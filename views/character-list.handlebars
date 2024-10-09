@@ -1,0 +1,40 @@
+<section class="section">
+  <div class="container">
+    <h2 class="title is-2">Characters</h2>
+    <div class="buttons">
+      <a href="/characters/new" class="button is-primary">Create New Character</a>
+    </div>
+
+    {{#if characters.length}}
+    <div class="block">
+      <table class="table is-fullwidth is-striped is-hoverable is-fullwidth">
+        <thead>
+          <tr>
+            <th>
+              <div style="width:600px;">Name</div>
+            </th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each characters}}
+          <tr>
+            <td><span class="title is-4">{{this.name}}</span></td>
+            <td>
+              <div class="buttons are-small">
+                <a href="/characters/{{this.id}}" class="button is-secondary">View</a>
+                <a href="/characters/{{this.id}}/edit" class="button is-warning">Edit</a>
+                <button class="button is-danger" hx-delete="/characters/{{this.id}}" hx-target="closest tr"
+                  hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this character?">Delete</button>
+              </div>
+            </td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="has-text-centered">You haven't created any characters yet.</p>
+    {{/if}}
+  </div>
+</section>

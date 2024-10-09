@@ -1,0 +1,51 @@
+<div id="profile-form" class="block">
+  <form hx-put="/profile" hx-target="#profile-info" hx-swap="innerHTML">
+
+    <div class="field">
+      <label class="label" for="name">Name</label>
+      <div class="control">
+        <input class="input" type="text" id="name" name="name" placeholder="Name" value="{{profile.name}}" required>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="bio">Bio</label>
+      <div class="control">
+        <textarea class="textarea" id="bio" name="bio" placeholder="Bio">{{profile.bio}}</textarea>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="image_url">Image URL</label>
+      <div class="control">
+        <input class="input" type="url" id="image_url" name="image_url" placeholder="Image URL"
+          value="{{profile.image_url}}">
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="email">Email</label>
+      <div class="control">
+        <input class="input" type="email" id="email" name="email" placeholder="Email" value="{{user.email}}" required>
+      </div>
+    </div>
+
+    <div class="field">
+      <label class="label" for="password">New Password</label>
+      <div class="control">
+        <input class="input" type="password" id="password" name="password"
+          placeholder="New Password (leave blank to keep current)">
+      </div>
+      <p class="help">Leave blank to keep current password</p>
+    </div>
+
+    <div class="field is-grouped">
+      <div class="control">
+        <button class="button is-primary" type="submit">Update Profile</button>
+      </div>
+      <div class="control">
+        <a class="button is-light" href="/profile" hx-target="body" hx-swap="innerHTML">Cancel</a>
+      </div>
+    </div>
+  </form>
+</div>

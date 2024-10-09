@@ -1,0 +1,60 @@
+<form hx-{{#if post}}put{{else}}post{{/if}}="{{#if post}}/lfg/{{post.id}}{{else}}/lfg{{/if}}" hx-swap="afterend" class="box">
+  <div class="field">
+    <label class="label">Game Title</label>
+    <div class="control">
+      <input class="input" type="text" name="title" placeholder="Game Title" value="{{post.title}}" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Game Description</label>
+    <div class="control">
+      <textarea class="textarea" name="description" placeholder="Game Description"
+        required>{{post.description}}</textarea>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Date</label>
+    <div class="control">
+      <input class="input" type="datetime-local" name="date" value="{{date post.date "YYYY-MM-DDTHH:MM"}}" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" name="host_id" {{#if (eq post.host_id (lookup profile "id"))}}checked{{/if}}>
+        I will Conduit this game
+      </label>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Max Characters</label>
+    <div class="control">
+      <input class="input" type="number" name="max_characters" min="1" value="{{post.max_characters}}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Status</label>
+    <div class="control">
+      <div class="select">
+        <select name="status" required>
+          <option value="open" {{#if (eq post.status 'open' )}}selected{{/if}}>Open</option>
+          <option value="closed" {{#if (eq post.status 'closed' )}}selected{{/if}}>Closed</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="field is-grouped">
+    <div class="control">
+      <button class="button is-primary" type="submit">{{#if post}}Update{{else}}Create{{/if}} LFG Post</button>
+    </div>
+    <div class="control">
+      <a class="button is-light" href="/lfg" hx-target="body" hx-swap="innerHTML">Cancel</a>
+    </div>
+  </div>
+</form>

@@ -1,0 +1,24 @@
+<nav class="navbar is-dark" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a class="navbar-item" href="/">
+      <strong>Agent Resources</strong>
+    </a>
+  </div>
+
+  <div class="navbar-menu">
+    <div class="navbar-end">
+      {{#if user}}
+      <a class="navbar-item" href="/profile">Profile</a>
+      <a class="navbar-item" href="/characters">Characters</a>
+      <a class="navbar-item" href="/lfg">Looking for Game</a>
+      <div class="navbar-item">
+        <button class="button is-light" hx-on:click="App.signOut(event)">Sign Out</button>
+      </div>
+      {{else}}
+      <div class="navbar-item">
+        <a class="button is-primary" href="/auth">Login/Signup</a>
+      </div>
+      {{/if}}
+    </div>
+  </div>
+</nav>

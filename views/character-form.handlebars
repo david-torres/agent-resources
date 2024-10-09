@@ -1,0 +1,179 @@
+<h2 class="title is-3">{{#if isNew}}Create New Character{{else}}Edit Character{{/if}}</h2>
+{{#unless isNew}}
+<div class="buttons">
+  <a href="/characters/{{character.id}}" class="button is-primary">View Character</a>
+</div>
+{{/unless}}
+
+<form hx-{{#if isNew}}post{{else}}put{{/if}}="/characters{{#unless isNew}}/{{character.id}}{{/unless}}"
+  hx-redirect="/characters">
+  <div class="field">
+    <label class="label">Name</label>
+    <div class="control">
+      <input class="input" type="text" name="name" placeholder="Character Name" value="{{character.name}}" required>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Class</label>
+    <div class="control">
+      <div class="select">
+        <select name="class" required>
+          <option disabled>Advent Classes</option>
+          {{#each adventClassList}}
+          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+
+          <option disabled>Aspirant Preview classes</option>
+          {{#each aspirantPreviewClassList}}
+          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+
+          <option disabled>Player Created Classes</option>
+          {{#each playerCreatedClassList}}
+          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{/each}}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="field is-grouped">
+    <div class="control">
+      <label class="label">Level</label>
+      <input class="input" type="number" name="level" placeholder="Level"
+        value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="20">
+    </div>
+
+    <div class="control">
+      <label class="label">Completed Missions</label>
+      <input class="input" type="number" name="completed_missions" placeholder="Completed Missions"
+        value="{{#if character.completed_missions}}{{character.completed_missions}}{{else}}0{{/if}}" required>
+    </div>
+
+    <div class="control">
+      <label class="label">Commissary Reward</label>
+      <input class="input" type="number" name="commissary_reward" placeholder="Commissary Reward"
+        value="{{#if character.commissary_reward}}{{character.commissary_reward}}{{else}}0{{/if}}" required>
+    </div>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Personality</label>
+    <div class="columns is-multiline">
+      {{#times 3}}
+      <div class="column is-one-third">
+        <div class="control">
+          <label class="label">Trait:</label>
+          <div class="select">
+            <select name="trait{{@index}}" required>
+              {{#each personalityMap}}
+              <option value="{{this}}" {{#if (eq (itemAt (lookup ../character "traits" ) @../index)
+                this)}}selected{{/if}}>{{capitalize this}} ({{capitalize @key}})</option>
+              {{/each}}
+            </select>
+          </div>
+        </div>
+      </div>
+      {{/times}}
+    </div>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Stats</label>
+    <div class="columns is-multiline">
+      {{#each statList}}
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label">{{capitalize this}}</label>
+          <div class="control">
+            <input class="input" type="number" name="{{this}}"
+              value="{{#if (lookup ../character this)}}{{lookup ../character this}}{{else}}0{{/if}}" required>
+          </div>
+        </div>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Class Gear</label>
+    <div class="columns is-multiline" id="class-gear-list">
+      {{#if character.gear}}
+        {{#each character.gear}}
+         {{> character-class-gear characterGear=this classGearList=../classGearList}}
+       {{/each}}
+      {{/if}}
+    </div>
+    <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
+      hx-swap="beforeend">Add
+      Class Gear</button>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Additional Gear</label>
+    <div class="control">
+      <textarea class="textarea" name="additional_gear"
+        placeholder="Additional Gear">{{character.additional_gear}}</textarea>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Image URL</label>
+    <div class="control">
+      <input class="input" type="url" name="image_url" placeholder="Image URL" value="{{character.image_url}}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Appearance</label>
+    <div class="control">
+      <textarea class="textarea" name="appearance"
+        placeholder="Character Appearance">{{character.appearance}}</textarea>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Background</label>
+    <div class="control">
+      <textarea class="textarea" name="background"
+        placeholder="Character Background">{{character.background}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Flavor</label>
+    <div class="control">
+      <textarea class="textarea" name="flavor" placeholder="Character Flavor">{{character.flavor}}</textarea>
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Ideas</label>
+    <div class="control">
+      <textarea class="textarea" name="ideas" placeholder="Character Ideas">{{character.ideas}}</textarea>
+    </div>
+  </div>
+
+  <div class="buttons is-right">
+    {{#unless isNew}}
+    <button class="button is-danger" hx-delete="/characters/{{character.id}}"
+      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters">Delete Character</button>
+    {{/unless}}
+    <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit">{{#if
+      isNew}}Create{{else}}Update{{/if}} Character</button>
+  </div>
+</form>
+
+<div class="field mt-4">
+  <div class="control">
+    <a href="/characters" class="button is-light">Cancel</a>
+  </div>
+</div>

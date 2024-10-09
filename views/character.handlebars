@@ -1,0 +1,106 @@
+<div class="container">
+  <h1 class="title is-2">{{character.name}}</h1>
+  <div class="columns">
+    <div class="column is-one-third">
+      {{#if character.image_url}}
+      <figure class="image is-4by3">
+        <img src="{{character.image_url}}" alt="{{character.name}}">
+      </figure>
+      {{else}}
+      <div class="notification is-info">No image available</div>
+      {{/if}}
+
+      <div class="box mt-4">
+        <h3 class="title is-4">Character Info</h3>
+        <p><strong>Class:</strong> {{character.class}}</p>
+        <p><strong>Level:</strong> {{character.level}}</p>
+        <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
+        <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Personality</h3>
+        <div class="tags is-centered">
+          {{#each character.traits}}
+          <span class="tag is-primary is-medium">{{capitalize this}}</span>
+          {{/each}}
+        </div>
+      </div>
+
+      {{#if (eq post.creator_id (lookup ../profile "id"))}}
+      <div class="field is-grouped is-pulled-right">
+        <div class="control">
+          <div class="field">
+            <input type="checkbox" name="is_public" class="checkbox is-info" {{#if character.is_public}}checked{{/if}}
+              hx-put="/characters/{{character.id}}/toggle-visibility" hx-swap="none">
+            <label for="is_public">Public</label>
+          </div>
+        </div>
+        <div class="control">
+          <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
+        </div>
+      </div>
+      {{/if}}
+    </div>
+
+    <div class="column is-two-thirds">
+      <div class="box">
+        <h3 class="title is-4">Stats</h3>
+        <div class="columns is-multiline">
+          {{#each statList}}
+          <div class="column is-one-third">
+            <p><strong>{{capitalize this}}:</strong> {{lookup ../character this}}</p>
+          </div>
+          {{/each}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Class Gear</h3>
+        <div class="columns is-multiline">
+          {{#each character.gear}}
+          <div class="column is-one-third">
+            <div class="is-size-5">{{capitalize this}}</div>
+          </div>
+          {{/each}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Additional Gear</h3>
+        <div class="content">
+          {{{markdown character.additional_gear}}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Appearance</h3>
+        <div class="content">
+          {{{markdown character.appearance}}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Background</h3>
+        <div class="content">
+          {{{markdown character.background}}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Flavor</h3>
+        <div class="content">
+          {{{markdown character.flavor}}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Ideas</h3>
+        <div class="content">
+          {{{markdown character.ideas}}}
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>

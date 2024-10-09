@@ -1,0 +1,29 @@
+{{!-- <h1 class="title">Welcome to Agent Resources</h1> --}}
+
+<div id="block">
+  {{#if profile}}
+  <p>Welcome, Agent: {{profile.name}}</p>
+  {{else}}
+  <p>Please <a href="/auth">sign in</a> or <a href="/auth">sign up</a>.</p>
+  {{/if}}
+  <hr />
+  <section class="hero is-medium is-dark">
+    <div class="hero-body">
+      <p class="title">Agent Resources is a tool for Enclave players to create and share Enclave characters, look for
+        games, and log missions.</p>
+    </div>
+  </section>
+
+  {{!-- <div class="block has-text-centered">
+    <p class="mt-4">New to the Enclave? Watch the video:</p>
+    <iframe width="560" height="315" src="https://www.youtube.com/embed/aBVeIi6s6rE?si=kT7MA-dEjunuU8Aq"
+      title="YouTube video player" frameborder="0"
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+      referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+    <p>
+      <a class="button is-primary"
+        href="https://www.kickstarter.com/projects/757240159/enclave-a-tableless-roleplaying-game">Learn more about the
+        Enclave</a>
+    </p>
+  </div> --}}
+</div>

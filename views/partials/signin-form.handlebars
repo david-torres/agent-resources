@@ -1,0 +1,26 @@
+<div id="auth-form">
+  <h2 class="title is-4">Sign In</h2>
+  <form id="sign-in" hx-on:submit="App.signIn(event)">
+    <div class="field">
+      <label class="label">Email</label>
+      <div class="control">
+        <input class="input" type="email" name="email" placeholder="Email" required>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Password</label>
+      <div class="control">
+        <input class="input" type="password" name="password" placeholder="Password" required>
+      </div>
+    </div>
+    <div class="field">
+      <div class="control">
+        <button class="button is-primary" type="submit">Sign In</button>
+      </div>
+    </div>
+  </form>
+  <p class="mt-4">
+    Don't have an account?
+    <a hx-get="/auth/signup-form" hx-target="#auth-form" hx-swap="outerHTML">Sign Up</a>
+  </p>
+</div>

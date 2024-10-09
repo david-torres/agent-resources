@@ -1,0 +1,15 @@
+<section class="section">
+  <div class="container">
+    <h2 class="title is-2">User Profile</h2>
+
+    <div id="profile-info" class="box">
+      <div class="block">
+        <p><strong>Name:</strong> <span id="user-name">{{profile.name}}</span></p>
+        <p><strong>Email:</strong> <span id="user-email">{{user.email}}</span></p>
+      </div>
+      <button class="button is-primary" hx-get="/profile/edit" hx-target="#profile-info" hx-swap="innerHTML">
+        Edit Profile
+      </button>
+    </div>
+  </div>
+</section>
