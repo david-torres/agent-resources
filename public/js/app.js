@@ -76,8 +76,7 @@ const App = (function () {
     }
   }
 
-  const signIn = async (event) => {
-    event.preventDefault();
+  const signIn = async () => {
     const form = document.getElementById('sign-in');
     const formData = new FormData(form);
     const email = formData.get('email');

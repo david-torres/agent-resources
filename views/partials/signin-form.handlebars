@@ -1,6 +1,6 @@
 <div id="auth-form">
   <h2 class="title is-4">Sign In</h2>
-  <form id="sign-in" hx-on:submit="App.signIn(event)">
+  <form id="sign-in" method="POST" hx-on:submit="htmx.trigger('#sign-in', 'htmx:abort'); App.signIn(event);">
     <div class="field">
       <label class="label">Email</label>
       <div class="control">
