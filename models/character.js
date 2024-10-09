@@ -85,7 +85,7 @@ const updateCharacter = async (id, characterReq) => {
   delete characterData.gear;
 
   // update character
-  const { data, error } = await supabase.from('characters').update({ ...characterReq, ...characterData }).eq('id', id).eq('creator_id', profile.id).select();
+  const { data, error } = await supabase.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
   if (error) {
     console.error(error);
     return { data, error };
