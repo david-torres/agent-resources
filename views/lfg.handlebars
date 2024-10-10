@@ -19,7 +19,8 @@
         <th>Title</th>
         <th>Date</th>
         <th>Conduit</th>
-        <th>Actions</th>
+        <th>Status</th>
+        <th class="is-pulled-right">Actions</th>
       </tr>
     </thead>
     <tbody>
@@ -34,6 +35,8 @@
           <span class="tag is-warning">Conduit needed</span>
           {{/if}}
         </td>
+        <td>
+          {{this.status}}
         <td>
           <div class="buttons is-right">
             <button class="button is-danger" hx-delete="/lfg/{{this.id}}" hx-confirm="Are you sure?" hx-swap="outerHTML">Delete</button>

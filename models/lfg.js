@@ -2,7 +2,7 @@ const { supabase } = require('./_base');
 const { getProfile } = require('./profile');
 
 const getLfgPosts = async () => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').eq('is_public', true).order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('lfg_posts').select('*').eq('is_public', true).eq('status', 'open').order('created_at', { ascending: false });
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
