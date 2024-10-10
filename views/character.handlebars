@@ -56,6 +56,17 @@
       </div>
 
       <div class="box">
+        <h3 class="title is-4">Class Abilities</h3>
+        <div class="columns is-multiline">
+          {{#each character.abilities}}
+          <div class="column is-one-third">
+            <div class="is-size-5">{{capitalize this}}</div>
+          </div>
+          {{/each}}
+        </div>
+      </div>
+
+      <div class="box">
         <h3 class="title is-4">Class Gear</h3>
         <div class="columns is-multiline">
           {{#each character.gear}}

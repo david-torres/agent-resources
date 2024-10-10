@@ -77,35 +77,91 @@ const classGearList = {
     'Nostrum',
     'Map'
   ],
-  // Berserker: [
-  //   'Axe',
-  //   'Armor',
-  //   'Helmet',
-  //   'Boots',
-  //   'Belt'
-  // ],
-  // Infiltrator: [
-  //   'Dagger',
-  //   'Crossbow',
-  //   'Cloak',
-  //   'Mask',
-  //   'Boots'
-  // ],
-  // Vessel: [
-  //   'Mace',
-  //   'Armor',
-  //   'Helmet',
-  //   'Boots',
-  //   'Belt'
-  // ],
-  // Bogatyr: [
-  //   'Sword',
-  //   'Shield',
-  //   'Armor',
-  //   'Helmet',
-  //   'Boots'
-  // ],
+  Berserker: [
+    'Pelt Panoply',
+    'Great Axe',
+    'Spatha',
+    'Warpaint',
+    'Beast Claws'
+  ],
+  Infiltrator: [
+    'Catsuit',
+    'Stiletto',
+    'Earpiece',
+    'Time Bomb',
+    'Skeleton Key',
+    'Listening Bugs'
+  ],
+  Vessel: [
+    'Ceremonial Raiment',
+    'Ritual Knife',
+    'Alter Lights',
+    'Deathmask',
+    'Shadow Blade',
+    'Star Crystal'
+  ],
+  Bogatyr: [
+    'Bludgeon',
+    'Vyshyvanka',
+    'Spangenhelm',
+    'Toolbox',
+    'Earspoon',
+    'Endless Tankard'
+  ],
 };
+
+const classAbilityList = {
+  Gunslinger: [
+    'Trickshot',
+    'Standoff',
+    'Shootout'
+  ],
+  Illusionist: [
+    'Phantasm',
+    'Veneer',
+    'Viewpoint'
+  ],
+  Librarian: [
+    'Fun Fact',
+    'Knowledge is Power',
+    'Catalog'
+  ],
+  Thane: [
+    'To Arms',
+    'Shieldwall',
+    'Gairethinx'
+  ],
+  Thunderbird: [
+    'Storm Brewing',
+    'Thunderclap',
+    'Out of the Blue'
+  ],
+  Wanderer: [
+    'Fork in the Road',
+    'By the Wayside',
+    'Familiar Face'
+  ],
+  Berserker: [
+    'Furor',
+    'Warp Spasm',
+    'Bloodlust'
+  ],
+  Infiltrator: [
+    'Identity Theft',
+    'Case the Joint',
+    'Maximum Security'
+  ],
+  Vessel: [
+    'Insidious Whispers',
+    'Embrace Darkness',
+    'Fill the Void'
+  ],
+  Bogatyr: [
+    'Friend in Need',
+    'Samosek',
+    'Trading Blows'
+  ]
+}
 
 const adventClassList = [
   'Gunslinger',
@@ -132,4 +188,12 @@ const playerCreatedClassList = [
   'Shōnen'
 ];
 
-module.exports = { statList, personalityMap, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classGearList };
+module.exports = {
+  statList,
+  personalityMap,
+  adventClassList,
+  aspirantPreviewClassList,
+  playerCreatedClassList,
+  classGearList,
+  classAbilityList
+};

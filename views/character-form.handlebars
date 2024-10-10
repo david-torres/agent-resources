@@ -107,13 +107,29 @@
     <div class="columns is-multiline" id="class-gear-list">
       {{#if character.gear}}
         {{#each character.gear}}
-         {{> character-class-gear characterGear=this classGearList=../classGearList}}
-       {{/each}}
+          {{> character-class-gear characterGear=this classGearList=../classGearList}}
+        {{/each}}
       {{/if}}
     </div>
     <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
       hx-swap="beforeend">Add
       Class Gear</button>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Class Abilities</label>
+    <div class="columns is-multiline" id="class-ability-list">
+      {{#if character.abilities}}
+        {{#each character.abilities}}
+          {{> character-class-abilities characterAbility=this classAbilityList=../classAbilityList}}
+        {{/each}}
+      {{/if}}
+    </div>
+    <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list"
+      hx-swap="beforeend">Add
+      Class Abilities</button>
   </div>
 
   <hr />

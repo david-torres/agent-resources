@@ -81,7 +81,7 @@ CREATE TABLE class_abilities (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   character_id UUID NOT NULL,
   name TEXT NOT NULL,
-  description TEXT NOT NULL,
+  description TEXT,
   essence_cost TEXT,
   cooldown TEXT,
   duration TEXT,

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getUser, getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
-const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList } = require('../util/enclave-consts');
+const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated } = require('../util/is-authenticated');
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -24,7 +24,8 @@ router.get('/new', isAuthenticated, (req, res) => {
     aspirantPreviewClassList,
     playerCreatedClassList,
     personalityMap,
-    classGearList
+    classGearList,
+    classAbilityList
   });
 });
 
@@ -43,7 +44,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       aspirantPreviewClassList,
       playerCreatedClassList,
       personalityMap,
-      classGearList
+      classGearList,
+      classAbilityList
     });
   }
 });
@@ -61,6 +63,10 @@ router.get('/class-gear', (req, res) => {
   res.render('partials/character-class-gear', { layout: false, classGearList });
 });
 
+router.get('/class-abilities', (req, res) => {
+  res.render('partials/character-class-abilities', { layout: false, classAbilityList });
+});
+
 router.get('/:id', async (req, res) => {
   const user = await getUser();
   const { id } = req.params;
@@ -74,7 +80,8 @@ router.get('/:id', async (req, res) => {
       statList,
       adventClassList,
       aspirantPreviewClassList,
-      playerCreatedClassList
+      playerCreatedClassList,
+      classAbilityList
     });
   }
 });
@@ -82,7 +89,6 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   const { data, error } = await updateCharacter(id, req.body);
-
   if (error) {
     res.status(400).send(error.message);
   } else {

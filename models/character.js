@@ -28,6 +28,13 @@ const getCharacter = async (id) => {
   }
   data.gear = gear.map(gear => gear.name);
 
+  const { data: abilities, error: abilitiesError } = await getCharacterAbilities(id);
+  if (abilitiesError) {
+    console.error(abilitiesError);
+    return { data: null, error: abilitiesError };
+  }
+  data.abilities = abilities.map(ability => ability.name);
+
   return { data, error };
 }
 
@@ -42,6 +49,10 @@ const createCharacter = async (characterReq) => {
   // handle class gear
   const classGear = characterReq.gear;
   delete characterReq.gear;
+
+  // handle class abilities
+  const classAbilities = characterReq.abilities;
+  delete characterReq.abilities;
 
   // create character
   const { data, error } = await supabase.from('characters').insert(characterReq).select();
@@ -65,6 +76,13 @@ const createCharacter = async (characterReq) => {
     return { data: null, error: gearSetError };
   }
 
+  // set class abilities
+  const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+  if (abilitiesSetError) {
+    console.error(abilitiesSetError);
+    return { data: null, error: abilitiesSetError };
+  }
+
   return { data: character, error };
 }
 
@@ -83,6 +101,11 @@ const updateCharacter = async (id, characterReq) => {
   const classGear = characterReq.gear;
   delete characterReq.gear;
   delete characterData.gear;
+
+  // handle class abilities
+  const classAbilities = characterReq.abilities;
+  delete characterReq.abilities;
+  delete characterData.abilities;
 
   // update character
   const { data, error } = await supabase.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
@@ -105,6 +128,13 @@ const updateCharacter = async (id, characterReq) => {
   if (gearSetError) {
     console.error(gearSetError);
     return { data: null, error: gearSetError };
+  }
+
+  // update abilities
+  const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+  if (abilitiesSetError) {
+    console.error(abilitiesSetError);
+    return { data: null, error: abilitiesSetError };
   }
 
   return { data: character, error };
@@ -162,6 +192,26 @@ const setCharacterGear = async (id, gear) => {
   }
 
   return { data: newGear, error: null };
+}
+
+const getCharacterAbilities = async (id) => {
+  const { data, error } = await supabase.from('class_abilities').select('*').eq('character_id', id);
+  return { data, error };
+}
+
+const setCharacterAbilities = async (id, abilities) => {
+  const { data, error } = await supabase.from('class_abilities').delete().eq('character_id', id);
+  if (error) {
+    return { data: null, error };
+  }
+
+  const abilitiesData = abilities.map(ability => ({ character_id: id, name: ability }));
+  const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
+  if (newAbilitiesError) {
+    return { data: null, error: newAbilitiesError };
+  }
+
+  return { data: newAbilities, error: null };
 }
 
 module.exports = {
