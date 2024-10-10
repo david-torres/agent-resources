@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { getUser, getProfile, getOwnCharacters, getCharacter, getLfgPosts, getLfgPostsByCreator, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost } = require('../util/supabase');
+const { getProfile, getOwnCharacters, getCharacter, getLfgPosts, getLfgPostsByCreator, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost } = require('../util/supabase');
 const { isAuthenticated } = require('../util/is-authenticated');
 
 router.get('/', isAuthenticated, async (req, res) => {
-  const user = await getUser();
-  const profile = await getProfile();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   const { data, error } = await getLfgPosts();
 
   // get own lfg posts
@@ -22,21 +22,23 @@ router.get('/', isAuthenticated, async (req, res) => {
 });
 
 router.get('/new', isAuthenticated, async (req, res) => {
-  const profile = await getProfile();
-  const characters = await getOwnCharacters();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
+  const characters = await getOwnCharacters(user);
   res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
 
 
 router.post('/', isAuthenticated, async (req, res) => {
-  const profile = await getProfile();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   const post = req.body;
 
   if (post.host_id == 'on') {
     post.host_id = profile.id;
   }
 
-  const { data, error } = await createLfgPost(req.body);
+  const { data, error } = await createLfgPost(req.body, user);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -45,8 +47,8 @@ router.post('/', isAuthenticated, async (req, res) => {
 });
 
 router.get('/:id', isAuthenticated, async (req, res) => {
-  const user = await getUser();
-  const profile = await getProfile();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   const { data, error } = await getLfgPost(req.params.id);
   if (error) {
     res.status(400).send(error.message);
@@ -56,8 +58,9 @@ router.get('/:id', isAuthenticated, async (req, res) => {
 });
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
-  const profile = await getProfile();
-  const characters = await getOwnCharacters();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
+  const characters = await getOwnCharacters(user);
   const { data, error } = await getLfgPost(req.params.id);
   if (error) {
     res.status(400).send(error.message);
@@ -67,7 +70,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 });
 
 router.put('/:id', isAuthenticated, async (req, res) => {
-  const { data, error } = await updateLfgPost(req.params.id, req.body);
+  const user = res.locals.user;
+  const { data, error } = await updateLfgPost(req.params.id, req.body, user);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -76,7 +80,8 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 });
 
 router.delete('/:id', isAuthenticated, async (req, res) => {
-  const { data, error } = await deleteLfgPost(req.params.id);
+  const user = res.locals.user;
+  const { data, error } = await deleteLfgPost(req.params.id, user);
   if (error) {
     res.status(400).send(error.message);
   } else {

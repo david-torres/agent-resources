@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getUser, getProfile } = require('../util/supabase');
+const { getProfile } = require('../util/supabase');
 
 router.get('/', async (req, res) => {
-  const user = await getUser();
+  const user = res.locals.user;
   let profile = null;
   if (user) {
-    profile = await getProfile();
+    profile = await getProfile(user);
   }
   res.render('home', { user, profile });
 });

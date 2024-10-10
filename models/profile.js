@@ -3,8 +3,7 @@ const { getUser } = require('./auth');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
-const getProfile = async () => {
-  const user = await getUser();
+const getProfile = async (user) => {
   if (!user) {
     throw new Error('User not found');
   }
@@ -46,7 +45,6 @@ const createProfile = async (user_id) => {
 }
 
 const updateUser = async (email, password, profile) => {
-  
   if (password === '') password = null;
   const { data, error } = await supabase.auth.updateUser({ email, password });
   if (error) return { data, error };

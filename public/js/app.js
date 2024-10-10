@@ -65,6 +65,8 @@ const App = (function (document, supabase, htmx) {
       _setTokens(session.access_token, session.refresh_token);
       if (window.location.pathname === '/auth') {
         htmx.ajax('GET', '/profile', 'body');
+      } else {
+        htmx.ajax('GET', window.location.pathname, 'body');
       }
     } else if (event === 'SIGNED_OUT') {
       // handle sign out event

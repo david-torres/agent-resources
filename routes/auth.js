@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const { clearUser } = require('../util/supabase');
 
 router.get('/', (req, res) => {
   res.render('auth');
@@ -15,7 +14,6 @@ router.get('/signup-form', (req, res) => {
 });
 
 router.post('/signout', async (req, res) => {
-  clearUser();
   res.header('HX-Location', '/auth').send();
 });
 

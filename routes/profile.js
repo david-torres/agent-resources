@@ -1,22 +1,22 @@
 const express = require('express');
 const router = express.Router();
-const { getUser, updateUser, getProfile, getProfileByName } = require('../util/supabase');
+const { updateUser, getProfile, getProfileByName } = require('../util/supabase');
 const { isAuthenticated } = require('../util/is-authenticated');
 
 router.get('/', isAuthenticated, async (req, res) => {
-  const user = await getUser();
-  const profile = await getProfile();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   res.render('profile', { user, profile });
 });
 
 router.get('/edit', isAuthenticated, async (req, res) => {
-  const user = await getUser();
-  const profile = await getProfile();
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   res.render('partials/profile-form', { layout: false, user, profile });
 });
 
 router.get('/view/:name', async (req, res) => {
-  const user = await getUser();
+  const user = res.locals.user;
   const { data: profile, error } = await getProfileByName(req.params.name);
   if (error) {
     res.status(400).send('Not found');
@@ -28,6 +28,7 @@ router.get('/view/:name', async (req, res) => {
 });
 
 router.put('/', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
   const { email, password, name, bio, image_url, is_public } = req.body;
   const profile = {
     name,

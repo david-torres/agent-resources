@@ -36,33 +36,33 @@ const getLfgPost = async (id) => {
   return { data: post, error };
 }
 
-const createLfgPost = async (post) => {
-  const profile = await getProfile();
+const createLfgPost = async (post, user) => {
+  const profile = await getProfile(user);
   post.creator_id = profile.id;
   const { data, error } = await supabase.from('lfg_posts').insert(post);
   return { data, error };
 }
 
-const updateLfgPost = async (id, posted) => {
-  const profile = await getProfile();
+const updateLfgPost = async (id, postReq, user) => {
+  const profile = await getProfile(user);
   const { data: post, error: postError } = await getLfgPost(id);
   if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
   delete post.creator_name;
   delete post.host_name;
 
-  if (posted.host_id == 'on') {
-    posted.host_id = profile.id;
+  if (postReq.host_id == 'on') {
+    postReq.host_id = profile.id;
   } else {
-    posted.host_id = null;
+    postReq.host_id = null;
   }
 
-  const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...posted }).eq('id', id).eq('creator_id', profile.id);
+  const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id);
   return { data, error };
 }
 
-const deleteLfgPost = async (id) => {
-  const profile = await getProfile();
+const deleteLfgPost = async (id, user) => {
+  const profile = await getProfile(user);
   const { data: post, error: postError } = await getLfgPost(id);
   if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 

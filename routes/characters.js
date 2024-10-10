@@ -1,12 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { getUser, getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated } = require('../util/is-authenticated');
 
 router.get('/', isAuthenticated, async (req, res) => {
-  const user = await getUser();
-  const { data, error } = await getOwnCharacters();
+  const user = res.locals.user;
+  const { data, error } = await getOwnCharacters(user);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -15,7 +15,7 @@ router.get('/', isAuthenticated, async (req, res) => {
 });
 
 router.get('/new', isAuthenticated, (req, res) => {
-  const user = getUser();
+  const user = res.locals.user;
   res.render('character-form', {
     user,
     isNew: true,
@@ -30,7 +30,7 @@ router.get('/new', isAuthenticated, (req, res) => {
 });
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
-  const user = await getUser();
+  const user = res.locals.user;
   const { data:character, error } = await getCharacter(req.params.id);
   if (error) {
     res.status(400).send(error.message);
@@ -51,7 +51,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 });
 
 router.post('/', isAuthenticated, async (req, res) => {
-  const { data, error } = await createCharacter(req.body);
+  const user = res.locals.user;
+  const { data, error } = await createCharacter(req.body, user);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -68,7 +69,7 @@ router.get('/class-abilities', (req, res) => {
 });
 
 router.get('/:id', async (req, res) => {
-  const user = await getUser();
+  const user = res.locals.user;
   const { id } = req.params;
   const { data, error } = await getCharacter(id);
   if (error) {
