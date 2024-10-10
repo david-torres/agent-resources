@@ -2,7 +2,19 @@ const { supabase } = require('./_base');
 const { getProfile } = require('./profile');
 
 const getLfgPosts = async () => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').order('created_at', { ascending: false });
+  const { data, error } = await supabase.from('lfg_posts').select('*').eq('is_public', true).order('created_at', { ascending: false });
+  for (let post of data) {
+    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
+    post.creator_name = creator.name;
+
+    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    if (!hostError) post.host_name = host.name;
+  }
+  return { data, error };
+}
+
+const getLfgPostsByCreator = async (creator_id) => {
+  const { data, error } = await supabase.from('lfg_posts').select('*').eq('creator_id', creator_id).order('created_at', { ascending: false });
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
@@ -60,6 +72,7 @@ const deleteLfgPost = async (id) => {
 
 module.exports = {
   getLfgPosts,
+  getLfgPostsByCreator,
   getLfgPost,
   createLfgPost,
   updateLfgPost,
