@@ -1,6 +1,8 @@
 const { supabase } = require('./_base');
 const { getUser } = require('./auth');
 
+const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
+
 const getProfile = async () => {
   const user = await getUser();
   if (!user) {
@@ -9,8 +11,19 @@ const getProfile = async () => {
 
   const { data, error } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
   if (error) {
-    console.error(error);
-    throw new Error(error);
+    if (PROFILE_NOT_FOUND_ERROR === error.code) {
+      if (user.confirmed_at) {
+        const { data, error } = await createProfile(user.id);
+        if (error) {
+          console.error(error);
+          return false;
+        } else {
+          return data;
+        }
+      } else {
+        return false;
+      }
+    }
   }
 
   return data;
@@ -18,7 +31,7 @@ const getProfile = async () => {
 
 const createProfile = async (user_id) => {
   const user = await getUser();
-  const { data, error } = await supabase.from('profiles').insert({ user_id: user.id });
+  const { data, error } = await supabase.from('profiles').insert({ user_id: user.id, name: `Agent #${user.id}` });
   return { data, error };
 }
 

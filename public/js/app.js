@@ -1,4 +1,4 @@
-const App = (function () {
+const App = (function (document, supabase, htmx) {
   let supabaseClient;
   let authToken = null;
   let refreshToken = null;
@@ -25,9 +25,13 @@ const App = (function () {
     return refreshToken || localStorage.getItem('refreshToken');
   };
 
-  const _displayError = (errorMsg) => {
-    const errorContainer = document.getElementById('alerts');
-    errorContainer.innerHTML = `<div class="notification is-danger">${errorMsg}</div>`;
+  const _displayNotification = (alertType, message) => {
+    const messageContainer = document.getElementById('alerts');
+    messageContainer.innerHTML = `<div class="notification is-${alertType}">${message}</div>`;
+  }
+
+  const _displayError = (message) => {
+    _displayNotification('danger', message);
   }
 
   function init(supabaseUrl, supabaseKey) {
@@ -73,10 +77,11 @@ const App = (function () {
       _setTokens(session.access_token, session.refresh_token);
     } else if (event === 'USER_UPDATED') {
       // handle user updated event
+      console.log('user updated');
     }
   }
 
-  const signIn = async () => {
+  const signIn = async (event) => {
     const form = document.getElementById('sign-in');
     const formData = new FormData(form);
     const email = formData.get('email');
@@ -91,6 +96,23 @@ const App = (function () {
     }
   };
 
+  const signUp = async (event) => {
+    const form = document.getElementById('sign-up');
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    const password = formData.get('password');
+
+    try {
+      const { data, error } = await supabaseClient.auth.signUp({ email, password });
+      if (error) throw error;
+
+      const message = 'Please verify your email address to continue.';
+      htmx.swap(`#${event.target.id}`, `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  }
+
   const signOut = async () => {
     try {
       const { error } = await supabaseClient.auth.signOut('global');
@@ -103,6 +125,7 @@ const App = (function () {
   return {
     init,
     signIn,
+    signUp,
     signOut
   };
-})(document, supabase);
+})(document, supabase, htmx);
