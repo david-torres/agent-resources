@@ -18,11 +18,12 @@
   <div class="field">
     <label class="label">Date</label>
     <div class="control">
-      <input class="input" type="datetime-local" name="date" value="{{date post.date " YYYY-MM-DDTHH:MM"}}" required>
+      <input class="input" type="datetime-local" name="date" value="{{#if post}}{{date post.date "YYYY-MM-DDTHH:MM"}}{{else}}{{date "now" "YYYY-MM-DDTHH:MM" }}{{/if}}" required>
     </div>
   </div>
 
   <div class="field">
+    <label class="label">Conduit</label>
     <div class="control">
       <label class="checkbox">
         <input type="checkbox" name="host_id" {{#if (eq post.host_id (lookup profile "id" ))}}checked{{/if}}>
@@ -34,28 +35,40 @@
   <div class="field">
     <label class="label">Max Characters</label>
     <div class="control">
-      <input class="input" type="number" name="max_characters" min="1" value="{{post.max_characters}}">
+      <input class="input" type="number" name="max_characters" min="1"
+        value="{{#if post}}{{post.max_characters}}{{else}}1{{/if}}">
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Status</label>
+    <label class="label">Public</label>
     <div class="control">
-      <div class="select">
-        <select name="status" required>
-          <option value="open" {{#if (eq post.status 'open' )}}selected{{/if}}>Open</option>
-          <option value="closed" {{#if (eq post.status 'closed' )}}selected{{/if}}>Closed</option>
-        </select>
+      <label class="checkbox">
+        <input type="checkbox" name="is_public" {{#if post.is_public}}checked{{/if}}>
+        Make this post public
+      </label>
+    </div>
+
+    {{#if post}}
+    <div class="field">
+      <label class="label">Status</label>
+      <div class="control">
+        <div class="select">
+          <select name="status" required>
+            <option value="open" {{#if (eq post.status 'open' )}}selected{{/if}}>Open</option>
+            <option value="closed" {{#if (eq post.status 'closed' )}}selected{{/if}}>Closed</option>
+          </select>
+        </div>
       </div>
     </div>
-  </div>
+    {{/if}}
 
-  <div class="field is-grouped">
-    <div class="control">
-      <button class="button is-primary" type="submit">{{#if post}}Update{{else}}Create{{/if}} LFG Post</button>
+    <div class="field is-grouped mt-4">
+      <div class="control">
+        <button class="button is-primary" type="submit">{{#if post}}Update{{else}}Create{{/if}} LFG Post</button>
+      </div>
+      <div class="control">
+        <a class="button is-light" href="/lfg" hx-target="body" hx-swap="innerHTML">Cancel</a>
+      </div>
     </div>
-    <div class="control">
-      <a class="button is-light" href="/lfg" hx-target="body" hx-swap="innerHTML">Cancel</a>
-    </div>
-  </div>
 </form>

@@ -15,8 +15,9 @@ router.get('/', isAuthenticated, async (req, res) => {
 });
 
 router.get('/new', isAuthenticated, async (req, res) => {
+  const profile = await getProfile();
   const characters = await getOwnCharacters();
-  res.render('partials/lfg-form', { layout: false, isNew: true, characters });
+  res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
 
 
