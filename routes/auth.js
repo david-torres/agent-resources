@@ -13,8 +13,4 @@ router.get('/signup-form', (req, res) => {
   res.render('partials/signup-form', { layout: false });
 });
 
-router.post('/signout', async (req, res) => {
-  res.header('HX-Location', '/auth').send();
-});
-
 module.exports = router;

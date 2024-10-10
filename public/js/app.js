@@ -71,7 +71,6 @@ const App = (function (document, supabase, htmx) {
     } else if (event === 'SIGNED_OUT') {
       // handle sign out event
       _clearTokens();
-      htmx.ajax('POST', '/auth/signout');
     } else if (event === 'PASSWORD_RECOVERY') {
       // handle password recovery event
     } else if (event === 'TOKEN_REFRESHED') {
