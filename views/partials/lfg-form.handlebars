@@ -1,4 +1,5 @@
-<form hx-{{#if post}}put{{else}}post{{/if}}="{{#if post}}/lfg/{{post.id}}{{else}}/lfg{{/if}}" hx-swap="afterend" class="box">
+<form hx-{{#if post}}put{{else}}post{{/if}}="{{#if post}}/lfg/{{post.id}}{{else}}/lfg{{/if}}" hx-swap="afterend"
+  class="box">
   <div class="field">
     <label class="label">Game Title</label>
     <div class="control">
@@ -17,14 +18,14 @@
   <div class="field">
     <label class="label">Date</label>
     <div class="control">
-      <input class="input" type="datetime-local" name="date" value="{{date post.date "YYYY-MM-DDTHH:MM"}}" required>
+      <input class="input" type="datetime-local" name="date" value="{{date post.date " YYYY-MM-DDTHH:MM"}}" required>
     </div>
   </div>
 
   <div class="field">
     <div class="control">
       <label class="checkbox">
-        <input type="checkbox" name="host_id" {{#if (eq post.host_id (lookup profile "id"))}}checked{{/if}}>
+        <input type="checkbox" name="host_id" {{#if (eq post.host_id (lookup profile "id" ))}}checked{{/if}}>
         I will Conduit this game
       </label>
     </div>

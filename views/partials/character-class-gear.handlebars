@@ -1,14 +1,15 @@
 <div class="column is-one-third">
-    <div class="control">
-        <div class="select">
-            <select name="gear[]" required>
-                {{#each classGearList}}
-                <option disabled>{{capitalize @key}}</option>
-                {{#each this}}
-                <option value="{{this}}" {{#if (eq this ../../characterGear)}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
-                {{/each}}
-                {{/each}}
-            </select>
-        </div>
+  <div class="control">
+    <div class="select">
+      <select name="gear[]" required>
+        {{#each classGearList}}
+        <option disabled>{{capitalize @key}}</option>
+        {{#each this}}
+        <option value="{{this}}" {{#if (eq this ../../characterGear)}}selected{{/if}}>{{capitalize this}} ({{capitalize
+          @../key}})</option>
+        {{/each}}
+        {{/each}}
+      </select>
     </div>
+  </div>
 </div>
