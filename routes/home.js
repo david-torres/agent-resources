@@ -1,8 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { getProfile } = require('../util/supabase');
+const { authOptional } = require('../util/auth');
 
-router.get('/', async (req, res) => {
+router.get('/', authOptional, async (req, res) => {
   const user = res.locals.user;
   let profile = null;
   if (user) {

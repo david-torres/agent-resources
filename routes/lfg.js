@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { getProfile, getOwnCharacters, getCharacter, getLfgPosts, getLfgPostsByCreator, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost } = require('../util/supabase');
-const { isAuthenticated } = require('../util/is-authenticated');
+const { isAuthenticated } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
@@ -33,10 +33,6 @@ router.post('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
   const profile = await getProfile(user);
   const post = req.body;
-
-  if (post.host_id == 'on') {
-    post.host_id = profile.id;
-  }
 
   const { data, error } = await createLfgPost(req.body, user);
   if (error) {

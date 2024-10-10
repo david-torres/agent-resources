@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
+const { getProfile, getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
-const { isAuthenticated } = require('../util/is-authenticated');
+const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
@@ -31,7 +31,7 @@ router.get('/new', isAuthenticated, (req, res) => {
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
-  const { data:character, error } = await getCharacter(req.params.id);
+  const { data: character, error } = await getCharacter(req.params.id);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -68,28 +68,35 @@ router.get('/class-abilities', (req, res) => {
   res.render('partials/character-class-abilities', { layout: false, classAbilityList });
 });
 
-router.get('/:id', async (req, res) => {
+router.get('/:id', authOptional, async (req, res) => {
   const user = res.locals.user;
+  let profile = null;
+  if (user) profile = await getProfile(user);
   const { id } = req.params;
-  const { data, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id);
   if (error) {
     res.status(400).send(error.message);
   } else {
-    res.render('character', {
-      user,
-      character: data,
-      statList,
-      adventClassList,
-      aspirantPreviewClassList,
-      playerCreatedClassList,
-      classAbilityList
-    });
+    if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
+      res.status(404).send('Not found').send();
+    } else {
+      res.render('character', {
+        user,
+        character,
+        statList,
+        adventClassList,
+        aspirantPreviewClassList,
+        playerCreatedClassList,
+        classAbilityList
+      });
+    }
   }
 });
 
 router.put('/:id', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
   const { id } = req.params;
-  const { data, error } = await updateCharacter(id, req.body);
+  const { data, error } = await updateCharacter(id, req.body, user);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -98,8 +105,9 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 });
 
 router.delete('/:id', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
   const { id } = req.params;
-  const { error } = await deleteCharacter(id);
+  const { error } = await deleteCharacter(id, user);
   if (error) {
     res.status(400).send(error.message);
   } else {

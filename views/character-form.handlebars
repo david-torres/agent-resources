@@ -178,6 +178,20 @@
     </div>
   </div>
 
+  <hr />
+
+  <div class="field">
+    <label class="label">Public</label>
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" name="is_public" {{#if character.is_public}}checked{{/if}}>
+        Make this character public
+      </label>
+    </div>
+  </div>
+
+  <hr />
+
   <div class="buttons is-right">
     {{#unless isNew}}
     <button class="button is-danger" hx-delete="/characters/{{character.id}}"

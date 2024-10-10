@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { updateUser, getProfile, getProfileByName } = require('../util/supabase');
-const { isAuthenticated } = require('../util/is-authenticated');
+const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
@@ -15,7 +15,7 @@ router.get('/edit', isAuthenticated, async (req, res) => {
   res.render('partials/profile-form', { layout: false, user, profile });
 });
 
-router.get('/view/:name', async (req, res) => {
+router.get('/view/:name', authOptional, async (req, res) => {
   const user = res.locals.user;
   const { data: profile, error } = await getProfileByName(req.params.name);
   if (error) {

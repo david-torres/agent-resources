@@ -36,10 +36,22 @@ const getLfgPost = async (id) => {
   return { data: post, error };
 }
 
-const createLfgPost = async (post, user) => {
+const createLfgPost = async (postReq, user) => {
   const profile = await getProfile(user);
-  post.creator_id = profile.id;
-  const { data, error } = await supabase.from('lfg_posts').insert(post);
+  postReq.creator_id = profile.id;
+
+  if (postReq.host_id == 'on') {
+    postReq.host_id = profile.id;
+  } else {
+    postReq.host_id = null;
+  }
+  if (postReq.is_public == 'on') {
+    postReq.is_public = true;
+  } else {
+    postReq.is_public = false;
+  }
+
+  const { data, error } = await supabase.from('lfg_posts').insert(postReq);
   return { data, error };
 }
 
@@ -55,6 +67,12 @@ const updateLfgPost = async (id, postReq, user) => {
     postReq.host_id = profile.id;
   } else {
     postReq.host_id = null;
+  }
+
+  if (postReq.is_public == 'on') {
+    postReq.is_public = true;
+  } else {
+    postReq.is_public = false;
   }
 
   const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id);

@@ -54,6 +54,13 @@ const createCharacter = async (characterReq, user) => {
   const classAbilities = characterReq.abilities;
   delete characterReq.abilities;
 
+  // handle is_public
+  if (characterReq.is_public == 'on') {
+    characterReq.is_public = true;
+  } else {
+    characterReq.is_public = false;
+  }
+
   // create character
   const { data, error } = await supabase.from('characters').insert(characterReq).select();
   if (error) {
@@ -70,17 +77,21 @@ const createCharacter = async (characterReq, user) => {
   }
 
   // set class gear
-  const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
-  if (gearSetError) {
-    console.error(gearSetError);
-    return { data: null, error: gearSetError };
+  if (classGear) {
+    const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
+    if (gearSetError) {
+      console.error(gearSetError);
+      return { data: null, error: gearSetError };
+    }
   }
 
   // set class abilities
-  const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
-  if (abilitiesSetError) {
-    console.error(abilitiesSetError);
-    return { data: null, error: abilitiesSetError };
+  if (classAbilities) {
+    const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+    if (abilitiesSetError) {
+      console.error(abilitiesSetError);
+      return { data: null, error: abilitiesSetError };
+    }
   }
 
   return { data: character, error };
@@ -107,6 +118,13 @@ const updateCharacter = async (id, characterReq, user) => {
   delete characterReq.abilities;
   delete characterData.abilities;
 
+  // handle is_public
+  if (characterReq.is_public == 'on') {
+    characterReq.is_public = true;
+  } else {
+    characterReq.is_public = false;
+  }
+
   // update character
   const { data, error } = await supabase.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
   if (error) {
@@ -124,17 +142,21 @@ const updateCharacter = async (id, characterReq, user) => {
   }
 
   // update gear
-  const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
-  if (gearSetError) {
-    console.error(gearSetError);
-    return { data: null, error: gearSetError };
+  if (classGear) {
+    const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
+    if (gearSetError) {
+      console.error(gearSetError);
+      return { data: null, error: gearSetError };
+    }
   }
 
   // update abilities
-  const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
-  if (abilitiesSetError) {
-    console.error(abilitiesSetError);
-    return { data: null, error: abilitiesSetError };
+  if (classAbilities) {
+    const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+    if (abilitiesSetError) {
+      console.error(abilitiesSetError);
+      return { data: null, error: abilitiesSetError };
+    }
   }
 
   return { data: character, error };
