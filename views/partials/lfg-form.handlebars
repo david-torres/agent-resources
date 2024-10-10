@@ -26,9 +26,24 @@
     <label class="label">Conduit</label>
     <div class="control">
       <label class="checkbox">
-        <input type="checkbox" name="host_id" {{#if (eq post.host_id (lookup profile "id" ))}}checked{{/if}}>
+        <input type="checkbox" name="host_id" hx-on:click="htmx.toggleClass(htmx.find('#character-select'), 'is-hidden')" {{#if (eq post.host_id profile.id)}}checked{{/if}}>
         I will Conduit this game
       </label>
+    </div>
+  </div>
+
+  <div class="field{{#if (eq post.host_id profile.id)}} is-hidden{{/if}}" id="character-select">
+    <label class="label">Character</label>
+    <div class="control">
+      <div class="select">
+        <select name="character">
+          <option value="">Select a character to join</option>
+          {{#each characters}}
+          <option value="{{this.id}}" {{#inArray (pluck post.join_requests "id") this.id}}selected{{/inArray}}>{{this.name}}
+          </option>
+          {{/each}}
+        </select>
+      </div>
     </div>
   </div>
 

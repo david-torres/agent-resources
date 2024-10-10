@@ -1,0 +1,42 @@
+<form hx-post="/lfg/{{post.id}}/join" hx-swap="outerHTML" class="box">
+  <h3 class="title is-4">Join "{{post.title}}"</h3>
+  <p>Date: {{date post.date "dddd, MMMM Do YYYY, h:mm"}}</p>
+  <p>Created by: {{post.creator_name}}</p>
+
+  <div class="field">
+    <label class="label">Join as:</label>
+    <div class="control">
+      <label class="radio">
+        <input type="radio" name="joinType" value="player" id="join-player-opt" hx-on:click="if (htmx.find('#join-player-opt').checked === true) htmx.removeClass(htmx.find('#character-select'), 'is-hidden')" checked>
+        Player
+      </label>
+      <label class="radio">
+        <input type="radio" name="joinType" value="conduit" hx-on:click="if (htmx.find('#join-player-opt').checked === false) htmx.addClass(htmx.find('#character-select'), 'is-hidden')" {{#if post.host_id}}disabled{{/if}}>
+        Conduit {{#if post.host_id}}(Already assigned){{/if}}
+      </label>
+    </div>
+  </div>
+
+  <div class="field" id="character-select">
+    <label class="label">Select Character:</label>
+    <div class="control">
+      <div class="select">
+        <select name="characterId" required>
+          <option disabled>Select a character</option>
+          {{#each characters}}
+            <option value="{{this.id}}">{{this.name}}</option>
+          {{/each}}
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="field is-grouped mt-4">
+    <div class="control">
+      <button class="button is-primary" type="submit">Request to Join</button>
+    </div>
+    <div class="control">
+      <button class="button is-light" hx-get="/lfg/{{post.id}}" hx-target="body">Cancel</button>
+    </div>
+  </div>
+</form>

@@ -6,7 +6,7 @@
           {{#each classAbilityList}}
           <option disabled>{{capitalize @key}}</option>
           {{#each this}}
-          <option value="{{this}}" {{#if (eq this ../../characterAbilities)}}selected{{/if}}>
+          <option value="{{this}}" {{#if (eq this ../../characterAbility)}}selected{{/if}}>
           {{capitalize this}} ({{capitalize @../key}})</option>
           {{/each}}
           {{/each}}

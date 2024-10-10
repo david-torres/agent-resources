@@ -1,0 +1,49 @@
+<div class="box">
+  <h3 class="title is-4">Join Requests for {{post.title}}</h3>
+  {{#if requests.length}}
+  <div class="block">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Player</th>
+          <th>Join Type</th>
+          <th>Character</th>
+          <th>Status</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each requests}}
+        <tr>
+          <td>{{this.profiles.name}}</td>
+          <td>{{this.join_type}}</td>
+          <td>{{#if this.characters}}{{this.characters.name}}{{else}}-{{/if}}</td>
+          <td>{{this.status}}</td>
+          <td>
+            {{#if (eq this.status 'pending')}}
+            <button class="button is-small is-success" hx-put="/lfg/{{../post.id}}/requests/{{this.id}}"
+              hx-vals='{"status": "approved"}'>Approve</button>
+            <button class="button is-small is-danger" hx-put="/lfg/{{../post.id}}/requests/{{this.id}}"
+              hx-vals='{"status": "rejected"}'>Decline</button>
+            {{/if}}
+            {{#if (eq this.status 'approved')}}
+            <button class="button is-small is-danger" hx-put="/lfg/{{../post.id}}/requests/{{this.id}}"
+              hx-vals='{"status": "pending"}'>Revoke</button>
+            {{/if}}
+            {{#if (eq this.status 'rejected')}}
+            <button class="button is-small is-success" hx-put="/lfg/{{../post.id}}/requests/{{this.id}}"
+              hx-vals='{"status": "pending"}'>Reconsider</button>
+            {{/if}}
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <p>No join requests yet.</p>
+  {{/if}}
+  <div class="buttons is-right">
+    <a href="/lfg" class="button is-light">Back</a>
+  </div>
+</div>

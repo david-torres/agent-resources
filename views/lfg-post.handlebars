@@ -12,13 +12,15 @@
       {{{markdown post.description}}}
     </div>
     <div class="buttons is-right">
-      {{#if (eq post.creator_id (lookup profile "id"))}}
-      <button class="button is-danger" hx-delete="/lfg/{{post.id}}" hx-confirm="Are you sure?"
-        hx-swap="outerHTML">Delete</button>
-      <button class="button is-warning" hx-get="/lfg/{{post.id}}/edit" hx-swap="outerHTML"
-        hx-target="closest .lfg-post">Edit</button>
-      {{/if}}
+      {{#if (eq post.host_id profile.id)}}
+      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
+      {{else}}
+      {{#inArray (pluck post.join_requests "profile_id") profile.id}}
+      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Player</button>
+      {{else}}
       <button class="button is-primary" hx-get="/lfg/{{post.id}}/join" hx-swap="outerHTML">Join</button>
+      {{/inArray}}
+      {{/if}}
     </div>
   </div>
 </div>

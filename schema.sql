@@ -104,12 +104,15 @@ CREATE TABLE lfg_posts (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp
 );
 
--- lfg_post_characters junction table
-CREATE TABLE lfg_post_characters (
-  id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-  lfg_post_id UUID NOT NULL,
-  character_id UUID NOT NULL,
-  status TEXT CHECK (status IN ('applied', 'accepted')) NOT NULL,
-  FOREIGN KEY (lfg_post_id) REFERENCES lfg_posts(id) ON DELETE CASCADE,
-  FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+-- lfg_join_requests table
+CREATE TABLE lfg_join_requests (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  lfg_post_id UUID NOT NULL REFERENCES lfg_posts(id) ON DELETE CASCADE,
+  profile_id UUID NOT NULL REFERENCES profiles(id),
+  join_type TEXT CHECK (join_type IN ('player', 'conduit')) NOT NULL,
+  character_id UUID REFERENCES characters(id),
+  status TEXT CHECK (status IN ('pending', 'approved', 'rejected')) NOT NULL DEFAULT 'pending',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
+  CONSTRAINT unique_lfg_post_profile UNIQUE (lfg_post_id, profile_id)
 );

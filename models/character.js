@@ -4,6 +4,11 @@ const { getProfile } = require('./profile');
 const getOwnCharacters = async (user) => {
   const profile = await getProfile(user);
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+
   return { data, error };
 }
 

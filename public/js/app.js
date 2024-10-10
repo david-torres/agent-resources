@@ -62,11 +62,13 @@ const App = (function (document, supabase, htmx) {
     if (event === 'INITIAL_SESSION') {
       // handle initial session
     } else if (event === 'SIGNED_IN') {
-      _setTokens(session.access_token, session.refresh_token);
-      if (window.location.pathname === '/auth') {
-        htmx.ajax('GET', '/profile', 'body');
-      } else {
-        htmx.ajax('GET', window.location.pathname, 'body');
+      if (session && _getAuthToken() !== session.access_token) {
+        _setTokens(session.access_token, session.refresh_token);
+        if (window.location.pathname === '/auth') {
+          htmx.ajax('GET', '/profile', 'body', { history: 'replace' });
+        } else {
+          htmx.ajax('GET', window.location.pathname, 'body', { history: 'replace' });
+        }
       }
     } else if (event === 'SIGNED_OUT') {
       // handle sign out event

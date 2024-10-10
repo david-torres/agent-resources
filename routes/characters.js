@@ -82,6 +82,7 @@ router.get('/:id', authOptional, async (req, res) => {
     } else {
       res.render('character', {
         user,
+        profile,
         character,
         statList,
         adventClassList,
