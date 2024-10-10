@@ -2,6 +2,7 @@
 CREATE TABLE profiles (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
+  is_public BOOLEAN NULL DEFAULT FALSE,
   name TEXT NOT NULL,
   bio TEXT NULL,
   image_url TEXT NULL

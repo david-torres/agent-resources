@@ -1,0 +1,16 @@
+<div class="container">
+  <h1 class="title is-2">{{profile.name}}</h1>
+
+  <div class="columns">
+    <div class="column is-one-third">
+      {{#if profile.image_url}}
+      <img src="{{profile.image_url}}" alt="{{profile.name}}'s profile picture" class="profile-image">
+      {{else}}
+      <div class="notification is-info">No image available</div>
+      {{/if}}
+    </div>
+
+    <div class="column is-two-thirds">
+      <div class="content">{{{markdown profile.bio}}}</div>
+    </div>
+  </div>

@@ -29,6 +29,16 @@ const getProfile = async () => {
   return data;
 }
 
+const getProfileById = async (id) => {
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+  return { data, error };
+}
+
+const getProfileByName = async (name) => {
+  const { data, error } = await supabase.from('profiles').select('*').eq('name', name).single();
+  return { data, error };
+}
+
 const createProfile = async (user_id) => {
   const user = await getUser();
   const { data, error } = await supabase.from('profiles').insert({ user_id: user.id, name: `Agent #${user.id}` });
@@ -48,6 +58,8 @@ const updateUser = async (email, password, profile) => {
 
 module.exports = {
   getProfile,
+  getProfileById,
+  getProfileByName,
   createProfile,
   updateUser
 };
