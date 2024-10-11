@@ -39,9 +39,9 @@
           {{this.status}}
         <td>
           <div class="buttons is-right">
-            <button class="button is-danger" hx-delete="/lfg/{{this.id}}" hx-confirm="Are you sure?" hx-swap="outerHTML">Delete</button>
-            <button class="button is-warning" hx-get="/lfg/{{this.id}}/edit" hx-swap="outerHTML" hx-target="closest table">Edit</button>
-            <a class="button is-secondary" href="/lfg/{{this.id}}">View</a>
+            <button class="button is-danger is-small" hx-delete="/lfg/{{this.id}}" hx-confirm="Are you sure?" hx-swap="outerHTML">Delete</button>
+            <button class="button is-warning is-small" hx-get="/lfg/{{this.id}}/edit" hx-swap="outerHTML" hx-target="closest table">Edit</button>
+            <a class="button is-secondary is-small" href="/lfg/{{this.id}}">View</a>
           </div>
         </td>
       </tr>
