@@ -36,11 +36,6 @@ async function authOptional(req, res, next) {
   const user = await getUserFromToken(authToken, refreshToken);
   res.locals.user = user;
 
-  const referer = new URL(req.headers['referer']).pathname;
-  if (referer != req.headers['redirect-to']) {
-    res.header('HX-Push-Url', req.headers['redirect-to']);
-  }
-
   next();
 }
  
