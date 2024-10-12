@@ -15,6 +15,7 @@ const times = function (n, block) {
 
 const date_tz = function(datetime, format, timezone) {
   if (!datetime) return '';
+  if (timezone === 'local') timezone = moment.tz.guess();
   return moment.utc(datetime).tz(timezone).format(format);
 }
 

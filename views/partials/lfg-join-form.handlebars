@@ -1,6 +1,6 @@
 <form hx-post="/lfg/{{post.id}}/join" hx-swap="outerHTML" class="box">
   <h3 class="title is-4">Join "{{post.title}}"</h3>
-  <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm" profile.timezone}}</p>
+  <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
   <p>Created by: {{post.creator_name}}</p>
 
   <div class="field">

@@ -1,7 +1,7 @@
 <div class="container">
   <div class="box lfg-post">
     <h3 class="title is-4">{{post.title}}</h3>
-    <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm" profile.timezone}}</p>
+    <p>Date: {{#if profile}}{{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}{{else}}{{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" "local"}}{{/if}}</p>
     <p class="is-size-7">Created by: {{post.creator_name}}</p>
     <p class="mt-4">
       {{#if post.host_id}}
@@ -11,6 +11,7 @@
     <div class="box content mt-4">
       {{{markdown post.description}}}
     </div>
+    {{#if profile}}
     <div class="buttons is-right">
       {{#if (eq post.host_id profile.id)}}
       <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
@@ -22,5 +23,6 @@
       {{/inArray}}
       {{/if}}
     </div>
+    {{/if}}
   </div>
 </div>

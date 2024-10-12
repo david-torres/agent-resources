@@ -3,7 +3,7 @@
   {{#each joinedPosts}}
   <div class="box lfg-post">
     <h3 class="title is-4">{{this.title}}</h3>
-    <p>Date: {{date_tz this.date "dddd, MMMM Do YYYY, h:mm" ../profile.timezone}}</p>
+    <p>Date: {{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</p>
     <p class="is-size-7">Created by: {{this.creator_name}}</p>
     <p class="mt-4">
       {{#if this.host_id}}
