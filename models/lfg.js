@@ -187,10 +187,39 @@ const deleteJoinRequest = async (requestId) => {
   return { data, error };
 }
 
+const getLfgJoinedPosts = async (profileId) => {
+  const { data, error } = await supabase
+    .from('lfg_join_requests')
+    .select(`
+      *,
+      lfg_posts:lfg_post_id (*)
+    `)
+    .eq('profile_id', profileId);
+
+  if (error) return { data: null, error };
+
+  const joinedPosts = data.map(request => request.lfg_posts);
+
+  for (let post of joinedPosts) {
+    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
+    post.creator_name = creator.name;
+
+    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    if (!hostError) post.host_name = host.name;
+
+    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
+    if (joinRequestsError) return { data: null, error: joinRequestsError };
+    post.join_requests = joinRequests;
+  }
+
+  return { data: joinedPosts, error: null };
+}
+
 module.exports = {
   getLfgPosts,
   getLfgPostsByCreator,
   getLfgPostsByOthers,
+  getLfgJoinedPosts,
   getLfgPost,
   createLfgPost,
   updateLfgPost,

@@ -1,0 +1,32 @@
+{{#if publicPosts.length}}
+<div id="lfg-posts" class="block">
+  {{#each publicPosts}}
+  <div class="box lfg-post">
+    <h3 class="title is-4">{{this.title}}</h3>
+    <p>Date: {{date_tz this.date "dddd, MMMM Do YYYY, h:mm" ../profile.timezone}}</p>
+    <p class="is-size-7">Created by: {{this.creator_name}}</p>
+    <p class="mt-4">
+      {{#if this.host_id}}
+      Conduit: {{this.host_name}}{{else}}<span class="tag is-warning">Conduit needed</span>
+      {{/if}}
+    </p>
+    <div class="box content mt-4">
+      {{{markdown this.description}}}
+    </div>
+    <div class="buttons is-right">
+      {{#if (eq this.host_id ../profile.id)}}
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
+      {{else}}
+      {{#inArray (pluck this.join_requests "profile_id") (lookup ../profile "id")}}
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Player</button>
+      {{else}}
+      <button class="button is-primary" hx-get="/lfg/{{this.id}}/join" hx-swap="outerHTML">Join</button>
+      {{/inArray}}
+      {{/if}}
+    </div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<p class="has-text-centered">No public LFG posts available.</p>
+{{/if}}

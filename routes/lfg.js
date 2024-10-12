@@ -1,23 +1,48 @@
 const express = require('express');
 const router = express.Router();
-const { getProfile, getOwnCharacters, getCharacter, getLfgPosts, getLfgPostsByCreator, getLfgPostsByOthers, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost, joinLfgPost, getLfgJoinRequests, getLfgJoinRequestByPostIdAndProfileId, updateJoinRequest, deleteJoinRequest } = require('../util/supabase');
+const { getProfile, getOwnCharacters, getCharacter, getLfgPosts, getLfgPostsByCreator, getLfgPostsByOthers, getLfgJoinedPosts, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost, joinLfgPost, getLfgJoinRequests, getLfgJoinRequestByPostIdAndProfileId, updateJoinRequest, deleteJoinRequest } = require('../util/supabase');
 const { isAuthenticated } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
   const profile = await getProfile(user);
-  const { data, error } = await getLfgPostsByOthers(profile.id);
+  const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id);
+  res.render('lfg', { user, profile, ownPosts });
+});
 
-  // get own lfg posts
+router.get('/tab/my-posts', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const profile = await getProfile(user);
   const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id);
   if (ownPostsError) {
     console.error(ownPostsError);
-  }
-
-  if (error) {
-    res.status(400).send(error.message);
+    res.status(400).send(ownPostsError.message);
   } else {
-    res.render('lfg', { user, profile, posts: data, ownPosts });
+    res.render('partials/lfg-my-posts', { layout: false, ownPosts, profile });
+  }
+});
+
+router.get('/tab/joined', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const profile = await getProfile(user);
+  const { data: joinedPosts, error: joinedPostsError } = await getLfgJoinedPosts(profile.id);
+  if (joinedPostsError) {
+    console.error(joinedPostsError);
+    res.status(400).send(joinedPostsError.message);
+  } else {
+    res.render('partials/lfg-joined-posts', { layout: false, joinedPosts, profile });
+  }
+});
+
+router.get('/tab/public', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const profile = await getProfile(user);
+  const { data: publicPosts, error: publicPostsError } = await getLfgPostsByOthers(profile.id);
+  if (publicPostsError) {
+    console.error(publicPostsError);
+    res.status(400).send(publicPostsError.message);
+  } else {
+    res.render('partials/lfg-public-posts', { layout: false, publicPosts, profile });
   }
 });
 
