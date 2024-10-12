@@ -5,7 +5,8 @@ CREATE TABLE profiles (
   is_public BOOLEAN NULL DEFAULT FALSE,
   name TEXT NOT NULL,
   bio TEXT NULL,
-  image_url TEXT NULL
+  image_url TEXT NULL,
+  timezone TEXT NULL DEFAULT 'UTC'
 );
 
 -- characters table

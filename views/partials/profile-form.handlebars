@@ -48,6 +48,64 @@
       <p class="help">Leave blank to keep current password</p>
     </div>
 
+    <div class="field">
+      <label class="label" for="timezone">Timezone</label>
+      <div class="control">
+        <div class="select">
+          <select id="timezone" name="timezone">
+            <option value="UTC" {{#if (eq profile.timezone "UTC")}}selected{{/if}}>UTC</option>
+            <option value="America/New_York" {{#if (eq profile.timezone "America/New_York")}}selected{{/if}}>Eastern Time</option>
+            <option value="America/Chicago" {{#if (eq profile.timezone "America/Chicago")}}selected{{/if}}>Central Time</option>
+            <option value="America/Denver" {{#if (eq profile.timezone "America/Denver")}}selected{{/if}}>Mountain Time</option>
+            <option value="America/Los_Angeles" {{#if (eq profile.timezone "America/Los_Angeles")}}selected{{/if}}>Pacific Time</option>
+            <option value="Africa/Cairo" {{#if (eq profile.timezone "Africa/Cairo")}}selected{{/if}}>Africa/Cairo</option>
+            <option value="Africa/Johannesburg" {{#if (eq profile.timezone "Africa/Johannesburg")}}selected{{/if}}>Africa/Johannesburg</option>
+            <option value="Africa/Lagos" {{#if (eq profile.timezone "Africa/Lagos")}}selected{{/if}}>Africa/Lagos</option>
+            <option value="America/Anchorage" {{#if (eq profile.timezone "America/Anchorage")}}selected{{/if}}>America/Anchorage</option>
+            <option value="America/Argentina/Buenos_Aires" {{#if (eq profile.timezone "America/Argentina/Buenos_Aires")}}selected{{/if}}>America/Argentina/Buenos_Aires</option>
+            <option value="America/Bogota" {{#if (eq profile.timezone "America/Bogota")}}selected{{/if}}>America/Bogota</option>
+            <option value="America/Caracas" {{#if (eq profile.timezone "America/Caracas")}}selected{{/if}}>America/Caracas</option>
+            <option value="America/Halifax" {{#if (eq profile.timezone "America/Halifax")}}selected{{/if}}>America/Halifax</option>
+            <option value="America/Mexico_City" {{#if (eq profile.timezone "America/Mexico_City")}}selected{{/if}}>America/Mexico_City</option>
+            <option value="America/Phoenix" {{#if (eq profile.timezone "America/Phoenix")}}selected{{/if}}>America/Phoenix</option>
+            <option value="America/Santiago" {{#if (eq profile.timezone "America/Santiago")}}selected{{/if}}>America/Santiago</option>
+            <option value="America/Sao_Paulo" {{#if (eq profile.timezone "America/Sao_Paulo")}}selected{{/if}}>America/Sao_Paulo</option>
+            <option value="Asia/Baghdad" {{#if (eq profile.timezone "Asia/Baghdad")}}selected{{/if}}>Asia/Baghdad</option>
+            <option value="Asia/Bangkok" {{#if (eq profile.timezone "Asia/Bangkok")}}selected{{/if}}>Asia/Bangkok</option>
+            <option value="Asia/Dhaka" {{#if (eq profile.timezone "Asia/Dhaka")}}selected{{/if}}>Asia/Dhaka</option>
+            <option value="Asia/Dubai" {{#if (eq profile.timezone "Asia/Dubai")}}selected{{/if}}>Asia/Dubai</option>
+            <option value="Asia/Hong_Kong" {{#if (eq profile.timezone "Asia/Hong_Kong")}}selected{{/if}}>Asia/Hong_Kong</option>
+            <option value="Asia/Jakarta" {{#if (eq profile.timezone "Asia/Jakarta")}}selected{{/if}}>Asia/Jakarta</option>
+            <option value="Asia/Jerusalem" {{#if (eq profile.timezone "Asia/Jerusalem")}}selected{{/if}}>Asia/Jerusalem</option>
+            <option value="Asia/Karachi" {{#if (eq profile.timezone "Asia/Karachi")}}selected{{/if}}>Asia/Karachi</option>
+            <option value="Asia/Kolkata" {{#if (eq profile.timezone "Asia/Kolkata")}}selected{{/if}}>Asia/Kolkata</option>
+            <option value="Asia/Manila" {{#if (eq profile.timezone "Asia/Manila")}}selected{{/if}}>Asia/Manila</option>
+            <option value="Asia/Seoul" {{#if (eq profile.timezone "Asia/Seoul")}}selected{{/if}}>Asia/Seoul</option>
+            <option value="Asia/Shanghai" {{#if (eq profile.timezone "Asia/Shanghai")}}selected{{/if}}>Asia/Shanghai</option>
+            <option value="Asia/Singapore" {{#if (eq profile.timezone "Asia/Singapore")}}selected{{/if}}>Asia/Singapore</option>
+            <option value="Asia/Tokyo" {{#if (eq profile.timezone "Asia/Tokyo")}}selected{{/if}}>Asia/Tokyo</option>
+            <option value="Australia/Adelaide" {{#if (eq profile.timezone "Australia/Adelaide")}}selected{{/if}}>Australia/Adelaide</option>
+            <option value="Australia/Brisbane" {{#if (eq profile.timezone "Australia/Brisbane")}}selected{{/if}}>Australia/Brisbane</option>
+            <option value="Australia/Melbourne" {{#if (eq profile.timezone "Australia/Melbourne")}}selected{{/if}}>Australia/Melbourne</option>
+            <option value="Australia/Perth" {{#if (eq profile.timezone "Australia/Perth")}}selected{{/if}}>Australia/Perth</option>
+            <option value="Australia/Sydney" {{#if (eq profile.timezone "Australia/Sydney")}}selected{{/if}}>Australia/Sydney</option>
+            <option value="Europe/Amsterdam" {{#if (eq profile.timezone "Europe/Amsterdam")}}selected{{/if}}>Europe/Amsterdam</option>
+            <option value="Europe/Athens" {{#if (eq profile.timezone "Europe/Athens")}}selected{{/if}}>Europe/Athens</option>
+            <option value="Europe/Berlin" {{#if (eq profile.timezone "Europe/Berlin")}}selected{{/if}}>Europe/Berlin</option>
+            <option value="Europe/Istanbul" {{#if (eq profile.timezone "Europe/Istanbul")}}selected{{/if}}>Europe/Istanbul</option>
+            <option value="Europe/London" {{#if (eq profile.timezone "Europe/London")}}selected{{/if}}>Europe/London</option>
+            <option value="Europe/Madrid" {{#if (eq profile.timezone "Europe/Madrid")}}selected{{/if}}>Europe/Madrid</option>
+            <option value="Europe/Moscow" {{#if (eq profile.timezone "Europe/Moscow")}}selected{{/if}}>Europe/Moscow</option>
+            <option value="Europe/Paris" {{#if (eq profile.timezone "Europe/Paris")}}selected{{/if}}>Europe/Paris</option>
+            <option value="Europe/Rome" {{#if (eq profile.timezone "Europe/Rome")}}selected{{/if}}>Europe/Rome</option>
+            <option value="Pacific/Auckland" {{#if (eq profile.timezone "Pacific/Auckland")}}selected{{/if}}>Pacific/Auckland</option>
+            <option value="Pacific/Fiji" {{#if (eq profile.timezone "Pacific/Fiji")}}selected{{/if}}>Pacific/Fiji</option>
+            <option value="Pacific/Honolulu" {{#if (eq profile.timezone "Pacific/Honolulu")}}selected{{/if}}>Pacific/Honolulu</option>
+          </select>
+        </div>
+      </div>
+    </div>
+
     <div class="field is-grouped">
       <div class="control">
         <button class="button is-primary" type="submit">Update Profile</button>

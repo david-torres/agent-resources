@@ -1,3 +1,5 @@
+const moment = require('moment-timezone');
+
 // N times helper, usage: {{#times 5}}<div>{{index}}</div>{{/times}}
 // https://stackoverflow.com/a/41463316
 const times = function (n, block) {
@@ -11,6 +13,12 @@ const times = function (n, block) {
     return accum;
 };
 
+const date_tz = function(datetime, format, timezone) {
+  if (!datetime) return '';
+  return moment.utc(datetime).tz(timezone).format(format);
+}
+
 module.exports = {
-    times
+    times,
+    date_tz
 }

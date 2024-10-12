@@ -29,12 +29,13 @@ router.get('/view/:name', authOptional, async (req, res) => {
 
 router.put('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
-  const { email, password, name, bio, image_url, is_public } = req.body;
+  const { email, password, name, bio, image_url, is_public, timezone } = req.body;
   const profile = {
     name,
     bio,
     image_url,
     is_public: (is_public ? true : false),
+    timezone
   }
   const { data, error } = await updateUser(email, password, profile);
   if (error) {

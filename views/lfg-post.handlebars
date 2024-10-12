@@ -1,7 +1,7 @@
 <div class="container">
   <div class="box lfg-post">
     <h3 class="title is-4">{{post.title}}</h3>
-    <p>Date: {{date post.date "dddd, MMMM Do YYYY, h:mm"}}</p>
+    <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm" profile.timezone}}</p>
     <p class="is-size-7">Created by: {{post.creator_name}}</p>
     <p class="mt-4">
       {{#if post.host_id}}

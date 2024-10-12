@@ -70,7 +70,7 @@
           <div class="select">
             <select name="trait{{@index}}" required>
               {{#each personalityMap}}
-              <option value="{{this}}" {{#if (eq (itemAt (lookup ../character "traits" ) @../index)
+              <option value="{{this}}" {{#if (eq (itemAt ../character.traits @../index)
                 this)}}selected{{/if}}>{{capitalize this}} ({{capitalize @key}})</option>
               {{/each}}
             </select>

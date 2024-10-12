@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times } = require('./util/handlebars');
+const { times, date_tz } = require('./util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -27,7 +27,8 @@ app.engine('handlebars', exphbs.engine({
   defaultLayout: 'main',
     helpers: {
       times,
-      range
+      range,
+      date_tz
   }
 }));
 app.set('view engine', 'handlebars');

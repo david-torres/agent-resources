@@ -18,7 +18,7 @@
   <div class="field">
     <label class="label">Date</label>
     <div class="control">
-      <input class="input" type="datetime-local" name="date" value="{{#if post}}{{date post.date "YYYY-MM-DDTHH:MM"}}{{else}}{{date "now" "YYYY-MM-DDTHH:MM" }}{{/if}}" required>
+      <input class="input" type="datetime-local" name="date" value="{{#if post}}{{date_tz post.date "YYYY-MM-DDTHH:MM" profile.timezone}}{{else}}{{date_tz (date "now" "YYYY-MM-DDTHH:MM") "YYYY-MM-DDTHH:MM" profile.timezone}}{{/if}}" required>
     </div>
   </div>
 
