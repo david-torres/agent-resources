@@ -45,7 +45,9 @@ const App = (function (document, supabase, htmx) {
 
       // add auth token to htmx requests
       document.body.addEventListener("htmx:configRequest", function (event) {
-        if (_getAuthToken() && _getRefreshToken()) {
+        const authToken = _getAuthToken();
+        const refreshToken = _getRefreshToken();
+        if (authToken && refreshToken) {
           event.detail.headers["Authorization"] = `Bearer ${authToken}`;
           event.detail.headers["Refresh-Token"] = refreshToken;
         }
@@ -58,21 +60,31 @@ const App = (function (document, supabase, htmx) {
     });
   }
 
+  function redirectTo(url) {
+    if (url === '/auth') {
+      htmx.ajax('GET', '/profile', { target: 'body', headers: {'redirect-to': '/profile' } });
+    } else {
+      htmx.ajax('GET', url, { target: 'body', headers: {'redirect-to': url } });
+    }
+  }
+
   function _handleAuthStateChange(event, session) {
     if (event === 'INITIAL_SESSION') {
       // handle initial session
-    } else if (event === 'SIGNED_IN') {
       if (session && _getAuthToken() !== session.access_token) {
         _setTokens(session.access_token, session.refresh_token);
-        if (window.location.pathname === '/auth') {
-          htmx.ajax('GET', '/profile', 'body', { history: 'replace' });
-        } else {
-          htmx.ajax('GET', window.location.pathname, 'body', { history: 'replace' });
-        }
+      }
+      redirectTo(window.location.pathname);
+    } else if (event === 'SIGNED_IN') {
+      // handle sign in event
+      if (session && _getAuthToken() !== session.access_token) {
+        _setTokens(session.access_token, session.refresh_token);
+        redirectTo(window.location.pathname);
       }
     } else if (event === 'SIGNED_OUT') {
       // handle sign out event
       _clearTokens();
+      window.location.href = '/auth';
     } else if (event === 'PASSWORD_RECOVERY') {
       // handle password recovery event
     } else if (event === 'TOKEN_REFRESHED') {
