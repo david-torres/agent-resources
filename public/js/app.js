@@ -1,7 +1,9 @@
-const App = (function (document, supabase, htmx) {
+const App = (function (document, supabase, htmx, FullCalendar) {
   let supabaseClient;
   let authToken = null;
   let refreshToken = null;
+
+  let calendar;
 
   const _getAuthToken = () => {
     return authToken || localStorage.getItem('authToken');
@@ -57,14 +59,21 @@ const App = (function (document, supabase, htmx) {
       document.body.addEventListener("htmx:responseError", function (event) {
         _displayError(event.detail.xhr.response);
       });
+
+      document.addEventListener('htmx:afterRequest', function (evt) {
+        console.log(evt);
+        if (!_getAuthToken()) return;
+        if (evt.detail.pathInfo.finalRequestPath !== '/') return;
+        renderCalendar();
+      });
     });
   }
 
   function redirectTo(url) {
     if (url === '/auth') {
-      htmx.ajax('GET', '/profile', { target: 'body', headers: {'redirect-to': '/profile' } });
+      htmx.ajax('GET', '/', { target: 'body', headers: { 'redirect-to': '/' } });
     } else {
-      htmx.ajax('GET', url, { target: 'body', headers: {'redirect-to': url } });
+      htmx.ajax('GET', url, { target: 'body', headers: { 'redirect-to': url } });
     }
   }
 
@@ -137,10 +146,37 @@ const App = (function (document, supabase, htmx) {
     }
   };
 
+  const renderCalendar = () => {
+    const calendarEl = htmx.find('#calendar');
+    if (calendarEl) {
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        events: async () => {
+          // fetch events
+          const r = await fetch('/lfg/events/all', {
+            headers: {
+              'Authorization': `Bearer ${_getAuthToken()}`,
+              'Refresh-Token': `${_getRefreshToken()}`
+            }
+          })
+            .then(response => response.json())
+            .catch(error => {
+              _displayError('Failed to load events');
+              console.error('Error fetching events:', error);
+              return [];
+            });
+            return r;
+        }
+      });
+      calendar.render();
+    }
+  };
+
   return {
     init,
     signIn,
     signUp,
-    signOut
+    signOut,
+    renderCalendar
   };
-})(document, supabase, htmx);
+})(document, supabase, htmx, FullCalendar);
