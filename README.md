@@ -8,6 +8,7 @@ games, and more!
 - [Installation](#installation)
 - [Usage](#usage)
 - [Dependencies](#dependencies)
+- [Enclave](#enclave)
 - [License](#license)
 
 ## Installation
@@ -49,6 +50,15 @@ This project is built using:
 - [Supabase](https://github.com/supabase/supabase)
 - [Htmx](https://github.com/bigskysoftware/htmx)
 - [Bulma](https://github.com/jgthms/bulma)
+
+## Enclave
+
+New to the Enclave? Watch the video:
+
+[![Watch the video](https://img.youtube.com/vi/aBVeIi6s6rE/0.jpg)](https://www.youtube.com/watch?v=aBVeIi6s6rE)
+
+[Learn more about the Enclave](https://www.kickstarter.com/projects/757240159/enclave-a-tableless-roleplaying-game)
+
 
 ## License
 
