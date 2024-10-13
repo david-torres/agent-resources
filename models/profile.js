@@ -39,7 +39,7 @@ const getProfileByName = async (name) => {
 }
 
 const createProfile = async (user_id) => {
-  const { data, error } = await supabase.from('profiles').insert({ user_id: user.id, name: `Agent #${user.id}` }).select();
+  const { data, error } = await supabase.from('profiles').insert({ user_id, name: `Agent #${user_id}` }).select();
   return { data, error };
 }
 
