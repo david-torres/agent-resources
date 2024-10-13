@@ -158,7 +158,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         eventClick: function (info) {
           info.jsEvent.preventDefault();
           const event = info.event;
-          htmx.ajax('GET', `/lfg/${event.id}`, { target: 'body' });
+          const url = `/lfg/${event.id}`;
+          htmx.ajax('GET', url, { target: 'body', headers: { 'x-calendar': 1 } });
         },
         events: async () => {
           // fetch events
@@ -174,7 +175,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
               console.error('Error fetching events:', error);
               return [];
             });
-            return r;
+          return r;
         }
       });
       calendar.render();
