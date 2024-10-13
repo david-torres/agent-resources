@@ -206,4 +206,28 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
   }
 });
 
+router.get('/events/all', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const profile = await getProfile(user);
+  const { data: allPosts, error } = await getLfgPosts();
+
+  if (error) {
+    console.error(error);
+    res.status(400).json({ error: error.message });
+  } else {
+    const events = allPosts.map(post => ({
+      id: post.id,
+      title: post.title,
+      start: post.date,
+      allDay: false,
+      extendedProps: {
+        description: post.description,
+        creatorId: post.creator_id,
+        isCreator: post.creator_id === profile.id
+      }
+    }));
+    res.json(events);
+  }
+});
+
 module.exports = router;
