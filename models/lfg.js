@@ -1,5 +1,7 @@
 const { supabase } = require('./_base');
 const { getProfile } = require('./profile');
+const moment = require('moment-timezone');
+moment.tz.setDefault('UTC');
 
 const getLfgPosts = async () => {
   const { data, error } = await supabase.from('lfg_posts').select('*').eq('is_public', true).eq('status', 'open').order('created_at', { ascending: false });
@@ -98,6 +100,9 @@ const createLfgPost = async (postReq, user) => {
     postReq.is_public = false;
   }
 
+  // make sure the date is in UTC
+  postReq.date = moment.tz(postReq.date, profile.timezone).utc();
+
   const { data, error } = await supabase.from('lfg_posts').insert(postReq).select();
   return { data, error };
 }
@@ -137,6 +142,9 @@ const updateLfgPost = async (id, postReq, user) => {
   } else {
     postReq.is_public = false;
   }
+
+  // make sure the date is in UTC
+  postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
   const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id);
   return { data, error };
