@@ -151,6 +151,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     if (calendarEl) {
       calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
+        headerToolbar: {
+          left: 'prev,next',
+          center: 'title',
+          right: 'dayGridMonth,dayGridWeek'
+        },
         events: async () => {
           // fetch events
           const r = await fetch('/lfg/events/all', {
