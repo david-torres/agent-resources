@@ -15,7 +15,7 @@ games, and more!
 
 1. Clone the repository:
    ```sh
-   git clone https://github.com/yourusername/agent-resources.git
+   git clone https://github.com/david-torres/agent-resources.git
    cd agent-resources
    ```
 
