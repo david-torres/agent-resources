@@ -71,6 +71,22 @@ const createLfgPost = async (postReq, user) => {
   const profile = await getProfile(user);
   postReq.creator_id = profile.id;
 
+  if (postReq.character) {
+    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestByPostIdAndProfileId(id, profile.id);
+
+    if (lfgRequest) {
+      const { data: deleteRequest, error: deleteRequestError } = await deleteJoinRequest(lfgRequest.id);
+      if (deleteRequestError) return { data: null, error: deleteRequestError };
+    }
+
+    const { data: lfgJoin, error: lfgJoinError } = await joinLfgPost(id, profile.id, 'player', postReq.character);
+    if (lfgJoinError) return { data: null, error: lfgJoinError };
+
+    const { data: joinRequest, error: joinRequestError } = await updateJoinRequest(lfgJoin[0].id, 'approved');
+    if (joinRequestError) return { data: null, error: joinRequestError };
+  }
+  delete postReq.character;
+
   if (postReq.host_id == 'on') {
     postReq.host_id = profile.id;
   } else {
