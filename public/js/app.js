@@ -61,7 +61,6 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       });
 
       document.addEventListener('htmx:afterRequest', function (evt) {
-        console.log(evt);
         if (!_getAuthToken()) return;
         if (evt.detail.pathInfo.finalRequestPath !== '/') return;
         renderCalendar();
