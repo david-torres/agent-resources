@@ -37,7 +37,8 @@ CREATE TABLE characters (
   image_url TEXT NULL,
   flavor TEXT NULL,
   ideas TEXT NULL,
-  background TEXT NULL
+  background TEXT NULL,
+  perks TEXT NULL;
 );
 
 -- missions table
