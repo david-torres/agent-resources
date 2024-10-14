@@ -155,6 +155,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           center: 'title',
           right: 'dayGridMonth,dayGridWeek'
         },
+        eventClick: function (info) {
+          info.jsEvent.preventDefault();
+          const event = info.event;
+          htmx.ajax('GET', `/lfg/${event.id}`, { target: 'body' });
+        },
         events: async () => {
           // fetch events
           const r = await fetch('/lfg/events/all', {
