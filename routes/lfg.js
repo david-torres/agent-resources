@@ -76,6 +76,9 @@ router.get('/:id', authOptional, async (req, res) => {
   if (error) {
     res.status(400).send(error.message);
   } else {
+    if (req.headers['x-calendar']) {
+      res.header('HX-Push-Url', `/lfg/${req.params.id}`);
+    }
     res.render('lfg-post', { user, profile, post: data });
   }
 });
