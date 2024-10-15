@@ -46,11 +46,14 @@ CREATE TABLE missions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   name TEXT NOT NULL,
   focus_words TEXT,
+  statement TEXT,
   summary TEXT,
-  outcome TEXT,
+  outcome TEXT CHECK (status IN ('success', 'failure', 'pending')) NOT NULL DEFAULT 'pending',
+  creator_id UUID NOT NULL REFERENCES profiles(id),
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   is_public BOOLEAN DEFAULT FALSE,
-  host_id UUID NOT NULL REFERENCES profiles(id)
+  host_id UUID REFERENCES profiles(id),
+  host_name TEXT
 );
 
 -- mission_log_characters junction table

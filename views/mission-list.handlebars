@@ -1,0 +1,44 @@
+<section class="section">
+  <div class="container">
+    <h2 class="title is-2">Missions</h2>
+    <div class="buttons">
+      <a href="/missions/new" class="button is-primary">Create New Mission</a>
+    </div>
+
+    {{#if missions.length}}
+    <div class="block">
+      <table class="table is-fullwidth is-striped is-hoverable">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Date</th>
+            <th>Status</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {{#each missions}}
+          <tr>
+            <td>{{this.name}}</td>
+            <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
+            <td>{{this.outcome}}</td>
+            <td>
+              <div class="buttons are-small">
+                <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+                {{#if (eq this.creator_id ../profile.id)}}
+                <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
+                <button class="button is-danger" hx-delete="/missions/{{this.id}}" hx-target="closest tr"
+                  hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this mission?">Delete</button>
+                {{/if}}
+              </div>
+            </td>
+          </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+    {{else}}
+    <p class="has-text-centered">No missions available.</p>
+    {{/if}}
+  </div>
+</section>
