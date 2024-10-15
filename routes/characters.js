@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
-const { getProfile, getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
-  const user = res.locals.user;
-  const { data, error } = await getOwnCharacters(user);
+  const { profile } = res.locals;
+  const { data: characters, error } = await getOwnCharacters(profile);
   if (error) {
     res.status(400).send(error.message);
   } else {
-    res.render('character-list', { user, characters: data });
+    res.render('character-list', { characters });
   }
 });
 
 router.get('/new', isAuthenticated, (req, res) => {
-  const user = res.locals.user;
+  const { profile } = res.locals;
   res.render('character-form', {
-    user,
+    profile,
     isNew: true,
     statList,
     adventClassList,
@@ -30,13 +30,13 @@ router.get('/new', isAuthenticated, (req, res) => {
 });
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
-  const user = res.locals.user;
+  const { profile } = res.locals;
   const { data: character, error } = await getCharacter(req.params.id);
   if (error) {
     res.status(400).send(error.message);
   } else {
     res.render('character-form', {
-      user,
+      profile,
       isNew: false,
       character,
       statList,
@@ -51,8 +51,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 });
 
 router.post('/', isAuthenticated, async (req, res) => {
-  const user = res.locals.user;
-  const { data, error } = await createCharacter(req.body, user);
+  const { profile } = res.locals;
+  const { data, error } = await createCharacter(req.body, profile);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -69,9 +69,7 @@ router.get('/class-abilities', (req, res) => {
 });
 
 router.get('/:id', authOptional, async (req, res) => {
-  const user = res.locals.user;
-  let profile = null;
-  if (user) profile = await getProfile(user);
+  const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id);
   if (error) {
@@ -81,7 +79,6 @@ router.get('/:id', authOptional, async (req, res) => {
       res.status(404).send('Not found').send();
     } else {
       res.render('character', {
-        user,
         profile,
         character,
         statList,
@@ -95,9 +92,9 @@ router.get('/:id', authOptional, async (req, res) => {
 });
 
 router.put('/:id', isAuthenticated, async (req, res) => {
-  const user = res.locals.user;
+  const { profile } = res.locals;
   const { id } = req.params;
-  const { data, error } = await updateCharacter(id, req.body, user);
+  const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
     res.status(400).send(error.message);
   } else {
@@ -106,9 +103,9 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 });
 
 router.delete('/:id', isAuthenticated, async (req, res) => {
-  const user = res.locals.user;
+  const { profile } = res.locals;
   const { id } = req.params;
-  const { error } = await deleteCharacter(id, user);
+  const { error } = await deleteCharacter(id, profile);
   if (error) {
     res.status(400).send(error.message);
   } else {

@@ -1,4 +1,4 @@
-const { getUserFromToken } = require('./supabase');
+const { getUserFromToken, getProfile } = require('./supabase');
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
@@ -13,6 +13,11 @@ async function isAuthenticated(req, res, next) {
     res.redirect('/auth');
   } else {
     res.locals.user = user;
+    if (user) {
+      res.locals.profile = await getProfile(user);
+    } else {
+      res.locals.profile = null;
+    }
 
     if (req.headers['redirect-to']) {
       const referer = new URL(req.headers['referer']).pathname;
@@ -35,7 +40,11 @@ async function authOptional(req, res, next) {
   const refreshToken = req.headers['refresh-token'];
   const user = await getUserFromToken(authToken, refreshToken);
   res.locals.user = user;
-
+  if (user) {
+    res.locals.profile = await getProfile(user);
+  } else {
+    res.locals.profile = null;
+  }
   if (req.headers['redirect-to']) {
     const referer = new URL(req.headers['referer']).pathname;
     if (referer != req.headers['redirect-to']) {
