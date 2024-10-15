@@ -11,6 +11,7 @@ const authRoutes = require('./routes/auth');
 const charactersRoutes = require('./routes/characters');
 const lfgRoutes = require('./routes/lfg');
 const profileRoutes = require('./routes/profile');
+const missionsRoutes = require('./routes/missions');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -47,6 +48,7 @@ app.use('/auth', authRoutes);
 app.use('/profile', profileRoutes);
 app.use('/characters', charactersRoutes);
 app.use('/lfg', lfgRoutes);
+app.use('/missions', missionsRoutes);
 
 // Start server
 app.listen(PORT, () => {
