@@ -191,7 +191,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
     post.host_id = null;
     const { data: updatePost, error: updatePostError } = await updateLfgPost(req.params.id, post, user);
     if (updatePostError) {
-      res.status(400).send(error.message);
+      res.status(400).send(updatePostError.message);
     }
     res.headers('HX-Location', `/lfg`).send();
     return;
