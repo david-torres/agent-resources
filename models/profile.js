@@ -1,5 +1,4 @@
 const { supabase } = require('./_base');
-const { getUser } = require('./auth');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 

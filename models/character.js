@@ -1,8 +1,6 @@
 const { supabase } = require('./_base');
-const { getProfile } = require('./profile');
 
-const getOwnCharacters = async (user) => {
-  const profile = await getProfile(user);
+const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
   if (error) {
     console.error(error);
@@ -43,8 +41,7 @@ const getCharacter = async (id) => {
   return { data, error };
 }
 
-const createCharacter = async (characterReq, user) => {
-  const profile = await getProfile(user);
+const createCharacter = async (characterReq, profile) => {
   characterReq.creator_id = profile.id;
 
   // handle personality traits
@@ -102,8 +99,7 @@ const createCharacter = async (characterReq, user) => {
   return { data: character, error };
 }
 
-const updateCharacter = async (id, characterReq, user) => {
-  const profile = await getProfile(user);
+const updateCharacter = async (id, characterReq, profile) => {
   const { data: characterData, error: characterError } = await getCharacter(id);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
@@ -167,13 +163,12 @@ const updateCharacter = async (id, characterReq, user) => {
   return { data: character, error };
 }
 
-const deleteCharacter = async (id, character, user) => {
-  const profile = await getProfile(user);
+const deleteCharacter = async (id, profile) => {
   const { data: characterData, error: characterError } = await getCharacter(id);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
-  const { data, error } = await supabase.from('characters').delete(character).eq('id', id).eq('creator_id', profile.id);
+  const { data, error } = await supabase.from('characters').delete().eq('id', id).eq('creator_id', profile.id);
   return { data, error };
 }
 

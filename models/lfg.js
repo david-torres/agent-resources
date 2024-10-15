@@ -1,5 +1,4 @@
 const { supabase } = require('./_base');
-const { getProfile } = require('./profile');
 const moment = require('moment-timezone');
 moment.tz.setDefault('UTC');
 
@@ -69,8 +68,7 @@ const getLfgPost = async (id) => {
   return { data: post, error };
 }
 
-const createLfgPost = async (postReq, user) => {
-  const profile = await getProfile(user);
+const createLfgPost = async (postReq, profile) => {
   postReq.creator_id = profile.id;
 
   const characterId = postReq.character;
@@ -93,7 +91,7 @@ const createLfgPost = async (postReq, user) => {
   const { data: post, error } = await supabase.from('lfg_posts').insert(postReq).select();
 
   if (postReq.character) {
-    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestByPostIdAndProfileId(post.id, profile.id);
+    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestForUserAndPost(profile.id, post.id);
 
     if (lfgRequest) {
       const { data: deleteRequest, error: deleteRequestError } = await deleteJoinRequest(lfgRequest.id);
@@ -110,12 +108,11 @@ const createLfgPost = async (postReq, user) => {
   return { data: post, error };
 }
 
-const updateLfgPost = async (id, postReq, user) => {
-  const profile = await getProfile(user);
+const updateLfgPost = async (id, postReq, profile) => {
   const { data: post, error: postError } = await getLfgPost(id);
   if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
   if (postReq.character) {
-    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestByPostIdAndProfileId(id, profile.id);
+    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestForUserAndPost(profile.id, id);
 
     if (lfgRequest) {
       const { data: deleteRequest, error: deleteRequestError } = await deleteJoinRequest(lfgRequest.id);
@@ -153,8 +150,7 @@ const updateLfgPost = async (id, postReq, user) => {
   return { data, error };
 }
 
-const deleteLfgPost = async (id, user) => {
-  const profile = await getProfile(user);
+const deleteLfgPost = async (id, profile) => {
   const { data: post, error: postError } = await getLfgPost(id);
   if (postError) return { data: null, error: postError };
   if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
@@ -164,6 +160,13 @@ const deleteLfgPost = async (id, user) => {
 }
 
 const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
+  if (joinType == 'player' && !characterId) return { data: null, error: 'Character is required for player join' };
+  if (joinType == 'player') {
+    const { data: character, error: characterError } = await supabase.from('characters').select('*').eq('id', characterId).single();
+    if (characterError) return { data: null, error: characterError };
+  }
+  if (joinType == 'conduit') characterId = null;
+
   const joinRequest = {
     lfg_post_id: postId,
     profile_id: profileId,
@@ -188,7 +191,7 @@ const getLfgJoinRequests = async (postId) => {
   return { data, error };
 }
 
-const getLfgJoinRequestByPostIdAndProfileId = async (postId, profileId) => {
+const getLfgJoinRequestForUserAndPost = async (profileId, postId) => {
   const { data, error } = await supabase
     .from('lfg_join_requests')
     .select('*')
@@ -253,7 +256,7 @@ module.exports = {
   deleteLfgPost,
   joinLfgPost,
   getLfgJoinRequests,
-  getLfgJoinRequestByPostIdAndProfileId,
+  getLfgJoinRequestForUserAndPost,
   updateJoinRequest,
   deleteJoinRequest
 };

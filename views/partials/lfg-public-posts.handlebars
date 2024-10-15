@@ -18,7 +18,7 @@
       <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
       {{else}}
       {{#inArray (pluck this.join_requests "profile_id") (lookup ../profile "id")}}
-      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Player</button>
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin</button>
       {{else}}
       <button class="button is-primary" hx-get="/lfg/{{this.id}}/join" hx-swap="outerHTML">Join</button>
       {{/inArray}}
