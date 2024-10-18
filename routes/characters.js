@@ -3,6 +3,7 @@ const router = express.Router();
 const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
+const { processCharacterImport } = require('../util/character-import');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -67,6 +68,23 @@ router.get('/class-gear', (req, res) => {
 router.get('/class-abilities', (req, res) => {
   res.render('partials/character-class-abilities', { layout: false, classAbilityList });
 });
+
+router.get('/import', isAuthenticated, (req, res) => {
+  const { profile } = res.locals;
+  res.render('character-import', { profile });
+});
+
+router.post('/import', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { inputText } = req.body;
+  try {
+    const character = await processCharacterImport(inputText, profile);
+    res.header('HX-Location', `/characters/${character.id}`).send();
+  } catch (error) {
+    res.status(400).send(error.message);
+  }
+});
+
 
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;

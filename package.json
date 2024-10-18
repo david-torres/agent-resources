@@ -15,7 +15,9 @@
     "express-handlebars": "^8.0.1",
     "handlebars-helper-range": "^1.1.1",
     "handlebars-helpers": "^0.10.0",
-    "moment-timezone": "^0.5.46"
+    "llm-api": "^1.6.0",
+    "moment-timezone": "^0.5.46",
+    "zod-gpt": "^0.16.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.7"
