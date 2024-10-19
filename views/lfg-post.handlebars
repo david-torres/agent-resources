@@ -19,10 +19,10 @@
       </button>
       <div id="calendar-buttons" class="is-hidden">
         <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
-        <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo Calendar</a>
-        <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Outlook Calendar</a>
-        <a class="button" href="{{calendar_link 'outlook' post.date post.title post.description}}">Outlook Calendar</a>
-        <a class="button" href="{{calendar_link 'google' post.date post.title post.description}}">Google Calendar</a>
+        <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo</a>
+        <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Office365</a>
+        <a class="button" href="{{calendar_link 'outlook' post.date post.title post.description}}">Outlook</a>
+        <a class="button" href="{{calendar_link 'google' post.date post.title post.description}}">Google</a>
       </div>
       {{#if profile}}
       {{#if (eq post.host_id profile.id)}}
