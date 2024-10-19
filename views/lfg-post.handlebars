@@ -11,18 +11,32 @@
     <div class="box content mt-4">
       {{{markdown post.description}}}
     </div>
-    {{#if profile}}
+
     <div class="buttons is-right">
+      <button class="button" id="calendar-buttons-show" 
+        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');$el = htmx.find('#calendar-buttons'); const isHidden = $el.classList.contains('is-hidden') ; htmx.find('#calendar-buttons-show').innerHTML = isHidden ? 'Calendar' : 'Close';">
+        Calendar
+      </button>
+      <div id="calendar-buttons" class="is-hidden">
+        <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
+        <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo Calendar</a>
+        <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Outlook Calendar</a>
+        <a class="button" href="{{calendar_link 'outlook' post.date post.title post.description}}">Outlook Calendar</a>
+        <a class="button" href="{{calendar_link 'google' post.date post.title post.description}}">Google Calendar</a>
+      </div>
+      {{#if profile}}
       {{#if (eq post.host_id profile.id)}}
-      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
+      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+        hx-swap="outerHTML">Unjoin as Conduit</button>
       {{else}}
       {{#inArray (pluck post.join_requests "profile_id") profile.id}}
-      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin</button>
+      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+        hx-swap="outerHTML">Unjoin</button>
       {{else}}
       <button class="button is-primary" hx-get="/lfg/{{post.id}}/join" hx-swap="outerHTML">Join</button>
       {{/inArray}}
       {{/if}}
+      {{/if}}
     </div>
-    {{/if}}
   </div>
 </div>
