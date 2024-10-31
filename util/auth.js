@@ -2,7 +2,12 @@ const { getUserFromToken, getProfile } = require('./supabase');
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
-    res.redirect('/auth');
+    const redirectUrl = req.headers['redirect-to'] || req.originalUrl;
+    if (redirectUrl == '/auth' || redirectUrl == '/') {
+      res.redirect('/auth/check');
+      return;
+    }
+    res.redirect(`/auth/check?r=${encodeURIComponent(redirectUrl)}`);
     return;
   }
 

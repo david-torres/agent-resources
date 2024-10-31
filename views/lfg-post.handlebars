@@ -14,10 +14,13 @@
 
     <div class="buttons is-right">
       <button class="button" id="calendar-buttons-show" 
-        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');$el = htmx.find('#calendar-buttons'); const isHidden = $el.classList.contains('is-hidden') ; htmx.find('#calendar-buttons-show').innerHTML = isHidden ? 'Calendar' : 'Close';">
+        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');">
         Calendar
       </button>
       <div id="calendar-buttons" class="is-hidden">
+        <button class="delete mt-2" id="calendar-buttons-hide"
+          hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');">
+        </button>
         <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
         <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo</a>
         <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Office365</a>

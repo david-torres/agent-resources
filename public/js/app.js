@@ -69,11 +69,12 @@ const App = (function (document, supabase, htmx, FullCalendar) {
   }
 
   function redirectTo(url) {
-    if (url === '/auth') {
-      htmx.ajax('GET', '/', { target: 'body', headers: { 'redirect-to': '/' } });
-    } else {
-      htmx.ajax('GET', url, { target: 'body', headers: { 'redirect-to': url } });
-    }
+    htmx.ajax('GET', url, { target: 'body', headers: { 'redirect-to': url } });
+  }
+
+  function getRedirectUrl() {
+    const url = new URL(window.location.href);
+    return url.searchParams.get('r');
   }
 
   function _handleAuthStateChange(event, session) {
@@ -82,17 +83,32 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       if (session && _getAuthToken() !== session.access_token) {
         _setTokens(session.access_token, session.refresh_token);
       }
-      redirectTo(window.location.pathname);
+
+      if (!session) {
+        redirectTo('/auth');
+        return;
+      }
+
+      const redirectUrl = getRedirectUrl();
+      if (redirectUrl) {
+        redirectTo(redirectUrl);
+      }
     } else if (event === 'SIGNED_IN') {
+      const redirectUrl = getRedirectUrl() || '/';
       // handle sign in event
       if (session && _getAuthToken() !== session.access_token) {
         _setTokens(session.access_token, session.refresh_token);
-        redirectTo(window.location.pathname);
+        redirectTo(redirectUrl);
       }
     } else if (event === 'SIGNED_OUT') {
+      let returnUrl = getRedirectUrl();
+      if (returnUrl && (returnUrl.startsWith('/auth') || returnUrl === '/')) {
+        returnUrl = null;
+      }
+
       // handle sign out event
       _clearTokens();
-      window.location.href = '/auth';
+      window.location.href = returnUrl ? `/auth?r=${encodeURIComponent(returnUrl)}` : '/auth';
     } else if (event === 'PASSWORD_RECOVERY') {
       // handle password recovery event
     } else if (event === 'TOKEN_REFRESHED') {

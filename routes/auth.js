@@ -5,6 +5,10 @@ router.get('/', (req, res) => {
   res.render('auth');
 });
 
+router.get('/check', (req, res) => {
+  res.render('auth-check');
+});
+
 router.get('/signin-form', (req, res) => {
   res.render('partials/signin-form', { layout: false });
 });
