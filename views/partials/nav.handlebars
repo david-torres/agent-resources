@@ -3,9 +3,15 @@
     <a class="navbar-item" href="/">
       <strong>Agent Resources</strong>
     </a>
+    <button class="navbar-burger" id="navbar-burger" role="button" aria-label="menu" aria-expanded="false" hx-on:click="htmx.toggleClass(htmx.find('#navbar-burger'), 'is-active');htmx.toggleClass(htmx.find('#navbar-menu'), 'is-active');return false;">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
   </div>
 
-  <div class="navbar-menu">
+  <div class="navbar-menu" id="navbar-menu">
     <div class="navbar-end">
       {{#if profile}}
       <a class="navbar-item" href="/profile">Profile</a>

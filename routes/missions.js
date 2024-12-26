@@ -3,7 +3,7 @@ const router = express.Router();
 const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission } = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
-router.get('/', authOptional, async (req, res) => {
+router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: missions, error } = await getMissions();
   if (error) {
