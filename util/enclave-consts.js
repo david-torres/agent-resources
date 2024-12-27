@@ -108,6 +108,22 @@ const classGearList = {
     'Earspoon',
     'Endless Tankard'
   ],
+  Freerunner: [
+    'Sportwear',
+    'Sneakers',
+    'Tonfa',
+    'Grapple Gun',
+    'Energy Drink',
+    'Action Camera'
+  ],
+  Witchhunter: [
+    'Watchcoat',
+    'Capotain',
+    'Ballestrino',
+    'Eyepatch',
+    'Aspergillum',
+    'Firebrand'
+  ],
 };
 
 const classAbilityList = {
@@ -160,7 +176,17 @@ const classAbilityList = {
     'Friend in Need',
     'Samosek',
     'Trading Blows'
-  ]
+  ],
+  Freerunner: [
+    'Derive',
+    'Tag, You\'re It',
+    'Hangtime'
+  ],
+  Witchhunter: [
+    'Cloud of Suspicion',
+    'Omoriori',
+    'Malleus Maleficarum'
+  ],
 }
 
 const adventClassList = [
@@ -175,7 +201,9 @@ const adventClassList = [
 const aspirantPreviewClassList = [
   'Berserker',
   'Infiltrator',
-  'Vessel'
+  'Vessel',
+  'Freerunner',
+  'Witchhunter'
 ];
 
 const playerCreatedClassList = [
