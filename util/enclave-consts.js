@@ -108,6 +108,14 @@ const classGearList = {
     'Earspoon',
     'Endless Tankard'
   ],
+  Freerunner: [
+    'Sportwear',
+    'Sneakers',
+    'Tonfa',
+    'Grapple Gun',
+    'Energy Drink',
+    'Action Camera'
+  ]
 };
 
 const classAbilityList = {
@@ -160,6 +168,11 @@ const classAbilityList = {
     'Friend in Need',
     'Samosek',
     'Trading Blows'
+  ],
+  Freerunner: [
+    'Derive',
+    'Tag, You\'re It',
+    'Hangtime'
   ]
 }
 
@@ -175,7 +188,8 @@ const adventClassList = [
 const aspirantPreviewClassList = [
   'Berserker',
   'Infiltrator',
-  'Vessel'
+  'Vessel',
+  'Freerunner'
 ];
 
 const playerCreatedClassList = [
