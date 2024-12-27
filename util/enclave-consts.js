@@ -115,7 +115,15 @@ const classGearList = {
     'Grapple Gun',
     'Energy Drink',
     'Action Camera'
-  ]
+  ],
+  Witchhunter: [
+    'Watchcoat',
+    'Capotain',
+    'Ballestrino',
+    'Eyepatch',
+    'Aspergillum',
+    'Firebrand'
+  ],
 };
 
 const classAbilityList = {
@@ -173,7 +181,12 @@ const classAbilityList = {
     'Derive',
     'Tag, You\'re It',
     'Hangtime'
-  ]
+  ],
+  Witchhunter: [
+    'Cloud of Suspicion',
+    'Omoriori',
+    'Malleus Maleficarum'
+  ],
 }
 
 const adventClassList = [
@@ -189,7 +202,8 @@ const aspirantPreviewClassList = [
   'Berserker',
   'Infiltrator',
   'Vessel',
-  'Freerunner'
+  'Freerunner',
+  'Witchhunter'
 ];
 
 const playerCreatedClassList = [
