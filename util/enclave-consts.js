@@ -207,13 +207,13 @@ const aspirantPreviewClassList = [
 ];
 
 const playerCreatedClassList = [
-  'Battery',
+  // 'Battery',
   'Bogatyr',
-  'Inventor',
-  'Jinx',
-  'Lithomancer',
-  'Ratcatcher',
-  'Shōnen'
+  // 'Inventor',
+  // 'Jinx',
+  // 'Lithomancer',
+  // 'Ratcatcher',
+  // 'Shōnen'
 ];
 
 module.exports = {
