@@ -199,6 +199,7 @@ const classAbilityList = {
     'Tremor Sense',
     'Geomorph',
     'Stoneskin'
+  ]
 }
 
 const adventClassList = [
