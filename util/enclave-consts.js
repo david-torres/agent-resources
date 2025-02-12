@@ -216,17 +216,12 @@ const aspirantPreviewClassList = [
   'Infiltrator',
   'Vessel',
   'Freerunner',
-  'Witchhunter',
-  'Lithomancer'
+  'Witchhunter'
 ];
 
 const playerCreatedClassList = [
-  'Battery',
   'Bogatyr',
-  'Inventor',
-  'Jinx',
-  'Ratcatcher',
-  'Shōnen'
+  'Lithomancer'
 ];
 
 module.exports = {
