@@ -124,6 +124,14 @@ const classGearList = {
     'Aspergillum',
     'Firebrand'
   ],
+  Lithomancer: [
+    'Huaraches',
+    'Earthshapers',
+    'Circling Stones',
+    'Safety Goggles',
+    'Rock Maul',
+    'Prima Materia'
+  ]
 };
 
 const classAbilityList = {
@@ -187,6 +195,10 @@ const classAbilityList = {
     'Omoriori',
     'Malleus Maleficarum'
   ],
+  Lithomancer: [
+    'Tremor Sense',
+    'Geomorph',
+    'Stoneskin'
 }
 
 const adventClassList = [
@@ -203,7 +215,8 @@ const aspirantPreviewClassList = [
   'Infiltrator',
   'Vessel',
   'Freerunner',
-  'Witchhunter'
+  'Witchhunter',
+  'Lithomancer'
 ];
 
 const playerCreatedClassList = [
@@ -211,7 +224,6 @@ const playerCreatedClassList = [
   'Bogatyr',
   'Inventor',
   'Jinx',
-  'Lithomancer',
   'Ratcatcher',
   'Shōnen'
 ];
