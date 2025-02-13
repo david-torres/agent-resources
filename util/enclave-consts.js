@@ -82,6 +82,7 @@ const classGearList = {
     'Great Axe',
     'Spatha',
     'Warpaint',
+    'Gaesa',
     'Beast Claws'
   ],
   Infiltrator: [
