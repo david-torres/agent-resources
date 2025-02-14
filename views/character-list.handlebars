@@ -23,7 +23,7 @@
             <td><span class="title is-4">{{this.name}}</span></td>
             <td>
               <div class="buttons are-small">
-                <a href="/characters/{{this.id}}" class="button is-secondary">View</a>
+                <a href="/characters/{{this.id}}/{{this.name}}" class="button is-secondary">View</a>
                 <a href="/characters/{{this.id}}/edit" class="button is-warning">Edit</a>
                 <button class="button is-danger" hx-delete="/characters/{{this.id}}" hx-target="closest tr"
                   hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this character?">Delete</button>

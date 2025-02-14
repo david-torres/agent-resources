@@ -1,7 +1,7 @@
 <h2 class="title is-3">{{#if isNew}}Create New Character{{else}}Edit Character{{/if}}</h2>
 {{#unless isNew}}
 <div class="buttons">
-  <a href="/characters/{{character.id}}" class="button is-primary">View Character</a>
+  <a href="/characters/{{character.id}}/{{character.name}}" class="button is-primary">View Character</a>
 </div>
 {{/unless}}
 

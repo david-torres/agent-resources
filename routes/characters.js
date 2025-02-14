@@ -79,14 +79,14 @@ router.post('/import', isAuthenticated, async (req, res) => {
   const { inputText } = req.body;
   try {
     const character = await processCharacterImport(inputText, profile);
-    res.header('HX-Location', `/characters/${character.id}`).send();
+    res.header('HX-Location', `/characters/${character.id}/${character.name}`).send();
   } catch (error) {
     res.status(400).send(error.message);
   }
 });
 
 
-router.get('/:id', authOptional, async (req, res) => {
+router.get('/:id/:name?', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id);
@@ -109,18 +109,18 @@ router.get('/:id', authOptional, async (req, res) => {
   }
 });
 
-router.put('/:id', isAuthenticated, async (req, res) => {
+router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
     res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', `/characters/${id}`).send();
+    res.header('HX-Location', `/characters/${id}/${data.name}`).send();
   }
 });
 
-router.delete('/:id', isAuthenticated, async (req, res) => {
+router.delete('/:id/:name?', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { error } = await deleteCharacter(id, profile);
