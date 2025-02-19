@@ -34,7 +34,7 @@ router.get('/:id', authOptional, async (req, res) => {
   if (error) {
     res.status(400).send(error.message);
   } else {
-    res.render('mission', { profile, mission });
+    res.render('mission', { profile, mission, authOptional: true });
   }
 });
 

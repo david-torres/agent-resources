@@ -67,7 +67,7 @@ router.get('/:id', authOptional, async (req, res) => {
     if (req.headers['x-calendar']) {
       res.header('HX-Push-Url', `/lfg/${req.params.id}`);
     }
-    res.render('lfg-post', { profile, post: data });
+    res.render('lfg-post', { profile, post: data, authOptional: true });
   }
 });
 

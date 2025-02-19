@@ -65,6 +65,17 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         if (evt.detail.pathInfo.finalRequestPath !== '/') return;
         renderCalendar();
       });
+
+      // Add handler for htmx:afterSettle
+      document.body.addEventListener('htmx:afterSettle', function(event) {
+        const xhr = event.detail.xhr;
+        const authOptional = xhr.getResponseHeader('X-Auth-Optional') === 'true';
+        if (authOptional) {
+          document.body.setAttribute('data-auth-optional', 'true');
+        } else {
+          document.body.setAttribute('data-auth-optional', 'false');
+        }
+      });
     });
   }
 
@@ -77,6 +88,14 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     return url.searchParams.get('r');
   }
 
+  function getReturnUrl() {
+    let returnUrl = getRedirectUrl();
+    if (returnUrl && (returnUrl.startsWith('/auth') || returnUrl === '/')) {
+      returnUrl = null;
+    }
+    return returnUrl ? `/auth?r=${encodeURIComponent(returnUrl)}` : '/auth';
+  }
+
   function _handleAuthStateChange(event, session) {
     if (event === 'INITIAL_SESSION') {
       // handle initial session
@@ -85,7 +104,14 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       }
 
       if (!session) {
-        redirectTo('/auth');
+        _clearTokens();
+
+        const authOptional = document.body.getAttribute('data-auth-optional') === 'true';
+        if (!authOptional) {
+          let returnUrl = getReturnUrl();
+          redirectTo(returnUrl);
+        }
+
         return;
       }
 
@@ -101,14 +127,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         redirectTo(redirectUrl);
       }
     } else if (event === 'SIGNED_OUT') {
-      let returnUrl = getRedirectUrl();
-      if (returnUrl && (returnUrl.startsWith('/auth') || returnUrl === '/')) {
-        returnUrl = null;
-      }
+      let returnUrl = getReturnUrl();
 
       // handle sign out event
       _clearTokens();
-      window.location.href = returnUrl ? `/auth?r=${encodeURIComponent(returnUrl)}` : '/auth';
+      window.location.href = returnUrl;
     } else if (event === 'PASSWORD_RECOVERY') {
       // handle password recovery event
     } else if (event === 'TOKEN_REFRESHED') {
