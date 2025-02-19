@@ -103,7 +103,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         adventClassList,
         aspirantPreviewClassList,
         playerCreatedClassList,
-        classAbilityList
+        classAbilityList,
+        authOptional: true
       });
     }
   }

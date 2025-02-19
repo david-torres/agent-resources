@@ -2,7 +2,7 @@
 <html lang="en">
 {{> head}}
 
-<body hx-boost="true"y>
+<body hx-boost="true" data-auth-optional="{{#if authOptional}}{{authOptional}}{{else}}false{{/if}}">
   {{> nav}}
   <section class="section">
     <div id="alerts" class="block"></div>

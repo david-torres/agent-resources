@@ -36,6 +36,8 @@ async function isAuthenticated(req, res, next) {
 }
 
 async function authOptional(req, res, next) {
+  res.header('X-Auth-Optional', 'true');
+
   if (!req.headers['authorization']) {
     next();
     return;

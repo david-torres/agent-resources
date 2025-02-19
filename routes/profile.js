@@ -22,7 +22,7 @@ router.get('/view/:name', authOptional, async (req, res) => {
   if (profile.is_public === false) {
     res.status(404).send('Not found');
   }
-  res.render('profile-view', { user, profile, viewProfile });
+  res.render('profile-view', { user, profile, viewProfile, authOptional: true });
 });
 
 router.put('/', isAuthenticated, async (req, res) => {
