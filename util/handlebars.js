@@ -1,5 +1,6 @@
 const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
+const { v1LevelingSequence, v2LevelingSequence } = require('./enclave-consts');
 
 // N times helper, usage: {{#times 5}}<div>{{index}}</div>{{/times}}
 // https://stackoverflow.com/a/41463316
@@ -44,8 +45,20 @@ const calendar_link = function (platform, start, title, description) {
   return false;
 }
 
+const getTotalV1MissionsNeeded = (targetLevel) => {
+  if (targetLevel <= 1) return 0;
+  return v1LevelingSequence.slice(0, targetLevel - 1).reduce((sum, num) => sum + num, 0);
+};
+
+const getTotalV2MissionsNeeded = (targetLevel) => {
+  if (targetLevel <= 1) return 0;
+  return v2LevelingSequence.slice(0, targetLevel - 1).reduce((sum, num) => sum + num, 0);
+};
+
 module.exports = {
   times,
   date_tz,
-  calendar_link
+  calendar_link,
+  getTotalV1MissionsNeeded,
+  getTotalV2MissionsNeeded
 }
