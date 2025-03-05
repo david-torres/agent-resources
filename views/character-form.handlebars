@@ -42,7 +42,13 @@
     <div class="control">
       <label class="label">Level</label>
       <input class="input" type="number" name="level" placeholder="Level"
-        value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="20">
+        value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="10">
+      {{#if (lt character.level 10)}}
+      <p class="help">
+        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}<br>
+        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}
+      </p>
+      {{/if}}
     </div>
 
     <div class="control">

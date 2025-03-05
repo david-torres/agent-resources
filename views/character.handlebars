@@ -14,6 +14,12 @@
         <h3 class="title is-4">Character Info</h3>
         <p><strong>Class:</strong> {{character.class}}</p>
         <p><strong>Level:</strong> {{character.level}}</p>
+        {{#if (lt character.level 10)}}
+        <p class="is-size-7">
+          V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}<br>
+          V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}
+        </p>
+        {{/if}}
         <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
         <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
       </div>

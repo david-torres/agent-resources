@@ -225,6 +225,9 @@ const playerCreatedClassList = [
   'Lithomancer'
 ];
 
+const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];
+const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6];
+
 module.exports = {
   statList,
   personalityMap,
@@ -232,5 +235,7 @@ module.exports = {
   aspirantPreviewClassList,
   playerCreatedClassList,
   classGearList,
-  classAbilityList
+  classAbilityList,
+  v1LevelingSequence,
+  v2LevelingSequence
 };
