@@ -76,6 +76,16 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           document.body.setAttribute('data-auth-optional', 'false');
         }
       });
+
+      document.body.addEventListener('htmx:afterSwap', function(evt) {
+        // Handle character search results visibility
+        if (evt.detail.target.id === 'characterSearchResults') {
+          evt.detail.target.classList.remove('is-hidden');
+          setTimeout(() => {
+            evt.detail.target.classList.add('is-hidden');
+          }, 10000);
+        }
+      });
     });
   }
 

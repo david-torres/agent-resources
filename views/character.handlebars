@@ -33,6 +33,50 @@
         </div>
       </div>
 
+      <div class="box">
+        <h3 class="title is-4">Recent Missions</h3>
+        {{#if recentMissions.length}}
+        <div class="content">
+          <ul>
+            {{#each recentMissions}}
+            {{#or this.is_public (eq ../profile.id this.creator_id)}}
+            <li>
+              <strong><a href="/missions/{{this.id}}">{{this.name}}</a></strong>
+              <br>
+              {{#if profile}}
+              <small>{{date_tz this.date "MMM D, YYYY" profile.timezone}} - {{this.outcome}}</small>
+              {{else}}
+              <small>{{date this.date "MMM D, YYYY"}} - {{this.outcome}}</small>
+              {{/if}}
+            </li>
+            {{/or}}
+            {{/each}}
+          </ul>
+          <p class="has-text-right">
+            <a href="/missions/character/{{character.id}}">View all missions →</a>
+          </p>
+        </div>
+        {{else}}
+        <p class="has-text-centered">No missions yet</p>
+        {{/if}}
+
+        {{#if profile}}
+        {{#if (eq character.creator_id profile.id)}}
+        <form hx-post="/missions" hx-trigger="submit" class="mt-4">
+          <input type="hidden" name="characters[]" value="{{character.id}}">
+          <div class="field has-addons">
+            <div class="control is-expanded">
+              <input class="input" type="text" name="name" placeholder="Mission name" required>
+            </div>
+            <div class="control">
+              <button class="button is-primary" type="submit">Add Mission</button>
+            </div>
+          </div>
+        </form>
+        {{/if}}
+        {{/if}}
+      </div>
+
       {{#if profile}}
       {{#if (eq post.creator_id ../profile.id)}}
       <div class="field is-grouped is-pulled-right">

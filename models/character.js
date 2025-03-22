@@ -236,10 +236,99 @@ const setCharacterAbilities = async (id, abilities) => {
   return { data: newAbilities, error: null };
 }
 
+const getCharacterRecentMissions = async (characterId, limit = 5) => {
+  const { data, error } = await supabase
+    .from('mission_characters')
+    .select(`
+      mission_id,
+      missions (
+        id,
+        name,
+        date,
+        outcome,
+        is_public,
+        creator_id
+      )
+    `)
+    .eq('character_id', characterId)
+    .order('missions(date)', { ascending: false })
+    .limit(limit);
+  
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+
+  const filteredMissions = data.filter(mc => {
+    if (mc.missions !== null) {
+      return true;
+    }
+    return false;
+  }).map(m => m.missions);
+
+  return {
+    data: filteredMissions, 
+    error 
+  };
+};
+
+const incrementMissionCount = async (characterId) => {
+  const { data, error } = await supabase.rpc('increment_missions_count', { x: 1, character_id: characterId });
+  return { data, error };
+}
+
+const getCharacterAllMissions = async (characterId) => {
+  const { data, error } = await supabase
+    .from('mission_characters')
+    .select(`
+      mission_id,
+      missions (
+        id,
+        name,
+        date,
+        outcome,
+        summary,
+        is_public,
+        creator_id
+      )
+    `)
+    .eq('character_id', characterId)
+    .order('missions(date)', { ascending: false });
+  
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+
+  return { 
+    data: data.map(mc => mc.missions), 
+    error 
+  };
+};
+
+const searchPublicCharacters = async (q, count) => {
+  const { data, error } = await supabase
+    .from('characters')
+    .select('id, name')
+    .ilike('name', `%${q}%`)
+    .match({is_public: true})
+    .limit(count);
+  
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+
+    return { data, error }
+}
 module.exports = {
   getOwnCharacters,
   getCharacter,
   createCharacter,
   updateCharacter,
-  deleteCharacter
+  incrementMissionCount,
+  deleteCharacter,
+  getCharacterRecentMissions,
+  getCharacterAllMissions,
+  searchPublicCharacters
 };

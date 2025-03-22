@@ -13,15 +13,30 @@
             <th>Name</th>
             <th>Date</th>
             <th>Status</th>
+            <th>Characters</th>
             <th>Actions</th>
           </tr>
         </thead>
         <tbody>
           {{#each missions}}
+          {{#or this.is_public (eq ../profile.id this.creator_id)}}
           <tr>
             <td>{{this.name}}</td>
+            {{#if profile}}
             <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
+            {{else}}
+            <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
+            {{/if}}
             <td>{{this.outcome}}</td>
+            <td>
+              {{#if this.characters.length}}
+              {{#each this.characters}}
+              <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
+              {{/each}}
+              {{else}}
+              -
+              {{/if}}
+            </td>
             <td>
               <div class="buttons are-small">
                 <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
@@ -33,12 +48,13 @@
               </div>
             </td>
           </tr>
+          {{/or}}
           {{/each}}
         </tbody>
       </table>
     </div>
     {{else}}
-    <p class="has-text-centered">No missions available.</p>
+    <p class="has-text-centered">You don't have any missions logged.</p>
     {{/if}}
   </div>
 </section>

@@ -4,7 +4,11 @@
     <div class="column is-two-thirds">
       <div class="box">
         <h3 class="title is-4">Mission Details</h3>
+        {{#if profile}}
         <p><strong>Date:</strong> {{date_tz mission.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
+        {{else}}
+        <p><strong>Date:</strong> {{date mission.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
+        {{/if}}
         <p><strong>Status:</strong> {{mission.outcome}}</p>
         <p><strong>Focus Words:</strong> {{mission.focus_words}}</p>
       </div>
@@ -12,14 +16,31 @@
       <div class="box">
         <h3 class="title is-4">Mission Statement</h3>
         <div class="content">
-          {{{markdown mission.statement}}}
+          {{#if mission.statement}}{{{markdown mission.statement}}}{{/if}}
         </div>
       </div>
 
       <div class="box">
         <h3 class="title is-4">Mission Summary</h3>
         <div class="content">
-          {{{markdown mission.summary}}}
+          {{#if mission.summary}}{{{markdown mission.summary}}}{{/if}}
+        </div>
+      </div>
+
+      <div class="box">
+        <h3 class="title is-4">Characters</h3>
+        <div class="content">
+          {{#if mission.characters.length}}
+          <ul>
+            {{#each mission.characters}}
+            <li>
+              <a href="/characters/{{this.id}}">{{this.name}}</a>
+            </li>
+            {{/each}}
+          </ul>
+          {{else}}
+          <p>No characters assigned to this mission.</p>
+          {{/if}}
         </div>
       </div>
 
