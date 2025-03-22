@@ -1,14 +1,81 @@
 const { supabase } = require('./_base');
 
 const getMissions = async () => {
-  const { data, error } = await supabase.from('missions').select('*').order('date', { ascending: false });
-  return { data, error };
+  const { data, error } = await supabase
+    .from('missions')
+    .select(`
+      *,
+      characters:mission_characters(
+        character:characters(
+          id,
+          name
+        )
+      )
+    `)
+    .order('date', { ascending: false });
+  
+  if (error) return { data: null, error };
+  
+  // Transform the nested data structure
+  const transformedData = data.map(mission => ({
+    ...mission,
+    characters: mission.characters.map(mc => mc.character)
+  }));
+  
+  return { data: transformedData, error };
 };
 
 const getMission = async (id) => {
-  const { data, error } = await supabase.from('missions').select('*').eq('id', id).single();
-  return { data, error };
+  const { data, error } = await supabase
+    .from('missions')
+    .select(`
+      *,
+      characters:mission_characters(
+        character:characters(
+          id,
+          name
+        )
+      )
+    `)
+    .eq('id', id)
+    .single();
+  
+  if (error) return { data: null, error };
+  
+  // Transform the nested data structure
+  const transformedData = {
+    ...data,
+    characters: data.characters.map(mc => mc.character)
+  };
+  
+  return { data: transformedData, error };
 };
+
+const getOwnMissions = async (profile) => {
+  const { data, error } = await supabase
+    .from('missions')
+    .select(`
+      *,
+      characters:mission_characters(
+        character:characters(
+          id,
+          name
+        )
+      )
+    `)
+    .eq('creator_id', profile.id)
+    .order('date', { ascending: false });
+  
+  if (error) return { data: null, error };
+  
+  // Transform the nested data structure
+  const transformedData = data.map(mission => ({
+    ...mission,
+    characters: mission.characters.map(mc => mc.character)
+  }));
+  
+  return { data: transformedData, error };
+}
 
 const createMission = async (missionData, profile) => {
   missionData.creator_id = profile.id;
@@ -38,7 +105,7 @@ const deleteMission = async (id, profile) => {
 const addCharacterToMission = async (missionId, characterId) => {
   const { data, error } = await supabase
     .from('mission_characters')
-    .insert({ mission_id: missionId, character_id: characterId })
+    .upsert({ mission_id: missionId, character_id: characterId })
     .select();
   return { data, error };
 };
@@ -52,6 +119,14 @@ const removeCharacterFromMission = async (missionId, characterId) => {
   return { data, error };
 };
 
+const getMissionCharacters = async (missionId) => {
+  const { data, error } = await supabase
+    .from('mission_characters')
+    .select('character_id')
+    .eq('mission_id', missionId);
+  return { data, error };
+}
+
 module.exports = {
   getMissions,
   getMission,
@@ -60,4 +135,6 @@ module.exports = {
   deleteMission,
   addCharacterToMission,
   removeCharacterFromMission,
+  getMissionCharacters,
+  getOwnMissions
 };

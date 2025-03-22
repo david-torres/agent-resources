@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
@@ -85,6 +85,36 @@ router.post('/import', isAuthenticated, async (req, res) => {
   }
 });
 
+router.get('/search', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { q } = req.query;
+
+  const { data: mission, errorMission } = await getMission(req.query.mission);
+  if (errorMission) {
+    res.status(400).send(errorMission.message);
+    return;
+  }
+
+  if (!q || q.length < 2) {
+    res.render('partials/character-search-results', { 
+      layout: false, 
+      characters: [],
+      mission: mission
+    });
+    return;
+  }
+  const { data: characters, error } = await searchPublicCharacters(q);
+
+  if (error) {
+    res.status(400).send(error.message);
+  } else {
+    res.render('partials/character-search-results', { 
+      layout: false, 
+      characters,
+      mission: mission
+    });
+  }
+});
 
 router.get('/:id/:name?', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -96,9 +126,11 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
       res.status(404).send('Not found').send();
     } else {
+      const { data: recentMissions } = await getCharacterRecentMissions(id);
       res.render('character', {
         profile,
         character,
+        recentMissions,
         statList,
         adventClassList,
         aspirantPreviewClassList,

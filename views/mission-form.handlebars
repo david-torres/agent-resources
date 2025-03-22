@@ -74,7 +74,57 @@
       </label>
     </div>
   </div>
-
+{{#if mission}}
+  <div class="field">
+    <label class="label">Characters</label>
+    <div class="control">
+      <div class="field has-addons">
+        <div class="control is-expanded">
+          <input class="input" type="text" 
+            name="q" 
+            placeholder="Search characters..." 
+            hx-get="/characters/search?mission={{mission.id}}"
+            hx-trigger="input changed delay:300ms, search"
+            hx-target="#characterSearchResults"
+            hx-swap="innerHTML"
+            hx-indicator="#searchIndicator">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-primary" hx-trigger="click" hx-get="/characters/search?mission={{mission.id}}" hx-target="#characterSearchResults">Search</button>
+        </div>
+      </div>
+      <div id="searchIndicator" class="htmx-indicator is-hidden">
+        <div class="box mt-2">
+          <div class="content">
+            <p>Searching...</p>
+          </div>
+        </div>
+      </div>
+      <div id="characterSearchResults" class="box mt-2 is-hidden">
+        <div class="content">
+          <ul id="searchResultsList"></ul>
+        </div>
+      </div>
+      <div id="selectedCharacters" class="box mt-2">
+        <div class="content">
+          <ul id="selectedCharactersList">
+            {{#each mission.characters}}
+            <li>
+              {{this.name}}
+              <button type="button" 
+                class="button is-small is-danger is-light" 
+                hx-delete="/missions/{{../mission.id}}/characters/{{this.id}}"
+                hx-target="#selectedCharactersList"
+                hx-swap="outerHTML">Remove</button>
+              <input type="hidden" name="characters[]" value="{{this.id}}">
+            </li>
+            {{/each}}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+{{/if}}
   <div class="field is-grouped mt-4">
     <div class="control">
       <button class="button is-primary" type="submit">{{#if isNew}}Create{{else}}Update{{/if}} Mission</button>

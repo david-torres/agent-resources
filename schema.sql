@@ -63,6 +63,7 @@ CREATE TABLE mission_characters (
   character_id UUID NOT NULL,
   FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
   FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+  CONSTRAINT unique_mission_character UNIQUE (mission_id, character_id)
 );
 
 -- traits table
@@ -121,3 +122,13 @@ CREATE TABLE lfg_join_requests (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT current_timestamp,
   CONSTRAINT unique_lfg_post_profile UNIQUE (lfg_post_id, profile_id)
 );
+
+drop function if exists increment_missions_count;
+create function increment_missions_count (x int, character_id uuid) 
+returns void as
+$$
+  update characters 
+  set completed_missions = completed_missions + x
+  where id = character_id
+$$ 
+language sql volatile;
