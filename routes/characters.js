@@ -85,25 +85,52 @@ router.post('/import', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/search', isAuthenticated, async (req, res) => {
+router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { q } = req.query;
+  const { q, count, mission:missionId } = req.query;
 
-  const { data: mission, errorMission } = await getMission(req.query.mission);
+  const { data: mission, errorMission } = await getMission(missionId);
   if (errorMission) {
     res.status(400).send(errorMission.message);
     return;
   }
 
   if (!q || q.length < 2) {
-    res.render('partials/character-search-results', { 
+    res.render('partials/add-to-mission-search-results', { 
       layout: false, 
       characters: [],
-      mission: mission
+      mission,
+      q
     });
     return;
   }
-  const { data: characters, error } = await searchPublicCharacters(q);
+  const { data: characters, error } = await searchPublicCharacters(q, count);
+
+  if (error) {
+    res.status(400).send(error.message);
+  } else {
+    res.render('partials/add-to-mission-search-results', { 
+      layout: false, 
+      characters,
+      mission,
+      q
+    });
+  }
+});
+
+router.get('/s', authOptional, async (req, res) => {
+  const { profile } = res.locals;
+  const { q, count } = req.query;
+
+  if (!q || q.length < 2) {
+    res.render('partials/character-search-results', { 
+      layout: false, 
+      characters: [],
+      q
+    });
+    return;
+  }
+  const { data: characters, error } = await searchPublicCharacters(q, count);
 
   if (error) {
     res.status(400).send(error.message);
@@ -111,9 +138,14 @@ router.get('/search', isAuthenticated, async (req, res) => {
     res.render('partials/character-search-results', { 
       layout: false, 
       characters,
-      mission: mission
+      q
     });
   }
+});
+
+router.get('/search', authOptional, (req, res) => {
+  const { profile } = res.locals;
+  res.render('character-search', { profile });
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {

@@ -1,0 +1,25 @@
+{{#if characters.length}}
+<ul>
+  {{#each characters}}
+  <li>
+    <button type="button"
+      class="button is-text"
+      hx-post="/missions/{{../mission.id}}/characters/{{this.id}}"
+      hx-target="#selectedCharactersList"
+      hx-swap="beforeend">
+      {{this.name}}
+    </button>
+  </li>
+  {{/each}}
+</ul>
+{{else}}
+  {{#if q}}
+    <div class="notification is-warning">
+      No characters found matching "{{q}}"
+    </div>
+  {{else}}
+    <div class="notification is-warning">
+      Enter a character name to search
+    </div>
+  {{/if}}
+{{/if}}

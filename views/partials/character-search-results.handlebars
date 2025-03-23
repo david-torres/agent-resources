@@ -1,21 +1,43 @@
 {{#if characters.length}}
-<ul>
+<div class="columns is-multiline">
   {{#each characters}}
-  <li>
-    {{#if ../mission}}
-      <button type="button"
-        class="button is-text"
-        hx-post="/missions/{{../mission.id}}/characters/{{this.id}}"
-        hx-target="#selectedCharactersList"
-        hx-swap="beforeend">
-        {{this.name}}
-      </button>
-    {{else}}
-      {{this.name}}
-    {{/if}}
-  </li>
+  <div class="column is-4">
+    <div class="card">
+      <div class="card-content">
+        {{#if this.image_url}}
+        <figure class="image is-4by3">
+          <img src="{{this.image_url}}" alt="{{this.name}}">
+        </figure>
+        {{else}}
+        <div class="notification is-info">No image available</div>
+        {{/if}}
+        <div class="container mt-4">
+          <p class="title is-4">{{this.name}}</p>
+          <div class="content">
+            <a href="/characters/{{this.id}}/{{this.name}}" class="button is-primary is-fullwidth">
+              View Character
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
   {{/each}}
-</ul>
+</div>
 {{else}}
-<p>No characters found.</p>
+
+{{#if q}}
+<div class="box">
+  <div class="notification is-warning">
+    No characters found matching "{{q}}"
+  </div>
+</div>
+{{else}}
+<div class="box">
+  <div class="notification is-info">
+    Enter a character name to search
+  </div>
+</div>
+{{/if}}
+
 {{/if}}
