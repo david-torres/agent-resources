@@ -309,7 +309,7 @@ const getCharacterAllMissions = async (characterId) => {
 const searchPublicCharacters = async (q, count) => {
   const { data, error } = await supabase
     .from('characters')
-    .select('id, name')
+    .select('id, name, image_url')
     .ilike('name', `%${q}%`)
     .match({is_public: true})
     .limit(count);

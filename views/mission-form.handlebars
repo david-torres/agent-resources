@@ -83,14 +83,14 @@
           <input class="input" type="text" 
             name="q" 
             placeholder="Search characters..." 
-            hx-get="/characters/search?mission={{mission.id}}"
+            hx-get="/characters/add-to-mission-search?mission={{mission.id}}&count=5"
             hx-trigger="input changed delay:300ms, search"
             hx-target="#characterSearchResults"
             hx-swap="innerHTML"
             hx-indicator="#searchIndicator">
         </div>
         <div class="control">
-          <button type="button" class="button is-primary" hx-trigger="click" hx-get="/characters/search?mission={{mission.id}}" hx-target="#characterSearchResults">Search</button>
+          <button type="button" class="button is-primary" hx-trigger="click" hx-get="/characters/add-to-mission-search?mission={{mission.id}}&count=5" hx-target="#characterSearchResults">Search</button>
         </div>
       </div>
       <div id="searchIndicator" class="htmx-indicator is-hidden">
