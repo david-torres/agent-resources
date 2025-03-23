@@ -14,18 +14,18 @@ const statList = [
 ];
 
 const personalityMap = {
-  vitality: 'indulgent',
-  might: 'forceful',
-  resilience: 'tough',
-  spirit: 'compassionate',
-  arcane: 'ambitious',
-  will: 'self-controlled',
-  sensory: 'alert',
-  reflex: 'smooth',
-  vigor: 'enthusiastic',
-  skill: 'confident',
-  intelligence: 'opinionated',
-  luck: 'carefree'
+  vitality: ['indulgent', 'fun-loving', 'greedy', 'optimistic'],
+  might: ['forceful', 'aggressive', 'retaliatory', 'brave'],
+  resilience: ['tough', 'blunt', 'no-nonsense', 'grim'],
+  spirit: ['compassionate', 'warm', 'sentimental', 'giving'],
+  arcane: ['ambitious', 'powerhungry', 'haughty', 'scheming'],
+  will: ['self-controlled', 'serious', 'calm', 'principled'],
+  sensory: ['alert', 'aloof', 'organized', 'wary'],
+  reflex: ['smooth', 'ingratiating', 'easygoing', 'sly'],
+  vigor: ['enthusiastic', 'gung-ho', 'extroverted', 'boisterous'],
+  skill: ['confident', 'cocky', 'showoffish', 'cool'],
+  intelligence: ['opinionated', 'articulate', 'pretentious', 'analytical'],
+  luck: ['carefree', 'cheeky', 'whimsical', 'complacent']
 };
 
 const classGearList = {

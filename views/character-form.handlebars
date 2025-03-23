@@ -76,8 +76,10 @@
           <div class="select">
             <select name="trait{{@index}}" required>
               {{#each personalityMap}}
-              <option value="{{this}}" {{#if (eq (itemAt ../character.traits @../index)
-                this)}}selected{{/if}}>{{capitalize this}} ({{capitalize @key}})</option>
+                {{#each this}}
+                <option value="{{this}}" {{#if (eq (itemAt ../../character.traits @../../index)
+                  this)}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
+                {{/each}}
               {{/each}}
             </select>
           </div>
