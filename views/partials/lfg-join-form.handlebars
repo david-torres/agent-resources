@@ -33,7 +33,7 @@
 
   <div class="field is-grouped mt-4">
     <div class="control">
-      <button class="button is-primary" type="submit">Request to Join</button>
+      <button class="button is-primary" type="submit" hx-indicator="this">Request to Join</button>
     </div>
     <div class="control">
       <button class="button is-light" hx-get="/lfg/{{post.id}}" hx-target="body">Cancel</button>

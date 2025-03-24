@@ -213,10 +213,11 @@
   <div class="buttons is-right">
     {{#unless isNew}}
     <button class="button is-danger" hx-delete="/characters/{{character.id}}"
-      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters">Delete Character</button>
+      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters"
+      hx-indicator="this">Delete Character</button>
     {{/unless}}
-    <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit">{{#if
-      isNew}}Create{{else}}Update{{/if}} Character</button>
+    <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit"
+      hx-indicator="this">{{#if isNew}}Create{{else}}Update{{/if}} Character</button>
   </div>
 </form>
 

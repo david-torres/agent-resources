@@ -1,22 +1,26 @@
-<h2 class="title is-2">Looking for Game</h2>
-<div class="block">
-  <div class="content">
-    <p>Find other agents to join you in your Enclave missions. Create a post to find players or join a post to hop into
-      a game.</p>
-  </div>
-  <div class="block" id="create-post">
-    <button class="button is-primary" hx-get="/lfg/new" hx-swap="outerHTML">Create LFG Post</button>
-  </div>
-</div>
+<section class="section">
+  <div class="container">
+    <h2 class="title is-2">Looking For Game</h2>
+    <div class="block">
+      <div class="content">
+        <p>Find other agents to join you in your Enclave missions. Create a post to find players or join a post to hop into
+          a game.</p>
+      </div>
+      <div class="block" id="create-post">
+        <button class="button is-primary" hx-get="/lfg/new" hx-swap="outerHTML">Create LFG Post</button>
+      </div>
+    </div>
 
-<div class="tabs">
-  <ul>
-    <li><a hx-get="/lfg/tab/my-posts" hx-target="#lfg-content" hx-swap="innerHTML">My Posts</a></li>
-    <li><a hx-get="/lfg/tab/joined" hx-target="#lfg-content" hx-swap="innerHTML">Joined</a></li>
-    <li><a hx-get="/lfg/tab/public" hx-target="#lfg-content" hx-swap="innerHTML">Public</a></li>
-  </ul>
-</div>
+    <div class="tabs">
+      <ul>
+        <li><a hx-get="/lfg/tab/my-posts" hx-target="#lfg-content" hx-swap="innerHTML">My Posts</a></li>
+        <li><a hx-get="/lfg/tab/joined" hx-target="#lfg-content" hx-swap="innerHTML">Joined</a></li>
+        <li><a hx-get="/lfg/tab/public" hx-target="#lfg-content" hx-swap="innerHTML">Public</a></li>
+      </ul>
+    </div>
 
-<div id="lfg-content">
-  {{> lfg-my-posts ownPosts=ownPosts profile=profile}}
-</div>
+    <div id="lfg-content">
+      {{> lfg-my-posts ownPosts=ownPosts profile=profile}}
+    </div>
+  </div>
+</section>
