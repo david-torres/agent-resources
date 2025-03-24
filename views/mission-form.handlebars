@@ -127,7 +127,7 @@
 {{/if}}
   <div class="field is-grouped mt-4">
     <div class="control">
-      <button class="button is-primary" type="submit">{{#if isNew}}Create{{else}}Update{{/if}} Mission</button>
+      <button class="button is-primary" type="submit" hx-indicator="this">{{#if isNew}}Create{{else}}Update{{/if}} Mission</button>
     </div>
     <div class="control">
       <a class="button is-light" href="/missions">Cancel</a>
