@@ -29,6 +29,14 @@ const personalityMap = {
 };
 
 const classGearList = {
+  Beastmaster: [
+    'Fearsome Visage',
+    'Bullwhip',
+    'Animal Crackers',
+    'Sovereign Lion',
+    'Diving Falcon',
+    'Coiling Serpent'
+  ],
   Berserker: [
     'Pelt Panoply',
     'Great Axe',
@@ -136,6 +144,11 @@ const classGearList = {
 };
 
 const classAbilityList = {
+  Beastmaster: [
+    'Sic \'Em!',
+    'Collar',
+    'Lure Sigil'
+  ],
   Berserker: [
     'Furor',
     'Warp Spasm',
@@ -221,6 +234,7 @@ const aspirantPreviewClassList = [
 ];
 
 const playerCreatedClassList = [
+  'Beastmaster',
   'Bogatyr',
   'Lithomancer'
 ];
