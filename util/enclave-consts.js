@@ -69,6 +69,14 @@ const classGearList = {
     'Coach Gun',
     'Saddled Horse'
   ],
+  Greybeard: [
+    'Feathered Hat',
+    'Weathered Cloak',
+    'Graven Staff',
+    'Churchwarden Pipe',
+    'Orbuclum',
+    'Eye in the Sky'
+  ],
   Illusionist: [
     'Wizarding Hat',
     'Smokebombs',
@@ -169,6 +177,11 @@ const classAbilityList = {
     'Standoff',
     'Shootout'
   ],
+  Greybeard: [
+    'Great & Terrible',
+    'Winds of Change',
+    'Mímisbrunnr'
+  ],
   Illusionist: [
     'Phantasm',
     'Veneer',
@@ -236,6 +249,7 @@ const aspirantPreviewClassList = [
 const playerCreatedClassList = [
   'Beastmaster',
   'Bogatyr',
+  'Greybeard',
   'Lithomancer'
 ];
 
