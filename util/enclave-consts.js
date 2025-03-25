@@ -29,54 +29,6 @@ const personalityMap = {
 };
 
 const classGearList = {
-  Gunslinger: [
-    'Duster',
-    'Bandolier',
-    'Revolver',
-    'Sharps Rifle',
-    'Coach Gun',
-    'Saddled Horse'
-  ],
-  Illusionist: [
-    'Wizarding Hat',
-    'Smokebombs',
-    'Folding Fan',
-    'Billowing Cape',
-    'Tome',
-    'Handmirror'
-  ],
-  Librarian: [
-    'Scholarly Raiment',
-    'Reading Glasses',
-    'Bookbag',
-    'Quill Pen',
-    'Scanner',
-    'Memos'
-  ],
-  Thane: [
-    'Heavy Panoply',
-    'Mantle',
-    'Bastard Sword',
-    'Halfpike & Kiteshield',
-    'Banner',
-    'Barded Warhorse'
-  ],
-  Thunderbird: [
-    'Feathered Cloak',
-    'Talaria',
-    'Thunderhammer',
-    'Heroic Cuirass',
-    'Lightning Bolts',
-    'Ceremonial Drum'
-  ],
-  Wanderer: [
-    'Satchel',
-    'Walking Stick',
-    'Waypoints',
-    'Fiddle',
-    'Nostrum',
-    'Map'
-  ],
   Berserker: [
     'Pelt Panoply',
     'Great Axe',
@@ -84,22 +36,6 @@ const classGearList = {
     'Warpaint',
     'Gaesa',
     'Beast Claws'
-  ],
-  Infiltrator: [
-    'Catsuit',
-    'Stiletto',
-    'Earpiece',
-    'Time Bomb',
-    'Skeleton Key',
-    'Listening Bugs'
-  ],
-  Vessel: [
-    'Ceremonial Raiment',
-    'Ritual Knife',
-    'Alter Lights',
-    'Deathmask',
-    'Shadow Blade',
-    'Star Crystal'
   ],
   Bogatyr: [
     'Bludgeon',
@@ -117,13 +53,37 @@ const classGearList = {
     'Energy Drink',
     'Action Camera'
   ],
-  Witchhunter: [
-    'Watchcoat',
-    'Capotain',
-    'Ballestrino',
-    'Eyepatch',
-    'Aspergillum',
-    'Firebrand'
+  Gunslinger: [
+    'Duster',
+    'Bandolier',
+    'Revolver',
+    'Sharps Rifle',
+    'Coach Gun',
+    'Saddled Horse'
+  ],
+  Illusionist: [
+    'Wizarding Hat',
+    'Smokebombs',
+    'Folding Fan',
+    'Billowing Cape',
+    'Tome',
+    'Handmirror'
+  ],
+  Infiltrator: [
+    'Catsuit',
+    'Stiletto',
+    'Earpiece',
+    'Time Bomb',
+    'Skeleton Key',
+    'Listening Bugs'
+  ],
+  Librarian: [
+    'Scholarly Raiment',
+    'Reading Glasses',
+    'Bookbag',
+    'Quill Pen',
+    'Scanner',
+    'Memos'
   ],
   Lithomancer: [
     'Huaraches',
@@ -132,54 +92,54 @@ const classGearList = {
     'Safety Goggles',
     'Rock Maul',
     'Prima Materia'
-  ]
+  ],
+  Thane: [
+    'Heavy Panoply',
+    'Mantle',
+    'Bastard Sword',
+    'Halfpike & Kiteshield',
+    'Banner',
+    'Barded Warhorse'
+  ],
+  Thunderbird: [
+    'Feathered Cloak',
+    'Talaria',
+    'Thunderhammer',
+    'Heroic Cuirass',
+    'Lightning Bolts',
+    'Ceremonial Drum'
+  ],
+  Vessel: [
+    'Ceremonial Raiment',
+    'Ritual Knife',
+    'Alter Lights',
+    'Deathmask',
+    'Shadow Blade',
+    'Star Crystal'
+  ],
+  Wanderer: [
+    'Satchel',
+    'Walking Stick',
+    'Waypoints',
+    'Fiddle',
+    'Nostrum',
+    'Map'
+  ],
+  Witchhunter: [
+    'Watchcoat',
+    'Capotain',
+    'Ballestrino',
+    'Eyepatch',
+    'Aspergillum',
+    'Firebrand'
+  ],
 };
 
 const classAbilityList = {
-  Gunslinger: [
-    'Trickshot',
-    'Standoff',
-    'Shootout'
-  ],
-  Illusionist: [
-    'Phantasm',
-    'Veneer',
-    'Viewpoint'
-  ],
-  Librarian: [
-    'Fun Fact',
-    'Knowledge is Power',
-    'Catalog'
-  ],
-  Thane: [
-    'To Arms',
-    'Shieldwall',
-    'Gairethinx'
-  ],
-  Thunderbird: [
-    'Storm Brewing',
-    'Thunderclap',
-    'Out of the Blue'
-  ],
-  Wanderer: [
-    'Fork in the Road',
-    'By the Wayside',
-    'Familiar Face'
-  ],
   Berserker: [
     'Furor',
     'Warp Spasm',
     'Bloodlust'
-  ],
-  Infiltrator: [
-    'Identity Theft',
-    'Case the Joint',
-    'Maximum Security'
-  ],
-  Vessel: [
-    'Insidious Whispers',
-    'Embrace Darkness',
-    'Fill the Void'
   ],
   Bogatyr: [
     'Friend in Need',
@@ -191,16 +151,56 @@ const classAbilityList = {
     'Tag, You\'re It',
     'Hangtime'
   ],
-  Witchhunter: [
-    'Cloud of Suspicion',
-    'Omoriori',
-    'Malleus Maleficarum'
+  Gunslinger: [
+    'Trickshot',
+    'Standoff',
+    'Shootout'
+  ],
+  Illusionist: [
+    'Phantasm',
+    'Veneer',
+    'Viewpoint'
+  ],
+  Infiltrator: [
+    'Identity Theft',
+    'Case the Joint',
+    'Maximum Security'
+  ],
+  Librarian: [
+    'Fun Fact',
+    'Knowledge is Power',
+    'Catalog'
   ],
   Lithomancer: [
     'Tremor Sense',
     'Geomorph',
     'Stoneskin'
-  ]
+  ],
+  Thane: [
+    'To Arms',
+    'Shieldwall',
+    'Gairethinx'
+  ],
+  Thunderbird: [
+    'Storm Brewing',
+    'Thunderclap',
+    'Out of the Blue'
+  ],
+  Vessel: [
+    'Insidious Whispers',
+    'Embrace Darkness',
+    'Fill the Void'
+  ],
+  Wanderer: [
+    'Fork in the Road',
+    'By the Wayside',
+    'Familiar Face'
+  ],
+  Witchhunter: [
+    'Cloud of Suspicion',
+    'Omoriori',
+    'Malleus Maleficarum'
+  ],
 }
 
 const adventClassList = [
