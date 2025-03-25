@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getOwnCharacters, getLfgPosts, getLfgPostsByCreator, getLfgPostsByOthers, getLfgJoinedPosts, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost, joinLfgPost, getLfgJoinRequests, getLfgJoinRequestForUserAndPost, updateJoinRequest, deleteJoinRequest, createMission } = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
+const { statList } = require('../util/enclave-consts');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -67,7 +68,21 @@ router.get('/:id', authOptional, async (req, res) => {
     if (req.headers['x-calendar']) {
       res.header('HX-Push-Url', `/lfg/${req.params.id}`);
     }
-    res.render('lfg-post', { profile, post: data, authOptional: true });
+    const party = data.join_requests.reduce((acc, item) => {
+      if (item.status === 'approved') {
+        acc.push(item.characters);
+      }
+      return acc;
+    }, []);
+    const partyStats = party.reduce((acc, item) => {
+      statList.forEach(stat => {
+        acc[stat] = (acc[stat] || 0) + (item[stat] || 0);
+      });
+      return acc;
+    }, {});
+
+
+    res.render('lfg-post', { profile, post: data, statList, partyStats, authOptional: true });
   }
 });
 
@@ -174,6 +189,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
     const { data: updatePost, error: updatePostError } = await updateLfgPost(req.params.id, post, profile);
     if (updatePostError) {
       res.status(400).send(updatePostError.message);
+      return;
     }
     res.headers('HX-Location', `/lfg`).send();
     return;

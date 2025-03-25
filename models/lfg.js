@@ -1,9 +1,15 @@
 const { supabase } = require('./_base');
+const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 moment.tz.setDefault('UTC');
 
 const getLfgPosts = async () => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').eq('is_public', true).eq('status', 'open').order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('lfg_posts')
+    .select('*')
+    .eq('is_public', true)
+    .eq('status', 'open')
+    .order('created_at', { ascending: false });
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
@@ -19,7 +25,15 @@ const getLfgPosts = async () => {
 }
 
 const getLfgPostsByOthers = async (profileId) => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').neq('creator_id', profileId).eq('is_public', true).eq('status', 'open').order('created_at', { ascending: false });
+  const today = moment().startOf('day').toISOString();
+  const { data, error } = await supabase
+    .from('lfg_posts')
+    .select('*')
+    .neq('creator_id', profileId)
+    .eq('is_public', true)
+    .eq('status', 'open')
+    .gte('date', today)
+    .order('created_at', { ascending: false });
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
@@ -35,9 +49,17 @@ const getLfgPostsByOthers = async (profileId) => {
 }
 
 const getLfgPostsByCreator = async (creator_id) => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').eq('creator_id', creator_id).order('created_at', { ascending: false });
+  const { data, error } = await supabase
+    .from('lfg_posts')
+    .select('*')
+    .eq('creator_id', creator_id)
+    .order('created_at', { ascending: false });
   for (let post of data) {
-    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
+    const { data: creator, error: creatorError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', post.creator_id)
+      .single();
     post.creator_name = creator.name;
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
@@ -51,17 +73,46 @@ const getLfgPostsByCreator = async (creator_id) => {
 }
 
 const getLfgPost = async (id) => {
-  const { data, error } = await supabase.from('lfg_posts').select('*').eq('id', id).single();
+  const { data, error } = await supabase
+    .from('lfg_posts')
+    .select('*')
+    .eq('id', id)
+    .single();
   if (error) return { data, error };
 
   let post = data;
-  const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
+  const { data: creator, error: creatorError } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', post.creator_id)
+    .single();
   post.creator_name = creator.name;
 
-  const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+  const { data: host, error: hostError } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('id', post.host_id)
+    .single();
   if (!hostError) post.host_name = host.name;
 
-  const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(id);
+  const { data: joinRequests, error: joinRequestsError } = await supabase
+    .from('lfg_join_requests')
+    .select(`
+      *,
+      profiles:profile_id (name),
+      characters:character_id (
+        id,
+        name,
+        class,
+        level,
+        ${statList.join(',')},
+        personality:traits(name),
+        abilities:class_abilities(name),
+        gear:class_gear(name)
+      )
+    `)
+    .eq('lfg_post_id', id);
+
   if (joinRequestsError) return { data: post, error: joinRequestsError };
   post.join_requests = joinRequests;
 
@@ -127,10 +178,15 @@ const updateLfgPost = async (id, postReq, profile) => {
   }
   delete postReq.character;
 
+  const creatorName = post.creator_name;
+  const hostName = post.host_name;
   delete post.creator_name;
   delete post.host_name;
   delete post.join_requests;
 
+  delete postReq.creator_name;
+  delete postReq.host_name;
+  delete postReq.join_requests;
   if (postReq.host_id == 'on') {
     postReq.host_id = profile.id;
   } else {
@@ -146,8 +202,9 @@ const updateLfgPost = async (id, postReq, profile) => {
   // make sure the date is in UTC
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
-  const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id);
-  return { data, error };
+  const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id).select();
+
+  return { data: data.pop(), error };
 }
 
 const deleteLfgPost = async (id, profile) => {
