@@ -1,6 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getLfgPosts, getLfgPostsByCreator, getLfgPostsByOthers, getLfgJoinedPosts, getLfgPost, createLfgPost, updateLfgPost, deleteLfgPost, joinLfgPost, getLfgJoinRequests, getLfgJoinRequestForUserAndPost, updateJoinRequest, deleteJoinRequest, createMission } = require('../util/supabase');
+const {
+    getOwnCharacters,
+    getLfgPosts,
+    getLfgPostsByCreator,
+    getLfgPostsByOthers,
+    getLfgJoinedPosts,
+    getLfgPost,
+    createLfgPost,
+    updateLfgPost,
+    deleteLfgPost,
+    joinLfgPost,
+    getLfgJoinRequests,
+    getLfgJoinRequestForUserAndPost,
+    updateJoinRequest,
+    deleteJoinRequest,
+} = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { statList } = require('../util/enclave-consts');
 
@@ -227,39 +242,6 @@ router.get('/events/all', isAuthenticated, async (req, res) => {
       }
     }));
     res.json(events);
-  }
-});
-
-router.post('/:id/create-mission', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
-  const { data: lfgPost, error: lfgError } = await getLfgPost(req.params.id);
-  if (lfgError) {
-    res.status(400).send(lfgError.message);
-    return;
-  }
-
-  // look up host id
-  let hostProfile = null;
-  if (lfgPost.host_id === null) {
-    hostProfile = await getProfile(lfgPost.host_id);
-  }
-
-  const missionData = {
-    name: lfgPost.title,
-    focus_words: '',
-    statement: lfgPost.description,
-    summary: '',
-    date: lfgPost.date,
-    is_public: lfgPost.is_public,
-    host_id: lfgPost.host_id,
-    host_name: lfgPost.host_name || hostProfile.name,
-  };
-
-  const { data: mission, error: missionError } = await createMission(missionData, profile);
-  if (missionError) {
-    res.status(400).send(missionError.message);
-  } else {
-    res.header('HX-Location', `/missions/${mission.id}`).send();
   }
 });
 
