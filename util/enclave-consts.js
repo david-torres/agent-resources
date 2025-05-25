@@ -109,6 +109,14 @@ const classGearList = {
     'Rock Maul',
     'Prima Materia'
   ],
+  Raubritter: [
+    'Sumptuary Furs',
+    'Morningstar',
+    'Warchest',
+    'Langes Messer',
+    'Hand Cannon',
+    'Knecht'
+  ],
   Samaritan: [
     'Habit',
     'Asklepian',
@@ -210,6 +218,11 @@ const classAbilityList = {
     'Geomorph',
     'Stoneskin'
   ],
+  Raubritter: [
+    'Aufruhr',
+    'Opprobrium',
+    'Unverwüstlich'
+  ],
   Samaritan: [
     'Gifts in Kind',
     'A Good Cause',
@@ -264,7 +277,8 @@ const playerCreatedClassList = [
   'Beastmaster',
   'Bogatyr',
   'Greybeard',
-  'Lithomancer'
+  'Lithomancer',
+  'Raubritter',
 ];
 
 const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];
