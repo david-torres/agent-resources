@@ -132,3 +132,139 @@ $$
   where id = character_id
 $$ 
 language sql volatile;
+
+-- Supabase Class Management Schema
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Enable Row Level Security
+ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_unlocks ENABLE ROW LEVEL SECURITY;
+
+-- Classes table
+CREATE TABLE IF NOT EXISTS classes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name text NOT NULL,
+    description text,
+    visibility text NOT NULL CHECK (visibility IN ('public','private')) DEFAULT 'public',
+    status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
+    is_player_created bool NOT NULL DEFAULT false,
+    rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant', 'adept', 'ace')) DEFAULT 'advent',
+    rules_version text NOT NULL (rules_version IN ('v1', 'v2')),
+    base_class_id uuid REFERENCES classes(id),
+    created_by uuid REFERENCES auth.users(id),
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now()
+);
+
+-- Class unlocks table
+CREATE TABLE IF NOT EXISTS class_unlocks (
+    user_id uuid REFERENCES auth.users(id),
+    class_id uuid REFERENCES classes(id),
+    unlocked_at timestamp NOT NULL DEFAULT now(),
+    PRIMARY KEY (user_id, class_id)
+);
+
+-- Function to duplicate a class for new version
+CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    new_class_id uuid;
+BEGIN
+    INSERT INTO classes (
+        id,
+        name,
+        description,
+        visibility,
+        status,
+        is_player_created,
+        rules_edition,
+        rules_version,
+        base_class_id,
+        created_by
+    )
+    SELECT 
+        new_id,
+        name,
+        description,
+        visibility,
+        status,
+        is_player_created,
+        rules_edition,
+        new_version,
+        id,
+        auth.uid()
+    FROM classes
+    WHERE id = base_id
+    RETURNING id INTO new_class_id;
+    
+    RETURN new_class_id;
+END;
+$$;
+
+-- RLS Policies for classes table
+CREATE POLICY "Public classes are viewable by everyone"
+    ON classes FOR SELECT
+    USING (visibility = 'public');
+
+CREATE POLICY "Private classes are viewable by owner or admin"
+    ON classes FOR SELECT
+    USING (
+        visibility = 'private' AND (
+            created_by = auth.uid() OR 
+            EXISTS (
+                SELECT 1 FROM auth.users 
+                WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+            )
+        )
+    );
+
+CREATE POLICY "Classes can be created by admin or player"
+    ON classes FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM auth.users 
+            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+        ) OR
+        is_player_created = true
+    );
+
+CREATE POLICY "Classes can be updated by owner or admin"
+    ON classes FOR UPDATE
+    USING (
+        created_by = auth.uid() OR 
+        EXISTS (
+            SELECT 1 FROM auth.users 
+            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+        )
+    );
+
+-- RLS Policies for class_unlocks table
+CREATE POLICY "Users can view their own unlocks"
+    ON class_unlocks FOR SELECT
+    USING (user_id = auth.uid());
+
+CREATE POLICY "Only admins can create unlocks"
+    ON class_unlocks FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM auth.users 
+            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+        )
+    );
+
+-- Trigger to update updated_at timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = now();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_classes_updated_at
+    BEFORE UPDATE ON classes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();

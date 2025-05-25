@@ -1,0 +1,310 @@
+<div class="container mt-4">
+    <h1 class="title is-2">Enclave Classes</h1>
+
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-content">
+            <h5 class="title is-5">Filters</h5>
+            <form id="filterForm">
+                <div class="columns is-multiline">
+                    {{!-- <div class="column is-3">
+                        <div class="field">
+                            <label class="label" for="visibility">Visibility</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="visibility" name="visibility">
+                                        <option value="">All</option>
+                                        <option value="public">Public</option>
+                                        <option value="private">Private</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div> --}}
+                    <div class="column is-3">
+                        <div class="field">
+                            <label class="label" for="rulesEdition">Rules Edition</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="rulesEdition" name="rules_edition">
+                                        <option value="">All</option>
+                                        <option value="advent">Advent</option>
+                                        <option value="aspirant" disabled>Aspirant</option>
+                                        <option value="adept" disabled>Adept</option>
+                                        <option value="ace" disabled>Ace</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-3">
+                        <div class="field">
+                            <label class="label" for="rulesVersion">Rules Version</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="rulesVersion" name="rules_version">
+                                        <option value="">All</option>
+                                        <option value="v1">V1</option>
+                                        <option value="v2">V2</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-3">
+                        <div class="field">
+                            <label class="label" for="isPlayerCreated">Type</label>
+                            <div class="control">
+                                <div class="select is-fullwidth">
+                                    <select id="isPlayerCreated" name="is_player_created">
+                                        <option value="">All</option>
+                                        <option value="false">Official</option>
+                                        <option value="true">Player Created</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-12">
+                        <div class="field is-grouped">
+                            <div class="control">
+                                <button type="submit" class="button is-primary">Apply Filters</button>
+                            </div>
+                            <div class="control">
+                                <button type="button" class="button is-light" id="resetFilters">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Class List -->
+    <div class="columns is-multiline" id="classList">
+        <!-- Classes will be dynamically inserted here -->
+    </div>
+
+    <!-- Create Class Modal -->
+    <div class="modal" id="createClassModal">
+        <div class="modal-background"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Create New Class</p>
+                <button class="delete" aria-label="close"></button>
+            </header>
+            <section class="modal-card-body">
+                <form id="createClassForm">
+                    <div class="field">
+                        <label class="label" for="className">Name</label>
+                        <div class="control">
+                            <input class="input" type="text" id="className" required>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="classDescription">Description</label>
+                        <div class="control">
+                            <textarea class="textarea" id="classDescription" rows="3" required></textarea>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="classVisibility">Visibility</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                <select id="classVisibility" required>
+                                    <option value="public">Public</option>
+                                    <option value="private">Private</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="classStatus">Status</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                <select id="classStatus" required>
+                                    <option value="alpha">Alpha</option>
+                                    <option value="beta">Beta</option>
+                                    <option value="pre-release">Pre-release</option>
+                                    <option value="release">Release</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="classRulesEdition">Rules Edition</label>
+                        <div class="control">
+                            <div class="select is-fullwidth">
+                                <select id="classRulesEdition" required>
+                                    <option value="v1">V1</option>
+                                    <option value="v2">V2</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field">
+                        <label class="label" for="classRulesVersion">Rules Version</label>
+                        <div class="control">
+                            <input class="input" type="text" id="classRulesVersion" required>
+                        </div>
+                    </div>
+                </form>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-light" id="cancelCreateClass">Cancel</button>
+                <button class="button is-primary" id="createClassBtn">Create Class</button>
+            </footer>
+        </div>
+    </div>
+</div>
+
+<script>
+// Initialize Supabase client
+const supabase = createClient('{{supabaseUrl}}', '{{supabaseKey}}');
+
+// Fetch and display classes
+async function fetchClasses(filters = {}) {
+    try {
+        let query = supabase.from('classes').select('*');
+        
+        // Apply filters
+        if (filters.visibility) query = query.eq('visibility', filters.visibility);
+        if (filters.status) query = query.eq('status', filters.status);
+        if (filters.rules_edition) query = query.eq('rules_edition', filters.rules_edition);
+        if (filters.is_player_created !== undefined) {
+            query = query.eq('is_player_created', filters.is_player_created === 'true');
+        }
+
+        const { data: classes, error } = await query;
+        if (error) throw error;
+
+        // Get unlocked classes for current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            const { data: unlocks } = await supabase
+                .from('class_unlocks')
+                .select('class_id')
+                .eq('user_id', user.id);
+            
+            const unlockedIds = new Set(unlocks?.map(u => u.class_id) || []);
+            
+            // Render classes
+            const classList = document.getElementById('classList');
+            classList.innerHTML = classes.map(cls => `
+                <div class="column is-4">
+                    <div class="card">
+                        <div class="card-content">
+                            <p class="title is-4">${cls.name}</p>
+                            <p class="subtitle is-6">${cls.description}</p>
+                            <div class="tags">
+                                <span class="tag is-${cls.visibility === 'public' ? 'success' : 'warning'}">${cls.visibility}</span>
+                                <span class="tag is-info">${cls.status}</span>
+                                ${cls.is_player_created ? '<span class="tag is-primary">Player Created</span>' : ''}
+                            </div>
+                            <div class="mt-4">
+                                ${unlockedIds.has(cls.id) ? 
+                                    '<span class="tag is-success is-medium">Unlocked</span>' : 
+                                    '<button class="button is-primary is-small unlock-btn" data-class-id="${cls.id}">Unlock</button>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            // Add event listeners for unlock buttons
+            document.querySelectorAll('.unlock-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    const classId = e.target.dataset.classId;
+                    try {
+                        const { error } = await supabase
+                            .from('class_unlocks')
+                            .insert([{ class_id: classId }]);
+                        
+                        if (error) throw error;
+                        
+                        // Refresh the class list
+                        fetchClasses(getFilters());
+                    } catch (error) {
+                        console.error('Error unlocking class:', error);
+                        alert('Failed to unlock class');
+                    }
+                });
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching classes:', error);
+        alert('Failed to load classes');
+    }
+}
+
+// Get current filter values
+function getFilters() {
+    return {
+        visibility: document.getElementById('visibility').value,
+        status: document.getElementById('status').value,
+        rules_edition: document.getElementById('rulesEdition').value,
+        is_player_created: document.getElementById('isPlayerCreated').value
+    };
+}
+
+// Event listeners
+document.getElementById('filterForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    fetchClasses(getFilters());
+});
+
+document.getElementById('resetFilters').addEventListener('click', () => {
+    document.getElementById('filterForm').reset();
+    fetchClasses();
+});
+
+// Modal handling
+const modal = document.getElementById('createClassModal');
+const modalClose = modal.querySelector('.delete');
+const cancelBtn = document.getElementById('cancelCreateClass');
+
+function closeModal() {
+    modal.classList.remove('is-active');
+}
+
+modalClose.addEventListener('click', closeModal);
+cancelBtn.addEventListener('click', closeModal);
+
+document.getElementById('createClassBtn').addEventListener('click', async () => {
+    const form = document.getElementById('createClassForm');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+
+    const classData = {
+        name: document.getElementById('className').value,
+        description: document.getElementById('classDescription').value,
+        visibility: document.getElementById('classVisibility').value,
+        status: document.getElementById('classStatus').value,
+        rules_edition: document.getElementById('classRulesEdition').value,
+        rules_version: document.getElementById('classRulesVersion').value,
+        is_player_created: true
+    };
+
+    try {
+        const { error } = await supabase
+            .from('classes')
+            .insert([classData]);
+
+        if (error) throw error;
+
+        // Close modal and refresh list
+        closeModal();
+        form.reset();
+        fetchClasses(getFilters());
+    } catch (error) {
+        console.error('Error creating class:', error);
+        alert('Failed to create class');
+    }
+});
+
+// Initial load
+fetchClasses();
+</script> 

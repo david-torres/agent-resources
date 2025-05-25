@@ -55,10 +55,15 @@ const getTotalV2MissionsNeeded = (targetLevel) => {
   return v2LevelingSequence.slice(0, targetLevel - 1).reduce((sum, num) => sum + num, 0);
 };
 
+function setVariable(varName, varValue, options){
+  options.data.root[varName] = varValue;
+};
+
 module.exports = {
   times,
   date_tz,
   calendar_link,
   getTotalV1MissionsNeeded,
-  getTotalV2MissionsNeeded
+  getTotalV2MissionsNeeded,
+  setVariable
 }
