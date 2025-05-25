@@ -109,6 +109,14 @@ const classGearList = {
     'Rock Maul',
     'Prima Materia'
   ],
+  Samaritan: [
+    'Habit',
+    'Asklepian',
+    'Alms',
+    'Wings of Mercy',
+    'Guiding Light',
+    'Innocence Shield'
+  ],
   Thane: [
     'Heavy Panoply',
     'Mantle',
@@ -202,6 +210,11 @@ const classAbilityList = {
     'Geomorph',
     'Stoneskin'
   ],
+  Samaritan: [
+    'Gifts in Kind',
+    'A Good Cause',
+    'Extol Virtue'
+  ],
   Thane: [
     'To Arms',
     'Shieldwall',
@@ -240,9 +253,10 @@ const adventClassList = [
 
 const aspirantPreviewClassList = [
   'Berserker',
-  'Infiltrator',
-  'Vessel',
   'Freerunner',
+  'Infiltrator',
+  'Samaritan',
+  'Vessel',
   'Witchhunter'
 ];
 
