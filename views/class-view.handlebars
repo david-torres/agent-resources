@@ -1,0 +1,95 @@
+<h1 class="title is-2">{{class.name}} <span class="tag is-info">{{class.status}}</span></h1>
+{{#if profile}}
+{{#or (eq profile.role 'admin') (eq profile.id class.creator_id)}}
+<div class="buttons">
+  <a href="/classes/{{class.id}}/edit" class="button is-warning">Edit</a>
+  <button class="button is-danger" hx-delete="/classes/{{class.id}}" hx-target="closest tr"
+    hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this class?">Delete</button>
+</div>
+{{/or}}
+{{/if}}
+
+<div class="columns">
+  <div class="column is-one-third">
+    {{#if class.image_url}}
+    <div class="card mb-4">
+      <div class="card-image">
+        <figure class="image is-4by3">
+          <img src="{{class.image_url}}" alt="{{class.name}}">
+        </figure>
+      </div>
+    </div>
+    {{/if}}
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-3">Description</h3>
+          <p>{{{markdown class.description}}}</p>
+        </div>
+        <div class="content">
+          <hr>
+          <p><strong>Edition: </strong>{{capitalize class.rules_edition}} {{class.rules_version}}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="columns is-two-thirds">
+    <div class="column">
+      <div class="card">
+        <div class="card-content">
+          <div class="content">
+            <h3 class="title is-3">Gear</h3>
+            <div class="columns">
+              <div class="column is-half">
+              {{#each (first class.gear 3) as |gear|}}
+                <div class="card">
+                  <div class="card-content">
+                    <div class="content">
+                      <h4 class="title is-4">{{gear.name}}</h4>
+                      {{{markdown gear.description}}}
+                    </div>
+                  </div>
+                </div>
+              {{/each}}
+              </div>
+
+              <div class="column is-half">
+              {{#each (last class.gear 3) as |gear|}}
+                <div class="card">
+                  <div class="card-content">
+                    <div class="content">
+                      <h4 class="title is-4">{{gear.name}}</h4>
+                      {{{markdown gear.description}}}
+                    </div>
+                  </div>
+                </div>
+              {{/each}}
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column">
+        <div class="card">
+          <div class="card-content">
+            <div class="content">
+              <h3 class="title is-3">Abilities</h3>
+              {{#each class.abilities}}
+              <div class="card">
+                <div class="card-content">
+                  <div class="content">
+                    <h4 class="title is-4">{{this.name}}</h4>
+                    {{{markdown this.description}}}
+                  </div>
+                </div>
+              </div>
+              {{/each}}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+

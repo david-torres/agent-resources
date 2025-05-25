@@ -1,0 +1,113 @@
+<h1 class="title is-2">Classes</h1>
+{{#if profile}}
+<div class="buttons is-right">
+  <button class="button is-primary" id="createClassBtn" hx-get="/classes/new"
+      hx-target="body" hx-swap="innerHTML" hx-push-url="/classes/new">Create Class</button>
+</div>
+{{/if}}
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-content">
+    <h5 class="title is-5">Filters</h5>
+    <form id="filterForm">
+      <div class="columns is-multiline">
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="rulesEdition">Rules Edition</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="rulesEdition" name="rules_edition">
+                  <option value="" {{#if (eq filters.rules_edition '' )}}selected{{/if}}>All</option>
+                  <option value="advent" {{#if (eq filters.rules_edition 'advent' )}}selected{{/if}}>Advent</option>
+                  <option value="aspirant" disabled>Aspirant</option>
+                  <option value="adept" disabled>Adept</option>
+                  <option value="ace" disabled>Ace</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="rulesVersion">Rules Version</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="rulesVersion" name="rules_version">
+                  <option value="" {{#if (eq filters.rules_version '' )}}selected{{/if}}>All</option>
+                  <option value="v1" {{#if (eq filters.rules_version 'v1' )}}selected{{/if}}>v1</option>
+                  <option value="v2" {{#if (eq filters.rules_version 'v2' )}}selected{{/if}}>v2</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="isPlayerCreated">Type</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="isPlayerCreated" name="is_player_created">
+                  <option value="" {{#if (eq filters.is_player_created '' )}}selected{{/if}}>All</option>
+                  <option value="false" {{#if (eq filters.is_player_created false)}}selected{{/if}}>Official</option>
+                  <option value="true" {{#if (eq filters.is_player_created true)}}selected{{/if}}>Player Created
+                  </option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="status">Status</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="status" name="status">
+                  <option value="" {{#if (eq filters.status '' )}}selected{{/if}}>All</option>
+                  <option value="release" {{#if (eq filters.status 'release' )}}selected{{/if}}>Release</option>
+                  <option value="beta" {{#if (eq filters.status 'beta' )}}selected{{/if}}>Beta</option>
+                  <option value="alpha" {{#if (eq filters.status 'alpha' )}}selected{{/if}}>Alpha</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-12">
+          <div class="field is-grouped">
+            <div class="control">
+              <button type="submit" class="button is-primary">Apply Filters</button>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-light" id="resetFilters" hx-get="/classes" hx-target="body"
+                hx-swap="innerHTML" hx-on:click="htmx.closest(this, 'form').reset()"
+                hx-push-url="/classes">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Class List -->
+<div class="columns is-multiline" id="classList">
+  <!-- loop over classes -->
+  {{#each classes}}
+  <div class="column is-3">
+    <div class="card">
+      {{#if this.image_url}}
+      <div class="card-image">
+        <figure class="image is-4by3">
+          <a href="/classes/{{this.id}}/{{this.name}}"><img src="{{this.image_url}}" alt="{{this.name}}"></a>
+        </figure>
+      </div>
+      {{/if}}
+      <div class="card-content">
+        <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></h5>
+        {{#if this.teaser}}
+          <p>{{this.teaser}}</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  {{/each}}

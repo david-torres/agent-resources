@@ -45,8 +45,10 @@
         value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="10">
       {{#if (lt character.level 10)}}
       <p class="help">
-        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}<br>
-        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}
+        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
+        missions to reach level {{add character.level 1}}<br>
+        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
+        missions to reach level {{add character.level 1}}
       </p>
       {{/if}}
     </div>
@@ -76,10 +78,10 @@
           <div class="select">
             <select name="trait{{@index}}" required>
               {{#each personalityMap}}
-                {{#each this}}
-                <option value="{{this}}" {{#if (eq (itemAt ../../character.traits @../../index)
-                  this)}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
-                {{/each}}
+              {{#each this}}
+              <option value="{{this}}" {{#if (eq (itemAt ../../character.traits @../../index) this)}}selected{{/if}}>
+                {{capitalize this}} ({{capitalize @../key}})</option>
+              {{/each}}
               {{/each}}
             </select>
           </div>
@@ -145,8 +147,7 @@
   <div class="field">
     <label class="label">Ability Perks</label>
     <div class="control">
-      <textarea class="textarea" name="perks"
-        placeholder="Ability Perks">{{character.perks}}</textarea>
+      <textarea class="textarea" name="perks" placeholder="Ability Perks">{{character.perks}}</textarea>
     </div>
   </div>
 
@@ -213,11 +214,11 @@
   <div class="buttons is-right">
     {{#unless isNew}}
     <button class="button is-danger" hx-delete="/characters/{{character.id}}"
-      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters"
-      hx-indicator="this">Delete Character</button>
+      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters" hx-indicator="this">Delete
+      Character</button>
     {{/unless}}
-    <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit"
-      hx-indicator="this">{{#if isNew}}Create{{else}}Update{{/if}} Character</button>
+    <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit" hx-indicator="this">{{#if
+      isNew}}Create{{else}}Update{{/if}} Character</button>
   </div>
 </form>
 
