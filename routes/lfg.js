@@ -206,7 +206,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
       res.status(400).send(updatePostError.message);
       return;
     }
-    res.headers('HX-Location', `/lfg`).send();
+    res.header('HX-Location', `/lfg`).send();
     return;
   }
 
