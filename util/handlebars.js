@@ -21,6 +21,10 @@ const date_tz = function (datetime, format, timezone) {
   return moment.utc(datetime).tz(timezone).format(format);
 }
 
+const encodeURIComponentH = function (str) {
+  return encodeURIComponent(str);
+}
+
 const calendar_link = function (platform, start, title, description) {
   const end = moment(start).add(3, 'hour').toDate();
   const eventData = {
@@ -59,6 +63,7 @@ module.exports = {
   times,
   date_tz,
   calendar_link,
+  encodeURIComponentH,
   getTotalV1MissionsNeeded,
   getTotalV2MissionsNeeded
 }

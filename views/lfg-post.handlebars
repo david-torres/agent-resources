@@ -71,7 +71,7 @@
           {{#if this.characters}}
           <tr>
             <td>
-              <a href="/characters/{{this.characters.id}}/{{this.characters.name}}">{{this.characters.name}}</a>
+              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}">{{this.characters.name}}</a>
             </td>
             <td>{{this.characters.class}}</td>
             <td>{{this.characters.level}}</td>
