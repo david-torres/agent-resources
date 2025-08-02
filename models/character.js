@@ -72,7 +72,7 @@ const createCharacter = async (characterReq, profile) => {
   const character = data[0];
 
   // set personality traits
-  const { data: traitsSet, error: traitsSetError } = setCharacterTraits(character.id, traitFields);
+  const { data: traitsSet, error: traitsSetError } = await setCharacterTraits(character.id, traitFields);
   if (traitsSetError) {
     console.error(traitsSetError);
     return { data: null, error: traitsSetError };
@@ -80,7 +80,7 @@ const createCharacter = async (characterReq, profile) => {
 
   // set class gear
   if (classGear) {
-    const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
+    const { data: gearSet, error: gearSetError } = await setCharacterGear(character.id, classGear);
     if (gearSetError) {
       console.error(gearSetError);
       return { data: null, error: gearSetError };
@@ -89,7 +89,7 @@ const createCharacter = async (characterReq, profile) => {
 
   // set class abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
@@ -136,7 +136,7 @@ const updateCharacter = async (id, characterReq, profile) => {
   const character = data[0];
 
   // update traits
-  const { data: traitsSet, error: traitsSetError } = setCharacterTraits(character.id, traitFields);
+  const { data: traitsSet, error: traitsSetError } = await setCharacterTraits(character.id, traitFields);
   if (traitsSetError) {
     console.error(traitsSetError);
     return { data: null, error: traitsSetError };
@@ -144,7 +144,7 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // update gear
   if (classGear) {
-    const { data: gearSet, error: gearSetError } = setCharacterGear(character.id, classGear);
+    const { data: gearSet, error: gearSetError } = await setCharacterGear(character.id, classGear);
     if (gearSetError) {
       console.error(gearSetError);
       return { data: null, error: gearSetError };
@@ -153,7 +153,7 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // update abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = setCharacterAbilities(character.id, classAbilities);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
