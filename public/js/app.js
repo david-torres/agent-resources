@@ -194,6 +194,17 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  const signInWithDiscord = async () => {
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'discord'
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
   const renderCalendar = () => {
     const calendarEl = htmx.find('#calendar');
     if (calendarEl) {
@@ -235,6 +246,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     init,
     signIn,
     signUp,
+    signInWithDiscord,
     signOut,
     renderCalendar
   };

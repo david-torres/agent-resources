@@ -1,7 +1,8 @@
 # Agent Resources
 
 Agent Resources is a web application for managing Enclave characters, finding
-games, and more!
+games, and more! Users can log in with email/password or use their Discord
+account via Supabase OAuth integration.
 
 ## Table of Contents
 
