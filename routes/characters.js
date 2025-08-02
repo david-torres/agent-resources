@@ -79,7 +79,7 @@ router.post('/import', isAuthenticated, async (req, res) => {
   const { inputText } = req.body;
   try {
     const character = await processCharacterImport(inputText, profile);
-    res.header('HX-Location', `/characters/${character.id}/${character.name}`).send();
+    res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   } catch (error) {
     res.status(400).send(error.message);
   }
@@ -160,6 +160,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
       res.render('character', {
+        title: character.name,
         profile,
         character,
         recentMissions,
@@ -181,7 +182,7 @@ router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   if (error) {
     res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', `/characters/${id}/${data.name}`).send();
+    res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
   }
 });
 
