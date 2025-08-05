@@ -1,55 +1,54 @@
-<div class="container">
-  <h1 class="title is-2">{{mission.name}}</h1>
-  <div class="columns">
-    <div class="column is-two-thirds">
-      <div class="box">
-        <h3 class="title is-4">Mission Details</h3>
-        {{#if profile}}
-        <p><strong>Date:</strong> {{date_tz mission.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
-        {{else}}
-        <p><strong>Date:</strong> {{date mission.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
-        {{/if}}
-        <p><strong>Status:</strong> {{mission.outcome}}</p>
-        <p><strong>Focus Words:</strong> {{mission.focus_words}}</p>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Mission Statement</h3>
-        <div class="content">
-          {{#if mission.statement}}{{{markdown mission.statement}}}{{/if}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Mission Summary</h3>
-        <div class="content">
-          {{#if mission.summary}}{{{markdown mission.summary}}}{{/if}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Characters</h3>
-        <div class="content">
-          {{#if mission.characters.length}}
-          <ul>
-            {{#each mission.characters}}
-            <li>
-              <a href="/characters/{{this.id}}">{{this.name}}</a>
-            </li>
-            {{/each}}
-          </ul>
-          {{else}}
-          <p>No characters assigned to this mission.</p>
-          {{/if}}
-        </div>
-      </div>
-
-      {{#if (eq mission.creator_id profile.id)}}
-      <div class="buttons">
-        <a href="/missions/{{mission.id}}/edit" class="button is-warning">Edit Mission</a>
-        <button class="button is-danger" hx-delete="/missions/{{mission.id}}" hx-confirm="Are you sure you want to delete this mission?" hx-redirect="/missions">Delete Mission</button>
-      </div>
+<h1 class="title is-2">{{mission.name}}</h1>
+<div class="columns">
+  <div class="column is-two-thirds">
+    <div class="box">
+      <h3 class="title is-4">Mission Details</h3>
+      {{#if profile}}
+      <p><strong>Date:</strong> {{date_tz mission.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
+      {{else}}
+      <p><strong>Date:</strong> {{date mission.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
       {{/if}}
+      <p><strong>Status:</strong> {{mission.outcome}}</p>
+      <p><strong>Focus Words:</strong> {{mission.focus_words}}</p>
     </div>
+
+    <div class="box">
+      <h3 class="title is-4">Mission Statement</h3>
+      <div class="content">
+        {{#if mission.statement}}{{{markdown mission.statement}}}{{/if}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Mission Summary</h3>
+      <div class="content">
+        {{#if mission.summary}}{{{markdown mission.summary}}}{{/if}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Characters</h3>
+      <div class="content">
+        {{#if mission.characters.length}}
+        <ul>
+          {{#each mission.characters}}
+          <li>
+            <a href="/characters/{{this.id}}">{{this.name}}</a>
+          </li>
+          {{/each}}
+        </ul>
+        {{else}}
+        <p>No characters assigned to this mission.</p>
+        {{/if}}
+      </div>
+    </div>
+
+    {{#if (eq mission.creator_id profile.id)}}
+    <div class="buttons">
+      <a href="/missions/{{mission.id}}/edit" class="button is-warning">Edit Mission</a>
+      <button class="button is-danger" hx-delete="/missions/{{mission.id}}"
+        hx-confirm="Are you sure you want to delete this mission?" hx-redirect="/missions">Delete Mission</button>
+    </div>
+    {{/if}}
   </div>
 </div>

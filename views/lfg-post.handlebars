@@ -1,58 +1,47 @@
-<div class="container">
-  <div class="box lfg-post">
-    <h3 class="title is-4">{{post.title}}</h3>
-    <p>Date: {{#if profile}}{{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}{{else}}{{date_tz
-      post.date "dddd, MMMM Do YYYY, h:mm A" "local"}}{{/if}}</p>
-    <p class="is-size-7">Created by: {{post.creator_name}}</p>
-    <p class="mt-4">
-      {{#if post.host_id}}
-      Conduit: {{post.host_name}}{{else}}<span class="tag is-warning">Conduit needed</span>
-      {{/if}}
-    </p>
-    <div class="box content mt-4">
-      {{{markdown post.description}}}
-    </div>
-
-    <div class="buttons is-right">
-      <button class="button" id="calendar-buttons-show"
-        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');">
-        Calendar
-      </button>
-      <div id="calendar-buttons" class="is-hidden">
-        <button class="delete mt-2" id="calendar-buttons-hide"
-          hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');">
-        </button>
-        <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
-        <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo</a>
-        <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Office365</a>
-        <a class="button" href="{{calendar_link 'outlook' post.date post.title post.description}}">Outlook</a>
-        <a class="button" href="{{calendar_link 'google' post.date post.title post.description}}">Google</a>
-      </div>
-      {{#if profile}}
-      {{#if (eq post.host_id profile.id)}}
-      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
-        hx-swap="outerHTML">Unjoin as Conduit</button>
-      {{else}}
-      {{#inArray (pluck post.join_requests "profile_id") profile.id}}
-      <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
-        hx-swap="outerHTML">Unjoin</button>
-      {{else}}
-      <button class="button is-primary" hx-get="/lfg/{{post.id}}/join" hx-swap="outerHTML">Join</button>
-      {{/inArray}}
-      {{/if}}
-      {{/if}}
-    </div>
+<div class="box lfg-post">
+  <h3 class="title is-4">{{post.title}}</h3>
+  <p>Date: {{#if profile}}{{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}{{else}}{{date_tz
+    post.date "dddd, MMMM Do YYYY, h:mm A" "local"}}{{/if}}</p>
+  <p class="is-size-7">Created by: {{post.creator_name}}</p>
+  <p class="mt-4">
+    {{#if post.host_id}}
+    Conduit: {{post.host_name}}{{else}}<span class="tag is-warning">Conduit needed</span>
+    {{/if}}
+  </p>
+  <div class="box content mt-4">
+    {{{markdown post.description}}}
   </div>
 
-  {{#if post.join_requests.length}}
-  <div class="box mt-4">
-    <h3 class="title is-4">Party Summary</h3>
-
-    {{#if post.host_id}}
-    <div class="notification is-info">
-      <strong>Conduit:</strong> {{post.host_name}}
+  <div class="buttons is-right">
+    <button class="button" id="calendar-buttons-show"
+      hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');">
+      Calendar
+    </button>
+    <div id="calendar-buttons" class="is-hidden">
+      <button class="delete mt-2" id="calendar-buttons-hide"
+        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');">
+      </button>
+      <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
+      <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo</a>
+      <a class="button" href="{{calendar_link 'office365' post.date post.title post.description}}">Office365</a>
+      <a class="button" href="{{calendar_link 'outlook' post.date post.title post.description}}">Outlook</a>
+      <a class="button" href="{{calendar_link 'google' post.date post.title post.description}}">Google</a>
     </div>
+    {{#if profile}}
+    {{#if (eq post.host_id profile.id)}}
+    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+      hx-swap="outerHTML">Unjoin as Conduit</button>
+    {{else}}
+    {{#inArray (pluck post.join_requests "profile_id") profile.id}}
+    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+      hx-swap="outerHTML">Unjoin</button>
+    {{else}}
+    <button class="button is-primary" hx-get="/lfg/{{post.id}}/join" hx-swap="outerHTML">Join</button>
+    {{/inArray}}
     {{/if}}
+    {{/if}}
+  </div>
+</div>
 
     <div class="table-container">
       <table class="table is-fullwidth">
@@ -135,21 +124,107 @@
       </table>
     </div>
 
-    <div class="box mt-4">
-      <h4 class="title is-5">Party Stats</h4>
-      <div class="columns is-multiline">
-        {{#each statList}}
-        <div class="column is-3">
-          <p><strong>{{capitalize this}}:</strong>
-              {{#range 0 (lookup ../partyStats this)}}
-              +
-              {{/range}}
-              ({{lookup ../partyStats this}})
-          </p>
-        </div>
-        {{/each}}
-      </div>
-    </div>
+  {{#if post.host_id}}
+  <div class="notification is-info">
+    <strong>Conduit:</strong> {{post.host_name}}
   </div>
   {{/if}}
+
+  <div class="table-container">
+    <table class="table is-fullwidth">
+      <thead>
+        <tr>
+          <th>Character</th>
+          <th>Class</th>
+          <th>Level</th>
+          <th>Player</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each post.join_requests}}
+        {{#if (eq this.status "approved")}}
+        {{#if this.characters}}
+        <tr>
+          <td>
+            <a href="/characters/{{this.characters.id}}/{{this.characters.name}}">{{this.characters.name}}</a>
+          </td>
+          <td>{{this.characters.class}}</td>
+          <td>{{this.characters.level}}</td>
+          <td>{{this.profiles.name}}</td>
+          <td>
+            <button class="button is-small is-info" {{!--
+              hx-get="/characters/{{this.characters.id}}/{{this.characters.name}}" --}}
+              hx-target="#character-details-{{this.characters.id}}"
+              hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.characters.id}}'), 'is-hidden');"
+              hx-swap="innerHTML">
+              Details
+            </button>
+          </td>
+        </tr>
+        <tr>
+          <td colspan="5">
+            <div id="character-details-{{this.characters.id}}" class="box is-hidden">
+              <div class="columns is-multiline">
+                <div class="column is-4">
+                  <h4 class="title is-5">Stats</h4>
+                  <div class="columns is-multiline">
+                    {{#each ../statList}}
+                    <div class="column is-6">
+                      <p><strong>{{capitalize this}}:</strong>
+                        {{#range 0 (lookup ../this.characters this)}}+ {{/range}}
+                      </p>
+                    </div>
+                    {{/each}}
+                  </div>
+                </div>
+                <div class="column is-4">
+                  <h4 class="title is-5">Abilities</h4>
+                  <div class="tags">
+                    {{#each this.characters.abilities}}
+                    <span class="tag is-primary is-medium">{{this.name}}</span>
+                    {{/each}}
+                  </div>
+                </div>
+                <div class="column is-4">
+                  <h4 class="title is-5">Gear</h4>
+                  <div class="tags">
+                    {{#each this.characters.gear}}
+                    <span class="tag is-gray is-medium">{{this.name}}</span>
+                    {{/each}}
+                  </div>
+                </div>
+              </div>
+              <div class="container">
+                <h4 class="title is-5">Personality</h4>
+                {{#each this.characters.personality}}
+                <span class="tag is-primary is-medium">{{capitalize this.name}}</span>
+                {{/each}}
+              </div>
+            </div>
+          </td>
+        </tr>
+        {{/if}}
+        {{/if}}
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="box mt-4">
+    <h4 class="title is-5">Party Stats</h4>
+    <div class="columns is-multiline">
+      {{#each statList}}
+      <div class="column is-3">
+        <p><strong>{{capitalize this}}:</strong>
+          {{#range 0 (lookup ../partyStats this)}}
+          +
+          {{/range}}
+          ({{lookup ../partyStats this}})
+        </p>
+      </div>
+      {{/each}}
+    </div>
+  </div>
 </div>
+{{/if}}

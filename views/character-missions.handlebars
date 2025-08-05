@@ -1,70 +1,70 @@
-<div class="container">
-  <div class="level">
-    <div class="level-left">
-      <div class="level-item">
-        <h1 class="title is-2">{{character.name}}'s Missions</h1>
-      </div>
-    </div>
-    <div class="level-right">
-      <div class="level-item">
-        <a href="/characters/{{character.id}}" class="button">Back to Character</a>
-      </div>
+<div class="level">
+  <div class="level-left">
+    <div class="level-item">
+      <h1 class="title is-2">{{character.name}}'s Missions</h1>
     </div>
   </div>
-
-  {{#if missions.length}}
-  <div class="block">
-    <table class="table is-fullwidth is-striped is-hoverable">
-      <thead>
-        <tr>
-          <th>Mission Name</th>
-          <th>Date</th>
-          <th>Outcome</th>
-          {{#and profile.id (eq character.creator_id profile.id)}}
-          <th>Is Public?</th>
-          {{/and}}
-          <th>Summary</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{#each missions}}
-        {{#or this.is_public (eq ../profile.id this.creator_id)}}
-        <tr>
-          <td><a href="/missions/{{this.id}}">{{this.name}}</a></td>
-          <td>{{#if ../profile}}{{date_tz this.date "MMM D, YYYY" ../profile.timezone}}{{else}}{{date this.date "MMM D, YYYY"}}{{/if}}</td>
-          <td>
-            <span class="tag {{#if (eq this.outcome 'success')}}is-success{{else if (eq this.outcome 'failure')}}is-danger{{else}}is-warning{{/if}}">
-              {{capitalize this.outcome}}
-            </span>
-          </td>
-          {{#and ../profile.id (eq this.creator_id ../profile.id)}}
-          <td>
-            {{#if this.is_public}}
-              <span class="tag is-primary">Public</span>
-            {{else}}
-              <span class="tag is-gray">Private</span>
-            {{/if}}
-          </td>
-          {{/and}}
-          <td>{{#if this.summary}}{{{markdown this.summary}}}{{else}}-{{/if}}</td>
-          <td>
-            <div class="buttons are-small">
-              <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
-              {{#if (eq this.creator_id ../profile.id)}}
-              <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
-              {{/if}}
-            </div>
-          </td>
-        </tr>
-        {{/or}}
-        {{/each}}
-      </tbody>
-    </table>
+  <div class="level-right">
+    <div class="level-item">
+      <a href="/characters/{{character.id}}" class="button">Back to Character</a>
+    </div>
   </div>
-  {{else}}
-  <div class="notification">
-    <p class="has-text-centered">No missions yet</p>
-  </div>
-  {{/if}}
 </div>
+
+{{#if missions.length}}
+<div class="block">
+  <table class="table is-fullwidth is-striped is-hoverable">
+    <thead>
+      <tr>
+        <th>Mission Name</th>
+        <th>Date</th>
+        <th>Outcome</th>
+        {{#and profile.id (eq character.creator_id profile.id)}}
+        <th>Is Public?</th>
+        {{/and}}
+        <th>Summary</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each missions}}
+      {{#or this.is_public (eq ../profile.id this.creator_id)}}
+      <tr>
+        <td><a href="/missions/{{this.id}}">{{this.name}}</a></td>
+        <td>{{#if ../profile}}{{date_tz this.date "MMM D, YYYY" ../profile.timezone}}{{else}}{{date this.date "MMM D,
+          YYYY"}}{{/if}}</td>
+        <td>
+          <span
+            class="tag {{#if (eq this.outcome 'success')}}is-success{{else if (eq this.outcome 'failure')}}is-danger{{else}}is-warning{{/if}}">
+            {{capitalize this.outcome}}
+          </span>
+        </td>
+        {{#and ../profile.id (eq this.creator_id ../profile.id)}}
+        <td>
+          {{#if this.is_public}}
+          <span class="tag is-primary">Public</span>
+          {{else}}
+          <span class="tag is-gray">Private</span>
+          {{/if}}
+        </td>
+        {{/and}}
+        <td>{{#if this.summary}}{{{markdown this.summary}}}{{else}}-{{/if}}</td>
+        <td>
+          <div class="buttons are-small">
+            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            {{#if (eq this.creator_id ../profile.id)}}
+            <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
+            {{/if}}
+          </div>
+        </td>
+      </tr>
+      {{/or}}
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="notification">
+  <p class="has-text-centered">No missions yet</p>
+</div>
+{{/if}}
