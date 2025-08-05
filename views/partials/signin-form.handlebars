@@ -13,9 +13,12 @@
         <input class="input" type="password" name="password" placeholder="Password" required>
       </div>
     </div>
-    <div class="field">
+    <div class="field is-grouped">
       <div class="control">
         <button class="button is-primary" type="submit">Sign In</button>
+      </div>
+      <div class="control">
+        <button class="button is-link" type="button" hx-on:click="App.sendSignInLink(event)">Send Magic Link</button>
       </div>
     </div>
   </form>
