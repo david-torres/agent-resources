@@ -1,60 +1,56 @@
-<section class="section">
-  <div class="container">
-    <h2 class="title is-2">Missions</h2>
-    <div class="buttons">
-      <a href="/missions/new" class="button is-primary">Create New Mission</a>
-    </div>
+<h2 class="title is-2">Missions</h2>
+<div class="buttons">
+  <a href="/missions/new" class="button is-primary">Create New Mission</a>
+</div>
 
-    {{#if missions.length}}
-    <div class="block">
-      <table class="table is-fullwidth is-striped is-hoverable">
-        <thead>
-          <tr>
-            <th>Name</th>
-            <th>Date</th>
-            <th>Status</th>
-            <th>Characters</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {{#each missions}}
-          {{#or this.is_public (eq ../profile.id this.creator_id)}}
-          <tr>
-            <td>{{this.name}}</td>
-            {{#if profile}}
-            <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
-            {{else}}
-            <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
-            {{/if}}
-            <td>{{this.outcome}}</td>
-            <td>
-              {{#if this.characters.length}}
-              {{#each this.characters}}
-              <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
-              {{/each}}
-              {{else}}
-              -
-              {{/if}}
-            </td>
-            <td>
-              <div class="buttons are-small">
-                <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
-                {{#if (eq this.creator_id ../profile.id)}}
-                <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
-                <button class="button is-danger" hx-delete="/missions/{{this.id}}" hx-target="closest tr"
-                  hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this mission?">Delete</button>
-                {{/if}}
-              </div>
-            </td>
-          </tr>
-          {{/or}}
+{{#if missions.length}}
+<div class="block">
+  <table class="table is-fullwidth is-striped is-hoverable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th>Characters</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each missions}}
+      {{#or this.is_public (eq ../profile.id this.creator_id)}}
+      <tr>
+        <td>{{this.name}}</td>
+        {{#if profile}}
+        <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
+        {{else}}
+        <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
+        {{/if}}
+        <td>{{this.outcome}}</td>
+        <td>
+          {{#if this.characters.length}}
+          {{#each this.characters}}
+          <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
           {{/each}}
-        </tbody>
-      </table>
-    </div>
-    {{else}}
-    <p class="has-text-centered">You don't have any missions logged.</p>
-    {{/if}}
-  </div>
-</section>
+          {{else}}
+          -
+          {{/if}}
+        </td>
+        <td>
+          <div class="buttons are-small">
+            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            {{#if (eq this.creator_id ../profile.id)}}
+            <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
+            <button class="button is-danger" hx-delete="/missions/{{this.id}}" hx-target="closest tr"
+              hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this mission?">Delete</button>
+            {{/if}}
+          </div>
+        </td>
+      </tr>
+      {{/or}}
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<p class="has-text-centered">You don't have any missions logged.</p>
+{{/if}}

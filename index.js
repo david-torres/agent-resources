@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, encodeURIComponentH, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, markdownSnippet, setVariable, encodeURIComponentH } = require('./util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -12,6 +12,7 @@ const charactersRoutes = require('./routes/characters');
 const lfgRoutes = require('./routes/lfg');
 const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
+const classesRoutes = require('./routes/classes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -33,7 +34,8 @@ app.engine('handlebars', exphbs.engine({
       calendar_link,
       encodeURIComponentH,
       getTotalV1MissionsNeeded,
-      getTotalV2MissionsNeeded
+      getTotalV2MissionsNeeded,
+      setVariable
   }
 }));
 app.set('view engine', 'handlebars');
@@ -53,6 +55,7 @@ app.use('/profile', profileRoutes);
 app.use('/characters', charactersRoutes);
 app.use('/lfg', lfgRoutes);
 app.use('/missions', missionsRoutes);
+app.use('/classes', classesRoutes);
 
 // Start server
 app.listen(PORT, () => {

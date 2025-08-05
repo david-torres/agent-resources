@@ -1,173 +1,173 @@
-<div class="container">
-  <h1 class="title is-2">{{character.name}}</h1>
-  <div class="columns">
-    <div class="column is-one-third">
-      {{#if character.image_url}}
-      <figure class="image is-4by3">
-        <img src="{{character.image_url}}" alt="{{character.name}}">
-      </figure>
-      {{else}}
-      <div class="notification is-info">No image available</div>
+<h1 class="title is-2">{{character.name}}</h1>
+<div class="columns">
+  <div class="column is-one-third">
+    {{#if character.image_url}}
+    <figure class="image is-4by3">
+      <img src="{{character.image_url}}" alt="{{character.name}}">
+    </figure>
+    {{else}}
+    <div class="notification is-info">No image available</div>
+    {{/if}}
+
+    <div class="box mt-4">
+      <h3 class="title is-4">Character Info</h3>
+      <p><strong>Class:</strong> {{character.class}}</p>
+      <p><strong>Level:</strong> {{character.level}}</p>
+      {{#if (lt character.level 10)}}
+      <p class="is-size-7">
+        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
+        missions to reach level {{add character.level 1}}<br>
+        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
+        missions to reach level {{add character.level 1}}
+      </p>
       {{/if}}
+      <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
+      <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
+    </div>
 
-      <div class="box mt-4">
-        <h3 class="title is-4">Character Info</h3>
-        <p><strong>Class:</strong> {{character.class}}</p>
-        <p><strong>Level:</strong> {{character.level}}</p>
-        {{#if (lt character.level 10)}}
-        <p class="is-size-7">
-          V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}<br>
-          V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more missions to reach level {{add character.level 1}}
-        </p>
-        {{/if}}
-        <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
-        <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
+    <div class="box">
+      <h3 class="title is-4">Personality</h3>
+      <div class="tags is-centered">
+        {{#each character.traits}}
+        <span class="tag is-primary is-medium">{{capitalize this}}</span>
+        {{/each}}
       </div>
+    </div>
 
-      <div class="box">
-        <h3 class="title is-4">Personality</h3>
-        <div class="tags is-centered">
-          {{#each character.traits}}
-          <span class="tag is-primary is-medium">{{capitalize this}}</span>
+    <div class="box">
+      <h3 class="title is-4">Recent Missions</h3>
+      {{#if recentMissions.length}}
+      <div class="content">
+        <ul>
+          {{#each recentMissions}}
+          {{#or this.is_public (eq ../profile.id this.creator_id)}}
+          <li>
+            <strong><a href="/missions/{{this.id}}">{{this.name}}</a></strong>
+            <br>
+            {{#if profile}}
+            <small>{{date_tz this.date "MMM D, YYYY" profile.timezone}} - {{this.outcome}}</small>
+            {{else}}
+            <small>{{date this.date "MMM D, YYYY"}} - {{this.outcome}}</small>
+            {{/if}}
+          </li>
+          {{/or}}
           {{/each}}
-        </div>
+        </ul>
+        <p class="has-text-right">
+          <a href="/missions/character/{{character.id}}">View all missions →</a>
+        </p>
       </div>
-
-      <div class="box">
-        <h3 class="title is-4">Recent Missions</h3>
-        {{#if recentMissions.length}}
-        <div class="content">
-          <ul>
-            {{#each recentMissions}}
-            {{#or this.is_public (eq ../profile.id this.creator_id)}}
-            <li>
-              <strong><a href="/missions/{{this.id}}">{{this.name}}</a></strong>
-              <br>
-              {{#if profile}}
-              <small>{{date_tz this.date "MMM D, YYYY" profile.timezone}} - {{this.outcome}}</small>
-              {{else}}
-              <small>{{date this.date "MMM D, YYYY"}} - {{this.outcome}}</small>
-              {{/if}}
-            </li>
-            {{/or}}
-            {{/each}}
-          </ul>
-          <p class="has-text-right">
-            <a href="/missions/character/{{character.id}}">View all missions →</a>
-          </p>
-        </div>
-        {{else}}
-        <p class="has-text-centered">No missions yet</p>
-        {{/if}}
-
-        {{#if profile}}
-        {{#if (eq character.creator_id profile.id)}}
-        <form hx-post="/missions" hx-trigger="submit" class="mt-4">
-          <input type="hidden" name="characters[]" value="{{character.id}}">
-          <div class="field has-addons">
-            <div class="control is-expanded">
-              <input class="input" type="text" name="name" placeholder="Mission name" required>
-            </div>
-            <div class="control">
-              <button class="button is-primary" type="submit">Add Mission</button>
-            </div>
-          </div>
-        </form>
-        {{/if}}
-        {{/if}}
-      </div>
+      {{else}}
+      <p class="has-text-centered">No missions yet</p>
+      {{/if}}
 
       {{#if profile}}
       {{#if (eq character.creator_id profile.id)}}
-      <div class="field is-grouped is-pulled-right">
-        <div class="control">
-          <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
+      <form hx-post="/missions" hx-trigger="submit" class="mt-4">
+        <input type="hidden" name="characters[]" value="{{character.id}}">
+        <div class="field has-addons">
+          <div class="control is-expanded">
+            <input class="input" type="text" name="name" placeholder="Mission name" required>
+          </div>
+          <div class="control">
+            <button class="button is-primary" type="submit">Add Mission</button>
+          </div>
         </div>
-      </div>
+      </form>
       {{/if}}
       {{/if}}
     </div>
 
-    <div class="column is-two-thirds">
-      <div class="box">
-        <h3 class="title is-4">Stats</h3>
-        <div class="columns is-multiline">
-          {{#each statList}}
-          <div class="column is-one-third">
-            <p><strong>{{capitalize this}}:</strong>
-              {{#range 0 (lookup ../character this)}}
-              +
-              {{/range}}
-            </p>
-          </div>
-          {{/each}}
-        </div>
+    {{#if profile}}
+    {{#if (eq character.creator_id profile.id)}}
+    <div class="field is-grouped is-pulled-right">
+      <div class="control">
+        <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
       </div>
-
-      <div class="box">
-        <h3 class="title is-4">Class Abilities</h3>
-        <div class="columns is-multiline">
-          {{#each character.abilities}}
-          <div class="column is-one-third">
-            <div class="is-size-5">{{capitalize this}}</div>
-          </div>
-          {{/each}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Ability Perks</h3>
-        <div class="content">
-          {{{markdown character.perks}}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Class Gear</h3>
-        <div class="columns is-multiline">
-          {{#each character.gear}}
-          <div class="column is-one-third">
-            <div class="is-size-5">{{capitalize this}}</div>
-          </div>
-          {{/each}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Additional Gear</h3>
-        <div class="content">
-          {{{markdown character.additional_gear}}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Appearance</h3>
-        <div class="content">
-          {{{markdown character.appearance}}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Background</h3>
-        <div class="content">
-          {{{markdown character.background}}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Flavor</h3>
-        <div class="content">
-          {{{markdown character.flavor}}}
-        </div>
-      </div>
-
-      <div class="box">
-        <h3 class="title is-4">Ideas</h3>
-        <div class="content">
-          {{{markdown character.ideas}}}
-        </div>
-      </div>
-
     </div>
+    {{/if}}
+    {{/if}}
+  </div>
+
+  <div class="column is-two-thirds">
+    <div class="box">
+      <h3 class="title is-4">Stats</h3>
+      <div class="columns is-multiline">
+        {{#each statList}}
+        <div class="column is-one-third">
+          <p><strong>{{capitalize this}}:</strong>
+            {{#range 0 (lookup ../character this)}}
+            +
+            {{/range}}
+          </p>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Class Abilities</h3>
+      <div class="columns is-multiline">
+        {{#each character.abilities}}
+        <div class="column is-one-third">
+          <div class="is-size-5">{{capitalize this}}</div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Ability Perks</h3>
+      <div class="content">
+        {{{markdown character.perks}}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Class Gear</h3>
+      <div class="columns is-multiline">
+        {{#each character.gear}}
+        <div class="column is-one-third">
+          <div class="is-size-5">{{capitalize this}}</div>
+        </div>
+        {{/each}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Additional Gear</h3>
+      <div class="content">
+        {{{markdown character.additional_gear}}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Appearance</h3>
+      <div class="content">
+        {{{markdown character.appearance}}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Background</h3>
+      <div class="content">
+        {{{markdown character.background}}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Flavor</h3>
+      <div class="content">
+        {{{markdown character.flavor}}}
+      </div>
+    </div>
+
+    <div class="box">
+      <h3 class="title is-4">Ideas</h3>
+      <div class="content">
+        {{{markdown character.ideas}}}
+      </div>
+    </div>
+
   </div>
 </div>

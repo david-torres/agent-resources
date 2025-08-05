@@ -1,24 +1,23 @@
-<section class="section">
-  <div class="container">
-    <h2 class="title is-2">Import Character</h2>
-    {{#if error}}
-      <div class="notification is-danger">
-        {{error}}
-      </div>
-    {{/if}}
-    <span class="tag is-warning mb-4">Note: This is an AI-powered feature and may make mistakes. Please review the imported character and make any necessary corrections.</span>
-    <form hx-post="/characters/import" class="box">
-      <div class="field">
-        <label class="label">Character Sheet</label>
-        <div class="control">
-          <textarea class="textarea" name="inputText" placeholder="Paste your character description sheet" rows="10"></textarea>
-        </div>
-      </div>
-      <div class="field">
-        <div class="control">
-          <button id="importBtn" type="submit" class="button is-primary" hx-on:click="htmx.addClass(htmx.find('#importBtn'), 'is-loading')">Import Character</button>
-        </div>
-      </div>
-    </form>
+<h2 class="title is-2">Import Character</h2>
+{{#if error}}
+<div class="notification is-danger">
+  {{error}}
+</div>
+{{/if}}
+<span class="tag is-warning mb-4">Note: This is an AI-powered feature and may make mistakes. Please review the
+  imported character and make any necessary corrections.</span>
+<form hx-post="/characters/import" class="box">
+  <div class="field">
+    <label class="label">Character Sheet</label>
+    <div class="control">
+      <textarea class="textarea" name="inputText" placeholder="Paste your character description sheet"
+        rows="10"></textarea>
+    </div>
   </div>
-</section>
+  <div class="field">
+    <div class="control">
+      <button id="importBtn" type="submit" class="button is-primary"
+        hx-on:click="htmx.addClass(htmx.find('#importBtn'), 'is-loading')">Import Character</button>
+    </div>
+  </div>
+</form>

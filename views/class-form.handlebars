@@ -1,0 +1,77 @@
+<h2 class="title is-3">{{#if isNew}}Create New Class{{else}}Edit Class{{/if}}</h2>
+<form hx-{{#if isNew}}post{{else}}put{{/if}}="/classes{{#unless isNew}}/{{class.id}}{{/unless}}" hx-redirect="/classes">
+  <div class="field is-grouped">
+    <label class="label">Rules Edition</label>
+    <div class="control">
+      <select class="select" name="rules_edition">
+        <option value="advent" {{#if (eq class.rules_edition "advent")}}selected{{/if}}>Advent</option>
+        <option value="aspirant" {{#if (eq class.rules_edition "aspirant")}}selected{{/if}} disabled>Aspirant</option>
+        <option value="adept" {{#if (eq class.rules_edition "adept")}}selected{{/if}} disabled>Adept</option>
+        <option value="ace" {{#if (eq class.rules_edition "ace")}}selected{{/if}} disabled>Ace</option>
+      </select>
+    </div>
+    <label class="label">Rules Version</label>
+    <div class="control">
+      <select class="select" name="rules_version">
+        <option value="v1" {{#if (eq class.rules_version "v1")}}selected{{/if}}>v1</option>
+        <option value="v2" {{#if (eq class.rules_version "v2")}}selected{{/if}}>v2</option>
+      </select>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Name</label>
+    <div class="control">
+      <input class="input" type="text" name="name" placeholder="Class Name" value="{{class.name}}" required>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Teaser</label>
+    <div class="control">
+      <textarea class="textarea" name="teaser" placeholder="Short description for class list display (optional)">{{class.teaser}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Description</label>
+    <div class="control">
+      <textarea class="textarea" name="description" placeholder="Class Description"
+        required>{{class.description}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Image</label>
+    <div class="control">
+      <input class="input" type="text" name="image_url" value="{{class.image_url}}">
+    </div>
+  </div>
+  <!-- classes have 3 abilities (name and description) -->
+  {{#each class.abilities}}
+    <div class="field">
+      <label class="label">Ability {{add @index 1}}</label>
+      <div class="control">
+        <input class="input" type="text" name="ability_name[]" placeholder="Ability {{add @index 1}}" value="{{this.name}}" required>
+      </div>
+      <label class="label">Ability {{add @index 1}} Description</label>
+      <div class="control">
+        <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description">{{this.description}}</textarea>
+      </div>
+    </div>
+  {{/each}}
+  <!-- classes have 6 gear items (name and description) -->
+  {{#each class.gear}}
+    <div class="field">
+      <label class="label">Gear {{add @index 1}}</label>
+      <div class="control">
+        <input class="input" type="text" name="gear_name[]" placeholder="Gear {{add @index 1}}" value="{{this.name}}" required>
+    </div>
+    <label class="label">Gear {{add @index 1}} Description</label>
+      <div class="control">
+        <textarea class="textarea" name="gear_description[]" placeholder="Gear {{add @index 1}} Description">{{this.description}}</textarea>
+      </div>
+    </div>
+  {{/each}}
+  <div class="field">
+    <div class="control">
+      <button class="button is-primary" type="submit">Save</button>
+    </div>
+  </div>
+</form>
