@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const crypto = require('crypto');
 
 const getClasses = async (filters = {}) => {
     let query = supabase
