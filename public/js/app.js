@@ -40,10 +40,21 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     document.addEventListener("DOMContentLoaded", async function () {
       // initialize supabase client
       supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
-      if (_getAuthToken()) {
-        supabaseClient.auth.getSession();
-      }
       supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
+
+      const url = new URL(window.location.href);
+      const code = url.searchParams.get('code');
+      if (code) {
+        try {
+          const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
+          if (error) throw error;
+          window.history.replaceState({}, document.title, url.pathname + url.hash);
+        } catch (error) {
+          _displayError(error.message);
+        }
+      }
+
+      await supabaseClient.auth.getSession();
 
       // add auth token to htmx requests
       document.body.addEventListener("htmx:configRequest", function (event) {
@@ -143,7 +154,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       _clearTokens();
       window.location.href = returnUrl;
     } else if (event === 'PASSWORD_RECOVERY') {
-      // handle password recovery event
+      redirectTo('/auth/update-password-form');
     } else if (event === 'TOKEN_REFRESHED') {
       // handle token refreshed event
       _setTokens(session.access_token, session.refresh_token);
@@ -183,7 +194,90 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     } catch (error) {
       _displayError(error.message);
     }
-  }
+  };
+
+  const sendSignInLink = async (event) => {
+    const form = document.getElementById('sign-in');
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    if (!email) {
+      _displayError('Email is required');
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/check` }
+      });
+      if (error) throw error;
+      const message = 'Check your email for a magic link to sign in.';
+      htmx.swap('#sign-in', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const sendSignUpLink = async (event) => {
+    const form = document.getElementById('sign-up');
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    if (!email) {
+      _displayError('Email is required');
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/check` }
+      });
+      if (error) throw error;
+
+      const message = 'Please check your email for a magic link to continue.';
+      htmx.swap('#sign-up', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const sendPasswordReset = async (event) => {
+    event.preventDefault();
+    const form = document.getElementById('sign-in');
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    if (!email) {
+      _displayError('Email is required');
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`
+      });
+      if (error) throw error;
+      const message = 'Check your email for a password reset link.';
+      htmx.swap('#sign-in', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const updatePassword = async (event) => {
+    event.preventDefault();
+    const form = document.getElementById('update-password');
+    const formData = new FormData(form);
+    const password = formData.get('password');
+
+    try {
+      const { error } = await supabaseClient.auth.updateUser({ password });
+      if (error) throw error;
+      _displayNotification('success', 'Password updated successfully.');
+      redirectTo('/');
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
 
   const signOut = async () => {
     try {
@@ -235,6 +329,10 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     init,
     signIn,
     signUp,
+    sendSignInLink,
+    sendSignUpLink,
+    sendPasswordReset,
+    updatePassword,
     signOut,
     renderCalendar
   };
