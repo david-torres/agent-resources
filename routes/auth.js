@@ -18,4 +18,8 @@ router.get('/signup-form', (req, res) => {
   res.render('partials/signup-form', { layout: false });
 });
 
+router.get('/update-password-form', (req, res) => {
+  res.render('partials/update-password-form', { layout: false });
+});
+
 module.exports = router;
