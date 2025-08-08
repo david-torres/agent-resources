@@ -72,21 +72,38 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
 router.post('/', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
-    
-    // Process abilities and gear arrays
-    const abilities = req.body.ability_name.map((name, index) => ({
-        name: name,
-        description: req.body['ability_description'][index]
-    }));
-    req.body.abilities = abilities;
+
+    // Validate and process abilities array
+    if (req.body.ability_name === undefined) {
+        req.body.abilities = [];
+    } else if (Array.isArray(req.body.ability_name)) {
+        const abilityDescriptions = Array.isArray(req.body.ability_description)
+            ? req.body.ability_description
+            : [];
+        req.body.abilities = req.body.ability_name.map((name, index) => ({
+            name: name,
+            description: abilityDescriptions[index]
+        }));
+    } else {
+        return res.status(400).json({ error: 'ability_name must be an array' });
+    }
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name.map((name, index) => ({
-        name: name,
-        description: req.body['gear_description'][index]
-    }));
-    req.body.gear = gear;
+    // Validate and process gear array
+    if (req.body.gear_name === undefined) {
+        req.body.gear = [];
+    } else if (Array.isArray(req.body.gear_name)) {
+        const gearDescriptions = Array.isArray(req.body.gear_description)
+            ? req.body.gear_description
+            : [];
+        req.body.gear = req.body.gear_name.map((name, index) => ({
+            name: name,
+            description: gearDescriptions[index]
+        }));
+    } else {
+        return res.status(400).json({ error: 'gear_name must be an array' });
+    }
     delete req.body.gear_name;
     delete req.body.gear_description;
 
@@ -104,19 +121,35 @@ router.post('/', isAuthenticated, async (req, res) => {
 router.put('/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
 
-    const abilities = req.body.ability_name.map((name, index) => ({
-        name: name,
-        description: req.body['ability_description'][index]
-    }));
-    req.body.abilities = abilities;
+    if (req.body.ability_name === undefined) {
+        req.body.abilities = [];
+    } else if (Array.isArray(req.body.ability_name)) {
+        const abilityDescriptions = Array.isArray(req.body.ability_description)
+            ? req.body.ability_description
+            : [];
+        req.body.abilities = req.body.ability_name.map((name, index) => ({
+            name: name,
+            description: abilityDescriptions[index]
+        }));
+    } else {
+        return res.status(400).json({ error: 'ability_name must be an array' });
+    }
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name.map((name, index) => ({
-        name: name,
-        description: req.body['gear_description'][index]
-    }));
-    req.body.gear = gear;
+    if (req.body.gear_name === undefined) {
+        req.body.gear = [];
+    } else if (Array.isArray(req.body.gear_name)) {
+        const gearDescriptions = Array.isArray(req.body.gear_description)
+            ? req.body.gear_description
+            : [];
+        req.body.gear = req.body.gear_name.map((name, index) => ({
+            name: name,
+            description: gearDescriptions[index]
+        }));
+    } else {
+        return res.status(400).json({ error: 'gear_name must be an array' });
+    }
     delete req.body.gear_name;
     delete req.body.gear_description;
 
