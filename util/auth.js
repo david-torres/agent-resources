@@ -64,11 +64,11 @@ async function authOptional(req, res, next) {
 
 // Middleware to check if user is admin
 const requireAdmin = async (req, res, next) => {
-  if (!req.user) {
+  if (!res.locals.user) {
       return res.status(401).json({ error: 'Not authenticated' });
   }
 
-  const { data: profile, error } = await getUserProfile(req.user.id);
+  const { data: profile, error } = await getUserProfile(res.locals.user.id);
   if (error || profile?.role !== 'admin') {
       return res.status(403).json({ error: 'Not authorized' });
   }

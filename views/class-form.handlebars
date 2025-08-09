@@ -17,6 +17,14 @@
         <option value="v2" {{#if (eq class.rules_version "v2")}}selected{{/if}}>v2</option>
       </select>
     </div>
+    <label class="label">Status</label>
+    <div class="control">
+      <select class="select" name="status">
+        <option value="release" {{#if (eq class.status "release")}}selected{{/if}}>Release</option>
+        <option value="beta" {{#if (eq class.status "beta")}}selected{{/if}}>Beta</option>
+        <option value="alpha" {{#if (eq class.status "alpha")}}selected{{/if}}>Alpha</option>
+      </select>
+    </div>
   </div>
   <div class="field">
     <label class="label">Name</label>

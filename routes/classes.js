@@ -74,26 +74,25 @@ router.post('/', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
     
     // Process abilities and gear arrays
-    const abilities = req.body.ability_name.map((name, index) => ({
+    const abilities = req.body.ability_name ? req.body.ability_name.map((name, index) => ({
         name: name,
         description: req.body['ability_description'][index]
-    }));
+    })) : [];
     req.body.abilities = abilities;
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name.map((name, index) => ({
+    const gear = req.body.gear_name ? req.body.gear_name.map((name, index) => ({
         name: name,
         description: req.body['gear_description'][index]
-    }));
+    })) : [];
     req.body.gear = gear;
     delete req.body.gear_name;
     delete req.body.gear_description;
 
     // Add created_by field
-    req.body.created_by = req.user.id;
+    req.body.created_by = res.locals.profile.id;
 
-    console.log('req.body is', req.body);
     const { data: classData, error } = await createClass(req.body);
     if (error) {
         return res.status(500).json({ error: error.message });
@@ -104,18 +103,18 @@ router.post('/', isAuthenticated, async (req, res) => {
 router.put('/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
 
-    const abilities = req.body.ability_name.map((name, index) => ({
+    const abilities = req.body.ability_name ? req.body.ability_name.map((name, index) => ({
         name: name,
         description: req.body['ability_description'][index]
-    }));
+    })) : [];
     req.body.abilities = abilities;
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name.map((name, index) => ({
+    const gear = req.body.gear_name ? req.body.gear_name.map((name, index) => ({
         name: name,
         description: req.body['gear_description'][index]
-    }));
+    })) : [];
     req.body.gear = gear;
     delete req.body.gear_name;
     delete req.body.gear_description;
