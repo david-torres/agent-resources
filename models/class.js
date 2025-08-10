@@ -34,6 +34,25 @@ const getClasses = async (filters = {}) => {
     return { data, error };
 };
 
+const isClassUnlocked = async (userId, classId) => {
+    if (!userId || !classId) {
+        return { data: false, error: null };
+    }
+
+    const { data, error } = await supabase
+        .from('class_unlocks')
+        .select('class_id')
+        .eq('user_id', userId)
+        .eq('class_id', classId)
+        .limit(1);
+
+    if (error) {
+        console.error(error);
+        return { data: false, error };
+    }
+    return { data: Array.isArray(data) && data.length > 0, error: null };
+};
+
 const getClass = async (id) => {
     const { data, error } = await supabase
         .from('classes')
@@ -175,6 +194,7 @@ module.exports = {
     duplicateClass,
     getUnlockedClasses,
     unlockClass,
+  isClassUnlocked,
     getVersionHistory,
     getUserProfile
 };

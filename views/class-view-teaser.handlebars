@@ -1,0 +1,43 @@
+<h1 class="title is-2">{{class.name}}</h1>
+
+<div class="columns">
+  <div class="column is-one-third">
+    {{#if class.image_url}}
+    <div class="card mb-4">
+      <div class="card-image">
+        <figure class="image is-4by3">
+          <img src="{{class.image_url}}" alt="{{class.name}}">
+        </figure>
+      </div>
+    </div>
+    {{/if}}
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-4">About this class</h3>
+          {{#if class.teaser}}
+            <p>{{class.teaser}}</p>
+          {{else}}
+            <p>This class is part of the Release content. Unlock it to view full details.</p>
+          {{/if}}
+          <hr>
+          <p><strong>Status:</strong> {{capitalize class.status}}</p>
+          <p><strong>Edition:</strong> {{capitalize class.rules_edition}} {{class.rules_version}}</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="column is-two-thirds">
+    <div class="notification is-info is-light">
+      <p><strong>Locked content</strong></p>
+      <p>This class is locked for your account. Unlock it to see gear and abilities.</p>
+    </div>
+
+    <div class="buttons">
+      <a href="/classes" class="button">Back to Classes</a>
+    </div>
+  </div>
+</div>
+
+
