@@ -17,21 +17,12 @@
   <div class="field">
     <label class="label">Class</label>
     <div class="control">
-      <div class="select">
-        <select name="class" required>
-          <option disabled>Advent Classes</option>
-          {{#each adventClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
-          {{/each}}
-
-          <option disabled>Aspirant Preview classes</option>
-          {{#each aspirantPreviewClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
-          {{/each}}
-
-          <option disabled>Player Created Classes</option>
-          {{#each playerCreatedClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+      <div class="select is-fullwidth">
+        <select name="class_id" id="class_id" required hx-get="/characters/class-defaults" hx-trigger="change" hx-target="#class-dynamic" hx-swap="outerHTML">
+          {{#each classes}}
+          <option value="{{this.id}}" {{#if (eq ../character.class_id this.id)}}selected{{/if}}>
+            {{this.name}} {{#if this.rules_version}}({{this.rules_version}}){{/if}}
+          </option>
           {{/each}}
         </select>
       </div>
@@ -112,34 +103,36 @@
 
   <hr />
 
-  <div class="block">
-    <label class="label">Class Gear</label>
-    <div class="columns is-multiline" id="class-gear-list">
+  <div id="class-dynamic">
+    <div class="block">
+      <label class="label">Class Gear</label>
+      <div class="columns is-multiline" id="class-gear-list">
       {{#if character.gear}}
       {{#each character.gear}}
       {{> character-class-gear characterGear=this classGearList=../classGearList}}
       {{/each}}
       {{/if}}
+      </div>
+      <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
+        hx-swap="beforeend">Add
+        Class Gear</button>
     </div>
-    <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
-      hx-swap="beforeend">Add
-      Class Gear</button>
-  </div>
 
-  <hr />
+    <hr />
 
-  <div class="field">
-    <label class="label">Class Abilities</label>
-    <div class="columns is-multiline" id="class-ability-list">
+    <div class="field">
+      <label class="label">Class Abilities</label>
+      <div class="columns is-multiline" id="class-ability-list">
       {{#if character.abilities}}
       {{#each character.abilities}}
       {{> character-class-abilities characterAbility=this classAbilityList=../classAbilityList}}
       {{/each}}
       {{/if}}
+      </div>
+      <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list"
+        hx-swap="beforeend">Add
+        Class Abilities</button>
     </div>
-    <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list"
-      hx-swap="beforeend">Add
-      Class Abilities</button>
   </div>
 
   <hr />

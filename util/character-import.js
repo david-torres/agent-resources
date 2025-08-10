@@ -2,6 +2,7 @@ const z = require("zod");
 const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
 const { createCharacter } = require('../models/character');
+const ClassModel = require('../models/class');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classGearList, classAbilityList, personalityMap } = require('../util/enclave-consts');
 
 const openai = new OpenAIChatApi(
@@ -60,6 +61,14 @@ JSON output:`;
       creator_id: profile.id,
       is_public: false,
     };
+    // Resolve class by name if possible to set class_id
+    try {
+      const { data: classes } = await ClassModel.getClasses({ visibility: 'public' });
+      const match = (classes || []).find(c => c.name.toLowerCase() === characterData.class.toLowerCase());
+      if (match) {
+        characterData.class_id = match.id;
+      }
+    } catch (_) { /* ignore */ }
     characterData.abilities = classAbilityList[characterData.class];
     const { data: character, error } = await createCharacter(characterData, profile);
     if (error) throw new Error(error.message);
