@@ -119,12 +119,14 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   function _handleAuthStateChange(event, session) {
     if (event === 'INITIAL_SESSION') {
-      // handle initial session
-      if (session && _getAuthToken() !== session.access_token) {
-        _setTokens(session.access_token, session.refresh_token);
-      }
-
-      if (!session) {
+      // Handle initial session deterministically
+      if (session) {
+        if (_getAuthToken() !== session.access_token) {
+          _setTokens(session.access_token, session.refresh_token);
+        }
+        const redirectUrl = getRedirectUrl() || '/';
+        redirectTo(redirectUrl);
+      } else {
         _clearTokens();
 
         const authOptional = document.body.getAttribute('data-auth-optional') === 'true';
@@ -132,13 +134,6 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           let returnUrl = getReturnUrl();
           redirectTo(returnUrl);
         }
-
-        return;
-      }
-
-      const redirectUrl = getRedirectUrl();
-      if (redirectUrl) {
-        redirectTo(redirectUrl);
       }
     } else if (event === 'SIGNED_IN') {
       const redirectUrl = getRedirectUrl() || '/';

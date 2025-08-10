@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
+const { authOptional } = require('../util/auth');
 
-router.get('/', (req, res) => {
+router.get('/', authOptional, (req, res) => {
   res.render('auth');
 });
 
-router.get('/check', (req, res) => {
+router.get('/check', authOptional, (req, res) => {
   res.render('auth-check');
 });
 
