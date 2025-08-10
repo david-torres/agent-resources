@@ -52,7 +52,7 @@
     </div>
   </div>
     <!-- classes have 3 abilities (name and description) -->
-    {{#if (or isNew (not class))}}
+    {{#if (or isNew (eq class.abilities.length 0))}}
       {{#times 3}}
         <div class="field">
           <label class="label">Ability {{add @index 1}}</label>
@@ -80,7 +80,7 @@
       {{/each}}
     {{/if}}
     <!-- classes have 6 gear items (name and description) -->
-    {{#if (or isNew (not class))}}
+    {{#if (or isNew (eq class.gear.length 0))}}
       {{#times 6}}
         <div class="field">
           <label class="label">Gear {{add @index 1}}</label>
