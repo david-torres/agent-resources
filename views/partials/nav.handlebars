@@ -3,12 +3,12 @@
     <a class="navbar-item" href="/">
       <strong>Agent Resources</strong>
     </a>
-    <button class="navbar-burger" id="navbar-burger" role="button" aria-label="menu" aria-expanded="false" hx-on:click="htmx.toggleClass(htmx.find('#navbar-burger'), 'is-active');htmx.toggleClass(htmx.find('#navbar-menu'), 'is-active');return false;">
+    <button class="navbar-burger" id="navbar-burger" role="button" aria-label="menu" aria-expanded="false" hx-on:click="const b = htmx.find('#navbar-burger'); const m = htmx.find('#navbar-menu'); htmx.toggleClass(b, 'is-active'); htmx.toggleClass(m, 'is-active'); b.setAttribute('aria-expanded', b.classList.contains('is-active')); return false;">
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>
-    </a>
+    </button>
   </div>
 
   <div class="navbar-menu" id="navbar-menu">
