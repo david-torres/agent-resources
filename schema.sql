@@ -1,20 +1,16 @@
--- profile table
 CREATE TABLE profiles (
-  id uuid not null default gen_random_uuid (),
-  user_id uuid not null,
-  name text not null,
-  bio text null,
-  image_url text null,
-  is_public boolean null default false,
-  timezone text null default 'UTC'::text,
-  role public.roles null,
-  constraint profiles_pkey primary key (id),
-  constraint unique_user_id unique (user_id),
-  constraint profiles_user_id_fkey foreign KEY (user_id) references auth.users (id),
-  constraint profiles_role_check check ((role = any (array['user'::text, 'admin'::text])))
-) TABLESPACE pg_default;
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id),
+    name TEXT NOT NULL,
+    bio TEXT,
+    image_url TEXT,
+    is_public BOOLEAN DEFAULT FALSE,
+    timezone TEXT DEFAULT 'UTC',
+    role public.roles,
+    CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'))
+);
 
-create index IF not exists idx_profiles_role on public.profiles using btree (role) TABLESPACE pg_default;
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
 
 -- characters table
 CREATE TABLE characters (
