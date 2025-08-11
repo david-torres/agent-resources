@@ -1,13 +1,16 @@
--- profile table
 CREATE TABLE profiles (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL REFERENCES auth.users(id) UNIQUE,
-  is_public BOOLEAN NULL DEFAULT FALSE,
-  name TEXT NOT NULL,
-  bio TEXT NULL,
-  image_url TEXT NULL,
-  timezone TEXT NULL DEFAULT 'UTC'
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id),
+    name TEXT NOT NULL,
+    bio TEXT,
+    image_url TEXT,
+    is_public BOOLEAN DEFAULT FALSE,
+    timezone TEXT DEFAULT 'UTC',
+    role public.roles,
+    CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
 
 -- characters table
 CREATE TABLE characters (
@@ -214,31 +217,30 @@ CREATE POLICY "Private classes are viewable by owner or admin"
     USING (
         visibility = 'private' AND (
             created_by = auth.uid() OR 
-            EXISTS (
-                SELECT 1 FROM auth.users 
-                WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
-            )
+            is_admin()
         )
     );
 
 CREATE POLICY "Classes can be created by admin or player"
     ON classes FOR INSERT
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
-        ) OR
-        is_player_created = true
+        -- Admins can create any status
+        is_admin() OR
+        -- Non-admins may only create player-created classes that are not release
+        (is_player_created = true AND status IN ('alpha','beta'))
     );
 
 CREATE POLICY "Classes can be updated by owner or admin"
     ON classes FOR UPDATE
     USING (
-        created_by = auth.uid() OR 
-        EXISTS (
-            SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
-        )
+        created_by = auth.uid() OR is_admin()
+    )
+    WITH CHECK (
+        -- Preserve owner/admin requirement
+        (created_by = auth.uid() OR is_admin())
+        AND
+        -- Only admins can set release
+        (is_admin() OR status IN ('alpha','beta'))
     );
 
 -- RLS Policies for class_unlocks table
@@ -246,13 +248,21 @@ CREATE POLICY "Users can view their own unlocks"
     ON class_unlocks FOR SELECT
     USING (user_id = auth.uid());
 
-CREATE POLICY "Only admins can create unlocks"
+DROP POLICY IF EXISTS "Only admins can create unlocks" ON class_unlocks;
+CREATE POLICY "Users can unlock eligible public player classes"
     ON class_unlocks FOR INSERT
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM auth.users 
-            WHERE id = auth.uid() AND raw_user_meta_data->>'role' = 'admin'
+        (
+          user_id = auth.uid()
+          AND EXISTS (
+            SELECT 1 FROM classes c
+            WHERE c.id = class_id
+              AND c.visibility = 'public'
+              AND c.is_player_created = true
+              AND c.status IN ('alpha','beta')
+          )
         )
+        OR is_admin()
     );
 
 -- Trigger to update updated_at timestamp
@@ -268,3 +278,540 @@ CREATE TRIGGER update_classes_updated_at
     BEFORE UPDATE ON classes
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Enable Row Level Security for application tables
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE characters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mission_characters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE traits ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_gear ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_abilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lfg_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE lfg_join_requests ENABLE ROW LEVEL SECURITY;
+
+-- Helper admin check used in policies (avoid selecting from auth.users in RLS)
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS boolean
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE((auth.jwt() ->> 'role') = 'admin', false)
+$$;
+
+-- Profiles policies
+DROP POLICY IF EXISTS "profiles_select" ON profiles;
+DROP POLICY IF EXISTS "profiles_insert" ON profiles;
+DROP POLICY IF EXISTS "profiles_update" ON profiles;
+DROP POLICY IF EXISTS "profiles_delete" ON profiles;
+
+CREATE POLICY "profiles_select"
+    ON profiles FOR SELECT
+    USING (
+        is_public = true
+        OR user_id = auth.uid()
+        OR is_admin()
+    );
+
+CREATE POLICY "profiles_insert"
+    ON profiles FOR INSERT
+    WITH CHECK (
+        user_id = auth.uid()
+        OR is_admin()
+    );
+
+CREATE POLICY "profiles_update"
+    ON profiles FOR UPDATE
+    USING (
+        user_id = auth.uid()
+        OR is_admin()
+    )
+    WITH CHECK (
+        user_id = auth.uid()
+        OR is_admin()
+    );
+
+CREATE POLICY "profiles_delete"
+    ON profiles FOR DELETE
+    USING (
+        user_id = auth.uid()
+        OR is_admin()
+    );
+
+-- Characters policies
+DROP POLICY IF EXISTS "characters_public_select" ON characters;
+DROP POLICY IF EXISTS "characters_owner_admin_select" ON characters;
+DROP POLICY IF EXISTS "characters_insert" ON characters;
+DROP POLICY IF EXISTS "characters_update" ON characters;
+DROP POLICY IF EXISTS "characters_delete" ON characters;
+
+CREATE POLICY "characters_public_select"
+    ON characters FOR SELECT
+    USING (is_public = true);
+
+CREATE POLICY "characters_owner_admin_select"
+    ON characters FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "characters_insert"
+    ON characters FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "characters_update"
+    ON characters FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "characters_delete"
+    ON characters FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    );
+
+-- Traits policies
+DROP POLICY IF EXISTS "traits_select" ON traits;
+DROP POLICY IF EXISTS "traits_mutate" ON traits;
+
+CREATE POLICY "traits_select"
+    ON traits FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = traits.character_id
+              AND (
+                c.is_public = true OR p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+CREATE POLICY "traits_mutate"
+    ON traits FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = traits.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = traits.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+-- Class gear policies
+DROP POLICY IF EXISTS "class_gear_select" ON class_gear;
+DROP POLICY IF EXISTS "class_gear_mutate" ON class_gear;
+
+CREATE POLICY "class_gear_select"
+    ON class_gear FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_gear.character_id
+              AND (
+                c.is_public = true OR p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+CREATE POLICY "class_gear_mutate"
+    ON class_gear FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_gear.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_gear.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+-- Class abilities policies
+DROP POLICY IF EXISTS "class_abilities_select" ON class_abilities;
+DROP POLICY IF EXISTS "class_abilities_mutate" ON class_abilities;
+
+CREATE POLICY "class_abilities_select"
+    ON class_abilities FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_abilities.character_id
+              AND (
+                c.is_public = true OR p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+CREATE POLICY "class_abilities_mutate"
+    ON class_abilities FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_abilities.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = class_abilities.character_id
+              AND (
+                p.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+-- Missions policies
+DROP POLICY IF EXISTS "missions_public_select" ON missions;
+DROP POLICY IF EXISTS "missions_owner_host_admin_select" ON missions;
+DROP POLICY IF EXISTS "missions_insert" ON missions;
+DROP POLICY IF EXISTS "missions_update" ON missions;
+DROP POLICY IF EXISTS "missions_delete" ON missions;
+
+CREATE POLICY "missions_public_select"
+    ON missions FOR SELECT
+    USING (is_public = true);
+
+CREATE POLICY "missions_owner_host_admin_select"
+    ON missions FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "missions_insert"
+    ON missions FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "missions_update"
+    ON missions FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    );
+
+CREATE POLICY "missions_delete"
+    ON missions FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    );
+
+-- Mission characters policies
+DROP POLICY IF EXISTS "mission_characters_select" ON mission_characters;
+DROP POLICY IF EXISTS "mission_characters_mutate" ON mission_characters;
+
+CREATE POLICY "mission_characters_select"
+    ON mission_characters FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM missions m
+            JOIN characters c ON c.id = mission_characters.character_id
+            JOIN profiles pm ON pm.id = m.creator_id
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE m.id = mission_characters.mission_id
+              AND (
+                m.is_public = true OR pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+CREATE POLICY "mission_characters_mutate"
+    ON mission_characters FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM missions m
+            JOIN characters c ON c.id = mission_characters.character_id
+            JOIN profiles pm ON pm.id = m.creator_id
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE m.id = mission_characters.mission_id
+              AND (
+                pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM missions m
+            JOIN characters c ON c.id = mission_characters.character_id
+            JOIN profiles pm ON pm.id = m.creator_id
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE m.id = mission_characters.mission_id
+              AND (
+                pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+-- LFG posts policies
+DROP POLICY IF EXISTS "lfg_posts_public_select" ON lfg_posts;
+DROP POLICY IF EXISTS "lfg_posts_owner_host_admin_select" ON lfg_posts;
+DROP POLICY IF EXISTS "lfg_posts_insert" ON lfg_posts;
+DROP POLICY IF EXISTS "lfg_posts_update" ON lfg_posts;
+DROP POLICY IF EXISTS "lfg_posts_delete" ON lfg_posts;
+
+CREATE POLICY "lfg_posts_public_select"
+    ON lfg_posts FOR SELECT
+    USING (is_public = true);
+
+CREATE POLICY "lfg_posts_owner_host_admin_select"
+    ON lfg_posts FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "lfg_posts_insert"
+    ON lfg_posts FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = creator_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "lfg_posts_update"
+    ON lfg_posts FOR UPDATE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    );
+
+CREATE POLICY "lfg_posts_delete"
+    ON lfg_posts FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE (p.id = creator_id OR p.id = host_id) AND (
+                p.user_id = auth.uid()
+                OR EXISTS (
+                    SELECT 1 FROM auth.users u
+                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
+                )
+            )
+        )
+    );
+
+-- LFG join requests policies
+DROP POLICY IF EXISTS "lfg_join_requests_select" ON lfg_join_requests;
+DROP POLICY IF EXISTS "lfg_join_requests_insert" ON lfg_join_requests;
+DROP POLICY IF EXISTS "lfg_join_requests_update" ON lfg_join_requests;
+DROP POLICY IF EXISTS "lfg_join_requests_delete" ON lfg_join_requests;
+
+CREATE POLICY "lfg_join_requests_select"
+    ON lfg_join_requests FOR SELECT
+    USING (
+        -- requester can see their own request
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = lfg_join_requests.profile_id AND p.user_id = auth.uid()
+        )
+        OR
+        -- post owner (creator or host) can see requests
+        EXISTS (
+            SELECT 1
+            FROM lfg_posts lp
+            JOIN profiles p2 ON p2.id IN (lp.creator_id, lp.host_id)
+            WHERE lp.id = lfg_join_requests.lfg_post_id
+              AND p2.user_id = auth.uid()
+        )
+        OR
+        -- admin can see everything
+        is_admin()
+    );
+
+CREATE POLICY "lfg_join_requests_insert"
+    ON lfg_join_requests FOR INSERT
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = lfg_join_requests.profile_id AND (
+                p.user_id = auth.uid() OR is_admin()
+            )
+        )
+    );
+
+CREATE POLICY "lfg_join_requests_update"
+    ON lfg_join_requests FOR UPDATE
+    USING (
+        -- only the post owner (creator or host) or admin can update status
+        EXISTS (
+            SELECT 1
+            FROM lfg_posts lp
+            JOIN profiles p2 ON p2.id IN (lp.creator_id, lp.host_id)
+            WHERE lp.id = lfg_join_requests.lfg_post_id
+              AND (
+                p2.user_id = auth.uid() OR is_admin()
+              )
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM lfg_posts lp
+            JOIN profiles p2 ON p2.id IN (lp.creator_id, lp.host_id)
+            WHERE lp.id = lfg_join_requests.lfg_post_id
+              AND (
+                p2.user_id = auth.uid() OR is_admin()
+              )
+        )
+    );
+
+CREATE POLICY "lfg_join_requests_delete"
+    ON lfg_join_requests FOR DELETE
+    USING (
+        -- requester can cancel
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = lfg_join_requests.profile_id AND p.user_id = auth.uid()
+        )
+        OR
+        -- post owner can remove
+        EXISTS (
+            SELECT 1
+            FROM lfg_posts lp
+            JOIN profiles p2 ON p2.id IN (lp.creator_id, lp.host_id)
+            WHERE lp.id = lfg_join_requests.lfg_post_id
+              AND p2.user_id = auth.uid()
+        )
+        OR
+        -- admin can delete
+        is_admin()
+    );
