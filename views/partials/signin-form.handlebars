@@ -21,6 +21,9 @@
         <button class="button is-link" type="button" hx-on:click="App.sendSignInLink(event)">Send Magic Link</button>
       </div>
     </div>
+    <p class="mt-2">
+      <a hx-on:click="App.sendPasswordReset(event)">Forgot password?</a>
+    </p>
   </form>
   <p class="mt-4">
     Don't have an account?

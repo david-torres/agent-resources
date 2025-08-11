@@ -149,7 +149,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       _clearTokens();
       window.location.href = returnUrl;
     } else if (event === 'PASSWORD_RECOVERY') {
-      // handle password recovery event
+      redirectTo('/auth/update-password-form');
     } else if (event === 'TOKEN_REFRESHED') {
       // handle token refreshed event
       _setTokens(session.access_token, session.refresh_token);
@@ -236,6 +236,44 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  const sendPasswordReset = async (event) => {
+    event.preventDefault();
+    const form = document.getElementById('sign-in');
+    const formData = new FormData(form);
+    const email = formData.get('email');
+    if (!email) {
+      _displayError('Email is required');
+      return;
+    }
+
+    try {
+      const { error } = await supabaseClient.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth`
+      });
+      if (error) throw error;
+      const message = 'Check your email for a password reset link.';
+      htmx.swap('#sign-in', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const updatePassword = async (event) => {
+    event.preventDefault();
+    const form = document.getElementById('update-password');
+    const formData = new FormData(form);
+    const password = formData.get('password');
+
+    try {
+      const { error } = await supabaseClient.auth.updateUser({ password });
+      if (error) throw error;
+      _displayNotification('success', 'Password updated successfully.');
+      redirectTo('/');
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
   const signOut = async () => {
     try {
       const { error } = await supabaseClient.auth.signOut('global');
@@ -288,6 +326,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     signUp,
     sendSignInLink,
     sendSignUpLink,
+    sendPasswordReset,
+    updatePassword,
     signOut,
     renderCalendar
   };
