@@ -16,6 +16,7 @@ CREATE TABLE characters (
   is_public BOOLEAN DEFAULT FALSE,
   name TEXT NOT NULL,
   class TEXT NOT NULL,
+  class_id UUID NULL REFERENCES classes(id),
   vitality INTEGER NOT NULL,
   might INTEGER NOT NULL,
   resilience INTEGER NOT NULL,
@@ -153,7 +154,9 @@ CREATE TABLE IF NOT EXISTS classes (
     base_class_id uuid REFERENCES classes(id),
     created_by uuid REFERENCES auth.users(id),
     created_at timestamp NOT NULL DEFAULT now(),
-    updated_at timestamp NOT NULL DEFAULT now()
+    updated_at timestamp NOT NULL DEFAULT now(),
+    abilities jsonb NOT NULL DEFAULT '[]'::jsonb,
+    gear jsonb NOT NULL DEFAULT '[]'::jsonb
 );
 
 -- Class unlocks table

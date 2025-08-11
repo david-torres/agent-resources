@@ -1,0 +1,24 @@
+<div id="class-dynamic">
+  <div class="block">
+    <label class="label">Class Gear</label>
+    <div class="columns is-multiline" id="class-gear-list">
+      {{#each selectedGear}}
+        {{> character-class-gear characterGear=this classGearList=../classGearList}}
+      {{/each}}
+    </div>
+    <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list" hx-swap="beforeend">Add Class Gear</button>
+  </div>
+
+  <hr />
+
+  <div class="field">
+    <label class="label">Class Abilities</label>
+    <div class="columns is-multiline" id="class-ability-list">
+      {{#each selectedAbilities}}
+        {{> character-class-abilities characterAbility=this classAbilityList=../classAbilityList}}
+      {{/each}}
+    </div>
+    <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list" hx-swap="beforeend">Add Class Abilities</button>
+  </div>
+</div>
+

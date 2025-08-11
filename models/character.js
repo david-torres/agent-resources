@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const ClassModel = require('./class');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -43,6 +44,26 @@ const getCharacter = async (id) => {
 
 const createCharacter = async (characterReq, profile) => {
   characterReq.creator_id = profile.id;
+
+  // If class_id provided, resolve class and set defaults
+  if (characterReq.class_id) {
+    const { data: classData, error: classError } = await ClassModel.getClass(characterReq.class_id);
+    if (classError) {
+      console.error(classError);
+      return { data: null, error: classError };
+    }
+    // Back-compat: persist friendly name
+    characterReq.class = classData.name;
+    // Default abilities/gear from class JSON if not provided
+    if (!characterReq.gear) {
+      const defaultGear = Array.isArray(classData.gear) ? classData.gear.map(g => g.name || g) : [];
+      characterReq.gear = defaultGear;
+    }
+    if (!characterReq.abilities) {
+      const defaultAbilities = Array.isArray(classData.abilities) ? classData.abilities.map(a => a.name || a) : [];
+      characterReq.abilities = defaultAbilities;
+    }
+  }
 
   // handle personality traits
   const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
@@ -103,6 +124,24 @@ const updateCharacter = async (id, characterReq, profile) => {
   const { data: characterData, error: characterError } = await getCharacter(id);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
+
+  // If class_id provided, resolve class and set defaults
+  if (characterReq.class_id) {
+    const { data: classData, error: classError } = await ClassModel.getClass(characterReq.class_id);
+    if (classError) {
+      console.error(classError);
+      return { data: null, error: classError };
+    }
+    characterReq.class = classData.name;
+    if (!characterReq.gear) {
+      const defaultGear = Array.isArray(classData.gear) ? classData.gear.map(g => g.name || g) : [];
+      characterReq.gear = defaultGear;
+    }
+    if (!characterReq.abilities) {
+      const defaultAbilities = Array.isArray(classData.abilities) ? classData.abilities.map(a => a.name || a) : [];
+      characterReq.abilities = defaultAbilities;
+    }
+  }
 
   // handle personality traits
   const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];

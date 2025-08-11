@@ -11,7 +11,14 @@
 
     <div class="box mt-4">
       <h3 class="title is-4">Character Info</h3>
-      <p><strong>Class:</strong> {{character.class}}</p>
+      <p>
+        <strong>Class:</strong> {{character.class}}
+        <a href="/classes/{{character.class_id}}" class="button is-small is-light ml-2" title="View Class">
+          <span class="icon is-small">
+            <i class="fas fa-external-link-alt"></i>
+          </span>
+        </a>
+      </p>
       <p><strong>Level:</strong> {{character.level}}</p>
       {{#if (lt character.level 10)}}
       <p class="is-size-7">
