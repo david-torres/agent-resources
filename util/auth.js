@@ -4,18 +4,16 @@ async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
     const redirectUrl = req.headers['redirect-to'] || req.originalUrl;
     if (redirectUrl == '/auth' || redirectUrl == '/') {
-      res.redirect('/auth/check');
-      return;
+      return res.redirect('/auth/check');
     }
-    res.redirect(`/auth/check?r=${encodeURIComponent(redirectUrl)}`);
-    return;
+    return res.redirect(`/auth/check?r=${encodeURIComponent(redirectUrl)}`);
   }
 
   const authToken = req.headers['authorization'].split(' ')[1];
   const refreshToken = req.headers['refresh-token'];
   const user = await getUserFromToken(authToken, refreshToken);
   if (!user) {
-    res.redirect('/auth');
+    return res.redirect('/auth');
   } else {
     res.locals.user = user;
     if (user) {

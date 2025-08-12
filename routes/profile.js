@@ -17,10 +17,10 @@ router.get('/view/:name', authOptional, async (req, res) => {
   const { user, profile } = res.locals;
   const { data: viewProfile, error } = await getProfileByName(req.params.name);
   if (error) {
-    res.status(400).send('Not found');
+    return res.status(400).send('Not found');
   }
   if (viewProfile.is_public === false) {
-    res.status(404).send('Not found');
+    return res.status(404).send('Not found');
   }
   res.render('profile-view', { user, profile, viewProfile, authOptional: true });
 });
@@ -37,9 +37,9 @@ router.put('/', isAuthenticated, async (req, res) => {
   }
   const { data, error } = await updateUser(email, password, profile);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', '/profile').send();
+    return res.header('HX-Location', '/profile').send();
   }
 });
 

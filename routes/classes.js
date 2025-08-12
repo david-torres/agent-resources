@@ -115,7 +115,7 @@ router.post('/', isAuthenticated, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
-    res.header('HX-Location', `/classes/${classData.id}/${classData.name}`).send();
+    return res.header('HX-Location', `/classes/${classData.id}/${classData.name}`).send();
 });
 
 router.put('/:id', isAuthenticated, async (req, res) => {
@@ -142,7 +142,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
-    res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
+    return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
 });
 
 // // API Routes
@@ -185,7 +185,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 //     if (error) {
 //         return res.status(500).json({ error: error.message });
 //     }
-//     res.status(201).json(newClass);
+//     return res.status(201).json(newClass);
 // });
 
 // // Update a class
@@ -208,7 +208,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 //     if (error) {
 //         return res.status(500).json({ error: error.message });
 //     }
-//     res.status(201).json(newClass);
+//     return res.status(201).json(newClass);
 // });
 
 // // Get unlocked classes for current user
@@ -231,7 +231,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
 //     if (error) {
 //         return res.status(500).json({ error: error.message });
 //     }
-//     res.status(201).json(unlock);
+//     return res.status(201).json(unlock);
 // });
 
 // // Get version history for a class

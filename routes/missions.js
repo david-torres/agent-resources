@@ -10,7 +10,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: missions, error } = await getOwnMissions(profile);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
     res.render('mission-list', { profile, missions });
   }
@@ -33,8 +33,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   }, profile);
 
   if (missionError) {
-    res.status(400).send(missionError.message);
-    return;
+    return res.status(400).send(missionError.message);
   }
 
   const mission = missionRes[0];
@@ -44,20 +43,19 @@ router.post('/', isAuthenticated, async (req, res) => {
     for (const characterId of characters) {
       const { error: characterError } = await addCharacterToMission(mission.id, characterId);
       if (characterError) {
-        res.status(400).send(characterError.message);
-        return;
+        return res.status(400).send(characterError.message);
       }
     }
   }
 
-  res.header('HX-Location', `/missions/${mission.id}/edit`).send();
+  return res.header('HX-Location', `/missions/${mission.id}/edit`).send();
 });
 
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { data: mission, error } = await getMission(req.params.id);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
     res.render('mission', { profile, mission, authOptional: true });
   }
@@ -67,7 +65,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: mission, error } = await getMission(req.params.id);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
     res.render('mission-form', { profile, mission, isNew: false });
   }
@@ -88,8 +86,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   // Update the mission
   const { data, error } = await updateMission(req.params.id, missionData, profile);
   if (error) {
-    res.status(400).send(error.message);
-    return;
+    return res.status(400).send(error.message);
   }
 
   // Get current characters
@@ -102,8 +99,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     if (!newIds.includes(id)) {
       const { error: removeError } = await removeCharacterFromMission(req.params.id, id);
       if (removeError) {
-        res.status(400).send(removeError.message);
-        return;
+        return res.status(400).send(removeError.message);
       }
     }
   }
@@ -113,22 +109,21 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     if (!currentIds.includes(id)) {
       const { error: addError } = await addCharacterToMission(req.params.id, id);
       if (addError) {
-        res.status(400).send(addError.message);
-        return;
+        return res.status(400).send(addError.message);
       }
     }
   }
 
-  res.header('HX-Location', `/missions/${req.params.id}`).send();
+  return res.header('HX-Location', `/missions/${req.params.id}`).send();
 });
 
 router.delete('/:id', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { error } = await deleteMission(req.params.id, profile);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', '/missions').send();
+    return res.header('HX-Location', '/missions').send();
   }
 });
 
@@ -136,9 +131,9 @@ router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) =>
   const { id, characterId } = req.params;
   const { error } = await addCharacterToMission(id, characterId);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', `/missions/${id}/edit`).send();
+    return res.header('HX-Location', `/missions/${id}/edit`).send();
   }
 });
 
@@ -146,9 +141,9 @@ router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) 
   const { id, characterId } = req.params;
   const { error } = await removeCharacterFromMission(id, characterId);
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
-    res.header('HX-Location', `/missions/${id}/edit`).send();
+    return res.header('HX-Location', `/missions/${id}/edit`).send();
   }
 });
 
@@ -158,14 +153,14 @@ router.get('/character/:id', authOptional, async (req, res) => {
   const { data: character, error } = await getCharacter(id);
   
   if (error) {
-    res.status(400).send(error.message);
+    return res.status(400).send(error.message);
   } else {
     if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
-      res.status(404).send('Not found');
+      return res.status(404).send('Not found');
     } else {
       const { data: missions, error: missionsError } = await getCharacterAllMissions(id);
       if (missionsError) {
-        res.status(400).send(missionsError.message);
+        return res.status(400).send(missionsError.message);
       } else {
         res.render('character-missions', {
           profile,
