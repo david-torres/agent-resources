@@ -13,25 +13,56 @@
 
   <div class="navbar-menu" id="navbar-menu">
     <div class="navbar-end">
-      <a class="navbar-item" href="/characters/search">
-        <span class="icon">
-          <i class="fas fa-search"></i>
-        </span>
-        <span>Search Characters</span>
-      </a>
       {{#if (eq profile.role 'admin')}}
-      <a class="navbar-item" href="/classes">
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">Game Info</a>
+        <div class="navbar-dropdown is-right">
+          <a class="navbar-item" href="/classes">
+            <span class="icon">
+              <i class="fas fa-chess-knight"></i>
+            </span>
+            <span>Classes</span>
+          </a>
+        </div>
+      </div>
+      {{/if}}
+      <div class="navbar-item has-dropdown is-hoverable">
+        <a class="navbar-link">Social</a>
+        <div class="navbar-dropdown is-right">
+          {{#if profile}}
+          <a class="navbar-item" href="/lfg">
+            <span class="icon">
+              <i class="fas fa-people-group"></i>
+            </span>
+            <span>Looking for Game</span>
+          </a>
+          {{/if}}
+          <a class="navbar-item" href="/characters/search">
+            <span class="icon">
+              <i class="fas fa-search"></i>
+            </span>
+            <span>Search Characters</span>
+          </a>
+        </div>
+      </div>
+      {{#if profile}}
+      <a class="navbar-item" href="/characters">
+        <span class="icon">
+          <i class="fas fa-masks-theater"></i>
+        </span>
+        <span>Characters</span>
+      </a>
+      <a class="navbar-item" href="/missions">
         <span class="icon">
           <i class="fas fa-book"></i>
         </span>
-        <span>Classes</span>
+        <span>Mission Log</span>
       </a>
-      {{/if}}
-      {{#if profile}}
-      <a class="navbar-item" href="/profile">Profile</a>
-      <a class="navbar-item" href="/missions">Mission Log</a>
-      <a class="navbar-item" href="/characters">My Characters</a>
-      <a class="navbar-item" href="/lfg">Looking for Game</a>
+      <a class="navbar-item" href="/profile" aria-label="Profile" title="Profile">
+        <span class="icon">
+          <i class="fas fa-user"></i>
+        </span>
+      </a>
       <div class="navbar-item">
         <button class="button is-light" hx-on:click="App.signOut(event)">Sign Out</button>
       </div>
