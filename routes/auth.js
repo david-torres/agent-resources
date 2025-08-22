@@ -6,6 +6,10 @@ router.get('/', authOptional, (req, res) => {
   res.render('auth');
 });
 
+router.post('/', authOptional, (req, res) => {
+  res.render('auth');
+});
+
 router.get('/check', authOptional, (req, res) => {
   res.render('auth-check');
 });

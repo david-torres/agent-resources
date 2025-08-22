@@ -42,20 +42,6 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
       supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
 
-      const url = new URL(window.location.href);
-      const code = url.searchParams.get('code');
-      if (code) {
-        try {
-          const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
-          if (error) throw error;
-          window.history.replaceState({}, document.title, url.pathname + url.hash);
-        } catch (error) {
-          _displayError(error.message);
-        }
-      }
-
-      await supabaseClient.auth.getSession();
-
       // add auth token to htmx requests
       document.body.addEventListener("htmx:configRequest", function (event) {
         const authToken = _getAuthToken();
@@ -97,11 +83,21 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           }, 10000);
         }
       });
+
+      // trigger initial session detection/emit events after listeners are ready
+      await supabaseClient.auth.getSession();
     });
   }
 
   function redirectTo(url) {
-    htmx.ajax('GET', url, { target: 'body', headers: { 'redirect-to': url } });
+    const token = _getAuthToken();
+    const refresh = _getRefreshToken();
+    const headers = { 'redirect-to': url };
+    if (token && refresh) {
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['Refresh-Token'] = refresh;
+    }
+    htmx.ajax('GET', url, { target: 'body', headers });
   }
 
   function getRedirectUrl() {
@@ -117,7 +113,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     return returnUrl ? `/auth?r=${encodeURIComponent(returnUrl)}` : '/auth';
   }
 
-  function _handleAuthStateChange(event, session) {
+  async function _handleAuthStateChange(event, session) {
     if (event === 'INITIAL_SESSION') {
       // Handle initial session deterministically
       if (session) {
@@ -125,6 +121,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           _setTokens(session.access_token, session.refresh_token);
         }
         const redirectUrl = getRedirectUrl() || '/';
+        await _syncDiscordToProfile();
         redirectTo(redirectUrl);
       } else {
         _clearTokens();
@@ -132,6 +129,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         const authOptional = document.body.getAttribute('data-auth-optional') === 'true';
         if (!authOptional) {
           let returnUrl = getReturnUrl();
+          await _syncDiscordToProfile();
           redirectTo(returnUrl);
         }
       }
@@ -140,6 +138,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       // handle sign in event
       if (session && _getAuthToken() !== session.access_token) {
         _setTokens(session.access_token, session.refresh_token);
+        await _syncDiscordToProfile();
         redirectTo(redirectUrl);
       }
     } else if (event === 'SIGNED_OUT') {
@@ -154,8 +153,36 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       // handle token refreshed event
       _setTokens(session.access_token, session.refresh_token);
     } else if (event === 'USER_UPDATED') {
-      // handle user updated event
-      console.log('user updated');
+      // user identity may have changed; attempt to sync discord id to profile
+      await _syncDiscordToProfile();
+    }
+  }
+
+  async function _syncDiscordToProfile() {
+    try {
+      const { data: userData, error } = await supabaseClient.auth.getUser();
+      if (error) return;
+      const user = userData?.user;
+      if (!user) return;
+      const discordIdentity = (user.identities || []).find((i) => i.provider === 'discord');
+      const identityData = discordIdentity?.identity_data || {};
+      const discordId = identityData.sub || identityData.id || null;
+      const discordEmail = identityData.email || null;
+      const authToken = _getAuthToken();
+      const refreshToken = _getRefreshToken();
+      if (discordId && authToken && refreshToken) {
+        await fetch('/profile/discord/sync', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${authToken}`,
+            'Refresh-Token': `${refreshToken}`
+          },
+          body: JSON.stringify({ discord_id: discordId, discord_email: discordEmail })
+        });
+      }
+    } catch (e) {
+      // noop
     }
   }
 
@@ -245,6 +272,68 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  const signInWithDiscord = async () => {
+    try {
+      const r = getRedirectUrl();
+      const redirectTo = r
+        ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
+        : `${window.location.origin}/auth/check`;
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'discord',
+        options: { redirectTo, scopes: 'identify email' }
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const signUpWithDiscord = async () => {
+    try {
+      const r = getRedirectUrl();
+      const redirectTo = r
+        ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
+        : `${window.location.origin}/auth/check`;
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'discord',
+        options: { redirectTo, scopes: 'identify email' }
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const linkDiscord = async () => {
+    try {
+      const redirectTo = `${window.location.origin}/auth/check?r=${encodeURIComponent('/profile')}`
+      const { error } = await supabaseClient.auth.linkIdentity({
+        provider: 'discord',
+        options: { redirectTo, scopes: 'identify email' }
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
+  const unlinkDiscord = async () => {
+    try {
+      // Best-effort clear on server. Unlinking identity may require identity id; handle DB clear regardless.
+      const authToken = _getAuthToken();
+      const refreshToken = _getRefreshToken();
+      await fetch('/profile/discord/clear', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+          'Refresh-Token': `${refreshToken}`
+        }
+      });
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
   const renderCalendar = () => {
     const calendarEl = htmx.find('#calendar');
     if (calendarEl) {
@@ -284,11 +373,16 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   return {
     init,
+    checkSessionNow: async () => { if (supabaseClient) { await supabaseClient.auth.getSession(); } },
     signIn,
     signUp,
     sendSignInLink,
     sendSignUpLink,
     signOut,
-    renderCalendar
+    renderCalendar,
+    signInWithDiscord,
+    signUpWithDiscord,
+    linkDiscord,
+    unlinkDiscord
   };
 })(document, supabase, htmx, FullCalendar);

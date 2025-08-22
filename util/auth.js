@@ -3,16 +3,25 @@ const { getUserFromToken, getProfile } = require('./supabase');
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
     const redirectUrl = req.headers['redirect-to'] || req.originalUrl;
-    if (redirectUrl == '/auth' || redirectUrl == '/') {
-      return res.redirect('/auth/check');
+    const dest = (redirectUrl == '/auth' || redirectUrl == '/')
+      ? '/auth/check'
+      : `/auth/check?r=${encodeURIComponent(redirectUrl)}`;
+
+    if (req.get('HX-Request')) {
+      res.set('HX-Redirect', dest);
+      return res.status(200).end();
     }
-    return res.redirect(`/auth/check?r=${encodeURIComponent(redirectUrl)}`);
+    return res.redirect(dest);
   }
 
   const authToken = req.headers['authorization'].split(' ')[1];
   const refreshToken = req.headers['refresh-token'];
   const user = await getUserFromToken(authToken, refreshToken);
   if (!user) {
+    if (req.get('HX-Request')) {
+      res.set('HX-Redirect', '/auth');
+      return res.status(200).end();
+    }
     return res.redirect('/auth');
   } else {
     res.locals.user = user;

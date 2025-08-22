@@ -52,10 +52,20 @@ const updateUser = async (email, password, profile) => {
   return { data: profileData, error: profileError };
 }
 
+const setDiscordId = async (user_id, discord_id, discord_email = null) => {
+  const { data, error } = await supabase
+    .from('profiles')
+    .update({ discord_id, discord_email })
+    .eq('user_id', user_id)
+    .select();
+  return { data, error };
+}
+
 module.exports = {
   getProfile,
   getProfileById,
   getProfileByName,
   createProfile,
-  updateUser
+  updateUser,
+  setDiscordId
 };

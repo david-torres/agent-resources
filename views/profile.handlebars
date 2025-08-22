@@ -4,6 +4,15 @@
   <div class="block">
     <p><strong>Name:</strong> <span id="user-name">{{profile.name}}</span></p>
     <p><strong>Email:</strong> <span id="user-email">{{user.email}}</span></p>
+    <p>
+      <strong>Discord:</strong>
+      {{#if profile.discord_id}}
+        <button class="button is-small is-light" hx-on:click="App.unlinkDiscord()">Disconnect</button>
+      {{else}}
+        Not connected
+        <button class="button is-small is-link" hx-on:click="App.linkDiscord()">Connect Discord</button>
+      {{/if}}
+    </p>
   </div>
   <button class="button is-primary" hx-get="/profile/edit" hx-target="#profile-info" hx-swap="innerHTML">
     Edit Profile
