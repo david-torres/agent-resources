@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { updateUser, getProfileByName } = require('../util/supabase');
+const { updateUser, getProfileByName, setDiscordId } = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -41,6 +41,25 @@ router.put('/', isAuthenticated, async (req, res) => {
   } else {
     return res.header('HX-Location', '/profile').send();
   }
+});
+
+router.post('/discord/sync', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const { discord_id, discord_email } = req.body;
+  const { error } = await setDiscordId(user.id, discord_id, discord_email);
+  if (error) {
+    return res.status(400).send(error.message);
+  }
+  return res.status(204).send();
+});
+
+router.post('/discord/clear', isAuthenticated, async (req, res) => {
+  const user = res.locals.user;
+  const { error } = await setDiscordId(user.id, null, null);
+  if (error) {
+    return res.status(400).send(error.message);
+  }
+  return res.status(204).send();
 });
 
 module.exports = router;
