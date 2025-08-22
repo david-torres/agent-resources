@@ -6,11 +6,14 @@ CREATE TABLE profiles (
     image_url TEXT,
     is_public BOOLEAN DEFAULT FALSE,
     timezone TEXT DEFAULT 'UTC',
+    discord_id TEXT,
+    discord_email TEXT,
     role public.roles,
     CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_discord_id ON profiles(discord_id) WHERE discord_id IS NOT NULL;
 
 -- characters table
 CREATE TABLE characters (

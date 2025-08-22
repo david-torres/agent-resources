@@ -26,4 +26,12 @@
     Don't have an account?
     <a hx-get="/auth/signup-form" hx-target="#auth-form" hx-swap="outerHTML">Sign Up</a>
   </p>
+  <div class="mt-4">
+    <button class="button is-dark" type="button" hx-on:click="App.signInWithDiscord()">
+      <span class="icon">
+        <i class="fa-brands fa-discord"></i>
+      </span>
+      <span>Sign in with Discord</span>
+    </button>
+  </div>
 </div>
