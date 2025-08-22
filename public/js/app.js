@@ -117,7 +117,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     return returnUrl ? `/auth?r=${encodeURIComponent(returnUrl)}` : '/auth';
   }
 
-  function _handleAuthStateChange(event, session) {
+  async function _handleAuthStateChange(event, session) {
     if (event === 'INITIAL_SESSION') {
       // Handle initial session deterministically
       if (session) {
@@ -155,9 +155,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       _setTokens(session.access_token, session.refresh_token);
     } else if (event === 'USER_UPDATED') {
       // user identity may have changed; attempt to sync discord id to profile
-      _syncDiscordIdToProfile();
+      await _syncDiscordIdToProfile();
     } else if (event === 'SIGNED_IN') {
-      _syncDiscordIdToProfile();
+      await _syncDiscordIdToProfile();
     }
   }
 
@@ -287,6 +287,18 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  const signUpWithDiscord = async () => {
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'discord',
+        options: { redirectTo: `${window.location.origin}/auth/check`, scopes: 'identify email' }
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
   const linkDiscord = async () => {
     try {
       const { error } = await supabaseClient.auth.linkIdentity({ provider: 'discord', options: { scopes: 'identify email' } });
@@ -359,6 +371,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     signOut,
     renderCalendar,
     signInWithDiscord,
+    signUpWithDiscord,
     linkDiscord,
     unlinkDiscord
   };
