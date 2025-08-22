@@ -1,5 +1,14 @@
 <div id="auth-form">
   <h2 class="title is-4">Sign Up</h2>
+    <div class="mt-4">
+    <button class="button is-dark" type="button" hx-on:click="App.signUpWithDiscord()">
+      <span class="icon">
+        <i class="fa-brands fa-discord"></i>
+      </span>
+      <span>Sign up with Discord</span>
+    </button>
+  </div>
+  <hr/
   <form id="sign-up" method="POST" hx-on:submit="htmx.trigger('#sign-up', 'htmx:abort'); App.signUp(event);">
     <div class="field">
       <label class="label" for="sign-up-email">Email</label>
