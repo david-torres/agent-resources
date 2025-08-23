@@ -36,6 +36,52 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     _displayNotification('danger', message);
   }
 
+  function _toggleFormLoading(form, isLoading) {
+    if (!form) return;
+    // Overlay for whole form
+    form.classList.toggle('has-form-overlay', !!isLoading);
+    let overlay = form.querySelector('.form-loading-overlay');
+    if (isLoading) {
+      if (!overlay) {
+        overlay = document.createElement('div');
+        overlay.className = 'form-loading-overlay';
+        const spinner = document.createElement('div');
+        spinner.className = 'form-loading-spinner';
+        overlay.appendChild(spinner);
+        form.appendChild(overlay);
+      }
+    } else if (overlay) {
+      overlay.remove();
+    }
+
+    // Bulma loading indicators
+    const submitButton = form.querySelector('button[type="submit"]');
+    const controls = form.querySelectorAll('input, button, select, textarea');
+    const bulmaControls = form.querySelectorAll('.control');
+    if (submitButton) {
+      if (isLoading) {
+        submitButton.classList.add('is-loading');
+      } else {
+        submitButton.classList.remove('is-loading');
+      }
+    }
+    bulmaControls.forEach((el) => {
+      if (isLoading) {
+        el.classList.add('is-loading');
+      } else {
+        el.classList.remove('is-loading');
+      }
+    });
+    controls.forEach((el) => {
+      if (isLoading) {
+        el.setAttribute('disabled', 'disabled');
+      } else {
+        el.removeAttribute('disabled');
+      }
+    });
+    form.setAttribute('aria-busy', isLoading ? 'true' : 'false');
+  }
+
   function init(supabaseUrl, supabaseKey) {
     document.addEventListener("DOMContentLoaded", async function () {
       // initialize supabase client
@@ -187,12 +233,14 @@ const App = (function (document, supabase, htmx, FullCalendar) {
   }
 
   const signIn = async (event) => {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
     const form = document.getElementById('sign-in');
     const formData = new FormData(form);
     const email = formData.get('email');
     const password = formData.get('password');
 
     try {
+      _toggleFormLoading(form, true);
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       _setTokens(data.session.access_token, data.session.refresh_token);
@@ -202,12 +250,14 @@ const App = (function (document, supabase, htmx, FullCalendar) {
   };
 
   const signUp = async (event) => {
+    if (event && typeof event.preventDefault === 'function') event.preventDefault();
     const form = document.getElementById('sign-up');
     const formData = new FormData(form);
     const email = formData.get('email');
     const password = formData.get('password');
 
     try {
+      _toggleFormLoading(form, true);
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
       if (error) throw error;
 
@@ -228,6 +278,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
 
     try {
+      _toggleFormLoading(form, true);
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/check` }
@@ -250,6 +301,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
 
     try {
+      _toggleFormLoading(form, true);
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/check` }
