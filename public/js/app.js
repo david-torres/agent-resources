@@ -48,7 +48,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         try {
           const { error } = await supabaseClient.auth.exchangeCodeForSession(code);
           if (error) throw error;
-          window.history.replaceState({}, document.title, url.pathname + url.hash);
+          const params = new URLSearchParams(url.search);
+          params.delete('code');
+          params.delete('state');
+          const newSearch = params.toString();
+          window.history.replaceState({}, document.title, url.pathname + (newSearch ? `?${newSearch}` : '') + url.hash);
         } catch (error) {
           _displayError(error.message);
         }
@@ -277,9 +281,13 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const signInWithDiscord = async () => {
     try {
+      const r = getRedirectUrl();
+      const redirectTo = r
+        ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
+        : `${window.location.origin}/auth/check`;
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'discord',
-        options: { redirectTo: `${window.location.origin}/auth/check`, scopes: 'identify email' }
+        options: { redirectTo, scopes: 'identify email' }
       });
       if (error) throw error;
     } catch (error) {
@@ -289,9 +297,13 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const signUpWithDiscord = async () => {
     try {
+      const r = getRedirectUrl();
+      const redirectTo = r
+        ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
+        : `${window.location.origin}/auth/check`;
       const { error } = await supabaseClient.auth.signInWithOAuth({
         provider: 'discord',
-        options: { redirectTo: `${window.location.origin}/auth/check`, scopes: 'identify email' }
+        options: { redirectTo, scopes: 'identify email' }
       });
       if (error) throw error;
     } catch (error) {
