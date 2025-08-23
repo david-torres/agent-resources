@@ -311,6 +311,18 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  const signUpWithDiscord = async () => {
+    try {
+      const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider: 'discord',
+        options: { redirectTo: `${window.location.origin}/auth/check`, scopes: 'identify email' }
+      });
+      if (error) throw error;
+    } catch (error) {
+      _displayError(error.message);
+    }
+  };
+
   const linkDiscord = async () => {
     try {
       const { error } = await supabaseClient.auth.linkIdentity({ provider: 'discord', options: { scopes: 'identify email' } });
