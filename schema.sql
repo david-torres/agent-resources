@@ -154,7 +154,7 @@ CREATE TABLE IF NOT EXISTS classes (
     visibility text NOT NULL CHECK (visibility IN ('public','private')) DEFAULT 'public',
     status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
     is_player_created bool NOT NULL DEFAULT false,
-    rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant', 'adept', 'ace')) DEFAULT 'advent',
+    rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
     rules_version text NOT NULL (rules_version IN ('v1', 'v2')),
     base_class_id uuid REFERENCES classes(id),
     created_by uuid REFERENCES auth.users(id),
