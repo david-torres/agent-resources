@@ -175,7 +175,7 @@ const duplicateClass = async (baseId, newVersion) => {
 const getUnlockedClasses = async (userId) => {
     const { data, error } = await supabase
         .from('class_unlocks')
-        .select('class(*)')
+        .select('class:classes(*)')
         .eq('user_id', userId);
 
     if (error) {

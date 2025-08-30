@@ -6,23 +6,14 @@ const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 
-router.get('/', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
-  const { data: characters, error } = await getOwnCharacters(profile);
-  if (error) {
-    return res.status(400).send(error.message);
-  } else {
-    res.render('character-list', { characters });
-  }
-});
-
-router.get('/new', isAuthenticated, async (req, res) => {
-  const { profile, user } = res.locals;
+// Helper to filter class lists/lookup maps by user's unlocked classes
+const filterClassDataForUser = async (user) => {
   let filteredAdvent = adventClassList;
   let filteredAspirant = aspirantPreviewClassList;
   let filteredPCC = playerCreatedClassList;
   let filteredGear = classGearList;
   let filteredAbilities = classAbilityList;
+
   if (user) {
     const { data: unlocked } = await getUnlockedClasses(user.id);
     if (Array.isArray(unlocked) && unlocked.length > 0) {
@@ -42,6 +33,23 @@ router.get('/new', isAuthenticated, async (req, res) => {
       filteredAbilities = {};
     }
   }
+
+  return { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities };
+};
+
+router.get('/', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { data: characters, error } = await getOwnCharacters(profile);
+  if (error) {
+    return res.status(400).send(error.message);
+  } else {
+    res.render('character-list', { characters });
+  }
+});
+
+router.get('/new', isAuthenticated, async (req, res) => {
+  const { profile, user } = res.locals;
+  const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
   res.render('character-form', {
     profile,
     isNew: true,
@@ -61,30 +69,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    let filteredAdvent = adventClassList;
-    let filteredAspirant = aspirantPreviewClassList;
-    let filteredPCC = playerCreatedClassList;
-    let filteredGear = classGearList;
-    let filteredAbilities = classAbilityList;
-    if (res.locals.user) {
-      const { data: unlocked } = await getUnlockedClasses(res.locals.user.id);
-      if (Array.isArray(unlocked) && unlocked.length > 0) {
-        const allowed = new Set(unlocked.map(c => c.name));
-        const filterArr = arr => arr.filter(n => allowed.has(n));
-        const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowed.has(k)));
-        filteredAdvent = filterArr(adventClassList);
-        filteredAspirant = filterArr(aspirantPreviewClassList);
-        filteredPCC = filterArr(playerCreatedClassList);
-        filteredGear = filterMap(classGearList);
-        filteredAbilities = filterMap(classAbilityList);
-      } else {
-        filteredAdvent = [];
-        filteredAspirant = [];
-        filteredPCC = [];
-        filteredGear = {};
-        filteredAbilities = {};
-      }
-    }
+    const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
     res.render('character-form', {
       profile,
       isNew: false,
@@ -110,12 +95,14 @@ router.post('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/class-gear', (req, res) => {
-  res.render('partials/character-class-gear', { layout: false, classGearList });
+router.get('/class-gear', authOptional, async (req, res) => {
+  const { filteredGear } = await filterClassDataForUser(res.locals.user);
+  res.render('partials/character-class-gear', { layout: false, classGearList: filteredGear });
 });
 
-router.get('/class-abilities', (req, res) => {
-  res.render('partials/character-class-abilities', { layout: false, classAbilityList });
+router.get('/class-abilities', authOptional, async (req, res) => {
+  const { filteredAbilities } = await filterClassDataForUser(res.locals.user);
+  res.render('partials/character-class-abilities', { layout: false, classAbilityList: filteredAbilities });
 });
 
 router.get('/import', isAuthenticated, (req, res) => {
