@@ -9,7 +9,10 @@ const {
     getUnlockedClasses, 
     unlockClass, 
     getVersionHistory,
-    getUserProfile 
+    getUserProfile,
+    createUnlockCode,
+    listUnlockCodes,
+    redeemUnlockCode
 } = require('../models/class');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 
@@ -88,6 +91,62 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     res.render('class-view', { profile, title: 'View Class', class: classData });
 });
 
+// Self-unlock eligible PCCs (alpha/beta, public)
+router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const userId = res.locals.user.id;
+    const { data: cls, error } = await getClass(id);
+    if (error || !cls) return res.status(400).send(error?.message || 'Class not found');
+    if (!(cls.visibility === 'public' && cls.is_player_created === true && ['alpha','beta'].includes(cls.status))) {
+        return res.status(403).send('Not eligible for self-unlock');
+    }
+    const { error: unlockError } = await unlockClass(userId, id);
+    if (unlockError) return res.status(400).send(unlockError.message);
+    return res.status(204).send();
+});
+
+// Admin: generate unlock code for a class
+router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { expires_at, max_uses } = req.body;
+    const createdByProfileId = res.locals.profile.id;
+    const { data, error } = await createUnlockCode({ classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1 });
+    if (error) return res.status(400).send(error.message);
+
+    return res.render('partials/unlock-code-result', {
+        layout: false,
+        code: data.code,
+        max_uses: data.max_uses,
+        expires_at: data.expires_at
+    });
+});
+
+// Admin: list unlock codes for a class
+router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { data, error } = await listUnlockCodes(id);
+    if (error) return res.status(400).send(error.message);
+    return res.json(data);
+});
+
+// User: redeem code
+router.post('/redeem', isAuthenticated, async (req, res) => {
+    const { code } = req.body;
+    if (!code) return res.status(400).send('Code is required');
+    const userId = res.locals.user.id;
+    const { data: classId, error } = await redeemUnlockCode(code, userId);
+    if (error) return res.status(400).send(error.message);
+
+    // Navigate to the unlocked class view using HX-Location for htmx
+    try {
+        const { data: classData } = await getClass(classId);
+        const slug = classData?.name ? `/${classData.name}` : '';
+        return res.header('HX-Location', `/classes/${classId}${slug}`).status(204).send();
+    } catch (_) {
+        return res.header('HX-Location', `/classes/${classId}`).status(204).send();
+    }
+});
+
 router.post('/', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
     
@@ -108,8 +167,13 @@ router.post('/', isAuthenticated, async (req, res) => {
     delete req.body.gear_name;
     delete req.body.gear_description;
 
-    // Add created_by field
+    // Add created_by field and normalize visibility checkbox
     req.body.created_by = res.locals.profile.id;
+    if (req.body.visibility) {
+        req.body.visibility = 'public';
+    } else {
+        req.body.visibility = 'private';
+    }
 
     const { data: classData, error } = await createClass(req.body);
     if (error) {
@@ -138,6 +202,12 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     delete req.body.gear_description;
 
     console.log('req.body is', req.body);
+    if (req.body.visibility) {
+        req.body.visibility = 'public';
+    } else if (req.body.visibility === undefined) {
+        // unchecked in forms does not send field; default to private unless explicitly set elsewhere
+        req.body.visibility = 'private';
+    }
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
         return res.status(500).json({ error: error.message });

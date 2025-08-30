@@ -23,6 +23,18 @@
           <hr>
           <p><strong>Status:</strong> {{capitalize class.status}}</p>
           <p><strong>Edition:</strong> {{capitalize class.rules_edition}} {{class.rules_version}}</p>
+          {{#if profile}}
+          <div class="mt-3">
+            <form class="field has-addons" hx-post="/classes/redeem" hx-swap="none">
+              <div class="control">
+                <input class="input" type="text" name="code" placeholder="Enter unlock code">
+              </div>
+              <div class="control">
+                <button class="button is-primary" type="submit">Redeem</button>
+              </div>
+            </form>
+          </div>
+          {{/if}}
         </div>
       </div>
     </div>

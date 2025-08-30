@@ -37,6 +37,12 @@
     </div>
   </div>
   <div class="field">
+    <label class="checkbox">
+      <input type="checkbox" name="visibility" value="public" {{#if (eq class.visibility 'public')}}checked{{/if}}>
+      Public (visible to everyone)
+    </label>
+  </div>
+  <div class="field">
     <label class="label">Description</label>
     <div class="control">
       <textarea class="textarea" name="description" placeholder="Class Description"

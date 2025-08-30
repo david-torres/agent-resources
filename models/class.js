@@ -34,6 +34,53 @@ const getClasses = async (filters = {}) => {
     return { data, error };
 };
 
+const createUnlockCode = async ({ classId, createdByProfileId, expiresAt = null, maxUses = 1 }) => {
+    const code = crypto.randomBytes(12).toString('base64url');
+    const insert = {
+        code,
+        class_id: classId,
+        created_by: createdByProfileId,
+        expires_at: expiresAt,
+        max_uses: maxUses
+    };
+
+    const { data, error } = await supabase
+        .from('class_unlock_codes')
+        .insert([insert])
+        .select()
+        .single();
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data: { ...data, code }, error: null };
+};
+
+const listUnlockCodes = async (classId) => {
+    const { data, error } = await supabase
+        .from('class_unlock_codes')
+        .select('*')
+        .eq('class_id', classId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
+const redeemUnlockCode = async (code, userId) => {
+    const { data, error } = await supabase
+        .rpc('redeem_class_code_for_user', { p_code: code, p_user_id: userId });
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
 const isClassUnlocked = async (userId, classId) => {
     if (!userId || !classId) {
         return { data: false, error: null };
@@ -196,5 +243,8 @@ module.exports = {
     unlockClass,
   isClassUnlocked,
     getVersionHistory,
-    getUserProfile
+    getUserProfile,
+    createUnlockCode,
+    listUnlockCodes,
+    redeemUnlockCode
 };

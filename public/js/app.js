@@ -130,6 +130,16 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
       });
 
+      // Global keydown handler for closing modals on Escape
+      document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+          const activeModal = document.querySelector('.modal.is-active');
+          if (activeModal) {
+            App.closeModal('#' + activeModal.id);
+          }
+        }
+      });
+
       // trigger initial session detection/emit events after listeners are ready
       await supabaseClient.auth.getSession();
     });
@@ -386,6 +396,56 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     }
   };
 
+  // UI helpers
+  const openModal = (selector) => {
+    const modal = htmx.find(selector);
+    if (!modal) return;
+    if (!modal.classList.contains('is-active')) {
+      htmx.toggleClass(modal, 'is-active');
+    }
+    if (!document.body.classList.contains('modal-open')) {
+      htmx.toggleClass(document.body, 'modal-open');
+    }
+  };
+
+  const closeModal = (selector) => {
+    const modal = htmx.find(selector);
+    if (!modal) return;
+    if (modal.classList.contains('is-active')) {
+      htmx.toggleClass(modal, 'is-active');
+    }
+    if (document.body.classList.contains('modal-open')) {
+      htmx.toggleClass(document.body, 'modal-open');
+    }
+    // If modal requests clearing target on close
+    const clearOnClose = modal.getAttribute('data-clear-on-close') === 'true';
+    const clearTarget = modal.getAttribute('data-clear-target');
+    if (clearOnClose && clearTarget) {
+      const el = htmx.find(clearTarget);
+      if (el) el.innerHTML = '';
+    }
+  };
+
+  const copyToClipboard = async (text, evt) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      const button = evt && evt.target ? evt.target.closest('button') : null;
+      if (button) {
+        const original = button.innerHTML;
+        button.innerHTML = '<span class="icon"><i class="fas fa-check"></i></span><span>Copied!</span>';
+        htmx.removeClass(button, 'is-success');
+        htmx.toggleClass(button, 'is-info');
+        setTimeout(() => {
+          button.innerHTML = original;
+          htmx.removeClass(button, 'is-info');
+          htmx.toggleClass(button, 'is-success');
+        }, 2000);
+      }
+    } catch (e) {
+      _displayError('Failed to copy to clipboard');
+    }
+  };
+
   const renderCalendar = () => {
     const calendarEl = htmx.find('#calendar');
     if (calendarEl) {
@@ -435,6 +495,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     signInWithDiscord,
     signUpWithDiscord,
     linkDiscord,
-    unlinkDiscord
+    unlinkDiscord,
+    openModal,
+    closeModal,
+    copyToClipboard
   };
 })(document, supabase, htmx, FullCalendar);
