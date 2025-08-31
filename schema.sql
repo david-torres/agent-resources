@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS classes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name text NOT NULL,
     description text,
-    visibility text NOT NULL CHECK (visibility IN ('public','private')) DEFAULT 'public',
+    is_public BOOLEAN DEFAULT FALSE,
     status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
     is_player_created bool NOT NULL DEFAULT false,
     rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
@@ -199,7 +199,7 @@ BEGIN
         id,
         name,
         description,
-        visibility,
+        is_public,
         status,
         is_player_created,
         rules_edition,
@@ -211,7 +211,7 @@ BEGIN
         new_id,
         name,
         description,
-        visibility,
+        is_public,
         status,
         is_player_created,
         rules_edition,
@@ -229,15 +229,13 @@ $$;
 -- RLS Policies for classes table
 CREATE POLICY "Public classes are viewable by everyone"
     ON classes FOR SELECT
-    USING (visibility = 'public');
+    USING (is_public = true);
 
 CREATE POLICY "Private classes are viewable by owner or admin"
     ON classes FOR SELECT
     USING (
-        visibility = 'private' AND (
-            created_by = auth.uid() OR 
-            is_admin()
-        )
+        created_by = auth.uid() OR 
+        is_admin()
     );
 
 CREATE POLICY "Classes can be created by admin or player"
@@ -276,7 +274,7 @@ CREATE POLICY "Users can unlock eligible public player classes"
           AND EXISTS (
             SELECT 1 FROM classes c
             WHERE c.id = class_id
-              AND c.visibility = 'public'
+              AND c.is_public = true
               AND c.is_player_created = true
               AND c.status IN ('alpha','beta')
           )

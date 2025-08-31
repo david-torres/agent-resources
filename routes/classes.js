@@ -22,7 +22,7 @@ router.get('/', authOptional, async (req, res) => {
 
     // get class filters
     const filters = {
-        visibility: 'public',
+        is_public: true,
         rules_edition: req.query.rules_edition,
         rules_version: req.query.rules_version,
         status: req.query.status,
@@ -97,7 +97,7 @@ router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
     const userId = res.locals.user.id;
     const { data: cls, error } = await getClass(id);
     if (error || !cls) return res.status(400).send(error?.message || 'Class not found');
-    if (!(cls.visibility === 'public' && cls.is_player_created === true && ['alpha','beta'].includes(cls.status))) {
+    if (!((cls.is_public === true) && cls.is_player_created === true && ['alpha','beta'].includes(cls.status))) {
         return res.status(403).send('Not eligible for self-unlock');
     }
     const { error: unlockError } = await unlockClass(userId, id);
@@ -167,12 +167,12 @@ router.post('/', isAuthenticated, async (req, res) => {
     delete req.body.gear_name;
     delete req.body.gear_description;
 
-    // Add created_by field and normalize visibility checkbox
+    // Add created_by field and normalize is_public checkbox
     req.body.created_by = res.locals.profile.id;
-    if (req.body.visibility) {
-        req.body.visibility = 'public';
+    if (req.body.is_public === 'on') {
+        req.body.is_public = true;
     } else {
-        req.body.visibility = 'private';
+        req.body.is_public = false;
     }
 
     const { data: classData, error } = await createClass(req.body);
@@ -202,11 +202,11 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     delete req.body.gear_description;
 
     console.log('req.body is', req.body);
-    if (req.body.visibility) {
-        req.body.visibility = 'public';
-    } else if (req.body.visibility === undefined) {
-        // unchecked in forms does not send field; default to private unless explicitly set elsewhere
-        req.body.visibility = 'private';
+    if (req.body.is_public === 'on') {
+        req.body.is_public = true;
+    } else if (req.body.is_public === undefined) {
+        // unchecked in forms does not send field; default to false unless explicitly set elsewhere
+        req.body.is_public = false;
     }
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {

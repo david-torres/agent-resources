@@ -7,8 +7,8 @@ const getClasses = async (filters = {}) => {
         .select('*');
 
     // Apply filters
-    if (filters.visibility) {
-        query = query.eq('visibility', filters.visibility);
+    if (filters.is_public !== undefined) {
+        query = query.eq('is_public', filters.is_public);
     }
     if (filters.rules_edition) {
         query = query.eq('rules_edition', filters.rules_edition);

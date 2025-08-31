@@ -30,7 +30,7 @@
         <div class="content">
           <hr>
           <p><strong>Edition: </strong>{{capitalize class.rules_edition}} {{class.rules_version}}</p>
-          <p><strong>Visibility: </strong>{{capitalize class.visibility}}</p>
+          <p><strong>Public: </strong>{{#if class.is_public}}Yes{{else}}No{{/if}}</p>
         </div>
       </div>
     </div>

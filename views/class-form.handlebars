@@ -18,7 +18,9 @@
     <label class="label">Status</label>
     <div class="control">
       <select class="select" name="status">
+        {{#if (eq profile.role 'admin')}}
         <option value="release" {{#if (eq class.status "release")}}selected{{/if}}>Release</option>
+        {{/if}}
         <option value="beta" {{#if (eq class.status "beta")}}selected{{/if}}>Beta</option>
         <option value="alpha" {{#if (eq class.status "alpha")}}selected{{/if}}>Alpha</option>
       </select>
@@ -38,7 +40,7 @@
   </div>
   <div class="field">
     <label class="checkbox">
-      <input type="checkbox" name="visibility" value="public" {{#if (eq class.visibility 'public')}}checked{{/if}}>
+      <input type="checkbox" name="is_public" {{#if class.is_public}}checked{{/if}}>
       Public (visible to everyone)
     </label>
   </div>
