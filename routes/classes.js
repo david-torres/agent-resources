@@ -7,13 +7,13 @@ const {
     updateClass, 
     duplicateClass, 
     getUnlockedClasses, 
-    unlockClass, 
+    unlockClass,
+    isClassUnlocked, 
     getVersionHistory,
-    getUserProfile,
     createUnlockCode,
     listUnlockCodes,
     redeemUnlockCode
-} = require('../models/class');
+} = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 
 // View Routes
@@ -76,7 +76,6 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         classData.status === 'release' &&
         (!profile || (profile.role !== 'admin' && profile.id !== classData.creator_id))
     ) {
-        const { isClassUnlocked } = require('../models/class');
         const userId = res.locals.user?.id;
         const { data: unlocked } = await isClassUnlocked(userId, id);
         if (!unlocked) {
@@ -214,103 +213,5 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     }
     return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
 });
-
-// // API Routes
-// // Get all classes with optional filters
-// router.get('/api', async (req, res) => {
-//     const filters = {
-//         visibility: req.query.visibility,
-//         rules_edition: req.query.rules_edition,
-//         rules_version: req.query.rules_version,
-//         status: req.query.status,
-//         is_player_created: req.query.is_player_created === 'true'
-//     };
-
-//     const { data: classes, error } = await getClasses(filters);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     res.json(classes);
-// });
-
-// // Get a single class by ID
-// router.get('/api/:id', async (req, res) => {
-//     const { data: classData, error } = await getClass(req.params.id);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     if (!classData) {
-//         return res.status(404).json({ error: 'Class not found' });
-//     }
-//     res.json(classData);
-// });
-
-// // Create a new class
-// router.post('/api', isAuthenticated, async (req, res) => {
-//     const classData = {
-//         ...req.body,
-//         created_by: req.user.id
-//     };
-//     const { data: newClass, error } = await createClass(classData);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     return res.status(201).json(newClass);
-// });
-
-// // Update a class
-// router.patch('/api/:id', isAuthenticated, async (req, res) => {
-//     const { data: updatedClass, error } = await updateClass(req.params.id, req.body);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     res.json(updatedClass);
-// });
-
-// // Duplicate a class for new version
-// router.post('/api/:id/duplicate', isAuthenticated, async (req, res) => {
-//     const { new_version } = req.body;
-//     if (!new_version) {
-//         return res.status(400).json({ error: 'New version is required' });
-//     }
-
-//     const { data: newClass, error } = await duplicateClass(req.params.id, new_version);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     return res.status(201).json(newClass);
-// });
-
-// // Get unlocked classes for current user
-// router.get('/api/unlocked', isAuthenticated, async (req, res) => {
-//     const { data: unlockedClasses, error } = await getUnlockedClasses(req.user.id);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     res.json(unlockedClasses);
-// });
-
-// // Unlock a class for a user (admin only)
-// router.post('/api/:id/unlock', isAuthenticated, requireAdmin, async (req, res) => {
-//     const { user_id } = req.body;
-//     if (!user_id) {
-//         return res.status(400).json({ error: 'User ID is required' });
-//     }
-
-//     const { data: unlock, error } = await unlockClass(user_id, req.params.id);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     return res.status(201).json(unlock);
-// });
-
-// // Get version history for a class
-// router.get('/api/:id/history', async (req, res) => {
-//     const { data: history, error } = await getVersionHistory(req.params.id);
-//     if (error) {
-//         return res.status(500).json({ error: error.message });
-//     }
-//     res.json(history);
-// });
 
 module.exports = router;

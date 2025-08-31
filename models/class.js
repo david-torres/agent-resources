@@ -219,20 +219,6 @@ const getVersionHistory = async (classId) => {
     return { data, error };
 };
 
-const getUserProfile = async (userId) => {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error };
-};
-
 module.exports = {
     getClasses,
     getClass,
@@ -241,9 +227,8 @@ module.exports = {
     duplicateClass,
     getUnlockedClasses,
     unlockClass,
-  isClassUnlocked,
+    isClassUnlocked,
     getVersionHistory,
-    getUserProfile,
     createUnlockCode,
     listUnlockCodes,
     redeemUnlockCode
