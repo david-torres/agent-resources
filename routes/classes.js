@@ -53,6 +53,69 @@ router.get('/new', isAuthenticated, (req, res) => {
     });
 });
 
+// Bulk Redeem: show form
+router.get('/redeem/bulk', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    return res.render('redeem-codes', {
+        profile,
+        title: 'Redeem Unlock Codes',
+        results: null,
+        input_codes: ''
+    });
+});
+
+// Bulk Redeem: process textarea input
+router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    const userId = res.locals.user.id;
+    const codesRaw = (req.body.codes || '').trim();
+
+    if (!codesRaw) {
+        return res.render('redeem-codes', {
+            profile,
+            title: 'Redeem Unlock Codes',
+            results: [],
+            input_codes: ''
+        });
+    }
+
+    // Split by newlines or commas; trim and de-duplicate
+    const codes = Array.from(new Set(
+        codesRaw
+            .split(/\r?\n|,/)
+            .map(c => c.trim())
+            .filter(c => c.length > 0)
+    ));
+
+    const results = [];
+    for (const code of codes) {
+        try {
+            const { data: classId, error } = await redeemUnlockCode(code, userId);
+            if (error) {
+                results.push({ code, success: false, error: error.message });
+                continue;
+            }
+            let className = null;
+            try {
+                const { data: classData } = await getClass(classId);
+                className = classData?.name || null;
+            } catch (_) {
+                // ignore
+            }
+            results.push({ code, success: true, class_id: classId, class_name: className });
+        } catch (e) {
+            results.push({ code, success: false, error: e?.message || 'Unknown error' });
+        }
+    }
+
+    return res.render('redeem-codes', {
+        profile,
+        title: 'Redeem Unlock Codes',
+        results,
+        input_codes: codesRaw
+    });
+});
+
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
@@ -174,6 +237,27 @@ router.post('/', isAuthenticated, async (req, res) => {
         req.body.is_public = false;
     }
 
+    // Enforce class type: only admins may set/override is_player_created
+    const isAdmin = res.locals.profile?.role === 'admin';
+    if (isAdmin) {
+        if (req.body.is_player_created !== undefined) {
+            req.body.is_player_created = req.body.is_player_created === 'true';
+        }
+        // Admin may override creator when PCC; otherwise default to current profile
+        if (req.body.is_player_created === true) {
+            const creatorProfileId = (req.body.creator_profile_id || '').trim();
+            if (creatorProfileId) {
+                req.body.created_by = creatorProfileId;
+            } else {
+                req.body.created_by = res.locals.profile.id;
+            }
+        }
+        delete req.body.creator_profile_id;
+    } else {
+        req.body.is_player_created = true;
+        req.body.creator_profile_id = res.locals.profile.id;
+    }
+
     const { data: classData, error } = await createClass(req.body);
     if (error) {
         return res.status(500).json({ error: error.message });
@@ -206,6 +290,24 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     } else if (req.body.is_public === undefined) {
         // unchecked in forms does not send field; default to false unless explicitly set elsewhere
         req.body.is_public = false;
+    }
+    // Enforce class type: only admins may change is_player_created
+    const isAdmin = res.locals.profile?.role === 'admin';
+    if (isAdmin) {
+        if (req.body.is_player_created !== undefined) {
+            req.body.is_player_created = req.body.is_player_created === 'true';
+        }
+        // Admin may change creator when PCC; ignore otherwise
+        if (req.body.is_player_created === true) {
+            const creatorProfileId = (req.body.creator_profile_id || '').trim();
+            if (creatorProfileId) {
+                req.body.created_by = creatorProfileId;
+            }
+        }
+        delete req.body.creator_profile_id;
+    } else {
+        delete req.body.is_player_created;
+        delete req.body.creator_profile_id;
     }
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
