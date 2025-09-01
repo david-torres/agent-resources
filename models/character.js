@@ -10,6 +10,20 @@ const getOwnCharacters = async (profile) => {
   return { data, error };
 }
 
+const getPublicCharactersByCreator = async (creatorId) => {
+  const { data, error } = await supabase
+    .from('characters')
+    .select('id, name, image_url')
+    .eq('creator_id', creatorId)
+    .eq('is_public', true)
+    .order('name', { ascending: true });
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error };
+}
+
 const getCharacter = async (id) => {
   const { data, error } = await supabase.from('characters').select('*').eq('id', id).single();
   if (error) {
@@ -330,5 +344,6 @@ module.exports = {
   deleteCharacter,
   getCharacterRecentMissions,
   getCharacterAllMissions,
-  searchPublicCharacters
+  searchPublicCharacters,
+  getPublicCharactersByCreator
 };

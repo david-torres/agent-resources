@@ -10,6 +10,9 @@ const getClasses = async (filters = {}) => {
     if (filters.is_public !== undefined) {
         query = query.eq('is_public', filters.is_public);
     }
+    if (filters.created_by) {
+        query = query.eq('created_by', filters.created_by);
+    }
     if (filters.rules_edition) {
         query = query.eq('rules_edition', filters.rules_edition);
     }
