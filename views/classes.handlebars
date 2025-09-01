@@ -101,7 +101,13 @@
       </div>
       {{/if}}
       <div class="card-content">
-        <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></h5>
+        <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+          {{#if (eq this.status 'release')}}
+          <span class="tag is-success is-light" style="margin-left: 0.5rem;">
+            <span class="icon is-small"><i class="fas fa-star"></i></span>
+          </span>
+          {{/if}}
+        </h5>
         {{#if this.teaser}}
           <p>{{this.teaser}}</p>
         {{/if}}

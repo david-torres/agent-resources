@@ -1,4 +1,10 @@
-<h1 class="title is-2">{{class.name}} <span class="tag is-info">{{class.status}}</span></h1>
+<h1 class="title is-2">{{class.name}} <span class="tag is-info">{{class.status}}</span>
+  {{#if (eq class.status 'release')}}
+  <span class="tag is-success is-light" style="margin-left: 0.5rem;">
+    <span class="icon is-small"><i class="fas fa-star"></i></span>
+  </span>
+  {{/if}}
+</h1>
 {{#if profile}}
 {{#or (eq profile.role 'admin') (eq profile.id class.creator_id)}}
 <div class="buttons">
