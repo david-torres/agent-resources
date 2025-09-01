@@ -1,4 +1,5 @@
 const { getUserFromToken, getProfile } = require('./supabase');
+const { getSystemMessage } = require('./system-message');
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
@@ -27,8 +28,10 @@ async function isAuthenticated(req, res, next) {
     res.locals.user = user;
     if (user) {
       res.locals.profile = await getProfile(user);
+      res.locals.systemMessage = getSystemMessage();
     } else {
       res.locals.profile = null;
+      res.locals.systemMessage = null;
     }
 
     if (req.headers['redirect-to']) {
@@ -57,8 +60,10 @@ async function authOptional(req, res, next) {
   res.locals.user = user;
   if (user) {
     res.locals.profile = await getProfile(user);
+    res.locals.systemMessage = getSystemMessage();
   } else {
     res.locals.profile = null;
+    res.locals.systemMessage = null;
   }
   if (req.headers['redirect-to']) {
     const referer = new URL(req.headers['referer']).pathname;

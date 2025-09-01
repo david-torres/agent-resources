@@ -5,6 +5,11 @@
 <body hx-boost="true" data-auth-optional="{{#if authOptional}}{{authOptional}}{{else}}false{{/if}}">
   {{> nav}}
   <section class="section">
+    {{#if profile}}
+    {{#if systemMessage}}
+    {{> alert/system-banner systemMessage}}
+    {{/if}}
+    {{/if}}
     <div id="alerts" class="block"></div>
     <div class="container">
         {{{body}}}
