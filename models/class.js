@@ -7,6 +7,9 @@ const getClasses = async (filters = {}) => {
         .select('*');
 
     // Apply filters
+    if (filters.name) {
+        query = query.eq('name', filters.name);
+    }
     if (filters.is_public !== undefined) {
         query = query.eq('is_public', filters.is_public);
     }

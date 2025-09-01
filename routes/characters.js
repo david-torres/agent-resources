@@ -210,10 +210,23 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       return res.status(404).send('Not found');
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
+
+      // Try to resolve the class record by name for linking
+      let characterClass = null;
+      try {
+        const { data: classMatches } = await getClasses({ name: character.class, is_public: true });
+        if (Array.isArray(classMatches) && classMatches.length > 0) {
+          characterClass = classMatches[0];
+        }
+      } catch (_) {
+        // ignore lookup errors; we'll fall back to plain text
+      }
+
       res.render('character', {
         title: character.name,
         profile,
         character,
+        characterClass,
         recentMissions,
         statList,
         authOptional: true
