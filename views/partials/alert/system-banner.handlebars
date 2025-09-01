@@ -1,0 +1,9 @@
+<div id="system-banner" class="notification is-{{level}}" data-id="{{id}}" role="status" aria-live="polite">
+  <button class="delete" hx-on:click="App.dismissSystemMessage('{{id}}')" aria-label="Dismiss system message"></button>
+  {{text}}
+  {{#if link}}
+  <a href="{{link}}" class="ml-2">Learn more</a>
+  {{/if}}
+</div>
+
+

@@ -84,6 +84,17 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   function init(supabaseUrl, supabaseKey) {
     document.addEventListener("DOMContentLoaded", async function () {
+      // System message visibility control
+      (function () {
+        const banner = document.getElementById('system-banner');
+        if (!banner) return;
+        const dismissedKey = 'dismissedSystemMessageId';
+        const id = banner.getAttribute('data-id');
+        const dismissedId = localStorage.getItem(dismissedKey);
+        if (dismissedId === id) {
+          banner.remove();
+        }
+      })();
       // initialize supabase client
       supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
       supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
@@ -485,6 +496,13 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   return {
     init,
+    dismissSystemMessage: (id) => {
+      try {
+        localStorage.setItem('dismissedSystemMessageId', id);
+      } catch (e) { /* noop */ }
+      const el = document.getElementById('system-banner');
+      if (el) el.remove();
+    },
     checkSessionNow: async () => { if (supabaseClient) { await supabaseClient.auth.getSession(); } },
     signIn,
     signUp,
