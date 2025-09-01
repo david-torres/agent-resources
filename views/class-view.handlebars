@@ -55,6 +55,7 @@
         {{#if class.is_public}}
         {{#if class.is_player_created}}
         {{#or (eq class.status 'alpha') (eq class.status 'beta')}}
+        {{#unless unlocked}}
         <div class="buttons is-centered">
           <button class="button is-warning"
             hx-post="/classes/{{class.id}}/unlock/self"
@@ -64,6 +65,7 @@
             <span>Help test this class</span>
           </button>
         </div>
+        {{/unless}}
         {{/or}}
         {{/if}}
         {{/if}}

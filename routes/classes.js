@@ -133,14 +133,14 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
+    const userId = res.locals.user?.id;
+    const { data: unlocked } = await isClassUnlocked(userId, id);
     // Show teaser if Release and not unlocked for non-admins/non-creators
     if (
         classData &&
         classData.status === 'release' &&
         (!profile || (profile.role !== 'admin' && profile.id !== classData.creator_id))
     ) {
-        const userId = res.locals.user?.id;
-        const { data: unlocked } = await isClassUnlocked(userId, id);
         if (!unlocked) {
             return res.render('class-view-teaser', {
                 profile,
@@ -150,7 +150,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         }
     }
 
-    res.render('class-view', { profile, title: 'View Class', class: classData });
+    res.render('class-view', { profile, title: 'View Class', class: classData, unlocked });
 });
 
 // Self-unlock eligible PCCs (alpha/beta, public)

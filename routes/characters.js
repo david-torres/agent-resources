@@ -1,30 +1,46 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission } = require('../util/supabase');
-const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission, getClasses } = require('../util/supabase');
+const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
-  let filteredAdvent = adventClassList;
-  let filteredAspirant = aspirantPreviewClassList;
-  let filteredPCC = playerCreatedClassList;
-  let filteredGear = classGearList;
-  let filteredAbilities = classAbilityList;
+  // Load classes from DB by category
+  const [adventRes, aspirantRes, pccRes] = await Promise.all([
+    getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
+    getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
+    getClasses({ is_public: true, is_player_created: true })
+  ]);
 
+  const advent = Array.isArray(adventRes.data) ? adventRes.data : [];
+  const aspirant = Array.isArray(aspirantRes.data) ? aspirantRes.data : [];
+  const pcc = Array.isArray(pccRes.data) ? pccRes.data : [];
+
+  // Build name lists
+  let filteredAdvent = advent.map(c => c.name);
+  let filteredAspirant = aspirant.map(c => c.name);
+  let filteredPCC = pcc.map(c => c.name);
+
+  // Build lookup maps for gear and abilities keyed by class name
+  const allClasses = [...advent, ...aspirant, ...pcc];
+  let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
+  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.abilities) ? c.abilities.map(a => a.name) : []]));
+
+  // If user provided, reduce to unlocked set
   if (user) {
     const { data: unlocked } = await getUnlockedClasses(user.id);
     if (Array.isArray(unlocked) && unlocked.length > 0) {
       const allowed = new Set(unlocked.map(c => c.name));
       const filterArr = arr => arr.filter(n => allowed.has(n));
       const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowed.has(k)));
-      filteredAdvent = filterArr(adventClassList);
-      filteredAspirant = filterArr(aspirantPreviewClassList);
-      filteredPCC = filterArr(playerCreatedClassList);
-      filteredGear = filterMap(classGearList);
-      filteredAbilities = filterMap(classAbilityList);
+      filteredAdvent = filterArr(filteredAdvent);
+      filteredAspirant = filterArr(filteredAspirant);
+      filteredPCC = filterArr(filteredPCC);
+      filteredGear = filterMap(filteredGear);
+      filteredAbilities = filterMap(filteredAbilities);
     } else {
       filteredAdvent = [];
       filteredAspirant = [];
@@ -200,10 +216,6 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         character,
         recentMissions,
         statList,
-        adventClassList,
-        aspirantPreviewClassList,
-        playerCreatedClassList,
-        classAbilityList,
         authOptional: true
       });
     }
