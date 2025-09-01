@@ -107,6 +107,16 @@
             <span class="icon is-small"><i class="fas fa-star"></i></span>
           </span>
           {{/if}}
+          {{#if (eq this.status 'beta')}}
+          <span class="tag is-warning is-light" style="margin-left: 0.5rem;">
+            <span class="icon is-small"><i class="fas fa-flask"></i></span>
+          </span>
+          {{/if}}
+          {{#if (eq this.status 'alpha')}}
+          <span class="tag is-danger is-light" style="margin-left: 0.5rem;">
+            <span class="icon is-small"><i class="fas fa-flask"></i></span>
+          </span>
+          {{/if}}
         </h5>
         {{#if this.teaser}}
           <p>{{this.teaser}}</p>

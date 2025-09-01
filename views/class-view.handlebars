@@ -1,7 +1,19 @@
-<h1 class="title is-2">{{class.name}} <span class="tag is-info">{{class.status}}</span>
+<h1 class="title is-2">{{class.name}}
   {{#if (eq class.status 'release')}}
   <span class="tag is-success is-light" style="margin-left: 0.5rem;">
     <span class="icon is-small"><i class="fas fa-star"></i></span>
+  </span>
+  {{/if}}
+  {{#if (eq class.status 'beta')}}
+  <span class="tag is-warning is-light" style="margin-left: 0.5rem;">
+    <span class="icon is-small"><i class="fas fa-flask"></i></span>
+    <span>{{class.status}}</span>
+  </span>
+  {{/if}}
+  {{#if (eq class.status 'alpha')}}
+  <span class="tag is-danger is-light" style="margin-left: 0.5rem;">
+    <span class="icon is-small"><i class="fas fa-flask"></i></span>
+    <span>{{class.status}}</span>
   </span>
   {{/if}}
 </h1>
@@ -37,6 +49,25 @@
           <hr>
           <p><strong>Edition: </strong>{{capitalize class.rules_edition}} {{class.rules_version}}</p>
           <p><strong>Public: </strong>{{#if class.is_public}}Yes{{else}}No{{/if}}</p>
+        </div>
+        <div class="content">
+        {{#if profile}}
+        {{#if class.is_public}}
+        {{#if class.is_player_created}}
+        {{#or (eq class.status 'alpha') (eq class.status 'beta')}}
+        <div class="buttons is-centered">
+          <button class="button is-warning"
+            hx-post="/classes/{{class.id}}/unlock/self"
+            hx-swap="none"
+            hx-on::after-request="if(event.detail.successful){ this.classList.remove('is-primary','is-light'); this.classList.add('is-success'); this.setAttribute('disabled','disabled'); this.textContent='Thanks for helping test!'; }">
+            <span class="icon"><i class="fas fa-flask"></i></span>
+            <span>Help test this class</span>
+          </button>
+        </div>
+        {{/or}}
+        {{/if}}
+        {{/if}}
+        {{/if}}
         </div>
       </div>
     </div>
