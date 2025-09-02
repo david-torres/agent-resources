@@ -116,13 +116,15 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
       document.addEventListener('htmx:afterRequest', function (evt) {
         if (!_getAuthToken()) return;
-        if (evt.detail.pathInfo.finalRequestPath !== '/') return;
+        const pathInfo = evt.detail && evt.detail.pathInfo;
+        if (!pathInfo || pathInfo.finalRequestPath !== '/') return;
         renderCalendar();
       });
 
       // Add handler for htmx:afterSettle
       document.body.addEventListener('htmx:afterSettle', function(event) {
-        const xhr = event.detail.xhr;
+        const xhr = event.detail && event.detail.xhr;
+        if (!xhr) return;
         const authOptional = xhr.getResponseHeader('X-Auth-Optional') === 'true';
         if (authOptional) {
           document.body.setAttribute('data-auth-optional', 'true');
@@ -133,10 +135,12 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
       document.body.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
-        if (evt.detail.target.id === 'characterSearchResults') {
-          evt.detail.target.classList.remove('is-hidden');
+        const targetEl = evt.detail && evt.detail.target;
+        if (!targetEl || !targetEl.id) return;
+        if (targetEl.id === 'characterSearchResults') {
+          targetEl.classList.remove('is-hidden');
           setTimeout(() => {
-            evt.detail.target.classList.add('is-hidden');
+            targetEl.classList.add('is-hidden');
           }, 10000);
         }
       });
@@ -151,8 +155,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
       });
 
-      // trigger initial session detection/emit events after listeners are ready
-      await supabaseClient.auth.getSession();
+      // trigger initial session handling immediately
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      await _handleAuthStateChange('INITIAL_SESSION', session);
     });
   }
 
@@ -187,9 +192,19 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         if (_getAuthToken() !== session.access_token) {
           _setTokens(session.access_token, session.refresh_token);
         }
-        const redirectUrl = getRedirectUrl() || '/';
+        const onAuthPage = window.location.pathname.startsWith('/auth');
+        const redirectParam = getRedirectUrl();
         await _syncDiscordToProfile();
-        redirectTo(redirectUrl);
+        // Only redirect if we're on an auth page or an explicit return URL is present
+        if (onAuthPage) {
+          redirectTo(redirectParam || '/');
+        } else if (redirectParam) {
+          redirectTo(redirectParam);
+        } else {
+          // Refresh the current page with auth headers so server can render authed view
+          const current = window.location.pathname + window.location.search;
+          redirectTo(current);
+        }
       } else {
         _clearTokens();
 
@@ -201,12 +216,20 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
       }
     } else if (event === 'SIGNED_IN') {
-      const redirectUrl = getRedirectUrl() || '/';
       // handle sign in event
       if (session && _getAuthToken() !== session.access_token) {
         _setTokens(session.access_token, session.refresh_token);
         await _syncDiscordToProfile();
-        redirectTo(redirectUrl);
+        const onAuthPage = window.location.pathname.startsWith('/auth');
+        const redirectParam = getRedirectUrl();
+        if (onAuthPage) {
+          redirectTo(redirectParam || '/');
+        } else if (redirectParam) {
+          redirectTo(redirectParam);
+        } else {
+          const current = window.location.pathname + window.location.search;
+          redirectTo(current);
+        }
       }
     } else if (event === 'SIGNED_OUT') {
       let returnUrl = getReturnUrl();
