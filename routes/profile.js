@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { updateUser, getProfileByName, setDiscordId } = require('../util/supabase');
+const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses } = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -22,7 +22,15 @@ router.get('/view/:name', authOptional, async (req, res) => {
   if (viewProfile.is_public === false) {
     return res.status(404).send('Not found');
   }
-  res.render('profile-view', { user, profile, viewProfile, authOptional: true });
+  const { data: publicCharacters, error: charsError } = await getPublicCharactersByCreator(viewProfile.id);
+  if (charsError) {
+    return res.status(400).send(charsError.message);
+  }
+  const { data: publicClasses, error: classesError } = await getClasses({ is_public: true, created_by: viewProfile.id });
+  if (classesError) {
+    return res.status(400).send(classesError.message);
+  }
+  res.render('profile-view', { user, profile, viewProfile, authOptional: true, publicCharacters, publicClasses });
 });
 
 router.put('/', isAuthenticated, async (req, res) => {

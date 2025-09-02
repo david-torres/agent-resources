@@ -13,3 +13,67 @@
     <div class="content">{{{markdown viewProfile.bio}}}</div>
   </div>
 </div>
+
+{{#if publicCharacters}}
+<div class="box">
+  <h2 class="title is-4">Public Characters</h2>
+  {{#if publicCharacters.length}}
+  <div class="columns is-multiline">
+    {{#each publicCharacters}}
+    <div class="column is-4">
+      <div class="card">
+        <div class="card-content">
+          {{#if this.image_url}}
+          <figure class="image is-4by3">
+            <img src="{{this.image_url}}" alt="{{this.name}}">
+          </figure>
+          {{else}}
+          <div class="notification is-info">No image available</div>
+          {{/if}}
+          <div class="container mt-4">
+            <p class="title is-5">{{this.name}}</p>
+            <div class="content">
+              <a href="/characters/{{this.id}}/{{encodeURIComponentH this.name}}" class="button is-primary is-fullwidth">View Character</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  {{else}}
+  <div class="notification is-light">No public characters yet.</div>
+  {{/if}}
+</div>
+{{/if}}
+
+{{#if publicClasses}}
+<div class="box">
+  <h2 class="title is-4">Public Classes</h2>
+  {{#if publicClasses.length}}
+  <div class="columns is-multiline">
+    {{#each publicClasses}}
+    <div class="column is-3">
+      <div class="card">
+        {{#if this.image_url}}
+        <div class="card-image">
+          <figure class="image is-4by3">
+            <a href="/classes/{{this.id}}/{{this.name}}"><img src="{{this.image_url}}" alt="{{this.name}}"></a>
+          </figure>
+        </div>
+        {{/if}}
+        <div class="card-content">
+          <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></h5>
+          {{#if this.teaser}}
+          <p>{{this.teaser}}</p>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  {{else}}
+  <div class="notification is-light">No public classes yet.</div>
+  {{/if}}
+</div>
+{{/if}}

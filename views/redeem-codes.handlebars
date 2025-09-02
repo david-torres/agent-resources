@@ -1,0 +1,58 @@
+<h1 class="title is-2">Redeem Unlock Codes</h1>
+
+<div class="columns">
+  <div class="column is-two-thirds">
+    <form method="post" action="/classes/redeem/bulk">
+      <div class="field">
+        <label class="label">Paste codes (one per line or comma-separated)</label>
+        <div class="control">
+          <textarea class="textarea is-medium" name="codes" rows="12" placeholder="ABCDEF123456\nXYZ789...">{{input_codes}}</textarea>
+        </div>
+      </div>
+      <div class="field is-grouped">
+        <div class="control">
+          <button type="submit" class="button is-primary is-medium">Redeem Codes</button>
+        </div>
+        <div class="control">
+          <a href="/classes" class="button is-light is-medium">Back to Classes</a>
+        </div>
+      </div>
+    </form>
+
+    {{#if results}}
+    <div class="mt-5">
+      <h2 class="title is-4">Results</h2>
+      {{#each results}}
+        {{#if this.success}}
+          <div class="notification is-success is-light">
+            <strong>{{this.code}}</strong> redeemed.
+            {{#if this.class_id}}
+              Unlocked class
+              {{#if this.class_name}}
+                <a href="/classes/{{this.class_id}}/{{this.class_name}}">{{this.class_name}}</a>
+              {{else}}
+                <a href="/classes/{{this.class_id}}">View Class</a>
+              {{/if}}
+            {{/if}}
+          </div>
+        {{else}}
+          <div class="notification is-danger is-light">
+            <strong>{{this.code}}</strong> failed: {{this.error}}
+          </div>
+        {{/if}}
+      {{/each}}
+    </div>
+    {{/if}}
+  </div>
+  <div class="column is-one-third">
+    <div class="card">
+      <div class="card-content">
+        <p class="content">
+          Paste one or more unlock codes you received. You can separate them with newlines or commas.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+

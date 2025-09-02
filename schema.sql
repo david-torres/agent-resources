@@ -151,7 +151,7 @@ CREATE TABLE IF NOT EXISTS classes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
     name text NOT NULL,
     description text,
-    visibility text NOT NULL CHECK (visibility IN ('public','private')) DEFAULT 'public',
+    is_public BOOLEAN DEFAULT FALSE,
     status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
     is_player_created bool NOT NULL DEFAULT false,
     rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
@@ -170,6 +170,22 @@ CREATE TABLE IF NOT EXISTS class_unlocks (
     PRIMARY KEY (user_id, class_id)
 );
 
+-- One-time unlock codes for classes
+CREATE TABLE IF NOT EXISTS class_unlock_codes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    code text NOT NULL UNIQUE,
+    class_id uuid NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+    created_by uuid NOT NULL REFERENCES profiles(id),
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    expires_at timestamp with time zone,
+    max_uses int NOT NULL DEFAULT 1,
+    used_count int NOT NULL DEFAULT 0,
+    last_redeemed_by uuid REFERENCES auth.users(id),
+    last_redeemed_at timestamp with time zone
+);
+
+ALTER TABLE class_unlock_codes ENABLE ROW LEVEL SECURITY;
+
 -- Function to duplicate a class for new version
 CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text)
 RETURNS uuid
@@ -183,7 +199,7 @@ BEGIN
         id,
         name,
         description,
-        visibility,
+        is_public,
         status,
         is_player_created,
         rules_edition,
@@ -195,7 +211,7 @@ BEGIN
         new_id,
         name,
         description,
-        visibility,
+        is_public,
         status,
         is_player_created,
         rules_edition,
@@ -213,15 +229,13 @@ $$;
 -- RLS Policies for classes table
 CREATE POLICY "Public classes are viewable by everyone"
     ON classes FOR SELECT
-    USING (visibility = 'public');
+    USING (is_public = true);
 
 CREATE POLICY "Private classes are viewable by owner or admin"
     ON classes FOR SELECT
     USING (
-        visibility = 'private' AND (
-            created_by = auth.uid() OR 
-            is_admin()
-        )
+        created_by = auth.uid() OR 
+        is_admin()
     );
 
 CREATE POLICY "Classes can be created by admin or player"
@@ -260,13 +274,90 @@ CREATE POLICY "Users can unlock eligible public player classes"
           AND EXISTS (
             SELECT 1 FROM classes c
             WHERE c.id = class_id
-              AND c.visibility = 'public'
+              AND c.is_public = true
               AND c.is_player_created = true
               AND c.status IN ('alpha','beta')
           )
         )
         OR is_admin()
     );
+
+-- Admin-only policy for managing unlock codes
+DROP POLICY IF EXISTS "class_unlock_codes_admin_all" ON class_unlock_codes;
+CREATE POLICY "class_unlock_codes_admin_all"
+    ON class_unlock_codes FOR ALL
+    USING (is_admin())
+    WITH CHECK (is_admin());
+
+-- Secure, atomic redemption function for unlock codes
+CREATE OR REPLACE FUNCTION redeem_class_code(p_code text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_code RECORD;
+BEGIN
+    SELECT *
+    INTO v_code
+    FROM class_unlock_codes
+    WHERE code = p_code
+      AND (expires_at IS NULL OR expires_at > now())
+      AND used_count < max_uses
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or expired code';
+    END IF;
+
+    INSERT INTO class_unlocks(user_id, class_id)
+    VALUES (auth.uid(), v_code.class_id)
+    ON CONFLICT (user_id, class_id) DO NOTHING;
+
+    UPDATE class_unlock_codes
+    SET used_count = used_count + 1,
+        last_redeemed_by = auth.uid(),
+        last_redeemed_at = now()
+    WHERE id = v_code.id;
+
+    RETURN v_code.class_id;
+END;
+$$;
+
+-- Variant that allows server-side to specify the target user explicitly
+CREATE OR REPLACE FUNCTION redeem_class_code_for_user(p_code text, p_user_id uuid)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_code RECORD;
+BEGIN
+    SELECT *
+    INTO v_code
+    FROM class_unlock_codes
+    WHERE code = p_code
+      AND (expires_at IS NULL OR expires_at > now())
+      AND used_count < max_uses
+    FOR UPDATE;
+
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Invalid or expired code';
+    END IF;
+
+    INSERT INTO class_unlocks(user_id, class_id)
+    VALUES (p_user_id, v_code.class_id)
+    ON CONFLICT (user_id, class_id) DO NOTHING;
+
+    UPDATE class_unlock_codes
+    SET used_count = used_count + 1,
+        last_redeemed_by = p_user_id,
+        last_redeemed_at = now()
+    WHERE id = v_code.id;
+
+    RETURN v_code.class_id;
+END;
+$$;
 
 -- Trigger to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -296,10 +387,20 @@ ALTER TABLE lfg_join_requests ENABLE ROW LEVEL SECURITY;
 -- Helper admin check used in policies (avoid selecting from auth.users in RLS)
 CREATE OR REPLACE FUNCTION is_admin()
 RETURNS boolean
-LANGUAGE sql
-STABLE
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
 AS $$
-  SELECT COALESCE((auth.jwt() ->> 'role') = 'admin', false)
+DECLARE
+  v_is_admin boolean;
+BEGIN
+  SELECT role = 'admin'
+    INTO v_is_admin
+  FROM profiles
+  WHERE user_id = auth.uid();
+
+  RETURN COALESCE(v_is_admin, false);
+END;
 $$;
 
 -- Profiles policies

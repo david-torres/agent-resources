@@ -14,7 +14,7 @@ const hardcodedClasses = [
     ...adventClassList.map(cls => ({
         name: cls,
         description: '',
-        visibility: 'public',
+        is_public: true,
         status: 'release',
         is_player_created: false,
         rules_edition: 'advent',
@@ -24,7 +24,7 @@ const hardcodedClasses = [
     ...aspirantPreviewClassList.map(cls => ({
         name: cls,
         description: '',
-        visibility: 'public',
+        is_public: true,
         status: 'release',
         is_player_created: false,
         rules_edition: 'advent',
@@ -34,7 +34,7 @@ const hardcodedClasses = [
     ...playerCreatedClassList.map(cls => ({
         name: cls,
         description: '',
-        visibility: 'public',
+        is_public: true,
         status: 'release',
         is_player_created: true,
         rules_edition: 'advent',

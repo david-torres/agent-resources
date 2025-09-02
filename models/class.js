@@ -7,8 +7,14 @@ const getClasses = async (filters = {}) => {
         .select('*');
 
     // Apply filters
-    if (filters.visibility) {
-        query = query.eq('visibility', filters.visibility);
+    if (filters.name) {
+        query = query.eq('name', filters.name);
+    }
+    if (filters.is_public !== undefined) {
+        query = query.eq('is_public', filters.is_public);
+    }
+    if (filters.created_by) {
+        query = query.eq('created_by', filters.created_by);
     }
     if (filters.rules_edition) {
         query = query.eq('rules_edition', filters.rules_edition);
@@ -32,6 +38,53 @@ const getClasses = async (filters = {}) => {
         return { data: null, error };
     }
     return { data, error };
+};
+
+const createUnlockCode = async ({ classId, createdByProfileId, expiresAt = null, maxUses = 1 }) => {
+    const code = crypto.randomBytes(12).toString('base64url');
+    const insert = {
+        code,
+        class_id: classId,
+        created_by: createdByProfileId,
+        expires_at: expiresAt,
+        max_uses: maxUses
+    };
+
+    const { data, error } = await supabase
+        .from('class_unlock_codes')
+        .insert([insert])
+        .select()
+        .single();
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data: { ...data, code }, error: null };
+};
+
+const listUnlockCodes = async (classId) => {
+    const { data, error } = await supabase
+        .from('class_unlock_codes')
+        .select('*')
+        .eq('class_id', classId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
+const redeemUnlockCode = async (code, userId) => {
+    const { data, error } = await supabase
+        .rpc('redeem_class_code_for_user', { p_code: code, p_user_id: userId });
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
 };
 
 const isClassUnlocked = async (userId, classId) => {
@@ -128,7 +181,7 @@ const duplicateClass = async (baseId, newVersion) => {
 const getUnlockedClasses = async (userId) => {
     const { data, error } = await supabase
         .from('class_unlocks')
-        .select('class(*)')
+        .select('class:classes(*)')
         .eq('user_id', userId);
 
     if (error) {
@@ -172,20 +225,6 @@ const getVersionHistory = async (classId) => {
     return { data, error };
 };
 
-const getUserProfile = async (userId) => {
-    const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error };
-};
-
 module.exports = {
     getClasses,
     getClass,
@@ -194,7 +233,9 @@ module.exports = {
     duplicateClass,
     getUnlockedClasses,
     unlockClass,
-  isClassUnlocked,
+    isClassUnlocked,
     getVersionHistory,
-    getUserProfile
+    createUnlockCode,
+    listUnlockCodes,
+    redeemUnlockCode
 };

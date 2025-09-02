@@ -1,9 +1,57 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission } = require('../util/supabase');
-const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, personalityMap, classGearList, classAbilityList } = require('../util/enclave-consts');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission, getClasses } = require('../util/supabase');
+const { statList, personalityMap } = require('../util/enclave-consts');
+const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
+
+// Helper to filter class lists/lookup maps by user's unlocked classes
+const filterClassDataForUser = async (user) => {
+  // Load classes from DB by category
+  const [adventRes, aspirantRes, pccRes] = await Promise.all([
+    getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
+    getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
+    getClasses({ is_public: true, is_player_created: true })
+  ]);
+
+  const advent = Array.isArray(adventRes.data) ? adventRes.data : [];
+  const aspirant = Array.isArray(aspirantRes.data) ? aspirantRes.data : [];
+  const pcc = Array.isArray(pccRes.data) ? pccRes.data : [];
+
+  // Build name lists
+  let filteredAdvent = advent.map(c => c.name);
+  let filteredAspirant = aspirant.map(c => c.name);
+  let filteredPCC = pcc.map(c => c.name);
+
+  // Build lookup maps for gear and abilities keyed by class name
+  const allClasses = [...advent, ...aspirant, ...pcc];
+  let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
+  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.abilities) ? c.abilities.map(a => a.name) : []]));
+
+  // If user provided, reduce to unlocked set
+  if (user) {
+    const { data: unlocked } = await getUnlockedClasses(user.id);
+    if (Array.isArray(unlocked) && unlocked.length > 0) {
+      const allowed = new Set(unlocked.map(c => c.name));
+      const filterArr = arr => arr.filter(n => allowed.has(n));
+      const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowed.has(k)));
+      filteredAdvent = filterArr(filteredAdvent);
+      filteredAspirant = filterArr(filteredAspirant);
+      filteredPCC = filterArr(filteredPCC);
+      filteredGear = filterMap(filteredGear);
+      filteredAbilities = filterMap(filteredAbilities);
+    } else {
+      filteredAdvent = [];
+      filteredAspirant = [];
+      filteredPCC = [];
+      filteredGear = {};
+      filteredAbilities = {};
+    }
+  }
+
+  return { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities };
+};
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -15,18 +63,19 @@ router.get('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/new', isAuthenticated, (req, res) => {
-  const { profile } = res.locals;
+router.get('/new', isAuthenticated, async (req, res) => {
+  const { profile, user } = res.locals;
+  const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
   res.render('character-form', {
     profile,
     isNew: true,
     statList,
-    adventClassList,
-    aspirantPreviewClassList,
-    playerCreatedClassList,
+    adventClassList: filteredAdvent,
+    aspirantPreviewClassList: filteredAspirant,
+    playerCreatedClassList: filteredPCC,
     personalityMap,
-    classGearList,
-    classAbilityList
+    classGearList: filteredGear,
+    classAbilityList: filteredAbilities
   });
 });
 
@@ -36,17 +85,18 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   if (error) {
     return res.status(400).send(error.message);
   } else {
+    const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
     res.render('character-form', {
       profile,
       isNew: false,
       character,
       statList,
-      adventClassList,
-      aspirantPreviewClassList,
-      playerCreatedClassList,
+      adventClassList: filteredAdvent,
+      aspirantPreviewClassList: filteredAspirant,
+      playerCreatedClassList: filteredPCC,
       personalityMap,
-      classGearList,
-      classAbilityList
+      classGearList: filteredGear,
+      classAbilityList: filteredAbilities
     });
   }
 });
@@ -61,12 +111,14 @@ router.post('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/class-gear', (req, res) => {
-  res.render('partials/character-class-gear', { layout: false, classGearList });
+router.get('/class-gear', authOptional, async (req, res) => {
+  const { filteredGear } = await filterClassDataForUser(res.locals.user);
+  res.render('partials/character-class-gear', { layout: false, classGearList: filteredGear });
 });
 
-router.get('/class-abilities', (req, res) => {
-  res.render('partials/character-class-abilities', { layout: false, classAbilityList });
+router.get('/class-abilities', authOptional, async (req, res) => {
+  const { filteredAbilities } = await filterClassDataForUser(res.locals.user);
+  res.render('partials/character-class-abilities', { layout: false, classAbilityList: filteredAbilities });
 });
 
 router.get('/import', isAuthenticated, (req, res) => {
@@ -158,16 +210,25 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       return res.status(404).send('Not found');
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
+
+      // Try to resolve the class record by name for linking
+      let characterClass = null;
+      try {
+        const { data: classMatches } = await getClasses({ name: character.class, is_public: true });
+        if (Array.isArray(classMatches) && classMatches.length > 0) {
+          characterClass = classMatches[0];
+        }
+      } catch (_) {
+        // ignore lookup errors; we'll fall back to plain text
+      }
+
       res.render('character', {
         title: character.name,
         profile,
         character,
+        characterClass,
         recentMissions,
         statList,
-        adventClassList,
-        aspirantPreviewClassList,
-        playerCreatedClassList,
-        classAbilityList,
         authOptional: true
       });
     }

@@ -11,7 +11,13 @@
 
     <div class="box mt-4">
       <h3 class="title is-4">Character Info</h3>
-      <p><strong>Class:</strong> {{character.class}}</p>
+      <p><strong>Class:</strong>
+        {{#if characterClass}}
+        <a href="/classes/{{characterClass.id}}/{{characterClass.name}}">{{character.class}}</a>
+        {{else}}
+        {{character.class}}
+        {{/if}}
+      </p>
       <p><strong>Level:</strong> {{character.level}}</p>
       {{#if (lt character.level 10)}}
       <p class="is-size-7">
