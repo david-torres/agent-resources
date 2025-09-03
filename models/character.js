@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const { getClasses, getClass } = require('./class');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -57,6 +58,33 @@ const getCharacter = async (id) => {
 
 const createCharacter = async (characterReq, profile) => {
   characterReq.creator_id = profile.id;
+
+  // Ensure class_id is populated from the class name when missing
+  if (!characterReq.class_id && characterReq.class) {
+    try {
+      let lookup = await getClasses({ name: characterReq.class });
+      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
+        lookup = await getClasses({ name: characterReq.class, is_public: true });
+      }
+      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
+        characterReq.class_id = lookup.data[0].id;
+      }
+    } catch (_) {
+      // Non-fatal: if lookup fails, proceed without blocking character creation
+    }
+  }
+
+  // Ensure class name is populated from class_id when missing
+  if (characterReq.class_id && !characterReq.class) {
+    try {
+      const { data: cls } = await getClass(characterReq.class_id);
+      if (cls && cls.name) {
+        characterReq.class = cls.name;
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
 
   // handle personality traits
   const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
@@ -117,6 +145,33 @@ const updateCharacter = async (id, characterReq, profile) => {
   const { data: characterData, error: characterError } = await getCharacter(id);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
+
+  // Ensure class_id is populated from the class name when missing or when class changed
+  if (!characterReq.class_id && characterReq.class) {
+    try {
+      let lookup = await getClasses({ name: characterReq.class });
+      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
+        lookup = await getClasses({ name: characterReq.class, is_public: true });
+      }
+      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
+        characterReq.class_id = lookup.data[0].id;
+      }
+    } catch (_) {
+      // Non-fatal: if lookup fails, proceed with remaining updates
+    }
+  }
+
+  // Ensure class name is populated from class_id when missing
+  if (characterReq.class_id && !characterReq.class) {
+    try {
+      const { data: cls } = await getClass(characterReq.class_id);
+      if (cls && cls.name) {
+        characterReq.class = cls.name;
+      }
+    } catch (_) {
+      // ignore
+    }
+  }
 
   // handle personality traits
   const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];

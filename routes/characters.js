@@ -19,10 +19,10 @@ const filterClassDataForUser = async (user) => {
   const aspirant = Array.isArray(aspirantRes.data) ? aspirantRes.data : [];
   const pcc = Array.isArray(pccRes.data) ? pccRes.data : [];
 
-  // Build name lists
-  let filteredAdvent = advent.map(c => c.name);
-  let filteredAspirant = aspirant.map(c => c.name);
-  let filteredPCC = pcc.map(c => c.name);
+  // Default to full class object lists
+  let filteredAdvent = advent;
+  let filteredAspirant = aspirant;
+  let filteredPCC = pcc;
 
   // Build lookup maps for gear and abilities keyed by class name
   const allClasses = [...advent, ...aspirant, ...pcc];
@@ -34,7 +34,7 @@ const filterClassDataForUser = async (user) => {
     const { data: unlocked } = await getUnlockedClasses(user.id);
     if (Array.isArray(unlocked) && unlocked.length > 0) {
       const allowed = new Set(unlocked.map(c => c.name));
-      const filterArr = arr => arr.filter(n => allowed.has(n));
+      const filterArr = arr => arr.filter(c => allowed.has(c.name));
       const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowed.has(k)));
       filteredAdvent = filterArr(filteredAdvent);
       filteredAspirant = filterArr(filteredAspirant);
@@ -70,9 +70,9 @@ router.get('/new', isAuthenticated, async (req, res) => {
     profile,
     isNew: true,
     statList,
-    adventClassList: filteredAdvent,
-    aspirantPreviewClassList: filteredAspirant,
-    playerCreatedClassList: filteredPCC,
+    adventClasses: filteredAdvent,
+    aspirantPreviewClasses: filteredAspirant,
+    playerCreatedClasses: filteredPCC,
     personalityMap,
     classGearList: filteredGear,
     classAbilityList: filteredAbilities
@@ -91,9 +91,9 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       isNew: false,
       character,
       statList,
-      adventClassList: filteredAdvent,
-      aspirantPreviewClassList: filteredAspirant,
-      playerCreatedClassList: filteredPCC,
+      adventClasses: filteredAdvent,
+      aspirantPreviewClasses: filteredAspirant,
+      playerCreatedClasses: filteredPCC,
       personalityMap,
       classGearList: filteredGear,
       classAbilityList: filteredAbilities

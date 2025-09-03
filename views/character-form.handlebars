@@ -18,20 +18,20 @@
     <label class="label">Class</label>
     <div class="control">
       <div class="select">
-        <select name="class" required>
+        <select name="class_id" required>
           <option disabled>Advent Classes</option>
-          {{#each adventClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{#each adventClasses}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
 
           <option disabled>Aspirant Preview classes</option>
-          {{#each aspirantPreviewClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{#each aspirantPreviewClasses}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
 
           <option disabled>Player Created Classes</option>
-          {{#each playerCreatedClassList}}
-          <option value="{{this}}" {{#if (eq ../character.class this)}}selected{{/if}}>{{this}}</option>
+          {{#each playerCreatedClasses}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
         </select>
       </div>
