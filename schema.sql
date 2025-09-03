@@ -501,10 +501,7 @@ CREATE POLICY "characters_delete"
             SELECT 1 FROM profiles p
             WHERE p.id = creator_id AND (
                 p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                OR is_admin()
             )
         )
     );
@@ -677,11 +674,7 @@ CREATE POLICY "missions_update"
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                p.user_id = auth.uid() OR is_admin()
             )
         )
     )
@@ -689,11 +682,7 @@ CREATE POLICY "missions_update"
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                p.user_id = auth.uid() OR is_admin()
             )
         )
     );
@@ -704,11 +693,7 @@ CREATE POLICY "missions_delete"
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                p.user_id = auth.uid() OR is_admin()
             )
         )
     );
@@ -809,11 +794,7 @@ CREATE POLICY "lfg_posts_update"
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                p.user_id = auth.uid() OR is_admin()
             )
         )
     );
@@ -824,11 +805,7 @@ CREATE POLICY "lfg_posts_delete"
         EXISTS (
             SELECT 1 FROM profiles p
             WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid()
-                OR EXISTS (
-                    SELECT 1 FROM auth.users u
-                    WHERE u.id = auth.uid() AND u.raw_user_meta_data->>'role' = 'admin'
-                )
+                p.user_id = auth.uid() OR is_admin()
             )
         )
     );
