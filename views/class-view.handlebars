@@ -23,7 +23,9 @@
   <a href="/classes/{{class.id}}/edit" class="button is-warning">Edit</a>
   <button class="button is-danger" hx-delete="/classes/{{class.id}}" hx-target="closest tr"
     hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this class?">Delete</button>
+  {{#unless (or (eq class.status 'beta') (eq class.status 'alpha'))}}
   <button class="button is-info" hx-on:click="App.openModal('#unlockCodeModal')">Generate Unlock Code</button>
+  {{/unless}}
 </div>
 {{/or}}
 {{/if}}

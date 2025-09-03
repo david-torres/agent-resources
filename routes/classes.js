@@ -133,8 +133,13 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
-    const userId = res.locals.user?.id;
-    const { data: unlocked } = await isClassUnlocked(userId, id);
+    
+    let unlocked = false;
+    if (profile) {
+        const result = await isClassUnlocked(profile.user_id, id);
+        unlocked = result?.data || false;
+    }
+
     // Show teaser if Release and not unlocked for non-admins/non-creators
     if (
         classData &&

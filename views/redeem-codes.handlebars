@@ -27,12 +27,7 @@
           <div class="notification is-success is-light">
             <strong>{{this.code}}</strong> redeemed.
             {{#if this.class_id}}
-              Unlocked class
-              {{#if this.class_name}}
-                <a href="/classes/{{this.class_id}}/{{this.class_name}}">{{this.class_name}}</a>
-              {{else}}
-                <a href="/classes/{{this.class_id}}">View Class</a>
-              {{/if}}
+              Unlocked class <a class="tag button is-black" href="/classes/{{this.class_id}}/{{this.class_name}}">{{this.class_name}}</a>
             {{/if}}
           </div>
         {{else}}
