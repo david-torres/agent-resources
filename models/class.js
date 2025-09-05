@@ -236,6 +236,54 @@ const deleteClass = async (id) => {
     return { error: null };
 };
 
+// Build lookup maps from gear/ability name -> class_id and description
+const buildClassContentLookupMaps = async () => {
+    try {
+      const [adventRes, aspirantRes, pccRes] = await Promise.all([
+        getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
+        getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
+        getClasses({ is_public: true, is_player_created: true })
+      ]);
+  
+      const advent = Array.isArray(adventRes?.data) ? adventRes.data : [];
+      const aspirant = Array.isArray(aspirantRes?.data) ? aspirantRes.data : [];
+      const pcc = Array.isArray(pccRes?.data) ? pccRes.data : [];
+  
+      const allClasses = [...advent, ...aspirant, ...pcc];
+      const gearNameToClassId = new Map();
+      const abilityNameToClassId = new Map();
+      const gearNameToDescription = new Map();
+      const abilityNameToDescription = new Map();
+  
+      for (const cls of allClasses) {
+        if (Array.isArray(cls?.gear)) {
+          for (const g of cls.gear) {
+            if (g && g.name) {
+              if (cls.id) gearNameToClassId.set(g.name, cls.id);
+              if (typeof g.description === 'string' && g.description.length > 0) {
+                gearNameToDescription.set(g.name, g.description);
+              }
+            }
+          }
+        }
+        if (Array.isArray(cls?.abilities)) {
+          for (const a of cls.abilities) {
+            if (a && a.name) {
+              if (cls.id) abilityNameToClassId.set(a.name, cls.id);
+              if (typeof a.description === 'string' && a.description.length > 0) {
+                abilityNameToDescription.set(a.name, a.description);
+              }
+            }
+          }
+        }
+      }
+  
+      return { gearNameToClassId, abilityNameToClassId, gearNameToDescription, abilityNameToDescription };
+    } catch (error) {
+      throw error;
+    }
+};
+
 module.exports = {
     getClasses,
     getClass,
@@ -249,5 +297,6 @@ module.exports = {
     createUnlockCodes,
     listUnlockCodes,
     redeemUnlockCode,
-    deleteClass
+    deleteClass,
+    buildClassContentLookupMaps
 };

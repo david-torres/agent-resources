@@ -7,7 +7,8 @@
     "start": "node index.js",
     "dev": "nodemon index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed:classes": "node util/seed-classes.js"
+    "seed:classes": "node util/seed-classes.js",
+    "backfill:class-links": "node util/backfill-class-links.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
