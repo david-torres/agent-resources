@@ -63,6 +63,10 @@ function setVariable(varName, varValue, options){
   options.data.root[varName] = varValue;
 };
 
+function dump(varName) {
+  return JSON.stringify(varName, null, 2);
+}
+
 module.exports = {
   times,
   date_tz,
@@ -70,5 +74,6 @@ module.exports = {
   encodeURIComponentH,
   getTotalV1MissionsNeeded,
   getTotalV2MissionsNeeded,
-  setVariable
+  setVariable,
+  dump
 }
