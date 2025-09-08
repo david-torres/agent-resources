@@ -260,8 +260,17 @@ router.post('/', isAuthenticated, async (req, res) => {
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
+        if (req.body.is_player_created === true) {
+            const creatorProfileId = (req.body.creator_profile_id || '').trim();
+            req.body.created_by = creatorProfileId || profileId;
+        } else {
+            req.body.created_by = profileId;
+        }
+        delete req.body.creator_profile_id;
     } else {
         req.body.is_player_created = true;
+        req.body.created_by = profileId;
+        delete req.body.creator_profile_id;
     }
 
     // Always set created_by to the current profile
