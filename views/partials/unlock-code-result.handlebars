@@ -1,3 +1,60 @@
+{{#if codes}}
+<div class="notification is-success">
+  <h4 class="title is-5">{{codes.length}} Unlock Codes Generated Successfully!</h4>
+</div>
+{{#if (gt codes.length 5)}}
+<div class="box mb-4">
+  <div class="field">
+    <label class="label">Codes:</label>
+    <div class="control">
+      <textarea class="textarea" rows="10" readonly>{{#each codes}}{{this.code}}
+{{/each}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <div class="control">
+      <button class="button is-success" hx-on:click="App.copyToClipboard(this.closest('.box').querySelector('textarea').value, event)">
+        <span class="icon">
+          <i class="fas fa-copy"></i>
+        </span>
+        <span>Copy All</span>
+      </button>
+    </div>
+  </div>
+</div>
+{{else}}
+{{#each codes}}
+<div class="box mb-4">
+  <div class="field">
+    <label class="label">Code:</label>
+    <div class="control">
+      <div class="field has-addons">
+        <div class="control is-expanded">
+          <input class="input" type="text" value="{{this.code}}" hx-on:load="this.select()">
+        </div>
+        <div class="control">
+          <button class="button" hx-on:click="App.copyToClipboard('{{this.code}}', event)">
+            <span class="icon">
+              <i class="fas fa-copy"></i>
+            </span>
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label">Max Uses:</label>
+    <p class="subtitle is-6">{{this.max_uses}}</p>
+  </div>
+  <div class="field">
+    <label class="label">Expires:</label>
+    <p class="subtitle is-6">{{#if this.expires_at}}{{date_tz this.expires_at 'lll' 'local'}}{{else}}Never{{/if}}</p>
+  </div>
+</div>
+{{/each}}
+{{/if}}
+{{else}}
 <div class="notification is-success">
   <h4 class="title is-5">Unlock Code Generated Successfully!</h4>
 </div>
@@ -29,5 +86,6 @@
     <p class="subtitle is-6">{{#if expires_at}}{{date_tz expires_at 'lll' 'local'}}{{else}}Never{{/if}}</p>
   </div>
 </div>
+{{/if}}
 
 

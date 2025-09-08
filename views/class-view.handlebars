@@ -162,12 +162,18 @@
           </div>
         </div>
         <div class="field">
+          <label class="label">Amount</label>
+          <div class="control">
+            <input class="input" type="number" min="1" name="amount" value="1" placeholder="Number of codes to generate">
+          </div>
+        </div>
+        <div class="field">
           <div class="control">
             <button class="button is-primary" type="submit" hx-indicator="#generateCodeSpinner">
               <span class="icon">
                 <i class="fas fa-key"></i>
               </span>
-              <span class="is-right">Generate Code</span>
+              <span class="is-right">Generate Code(s)</span>
             </button>
             <div id="generateCodeSpinner" class="htmx-indicator">
               <div class="form-loading-spinner"></div>

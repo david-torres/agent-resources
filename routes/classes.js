@@ -10,7 +10,7 @@ const {
     unlockClass,
     isClassUnlocked, 
     getVersionHistory,
-    createUnlockCode,
+    createUnlockCodes,
     listUnlockCodes,
     redeemUnlockCode
 } = require('../util/supabase');
@@ -175,16 +175,25 @@ router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
 // Admin: generate unlock code for a class
 router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { expires_at, max_uses } = req.body;
+    const { expires_at, max_uses, amount } = req.body;
     const createdByProfileId = res.locals.profile.id;
-    const { data, error } = await createUnlockCode({ classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1 });
+    const count = parseInt(amount, 10) || 1;
+    const { data, error } = await createUnlockCodes({ classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1, amount: count });
     if (error) return res.status(400).send(error.message);
 
+    if (count > 1) {
+        return res.render('partials/unlock-code-result', {
+            layout: false,
+            codes: data
+        });
+    }
+
+    const code = data[0];
     return res.render('partials/unlock-code-result', {
         layout: false,
-        code: data.code,
-        max_uses: data.max_uses,
-        expires_at: data.expires_at
+        code: code.code,
+        max_uses: code.max_uses,
+        expires_at: code.expires_at
     });
 });
 
