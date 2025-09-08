@@ -40,27 +40,25 @@ const getClasses = async (filters = {}) => {
     return { data, error };
 };
 
-const createUnlockCode = async ({ classId, createdByProfileId, expiresAt = null, maxUses = 1 }) => {
-    const code = crypto.randomBytes(12).toString('base64url');
-    const insert = {
-        code,
+const createUnlockCodes = async ({ classId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
+    const inserts = Array.from({ length: amount }, () => ({
+        code: crypto.randomBytes(12).toString('base64url'),
         class_id: classId,
         created_by: createdByProfileId,
         expires_at: expiresAt,
         max_uses: maxUses
-    };
+    }));
 
     const { data, error } = await supabase
         .from('class_unlock_codes')
-        .insert([insert])
-        .select()
-        .single();
+        .insert(inserts)
+        .select();
 
     if (error) {
         console.error(error);
         return { data: null, error };
     }
-    return { data: { ...data, code }, error: null };
+    return { data, error: null };
 };
 
 const listUnlockCodes = async (classId) => {
@@ -235,7 +233,7 @@ module.exports = {
     unlockClass,
     isClassUnlocked,
     getVersionHistory,
-    createUnlockCode,
+    createUnlockCodes,
     listUnlockCodes,
     redeemUnlockCode
 };
