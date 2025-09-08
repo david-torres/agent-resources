@@ -225,6 +225,10 @@ router.post('/redeem', isAuthenticated, async (req, res) => {
 
 router.post('/', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
+    const profileId = profile?.id;
+    if (!profileId) {
+        return res.status(500).json({ error: 'Missing profile id' });
+    }
     
     // Process abilities and gear arrays
     const abilities = req.body.ability_name ? req.body.ability_name.map((name, index) => ({
@@ -243,8 +247,7 @@ router.post('/', isAuthenticated, async (req, res) => {
     delete req.body.gear_name;
     delete req.body.gear_description;
 
-    // Add created_by field and normalize is_public checkbox
-    req.body.created_by = res.locals.profile.id;
+    // Normalize is_public checkbox
     if (req.body.is_public === 'on') {
         req.body.is_public = true;
     } else {
@@ -252,24 +255,22 @@ router.post('/', isAuthenticated, async (req, res) => {
     }
 
     // Enforce class type: only admins may set/override is_player_created
-    const isAdmin = res.locals.profile?.role === 'admin';
+    const isAdmin = profile?.role === 'admin';
     if (isAdmin) {
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
-        // Admin may override creator when PCC; otherwise default to current profile
         if (req.body.is_player_created === true) {
             const creatorProfileId = (req.body.creator_profile_id || '').trim();
-            if (creatorProfileId) {
-                req.body.created_by = creatorProfileId;
-            } else {
-                req.body.created_by = res.locals.profile.id;
-            }
+            req.body.created_by = creatorProfileId || profileId;
+        } else {
+            req.body.created_by = profileId;
         }
         delete req.body.creator_profile_id;
     } else {
         req.body.is_player_created = true;
-        req.body.creator_profile_id = res.locals.profile.id;
+        req.body.created_by = profileId;
+        delete req.body.creator_profile_id;
     }
 
     const { data: classData, error } = await createClass(req.body);
