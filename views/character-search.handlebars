@@ -1,17 +1,40 @@
 <h2 class="title is-2">Search Characters</h2>
 <div class="box">
-  <div class="field">
-    <label class="label">Search by name</label>
-    <div class="control has-icons-left">
-      <input class="input" type="text" name="q" placeholder="Enter character name..." hx-get="/characters/s?count=12"
-        hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results">
-      <span class="icon is-left">
-        <i class="fas fa-search"></i>
-      </span>
+  <div class="columns is-multiline">
+    <div class="column is-8">
+      <div class="field">
+        <label class="label">Search by name</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" name="q" placeholder="Enter character name..." hx-get="/characters/s?count=12"
+            hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results" hx-include="#class-filter">
+          <span class="icon is-left">
+            <i class="fas fa-search"></i>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-4">
+      <div class="field">
+        <label class="label">Filter by class</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="class-filter" name="classId" hx-get="/characters/s?count=12" hx-target="#search-results" hx-trigger="change" hx-include="closest .box input[name='q']">
+              <option value="">All classes</option>
+              {{#each classes}}
+                <option value="{{this.id}}">{{this.name}}</option>
+              {{/each}}
+            </select>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
 
 <div id="search-results" class="mt-4">
-  {{> character-search-results characters=[]}}
+  {{#if initialCharacters}}
+    {{> character-search-results characters=initialCharacters}}
+  {{else}}
+    {{> character-search-results characters=[]}}
+  {{/if}}
 </div>

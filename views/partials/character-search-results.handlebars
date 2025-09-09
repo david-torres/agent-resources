@@ -25,19 +25,15 @@
   {{/each}}
 </div>
 {{else}}
-
-{{#if q}}
 <div class="box">
-  <div class="notification is-warning">
-    No characters found matching "{{q}}"
-  </div>
+  {{#if q}}
+    <div class="notification is-warning">
+      No characters found matching "{{q}}"
+    </div>
+  {{else}}
+    <div class="notification is-info">
+      Adjust filters or type a name to search
+    </div>
+  {{/if}}
 </div>
-{{else}}
-<div class="box">
-  <div class="notification is-info">
-    Enter a character name to search
-  </div>
-</div>
-{{/if}}
-
 {{/if}}

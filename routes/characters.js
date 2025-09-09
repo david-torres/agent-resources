@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission, getClasses, getProfileById } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -172,31 +172,48 @@ router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
 router.get('/s', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { q, count } = req.query;
+  const classId = req.query.classId || null;
+  const className = req.query.class || null;
 
-  if (!q || q.length < 2) {
-    res.render('partials/character-search-results', { 
-      layout: false, 
+  const hasQuery = q && q.length >= 2;
+  const hasClassFilter = !!(classId || className);
+
+  if (!hasQuery && !hasClassFilter) {
+    res.render('partials/character-search-results', {
+      layout: false,
       characters: [],
-      q
+      q,
+      classFilter: null
     });
     return;
   }
-  const { data: characters, error } = await searchPublicCharacters(q, count);
+
+  const options = {};
+  if (classId) options.classId = classId;
+  if (!options.classId && className) options.className = className;
+
+  const { data: characters, error } = await searchPublicCharacters(hasQuery ? q : null, count, options);
 
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    res.render('partials/character-search-results', { 
-      layout: false, 
+    res.render('partials/character-search-results', {
+      layout: false,
       characters,
-      q
+      q,
+      classFilter: classId || className || null
     });
   }
 });
 
-router.get('/search', authOptional, (req, res) => {
+router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
-  res.render('character-search', { profile });
+  const [{ data: classes }] = await Promise.all([
+    getClasses({ is_public: true })
+  ]);
+  const { data: initialCharacters } = await getRandomPublicCharacters(12);
+
+  res.render('character-search', { profile, classes: Array.isArray(classes) ? classes : [], initialCharacters: Array.isArray(initialCharacters) ? initialCharacters : [] });
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {

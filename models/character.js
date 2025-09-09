@@ -375,20 +375,79 @@ const getCharacterAllMissions = async (characterId) => {
   };
 };
 
-const searchPublicCharacters = async (q, count) => {
-  const { data, error } = await supabase
-    .from('characters')
-    .select('id, name, image_url')
-    .ilike('name', `%${q}%`)
-    .match({is_public: true})
-    .limit(count);
-  
+const searchPublicCharacters = async (q, count, options = {}) => {
+  try {
+    let query = supabase
+      .from('characters')
+      .select('id, name, image_url, class_id, class')
+      .eq('is_public', true)
+      .limit(count);
+
+    if (q && q.trim().length > 0) {
+      query = query.ilike('name', `%${q}%`);
+    }
+
+    if (options.classId) {
+      query = query.eq('class_id', options.classId);
+    } else if (options.className) {
+      query = query.eq('class', options.className);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+    return { data, error: null };
+  } catch (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+}
+
+const getRandomPublicCharacters = async (count = 12, options = {}) => {
+  try {
+    // Fetch a reasonably sized pool, then sample client-side for randomness
+    const poolSize = Math.max(Math.min(count * 5, 100), count);
+    let query = supabase
+      .from('characters')
+      .select('id, name, image_url, class_id, class')
+      .eq('is_public', true)
+      .limit(poolSize);
+
+    if (options.classId) {
+      query = query.eq('class_id', options.classId);
+    } else if (options.className) {
+      query = query.eq('class', options.className);
+    }
+
+    const { data, error } = await query;
     if (error) {
       console.error(error);
       return { data: null, error };
     }
 
-    return { data, error }
+    if (!Array.isArray(data) || data.length <= count) {
+      return { data, error: null };
+    }
+
+    // Reservoir sample
+    const sampled = [];
+    for (let i = 0; i < data.length; i++) {
+      if (i < count) {
+        sampled.push(data[i]);
+      } else {
+        const j = Math.floor(Math.random() * (i + 1));
+        if (j < count) {
+          sampled[j] = data[i];
+        }
+      }
+    }
+    return { data: sampled, error: null };
+  } catch (error) {
+    console.error(error);
+    return { data: null, error };
+  }
 }
 module.exports = {
   getOwnCharacters,
@@ -400,5 +459,6 @@ module.exports = {
   getCharacterRecentMissions,
   getCharacterAllMissions,
   searchPublicCharacters,
+  getRandomPublicCharacters,
   getPublicCharactersByCreator
 };
