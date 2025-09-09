@@ -262,6 +262,8 @@ router.post('/', isAuthenticated, async (req, res) => {
         }
     } else {
         req.body.is_player_created = true;
+        // Non-admins can only create alpha/beta
+        req.body.status = ['alpha', 'beta'].includes(req.body.status) ? req.body.status : 'alpha';
     }
 
     // Always set created_by to the current profile
@@ -309,6 +311,10 @@ router.put('/:id', isAuthenticated, async (req, res) => {
         // Do not accept creator overrides via request body anymore
     } else {
         delete req.body.is_player_created;
+        // Non-admins cannot set release; ignore disallowed values
+        if (req.body.status && !['alpha', 'beta'].includes(req.body.status)) {
+            delete req.body.status;
+        }
     }
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
