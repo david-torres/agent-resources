@@ -157,7 +157,7 @@ CREATE TABLE IF NOT EXISTS classes (
     rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
     rules_version text NOT NULL (rules_version IN ('v1', 'v2')),
     base_class_id uuid REFERENCES classes(id),
-    created_by uuid REFERENCES auth.users(id),
+    created_by uuid REFERENCES profiles(id),
     created_at timestamp NOT NULL DEFAULT now(),
     updated_at timestamp NOT NULL DEFAULT now()
 );
@@ -194,7 +194,10 @@ SECURITY DEFINER
 AS $$
 DECLARE
     new_class_id uuid;
+    v_profile_id uuid;
 BEGIN
+    SELECT id INTO v_profile_id FROM profiles WHERE user_id = auth.uid() LIMIT 1;
+
     INSERT INTO classes (
         id,
         name,
@@ -217,7 +220,7 @@ BEGIN
         rules_edition,
         new_version,
         id,
-        auth.uid()
+        v_profile_id
     FROM classes
     WHERE id = base_id
     RETURNING id INTO new_class_id;
@@ -234,29 +237,41 @@ CREATE POLICY "Public classes are viewable by everyone"
 CREATE POLICY "Private classes are viewable by owner or admin"
     ON classes FOR SELECT
     USING (
-        created_by = auth.uid() OR 
-        is_admin()
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = classes.created_by
+              AND p.user_id = auth.uid()
+        ) OR is_admin()
     );
 
 CREATE POLICY "Classes can be created by admin or player"
     ON classes FOR INSERT
     WITH CHECK (
-        -- Admins can create any status
-        is_admin() OR
-        -- Non-admins may only create player-created classes that are not release
-        (is_player_created = true AND status IN ('alpha','beta'))
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = classes.created_by
+              AND (p.user_id = auth.uid() OR is_admin())
+        )
+        AND
+        (is_admin() OR (is_player_created = true AND status IN ('alpha','beta')))
     );
 
 CREATE POLICY "Classes can be updated by owner or admin"
     ON classes FOR UPDATE
     USING (
-        created_by = auth.uid() OR is_admin()
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = classes.created_by
+              AND (p.user_id = auth.uid() OR is_admin())
+        )
     )
     WITH CHECK (
-        -- Preserve owner/admin requirement
-        (created_by = auth.uid() OR is_admin())
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = classes.created_by
+              AND (p.user_id = auth.uid() OR is_admin())
+        )
         AND
-        -- Only admins can set release
         (is_admin() OR status IN ('alpha','beta'))
     );
 
