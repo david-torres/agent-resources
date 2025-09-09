@@ -19,6 +19,9 @@
         {{/if}}
       </p>
       <p><strong>Level:</strong> {{character.level}}</p>
+      {{#if ownerProfile}}
+      <p><strong>Owner:</strong> <a href="/profile/view/{{ownerProfile.name}}">{{ownerProfile.name}}</a></p>
+      {{/if}}
       {{#if (lt character.level 10)}}
       <p class="is-size-7">
         V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more

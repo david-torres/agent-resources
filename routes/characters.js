@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission, getClasses } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getMission, getClasses, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -222,11 +222,21 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // ignore lookup errors; we'll fall back to plain text
       }
 
+      // Load creator profile for linking
+      let ownerProfile = null;
+      try {
+        const { data: creator } = await getProfileById(character.creator_id);
+        if (creator) ownerProfile = creator;
+      } catch (_) {
+        // ignore failures; owner link is optional
+      }
+
       res.render('character', {
         title: character.name,
         profile,
         character,
         characterClass,
+        ownerProfile,
         recentMissions,
         statList,
         authOptional: true
