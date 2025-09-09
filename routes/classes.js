@@ -12,7 +12,8 @@ const {
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,
-    redeemUnlockCode
+    redeemUnlockCode,
+    deleteClass
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 
@@ -38,6 +39,28 @@ router.get('/', authOptional, async (req, res) => {
     res.render('classes', {
         profile,
         title: 'Classes',
+        classes: classes,
+        filters: filters
+    });
+});
+
+// My Classes (owned by current profile)
+router.get('/my', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    const filters = {
+        created_by: profile?.id,
+        rules_edition: req.query.rules_edition,
+        rules_version: req.query.rules_version,
+        status: req.query.status,
+    };
+
+    const { data: classes, error } = await getClasses(filters);
+    if (error) {
+        return res.status(500).json({ error: error.message });
+    }
+    res.render('my-classes', {
+        profile,
+        title: 'My Classes',
         classes: classes,
         filters: filters
     });
@@ -144,7 +167,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     if (
         classData &&
         classData.status === 'release' &&
-        (!profile || (profile.role !== 'admin' && profile.id !== classData.creator_id))
+        (!profile || (profile.role !== 'admin' && profile.id !== classData.created_by))
     ) {
         if (!unlocked) {
             return res.render('class-view-teaser', {
@@ -156,6 +179,31 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     }
 
     res.render('class-view', { profile, title: 'View Class', class: classData, unlocked });
+});
+
+// Duplicate a class to a new version
+router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const { new_version } = req.body;
+    if (!new_version) return res.status(400).send('new_version is required');
+    const { data: newClassId, error } = await duplicateClass(id, new_version);
+    if (error) return res.status(400).send(error.message);
+    try {
+        const { data: newClass } = await getClass(newClassId);
+        const slug = newClass?.name ? `/${newClass.name}` : '';
+        return res.header('HX-Location', `/classes/${newClassId}${slug}`).status(204).send();
+    } catch (_) {
+        return res.header('HX-Location', `/classes/${newClassId}`).status(204).send();
+    }
+});
+
+// Version history (base and derived)
+router.get('/:id/history', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    const { id } = req.params;
+    const { data: history, error } = await getVersionHistory(id);
+    if (error) return res.status(400).send(error.message);
+    return res.render('partials/class-history', { layout: false, profile, history });
 });
 
 // Self-unlock eligible PCCs (alpha/beta, public)
@@ -321,6 +369,16 @@ router.put('/:id', isAuthenticated, async (req, res) => {
         return res.status(500).json({ error: error.message });
     }
     return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
+});
+
+// Delete a class (owner or admin via RLS)
+router.delete('/:id', isAuthenticated, async (req, res) => {
+    const { id } = req.params;
+    const { error } = await deleteClass(id);
+    if (error) {
+        return res.status(400).send(error.message);
+    }
+    return res.status(204).send();
 });
 
 module.exports = router;

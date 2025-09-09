@@ -223,6 +223,19 @@ const getVersionHistory = async (classId) => {
     return { data, error };
 };
 
+const deleteClass = async (id) => {
+    const { error } = await supabase
+        .from('classes')
+        .delete()
+        .eq('id', id);
+
+    if (error) {
+        console.error(error);
+        return { error };
+    }
+    return { error: null };
+};
+
 module.exports = {
     getClasses,
     getClass,
@@ -235,5 +248,6 @@ module.exports = {
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,
-    redeemUnlockCode
+    redeemUnlockCode,
+    deleteClass
 };

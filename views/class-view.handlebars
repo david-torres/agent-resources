@@ -18,7 +18,7 @@
   {{/if}}
 </h1>
 {{#if profile}}
-{{#or (eq profile.role 'admin') (eq profile.id class.creator_id)}}
+{{#or (eq profile.role 'admin') (eq profile.id class.created_by)}}
 <div class="buttons">
   <a href="/classes/{{class.id}}/edit" class="button is-warning">Edit</a>
   <button class="button is-danger" hx-delete="/classes/{{class.id}}" hx-target="closest tr"
