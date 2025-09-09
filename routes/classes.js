@@ -13,7 +13,8 @@ const {
     createUnlockCodes,
     listUnlockCodes,
     redeemUnlockCode,
-    deleteClass
+    deleteClass,
+    getProfileById
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 
@@ -178,7 +179,18 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         }
     }
 
-    res.render('class-view', { profile, title: 'View Class', class: classData, unlocked });
+    // Load owner profile for linking (if public)
+    let ownerProfile = null;
+    try {
+        const { data: creator } = await getProfileById(classData.created_by);
+        if (creator && creator.is_public !== false) {
+            ownerProfile = creator;
+        }
+    } catch (_) {
+        // optional
+    }
+
+    res.render('class-view', { profile, title: 'View Class', class: classData, unlocked, ownerProfile });
 });
 
 // Duplicate a class to a new version
