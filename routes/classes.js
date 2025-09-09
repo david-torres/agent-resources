@@ -260,18 +260,12 @@ router.post('/', isAuthenticated, async (req, res) => {
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
-        if (req.body.is_player_created === true) {
-            const creatorProfileId = (req.body.creator_profile_id || '').trim();
-            req.body.created_by = creatorProfileId || profileId;
-        } else {
-            req.body.created_by = profileId;
-        }
-        delete req.body.creator_profile_id;
     } else {
         req.body.is_player_created = true;
-        req.body.created_by = profileId;
-        delete req.body.creator_profile_id;
     }
+
+    // Always set created_by to the current profile
+    req.body.created_by = profileId;
 
     const { data: classData, error } = await createClass(req.body);
     if (error) {
@@ -312,17 +306,9 @@ router.put('/:id', isAuthenticated, async (req, res) => {
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
-        // Admin may change creator when PCC; ignore otherwise
-        if (req.body.is_player_created === true) {
-            const creatorProfileId = (req.body.creator_profile_id || '').trim();
-            if (creatorProfileId) {
-                req.body.created_by = creatorProfileId;
-            }
-        }
-        delete req.body.creator_profile_id;
+        // Do not accept creator overrides via request body anymore
     } else {
         delete req.body.is_player_created;
-        delete req.body.creator_profile_id;
     }
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
