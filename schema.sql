@@ -275,6 +275,16 @@ CREATE POLICY "Classes can be updated by owner or admin"
         (is_admin() OR status IN ('alpha','beta'))
     );
 
+CREATE POLICY "Classes can be deleted by owner or admin"
+    ON classes FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = classes.created_by
+              AND (p.user_id = auth.uid() OR is_admin())
+        )
+    );
+
 -- RLS Policies for class_unlocks table
 CREATE POLICY "Users can view their own unlocks"
     ON class_unlocks FOR SELECT

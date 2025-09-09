@@ -1,0 +1,133 @@
+<h1 class="title is-2">My PCCs</h1>
+<div class="buttons is-right">
+  <button class="button is-primary" id="createClassBtn" hx-get="/classes/new"
+      hx-target="body" hx-swap="innerHTML" hx-push-url="/classes/new">Create Class</button>
+  <a class="button" href="/classes">Browse All</a>
+  </div>
+
+<!-- Filters -->
+<div class="card mb-4">
+  <div class="card-content">
+    <h5 class="title is-5">Filters</h5>
+    <form id="filterForm">
+      <div class="columns is-multiline">
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="rulesEdition">Rules Edition</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="rulesEdition" name="rules_edition">
+                  <option value="" {{#if (eq filters.rules_edition '' )}}selected{{/if}}>All</option>
+                  <option value="advent" {{#if (eq filters.rules_edition 'advent' )}}selected{{/if}}>Advent</option>
+                  <option value="aspirant" disabled>Aspirant</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="rulesVersion">Rules Version</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="rulesVersion" name="rules_version">
+                  <option value="" {{#if (eq filters.rules_version '' )}}selected{{/if}}>All</option>
+                  <option value="v1" {{#if (eq filters.rules_version 'v1' )}}selected{{/if}}>v1</option>
+                  <option value="v2" {{#if (eq filters.rules_version 'v2' )}}selected{{/if}}>v2</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-3">
+          <div class="field">
+            <label class="label" for="status">Status</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select id="status" name="status">
+                  <option value="" {{#if (eq filters.status '' )}}selected{{/if}}>All</option>
+                  <option value="release" {{#if (eq filters.status 'release' )}}selected{{/if}}>Release</option>
+                  <option value="beta" {{#if (eq filters.status 'beta' )}}selected{{/if}}>Beta</option>
+                  <option value="alpha" {{#if (eq filters.status 'alpha' )}}selected{{/if}}>Alpha</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-12">
+          <div class="field is-grouped">
+            <div class="control">
+              <button type="submit" class="button is-primary">Apply Filters</button>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-light" id="resetFilters" hx-get="/classes/my" hx-target="body"
+                hx-swap="innerHTML" hx-on:click="htmx.closest(this, 'form').reset()"
+                hx-push-url="/classes/my">Reset</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="table-container">
+  <table class="table is-fullwidth is-striped">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Status</th>
+        <th>Public</th>
+        <th>Rules</th>
+        <th>Updated</th>
+        <th class="has-text-right">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each classes}}
+      <tr id="row-{{this.id}}">
+        <td>
+          <a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+        </td>
+        <td>
+          {{#if (eq this.status 'release')}}
+            <span class="tag is-success is-light">release</span>
+          {{/if}}
+          {{#if (eq this.status 'beta')}}
+            <span class="tag is-warning is-light">beta</span>
+          {{/if}}
+          {{#if (eq this.status 'alpha')}}
+            <span class="tag is-danger is-light">alpha</span>
+          {{/if}}
+        </td>
+        <td>{{#if this.is_public}}Yes{{else}}No{{/if}}</td>
+        <td>{{capitalize this.rules_edition}} {{this.rules_version}}</td>
+        <td>{{moment this.updated_at "YYYY-MM-DD HH:mm"}}</td>
+        <td class="has-text-right">
+          <div class="buttons is-right">
+            <a class="button is-small" href="/classes/{{this.id}}/edit">Edit</a>
+            <button class="button is-small is-info" hx-post="/classes/{{this.id}}/duplicate" hx-vals='{"new_version":"v2"}' hx-confirm="Duplicate to new version v2?" hx-swap="none">Duplicate</button>
+            <button class="button is-small is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
+          </div>
+          <!-- History Modal -->
+          <div id="historyModal-{{this.id}}" class="modal" data-clear-on-close="true" data-clear-target="#history-{{this.id}}">
+            <div class="modal-background" hx-on:click="App.closeModal('#historyModal-{{this.id}}')"></div>
+            <div class="modal-card">
+              <header class="modal-card-head">
+                <p class="modal-card-title">Version History - {{this.name}}</p>
+                <button class="delete" aria-label="close" hx-on:click="App.closeModal('#historyModal-{{this.id}}')"></button>
+              </header>
+              <section class="modal-card-body" id="history-{{this.id}}"></section>
+              <footer class="modal-card-foot">
+                <button class="button" hx-on:click="App.closeModal('#historyModal-{{this.id}}')">Close</button>
+              </footer>
+            </div>
+          </div>
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+

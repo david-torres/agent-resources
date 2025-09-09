@@ -1,0 +1,19 @@
+{{#if history}}
+  <ul>
+  {{#each history}}
+    <li>
+      <a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+      — {{capitalize this.rules_edition}} {{this.rules_version}} — {{this.status}}
+      {{#if this.base_class_id}}
+        <span class="tag is-light">derived</span>
+      {{else}}
+        <span class="tag is-light">base</span>
+      {{/if}}
+    </li>
+  {{/each}}
+  </ul>
+{{else}}
+  <p>No history found.</p>
+{{/if}}
+
+
