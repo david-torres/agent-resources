@@ -39,13 +39,7 @@
           PCC (player-created)
         </label>
       </div>
-      <div class="field" style="margin-top: 0.75rem;">
-        <label class="label">Creator Profile ID (UUID)</label>
-        <div class="control">
-          <input class="input" type="text" name="creator_profile_id" placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000" value="{{#if class}}{{class.created_by}}{{/if}}">
-        </div>
-        <p class="help">For PCC only. Leave blank to use your profile.</p>
-      </div>
+      
     {{else}}
       <input type="hidden" name="is_player_created" value="true">
     {{/if}}
