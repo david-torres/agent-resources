@@ -86,6 +86,7 @@ CREATE TABLE class_gear (
   character_id UUID NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
+  class_id uuid REFERENCES classes(id),
   FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
 );
 
@@ -98,6 +99,7 @@ CREATE TABLE class_abilities (
   essence_cost TEXT,
   cooldown TEXT,
   duration TEXT,
+  class_id uuid REFERENCES classes(id),
   FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
 );
 
