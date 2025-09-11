@@ -18,7 +18,7 @@
     <tbody>
       {{#each characters}}
       <tr>
-        <td><span class="title is-4">{{this.name}}</span></td>
+        <td><span class="title is-4"><a href="/characters/{{this.id}}/{{this.name}}">{{this.name}}</a></span></td>
         <td>
           <div class="buttons are-small">
             <a href="/characters/{{this.id}}/{{this.name}}" class="button is-secondary">View</a>

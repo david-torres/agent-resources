@@ -72,14 +72,13 @@
 </div>
 
 <div class="table-container">
-  <table class="table is-fullwidth is-striped">
+  <table class="table is-fullwidth is-striped is-hoverable">
     <thead>
       <tr>
         <th>Name</th>
         <th>Status</th>
         <th>Public</th>
         <th>Rules</th>
-        <th>Updated</th>
         <th class="has-text-right">Actions</th>
       </tr>
     </thead>
@@ -87,7 +86,7 @@
       {{#each classes}}
       <tr id="row-{{this.id}}">
         <td>
-          <a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+          <span class="title is-4"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></span>
         </td>
         <td>
           {{#if (eq this.status 'release')}}
@@ -102,12 +101,11 @@
         </td>
         <td>{{#if this.is_public}}Yes{{else}}No{{/if}}</td>
         <td>{{capitalize this.rules_edition}} {{this.rules_version}}</td>
-        <td>{{moment this.updated_at "YYYY-MM-DD HH:mm"}}</td>
         <td class="has-text-right">
-          <div class="buttons is-right">
-            <a class="button is-small" href="/classes/{{this.id}}/edit">Edit</a>
-            <button class="button is-small is-info" hx-post="/classes/{{this.id}}/duplicate" hx-vals='{"new_version":"v2"}' hx-confirm="Duplicate to new version v2?" hx-swap="none">Duplicate</button>
-            <button class="button is-small is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
+          <div class="buttons are-small is-right">
+            <a class="button is-warning" href="/classes/{{this.id}}/edit">Edit</a>
+            <button class="button is-info" hx-post="/classes/{{this.id}}/duplicate" hx-vals='{"new_version":"v2"}' hx-confirm="Duplicate to new version v2?" hx-swap="none">Duplicate</button>
+            <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
           </div>
           <!-- History Modal -->
           <div id="historyModal-{{this.id}}" class="modal" data-clear-on-close="true" data-clear-target="#history-{{this.id}}">
