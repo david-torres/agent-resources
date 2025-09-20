@@ -1,11 +1,17 @@
 const express = require('express');
 const router = express.Router();
 const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses } = require('../util/supabase');
+const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
-  res.render('profile', { user, profile });
+  let unlockedClasses = [];
+  try {
+    const { data } = await getUnlockedClasses(user.id);
+    if (Array.isArray(data)) unlockedClasses = data;
+  } catch (_) {}
+  res.render('profile', { user, profile, unlockedClasses });
 });
 
 router.get('/edit', isAuthenticated, async (req, res) => {
