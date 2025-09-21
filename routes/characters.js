@@ -253,26 +253,36 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
       // compute tooltip availability and description maps
       try { 
-        if (characterClass && profile) {
-          // Check individual abilities for unlock status and mutate character.abilities directly
+        if (!profile) {
+          // Not logged in: hide all descriptions
+          if (Array.isArray(character.abilities)) {
+            for (const ability of character.abilities) {
+              ability.description = '';
+            }
+          }
+          if (Array.isArray(character.gear)) {
+            for (const gear of character.gear) {
+              gear.description = '';
+            }
+          }
+        } else if (characterClass) {
+          // Logged in: hide descriptions for items from locked classes
           if (Array.isArray(character.abilities)) {
             for (const ability of character.abilities) {
               if (ability.class_id) {
                 const { data: abilityUnlocked } = await isClassUnlocked(profile.user_id, ability.class_id);
                 if (!abilityUnlocked) {
-                  // ability.description = '';
+                  ability.description = '';
                 }
               }
             }
           }
-          
-          // Check individual gear items for unlock status and mutate character.gear directly
           if (Array.isArray(character.gear)) {
             for (const gear of character.gear) {
               if (gear.class_id) {
                 const { data: gearUnlocked } = await isClassUnlocked(profile.user_id, gear.class_id);
                 if (!gearUnlocked) {
-                  // gear.description = '';
+                  gear.description = '';
                 }
               }
             }

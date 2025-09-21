@@ -122,7 +122,6 @@
       <h3 class="title is-4">Class Abilities</h3>
       <div class="columns is-multiline">
         {{#each character.abilities}}
-        {{dump this}}
         <div class="column is-one-third">
           {{#if (lookup this 'description')}}
           <span class="is-size-5" data-tooltip-markdown="#ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{capitalize (lookup this 'name')}}</span>
