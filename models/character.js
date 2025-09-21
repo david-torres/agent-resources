@@ -1,7 +1,7 @@
 const { supabase } = require('./_base');
 const { getClasses, getClass } = require('./class');
 
-// Build lookup maps from gear/ability name -> class_id
+// Build lookup maps from gear/ability name -> class_id and description
 const buildClassContentLookupMaps = async () => {
   try {
     const [adventRes, aspirantRes, pccRes] = await Promise.all([
@@ -17,12 +17,17 @@ const buildClassContentLookupMaps = async () => {
     const allClasses = [...advent, ...aspirant, ...pcc];
     const gearNameToClassId = new Map();
     const abilityNameToClassId = new Map();
+    const gearNameToDescription = new Map();
+    const abilityNameToDescription = new Map();
 
     for (const cls of allClasses) {
       if (Array.isArray(cls?.gear)) {
         for (const g of cls.gear) {
           if (g && g.name && cls.id) {
             gearNameToClassId.set(g.name, cls.id);
+            if (g.description) {
+              gearNameToDescription.set(g.name, g.description);
+            }
           }
         }
       }
@@ -30,12 +35,15 @@ const buildClassContentLookupMaps = async () => {
         for (const a of cls.abilities) {
           if (a && a.name && cls.id) {
             abilityNameToClassId.set(a.name, cls.id);
+            if (a.description) {
+              abilityNameToDescription.set(a.name, a.description);
+            }
           }
         }
       }
     }
 
-    return { gearNameToClassId, abilityNameToClassId };
+    return { gearNameToClassId, abilityNameToClassId, gearNameToDescription, abilityNameToDescription };
   } catch (error) {
     throw error;
   }
@@ -316,11 +324,13 @@ const setCharacterGear = async (id, gear) => {
     return { data: null, error };
   }
 
-  const { gearNameToClassId } = await buildClassContentLookupMaps();
+  const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
   const gearData = gear.map(itemName => {
     const record = { character_id: id, name: itemName };
     const clsId = gearNameToClassId.get(itemName);
     if (clsId) record.class_id = clsId;
+    const desc = gearNameToDescription.get(itemName);
+    if (desc) record.description = desc;
     return record;
   });
   const { data: newGear, error: newGearError } = await supabase.from('class_gear').insert(gearData);
@@ -342,11 +352,13 @@ const setCharacterAbilities = async (id, abilities) => {
     return { data: null, error };
   }
 
-  const { abilityNameToClassId } = await buildClassContentLookupMaps();
+  const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
   const abilitiesData = abilities.map(abilityName => {
     const record = { character_id: id, name: abilityName };
     const clsId = abilityNameToClassId.get(abilityName);
     if (clsId) record.class_id = clsId;
+    const desc = abilityNameToDescription.get(abilityName);
+    if (desc) record.description = desc;
     return record;
   });
   const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
