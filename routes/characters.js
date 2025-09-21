@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
-const { getUnlockedClasses, isClassUnlocked } = require('../models/class');
+const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 
@@ -229,7 +229,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
 
-      // fetch class record
+      // fetch class record (non-fatal on failure)
       let characterClass = null;
       try {
         if (character.class_id) {
@@ -238,8 +238,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             characterClass = cls;
           }
         }
-      } catch (error) {
-        return res.status(400).send(error.message);
+      } catch (_) {
+        // ignore; continue rendering without class details
       }
 
       // fetch creator profile
@@ -251,8 +251,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // owner link is optional
       }
 
-      // compute tooltip availability and description maps
-      try { 
+      // compute tooltip availability and description maps (never block render)
+      try {
         if (!profile) {
           // Not logged in: hide all descriptions
           if (Array.isArray(character.abilities)) {
@@ -265,31 +265,49 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
               gear.description = '';
             }
           }
-        } else if (characterClass) {
-          // Logged in: hide descriptions for items from locked classes
+        } else {
+          // Logged in: fetch unlocked classes once and hide descriptions for locked classes
+          const userId = profile.user_id || (res.locals.user && res.locals.user.id) || null;
+          let unlockedClassIds = new Set();
+          try {
+            const { data: unlocked } = await getUnlockedClasses(userId);
+            if (Array.isArray(unlocked)) {
+              unlockedClassIds = new Set(unlocked.map(c => c.id));
+            }
+          } catch (e) {
+            // On error fetching unlocks, default to hiding everything that is class-gated
+            unlockedClassIds = new Set();
+          }
+
           if (Array.isArray(character.abilities)) {
             for (const ability of character.abilities) {
-              if (ability.class_id) {
-                const { data: abilityUnlocked } = await isClassUnlocked(profile.user_id, ability.class_id);
-                if (!abilityUnlocked) {
-                  ability.description = '';
-                }
+              if (ability && ability.class_id && !unlockedClassIds.has(ability.class_id)) {
+                ability.description = '';
               }
             }
           }
           if (Array.isArray(character.gear)) {
             for (const gear of character.gear) {
-              if (gear.class_id) {
-                const { data: gearUnlocked } = await isClassUnlocked(profile.user_id, gear.class_id);
-                if (!gearUnlocked) {
-                  gear.description = '';
-                }
+              if (gear && gear.class_id && !unlockedClassIds.has(gear.class_id)) {
+                gear.description = '';
               }
             }
           }
         }
-      } catch (error) {
-        return res.status(400).send(error.message);
+      } catch (_) {
+        // Never block page render for tooltip logic; fail closed by hiding descriptions
+        try {
+          if (Array.isArray(character.abilities)) {
+            for (const ability of character.abilities) {
+              if (ability) ability.description = '';
+            }
+          }
+          if (Array.isArray(character.gear)) {
+            for (const gear of character.gear) {
+              if (gear) gear.description = '';
+            }
+          }
+        } catch (_) { /* ignore */ }
       }
 
       res.render('character', {

@@ -279,14 +279,18 @@ const getCharacterGear = async (id) => {
     return { data: [], error: null };
   }
 
-  // Fetch related class definitions
+  // Fetch related class definitions (non-fatal)
   const classIds = [...new Set(gear.map(g => g.class_id).filter(Boolean))];
+  if (classIds.length === 0) {
+    return { data: gear, error: null };
+  }
   const { data: classes, error: classesError } = await supabase
     .from('classes')
     .select('id, name, gear')
     .in('id', classIds);
   if (classesError) {
-    return { data: null, error: classesError };
+    // Fallback: return raw gear rows as-is
+    return { data: gear, error: null };
   }
 
   // Merge class gear definition values directly onto each character gear row
@@ -345,16 +349,20 @@ const getCharacterAbilities = async (id) => {
   }
 
   // Get unique class IDs
-  const classIds = [...new Set(abilities.map(ability => ability.class_id))];
+  const classIds = [...new Set(abilities.map(ability => ability.class_id).filter(Boolean))];
+  if (classIds.length === 0) {
+    return { data: abilities, error: null };
+  }
   
-  // Get classes with their abilities JSONB
+  // Get classes with their abilities JSONB (non-fatal)
   const { data: classes, error: classesError } = await supabase
     .from('classes')
     .select('id, name, abilities')
     .in('id', classIds);
 
   if (classesError) {
-    return { data: null, error: classesError };
+    // Fallback: return raw ability rows as-is
+    return { data: abilities, error: null };
   }
 
   // Merge class ability definition values directly onto each character ability
