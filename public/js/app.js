@@ -133,16 +133,52 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
       });
 
+      const _initTooltips = (root) => {
+        const container = root || document;
+        if (typeof tippy !== 'function') return;
+        const els = container.querySelectorAll('[data-tooltip-markdown]');
+        els.forEach((el) => {
+          try {
+            if (el._tippy) return;
+            const ref = el.getAttribute('data-tooltip-markdown');
+            let contentEl = null;
+            if (ref) {
+              if (ref.startsWith('#')) {
+                const id = ref.slice(1);
+                contentEl = document.getElementById(id) || (container.getElementById ? container.getElementById(id) : null);
+              }
+              if (!contentEl) {
+                try { contentEl = container.querySelector(ref) || document.querySelector(ref); } catch (_) { /* ignore */ }
+              }
+            }
+            if (!contentEl && el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('tooltip-markdown')) {
+              contentEl = el.nextElementSibling;
+            }
+            if (!contentEl) return;
+            tippy(el, {
+              theme: 'light-border',
+              allowHTML: true,
+              interactive: true,
+              maxWidth: 350,
+              content: contentEl.innerHTML,
+              placement: 'top',
+              appendTo: () => document.body,
+            });
+          } catch (e) { /* noop per element */ }
+        });
+      };
+
       document.body.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
         const targetEl = evt.detail && evt.detail.target;
-        if (!targetEl || !targetEl.id) return;
-        if (targetEl.id === 'characterSearchResults') {
+        if (targetEl && targetEl.id === 'characterSearchResults') {
           targetEl.classList.remove('is-hidden');
           setTimeout(() => {
             targetEl.classList.add('is-hidden');
           }, 10000);
         }
+        // Initialize tooltips after swaps (for boosted navs and partial swaps)
+        _initTooltips(targetEl || document);
       });
 
       // Global keydown handler for closing modals on Escape
@@ -158,6 +194,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       // trigger initial session handling immediately
       const { data: { session } } = await supabaseClient.auth.getSession();
       await _handleAuthStateChange('INITIAL_SESSION', session);
+
+      // Initialize any tooltips present at load
+      _initTooltips(document);
     });
   }
 
@@ -519,6 +558,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   return {
     init,
+    initTooltips: (root) => { try { _initTooltips(root); } catch (e) { /* noop */ } },
     dismissSystemMessage: (id) => {
       try {
         localStorage.setItem('dismissedSystemMessageId', id);

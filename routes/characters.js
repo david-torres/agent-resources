@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getProfileById } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
-const { getUnlockedClasses } = require('../models/class');
+const { getUnlockedClasses, isClassUnlocked } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
+  
   // Load classes from DB by category
   const [adventRes, aspirantRes, pccRes] = await Promise.all([
     getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
@@ -228,24 +229,67 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
 
-      // Try to resolve the class record by name for linking
+      // fetch class record
       let characterClass = null;
       try {
-        const { data: classMatches } = await getClasses({ name: character.class, is_public: true });
-        if (Array.isArray(classMatches) && classMatches.length > 0) {
-          characterClass = classMatches[0];
+        if (character.class_id) {
+          const { data: cls } = await getClass(character.class_id);
+          if (cls) {
+            characterClass = cls;
+          }
         }
-      } catch (_) {
-        // ignore lookup errors; we'll fall back to plain text
+      } catch (error) {
+        return res.status(400).send(error.message);
       }
 
-      // Load creator profile for linking
+      // fetch creator profile
       let ownerProfile = null;
       try {
         const { data: creator } = await getProfileById(character.creator_id);
         if (creator) ownerProfile = creator;
       } catch (_) {
-        // ignore failures; owner link is optional
+        // owner link is optional
+      }
+
+      // compute tooltip availability and description maps
+      try { 
+        if (!profile) {
+          // Not logged in: hide all descriptions
+          if (Array.isArray(character.abilities)) {
+            for (const ability of character.abilities) {
+              ability.description = '';
+            }
+          }
+          if (Array.isArray(character.gear)) {
+            for (const gear of character.gear) {
+              gear.description = '';
+            }
+          }
+        } else if (characterClass) {
+          // Logged in: hide descriptions for items from locked classes
+          if (Array.isArray(character.abilities)) {
+            for (const ability of character.abilities) {
+              if (ability.class_id) {
+                const { data: abilityUnlocked } = await isClassUnlocked(profile.user_id, ability.class_id);
+                if (!abilityUnlocked) {
+                  ability.description = '';
+                }
+              }
+            }
+          }
+          if (Array.isArray(character.gear)) {
+            for (const gear of character.gear) {
+              if (gear.class_id) {
+                const { data: gearUnlocked } = await isClassUnlocked(profile.user_id, gear.class_id);
+                if (!gearUnlocked) {
+                  gear.description = '';
+                }
+              }
+            }
+          }
+        }
+      } catch (error) {
+        return res.status(400).send(error.message);
       }
 
       res.render('character', {

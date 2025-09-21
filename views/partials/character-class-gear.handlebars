@@ -6,7 +6,7 @@
           {{#each classGearList}}
           <option disabled>{{capitalize @key}}</option>
           {{#each this}}
-          <option value="{{this}}" {{#if (eq this ../../characterGear)}}selected{{/if}}>
+          <option value="{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>
           {{capitalize this}} ({{capitalize @../key}})</option>
           {{/each}}
           {{/each}}

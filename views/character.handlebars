@@ -123,7 +123,14 @@
       <div class="columns is-multiline">
         {{#each character.abilities}}
         <div class="column is-one-third">
-          <div class="is-size-5">{{capitalize this}}</div>
+          {{#if (lookup this 'description')}}
+          <span class="is-size-5" data-tooltip-markdown="#ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{capitalize (lookup this 'name')}}</span>
+          <div id="ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
+            {{{markdown (lookup this 'description')}}}
+          </div>
+          {{else}}
+          <div class="is-size-5">{{capitalize (lookup this 'name')}}</div>
+          {{/if}}
         </div>
         {{/each}}
       </div>
@@ -141,7 +148,14 @@
       <div class="columns is-multiline">
         {{#each character.gear}}
         <div class="column is-one-third">
-          <div class="is-size-5">{{capitalize this}}</div>
+          {{#if (lookup this 'description')}}
+          <span class="is-size-5" data-tooltip-markdown="#gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{capitalize (lookup this 'name')}}</span>
+          <div id="gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
+            {{{markdown (lookup this 'description')}}}
+          </div>
+          {{else}}
+          <div class="is-size-5">{{capitalize (lookup this 'name')}}</div>
+          {{/if}}
         </div>
         {{/each}}
       </div>

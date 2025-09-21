@@ -1,53 +1,5 @@
 const { supabase } = require('./_base');
-const { getClasses, getClass } = require('./class');
-
-// Build lookup maps from gear/ability name -> class_id and description
-const buildClassContentLookupMaps = async () => {
-  try {
-    const [adventRes, aspirantRes, pccRes] = await Promise.all([
-      getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
-      getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
-      getClasses({ is_public: true, is_player_created: true })
-    ]);
-
-    const advent = Array.isArray(adventRes?.data) ? adventRes.data : [];
-    const aspirant = Array.isArray(aspirantRes?.data) ? aspirantRes.data : [];
-    const pcc = Array.isArray(pccRes?.data) ? pccRes.data : [];
-
-    const allClasses = [...advent, ...aspirant, ...pcc];
-    const gearNameToClassId = new Map();
-    const abilityNameToClassId = new Map();
-    const gearNameToDescription = new Map();
-    const abilityNameToDescription = new Map();
-
-    for (const cls of allClasses) {
-      if (Array.isArray(cls?.gear)) {
-        for (const g of cls.gear) {
-          if (g && g.name && cls.id) {
-            gearNameToClassId.set(g.name, cls.id);
-            if (g.description) {
-              gearNameToDescription.set(g.name, g.description);
-            }
-          }
-        }
-      }
-      if (Array.isArray(cls?.abilities)) {
-        for (const a of cls.abilities) {
-          if (a && a.name && cls.id) {
-            abilityNameToClassId.set(a.name, cls.id);
-            if (a.description) {
-              abilityNameToDescription.set(a.name, a.description);
-            }
-          }
-        }
-      }
-    }
-
-    return { gearNameToClassId, abilityNameToClassId, gearNameToDescription, abilityNameToDescription };
-  } catch (error) {
-    throw error;
-  }
-};
+const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -92,14 +44,14 @@ const getCharacter = async (id) => {
     console.error(gearError);
     return { data: null, error: gearError };
   }
-  data.gear = gear.map(gear => gear.name);
+  data.gear = gear;
 
   const { data: abilities, error: abilitiesError } = await getCharacterAbilities(id);
   if (abilitiesError) {
     console.error(abilitiesError);
     return { data: null, error: abilitiesError };
   }
-  data.abilities = abilities.map(ability => ability.name);
+  data.abilities = abilities;
 
   return { data, error };
 }
@@ -314,8 +266,44 @@ const setCharacterTraits = async (id, traits) => {
 }
 
 const getCharacterGear = async (id) => {
-  const { data, error } = await supabase.from('class_gear').select('*').eq('character_id', id);
-  return { data, error };
+  // Fetch character gear rows
+  const { data: gear, error: gearError } = await supabase
+    .from('class_gear')
+    .select('*')
+    .eq('character_id', id);
+  if (gearError) {
+    return { data: null, error: gearError };
+  }
+
+  if (!Array.isArray(gear) || gear.length === 0) {
+    return { data: [], error: null };
+  }
+
+  // Fetch related class definitions
+  const classIds = [...new Set(gear.map(g => g.class_id).filter(Boolean))];
+  const { data: classes, error: classesError } = await supabase
+    .from('classes')
+    .select('id, name, gear')
+    .in('id', classIds);
+  if (classesError) {
+    return { data: null, error: classesError };
+  }
+
+  // Merge class gear definition values directly onto each character gear row
+  const mergedGear = gear.map(item => {
+    const cls = classes?.find(c => c.id === item.class_id);
+    const classGear = Array.isArray(cls?.gear)
+      ? cls.gear.find(g => g && g.name === item.name)
+      : null;
+
+    if (classGear) {
+      // Prefer existing row values when overlapping keys exist
+      return { ...classGear, ...item };
+    }
+    return item;
+  });
+
+  return { data: mergedGear, error: null };
 }
 
 const setCharacterGear = async (id, gear) => {
@@ -342,8 +330,49 @@ const setCharacterGear = async (id, gear) => {
 }
 
 const getCharacterAbilities = async (id) => {
-  const { data, error } = await supabase.from('class_abilities').select('*').eq('character_id', id);
-  return { data, error };
+  // First get the character abilities
+  const { data: abilities, error: abilitiesError } = await supabase
+    .from('class_abilities')
+    .select('*')
+    .eq('character_id', id);
+  
+  if (abilitiesError) {
+    return { data: null, error: abilitiesError };
+  }
+
+  if (!abilities || abilities.length === 0) {
+    return { data: [], error: null };
+  }
+
+  // Get unique class IDs
+  const classIds = [...new Set(abilities.map(ability => ability.class_id))];
+  
+  // Get classes with their abilities JSONB
+  const { data: classes, error: classesError } = await supabase
+    .from('classes')
+    .select('id, name, abilities')
+    .in('id', classIds);
+
+  if (classesError) {
+    return { data: null, error: classesError };
+  }
+
+  // Merge class ability definition values directly onto each character ability
+  const mergedAbilities = abilities.map(ability => {
+    const cls = classes.find(c => c.id === ability.class_id);
+    const classAbility = Array.isArray(cls?.abilities)
+      ? cls.abilities.find(a => a && a.name === ability.name)
+      : null;
+
+    if (classAbility) {
+      // Prefer existing ability row values when overlapping keys exist
+      return { ...classAbility, ...ability };
+    }
+
+    return ability;
+  });
+
+  return { data: mergedAbilities, error: null };
 }
 
 const setCharacterAbilities = async (id, abilities) => {
