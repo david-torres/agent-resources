@@ -20,7 +20,11 @@
       </p>
       <p><strong>Level:</strong> {{character.level}}</p>
       {{#if ownerProfile}}
+      {{#if (lookup ownerProfile 'is_public')}}
       <p><strong>Owner:</strong> <a href="/profile/view/{{ownerProfile.name}}">{{ownerProfile.name}}</a></p>
+      {{else}}
+      <p><strong>Owner:</strong> {{ownerProfile.name}}</p>
+      {{/if}}
       {{/if}}
       {{#if (lt character.level 10)}}
       <p class="is-size-7">
