@@ -19,3 +19,51 @@
   </button>
   <a href="/profile/view/{{profile.name}}" class="button is-secondary">View Profile</a>
 </div>
+
+{{#if unlockedClasses}}
+<div class="box">
+  <h3 class="title is-4">Unlocked Classes</h3>
+  {{#if unlockedClasses.length}}
+  <div class="table-container">
+    <table class="table is-fullwidth is-striped is-hoverable">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Status</th>
+          <th>Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each unlockedClasses}}
+        <tr>
+          <td>
+            <a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+          </td>
+          <td>
+            {{#if (eq this.status 'release')}}
+              <span class="tag is-success is-light">release</span>
+            {{/if}}
+            {{#if (eq this.status 'beta')}}
+              <span class="tag is-warning is-light">beta</span>
+            {{/if}}
+            {{#if (eq this.status 'alpha')}}
+              <span class="tag is-danger is-light">alpha</span>
+            {{/if}}
+          </td>
+          <td>{{capitalize this.rules_edition}} {{this.rules_version}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  {{else}}
+  <div class="notification is-light">
+    You haven't unlocked any classes yet.
+    <a href="/classes/redeem/bulk" class="button is-small is-link ml-2">Redeem Unlock Codes</a>
+  </div>
+  {{/if}}
+  <div class="buttons is-right">
+    <a class="button" href="/classes">Browse All Classes</a>
+  </div>
+  </div>
+{{/if}}
