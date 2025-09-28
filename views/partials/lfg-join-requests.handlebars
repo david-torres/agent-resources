@@ -15,9 +15,25 @@
       <tbody>
         {{#each requests}}
         <tr>
-          <td>{{this.profiles.name}}</td>
+          <td>
+            {{#if this.profile.is_public}}
+            <a href="/profile/view/{{encodeURIComponentH this.profile.name}}">{{this.profile.name}}</a>
+            {{else}}
+            {{this.profile.name}}
+            {{/if}}
+          </td>
           <td>{{this.join_type}}</td>
-          <td>{{#if this.characters}}{{this.characters.name}}{{else}}-{{/if}}</td>
+          <td>
+            {{#if this.character}}
+              {{#if this.character.is_public}}
+              <a href="/characters/{{this.character.id}}/{{encodeURIComponentH this.character.name}}?lfg={{../post.id}}">{{this.character.name}}</a>
+              {{else}}
+              {{this.character.name}}
+              {{/if}}
+            {{else}}
+            -
+            {{/if}}
+          </td>
           <td>{{this.status}}</td>
           <td>
             {{#if (eq this.status 'pending')}}
@@ -43,7 +59,7 @@
   {{else}}
   <p>No join requests yet.</p>
   {{/if}}
-  <div class="buttons is-right">
+  {{!-- <div class="buttons is-right">
     <a href="/lfg" class="button is-light">Back</a>
-  </div>
+  </div> --}}
 </div>
