@@ -60,14 +60,20 @@
           {{#if this.characters}}
           <tr>
             <td>
-              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}">{{this.characters.name}}</a>
+              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
             </td>
             <td>{{this.characters.class}}</td>
             <td>{{this.characters.level}}</td>
-            <td>{{this.profiles.name}}</td>
             <td>
-              <button class="button is-small is-info" {{!--
-                hx-get="/characters/{{this.characters.id}}/{{this.characters.name}}" --}}
+              {{#if this.profiles.is_public}}
+              <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
+              {{else}}
+              {{this.profiles.name}}
+              {{/if}}
+            </td>
+            <td>
+              <button class="button is-small is-info" 
+                hx-get="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}"
                 hx-target="#character-details-{{this.characters.id}}"
                 hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.characters.id}}'), 'is-hidden');"
                 hx-swap="innerHTML">
@@ -147,14 +153,20 @@
         {{#if this.characters}}
         <tr>
           <td>
-            <a href="/characters/{{this.characters.id}}/{{this.characters.name}}">{{this.characters.name}}</a>
+            <a href="/characters/{{this.characters.id}}/{{this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
           </td>
           <td>{{this.characters.class}}</td>
           <td>{{this.characters.level}}</td>
-          <td>{{this.profiles.name}}</td>
           <td>
-            <button class="button is-small is-info" {{!--
-              hx-get="/characters/{{this.characters.id}}/{{this.characters.name}}" --}}
+            {{#if this.profiles.is_public}}
+            <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
+            {{else}}
+            {{this.profiles.name}}
+            {{/if}}
+          </td>
+          <td>
+            <button class="button is-small is-info" 
+              hx-get="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}"
               hx-target="#character-details-{{this.characters.id}}"
               hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.characters.id}}'), 'is-hidden');"
               hx-swap="innerHTML">
@@ -227,4 +239,3 @@
     </div>
   </div>
 </div>
-{{/if}}

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getProfileById } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -253,6 +253,22 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
       // compute tooltip availability and description maps (never block render)
       try {
+        const characterId = character.id;
+        let hostingViaLfg = false;
+
+        // If an LFG context is provided and the current user is the host for this character on that post,
+        // allow full descriptions regardless of unlocks
+        if (profile && req.query.lfg) {
+          try {
+            const { data: lfgPost } = await getLfgPost(req.query.lfg);
+            if (lfgPost && lfgPost.host_id === profile.id) {
+              hostingViaLfg = Array.isArray(lfgPost.join_requests) && lfgPost.join_requests.some(r =>
+                r && r.status === 'approved' && r.characters && r.characters.id === characterId
+              );
+            }
+          } catch (_) { /* ignore; hostingViaLfg remains false */ }
+        }
+
         if (!profile) {
           // Not logged in: hide all descriptions
           if (Array.isArray(character.abilities)) {
@@ -265,8 +281,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
               gear.description = '';
             }
           }
-        } else {
-          // Logged in: fetch unlocked classes once and hide descriptions for locked classes
+        } else if (!hostingViaLfg) {
+          // Logged in but not host in this LFG context: enforce unlock gating
           const userId = profile.user_id || (res.locals.user && res.locals.user.id) || null;
           let unlockedClassIds = new Set();
           try {

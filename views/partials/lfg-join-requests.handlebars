@@ -15,9 +15,25 @@
       <tbody>
         {{#each requests}}
         <tr>
-          <td>{{this.profiles.name}}</td>
+          <td>
+            {{#if this.profiles.is_public}}
+            <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
+            {{else}}
+            {{this.profiles.name}}
+            {{/if}}
+          </td>
           <td>{{this.join_type}}</td>
-          <td>{{#if this.characters}}{{this.characters.name}}{{else}}-{{/if}}</td>
+          <td>
+            {{#if this.characters}}
+              {{#if this.characters.is_public}}
+              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
+              {{else}}
+              {{this.characters.name}}
+              {{/if}}
+            {{else}}
+            -
+            {{/if}}
+          </td>
           <td>{{this.status}}</td>
           <td>
             {{#if (eq this.status 'pending')}}
