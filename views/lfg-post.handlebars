@@ -12,6 +12,19 @@
     {{{markdown post.description}}}
   </div>
 
+  {{#if (eq post.creator_id profile.id)}}
+  {{#if (gt pendingCount 0)}}
+  <div class="notification is-warning is-light">
+    <strong>{{pendingCount}}</strong> pending join {{#if (eq pendingCount 1)}}request{{else}}requests{{/if}}.
+    <div class="buttons mt-2">
+      <button class="button is-small is-dark"
+        hx-on:click="const t=htmx.find('#join-requests-inline');htmx.toggleClass(t,'is-hidden');if(!t.dataset.loaded&&!t.classList.contains('is-hidden')){htmx.trigger(t,'revealed');t.dataset.loaded='1';}this.innerText=t.classList.contains('is-hidden')?'Show':'Hide';">Show</button>
+    </div>
+  </div>
+  <div id="join-requests-inline" class="block is-hidden" hx-get="/lfg/{{post.id}}/requests" hx-trigger="revealed" hx-swap="innerHTML"></div>
+  {{/if}}
+  {{/if}}
+
   <div class="buttons is-right">
     <button class="button" id="calendar-buttons-show"
       hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');">
@@ -57,33 +70,32 @@
         <tbody>
           {{#each post.join_requests}}
           {{#if (eq this.status "approved")}}
-          {{#if this.characters}}
+          {{#if this.character}}
           <tr>
             <td>
-              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
+              <a href="/characters/{{this.character.id}}/{{encodeURIComponentH this.character.name}}?lfg={{../post.id}}">{{this.character.name}}</a>
             </td>
-            <td>{{this.characters.class}}</td>
-            <td>{{this.characters.level}}</td>
+            <td>{{this.character.class}}</td>
+            <td>{{this.character.level}}</td>
             <td>
-              {{#if this.profiles.is_public}}
-              <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
+              {{#if this.profile.is_public}}
+              <a href="/profile/view/{{encodeURIComponentH this.profile.name}}">{{this.profile.name}}</a>
               {{else}}
-              {{this.profiles.name}}
+              {{this.profile.name}}
               {{/if}}
             </td>
             <td>
               <button class="button is-small is-info" 
-                hx-get="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}"
-                hx-target="#character-details-{{this.characters.id}}"
-                hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.characters.id}}'), 'is-hidden');"
-                hx-swap="innerHTML">
+                hx-history="false"
+                hx-push-url="false"
+                hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.character.id}}'), 'is-hidden');">
                 Details
               </button>
             </td>
           </tr>
           <tr>
             <td colspan="5">
-              <div id="character-details-{{this.characters.id}}" class="box is-hidden">
+              <div id="character-details-{{this.character.id}}" class="box is-hidden">
                 <div class="columns is-multiline">
                   <div class="column is-4">
                     <h4 class="title is-5">Stats</h4>
@@ -91,7 +103,7 @@
                       {{#each ../statList}}
                       <div class="column is-6">
                         <p><strong>{{capitalize this}}:</strong>
-                          {{#range 0 (lookup ../this.characters this)}}+ {{/range}}
+                          {{#range 0 (lookup ../this.character this)}}+ {{/range}}
                         </p>
                       </div>
                       {{/each}}
@@ -100,7 +112,7 @@
                   <div class="column is-4">
                     <h4 class="title is-5">Abilities</h4>
                     <div class="tags">
-                      {{#each this.characters.abilities}}
+                      {{#each this.character.abilities}}
                       <span class="tag is-primary is-medium">{{this.name}}</span>
                       {{/each}}
                     </div>
@@ -108,7 +120,7 @@
                   <div class="column is-4">
                     <h4 class="title is-5">Gear</h4>
                     <div class="tags">
-                      {{#each this.characters.gear}}
+                      {{#each this.character.gear}}
                       <span class="tag is-gray is-medium">{{this.name}}</span>
                       {{/each}}
                     </div>
@@ -116,7 +128,7 @@
                 </div>
                 <div class="container">
                   <h4 class="title is-5">Personality</h4>
-                  {{#each this.characters.personality}}
+                  {{#each this.character.personality}}
                     <span class="tag is-primary is-medium">{{capitalize this.name}}</span>
                   {{/each}}
                 </div>
@@ -136,95 +148,9 @@
   </div>
   {{/if}}
 
-  <div class="table-container">
-    <table class="table is-fullwidth">
-      <thead>
-        <tr>
-          <th>Character</th>
-          <th>Class</th>
-          <th>Level</th>
-          <th>Player</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {{#each post.join_requests}}
-        {{#if (eq this.status "approved")}}
-        {{#if this.characters}}
-        <tr>
-          <td>
-            <a href="/characters/{{this.characters.id}}/{{this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
-          </td>
-          <td>{{this.characters.class}}</td>
-          <td>{{this.characters.level}}</td>
-          <td>
-            {{#if this.profiles.is_public}}
-            <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
-            {{else}}
-            {{this.profiles.name}}
-            {{/if}}
-          </td>
-          <td>
-            <button class="button is-small is-info" 
-              hx-get="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}"
-              hx-target="#character-details-{{this.characters.id}}"
-              hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.characters.id}}'), 'is-hidden');"
-              hx-swap="innerHTML">
-              Details
-            </button>
-          </td>
-        </tr>
-        <tr>
-          <td colspan="5">
-            <div id="character-details-{{this.characters.id}}" class="box is-hidden">
-              <div class="columns is-multiline">
-                <div class="column is-4">
-                  <h4 class="title is-5">Stats</h4>
-                  <div class="columns is-multiline">
-                    {{#each ../statList}}
-                    <div class="column is-6">
-                      <p><strong>{{capitalize this}}:</strong>
-                        {{#range 0 (lookup ../this.characters this)}}+ {{/range}}
-                      </p>
-                    </div>
-                    {{/each}}
-                  </div>
-                </div>
-                <div class="column is-4">
-                  <h4 class="title is-5">Abilities</h4>
-                  <div class="tags">
-                    {{#each this.characters.abilities}}
-                    <span class="tag is-primary is-medium">{{this.name}}</span>
-                    {{/each}}
-                  </div>
-                </div>
-                <div class="column is-4">
-                  <h4 class="title is-5">Gear</h4>
-                  <div class="tags">
-                    {{#each this.characters.gear}}
-                    <span class="tag is-gray is-medium">{{this.name}}</span>
-                    {{/each}}
-                  </div>
-                </div>
-              </div>
-              <div class="container">
-                <h4 class="title is-5">Personality</h4>
-                {{#each this.characters.personality}}
-                <span class="tag is-primary is-medium">{{capitalize this.name}}</span>
-                {{/each}}
-              </div>
-            </div>
-          </td>
-        </tr>
-        {{/if}}
-        {{/if}}
-        {{/each}}
-      </tbody>
-    </table>
-  </div>
-
   <div class="box mt-4">
     <h4 class="title is-5">Party Stats</h4>
+    {{#if (gt approvedCount 0)}}
     <div class="columns is-multiline">
       {{#each statList}}
       <div class="column is-3">
@@ -237,5 +163,8 @@
       </div>
       {{/each}}
     </div>
+    {{else}}
+    <p class="has-text-grey">No approved party members yet.</p>
+    {{/if}}
   </div>
 </div>
