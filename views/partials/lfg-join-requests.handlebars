@@ -16,19 +16,19 @@
         {{#each requests}}
         <tr>
           <td>
-            {{#if this.profiles.is_public}}
-            <a href="/profile/view/{{encodeURIComponentH this.profiles.name}}">{{this.profiles.name}}</a>
+            {{#if this.profile.is_public}}
+            <a href="/profile/view/{{encodeURIComponentH this.profile.name}}">{{this.profile.name}}</a>
             {{else}}
-            {{this.profiles.name}}
+            {{this.profile.name}}
             {{/if}}
           </td>
           <td>{{this.join_type}}</td>
           <td>
-            {{#if this.characters}}
-              {{#if this.characters.is_public}}
-              <a href="/characters/{{this.characters.id}}/{{encodeURIComponentH this.characters.name}}?lfg={{../post.id}}">{{this.characters.name}}</a>
+            {{#if this.character}}
+              {{#if this.character.is_public}}
+              <a href="/characters/{{this.character.id}}/{{encodeURIComponentH this.character.name}}?lfg={{../post.id}}">{{this.character.name}}</a>
               {{else}}
-              {{this.characters.name}}
+              {{this.character.name}}
               {{/if}}
             {{else}}
             -
@@ -59,7 +59,7 @@
   {{else}}
   <p>No join requests yet.</p>
   {{/if}}
-  <div class="buttons is-right">
+  {{!-- <div class="buttons is-right">
     <a href="/lfg" class="button is-light">Back</a>
-  </div>
+  </div> --}}
 </div>
