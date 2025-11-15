@@ -1,6 +1,6 @@
 {{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Class{{else}}Edit Class{{/if}}</h2>
-<form hx-{{#if isNew}}post{{else}}put{{/if}}="/classes{{#unless isNew}}/{{class.id}}{{/unless}}" hx-redirect="{{#if isNew}}/classes{{else}}/classes/{{class.id}}/{{encodeURIComponentH class.name}}{{/if}}">
+<form hx-{{#if isNew}}post{{else}}put{{/if}}="/classes{{#unless isNew}}/{{class.id}}{{/unless}}" hx-redirect="{{#if isNew}}/classes{{else}}/classes/{{class.id}}/{{encodeURIComponentH class.name}}{{/if}}" hx-encoding="multipart/form-data" enctype="multipart/form-data">
   <div class="field is-grouped">
     <label class="label">Rules Edition</label>
     <div class="control">
@@ -75,6 +75,25 @@
     <div class="control">
       <input class="input" type="text" name="image_url" value="{{class.image_url}}">
     </div>
+  </div>
+  <div class="field">
+    <label class="label">Class PDF (optional)</label>
+    <div class="control">
+      <input class="input" type="file" name="class_pdf" accept="application/pdf">
+    </div>
+    <p class="help">Upload a PDF to share full class rules. Max size 25MB.</p>
+    {{#if class.pdf_storage_path}}
+    <div class="mt-2">
+      <p class="help">
+        {{#if class.pdf_updated_at}}Last updated {{date_tz class.pdf_updated_at}}{{/if}}
+        · <a href="/classes/{{class.id}}/pdf" target="_blank" rel="noopener">Preview current PDF</a>
+      </p>
+      <label class="checkbox">
+        <input type="checkbox" name="remove_pdf">
+        Remove existing PDF
+      </label>
+    </div>
+    {{/if}}
   </div>
     <!-- classes have 3 abilities (name and description) -->
     {{#if (or isNew (eq class.abilities.length 0))}}

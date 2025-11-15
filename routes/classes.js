@@ -1,22 +1,40 @@
 const express = require('express');
+const multer = require('multer');
 const router = express.Router();
-const { 
-    getClasses, 
-    getClass, 
-    createClass, 
-    updateClass, 
-    duplicateClass, 
-    getUnlockedClasses, 
+const {
+    getClasses,
+    getClass,
+    createClass,
+    updateClass,
+    duplicateClass,
+    getUnlockedClasses,
     unlockClass,
-    isClassUnlocked, 
+    isClassUnlocked,
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,
     redeemUnlockCode,
     deleteClass,
-    getProfileById
+    getProfileById,
+    saveClassPdfMetadata,
+    storeClassPdf,
+    getSignedPdfUrl,
+    canViewClassPdf,
+    deletePdfObject,
+    CLASS_PDF_BUCKET
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
+
+const upload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 25 * 1024 * 1024 } // 25MB limit
+});
+
+const ensureArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (value === undefined || value === null) return [];
+    return [value];
+};
 
 // View Routes
 router.get('/', authOptional, async (req, res) => {
@@ -189,6 +207,55 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     });
 });
 
+router.get('/:id/pdf', authOptional, async (req, res) => {
+    const { profile, user } = res.locals;
+    const { id } = req.params;
+
+    const { data: classData, error } = await getClass(id);
+    if (error || !classData) {
+        return res.status(404).send('Class not found');
+    }
+
+    if (!classData.pdf_storage_path) {
+        return res.status(404).send('Class PDF not available');
+    }
+
+    const { data: canView, error: canViewError } = await canViewClassPdf(
+        {
+            userId: user?.id || null,
+            profileId: profile?.id || null,
+            role: profile?.role || null
+        },
+        classData
+    );
+
+    if (canViewError) {
+        return res.status(500).send(canViewError.message || 'Unable to verify access');
+    }
+
+    if (!canView) {
+        return res.status(403).send('You do not have access to this class PDF');
+    }
+
+    const { data: signedUrl, error: signedError } = await getSignedPdfUrl({
+        bucket: CLASS_PDF_BUCKET,
+        path: classData.pdf_storage_path,
+        expiresIn: 600
+    });
+
+    if (signedError || !signedUrl) {
+        return res.status(500).send('Failed to prepare class PDF');
+    }
+
+    return res.render('pdf-viewer', {
+        profile,
+        title: `${classData.name} PDF`,
+        viewerTitle: `${classData.name} Class PDF`,
+        pdfUrl: signedUrl,
+        backUrl: `/classes/${classData.id}/${classData.name || ''}`
+    });
+});
+
 router.get('/:id/:name?', authOptional, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
@@ -234,12 +301,31 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // optional
     }
 
+    let classPdfAccessible = false;
+    let classPdfError = null;
+    if (classData?.pdf_storage_path) {
+        const { data: canAccess, error: accessError } = await canViewClassPdf(
+            {
+                userId: res.locals.user?.id || null,
+                profileId: profile?.id || null,
+                role: profile?.role || null
+            },
+            classData
+        );
+        classPdfAccessible = !!canAccess;
+        if (accessError) {
+            classPdfError = accessError.message || 'Unable to determine PDF access';
+        }
+    }
+
     res.render('class-view', {
         profile,
         title: 'View Class',
         class: classData,
         unlocked,
         ownerProfile,
+        classPdfAccessible,
+        classPdfError,
         activeNav: 'classes',
         breadcrumbs: [
             { label: 'Classes', href: '/classes' },
@@ -338,7 +424,7 @@ router.post('/redeem', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/', isAuthenticated, async (req, res) => {
+router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
     const { profile } = res.locals;
     const profileId = profile?.id;
     if (!profileId) {
@@ -346,18 +432,26 @@ router.post('/', isAuthenticated, async (req, res) => {
     }
     
     // Process abilities and gear arrays
-    const abilities = req.body.ability_name ? req.body.ability_name.map((name, index) => ({
-        name: name,
-        description: req.body['ability_description'][index]
-    })) : [];
+    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
+    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
+    const abilities = abilityNames
+        .map((name, index) => ({
+            name: name,
+            description: abilityDescriptions[index] || ''
+        }))
+        .filter((ability) => ability.name);
     req.body.abilities = abilities;
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name ? req.body.gear_name.map((name, index) => ({
-        name: name,
-        description: req.body['gear_description'][index]
-    })) : [];
+    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
+    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
+    const gear = gearNames
+        .map((name, index) => ({
+            name: name,
+            description: gearDescriptions[index] || ''
+        }))
+        .filter((item) => item.name);
     req.body.gear = gear;
     delete req.body.gear_name;
     delete req.body.gear_description;
@@ -388,29 +482,53 @@ router.post('/', isAuthenticated, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
+
+    if (req.file) {
+        const { data: storageInfo, error: storageError } = await storeClassPdf(classData.id, req.file);
+        if (storageError) {
+            return res.status(500).json({ error: storageError.message || 'Failed to store class PDF' });
+        }
+        const { error: metaError } = await saveClassPdfMetadata(classData.id, storageInfo.path);
+        if (metaError) {
+            return res.status(500).json({ error: metaError.message || 'Failed to update class PDF metadata' });
+        }
+    }
+
     return res.header('HX-Location', `/classes/${classData.id}/${classData.name}`).send();
 });
 
-router.put('/:id', isAuthenticated, async (req, res) => {
+router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
     const { id } = req.params;
 
-    const abilities = req.body.ability_name ? req.body.ability_name.map((name, index) => ({
-        name: name,
-        description: req.body['ability_description'][index]
-    })) : [];
+    const { data: existingClass, error: fetchError } = await getClass(id);
+    if (fetchError || !existingClass) {
+        return res.status(404).json({ error: fetchError?.message || 'Class not found' });
+    }
+
+    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
+    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
+    const abilities = abilityNames
+        .map((name, index) => ({
+            name: name,
+            description: abilityDescriptions[index] || ''
+        }))
+        .filter((ability) => ability.name);
     req.body.abilities = abilities;
     delete req.body.ability_name;
     delete req.body.ability_description;
 
-    const gear = req.body.gear_name ? req.body.gear_name.map((name, index) => ({
-        name: name,
-        description: req.body['gear_description'][index]
-    })) : [];
+    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
+    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
+    const gear = gearNames
+        .map((name, index) => ({
+            name: name,
+            description: gearDescriptions[index] || ''
+        }))
+        .filter((item) => item.name);
     req.body.gear = gear;
     delete req.body.gear_name;
     delete req.body.gear_description;
 
-    console.log('req.body is', req.body);
     if (req.body.is_public === 'on') {
         req.body.is_public = true;
     } else if (req.body.is_public === undefined) {
@@ -431,10 +549,28 @@ router.put('/:id', isAuthenticated, async (req, res) => {
             delete req.body.status;
         }
     }
+    const removePdf = req.body.remove_pdf === 'on';
+    delete req.body.remove_pdf;
+
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
         return res.status(500).json({ error: error.message });
     }
+
+    if (req.file) {
+        const { data: storageInfo, error: storageError } = await storeClassPdf(id, req.file, { previousPath: existingClass.pdf_storage_path });
+        if (storageError) {
+            return res.status(500).json({ error: storageError.message || 'Failed to store class PDF' });
+        }
+        const { error: metaError } = await saveClassPdfMetadata(id, storageInfo.path);
+        if (metaError) {
+            return res.status(500).json({ error: metaError.message || 'Failed to update class PDF metadata' });
+        }
+    } else if (removePdf && existingClass.pdf_storage_path) {
+        await deletePdfObject({ bucket: CLASS_PDF_BUCKET, path: existingClass.pdf_storage_path });
+        await saveClassPdfMetadata(id, null);
+    }
+
     return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
 });
 

@@ -470,3 +470,41 @@ a.dropdown-item:hover {
   color: #0a0a0a !important;
 }
 
+/* PDF viewer layout */
+.pdf-viewer-container {
+  padding: 1.5rem;
+  background-color: #fdfdfd;
+}
+
+.pdf-viewer-toolbar {
+  gap: 0.25rem;
+}
+
+.pdf-viewer-canvas-wrapper {
+  overflow: auto;
+  max-height: 75vh;
+  border: 1px solid #dbdbdb;
+  background-color: #2f2f2f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.pdf-viewer-canvas {
+  display: block;
+  max-width: 100%;
+  box-shadow: 0 0 12px rgba(10, 10, 10, 0.4);
+  background-color: white;
+}
+
+.pdf-viewer-container .help {
+  text-align: center;
+}
+
+@media screen and (max-width: 768px) {
+  .pdf-viewer-canvas-wrapper {
+    max-height: 65vh;
+    padding: 0.5rem;
+  }
+}
