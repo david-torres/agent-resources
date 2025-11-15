@@ -4,6 +4,8 @@ const character = require('../models/character');
 const lfgPost = require('../models/lfg');
 const mission = require('../models/mission');
 const classModel = require('../models/class');
+const pdfModel = require('../models/pdf');
+const rulesModel = require('../models/rules');
 
 module.exports = {
   ...auth,
@@ -11,5 +13,7 @@ module.exports = {
   ...character,
   ...lfgPost,
   ...mission,
-  ...classModel
+  ...classModel,
+  ...pdfModel,
+  ...rulesModel
 };

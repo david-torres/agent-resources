@@ -176,6 +176,28 @@ const duplicateClass = async (baseId, newVersion) => {
     return { data, error };
 };
 
+const saveClassPdfMetadata = async (classId, storagePath) => {
+    if (!classId) {
+        return { data: null, error: new Error('Missing class id') };
+    }
+    const updates = {
+        pdf_storage_path: storagePath || null,
+        pdf_updated_at: storagePath ? new Date().toISOString() : null
+    };
+    const { data, error } = await supabase
+        .from('classes')
+        .update(updates)
+        .eq('id', classId)
+        .select()
+        .single();
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
 const getUnlockedClasses = async (userId) => {
     const { data, error } = await supabase
         .from('class_unlocks')
@@ -190,6 +212,33 @@ const getUnlockedClasses = async (userId) => {
         data: data.map(entry => entry.class),
         error 
     };
+};
+
+const canViewClassPdf = async (userContext = {}, classData = {}) => {
+    const { userId = null, profileId = null, role = null } = userContext;
+
+    if (!classData?.pdf_storage_path) {
+        return { data: false, error: null };
+    }
+
+    if (role === 'admin') {
+        return { data: true, error: null };
+    }
+
+    if (profileId && classData?.created_by && profileId === classData.created_by) {
+        return { data: true, error: null };
+    }
+
+    if (!userId) {
+        return { data: false, error: null };
+    }
+
+    const { data, error } = await isClassUnlocked(userId, classData.id);
+    if (error) {
+        return { data: false, error };
+    }
+
+    return { data: !!data, error: null };
 };
 
 const unlockClass = async (userId, classId) => {
@@ -300,5 +349,7 @@ module.exports = {
     listUnlockCodes,
     redeemUnlockCode,
     deleteClass,
-    buildClassContentLookupMaps
+    buildClassContentLookupMaps,
+    saveClassPdfMetadata,
+    canViewClassPdf
 };

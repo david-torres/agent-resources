@@ -1,0 +1,76 @@
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">Rules Library</h1>
+  </div>
+  <div class="level-right">
+    {{#if isAdmin}}
+    <a class="button is-primary" href="/rules/manage">
+      <span class="icon"><i class="fas fa-sliders"></i></span>
+      <span>Manage Rules PDFs</span>
+    </a>
+    {{/if}}
+  </div>
+</div>
+
+<div class="content">
+  <p>Access gated PDFs for active rules editions. Viewing requires an active unlock on your account.</p>
+</div>
+
+{{#if rules.length}}
+<div class="columns is-multiline">
+  {{#each rules}}
+  <div class="column is-full-tablet is-half-desktop">
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <p class="title is-4">{{this.title}}</p>
+          <p class="subtitle is-6">Edition: {{this.edition}}</p>
+          {{#if ../isAdmin}}
+          <p>
+            <span class="tag {{#if this.is_active}}is-success{{else}}is-danger{{/if}} is-light">
+              {{#if this.is_active}}Active{{else}}Inactive{{/if}}
+            </span>
+          </p>
+          {{/if}}
+          {{#if this.canView}}
+          <div class="notification is-success is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-unlock"></i></span>
+              <span>Access granted</span>
+            </span>
+            {{#if this.expires_at}}
+            <br>
+            <span class="is-size-7">Expires {{date_tz this.expires_at}}</span>
+            {{/if}}
+          </div>
+          <a class="button is-link is-fullwidth" href="/rules/{{this.id}}/view">
+            <span class="icon"><i class="fas fa-file-pdf"></i></span>
+            <span>Open PDF</span>
+          </a>
+          {{else if this.isUnlocked}}
+          <div class="notification is-warning is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-hourglass-end"></i></span>
+              <span>Access expired {{date_tz this.expires_at}}</span>
+            </span>
+          </div>
+          {{else}}
+          <div class="notification is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-lock"></i></span>
+              <span>Unlock required</span>
+            </span>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="notification is-light">
+  No rules PDFs available yet. Check back soon.
+</div>
+{{/if}}
+

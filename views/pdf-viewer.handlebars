@@ -1,0 +1,52 @@
+<div class="level">
+  <div class="level-left">
+    <div>
+      <p class="title is-3">{{viewerTitle}}</p>
+      <p class="subtitle is-6">PDF viewing is read-only. Download is intentionally disabled.</p>
+    </div>
+  </div>
+  <div class="level-right">
+    {{#if backUrl}}
+    <a class="button is-light" href="{{backUrl}}">
+      <span class="icon">
+        <i class="fas fa-arrow-left"></i>
+      </span>
+      <span>Back</span>
+    </a>
+    {{/if}}
+  </div>
+</div>
+
+<div id="pdfViewer"
+     class="pdf-viewer-container box"
+     data-pdf-url="{{pdfUrl}}">
+  <div class="pdf-viewer-toolbar buttons has-addons is-centered mb-4">
+    <button class="button is-small" data-action="prev" aria-label="Previous page">
+      <span class="icon"><i class="fas fa-chevron-left"></i></span>
+    </button>
+    <span class="button is-static is-small">
+      Page <span id="pdfCurrentPage">1</span> / <span id="pdfTotalPages">?</span>
+    </span>
+    <button class="button is-small" data-action="next" aria-label="Next page">
+      <span class="icon"><i class="fas fa-chevron-right"></i></span>
+    </button>
+    <span class="button is-static is-small is-hidden-mobile">|</span>
+    <button class="button is-small" data-action="zoom-out" aria-label="Zoom out">
+      <span class="icon"><i class="fas fa-minus"></i></span>
+    </button>
+    <button class="button is-small" data-action="zoom-in" aria-label="Zoom in">
+      <span class="icon"><i class="fas fa-plus"></i></span>
+    </button>
+  </div>
+  <div class="pdf-viewer-canvas-wrapper">
+    <canvas id="pdfCanvas" class="pdf-viewer-canvas"></canvas>
+  </div>
+  <p class="help is-centered mt-3">
+    Having trouble reading? Use the zoom buttons or rotate your device to landscape.
+  </p>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf.min.js" integrity="sha512-rMBgMplsZSS3EU2RRTQ0HT410WWOISW1AXHq37TY3CGOrBqkmVBumHKxvQJhSfMtYj69itV28DH5L3df+GCrYQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.2.67/pdf_viewer.min.js" integrity="sha512-U1NWUGBF43m7JcosokG/0vQh+5uBdWOlH+Doornfen0LE/iyWAwGGi49IjZVuAvOGfQ71fCex2o0tm/fTXwcrw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+<script src="/js/pdf-viewer.js" defer></script>
+

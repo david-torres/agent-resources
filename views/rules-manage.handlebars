@@ -1,0 +1,213 @@
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">Manage Rules PDFs</h1>
+  </div>
+  <div class="level-right">
+    <a class="button" href="/rules">
+      <span class="icon"><i class="fas fa-arrow-left"></i></span>
+      <span>Back to Library</span>
+    </a>
+  </div>
+</div>
+
+<div class="box">
+  <h2 class="title is-4">Add New Rules PDF</h2>
+  <form method="post" action="/rules" enctype="multipart/form-data">
+    <div class="columns">
+      <div class="column is-half">
+        <div class="field">
+          <label class="label">Title</label>
+          <div class="control">
+            <input class="input" type="text" name="title" placeholder="Ruleset Name" required>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-quarter">
+        <div class="field">
+          <label class="label">Edition</label>
+          <div class="control">
+            <input class="input" type="text" name="edition" placeholder="e.g. Advent v2" required>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-quarter">
+        <div class="field">
+          <label class="label">Status</label>
+          <label class="checkbox">
+            <input type="checkbox" name="is_active" checked>
+            Active
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">PDF File</label>
+      <div class="control">
+        <input class="input" type="file" name="rules_pdf" accept="application/pdf" required>
+      </div>
+      <p class="help">Max size 25MB. Upload the official PDF for this edition.</p>
+    </div>
+    <div class="field">
+      <button class="button is-primary" type="submit">
+        <span class="icon"><i class="fas fa-upload"></i></span>
+        <span>Upload</span>
+      </button>
+    </div>
+  </form>
+</div>
+
+{{#if rules.length}}
+  {{#each rules}}
+  <div class="box">
+    <div class="level">
+      <div class="level-left">
+        <div>
+          <p class="title is-4">{{this.title}}</p>
+          <p class="subtitle is-6">Edition: {{this.edition}}</p>
+        </div>
+      </div>
+      <div class="level-right">
+        <span class="tag {{#if this.is_active}}is-success{{else}}is-danger{{/if}} is-light">{{#if this.is_active}}Active{{else}}Inactive{{/if}}</span>
+      </div>
+    </div>
+
+    <form method="post" action="/rules/{{this.id}}" enctype="multipart/form-data" class="mb-5">
+      <div class="columns">
+        <div class="column is-one-third">
+          <div class="field">
+            <label class="label">Title</label>
+            <div class="control">
+              <input class="input" type="text" name="title" value="{{this.title}}" required>
+            </div>
+          </div>
+        </div>
+        <div class="column is-one-third">
+          <div class="field">
+            <label class="label">Edition</label>
+            <div class="control">
+              <input class="input" type="text" name="edition" value="{{this.edition}}" required>
+            </div>
+          </div>
+        </div>
+        <div class="column is-one-third">
+          <div class="field">
+            <label class="label">Active</label>
+            <label class="checkbox">
+              <input type="checkbox" name="is_active" {{#if this.is_active}}checked{{/if}}>
+              Visible in library
+            </label>
+          </div>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label">Replace PDF</label>
+        <div class="control">
+          <input class="input" type="file" name="rules_pdf" accept="application/pdf">
+        </div>
+        {{#if this.storage_path}}
+        <div class="mt-2">
+          <p class="help">
+            {{#if this.updated_at}}Last updated {{date_tz this.updated_at}}{{/if}}
+            · <a href="/rules/{{this.id}}/view" target="_blank" rel="noopener">Preview current PDF</a>
+          </p>
+          <label class="checkbox">
+            <input type="checkbox" name="remove_pdf">
+            Remove stored PDF
+          </label>
+        </div>
+        {{else}}
+        <p class="help">No PDF uploaded yet.</p>
+        {{/if}}
+      </div>
+      <div class="field">
+        <button class="button is-info" type="submit">
+          <span class="icon"><i class="fas fa-save"></i></span>
+          <span>Save Changes</span>
+        </button>
+      </div>
+    </form>
+
+    <div class="columns">
+      <div class="column is-half">
+        <h3 class="title is-5">Grant Access</h3>
+        <form method="post" action="/rules/{{this.id}}/unlocks">
+          <div class="field">
+            <label class="label">Profile Name</label>
+            <div class="control">
+              <input class="input" type="text" name="profile_name" placeholder="Exact profile name" required>
+            </div>
+            <p class="help">Alternatively, provide a profile ID below.</p>
+          </div>
+          <div class="field">
+            <label class="label">Profile ID (optional)</label>
+            <div class="control">
+              <input class="input" type="text" name="profile_id" placeholder="UUID">
+            </div>
+          </div>
+          <div class="field">
+            <label class="label">Expires At (optional)</label>
+            <div class="control">
+              <input class="input" type="datetime-local" name="expires_at">
+            </div>
+            <p class="help">Leave blank for no expiration.</p>
+          </div>
+          <div class="field">
+            <button class="button is-primary" type="submit">
+              <span class="icon"><i class="fas fa-key"></i></span>
+              <span>Grant Access</span>
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="column is-half">
+        <h3 class="title is-5">Current Unlocks</h3>
+        {{#if this.unlocks.length}}
+        <div class="table-container">
+          <table class="table is-fullwidth is-striped">
+            <thead>
+              <tr>
+                <th>Profile</th>
+                <th>Granted</th>
+                <th>Expires</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {{#each this.unlocks}}
+              <tr>
+                <td>{{#if this.profile}}{{this.profile.name}}{{else}}<em>Unknown</em>{{/if}}</td>
+                <td>{{date_tz this.unlocked_at}}</td>
+                <td>
+                  {{#if this.expires_at}}
+                    {{date_tz this.expires_at}}
+                  {{else}}
+                    <span class="tag is-success is-light">No expiration</span>
+                  {{/if}}
+                </td>
+                <td class="has-text-right">
+                  <button class="button is-small is-danger"
+                          hx-delete="/rules/{{../id}}/unlocks/{{this.user_id}}"
+                          hx-confirm="Revoke access for {{#if this.profile}}{{this.profile.name}}{{else}}this profile{{/if}}?"
+                          hx-target="closest tr"
+                          hx-swap="outerHTML">
+                    <span class="icon"><i class="fas fa-trash"></i></span>
+                  </button>
+                </td>
+              </tr>
+              {{/each}}
+            </tbody>
+          </table>
+        </div>
+        {{else}}
+        <p class="notification is-light">No unlocks yet.</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+  {{/each}}
+{{else}}
+<div class="notification is-light">
+  No rules PDFs found. Upload one above.
+</div>
+{{/if}}
+
