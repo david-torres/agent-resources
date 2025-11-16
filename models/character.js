@@ -122,7 +122,10 @@ const createCharacter = async (characterReq, profile) => {
 
   // set class gear
   if (classGear) {
-    const { data: gearSet, error: gearSetError } = await setCharacterGear(character.id, classGear);
+    const { data: gearSet, error: gearSetError } = await setCharacterGear(
+      character.id,
+      classGear
+    );
     if (gearSetError) {
       console.error(gearSetError);
       return { data: null, error: gearSetError };
@@ -213,7 +216,10 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // update gear
   if (classGear) {
-    const { data: gearSet, error: gearSetError } = await setCharacterGear(character.id, classGear);
+    const { data: gearSet, error: gearSetError } = await setCharacterGear(
+      character.id,
+      classGear
+    );
     if (gearSetError) {
       console.error(gearSetError);
       return { data: null, error: gearSetError };
@@ -310,21 +316,65 @@ const getCharacterGear = async (id) => {
   return { data: mergedGear, error: null };
 }
 
+const normalizeGearItems = (gear) => {
+  if (!Array.isArray(gear)) {
+    return [];
+  }
+  return gear
+    .map(item => {
+      if (!item) return null;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        return trimmed ? { name: trimmed } : null;
+      }
+      if (typeof item === 'object' && typeof item.name === 'string') {
+        const trimmed = item.name.trim();
+        if (!trimmed) return null;
+        return {
+          ...item,
+          name: trimmed
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
 const setCharacterGear = async (id, gear) => {
   const { data, error } = await supabase.from('class_gear').delete().eq('character_id', id);
   if (error) {
     return { data: null, error };
   }
 
+  const normalizedGear = normalizeGearItems(gear);
+  if (normalizedGear.length === 0) {
+    return { data: [], error: null };
+  }
+
   const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-  const gearData = gear.map(itemName => {
-    const record = { character_id: id, name: itemName };
-    const clsId = gearNameToClassId.get(itemName);
-    if (clsId) record.class_id = clsId;
-    const desc = gearNameToDescription.get(itemName);
-    if (desc) record.description = desc;
-    return record;
-  });
+  const gearData = normalizedGear
+    .map(item => {
+      const record = {
+        character_id: id,
+        name: item.name
+      };
+      const clsId = item.class_id ?? gearNameToClassId.get(item.name);
+      if (!clsId) {
+        return null;
+      }
+      record.class_id = clsId;
+      const desc = item.description ?? gearNameToDescription.get(item.name);
+      if (desc) {
+        record.description = desc;
+      }
+      return record;
+    })
+    .filter(Boolean);
+
+  if (gearData.length === 0) {
+    return { data: [], error: null };
+  }
+
   const { data: newGear, error: newGearError } = await supabase.from('class_gear').insert(gearData);
   if (newGearError) {
     return { data: null, error: newGearError };
@@ -383,21 +433,62 @@ const getCharacterAbilities = async (id) => {
   return { data: mergedAbilities, error: null };
 }
 
+const normalizeAbilityItems = (abilities) => {
+  if (!Array.isArray(abilities)) {
+    return [];
+  }
+  return abilities
+    .map(item => {
+      if (!item) return null;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        return trimmed ? { name: trimmed } : null;
+      }
+      if (typeof item === 'object' && typeof item.name === 'string') {
+        const trimmed = item.name.trim();
+        if (!trimmed) return null;
+        return {
+          ...item,
+          name: trimmed
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
 const setCharacterAbilities = async (id, abilities) => {
   const { data, error } = await supabase.from('class_abilities').delete().eq('character_id', id);
   if (error) {
     return { data: null, error };
   }
 
+  const normalizedAbilities = normalizeAbilityItems(abilities);
+  if (normalizedAbilities.length === 0) {
+    return { data: [], error: null };
+  }
+
   const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-  const abilitiesData = abilities.map(abilityName => {
-    const record = { character_id: id, name: abilityName };
-    const clsId = abilityNameToClassId.get(abilityName);
-    if (clsId) record.class_id = clsId;
-    const desc = abilityNameToDescription.get(abilityName);
-    if (desc) record.description = desc;
-    return record;
-  });
+  const abilitiesData = normalizedAbilities
+    .map(item => {
+      const record = { character_id: id, name: item.name };
+      const clsId = item.class_id ?? abilityNameToClassId.get(item.name);
+      if (!clsId) {
+        return null;
+      }
+      record.class_id = clsId;
+      const desc = item.description ?? abilityNameToDescription.get(item.name);
+      if (desc) {
+        record.description = desc;
+      }
+      return record;
+    })
+    .filter(Boolean);
+
+  if (abilitiesData.length === 0) {
+    return { data: [], error: null };
+  }
+
   const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
   if (newAbilitiesError) {
     return { data: null, error: newAbilitiesError };

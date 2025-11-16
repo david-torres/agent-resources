@@ -2,6 +2,7 @@ const z = require("zod");
 const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
 const { createCharacter } = require('../models/character');
+const { getClasses } = require('../models/class');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classGearList, classAbilityList, personalityMap } = require('../util/enclave-consts');
 
 const openai = new OpenAIChatApi(
@@ -44,6 +45,46 @@ const schema = z.object({
   perks: z.string().describe("The character's ability perks"),
 });
 
+const resolveClassIdByName = async (className) => {
+  if (!className) {
+    return null;
+  }
+
+  const attempt = async (filters = {}) => {
+    const { data } = await getClasses({ name: className, ...filters });
+    return Array.isArray(data) && data.length > 0 ? data[0] : null;
+  };
+
+  return (await attempt()) || (await attempt({ is_public: true })) || null;
+};
+
+const formatClassContent = (items, classId) => {
+  if (!Array.isArray(items) || !classId) {
+    return [];
+  }
+
+  return items
+    .map(item => {
+      if (!item) return null;
+      if (typeof item === 'string') {
+        const trimmed = item.trim();
+        if (!trimmed) return null;
+        return { name: trimmed, class_id: classId };
+      }
+      if (typeof item === 'object' && typeof item.name === 'string') {
+        const trimmed = item.name.trim();
+        if (!trimmed) return null;
+        return {
+          ...item,
+          name: trimmed,
+          class_id: item.class_id ?? classId,
+        };
+      }
+      return null;
+    })
+    .filter(Boolean);
+};
+
 async function processCharacterImport(inputText, profile) {
   const prompt = `Parse the following character sheet and try to structure the data following the provided JSON schema info.
 
@@ -60,7 +101,14 @@ JSON output:`;
       creator_id: profile.id,
       is_public: false,
     };
-    characterData.abilities = classAbilityList[characterData.class];
+    const classDefinition = await resolveClassIdByName(characterData.class);
+    if (!classDefinition?.id) {
+      throw new Error(`Unknown class "${characterData.class}"`);
+    }
+    characterData.class_id = classDefinition.id;
+    const abilityNames = classAbilityList[characterData.class] || [];
+    characterData.abilities = formatClassContent(abilityNames, classDefinition.id);
+    characterData.gear = formatClassContent(characterData.gear, classDefinition.id);
     const { data: character, error } = await createCharacter(characterData, profile);
     if (error) throw new Error(error.message);
     return character;
