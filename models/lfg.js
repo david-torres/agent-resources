@@ -99,12 +99,13 @@ const getLfgPost = async (id) => {
     .from('lfg_join_requests')
     .select(`
       *,
-      profile:profile_id (name),
+      profile:profile_id (id, name, is_public),
       character:character_id (
         id,
         name,
         class,
         level,
+        is_public,
         ${statList.join(',')},
         personality:traits(name),
         abilities:class_abilities(name),

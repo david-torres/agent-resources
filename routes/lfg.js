@@ -84,8 +84,8 @@ router.get('/:id', authOptional, async (req, res) => {
       return res.header('HX-Push-Url', `/lfg/${req.params.id}`);
     }
     const party = (data.join_requests || [])
-      .filter((item) => item.status === 'approved' && item.characters)
-      .map((item) => item.characters);
+      .filter((item) => item.status === 'approved' && item.character)
+      .map((item) => item.character);
     const approvedCount = party.length;
     const partyStats = party.reduce((acc, item) => {
       statList.forEach(stat => {
