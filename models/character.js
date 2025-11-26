@@ -341,38 +341,50 @@ const normalizeGearItems = (gear) => {
 };
 
 const setCharacterGear = async (id, gear) => {
-  const { data, error } = await supabase.from('class_gear').delete().eq('character_id', id);
-  if (error) {
-    return { data: null, error };
-  }
-
   const normalizedGear = normalizeGearItems(gear);
+
   if (normalizedGear.length === 0) {
+    const { error } = await supabase.from('class_gear').delete().eq('character_id', id);
+    if (error) {
+      return { data: null, error };
+    }
     return { data: [], error: null };
   }
 
   const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-  const gearData = normalizedGear
-    .map(item => {
-      const record = {
-        character_id: id,
-        name: item.name
-      };
-      const clsId = item.class_id ?? gearNameToClassId.get(item.name);
-      if (!clsId) {
-        return null;
-      }
-      record.class_id = clsId;
-      const desc = item.description ?? gearNameToDescription.get(item.name);
-      if (desc) {
-        record.description = desc;
-      }
-      return record;
-    })
-    .filter(Boolean);
+  const gearData = [];
+
+  for (const item of normalizedGear) {
+    const itemClassId = item.class_id;
+    const lookupClassId = gearNameToClassId.get(item.name);
+    const clsId = itemClassId ?? lookupClassId;
+
+    if (!clsId) {
+      const errorMessage = `[setCharacterGear] Missing class_id for gear item "${item.name}"`;
+      console.error(errorMessage, { characterId: id, item });
+      return { data: null, error: errorMessage };
+    }
+
+    const record = {
+      character_id: id,
+      name: item.name,
+      class_id: clsId
+    };
+
+    const desc = item.description ?? gearNameToDescription.get(item.name);
+    if (desc) {
+      record.description = desc;
+    }
+    gearData.push(record);
+  }
 
   if (gearData.length === 0) {
     return { data: [], error: null };
+  }
+
+  const { error: deleteError } = await supabase.from('class_gear').delete().eq('character_id', id);
+  if (deleteError) {
+    return { data: null, error: deleteError };
   }
 
   const { data: newGear, error: newGearError } = await supabase.from('class_gear').insert(gearData);
@@ -458,35 +470,45 @@ const normalizeAbilityItems = (abilities) => {
 };
 
 const setCharacterAbilities = async (id, abilities) => {
-  const { data, error } = await supabase.from('class_abilities').delete().eq('character_id', id);
-  if (error) {
-    return { data: null, error };
-  }
-
   const normalizedAbilities = normalizeAbilityItems(abilities);
+
   if (normalizedAbilities.length === 0) {
+    const { error } = await supabase.from('class_abilities').delete().eq('character_id', id);
+    if (error) {
+      return { data: null, error };
+    }
     return { data: [], error: null };
   }
 
   const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-  const abilitiesData = normalizedAbilities
-    .map(item => {
-      const record = { character_id: id, name: item.name };
-      const clsId = item.class_id ?? abilityNameToClassId.get(item.name);
-      if (!clsId) {
-        return null;
-      }
-      record.class_id = clsId;
-      const desc = item.description ?? abilityNameToDescription.get(item.name);
-      if (desc) {
-        record.description = desc;
-      }
-      return record;
-    })
-    .filter(Boolean);
+  const abilitiesData = [];
+
+  for (const item of normalizedAbilities) {
+    const itemClassId = item.class_id;
+    const lookupClassId = abilityNameToClassId.get(item.name);
+    const clsId = itemClassId ?? lookupClassId;
+
+    if (!clsId) {
+      const errorMessage = `[setCharacterAbilities] Missing class_id for ability "${item.name}"`;
+      console.error(errorMessage, { characterId: id, item });
+      return { data: null, error: errorMessage };
+    }
+
+    const record = { character_id: id, name: item.name, class_id: clsId };
+    const desc = item.description ?? abilityNameToDescription.get(item.name);
+    if (desc) {
+      record.description = desc;
+    }
+    abilitiesData.push(record);
+  }
 
   if (abilitiesData.length === 0) {
     return { data: [], error: null };
+  }
+
+  const { error: deleteError } = await supabase.from('class_abilities').delete().eq('character_id', id);
+  if (deleteError) {
+    return { data: null, error: deleteError };
   }
 
   const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
