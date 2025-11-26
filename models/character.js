@@ -124,8 +124,7 @@ const createCharacter = async (characterReq, profile) => {
   if (classGear) {
     const { data: gearSet, error: gearSetError } = await setCharacterGear(
       character.id,
-      classGear,
-      character.class_id
+      classGear
     );
     if (gearSetError) {
       console.error(gearSetError);
@@ -135,7 +134,7 @@ const createCharacter = async (characterReq, profile) => {
 
   // set class abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities, character.class_id);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
@@ -219,8 +218,7 @@ const updateCharacter = async (id, characterReq, profile) => {
   if (classGear) {
     const { data: gearSet, error: gearSetError } = await setCharacterGear(
       character.id,
-      classGear,
-      character.class_id
+      classGear
     );
     if (gearSetError) {
       console.error(gearSetError);
@@ -230,7 +228,7 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // update abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities, character.class_id);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
@@ -342,52 +340,51 @@ const normalizeGearItems = (gear) => {
     .filter(Boolean);
 };
 
-const setCharacterGear = async (id, gear, fallbackClassId = null) => {
-  const { data, error } = await supabase.from('class_gear').delete().eq('character_id', id);
-  if (error) {
-    return { data: null, error };
-  }
-
+const setCharacterGear = async (id, gear) => {
   const normalizedGear = normalizeGearItems(gear);
+
   if (normalizedGear.length === 0) {
+    const { error } = await supabase.from('class_gear').delete().eq('character_id', id);
+    if (error) {
+      return { data: null, error };
+    }
     return { data: [], error: null };
   }
 
   const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-  const gearData = normalizedGear.map(item => {
-    const record = {
-      character_id: id,
-      name: item.name
-    };
+  const gearData = [];
+
+  for (const item of normalizedGear) {
     const itemClassId = item.class_id;
     const lookupClassId = gearNameToClassId.get(item.name);
     const clsId = itemClassId ?? lookupClassId;
-    if (!itemClassId && !lookupClassId) {
-      console.warn('[setCharacterGear] Missing class_id on gear item, using fallback', {
-        characterId: id,
-        gearName: item.name,
-        fallbackClassId,
-        item
-      });
-    } else if (!clsId) {
-      console.warn('[setCharacterGear] No class_id available for gear item', {
-        characterId: id,
-        gearName: item.name,
-        item
-      });
+
+    if (!clsId) {
+      const errorMessage = `[setCharacterGear] Missing class_id for gear item "${item.name}"`;
+      console.error(errorMessage, { characterId: id, item });
+      return { data: null, error: errorMessage };
     }
-    if (clsId) {
-      record.class_id = clsId;
-      const desc = item.description ?? gearNameToDescription.get(item.name);
-      if (desc) {
-        record.description = desc;
-      }
-      return record;
-    })
-    .filter(Boolean);
+
+    const record = {
+      character_id: id,
+      name: item.name,
+      class_id: clsId
+    };
+
+    const desc = item.description ?? gearNameToDescription.get(item.name);
+    if (desc) {
+      record.description = desc;
+    }
+    gearData.push(record);
+  }
 
   if (gearData.length === 0) {
     return { data: [], error: null };
+  }
+
+  const { error: deleteError } = await supabase.from('class_gear').delete().eq('character_id', id);
+  if (deleteError) {
+    return { data: null, error: deleteError };
   }
 
   const { data: newGear, error: newGearError } = await supabase.from('class_gear').insert(gearData);
@@ -472,49 +469,46 @@ const normalizeAbilityItems = (abilities) => {
     .filter(Boolean);
 };
 
-const setCharacterAbilities = async (id, abilities, fallbackClassId = null) => {
-  const { data, error } = await supabase.from('class_abilities').delete().eq('character_id', id);
-  if (error) {
-    return { data: null, error };
-  }
-
+const setCharacterAbilities = async (id, abilities) => {
   const normalizedAbilities = normalizeAbilityItems(abilities);
+
   if (normalizedAbilities.length === 0) {
+    const { error } = await supabase.from('class_abilities').delete().eq('character_id', id);
+    if (error) {
+      return { data: null, error };
+    }
     return { data: [], error: null };
   }
 
   const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-  const abilitiesData = normalizedAbilities.map(item => {
-    const record = { character_id: id, name: item.name };
+  const abilitiesData = [];
+
+  for (const item of normalizedAbilities) {
     const itemClassId = item.class_id;
     const lookupClassId = abilityNameToClassId.get(item.name);
     const clsId = itemClassId ?? lookupClassId;
-    if (!itemClassId && !lookupClassId) {
-      console.warn('[setCharacterAbilities] Missing class_id on ability item, using fallback', {
-        characterId: id,
-        abilityName: item.name,
-        fallbackClassId,
-        item
-      });
-    } else if (!clsId) {
-      console.warn('[setCharacterAbilities] No class_id available for ability item', {
-        characterId: id,
-        abilityName: item.name,
-        item
-      });
+
+    if (!clsId) {
+      const errorMessage = `[setCharacterAbilities] Missing class_id for ability "${item.name}"`;
+      console.error(errorMessage, { characterId: id, item });
+      return { data: null, error: errorMessage };
     }
-    if (clsId) {
-      record.class_id = clsId;
-      const desc = item.description ?? abilityNameToDescription.get(item.name);
-      if (desc) {
-        record.description = desc;
-      }
-      return record;
-    })
-    .filter(Boolean);
+
+    const record = { character_id: id, name: item.name, class_id: clsId };
+    const desc = item.description ?? abilityNameToDescription.get(item.name);
+    if (desc) {
+      record.description = desc;
+    }
+    abilitiesData.push(record);
+  }
 
   if (abilitiesData.length === 0) {
     return { data: [], error: null };
+  }
+
+  const { error: deleteError } = await supabase.from('class_abilities').delete().eq('character_id', id);
+  if (deleteError) {
+    return { data: null, error: deleteError };
   }
 
   const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
