@@ -263,7 +263,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             const { data: lfgPost } = await getLfgPost(req.query.lfg);
             if (lfgPost && lfgPost.host_id === profile.id) {
               hostingViaLfg = Array.isArray(lfgPost.join_requests) && lfgPost.join_requests.some(r =>
-                r && r.status === 'approved' && r.characters && r.characters.id === characterId
+                r && r.status === 'approved' && r.character && r.character.id === characterId
               );
             }
           } catch (_) { /* ignore; hostingViaLfg remains false */ }
