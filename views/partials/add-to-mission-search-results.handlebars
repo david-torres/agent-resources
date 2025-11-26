@@ -8,6 +8,9 @@
       hx-target="#selectedCharactersList"
       hx-swap="beforeend">
       {{this.name}}
+      {{#if this.is_deceased}}
+      <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+      {{/if}}
     </button>
   </li>
   {{/each}}

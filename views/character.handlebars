@@ -1,4 +1,12 @@
-<h1 class="title is-2">{{character.name}}</h1>
+<h1 class="title is-2">
+  {{character.name}}
+  {{#if character.is_deceased}}
+  <span class="tag is-dark is-medium ml-2">
+    <span class="icon"><i class="fas fa-skull"></i></span>
+    <span>Deceased</span>
+  </span>
+  {{/if}}
+</h1>
 <div class="columns">
   <div class="column is-one-third">
     {{#if character.image_url}}
@@ -97,6 +105,14 @@
       <div class="control">
         <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
       </div>
+      {{#unless character.is_deceased}}
+      <div class="control">
+        <button class="button is-dark" onclick="document.getElementById('deceased-modal').classList.add('is-active')">
+          <span class="icon"><i class="fas fa-skull"></i></span>
+          <span>Mark as Deceased</span>
+        </button>
+      </div>
+      {{/unless}}
     </div>
     {{/if}}
     {{/if}}
@@ -198,3 +214,48 @@
 
   </div>
 </div>
+
+{{#if profile}}
+{{#if (eq character.creator_id profile.id)}}
+{{#unless character.is_deceased}}
+<div id="deceased-modal" class="modal">
+  <div class="modal-background" onclick="document.getElementById('deceased-modal').classList.remove('is-active')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Mark Character as Deceased</p>
+      <button class="delete" aria-label="close" onclick="document.getElementById('deceased-modal').classList.remove('is-active')"></button>
+    </header>
+    <form hx-post="/characters/{{character.id}}/deceased" hx-indicator="#deceased-submit">
+      <section class="modal-card-body">
+        <div class="notification is-danger is-light">
+          <p><strong>Warning:</strong> This action is <strong>permanent</strong> and cannot be undone.</p>
+          <p class="mt-2">Marking a character as deceased will display a permanent indicator on their profile.</p>
+        </div>
+        <div class="field">
+          <label class="label">To confirm, type the character's name: <strong>{{character.name}}</strong></label>
+          <div class="control">
+            <input 
+              class="input" 
+              type="text" 
+              name="confirmName" 
+              placeholder="Type character name to confirm"
+              autocomplete="off"
+              oninput="document.getElementById('deceased-submit').disabled = (this.value !== '{{character.name}}')"
+              required
+            >
+          </div>
+        </div>
+      </section>
+      <footer class="modal-card-foot">
+        <button type="button" class="button" onclick="document.getElementById('deceased-modal').classList.remove('is-active')">Cancel</button>
+        <button id="deceased-submit" type="submit" class="button is-dark" disabled>
+          <span class="icon"><i class="fas fa-skull"></i></span>
+          <span>Confirm Death</span>
+        </button>
+      </footer>
+    </form>
+  </div>
+</div>
+{{/unless}}
+{{/if}}
+{{/if}}
