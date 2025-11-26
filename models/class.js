@@ -259,9 +259,10 @@ const buildClassContentLookupMaps = async () => {
         if (Array.isArray(cls?.gear)) {
           for (const g of cls.gear) {
             if (g && g.name && cls.id) {
-              gearNameToClassId.set(g.name, cls.id);
+              const gearName = g.name.trim();
+              gearNameToClassId.set(gearName, cls.id);
               if (g.description) {
-                gearNameToDescription.set(g.name, g.description);
+                gearNameToDescription.set(gearName, g.description);
               }
             }
           }
@@ -269,9 +270,10 @@ const buildClassContentLookupMaps = async () => {
         if (Array.isArray(cls?.abilities)) {
           for (const a of cls.abilities) {
             if (a && a.name && cls.id) {
-              abilityNameToClassId.set(a.name, cls.id);
+              const abilityName = a.name.trim();
+              abilityNameToClassId.set(abilityName, cls.id);
               if (a.description) {
-                abilityNameToDescription.set(a.name, a.description);
+                abilityNameToDescription.set(abilityName, a.description);
               }
             }
           }

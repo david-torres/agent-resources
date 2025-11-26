@@ -124,7 +124,8 @@ const createCharacter = async (characterReq, profile) => {
   if (classGear) {
     const { data: gearSet, error: gearSetError } = await setCharacterGear(
       character.id,
-      classGear
+      classGear,
+      character.class_id
     );
     if (gearSetError) {
       console.error(gearSetError);
@@ -134,7 +135,7 @@ const createCharacter = async (characterReq, profile) => {
 
   // set class abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities, character.class_id);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
@@ -218,7 +219,8 @@ const updateCharacter = async (id, characterReq, profile) => {
   if (classGear) {
     const { data: gearSet, error: gearSetError } = await setCharacterGear(
       character.id,
-      classGear
+      classGear,
+      character.class_id
     );
     if (gearSetError) {
       console.error(gearSetError);
@@ -228,7 +230,7 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // update abilities
   if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities, character.class_id);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
@@ -340,7 +342,7 @@ const normalizeGearItems = (gear) => {
     .filter(Boolean);
 };
 
-const setCharacterGear = async (id, gear) => {
+const setCharacterGear = async (id, gear, fallbackClassId = null) => {
   const { data, error } = await supabase.from('class_gear').delete().eq('character_id', id);
   if (error) {
     return { data: null, error };
@@ -352,16 +354,29 @@ const setCharacterGear = async (id, gear) => {
   }
 
   const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-  const gearData = normalizedGear
-    .map(item => {
-      const record = {
-        character_id: id,
-        name: item.name
-      };
-      const clsId = item.class_id ?? gearNameToClassId.get(item.name);
-      if (!clsId) {
-        return null;
-      }
+  const gearData = normalizedGear.map(item => {
+    const record = {
+      character_id: id,
+      name: item.name
+    };
+    const itemClassId = item.class_id;
+    const lookupClassId = gearNameToClassId.get(item.name);
+    const clsId = itemClassId ?? lookupClassId;
+    if (!itemClassId && !lookupClassId) {
+      console.warn('[setCharacterGear] Missing class_id on gear item, using fallback', {
+        characterId: id,
+        gearName: item.name,
+        fallbackClassId,
+        item
+      });
+    } else if (!clsId) {
+      console.warn('[setCharacterGear] No class_id available for gear item', {
+        characterId: id,
+        gearName: item.name,
+        item
+      });
+    }
+    if (clsId) {
       record.class_id = clsId;
       const desc = item.description ?? gearNameToDescription.get(item.name);
       if (desc) {
@@ -457,7 +472,7 @@ const normalizeAbilityItems = (abilities) => {
     .filter(Boolean);
 };
 
-const setCharacterAbilities = async (id, abilities) => {
+const setCharacterAbilities = async (id, abilities, fallbackClassId = null) => {
   const { data, error } = await supabase.from('class_abilities').delete().eq('character_id', id);
   if (error) {
     return { data: null, error };
@@ -469,13 +484,26 @@ const setCharacterAbilities = async (id, abilities) => {
   }
 
   const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-  const abilitiesData = normalizedAbilities
-    .map(item => {
-      const record = { character_id: id, name: item.name };
-      const clsId = item.class_id ?? abilityNameToClassId.get(item.name);
-      if (!clsId) {
-        return null;
-      }
+  const abilitiesData = normalizedAbilities.map(item => {
+    const record = { character_id: id, name: item.name };
+    const itemClassId = item.class_id;
+    const lookupClassId = abilityNameToClassId.get(item.name);
+    const clsId = itemClassId ?? lookupClassId;
+    if (!itemClassId && !lookupClassId) {
+      console.warn('[setCharacterAbilities] Missing class_id on ability item, using fallback', {
+        characterId: id,
+        abilityName: item.name,
+        fallbackClassId,
+        item
+      });
+    } else if (!clsId) {
+      console.warn('[setCharacterAbilities] No class_id available for ability item', {
+        characterId: id,
+        abilityName: item.name,
+        item
+      });
+    }
+    if (clsId) {
       record.class_id = clsId;
       const desc = item.description ?? abilityNameToDescription.get(item.name);
       if (desc) {
