@@ -230,6 +230,12 @@
     <button class="button is-danger" hx-delete="/characters/{{character.id}}"
       hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters" hx-indicator="this">Delete
       Character</button>
+    {{#unless character.is_deceased}}
+    <button type="button" class="button is-dark" onclick="document.getElementById('deceased-modal').classList.add('is-active')">
+      <span class="icon"><i class="fas fa-skull"></i></span>
+      <span>Mark as Deceased</span>
+    </button>
+    {{/unless}}
     {{/unless}}
     <button class="button {{#if isNew}}is-primary{{else}}is-warning{{/if}}" type="submit" hx-indicator="this">{{#if
       isNew}}Create{{else}}Update{{/if}} Character</button>
@@ -241,3 +247,47 @@
     <a href="/characters" class="button is-light">Cancel</a>
   </div>
 </div>
+
+{{#unless isNew}}
+{{#unless character.is_deceased}}
+<div id="deceased-modal" class="modal">
+  <div class="modal-background" onclick="document.getElementById('deceased-modal').classList.remove('is-active')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Mark Character as Deceased</p>
+      <button class="delete" aria-label="close" onclick="document.getElementById('deceased-modal').classList.remove('is-active')"></button>
+    </header>
+    <form hx-post="/characters/{{character.id}}/deceased" hx-indicator="#deceased-submit">
+      <section class="modal-card-body">
+        <div class="notification is-danger is-light">
+          <p><strong>Warning:</strong> This action is <strong>permanent</strong> and cannot be undone.</p>
+          <p class="mt-2">Marking a character as deceased will display a permanent indicator on their profile.</p>
+        </div>
+        <div class="field">
+          <label class="label">To confirm, type the character's name: <strong>{{character.name}}</strong></label>
+          <div class="control">
+            <input 
+              class="input" 
+              type="text" 
+              name="confirmName" 
+              placeholder="Type character name to confirm"
+              autocomplete="off"
+              data-confirm-name="{{character.name}}"
+              oninput="document.getElementById('deceased-submit').disabled = (this.value !== this.dataset.confirmName)"
+              required
+            >
+          </div>
+        </div>
+      </section>
+      <footer class="modal-card-foot">
+        <button type="button" class="button" onclick="document.getElementById('deceased-modal').classList.remove('is-active')">Cancel</button>
+        <button id="deceased-submit" type="submit" class="button is-dark" disabled>
+          <span class="icon"><i class="fas fa-skull"></i></span>
+          <span>Confirm Death</span>
+        </button>
+      </footer>
+    </form>
+  </div>
+</div>
+{{/unless}}
+{{/unless}}
