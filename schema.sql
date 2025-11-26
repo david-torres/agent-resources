@@ -46,7 +46,8 @@ CREATE TABLE characters (
   flavor TEXT NULL,
   ideas TEXT NULL,
   background TEXT NULL,
-  perks TEXT NULL;
+  perks TEXT NULL,
+  private_notes TEXT NULL
 );
 
 -- missions table

@@ -212,6 +212,26 @@
       </div>
     </div>
 
+    {{#if profile}}
+    {{#if (eq character.creator_id profile.id)}}
+    <div class="box">
+      <h3 class="title is-4">
+        <span class="icon-text">
+          <span class="icon"><i class="fas fa-lock"></i></span>
+          <span>Private Notes</span>
+        </span>
+      </h3>
+      <div class="content">
+        {{#if character.private_notes}}
+        {{{markdown character.private_notes}}}
+        {{else}}
+        <p class="has-text-grey-light is-italic">No private notes yet.</p>
+        {{/if}}
+      </div>
+    </div>
+    {{/if}}
+    {{/if}}
+
   </div>
 </div>
 
