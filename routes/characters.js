@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getProfileById } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -344,6 +344,31 @@ router.delete('/:id/:name?', isAuthenticated, async (req, res) => {
   } else {
     return res.header('HX-Location', '/characters').send();
   }
+});
+
+router.post('/:id/deceased', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const { confirmName } = req.body;
+
+  // Get the character to verify ownership and name
+  const { data: character, error: getError } = await getCharacter(id);
+  if (getError) {
+    return res.status(400).send(getError.message || getError);
+  }
+
+  // Verify the confirmation name matches
+  if (!confirmName || confirmName.trim() !== character.name) {
+    return res.status(400).send('Character name does not match. Please type the exact name to confirm.');
+  }
+
+  // Mark as deceased
+  const { data, error } = await markCharacterDeceased(id, profile);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
 });
 
 module.exports = router;

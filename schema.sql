@@ -20,6 +20,8 @@ CREATE TABLE characters (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   creator_id UUID NOT NULL REFERENCES profiles(id),
   is_public BOOLEAN DEFAULT FALSE,
+  is_deceased BOOLEAN NOT NULL DEFAULT FALSE,
+  hide_from_search BOOLEAN NOT NULL DEFAULT FALSE,
   name TEXT NOT NULL,
   class TEXT NOT NULL,
   vitality INTEGER NOT NULL,

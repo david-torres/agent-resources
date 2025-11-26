@@ -105,6 +105,13 @@ const createCharacter = async (characterReq, profile) => {
     characterReq.is_public = false;
   }
 
+  // handle hide_from_search
+  if (characterReq.hide_from_search == 'on') {
+    characterReq.hide_from_search = true;
+  } else {
+    characterReq.hide_from_search = false;
+  }
+
   // create character
   const { data, error } = await supabase.from('characters').insert(characterReq).select();
   if (error) {
@@ -196,6 +203,13 @@ const updateCharacter = async (id, characterReq, profile) => {
     characterReq.is_public = true;
   } else {
     characterReq.is_public = false;
+  }
+
+  // handle hide_from_search
+  if (characterReq.hide_from_search == 'on') {
+    characterReq.hide_from_search = true;
+  } else {
+    characterReq.hide_from_search = false;
   }
 
   // update character
@@ -589,12 +603,34 @@ const getCharacterAllMissions = async (characterId) => {
   };
 };
 
+const markCharacterDeceased = async (id, profile) => {
+  const { data: characterData, error: characterError } = await getCharacter(id);
+  if (characterError) return { data: null, error: characterError };
+  if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
+  if (characterData.is_deceased) return { data: null, error: 'Character is already deceased' };
+
+  const { data, error } = await supabase
+    .from('characters')
+    .update({ is_deceased: true })
+    .eq('id', id)
+    .eq('creator_id', profile.id)
+    .select();
+
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+
+  return { data: data[0], error: null };
+};
+
 const searchPublicCharacters = async (q, count, options = {}) => {
   try {
     let query = supabase
       .from('characters')
-      .select('id, name, image_url, class_id, class')
+      .select('id, name, image_url, class_id, class, is_deceased')
       .eq('is_public', true)
+      .eq('hide_from_search', false)
       .limit(count);
 
     if (q && q.trim().length > 0) {
@@ -625,8 +661,9 @@ const getRandomPublicCharacters = async (count = 12, options = {}) => {
     const poolSize = Math.max(Math.min(count * 5, 100), count);
     let query = supabase
       .from('characters')
-      .select('id, name, image_url, class_id, class')
+      .select('id, name, image_url, class_id, class, is_deceased')
       .eq('is_public', true)
+      .eq('hide_from_search', false)
       .limit(poolSize);
 
     if (options.classId) {
@@ -670,6 +707,7 @@ module.exports = {
   updateCharacter,
   incrementMissionCount,
   deleteCharacter,
+  markCharacterDeceased,
   getCharacterRecentMissions,
   getCharacterAllMissions,
   searchPublicCharacters,

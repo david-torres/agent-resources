@@ -200,11 +200,17 @@
   <hr />
 
   <div class="field">
-    <label class="label">Public</label>
+    <label class="label">Visibility</label>
     <div class="control">
       <label class="checkbox">
         <input type="checkbox" name="is_public" {{#if character.is_public}}checked{{/if}}>
         Make this character public
+      </label>
+    </div>
+    <div class="control mt-2">
+      <label class="checkbox">
+        <input type="checkbox" name="hide_from_search" {{#if character.hide_from_search}}checked{{/if}}>
+        Hide from public searches (character page still accessible via direct link)
       </label>
     </div>
   </div>
