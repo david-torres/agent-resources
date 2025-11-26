@@ -240,7 +240,8 @@
               name="confirmName" 
               placeholder="Type character name to confirm"
               autocomplete="off"
-              oninput="document.getElementById('deceased-submit').disabled = (this.value !== '{{character.name}}')"
+              data-confirm-name="{{character.name}}"
+              oninput="document.getElementById('deceased-submit').disabled = (this.value !== this.dataset.confirmName)"
               required
             >
           </div>
