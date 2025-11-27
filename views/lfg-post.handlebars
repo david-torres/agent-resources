@@ -113,7 +113,14 @@
                     <h4 class="title is-5">Abilities</h4>
                     <div class="tags">
                       {{#each this.character.abilities}}
+                      {{#if (lookup this 'description')}}
+                      <span class="tag is-primary is-medium" data-tooltip-markdown="#lfg-ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{this.name}}</span>
+                      <div id="lfg-ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
+                        {{{markdown (lookup this 'description')}}}
+                      </div>
+                      {{else}}
                       <span class="tag is-primary is-medium">{{this.name}}</span>
+                      {{/if}}
                       {{/each}}
                     </div>
                   </div>
@@ -121,7 +128,14 @@
                     <h4 class="title is-5">Gear</h4>
                     <div class="tags">
                       {{#each this.character.gear}}
+                      {{#if (lookup this 'description')}}
+                      <span class="tag is-gray is-medium" data-tooltip-markdown="#lfg-gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{this.name}}</span>
+                      <div id="lfg-gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
+                        {{{markdown (lookup this 'description')}}}
+                      </div>
+                      {{else}}
                       <span class="tag is-gray is-medium">{{this.name}}</span>
+                      {{/if}}
                       {{/each}}
                     </div>
                   </div>
