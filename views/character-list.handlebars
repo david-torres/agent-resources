@@ -18,7 +18,14 @@
     <tbody>
       {{#each characters}}
       <tr>
-        <td><span class="title is-4"><a href="/characters/{{this.id}}/{{this.name}}">{{this.name}}</a></span></td>
+        <td>
+          <span class="title is-4">
+            <a href="/characters/{{this.id}}/{{this.name}}">{{this.name}}</a>
+            {{#if this.is_deceased}}
+            <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+            {{/if}}
+          </span>
+        </td>
         <td>
           <div class="buttons are-small">
             <a href="/characters/{{this.id}}/{{this.name}}" class="button is-secondary">View</a>

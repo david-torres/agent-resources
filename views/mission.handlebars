@@ -34,6 +34,9 @@
           {{#each mission.characters}}
           <li>
             <a href="/characters/{{this.id}}">{{this.name}}</a>
+            {{#if this.is_deceased}}
+            <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+            {{/if}}
           </li>
           {{/each}}
         </ul>
