@@ -13,9 +13,13 @@ const getLfgPosts = async () => {
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
+    post.creator_is_public = creator.is_public;
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) post.host_name = host.name;
+    if (!hostError) {
+      post.host_name = host.name;
+      post.host_is_public = host.is_public;
+    }
 
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
     if (joinRequestsError) return { data, error: joinRequestsError };
@@ -37,9 +41,13 @@ const getLfgPostsByOthers = async (profileId) => {
   for (let post of data) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
+    post.creator_is_public = creator.is_public;
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) post.host_name = host.name;
+    if (!hostError) {
+      post.host_name = host.name;
+      post.host_is_public = host.is_public;
+    }
 
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
     if (joinRequestsError) return { data, error: joinRequestsError };
@@ -61,9 +69,13 @@ const getLfgPostsByCreator = async (creator_id) => {
       .eq('id', post.creator_id)
       .single();
     post.creator_name = creator.name;
+    post.creator_is_public = creator.is_public;
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) post.host_name = host.name;
+    if (!hostError) {
+      post.host_name = host.name;
+      post.host_is_public = host.is_public;
+    }
 
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
     if (joinRequestsError) return { data, error: joinRequestsError };
@@ -87,13 +99,17 @@ const getLfgPost = async (id) => {
     .eq('id', post.creator_id)
     .single();
   post.creator_name = creator.name;
+  post.creator_is_public = creator.is_public;
 
   const { data: host, error: hostError } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', post.host_id)
     .single();
-  if (!hostError) post.host_name = host.name;
+  if (!hostError) {
+    post.host_name = host.name;
+    post.host_is_public = host.is_public;
+  }
 
   const { data: joinRequests, error: joinRequestsError } = await supabase
     .from('lfg_join_requests')
@@ -291,9 +307,13 @@ const getLfgJoinedPosts = async (profileId) => {
   for (let post of joinedPosts) {
     const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
     post.creator_name = creator.name;
+    post.creator_is_public = creator.is_public;
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) post.host_name = host.name;
+    if (!hostError) {
+      post.host_name = host.name;
+      post.host_is_public = host.is_public;
+    }
 
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
     if (joinRequestsError) return { data: null, error: joinRequestsError };
