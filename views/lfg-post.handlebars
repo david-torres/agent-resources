@@ -5,7 +5,7 @@
   <p class="is-size-7">Created by: {{#if post.creator_is_public}}<a href="/profile/view/{{encodeURIComponentH post.creator_name}}">{{post.creator_name}}</a>{{else}}{{post.creator_name}}{{/if}}</p>
   <p class="mt-4">
     {{#if post.host_id}}
-    Conduit: {{#if post.host_is_public}}<a href="/profile/view/{{encodeURIComponentH post.host_name}}">{{post.host_name}}</a>{{else}}{{post.host_name}}{{/if}}{{else}}<span class="tag is-warning">Conduit needed</span>
+    Conduit: {{#if post.host_is_public}}<a href="/profile/view/{{encodeURIComponentH post.host_name}}#conduit-briefing">{{post.host_name}}</a>{{else}}{{post.host_name}}{{/if}}{{else}}<span class="tag is-warning">Conduit needed</span>
     {{/if}}
   </p>
   <div class="box content mt-4">
@@ -158,7 +158,7 @@
 
   {{#if post.host_id}}
   <div class="notification is-info">
-    <strong>Conduit:</strong> {{#if post.host_is_public}}<a href="/profile/view/{{encodeURIComponentH post.host_name}}">{{post.host_name}}</a>{{else}}{{post.host_name}}{{/if}}
+    <strong>Conduit:</strong> {{#if post.host_is_public}}<a href="/profile/view/{{encodeURIComponentH post.host_name}}#conduit-briefing">{{post.host_name}}</a>{{else}}{{post.host_name}}{{/if}}
   </div>
   {{/if}}
 

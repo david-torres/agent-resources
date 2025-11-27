@@ -17,7 +17,7 @@
         <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
         <td>
           {{#if this.host_id}}
-          {{#if this.host_is_public}}<a href="/profile/view/{{encodeURIComponentH this.host_name}}">{{this.host_name}}</a>{{else}}{{this.host_name}}{{/if}}
+          {{#if this.host_is_public}}<a href="/profile/view/{{encodeURIComponentH this.host_name}}#conduit-briefing">{{this.host_name}}</a>{{else}}{{this.host_name}}{{/if}}
           {{else}}
           <span class="tag is-warning">Conduit needed</span>
           {{/if}}

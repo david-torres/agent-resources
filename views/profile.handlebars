@@ -20,13 +20,6 @@
   <a href="/profile/view/{{profile.name}}" class="button is-secondary">View Profile</a>
 </div>
 
-{{#if profile.conduit_briefing}}
-<div class="box">
-  <h3 class="title is-4">📡 Conduit Briefing</h3>
-  <div class="content">{{{markdown profile.conduit_briefing}}}</div>
-</div>
-{{/if}}
-
 {{#if unlockedClasses}}
 <div class="box">
   <h3 class="title is-4">Unlocked Classes</h3>
