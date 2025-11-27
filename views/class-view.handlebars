@@ -52,7 +52,11 @@
           <p><strong>Edition: </strong>{{capitalize class.rules_edition}} {{class.rules_version}}</p>
           <p><strong>Public: </strong>{{#if class.is_public}}Yes{{else}}No{{/if}}</p>
           {{#if ownerProfile}}
-          <p><strong>Owner: </strong><a href="/profile/view/{{ownerProfile.name}}">{{ownerProfile.name}}</a></p>
+          {{#if ownerProfile.is_public}}
+          <p><strong>Owner: </strong><a href="/profile/view/{{encodeURIComponentH ownerProfile.name}}">{{ownerProfile.name}}</a></p>
+          {{else}}
+          <p><strong>Owner: </strong>{{ownerProfile.name}}</p>
+          {{/if}}
           {{/if}}
         </div>
         <div class="content">
