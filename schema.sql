@@ -8,6 +8,7 @@ CREATE TABLE profiles (
     timezone TEXT DEFAULT 'UTC',
     discord_id TEXT,
     discord_email TEXT,
+    conduit_briefing TEXT,
     role public.roles NOT NULL DEFAULT 'user',
     CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'))
 );
