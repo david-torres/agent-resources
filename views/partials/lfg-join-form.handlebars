@@ -1,7 +1,7 @@
 <form hx-post="/lfg/{{post.id}}/join" hx-swap="outerHTML" class="box">
   <h3 class="title is-4">Join "{{post.title}}"</h3>
   <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
-  <p>Created by: {{post.creator_name}}</p>
+  <p>Created by: {{#if post.creator_is_public}}<a href="/profile/view/{{encodeURIComponentH post.creator_name}}">{{post.creator_name}}</a>{{else}}{{post.creator_name}}{{/if}}</p>
 
   <div class="field">
     <label class="label">Join as:</label>
