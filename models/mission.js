@@ -8,7 +8,8 @@ const getMissions = async () => {
       characters:mission_characters(
         character:characters(
           id,
-          name
+          name,
+          is_deceased
         )
       )
     `)
@@ -33,7 +34,8 @@ const getMission = async (id) => {
       characters:mission_characters(
         character:characters(
           id,
-          name
+          name,
+          is_deceased
         )
       )
     `)
@@ -59,7 +61,8 @@ const getOwnMissions = async (profile) => {
       characters:mission_characters(
         character:characters(
           id,
-          name
+          name,
+          is_deceased
         )
       )
     `)

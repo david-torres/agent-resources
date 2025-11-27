@@ -122,6 +122,7 @@ const getLfgPost = async (id) => {
         class,
         level,
         is_public,
+        is_deceased,
         ${statList.join(',')},
         personality:traits(name),
         abilities:class_abilities(name,description,class_id),
@@ -238,6 +239,7 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
   if (joinType == 'player') {
     const { data: character, error: characterError } = await supabase.from('characters').select('*').eq('id', characterId).single();
     if (characterError) return { data: null, error: characterError };
+    if (character.is_deceased) return { data: null, error: 'Deceased characters cannot join games' };
   }
   if (joinType == 'conduit') characterId = null;
 
@@ -259,7 +261,7 @@ const getLfgJoinRequests = async (postId) => {
     .select(`
       *,
       profile:profile_id (id,name,is_public),
-      character:character_id (id,name,is_public)
+      character:character_id (id,name,is_public,is_deceased)
     `)
     .eq('lfg_post_id', postId);
   return { data, error };

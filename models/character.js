@@ -14,7 +14,7 @@ const getOwnCharacters = async (profile) => {
 const getPublicCharactersByCreator = async (creatorId) => {
   const { data, error } = await supabase
     .from('characters')
-    .select('id, name, image_url')
+    .select('id, name, image_url, is_deceased')
     .eq('creator_id', creatorId)
     .eq('is_public', true)
     .order('name', { ascending: true });

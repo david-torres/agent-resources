@@ -60,7 +60,8 @@ router.get('/tab/public', isAuthenticated, async (req, res) => {
 
 router.get('/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: characters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const characters = (allCharacters || []).filter(c => !c.is_deceased);
   res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
 
@@ -102,7 +103,8 @@ router.get('/:id', authOptional, async (req, res) => {
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: characters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const characters = (allCharacters || []).filter(c => !c.is_deceased);
   const { data, error } = await getLfgPost(req.params.id);
   if (error) {
     return res.status(400).send(error.message);
@@ -134,7 +136,8 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 router.get('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: post, error: postError } = await getLfgPost(req.params.id);
-  const { data: characters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const characters = (allCharacters || []).filter(c => !c.is_deceased);
 
   if (postError) {
     return res.status(400).send(postError.message);
