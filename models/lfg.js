@@ -99,16 +99,17 @@ const getLfgPost = async (id) => {
     .from('lfg_join_requests')
     .select(`
       *,
-      profiles:profile_id (name),
-      characters:character_id (
+      profile:profile_id (id, name, is_public),
+      character:character_id (
         id,
         name,
         class,
         level,
+        is_public,
         ${statList.join(',')},
         personality:traits(name),
-        abilities:class_abilities(name),
-        gear:class_gear(name)
+        abilities:class_abilities(name,description,class_id),
+        gear:class_gear(name,description,class_id)
       )
     `)
     .eq('lfg_post_id', id);
@@ -241,8 +242,8 @@ const getLfgJoinRequests = async (postId) => {
     .from('lfg_join_requests')
     .select(`
       *,
-      profiles:profile_id (name),
-      characters:character_id (name)
+      profile:profile_id (id,name,is_public),
+      character:character_id (id,name,is_public)
     `)
     .eq('lfg_post_id', postId);
   return { data, error };

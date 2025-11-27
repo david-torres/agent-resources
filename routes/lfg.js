@@ -83,12 +83,10 @@ router.get('/:id', authOptional, async (req, res) => {
     if (req.headers['x-calendar']) {
       return res.header('HX-Push-Url', `/lfg/${req.params.id}`);
     }
-    const party = data.join_requests.reduce((acc, item) => {
-      if (item.status === 'approved') {
-        acc.push(item.characters);
-      }
-      return acc;
-    }, []);
+    const party = (data.join_requests || [])
+      .filter((item) => item.status === 'approved' && item.character)
+      .map((item) => item.character);
+    const approvedCount = party.length;
     const partyStats = party.reduce((acc, item) => {
       statList.forEach(stat => {
         acc[stat] = (acc[stat] || 0) + (item[stat] || 0);
@@ -96,8 +94,9 @@ router.get('/:id', authOptional, async (req, res) => {
       return acc;
     }, {});
 
+    const pendingCount = (data.join_requests || []).filter(r => r.status === 'pending').length;
 
-    res.render('lfg-post', { profile, post: data, statList, partyStats, authOptional: true });
+    res.render('lfg-post', { profile, post: data, statList, partyStats, approvedCount, pendingCount, authOptional: true });
   }
 });
 
@@ -168,7 +167,8 @@ router.get('/:id/requests', isAuthenticated, async (req, res) => {
   if (requestsError) {
     return res.status(400).send(requestsError.message);
   } else {
-    res.render('partials/lfg-join-requests', { layout: false, requests, post });
+    const layout = req.get('HX-Request') ? false : 'main';
+    res.render('partials/lfg-join-requests', { layout, requests, post });
   }
 });
 
