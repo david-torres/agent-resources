@@ -63,7 +63,8 @@ CREATE TABLE missions (
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   is_public BOOLEAN DEFAULT FALSE,
   host_id UUID REFERENCES profiles(id),
-  host_name TEXT
+  host_name TEXT,
+  media_url TEXT
 );
 
 -- mission_log_characters junction table

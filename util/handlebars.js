@@ -67,6 +67,96 @@ function dump(varName) {
   return JSON.stringify(varName, null, 2);
 }
 
+/**
+ * Video provider configurations
+ */
+const videoProviders = {
+  youtube: {
+    name: 'YouTube',
+    patterns: [
+      /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    ],
+    getEmbedUrl: (id) => `https://www.youtube.com/embed/${id}`,
+    detectPattern: /(?:youtube\.com|youtu\.be)/,
+  },
+  twitch: {
+    name: 'Twitch',
+    patterns: [
+      // Twitch VODs: twitch.tv/videos/123456789
+      /twitch\.tv\/videos\/(\d+)/,
+    ],
+    getEmbedUrl: (id) => `https://player.twitch.tv/?video=${id}&parent=${process.env.HOSTNAME || 'localhost'}`,
+    detectPattern: /twitch\.tv\/videos/,
+  },
+  twitchClip: {
+    name: 'Twitch Clip',
+    patterns: [
+      // Twitch clips: clips.twitch.tv/ClipSlug or twitch.tv/channel/clip/ClipSlug
+      /clips\.twitch\.tv\/([a-zA-Z0-9_-]+)/,
+      /twitch\.tv\/\w+\/clip\/([a-zA-Z0-9_-]+)/,
+    ],
+    getEmbedUrl: (id) => `https://clips.twitch.tv/embed?clip=${id}&parent=${process.env.HOSTNAME || 'localhost'}`,
+    detectPattern: /(?:clips\.twitch\.tv|twitch\.tv\/\w+\/clip)/,
+  },
+};
+
+/**
+ * Detects the video provider from a URL
+ * Returns: 'youtube', 'twitch', 'twitchClip', or null
+ */
+function getVideoProvider(url) {
+  if (!url) return null;
+  
+  for (const [key, provider] of Object.entries(videoProviders)) {
+    if (provider.detectPattern.test(url)) {
+      return key;
+    }
+  }
+  return null;
+}
+
+/**
+ * Converts a video URL to an embeddable URL
+ * Supports YouTube, Twitch VODs, and Twitch Clips
+ */
+function videoEmbed(url) {
+  if (!url) return null;
+  
+  for (const provider of Object.values(videoProviders)) {
+    for (const pattern of provider.patterns) {
+      const match = url.match(pattern);
+      if (match && match[1]) {
+        return provider.getEmbedUrl(match[1]);
+      }
+    }
+  }
+  
+  return null;
+}
+
+/**
+ * Checks if a URL is a supported video URL
+ */
+function isSupportedVideoUrl(url) {
+  return getVideoProvider(url) !== null;
+}
+
+/**
+ * Legacy helper - converts a YouTube URL to an embeddable URL
+ */
+function youtubeEmbed(url) {
+  if (!url || !videoProviders.youtube.detectPattern.test(url)) return null;
+  return videoEmbed(url);
+}
+
+/**
+ * Legacy helper - checks if a URL is a YouTube URL
+ */
+function isYoutubeUrl(url) {
+  if (!url) return false;
+  return videoProviders.youtube.detectPattern.test(url);
+}
+
 module.exports = {
   times,
   date_tz,
@@ -75,5 +165,10 @@ module.exports = {
   getTotalV1MissionsNeeded,
   getTotalV2MissionsNeeded,
   setVariable,
-  dump
+  dump,
+  youtubeEmbed,
+  isYoutubeUrl,
+  videoEmbed,
+  isSupportedVideoUrl,
+  getVideoProvider
 }

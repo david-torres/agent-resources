@@ -30,7 +30,12 @@
       {{#each missions}}
       {{#or this.is_public (eq ../profile.id this.creator_id)}}
       <tr>
-        <td><a href="/missions/{{this.id}}">{{this.name}}</a></td>
+        <td>
+          <a href="/missions/{{this.id}}">{{this.name}}</a>
+          {{#if this.media_url}}
+          <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
+          {{/if}}
+        </td>
         <td>{{#if ../profile}}{{date_tz this.date "MMM D, YYYY" ../profile.timezone}}{{else}}{{date this.date "MMM D,
           YYYY"}}{{/if}}</td>
         <td>
