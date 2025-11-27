@@ -19,7 +19,12 @@
       {{#each missions}}
       {{#or this.is_public (eq ../profile.id this.creator_id)}}
       <tr>
-        <td>{{this.name}}</td>
+        <td>
+          {{this.name}}
+          {{#if this.media_url}}
+          <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
+          {{/if}}
+        </td>
         {{#if profile}}
         <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
         {{else}}

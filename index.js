@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl } = require('./util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -36,7 +36,9 @@ app.engine('handlebars', exphbs.engine({
       getTotalV1MissionsNeeded,
       getTotalV2MissionsNeeded,
       setVariable,
-      dump
+      dump,
+      videoEmbed,
+      isSupportedVideoUrl
   }
 }));
 app.set('view engine', 'handlebars');
