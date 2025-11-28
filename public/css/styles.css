@@ -378,3 +378,16 @@ body.modal-open {
   display: none;
 }
 
+/* Badge positioning */
+.navbar-item span.badge,
+.tabs a span.badge,
+.table td span.badge {
+  position: relative;
+  top: -0.4em;
+  margin-left: 0.25em;
+}
+
+.tabs ul {
+  padding-top: 0.25em;
+}
+

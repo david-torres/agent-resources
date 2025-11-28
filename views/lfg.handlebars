@@ -12,7 +12,7 @@
 
 <div class="tabs">
   <ul>
-    <li><a hx-get="/lfg/tab/my-posts" hx-target="#lfg-content" hx-swap="innerHTML">My Posts</a></li>
+    <li><a hx-get="/lfg/tab/my-posts" hx-target="#lfg-content" hx-swap="innerHTML">My Posts{{#if pendingLfgRequests}}<span class="badge is-danger">{{pendingLfgRequests}}</span>{{/if}}</a></li>
     <li><a hx-get="/lfg/tab/joined" hx-target="#lfg-content" hx-swap="innerHTML">Joined</a></li>
     <li><a hx-get="/lfg/tab/public" hx-target="#lfg-content" hx-swap="innerHTML">Public</a></li>
   </ul>

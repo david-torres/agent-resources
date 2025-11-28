@@ -46,7 +46,7 @@
             <span class="icon">
               <i class="fas fa-people-group"></i>
             </span>
-            <span>Looking for Game</span>
+            <span>Looking for Game{{#if pendingLfgRequests}}<span class="badge is-danger">{{pendingLfgRequests}}</span>{{/if}}</span>
           </a>
           {{/if}}
           <a class="navbar-item" href="/characters/search">
