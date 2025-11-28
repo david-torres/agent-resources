@@ -171,6 +171,25 @@
     </div>
 
     <div class="box">
+      <h3 class="title is-4">Common Items</h3>
+      {{#if character.common_items}}
+      {{#if character.common_items.length}}
+      <div class="content">
+        <ul>
+          {{#each character.common_items}}
+          <li>{{{markdown this}}}</li>
+          {{/each}}
+        </ul>
+      </div>
+      {{else}}
+      <p class="has-text-centered has-text-grey">No common items</p>
+      {{/if}}
+      {{else}}
+      <p class="has-text-centered has-text-grey">No common items</p>
+      {{/if}}
+    </div>
+
+    <div class="box">
       <h3 class="title is-4">Additional Gear</h3>
       <div class="content">
         {{{markdown character.additional_gear}}}

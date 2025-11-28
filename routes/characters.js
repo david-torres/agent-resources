@@ -141,6 +141,10 @@ router.get('/class-abilities', authOptional, async (req, res) => {
   res.render('partials/character-class-abilities', { layout: false, classAbilityList: filteredAbilities });
 });
 
+router.get('/common-item', authOptional, async (req, res) => {
+  res.render('partials/character-common-item', { layout: false });
+});
+
 router.get('/import', isAuthenticated, (req, res) => {
   const { profile } = res.locals;
   res.render('character-import', {

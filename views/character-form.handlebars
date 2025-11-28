@@ -129,6 +129,23 @@
 
   <hr />
 
+  <div class="block">
+    <label class="label">Common Items</label>
+    <p class="help mb-3">Items not tied to a specific class (e.g., potions, tools, or custom gear)</p>
+    <div class="columns is-multiline" id="common-items-list">
+      {{#if character.common_items}}
+      {{#each character.common_items}}
+      {{> character-common-item commonItem=this}}
+      {{/each}}
+      {{/if}}
+    </div>
+    <button class="button is-primary" hx-get="/characters/common-item" hx-target="#common-items-list"
+      hx-swap="beforeend">Add
+      Common Item</button>
+  </div>
+
+  <hr />
+
   <div class="field">
     <label class="label">Class Abilities</label>
     <div class="columns is-multiline" id="class-ability-list">
