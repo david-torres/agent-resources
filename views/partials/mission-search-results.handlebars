@@ -4,33 +4,31 @@
   <div class="column is-4">
     <div class="card">
       <div class="card-content">
-        <p class="title is-5">{{this.name}}</p>
-        <p class="subtitle is-6">
+        <p class="is-size-5 has-text-weight-bold mb-2">{{this.name}}</p>
+        <p class="mb-2">
           <span class="icon-text">
-            <span class="icon"><i class="fas fa-calendar"></i></span>
+            <span class="icon has-text-grey"><i class="fas fa-calendar"></i></span>
             <span>{{date this.date "MMM D, YYYY"}}</span>
           </span>
         </p>
         {{#if this.outcome}}
-        <p>
+        <p class="mb-2">
           <span class="tag {{#if (eq this.outcome 'success')}}is-success{{else if (eq this.outcome 'failure')}}is-danger{{else}}is-warning{{/if}}">
             {{this.outcome}}
           </span>
         </p>
         {{/if}}
         {{#if this.characters.length}}
-        <p class="mt-2">
-          <small>
-            <span class="icon"><i class="fas fa-users"></i></span>
-            {{this.characters.length}} character{{#unless (eq this.characters.length 1)}}s{{/unless}}
-          </small>
+        <p class="mb-3">
+          <span class="icon-text">
+            <span class="icon has-text-grey"><i class="fas fa-users"></i></span>
+            <span>{{this.characters.length}} character{{#unless (eq this.characters.length 1)}}s{{/unless}}</span>
+          </span>
         </p>
         {{/if}}
-        <div class="mt-4">
-          <a href="/missions/{{this.id}}" class="button is-primary is-fullwidth">
-            View Mission Log
-          </a>
-        </div>
+        <a href="/missions/{{this.id}}" class="button is-primary is-fullwidth">
+          View Mission Log
+        </a>
       </div>
     </div>
   </div>
