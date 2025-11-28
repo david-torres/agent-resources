@@ -4,10 +4,10 @@
   <div class="column is-4">
     <div class="card">
       <div class="card-content">
-        <p class="is-size-5 has-text-weight-bold mb-2">{{this.name}}</p>
-        <p class="mb-2">
-          <span class="icon-text">
-            <span class="icon has-text-grey"><i class="fas fa-calendar"></i></span>
+        <h3 class="is-size-4 has-text-weight-bold mb-3">{{this.name}}</h3>
+        <p class="has-text-grey mb-2">
+          <span class="icon-text is-size-7">
+            <span class="icon"><i class="fas fa-calendar"></i></span>
             <span>{{date this.date "MMM D, YYYY"}}</span>
           </span>
         </p>
@@ -19,9 +19,9 @@
         </p>
         {{/if}}
         {{#if this.characters.length}}
-        <p class="mb-3">
-          <span class="icon-text">
-            <span class="icon has-text-grey"><i class="fas fa-users"></i></span>
+        <p class="has-text-grey mb-3">
+          <span class="icon-text is-size-7">
+            <span class="icon"><i class="fas fa-users"></i></span>
             <span>{{this.characters.length}} character{{#unless (eq this.characters.length 1)}}s{{/unless}}</span>
           </span>
         </p>
