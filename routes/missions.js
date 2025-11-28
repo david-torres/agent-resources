@@ -1,10 +1,45 @@
 const express = require('express');
 const router = express.Router();
-const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters } = require('../util/supabase');
+const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
 const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const supabase = require('../util/supabase');
+
+router.get('/search', authOptional, async (req, res) => {
+  const { profile } = res.locals;
+  const { data: initialMissions } = await getRandomPublicMissions(12);
+
+  res.render('mission-search', {
+    profile,
+    initialMissions: Array.isArray(initialMissions) ? initialMissions : []
+  });
+});
+
+router.get('/s', authOptional, async (req, res) => {
+  const { q, count } = req.query;
+
+  if (!q || q.length < 2) {
+    res.render('partials/mission-search-results', {
+      layout: false,
+      missions: [],
+      q
+    });
+    return;
+  }
+
+  const { data: missions, error } = await searchPublicMissions(q, count || 12);
+
+  if (error) {
+    return res.status(400).send(error.message);
+  } else {
+    res.render('partials/mission-search-results', {
+      layout: false,
+      missions,
+      q
+    });
+  }
+});
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;

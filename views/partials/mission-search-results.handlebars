@@ -1,0 +1,51 @@
+{{#if missions.length}}
+<div class="columns is-multiline">
+  {{#each missions}}
+  <div class="column is-4">
+    <div class="card">
+      <div class="card-content">
+        <p class="title is-5">{{this.name}}</p>
+        <p class="subtitle is-6">
+          <span class="icon-text">
+            <span class="icon"><i class="fas fa-calendar"></i></span>
+            <span>{{date this.date "MMM D, YYYY"}}</span>
+          </span>
+        </p>
+        {{#if this.outcome}}
+        <p>
+          <span class="tag {{#if (eq this.outcome 'success')}}is-success{{else if (eq this.outcome 'failure')}}is-danger{{else}}is-warning{{/if}}">
+            {{this.outcome}}
+          </span>
+        </p>
+        {{/if}}
+        {{#if this.characters.length}}
+        <p class="mt-2">
+          <small>
+            <span class="icon"><i class="fas fa-users"></i></span>
+            {{this.characters.length}} character{{#unless (eq this.characters.length 1)}}s{{/unless}}
+          </small>
+        </p>
+        {{/if}}
+        <div class="mt-4">
+          <a href="/missions/{{this.id}}" class="button is-primary is-fullwidth">
+            View Mission Log
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="box">
+  {{#if q}}
+    <div class="notification is-warning">
+      No mission logs found matching "{{q}}"
+    </div>
+  {{else}}
+    <div class="notification is-info">
+      Type a mission name to search public mission logs
+    </div>
+  {{/if}}
+</div>
+{{/if}}
