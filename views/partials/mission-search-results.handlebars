@@ -1,0 +1,73 @@
+{{#if missions.length}}
+<div class="columns is-multiline">
+  {{#each missions}}
+  <div class="column is-4">
+    <div class="card" style="height: 100%; display: flex; flex-direction: column;">
+      <header class="card-header">
+        <p class="card-header-title">{{this.name}}</p>
+        {{#if this.outcome}}
+        <span class="card-header-icon">
+          <span class="tag {{#if (eq this.outcome 'success')}}is-success{{else if (eq this.outcome 'failure')}}is-danger{{else}}is-warning{{/if}}">
+            {{this.outcome}}
+          </span>
+        </span>
+        {{/if}}
+      </header>
+      <div class="card-content" style="flex: 1;">
+        <div class="level is-mobile mb-3">
+          <div class="level-left">
+            <div class="level-item">
+              <span class="icon-text">
+                <span class="icon has-text-grey"><i class="fas fa-calendar-alt"></i></span>
+                <span class="is-size-7">{{date this.date "MMM D, YYYY"}}</span>
+              </span>
+            </div>
+          </div>
+          {{#if this.characters.length}}
+          <div class="level-right">
+            <div class="level-item">
+              <span class="icon-text">
+                <span class="icon has-text-grey"><i class="fas fa-users"></i></span>
+                <span class="is-size-7">{{this.characters.length}}</span>
+              </span>
+            </div>
+          </div>
+          {{/if}}
+        </div>
+        {{#if this.characters.length}}
+        <div class="tags">
+          {{#each this.characters}}
+          <span class="tag is-light">{{this.name}}{{#if this.is_deceased}} <i class="fas fa-skull ml-1 has-text-grey"></i>{{/if}}</span>
+          {{/each}}
+        </div>
+        {{/if}}
+      </div>
+      <footer class="card-footer">
+        <a href="/missions/{{this.id}}" class="card-footer-item has-text-primary has-text-weight-semibold">
+          <span class="icon"><i class="fas fa-book-open"></i></span>
+          <span>View Log</span>
+        </a>
+        {{#if this.media_url}}
+        <a href="{{this.media_url}}" target="_blank" rel="noopener noreferrer" class="card-footer-item has-text-danger has-text-weight-semibold">
+          <span class="icon"><i class="fas fa-play-circle"></i></span>
+          <span>Watch Now</span>
+        </a>
+        {{/if}}
+      </footer>
+    </div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="box">
+  {{#if q}}
+    <div class="notification is-warning">
+      No mission logs found matching "{{q}}"
+    </div>
+  {{else}}
+    <div class="notification is-info">
+      Type a mission name to search public mission logs
+    </div>
+  {{/if}}
+</div>
+{{/if}}

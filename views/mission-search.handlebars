@@ -1,0 +1,21 @@
+<h2 class="title is-2">Search Mission Logs</h2>
+<div class="box">
+  <div class="field">
+    <label class="label">Search by mission name</label>
+    <div class="control has-icons-left">
+      <input class="input" type="text" name="q" placeholder="Enter mission name..." hx-get="/missions/s?count=12"
+        hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results">
+      <span class="icon is-left">
+        <i class="fas fa-search"></i>
+      </span>
+    </div>
+  </div>
+</div>
+
+<div id="search-results" class="mt-4">
+  {{#if initialMissions}}
+    {{> mission-search-results missions=initialMissions}}
+  {{else}}
+    {{> mission-search-results missions=[]}}
+  {{/if}}
+</div>

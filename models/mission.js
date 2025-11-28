@@ -130,6 +130,111 @@ const getMissionCharacters = async (missionId) => {
   return { data, error };
 }
 
+const searchPublicMissions = async (q, count = 12) => {
+  try {
+    let query = supabase
+      .from('missions')
+      .select(`
+        id,
+        name,
+        date,
+        outcome,
+        summary,
+        media_url,
+        characters:mission_characters(
+          character:characters(
+            id,
+            name,
+            is_deceased
+          )
+        )
+      `)
+      .eq('is_public', true)
+      .order('date', { ascending: false })
+      .limit(count);
+
+    if (q && q.trim().length > 0) {
+      query = query.ilike('name', `%${q}%`);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+
+    // Transform the nested data structure
+    const transformedData = data.map(mission => ({
+      ...mission,
+      characters: mission.characters.map(mc => mc.character)
+    }));
+
+    return { data: transformedData, error: null };
+  } catch (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+}
+
+const getRandomPublicMissions = async (count = 12) => {
+  try {
+    // Fetch a reasonably sized pool, then sample client-side for randomness
+    const poolSize = Math.max(Math.min(count * 5, 100), count);
+    const { data, error } = await supabase
+      .from('missions')
+      .select(`
+        id,
+        name,
+        date,
+        outcome,
+        summary,
+        media_url,
+        characters:mission_characters(
+          character:characters(
+            id,
+            name,
+            is_deceased
+          )
+        )
+      `)
+      .eq('is_public', true)
+      .order('date', { ascending: false })
+      .limit(poolSize);
+
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+
+    // Transform the nested data structure
+    const transformedData = data.map(mission => ({
+      ...mission,
+      characters: mission.characters.map(mc => mc.character)
+    }));
+
+    if (!Array.isArray(transformedData) || transformedData.length <= count) {
+      return { data: transformedData, error: null };
+    }
+
+    // Reservoir sample
+    const sampled = [];
+    for (let i = 0; i < transformedData.length; i++) {
+      if (i < count) {
+        sampled.push(transformedData[i]);
+      } else {
+        const j = Math.floor(Math.random() * (i + 1));
+        if (j < count) {
+          sampled[j] = transformedData[i];
+        }
+      }
+    }
+    return { data: sampled, error: null };
+  } catch (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+}
+
 module.exports = {
   getMissions,
   getMission,
@@ -139,5 +244,7 @@ module.exports = {
   addCharacterToMission,
   removeCharacterFromMission,
   getMissionCharacters,
-  getOwnMissions
+  getOwnMissions,
+  searchPublicMissions,
+  getRandomPublicMissions
 };
