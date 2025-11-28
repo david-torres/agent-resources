@@ -1,3 +1,4 @@
+{{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Character{{else}}Edit Character{{/if}}</h2>
 {{#unless isNew}}
 <div class="buttons">
@@ -6,7 +7,7 @@
 {{/unless}}
 
 <form hx-{{#if isNew}}post{{else}}put{{/if}}="/characters{{#unless isNew}}/{{character.id}}{{/unless}}"
-  hx-redirect="/characters">
+  hx-redirect="{{#if isNew}}/characters{{else}}/characters/{{character.id}}/{{encodeURIComponentH character.name}}{{/if}}">
   <div class="field">
     <label class="label">Name</label>
     <div class="control">

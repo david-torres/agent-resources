@@ -22,7 +22,14 @@ const { statList } = require('../util/enclave-consts');
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id);
-  res.render('lfg', { profile, ownPosts });
+  res.render('lfg', {
+    profile,
+    ownPosts,
+    activeNav: 'lfg',
+    breadcrumbs: [
+      { label: 'Looking for Game', href: '/lfg' }
+    ]
+  });
 });
 
 router.get('/tab/my-posts', isAuthenticated, async (req, res) => {
@@ -97,7 +104,20 @@ router.get('/:id', authOptional, async (req, res) => {
 
     const pendingCount = (data.join_requests || []).filter(r => r.status === 'pending').length;
 
-    res.render('lfg-post', { profile, post: data, statList, partyStats, approvedCount, pendingCount, authOptional: true });
+    res.render('lfg-post', {
+      profile,
+      post: data,
+      statList,
+      partyStats,
+      approvedCount,
+      pendingCount,
+      authOptional: true,
+      activeNav: 'lfg',
+      breadcrumbs: [
+        { label: 'Looking for Game', href: '/lfg' },
+        { label: data.title, href: `/lfg/${data.id}` }
+      ]
+    });
   }
 });
 

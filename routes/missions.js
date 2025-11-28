@@ -12,7 +12,11 @@ router.get('/search', authOptional, async (req, res) => {
 
   res.render('mission-search', {
     profile,
-    initialMissions: Array.isArray(initialMissions) ? initialMissions : []
+    initialMissions: Array.isArray(initialMissions) ? initialMissions : [],
+    activeNav: 'search-missions',
+    breadcrumbs: [
+      { label: 'Search Missions', href: '/missions/search' }
+    ]
   });
 });
 
@@ -47,13 +51,28 @@ router.get('/', isAuthenticated, async (req, res) => {
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    res.render('mission-list', { profile, missions });
+    res.render('mission-list', {
+      profile,
+      missions,
+      activeNav: 'missions',
+      breadcrumbs: [
+        { label: 'Missions', href: '/missions' }
+      ]
+    });
   }
 });
 
 router.get('/new', isAuthenticated, (req, res) => {
   const { profile } = res.locals;
-  res.render('mission-form', { profile, isNew: true });
+  res.render('mission-form', {
+    profile,
+    isNew: true,
+    activeNav: 'missions',
+    breadcrumbs: [
+      { label: 'Missions', href: '/missions' },
+      { label: 'New Mission', href: '/missions/new' }
+    ]
+  });
 });
 
 router.post('/', isAuthenticated, async (req, res) => {
@@ -88,21 +107,42 @@ router.post('/', isAuthenticated, async (req, res) => {
 
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
-  const { data: mission, error } = await getMission(req.params.id);
+  const { id } = req.params;
+  const { data: mission, error } = await getMission(id);
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    res.render('mission', { profile, mission, authOptional: true });
+    res.render('mission', {
+      profile,
+      mission,
+      authOptional: true,
+      activeNav: 'missions',
+      breadcrumbs: [
+        { label: 'Missions', href: '/missions' },
+        { label: mission.name, href: `/missions/${id}` }
+      ]
+    });
   }
 });
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: mission, error } = await getMission(req.params.id);
+  const { id } = req.params;
+  const { data: mission, error } = await getMission(id);
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    res.render('mission-form', { profile, mission, isNew: false });
+    res.render('mission-form', {
+      profile,
+      mission,
+      isNew: false,
+      activeNav: 'missions',
+      breadcrumbs: [
+        { label: 'Missions', href: '/missions' },
+        { label: mission.name, href: `/missions/${id}` },
+        { label: 'Edit', href: '#' }
+      ]
+    });
   }
 });
 
@@ -205,7 +245,13 @@ router.get('/character/:id', authOptional, async (req, res) => {
           adventClassList,
           aspirantPreviewClassList,
           playerCreatedClassList,
-          classAbilityList
+          classAbilityList,
+          activeNav: 'characters',
+          breadcrumbs: [
+            { label: 'Characters', href: '/characters' },
+            { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` },
+            { label: 'Missions', href: '#' }
+          ]
         });
       }
     }
