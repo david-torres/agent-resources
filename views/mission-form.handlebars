@@ -1,7 +1,8 @@
+{{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Mission{{else}}Edit Mission{{/if}}</h2>
 
 <form hx-{{#if isNew}}post{{else}}put{{/if}}="/missions{{#unless isNew}}/{{mission.id}}{{/unless}}"
-  hx-redirect="/missions">
+  hx-redirect="{{#if isNew}}/missions{{else}}/missions/{{mission.id}}{{/if}}">
   <div class="field">
     <label class="label">Name</label>
     <div class="control">

@@ -1,5 +1,6 @@
+{{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Class{{else}}Edit Class{{/if}}</h2>
-<form hx-{{#if isNew}}post{{else}}put{{/if}}="/classes{{#unless isNew}}/{{class.id}}{{/unless}}" hx-redirect="/classes">
+<form hx-{{#if isNew}}post{{else}}put{{/if}}="/classes{{#unless isNew}}/{{class.id}}{{/unless}}" hx-redirect="{{#if isNew}}/classes{{else}}/classes/{{class.id}}/{{encodeURIComponentH class.name}}{{/if}}">
   <div class="field is-grouped">
     <label class="label">Rules Edition</label>
     <div class="control">

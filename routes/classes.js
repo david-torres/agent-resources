@@ -41,7 +41,11 @@ router.get('/', authOptional, async (req, res) => {
         profile,
         title: 'Classes',
         classes: classes,
-        filters: filters
+        filters: filters,
+        activeNav: 'classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' }
+        ]
     });
 });
 
@@ -63,7 +67,12 @@ router.get('/my', isAuthenticated, async (req, res) => {
         profile,
         title: 'My Classes',
         classes: classes,
-        filters: filters
+        filters: filters,
+        activeNav: 'my-classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: 'My PCCs', href: '/classes/my' }
+        ]
     });
 });
 
@@ -73,7 +82,12 @@ router.get('/new', isAuthenticated, (req, res) => {
         profile,
         title: 'New Class',
         isNew: true,
-        class: null
+        class: null,
+        activeNav: 'classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: 'New Class', href: '/classes/new' }
+        ]
     });
 });
 
@@ -84,7 +98,12 @@ router.get('/redeem/bulk', isAuthenticated, async (req, res) => {
         profile,
         title: 'Redeem Unlock Codes',
         results: null,
-        input_codes: ''
+        input_codes: '',
+        activeNav: 'redeem',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: 'Redeem Codes', href: '/classes/redeem/bulk' }
+        ]
     });
 });
 
@@ -99,7 +118,12 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
             profile,
             title: 'Redeem Unlock Codes',
             results: [],
-            input_codes: ''
+            input_codes: '',
+            activeNav: 'redeem',
+            breadcrumbs: [
+                { label: 'Classes', href: '/classes' },
+                { label: 'Redeem Codes', href: '/classes/redeem/bulk' }
+            ]
         });
     }
 
@@ -136,7 +160,12 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
         profile,
         title: 'Redeem Unlock Codes',
         results,
-        input_codes: codesRaw
+        input_codes: codesRaw,
+        activeNav: 'redeem',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: 'Redeem Codes', href: '/classes/redeem/bulk' }
+        ]
     });
 });
 
@@ -147,7 +176,17 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     if (error) {
         return res.status(500).json({ error: error.message });
     }
-    res.render('class-form', { profile, title: 'Edit Class', class: classData });
+    res.render('class-form', {
+        profile,
+        title: 'Edit Class',
+        class: classData,
+        activeNav: 'classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: classData.name, href: `/classes/${id}/${encodeURIComponent(classData.name)}` },
+            { label: 'Edit', href: '#' }
+        ]
+    });
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {
@@ -174,7 +213,12 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             return res.render('class-view-teaser', {
                 profile,
                 title: 'View Class',
-                class: classData
+                class: classData,
+                activeNav: 'classes',
+                breadcrumbs: [
+                    { label: 'Classes', href: '/classes' },
+                    { label: classData.name, href: `/classes/${id}/${encodeURIComponent(classData.name)}` }
+                ]
             });
         }
     }
@@ -190,7 +234,18 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // optional
     }
 
-    res.render('class-view', { profile, title: 'View Class', class: classData, unlocked, ownerProfile });
+    res.render('class-view', {
+        profile,
+        title: 'View Class',
+        class: classData,
+        unlocked,
+        ownerProfile,
+        activeNav: 'classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: classData.name, href: `/classes/${id}/${encodeURIComponent(classData.name)}` }
+        ]
+    });
 });
 
 // Duplicate a class to a new version

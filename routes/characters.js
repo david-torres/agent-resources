@@ -60,7 +60,13 @@ router.get('/', isAuthenticated, async (req, res) => {
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    res.render('character-list', { characters });
+    res.render('character-list', {
+      characters,
+      activeNav: 'characters',
+      breadcrumbs: [
+        { label: 'Characters', href: '/characters' }
+      ]
+    });
   }
 });
 
@@ -76,13 +82,19 @@ router.get('/new', isAuthenticated, async (req, res) => {
     playerCreatedClasses: filteredPCC,
     personalityMap,
     classGearList: filteredGear,
-    classAbilityList: filteredAbilities
+    classAbilityList: filteredAbilities,
+    activeNav: 'characters',
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: 'New Character', href: '/characters/new' }
+    ]
   });
 });
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: character, error } = await getCharacter(req.params.id);
+  const { id } = req.params;
+  const { data: character, error } = await getCharacter(id);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -97,7 +109,13 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       playerCreatedClasses: filteredPCC,
       personalityMap,
       classGearList: filteredGear,
-      classAbilityList: filteredAbilities
+      classAbilityList: filteredAbilities,
+      activeNav: 'characters',
+      breadcrumbs: [
+        { label: 'Characters', href: '/characters' },
+        { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` },
+        { label: 'Edit', href: '#' }
+      ]
     });
   }
 });
@@ -108,7 +126,8 @@ router.post('/', isAuthenticated, async (req, res) => {
   if (error) {
     return res.status(400).send(error.message);
   } else {
-    return res.header('HX-Location', '/characters').send();
+    const character = Array.isArray(data) ? data[0] : data;
+    return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   }
 });
 
@@ -124,7 +143,14 @@ router.get('/class-abilities', authOptional, async (req, res) => {
 
 router.get('/import', isAuthenticated, (req, res) => {
   const { profile } = res.locals;
-  res.render('character-import', { profile });
+  res.render('character-import', {
+    profile,
+    activeNav: 'characters',
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: 'Import Character', href: '/characters/import' }
+    ]
+  });
 });
 
 router.post('/import', isAuthenticated, async (req, res) => {
@@ -214,7 +240,15 @@ router.get('/search', authOptional, async (req, res) => {
   ]);
   const { data: initialCharacters } = await getRandomPublicCharacters(12);
 
-  res.render('character-search', { profile, classes: Array.isArray(classes) ? classes : [], initialCharacters: Array.isArray(initialCharacters) ? initialCharacters : [] });
+  res.render('character-search', {
+    profile,
+    classes: Array.isArray(classes) ? classes : [],
+    initialCharacters: Array.isArray(initialCharacters) ? initialCharacters : [],
+    activeNav: 'search-characters',
+    breadcrumbs: [
+      { label: 'Search Characters', href: '/characters/search' }
+    ]
+  });
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {
@@ -334,7 +368,12 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         ownerProfile,
         recentMissions,
         statList,
-        authOptional: true
+        authOptional: true,
+        activeNav: 'characters',
+        breadcrumbs: [
+          { label: 'Characters', href: '/characters' },
+          { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` }
+        ]
       });
     }
   }

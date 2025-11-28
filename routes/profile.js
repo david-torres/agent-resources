@@ -11,7 +11,15 @@ router.get('/', isAuthenticated, async (req, res) => {
     const { data } = await getUnlockedClasses(user.id);
     if (Array.isArray(data)) unlockedClasses = data;
   } catch (_) {}
-  res.render('profile', { user, profile, unlockedClasses });
+  res.render('profile', {
+    user,
+    profile,
+    unlockedClasses,
+    activeNav: 'profile',
+    breadcrumbs: [
+      { label: 'Profile', href: '/profile' }
+    ]
+  });
 });
 
 router.get('/edit', isAuthenticated, async (req, res) => {
@@ -21,7 +29,8 @@ router.get('/edit', isAuthenticated, async (req, res) => {
 
 router.get('/view/:name', authOptional, async (req, res) => {
   const { user, profile } = res.locals;
-  const { data: viewProfile, error } = await getProfileByName(req.params.name);
+  const { name } = req.params;
+  const { data: viewProfile, error } = await getProfileByName(name);
   if (error) {
     return res.status(400).send('Not found');
   }
@@ -36,7 +45,18 @@ router.get('/view/:name', authOptional, async (req, res) => {
   if (classesError) {
     return res.status(400).send(classesError.message);
   }
-  res.render('profile-view', { user, profile, viewProfile, authOptional: true, publicCharacters, publicClasses });
+  res.render('profile-view', {
+    user,
+    profile,
+    viewProfile,
+    authOptional: true,
+    publicCharacters,
+    publicClasses,
+    activeNav: 'profile',
+    breadcrumbs: [
+      { label: viewProfile.name, href: `/profile/view/${encodeURIComponent(name)}` }
+    ]
+  });
 });
 
 router.put('/', isAuthenticated, async (req, res) => {

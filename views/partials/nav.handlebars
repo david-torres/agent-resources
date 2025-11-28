@@ -14,7 +14,7 @@
   <div class="navbar-menu" id="navbar-menu">
     <div class="navbar-end">
       <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link">Game Info</a>
+        <a class="navbar-link {{#if (or (eq activeNav 'classes') (eq activeNav 'my-classes') (eq activeNav 'redeem'))}}is-active{{/if}}">Game Info</a>
         <div class="navbar-dropdown is-right">
           <a class="navbar-item" href="/classes">
             <span class="icon">
@@ -39,7 +39,7 @@
         </div>
       </div>
       <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link">Social</a>
+        <a class="navbar-link {{#if (or (eq activeNav 'lfg') (eq activeNav 'search-characters') (eq activeNav 'search-missions'))}}is-active{{/if}}">Social</a>
         <div class="navbar-dropdown is-right">
           {{#if profile}}
           <a class="navbar-item" href="/lfg">
@@ -64,19 +64,19 @@
         </div>
       </div>
       {{#if profile}}
-      <a class="navbar-item" href="/characters">
+      <a class="navbar-item {{#if (eq activeNav 'characters')}}is-active{{/if}}" href="/characters">
         <span class="icon">
           <i class="fas fa-masks-theater"></i>
         </span>
         <span>Characters</span>
       </a>
-      <a class="navbar-item" href="/missions">
+      <a class="navbar-item {{#if (eq activeNav 'missions')}}is-active{{/if}}" href="/missions">
         <span class="icon">
           <i class="fas fa-book"></i>
         </span>
         <span>Mission Log</span>
       </a>
-      <a class="navbar-item" href="/profile" aria-label="Profile" title="Profile">
+      <a class="navbar-item {{#if (eq activeNav 'profile')}}is-active{{/if}}" href="/profile" aria-label="Profile" title="Profile">
         <span class="icon">
           <i class="fas fa-user"></i>
         </span>

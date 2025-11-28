@@ -391,3 +391,51 @@ body.modal-open {
   padding-top: 0.25em;
 }
 
+/* Breadcrumb styles */
+.breadcrumb {
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.breadcrumb ul {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.breadcrumb li {
+  display: flex;
+  align-items: center;
+}
+
+.breadcrumb li + li::before {
+  color: #b5b5b5;
+  content: "\203A";
+  margin: 0 0.5em;
+}
+
+.breadcrumb a {
+  color: #485fc7;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  color: #363636;
+  text-decoration: underline;
+}
+
+.breadcrumb li.is-active a {
+  color: #363636;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Navbar active state styling */
+.navbar.is-dark .navbar-item.is-active,
+.navbar.is-dark .navbar-link.is-active {
+  background-color: rgba(255, 255, 255, 0.1);
+}
+
