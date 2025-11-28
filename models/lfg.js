@@ -80,6 +80,7 @@ const getLfgPostsByCreator = async (creator_id) => {
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
+    post.pending_request_count = (joinRequests || []).filter(r => r.status === 'pending').length;
   }
   return { data, error };
 }
@@ -325,6 +326,15 @@ const getLfgJoinedPosts = async (profileId) => {
   return { data: joinedPosts, error: null };
 }
 
+const getPendingJoinRequestCount = async (profileId) => {
+  const { count, error } = await supabase
+    .from('lfg_join_requests')
+    .select('*, lfg_posts!inner(creator_id)', { count: 'exact', head: true })
+    .eq('lfg_posts.creator_id', profileId)
+    .eq('status', 'pending');
+  return { count: count || 0, error };
+}
+
 module.exports = {
   getLfgPosts,
   getLfgPostsByCreator,
@@ -338,5 +348,6 @@ module.exports = {
   getLfgJoinRequests,
   getLfgJoinRequestForUserAndPost,
   updateJoinRequest,
-  deleteJoinRequest
+  deleteJoinRequest,
+  getPendingJoinRequestCount
 };

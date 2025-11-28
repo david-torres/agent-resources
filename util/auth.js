@@ -1,5 +1,6 @@
 const { getUserFromToken, getProfile } = require('./supabase');
 const { getSystemMessage } = require('./system-message');
+const { getPendingJoinRequestCount } = require('../models/lfg');
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
@@ -29,6 +30,10 @@ async function isAuthenticated(req, res, next) {
     if (user) {
       res.locals.profile = await getProfile(user);
       res.locals.systemMessage = getSystemMessage();
+      if (res.locals.profile) {
+        const { count } = await getPendingJoinRequestCount(res.locals.profile.id);
+        res.locals.pendingLfgRequests = count;
+      }
     } else {
       res.locals.profile = null;
       res.locals.systemMessage = null;
@@ -61,6 +66,10 @@ async function authOptional(req, res, next) {
   if (user) {
     res.locals.profile = await getProfile(user);
     res.locals.systemMessage = getSystemMessage();
+    if (res.locals.profile) {
+      const { count } = await getPendingJoinRequestCount(res.locals.profile.id);
+      res.locals.pendingLfgRequests = count;
+    }
   } else {
     res.locals.profile = null;
     res.locals.systemMessage = null;

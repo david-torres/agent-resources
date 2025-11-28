@@ -13,7 +13,7 @@
     <tbody>
       {{#each ownPosts}}
       <tr>
-        <td>{{this.title}}</td>
+        <td>{{this.title}}{{#if this.pending_request_count}}<span class="badge is-danger">{{this.pending_request_count}}</span>{{/if}}</td>
         <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
         <td>
           {{#if this.host_id}}
