@@ -5,6 +5,7 @@ const { statList, personalityMap } = require('../util/enclave-consts');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
+const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
@@ -253,6 +254,40 @@ router.get('/search', authOptional, async (req, res) => {
       { label: 'Search Characters', href: '/characters/search' }
     ]
   });
+});
+
+router.get('/:id/export', authOptional, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const format = req.query.format || EXPORT_FORMATS.MARKDOWN;
+  
+  // Validate format
+  const supportedFormats = getSupportedFormats();
+  if (!supportedFormats.includes(format)) {
+    return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
+  }
+  
+  const { data: character, error } = await getCharacter(id);
+  if (error) {
+    return res.status(400).send(error.message);
+  }
+  
+  // Check access: public characters can be exported by anyone,
+  // private characters only by their owner
+  if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
+    return res.status(404).send('Not found');
+  }
+  
+  // Only include private notes if the user is the owner
+  const includePrivateNotes = profile && character.creator_id === profile.id;
+  
+  const { content, mimeType, filename } = exportCharacter(character, format, {
+    includePrivateNotes,
+  });
+  
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.send(content);
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {
