@@ -65,7 +65,7 @@ CREATE TABLE missions (
   host_id UUID REFERENCES profiles(id),
   host_name TEXT,
   media_url TEXT,
-  unknown_character_names TEXT[] DEFAULT '{}'
+  unregistered_character_names TEXT[] DEFAULT '{}'
 );
 
 -- mission_log_characters junction table

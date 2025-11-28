@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnknownCharacterNames, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
+const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnregisteredCharacterNames, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
 const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -148,7 +148,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 
 router.put('/:id', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  let { characters, unknown_character_names, ...missionData } = req.body;
+  let { characters, unregistered_character_names, ...missionData } = req.body;
 
   delete missionData.q;
 
@@ -158,17 +158,17 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     missionData.is_public = false
   }
 
-  // Parse unknown_character_names - handle both array and single string
-  let unknownNames = [];
-  if (unknown_character_names) {
-    if (Array.isArray(unknown_character_names)) {
-      unknownNames = unknown_character_names;
-    } else if (typeof unknown_character_names === 'string') {
-      unknownNames = [unknown_character_names];
+  // Parse unregistered_character_names - handle both array and single string
+  let unregisteredNames = [];
+  if (unregistered_character_names) {
+    if (Array.isArray(unregistered_character_names)) {
+      unregisteredNames = unregistered_character_names;
+    } else if (typeof unregistered_character_names === 'string') {
+      unregisteredNames = [unregistered_character_names];
     }
   }
   // Store as JSON array in the mission
-  missionData.unknown_character_names = unknownNames.filter(n => n && n.trim().length > 0);
+  missionData.unregistered_character_names = unregisteredNames.filter(n => n && n.trim().length > 0);
   
   // Update the mission
   const { data, error } = await updateMission(req.params.id, missionData, profile);
