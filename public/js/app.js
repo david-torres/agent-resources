@@ -168,6 +168,31 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         });
       };
 
+      const _initSearchableSelects = (root) => {
+        const container = root || document;
+        if (typeof TomSelect !== 'function') return;
+        const els = container.querySelectorAll('[data-searchable-select]');
+        els.forEach((el) => {
+          try {
+            // Skip if already initialized
+            if (el.tomselect) return;
+            new TomSelect(el, {
+              create: false,
+              maxOptions: null,
+              placeholder: 'Type to search...',
+              allowEmptyOption: false,
+              dropdownParent: 'body',
+              controlInput: '<input type="text" autocomplete="off" size="1" />',
+              render: {
+                optgroup_header: function(data, escape) {
+                  return '<div class="optgroup-header">' + escape(data.label) + '</div>';
+                }
+              }
+            });
+          } catch (e) { console.error('Tom Select init error:', e); }
+        });
+      };
+
       document.body.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
         const targetEl = evt.detail && evt.detail.target;
@@ -179,6 +204,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
         // Initialize tooltips after swaps (for boosted navs and partial swaps)
         _initTooltips(targetEl || document);
+        // Initialize searchable selects after swaps
+        _initSearchableSelects(targetEl || document);
       });
 
       // Global keydown handler for closing modals on Escape
@@ -197,6 +224,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
       // Initialize any tooltips present at load
       _initTooltips(document);
+      // Initialize any searchable selects present at load
+      _initSearchableSelects(document);
     });
   }
 
