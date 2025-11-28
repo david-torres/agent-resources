@@ -140,6 +140,7 @@ const searchPublicMissions = async (q, count = 12) => {
         date,
         outcome,
         summary,
+        media_url,
         characters:mission_characters(
           character:characters(
             id,
@@ -187,6 +188,7 @@ const getRandomPublicMissions = async (count = 12) => {
         date,
         outcome,
         summary,
+        media_url,
         characters:mission_characters(
           character:characters(
             id,

@@ -47,6 +47,12 @@
           <span class="icon"><i class="fas fa-book-open"></i></span>
           <span>View Log</span>
         </a>
+        {{#if this.media_url}}
+        <a href="{{this.media_url}}" target="_blank" rel="noopener noreferrer" class="card-footer-item has-text-danger has-text-weight-semibold">
+          <span class="icon"><i class="fas fa-play-circle"></i></span>
+          <span>Watch Now</span>
+        </a>
+        {{/if}}
       </footer>
     </div>
   </div>
