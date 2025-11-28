@@ -339,7 +339,13 @@ const normalizeGearItems = (gear) => {
       if (!item) return null;
       if (typeof item === 'string') {
         const trimmed = item.trim();
-        return trimmed ? { name: trimmed } : null;
+        if (!trimmed) return null;
+        // Handle "ClassName::GearName" format from searchable selects
+        if (trimmed.includes('::')) {
+          const [, gearName] = trimmed.split('::');
+          return gearName ? { name: gearName.trim() } : null;
+        }
+        return { name: trimmed };
       }
       if (typeof item === 'object' && typeof item.name === 'string') {
         const trimmed = item.name.trim();
@@ -468,7 +474,13 @@ const normalizeAbilityItems = (abilities) => {
       if (!item) return null;
       if (typeof item === 'string') {
         const trimmed = item.trim();
-        return trimmed ? { name: trimmed } : null;
+        if (!trimmed) return null;
+        // Handle "ClassName::AbilityName" format from searchable selects
+        if (trimmed.includes('::')) {
+          const [, abilityName] = trimmed.split('::');
+          return abilityName ? { name: abilityName.trim() } : null;
+        }
+        return { name: trimmed };
       }
       if (typeof item === 'object' && typeof item.name === 'string') {
         const trimmed = item.name.trim();

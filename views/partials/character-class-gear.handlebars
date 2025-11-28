@@ -1,17 +1,16 @@
 <div class="column is-one-third">
   <div class="field has-addons">
-    <div class="control">
-      <div class="select">
-        <select name="gear[]" required>
-          {{#each classGearList}}
-          <option disabled>{{capitalize @key}}</option>
+    <div class="control is-expanded">
+      <select name="gear[]" required data-searchable-select>
+        <option value="">Select gear...</option>
+        {{#each classGearList}}
+        <optgroup label="{{capitalize @key}}">
           {{#each this}}
-          <option value="{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>
-          {{capitalize this}} ({{capitalize @../key}})</option>
+          <option value="{{@../key}}::{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
           {{/each}}
-          {{/each}}
-        </select>
-      </div>
+        </optgroup>
+        {{/each}}
+      </select>
     </div>
     <div class="control ml-2 mt-2">
       <button class="delete" hx-on:click="htmx.remove(htmx.closest(this, '.is-one-third'));"></button>
