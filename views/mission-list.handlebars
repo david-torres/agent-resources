@@ -37,9 +37,18 @@
           {{#each this.characters}}
           <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
           {{/each}}
-          {{else}}
-          -
+          {{#if ../this.unknown_character_names.length}}, {{/if}}
           {{/if}}
+          {{#if this.unknown_character_names.length}}
+          {{#each this.unknown_character_names}}
+          <span class="has-text-grey">{{this}}</span>{{#unless @last}}, {{/unless}}
+          {{/each}}
+          {{/if}}
+          {{#unless this.characters.length}}
+          {{#unless this.unknown_character_names.length}}
+          -
+          {{/unless}}
+          {{/unless}}
         </td>
         <td>
           <div class="buttons are-small">

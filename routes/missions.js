@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
+const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnknownCharacterNames, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
 const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -148,7 +148,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 
 router.put('/:id', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  let { characters, ...missionData } = req.body;
+  let { characters, unknown_character_names, ...missionData } = req.body;
 
   delete missionData.q;
 
@@ -157,6 +157,18 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   } else {
     missionData.is_public = false
   }
+
+  // Parse unknown_character_names - handle both array and single string
+  let unknownNames = [];
+  if (unknown_character_names) {
+    if (Array.isArray(unknown_character_names)) {
+      unknownNames = unknown_character_names;
+    } else if (typeof unknown_character_names === 'string') {
+      unknownNames = [unknown_character_names];
+    }
+  }
+  // Store as JSON array in the mission
+  missionData.unknown_character_names = unknownNames.filter(n => n && n.trim().length > 0);
   
   // Update the mission
   const { data, error } = await updateMission(req.params.id, missionData, profile);

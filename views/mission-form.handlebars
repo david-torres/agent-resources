@@ -133,6 +133,55 @@
       </div>
     </div>
   </div>
+
+  <div class="field">
+    <label class="label">Unknown Characters</label>
+    <p class="help mb-2">Add names of characters not registered in the system</p>
+    <div id="unknownCharactersList">
+      {{#each mission.unknown_character_names}}
+      <div class="field has-addons unknown-character-entry">
+        <div class="control is-expanded">
+          <input class="input" type="text" name="unknown_character_names[]" value="{{this}}" placeholder="Character name">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-danger is-light remove-unknown-character">
+            <span class="icon"><i class="fas fa-times"></i></span>
+          </button>
+        </div>
+      </div>
+      {{/each}}
+    </div>
+    <button type="button" class="button is-small is-link is-light mt-2" id="addUnknownCharacter">
+      <span class="icon"><i class="fas fa-plus"></i></span>
+      <span>Add Unknown Character</span>
+    </button>
+  </div>
+
+  <script>
+    document.getElementById('addUnknownCharacter').addEventListener('click', function() {
+      const list = document.getElementById('unknownCharactersList');
+      const entry = document.createElement('div');
+      entry.className = 'field has-addons unknown-character-entry';
+      entry.innerHTML = `
+        <div class="control is-expanded">
+          <input class="input" type="text" name="unknown_character_names[]" placeholder="Character name">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-danger is-light remove-unknown-character">
+            <span class="icon"><i class="fas fa-times"></i></span>
+          </button>
+        </div>
+      `;
+      list.appendChild(entry);
+      entry.querySelector('input').focus();
+    });
+
+    document.getElementById('unknownCharactersList').addEventListener('click', function(e) {
+      if (e.target.closest('.remove-unknown-character')) {
+        e.target.closest('.unknown-character-entry').remove();
+      }
+    });
+  </script>
 {{/if}}
   <div class="field is-grouped mt-4">
     <div class="control">
