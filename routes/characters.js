@@ -285,8 +285,10 @@ router.get('/:id/export', authOptional, async (req, res) => {
     includePrivateNotes,
   });
   
-  res.setHeader('Content-Type', mimeType);
-  res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+  res.setHeader('Content-Type', `${mimeType}; charset=utf-8`);
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.setHeader('Content-Length', Buffer.byteLength(content, 'utf-8'));
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
   res.send(content);
 });
 
