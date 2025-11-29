@@ -98,6 +98,18 @@ const createCharacter = async (characterReq, profile) => {
   const classAbilities = characterReq.abilities;
   delete characterReq.abilities;
 
+  // handle common items - normalize to array of non-empty strings
+  if (characterReq.common_items) {
+    const items = Array.isArray(characterReq.common_items) 
+      ? characterReq.common_items 
+      : [characterReq.common_items];
+    characterReq.common_items = items
+      .map(item => (typeof item === 'string' ? item.trim() : ''))
+      .filter(item => item.length > 0);
+  } else {
+    characterReq.common_items = [];
+  }
+
   // handle is_public
   if (characterReq.is_public == 'on') {
     characterReq.is_public = true;
@@ -197,6 +209,18 @@ const updateCharacter = async (id, characterReq, profile) => {
   const classAbilities = characterReq.abilities;
   delete characterReq.abilities;
   delete characterData.abilities;
+
+  // handle common items - normalize to array of non-empty strings
+  if (characterReq.common_items) {
+    const items = Array.isArray(characterReq.common_items) 
+      ? characterReq.common_items 
+      : [characterReq.common_items];
+    characterReq.common_items = items
+      .map(item => (typeof item === 'string' ? item.trim() : ''))
+      .filter(item => item.length > 0);
+  } else {
+    characterReq.common_items = [];
+  }
 
   // handle is_public
   if (characterReq.is_public == 'on') {
