@@ -106,6 +106,29 @@
       <div class="control">
         <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
       </div>
+      <div class="control">
+        <div class="dropdown is-right" id="export-dropdown">
+          <div class="dropdown-trigger">
+            <button class="button is-info is-outlined" aria-haspopup="true" aria-controls="export-menu" onclick="document.getElementById('export-dropdown').classList.toggle('is-active')">
+              <span class="icon"><i class="fas fa-download"></i></span>
+              <span>Export</span>
+              <span class="icon is-small"><i class="fas fa-angle-down"></i></span>
+            </button>
+          </div>
+          <div class="dropdown-menu" id="export-menu" role="menu">
+            <div class="dropdown-content">
+              <a href="/characters/{{character.id}}/export?format=markdown" class="dropdown-item">
+                <span class="icon"><i class="fas fa-file-alt"></i></span>
+                <span>Markdown (.md)</span>
+              </a>
+              <a href="/characters/{{character.id}}/export?format=json" class="dropdown-item">
+                <span class="icon"><i class="fas fa-code"></i></span>
+                <span>JSON (.json)</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
     {{/if}}
     {{/if}}

@@ -215,7 +215,21 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           if (activeModal) {
             App.closeModal('#' + activeModal.id);
           }
+          // Also close any open dropdowns
+          document.querySelectorAll('.dropdown.is-active').forEach(function(dropdown) {
+            dropdown.classList.remove('is-active');
+          });
         }
+      });
+
+      // Global click handler for closing dropdowns when clicking outside
+      document.addEventListener('click', function(event) {
+        const dropdowns = document.querySelectorAll('.dropdown.is-active');
+        dropdowns.forEach(function(dropdown) {
+          if (!dropdown.contains(event.target)) {
+            dropdown.classList.remove('is-active');
+          }
+        });
       });
 
       // trigger initial session handling immediately
