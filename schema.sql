@@ -64,7 +64,8 @@ CREATE TABLE missions (
   is_public BOOLEAN DEFAULT FALSE,
   host_id UUID REFERENCES profiles(id),
   host_name TEXT,
-  media_url TEXT
+  media_url TEXT,
+  unregistered_character_names TEXT[] DEFAULT '{}'
 );
 
 -- mission_log_characters junction table

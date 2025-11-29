@@ -42,7 +42,19 @@
           {{/each}}
         </ul>
         {{else}}
-        <p>No characters assigned to this mission.</p>
+          {{#unless mission.unregistered_character_names.length}}
+          <p>No characters assigned to this mission.</p>
+          {{/unless}}
+        {{/if}}
+        {{#if mission.unregistered_character_names.length}}
+        <ul>
+          {{#each mission.unregistered_character_names}}
+          <li>
+            <span class="has-text-grey-dark">{{this}}</span>
+            <span class="tag is-light is-small ml-1">unregistered</span>
+          </li>
+          {{/each}}
+        </ul>
         {{/if}}
       </div>
     </div>

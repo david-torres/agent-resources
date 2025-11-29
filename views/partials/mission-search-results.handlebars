@@ -41,6 +41,13 @@
           {{/each}}
         </div>
         {{/if}}
+        {{#if this.unregistered_character_names.length}}
+        <div class="tags">
+          {{#each this.unregistered_character_names}}
+          <span class="tag is-light has-text-grey">{{this}}</span>
+          {{/each}}
+        </div>
+        {{/if}}
       </div>
       <footer class="card-footer">
         <a href="/missions/{{this.id}}" class="card-footer-item has-text-primary has-text-weight-semibold">

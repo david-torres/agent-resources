@@ -130,6 +130,22 @@ const getMissionCharacters = async (missionId) => {
   return { data, error };
 }
 
+const setUnregisteredCharacterNames = async (missionId, names, profile) => {
+  // Filter and clean names
+  const cleanedNames = (Array.isArray(names) ? names : [])
+    .map(n => (typeof n === 'string' ? n.trim() : ''))
+    .filter(n => n.length > 0);
+  
+  const { data, error } = await supabase
+    .from('missions')
+    .update({ unregistered_character_names: cleanedNames })
+    .eq('id', missionId)
+    .eq('creator_id', profile.id)
+    .select();
+  
+  return { data, error };
+}
+
 const searchPublicMissions = async (q, count = 12) => {
   try {
     let query = supabase
@@ -141,6 +157,7 @@ const searchPublicMissions = async (q, count = 12) => {
         outcome,
         summary,
         media_url,
+        unregistered_character_names,
         characters:mission_characters(
           character:characters(
             id,
@@ -189,6 +206,7 @@ const getRandomPublicMissions = async (count = 12) => {
         outcome,
         summary,
         media_url,
+        unregistered_character_names,
         characters:mission_characters(
           character:characters(
             id,
@@ -244,6 +262,7 @@ module.exports = {
   addCharacterToMission,
   removeCharacterFromMission,
   getMissionCharacters,
+  setUnregisteredCharacterNames,
   getOwnMissions,
   searchPublicMissions,
   getRandomPublicMissions
