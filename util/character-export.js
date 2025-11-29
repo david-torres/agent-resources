@@ -54,148 +54,189 @@ const sanitizeFilename = (name) => {
 };
 
 /**
+ * Capitalize first letter of a string
+ */
+const capitalize = (str) => {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+};
+
+/**
  * Export character to Markdown format
  */
 const exportToMarkdown = (character, options = {}) => {
   const lines = [];
   
-  // Header
+  // Header with name and class/level tagline
   lines.push(`# ${character.name}`);
   lines.push('');
+  lines.push(`**${character.class || 'Unknown'}** · Level ${character.level || 1}`);
+  lines.push('');
   
-  // Deceased status
+  // Deceased status callout
   if (character.is_deceased) {
-    lines.push('> ☠️ **DECEASED**');
+    lines.push('> ☠️ **This character is deceased.**');
     lines.push('');
   }
   
-  // Basic Info
-  lines.push('## Character Info');
-  lines.push('');
-  lines.push(`- **Class:** ${character.class || 'Unknown'}`);
-  lines.push(`- **Level:** ${character.level || 1}`);
-  lines.push(`- **Completed Missions:** ${character.completed_missions || 0}`);
-  lines.push(`- **Commissary Reward:** ${character.commissary_reward || 0}`);
-  lines.push('');
+  // Character image at the top if available
+  if (character.image_url) {
+    lines.push(`![${character.name}](${character.image_url})`);
+    lines.push('');
+  }
   
-  // Personality Traits
+  // Personality Traits - displayed as inline tags
   if (character.traits && character.traits.length > 0) {
-    lines.push('## Personality');
-    lines.push('');
-    lines.push(character.traits.map(trait => `- ${trait}`).join('\n'));
+    const traitTags = character.traits.map(trait => `\`${capitalize(trait)}\``).join(' · ');
+    lines.push(`🎭 **Personality:** ${traitTags}`);
     lines.push('');
   }
   
-  // Stats
-  lines.push('## Stats');
+  lines.push('---');
   lines.push('');
-  lines.push('| Stat | Value |');
-  lines.push('|------|-------|');
-  for (const stat of statList) {
-    const value = character[stat] || 0;
-    lines.push(`| ${stat.charAt(0).toUpperCase() + stat.slice(1)} | ${formatStatValue(value)} |`);
+  
+  // Stats section with cleaner table
+  lines.push('## 📊 Stats');
+  lines.push('');
+  
+  // Group stats into rows of 3 for better readability
+  const statsWithValues = statList.map(stat => ({
+    name: capitalize(stat),
+    value: formatStatValue(character[stat] || 0)
+  }));
+  
+  lines.push('| Stat | Value | Stat | Value | Stat | Value |');
+  lines.push('|:-----|:-----:|:-----|:-----:|:-----|:-----:|');
+  
+  for (let i = 0; i < statsWithValues.length; i += 3) {
+    const row = [];
+    for (let j = 0; j < 3; j++) {
+      const stat = statsWithValues[i + j];
+      if (stat) {
+        row.push(`| ${stat.name} | ${stat.value} `);
+      } else {
+        row.push('| | ');
+      }
+    }
+    lines.push(row.join('') + '|');
   }
   lines.push('');
   
   // Class Abilities
   if (character.abilities && character.abilities.length > 0) {
-    lines.push('## Class Abilities');
+    lines.push('## ⚔️ Class Abilities');
     lines.push('');
     for (const ability of character.abilities) {
       const name = typeof ability === 'string' ? ability : ability.name;
       const description = typeof ability === 'object' ? ability.description : null;
-      lines.push(`### ${name}`);
       if (description) {
+        lines.push(`**${name}**`);
+        lines.push(`> ${description.replace(/\n/g, '\n> ')}`);
         lines.push('');
-        lines.push(description);
+      } else {
+        lines.push(`- **${name}**`);
       }
+    }
+    if (!character.abilities.some(a => typeof a === 'object' && a.description)) {
       lines.push('');
     }
   }
   
   // Ability Perks
-  if (character.perks) {
-    lines.push('## Ability Perks');
+  if (character.perks && character.perks.trim()) {
+    lines.push('## ✨ Ability Perks');
     lines.push('');
-    lines.push(character.perks);
+    lines.push(character.perks.trim());
     lines.push('');
   }
   
   // Class Gear
   if (character.gear && character.gear.length > 0) {
-    lines.push('## Class Gear');
+    lines.push('## 🎒 Class Gear');
     lines.push('');
     for (const item of character.gear) {
       const name = typeof item === 'string' ? item : item.name;
       const description = typeof item === 'object' ? item.description : null;
-      lines.push(`### ${name}`);
       if (description) {
+        lines.push(`**${name}**`);
+        lines.push(`> ${description.replace(/\n/g, '\n> ')}`);
         lines.push('');
-        lines.push(description);
+      } else {
+        lines.push(`- **${name}**`);
       }
+    }
+    if (!character.gear.some(g => typeof g === 'object' && g.description)) {
       lines.push('');
     }
   }
   
-  // Additional Gear
-  if (character.additional_gear) {
-    lines.push('## Additional Gear');
+  // Common Items
+  if (character.common_items && character.common_items.length > 0) {
+    lines.push('## 📦 Common Items');
     lines.push('');
-    lines.push(character.additional_gear);
+    for (const item of character.common_items) {
+      lines.push(`- ${item}`);
+    }
     lines.push('');
   }
   
-  // Appearance
-  if (character.appearance) {
-    lines.push('## Appearance');
+  // Additional Gear (deprecated but still exported if present)
+  if (character.additional_gear && character.additional_gear.trim()) {
+    lines.push('## 🗃️ Additional Gear');
     lines.push('');
-    lines.push(character.appearance);
+    lines.push(character.additional_gear.trim());
+    lines.push('');
+  }
+  
+  lines.push('---');
+  lines.push('');
+  
+  // Appearance
+  if (character.appearance && character.appearance.trim()) {
+    lines.push('## 👤 Appearance');
+    lines.push('');
+    lines.push(character.appearance.trim());
     lines.push('');
   }
   
   // Background
-  if (character.background) {
-    lines.push('## Background');
+  if (character.background && character.background.trim()) {
+    lines.push('## 📜 Background');
     lines.push('');
-    lines.push(character.background);
+    lines.push(character.background.trim());
     lines.push('');
   }
   
   // Flavor
-  if (character.flavor) {
-    lines.push('## Flavor');
+  if (character.flavor && character.flavor.trim()) {
+    lines.push('## 🎲 Flavor');
     lines.push('');
-    lines.push(character.flavor);
+    lines.push(character.flavor.trim());
     lines.push('');
   }
   
   // Ideas
-  if (character.ideas) {
-    lines.push('## Ideas');
+  if (character.ideas && character.ideas.trim()) {
+    lines.push('## 💡 Ideas');
     lines.push('');
-    lines.push(character.ideas);
+    lines.push(character.ideas.trim());
     lines.push('');
   }
   
   // Private Notes (only included if explicitly requested)
-  if (options.includePrivateNotes && character.private_notes) {
-    lines.push('## Private Notes');
+  if (options.includePrivateNotes && character.private_notes && character.private_notes.trim()) {
+    lines.push('## 🔒 Private Notes');
     lines.push('');
-    lines.push(character.private_notes);
-    lines.push('');
-  }
-  
-  // Image URL
-  if (character.image_url) {
-    lines.push('---');
-    lines.push('');
-    lines.push(`![${character.name}](${character.image_url})`);
+    lines.push(character.private_notes.trim());
     lines.push('');
   }
   
-  // Footer
+  // Footer with metadata
   lines.push('---');
-  lines.push(`*Exported from Enclave*`);
+  lines.push('');
+  lines.push(`**Missions Completed:** ${character.completed_missions || 0} · **Commissary Reward:** ${character.commissary_reward || 0}`);
+  lines.push('');
+  lines.push(`*Exported from Agent Resources · ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}*`);
   
   return lines.join('\n');
 };
@@ -220,6 +261,7 @@ const exportToJson = (character, options = {}) => {
     gear: (character.gear || []).map(g => 
       typeof g === 'string' ? { name: g } : { name: g.name, description: g.description }
     ),
+    common_items: character.common_items || [],
     additional_gear: character.additional_gear || '',
     appearance: character.appearance || '',
     background: character.background || '',
