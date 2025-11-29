@@ -439,3 +439,34 @@ body.modal-open {
   background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Bulma dropdown styles - override Bulmaswatch Lux theme */
+.dropdown-menu {
+  background-color: #fff !important;
+}
+
+.dropdown-content {
+  background-color: #fff !important;
+  border-radius: 4px;
+  box-shadow: 0 0.5em 1em -0.125em rgba(10, 10, 10, 0.1), 0 0 0 1px rgba(10, 10, 10, 0.02);
+  padding-bottom: 0.5rem;
+  padding-top: 0.5rem;
+}
+
+.dropdown-item {
+  color: #4a4a4a !important;
+  display: block;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  padding: 0.375rem 1rem;
+  position: relative;
+}
+
+a.dropdown-item {
+  background-color: #fff !important;
+}
+
+a.dropdown-item:hover {
+  background-color: #f5f5f5 !important;
+  color: #0a0a0a !important;
+}
+
