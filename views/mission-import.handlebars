@@ -1,0 +1,22 @@
+{{> breadcrumbs}}
+<h2 class="title is-2">Import Mission Log</h2>
+{{#if error}}
+<div class="notification is-danger">
+  {{error}}
+</div>
+{{/if}}
+<span class="tag is-warning mb-4">AI-assisted: please review imported mission details before saving.</span>
+<form hx-post="/missions/import" class="box">
+  <div class="field">
+    <label class="label">Mission Log</label>
+    <div class="control">
+      <textarea class="textarea" name="inputText" placeholder="Paste your mission log or recap" rows="10"></textarea>
+    </div>
+  </div>
+  <div class="field">
+    <div class="control">
+      <button id="importMissionBtn" type="submit" class="button is-primary"
+        hx-on:click="htmx.addClass(htmx.find('#importMissionBtn'), 'is-loading')">Import Mission</button>
+    </div>
+  </div>
+</form>

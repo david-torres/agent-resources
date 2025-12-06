@@ -4,10 +4,10 @@
   "description": "Agent Resources: is a web application for managing Enclave characters, finding games, and more!",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js",
+    "start": "bun run index.js",
+    "dev": "bun --watch index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed:classes": "node util/seed-classes.js"
+    "seed:classes": "bun run util/seed-classes.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
