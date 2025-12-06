@@ -1,6 +1,15 @@
 {{> breadcrumbs}}
 <h1 class="title is-2">{{character.name}}'s Missions</h1>
 
+{{#if (and profile.id (eq character.creator_id profile.id))}}
+<div class="block">
+  <a href="/missions/new" class="button is-primary">
+    <span class="icon"><i class="fas fa-plus"></i></span>
+    <span>Add Mission</span>
+  </a>
+</div>
+{{/if}}
+
 {{#if missions.length}}
 <div class="block">
   <table class="table is-fullwidth is-striped is-hoverable">
