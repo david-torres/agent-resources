@@ -162,7 +162,11 @@ router.post('/import', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { inputText } = req.body;
   try {
-    const character = await processCharacterImport(inputText, profile);
+    const result = await processCharacterImport(inputText, profile);
+    const character = result.character;
+    if (!character) {
+      return res.status(400).send('No character found in import');
+    }
     return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   } catch (error) {
     return res.status(400).send(error.message);

@@ -6,18 +6,18 @@ const { getOwnCharacters, searchPublicCharacters } = require('../models/characte
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
-  { model: "gpt-4o-mini" }
+  { model: "gpt-5.1-mini" }
 );
 
 const missionSchema = z.object({
-  name: z.string().describe("Mission name/title"),
-  date: z.string().nullable().optional().describe("Mission date/time in any recognizable format"),
-  outcome: z.string().nullable().optional().describe("Outcome such as success, failure, or pending"),
-  focus_words: z.string().nullable().optional().describe("Optional focus words or tags"),
-  statement: z.string().nullable().optional().describe("Mission statement or objective"),
-  summary: z.string().nullable().optional().describe("Mission summary or play log"),
-  media_url: z.string().url().nullable().optional().describe("Optional media URL (YouTube/Twitch/etc)"),
-  characters: z.array(z.string()).nullable().optional().describe("Array of participant character names")
+  name: z.string().describe("The mission's name or title"),
+  date: z.string().nullable().optional().describe("The mission date/time in any recognizable format (e.g., '2024-01-15', 'January 15, 2024', 'last week', 'yesterday'). If not provided, use the current date."),
+  outcome: z.string().nullable().optional().describe("The mission outcome, must be one of: 'success', 'failure', or 'pending'. Infer from context if the mission was completed successfully, failed, or is still in progress."),
+  focus_words: z.string().nullable().optional().describe("Optional focus words or tags that describe key themes, locations, or concepts from the mission"),
+  statement: z.string().nullable().optional().describe("The mission statement, objective, or briefing that describes what the mission was supposed to accomplish"),
+  summary: z.string().nullable().optional().describe("A detailed summary or play log of what happened during the mission, including key events, decisions, and outcomes"),
+  media_url: z.string().url().nullable().optional().describe("Optional media URL linking to recordings or streams (YouTube, Twitch, etc.) of the mission"),
+  characters: z.array(z.string()).nullable().optional().describe("Array of participant character names who took part in the mission.")
 });
 
 const outcomeOptions = ['success', 'failure', 'pending'];
@@ -151,7 +151,7 @@ const findCharacterMatch = async (name, ownCharactersCache) => {
 };
 
 async function processMissionImport(inputText, profile) {
-  const prompt = `Parse the following mission log and structure it as JSON following the schema.
+  const prompt = `Parse the following mission log and try to structure the data following the provided JSON schema info.
 
 Mission log:
 ${inputText}

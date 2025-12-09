@@ -4,10 +4,12 @@ const { completion } = require("zod-gpt");
 const { createCharacter } = require('../models/character');
 const { getClasses } = require('../models/class');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classGearList, classAbilityList, personalityMap } = require('../util/enclave-consts');
+const { processMissionImport } = require('./mission-import');
+const { addCharacterToMission } = require('../models/mission');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
-  { model: "gpt-4o-mini" }
+  { model: "gpt-5.1-mini" }
 );
 
 const traits = Object.values(personalityMap).join(', ');
@@ -43,6 +45,7 @@ const schema = z.object({
   ideas: z.string().describe("The player's ideas for the character"),
   background: z.string().describe("The character's background"),
   perks: z.string().describe("The character's ability perks"),
+  mission_logs: z.array(z.string()).nullable().optional().describe("Array of mission log texts if any are attached to this character sheet. Each string should be a complete mission log entry that can be parsed separately.")
 });
 
 const resolveClassIdByName = async (className) => {
@@ -88,6 +91,8 @@ const formatClassContent = (items, classId) => {
 async function processCharacterImport(inputText, profile) {
   const prompt = `Parse the following character sheet and try to structure the data following the provided JSON schema info.
 
+If the character sheet includes mission logs or mission recaps (often found in sections labeled "Missions", "Mission Log", "Mission History", "Adventures", etc.), extract each mission log as a separate string in the mission_logs array. Each mission log should be a complete, standalone entry that can be parsed independently.
+
 Character sheet:
 ${inputText}
 
@@ -96,11 +101,18 @@ JSON output:`;
   const result = await completion(openai, prompt, { schema });
   try {
     const validatedCharacter = schema.parse(result.data);
+    const missionLogs = Array.isArray(validatedCharacter.mission_logs) 
+      ? validatedCharacter.mission_logs.filter(log => log && typeof log === 'string' && log.trim().length > 0)
+      : [];
+    
     const characterData = {
       ...validatedCharacter,
       creator_id: profile.id,
       is_public: false,
     };
+    // Remove mission_logs from characterData as it's not a character field
+    delete characterData.mission_logs;
+    
     const classDefinition = await resolveClassIdByName(characterData.class);
     if (!classDefinition?.id) {
       throw new Error(`Unknown class "${characterData.class}"`);
@@ -111,7 +123,39 @@ JSON output:`;
     characterData.gear = formatClassContent(characterData.gear, classDefinition.id);
     const { data: character, error } = await createCharacter(characterData, profile);
     if (error) throw new Error(error.message);
-    return character;
+    
+    const importedCharacter = Array.isArray(character) ? character[0] : character;
+    const importedMissions = [];
+    
+    // Process mission logs if any were found
+    if (missionLogs.length > 0) {
+      for (const missionLogText of missionLogs) {
+        try {
+          // Process the mission import, which will try to match characters
+          // We need to ensure the newly imported character is included
+          const { mission, matchedCharacterIds } = await processMissionImport(missionLogText, profile);
+          
+          // Check if the newly imported character was already added
+          // If not, add them to the mission
+          if (importedCharacter && importedCharacter.id) {
+            const characterAlreadyAdded = matchedCharacterIds.includes(importedCharacter.id);
+            if (!characterAlreadyAdded) {
+              // Try to add the character to the mission
+              // The mission import might not have matched the character name correctly
+              // since it was just created, so we'll add it explicitly
+              await addCharacterToMission(mission.id, importedCharacter.id);
+            }
+          }
+          
+          importedMissions.push(mission);
+        } catch (missionError) {
+          // Log but don't fail the character import if mission import fails
+          console.error(`Failed to import mission log: ${missionError.message}`);
+        }
+      }
+    }
+    
+    return { character: importedCharacter, missions: importedMissions };
   } catch (error) {
     throw new Error(`Invalid character data: ${error.message}`);
   }
