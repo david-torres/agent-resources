@@ -1,14 +1,58 @@
 {{> breadcrumbs}}
 <h2 class="title is-2">Search Mission Logs</h2>
-<div class="box">
-  <div class="field">
-    <label class="label">Search by mission name</label>
-    <div class="control has-icons-left">
-      <input class="input" type="text" name="q" placeholder="Enter mission name..." hx-get="/missions/s?count=12"
-        hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results">
-      <span class="icon is-left">
-        <i class="fas fa-search"></i>
-      </span>
+<div class="box" id="search-filters">
+  <div class="columns is-multiline">
+    <div class="column is-6">
+      <div class="field">
+        <label class="label">Search by mission name</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" name="q" placeholder="Enter mission name..." hx-get="/missions/s?count=12"
+            hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results" hx-include="#search-filters">
+          <span class="icon is-left">
+            <i class="fas fa-search"></i>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-6">
+      <div class="field">
+        <label class="label">Search by character name</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" name="character_name" placeholder="Enter character name..." hx-get="/missions/s?count=12"
+            hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results" hx-include="#search-filters">
+          <span class="icon is-left">
+            <i class="fas fa-user"></i>
+          </span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="columns is-multiline">
+    <div class="column is-6">
+      <div class="field">
+        <label class="label">Filter by character class</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="character_class" hx-get="/missions/s?count=12" hx-trigger="change" hx-target="#search-results" hx-include="#search-filters">
+              <option value="">All classes</option>
+              {{#each classes}}
+                <option value="{{this.name}}">{{this.name}}</option>
+              {{/each}}
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="column is-6">
+      <div class="field">
+        <div class="control">
+          <label class="checkbox">
+            <input type="checkbox" name="has_video" value="true"
+              hx-get="/missions/s?count=12" hx-trigger="change" hx-target="#search-results" hx-include="#search-filters">
+            Has video
+          </label>
+        </div>
+      </div>
     </div>
   </div>
 </div>

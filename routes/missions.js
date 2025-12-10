@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnregisteredCharacterNames, searchPublicMissions, getRandomPublicMissions } = require('../util/supabase');
+const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnregisteredCharacterNames, searchPublicMissions, getRandomPublicMissions, getClasses } = require('../util/supabase');
 const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -8,10 +8,15 @@ const supabase = require('../util/supabase');
 
 router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
-  const { data: initialMissions } = await getRandomPublicMissions(12);
+  const { has_video, character_name, character_class } = req.query;
+  const [{ data: classes }, { data: initialMissions }] = await Promise.all([
+    getClasses({ is_public: true }),
+    getRandomPublicMissions(12, has_video === 'true', character_name, character_class)
+  ]);
 
   res.render('mission-search', {
     profile,
+    classes: Array.isArray(classes) ? classes : [],
     initialMissions: Array.isArray(initialMissions) ? initialMissions : [],
     activeNav: 'search-missions',
     breadcrumbs: [
@@ -21,9 +26,15 @@ router.get('/search', authOptional, async (req, res) => {
 });
 
 router.get('/s', authOptional, async (req, res) => {
-  const { q, count } = req.query;
+  const { q, count, has_video, character_name, character_class } = req.query;
 
-  if (!q || q.length < 2) {
+  // If no search query, no character name, no character class, and no video filter, return empty results
+  const hasQuery = q && q.length >= 2;
+  const hasCharacterName = character_name && character_name.length >= 2;
+  const hasCharacterClass = character_class && character_class.length > 0;
+  const hasVideoFilter = has_video === 'true';
+
+  if (!hasQuery && !hasCharacterName && !hasCharacterClass && !hasVideoFilter) {
     res.render('partials/mission-search-results', {
       layout: false,
       missions: [],
@@ -32,7 +43,13 @@ router.get('/s', authOptional, async (req, res) => {
     return;
   }
 
-  const { data: missions, error } = await searchPublicMissions(q, count || 12);
+  const { data: missions, error } = await searchPublicMissions(
+    hasQuery ? q : null,
+    count || 12,
+    hasVideoFilter,
+    hasCharacterName ? character_name : null,
+    hasCharacterClass ? character_class : null
+  );
 
   if (error) {
     return res.status(400).send(error.message);

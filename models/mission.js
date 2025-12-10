@@ -146,8 +146,12 @@ const setUnregisteredCharacterNames = async (missionId, names, profile) => {
   return { data, error };
 }
 
-const searchPublicMissions = async (q, count = 12) => {
+const searchPublicMissions = async (q, count = 12, hasVideo = false, characterName = null, characterClass = null) => {
   try {
+    // Determine pool size based on filters - fetch more if filtering in JS
+    const needsJsFiltering = characterName || characterClass;
+    const poolSize = needsJsFiltering ? Math.max(count * 5, 100) : count;
+
     let query = supabase
       .from('missions')
       .select(`
@@ -162,16 +166,21 @@ const searchPublicMissions = async (q, count = 12) => {
           character:characters(
             id,
             name,
+            class,
             is_deceased
           )
         )
       `)
       .eq('is_public', true)
       .order('date', { ascending: false })
-      .limit(count);
+      .limit(poolSize);
 
     if (q && q.trim().length > 0) {
       query = query.ilike('name', `%${q}%`);
+    }
+
+    if (hasVideo) {
+      query = query.not('media_url', 'is', null).neq('media_url', '');
     }
 
     const { data, error } = await query;
@@ -181,10 +190,41 @@ const searchPublicMissions = async (q, count = 12) => {
     }
 
     // Transform the nested data structure
-    const transformedData = data.map(mission => ({
+    let transformedData = data.map(mission => ({
       ...mission,
       characters: mission.characters.map(mc => mc.character)
     }));
+
+    // Filter by character class - filter missions that have at least one character with matching class
+    if (characterClass && characterClass.trim().length > 0) {
+      transformedData = transformedData.filter(mission => {
+        return mission.characters.some(char => 
+          char && char.class && char.class === characterClass
+        );
+      });
+    }
+
+    // Filter by character name (both registered and unregistered)
+    if (characterName && characterName.trim().length > 0) {
+      const searchTerm = characterName.trim().toLowerCase();
+      transformedData = transformedData.filter(mission => {
+        // Check registered characters
+        const hasMatchingRegistered = mission.characters.some(char => 
+          char && char.name && char.name.toLowerCase().includes(searchTerm)
+        );
+        
+        // Check unregistered character names
+        const hasMatchingUnregistered = Array.isArray(mission.unregistered_character_names) &&
+          mission.unregistered_character_names.some(name => 
+            name && name.toLowerCase().includes(searchTerm)
+          );
+        
+        return hasMatchingRegistered || hasMatchingUnregistered;
+      });
+    }
+
+    // Limit to requested count after filtering
+    transformedData = transformedData.slice(0, count);
 
     return { data: transformedData, error: null };
   } catch (error) {
@@ -193,11 +233,14 @@ const searchPublicMissions = async (q, count = 12) => {
   }
 }
 
-const getRandomPublicMissions = async (count = 12) => {
+const getRandomPublicMissions = async (count = 12, hasVideo = false, characterName = null, characterClass = null) => {
   try {
     // Fetch a reasonably sized pool, then sample client-side for randomness
-    const poolSize = Math.max(Math.min(count * 5, 100), count);
-    const { data, error } = await supabase
+    // Fetch more if filtering in JS
+    const needsJsFiltering = characterName || characterClass;
+    const poolSize = needsJsFiltering ? Math.max(count * 10, 200) : Math.max(Math.min(count * 5, 100), count);
+
+    let query = supabase
       .from('missions')
       .select(`
         id,
@@ -211,6 +254,7 @@ const getRandomPublicMissions = async (count = 12) => {
           character:characters(
             id,
             name,
+            class,
             is_deceased
           )
         )
@@ -219,16 +263,50 @@ const getRandomPublicMissions = async (count = 12) => {
       .order('date', { ascending: false })
       .limit(poolSize);
 
+    if (hasVideo) {
+      query = query.not('media_url', 'is', null).neq('media_url', '');
+    }
+
+    const { data, error } = await query;
+
     if (error) {
       console.error(error);
       return { data: null, error };
     }
 
     // Transform the nested data structure
-    const transformedData = data.map(mission => ({
+    let transformedData = data.map(mission => ({
       ...mission,
       characters: mission.characters.map(mc => mc.character)
     }));
+
+    // Filter by character class - filter missions that have at least one character with matching class
+    if (characterClass && characterClass.trim().length > 0) {
+      transformedData = transformedData.filter(mission => {
+        return mission.characters.some(char => 
+          char && char.class && char.class === characterClass
+        );
+      });
+    }
+
+    // Filter by character name (both registered and unregistered)
+    if (characterName && characterName.trim().length > 0) {
+      const searchTerm = characterName.trim().toLowerCase();
+      transformedData = transformedData.filter(mission => {
+        // Check registered characters
+        const hasMatchingRegistered = mission.characters.some(char => 
+          char && char.name && char.name.toLowerCase().includes(searchTerm)
+        );
+        
+        // Check unregistered character names
+        const hasMatchingUnregistered = Array.isArray(mission.unregistered_character_names) &&
+          mission.unregistered_character_names.some(name => 
+            name && name.toLowerCase().includes(searchTerm)
+          );
+        
+        return hasMatchingRegistered || hasMatchingUnregistered;
+      });
+    }
 
     if (!Array.isArray(transformedData) || transformedData.length <= count) {
       return { data: transformedData, error: null };

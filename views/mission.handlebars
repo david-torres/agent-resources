@@ -2,6 +2,19 @@
 <h1 class="title is-2">{{mission.name}}</h1>
 <div class="columns">
   <div class="column is-two-thirds">
+    {{#if mission.media_url}}
+    <div class="box">
+      <h3 class="title is-4">Mission Recording</h3>
+      {{#if (isSupportedVideoUrl mission.media_url)}}
+      <figure class="image is-16by9">
+        <iframe class="has-ratio" width="560" height="315" src="{{videoEmbed mission.media_url}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+      </figure>
+      {{else}}
+      <p><a href="{{mission.media_url}}" target="_blank" rel="noopener noreferrer">{{mission.media_url}}</a></p>
+      {{/if}}
+    </div>
+    {{/if}}
+
     <div class="box">
       <h3 class="title is-4">Mission Details</h3>
       {{#if profile}}
@@ -58,19 +71,6 @@
         {{/if}}
       </div>
     </div>
-
-    {{#if mission.media_url}}
-    <div class="box">
-      <h3 class="title is-4">Mission Recording</h3>
-      {{#if (isSupportedVideoUrl mission.media_url)}}
-      <figure class="image is-16by9">
-        <iframe class="has-ratio" width="560" height="315" src="{{videoEmbed mission.media_url}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-      </figure>
-      {{else}}
-      <p><a href="{{mission.media_url}}" target="_blank" rel="noopener noreferrer">{{mission.media_url}}</a></p>
-      {{/if}}
-    </div>
-    {{/if}}
 
     {{#if (eq mission.creator_id profile.id)}}
     <div class="buttons">
