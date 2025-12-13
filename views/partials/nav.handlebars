@@ -14,8 +14,14 @@
   <div class="navbar-menu" id="navbar-menu">
     <div class="navbar-end">
       <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link {{#if (or (eq activeNav 'classes') (eq activeNav 'my-classes') (eq activeNav 'redeem'))}}is-active{{/if}}">Game Info</a>
+        <a class="navbar-link {{#if (or (eq activeNav 'classes') (eq activeNav 'my-classes') (eq activeNav 'redeem') (eq activeNav 'rules'))}}is-active{{/if}}">Game Info</a>
         <div class="navbar-dropdown is-right">
+          <a class="navbar-item" href="/rules">
+            <span class="icon">
+              <i class="fas fa-scroll"></i>
+            </span>
+            <span>Rules Library</span>
+          </a>
           <a class="navbar-item" href="/classes">
             <span class="icon">
               <i class="fas fa-chess-knight"></i>
@@ -35,12 +41,6 @@
               <i class="fas fa-ticket"></i>
             </span>
             <span>Redeem Unlock Codes</span>
-          </a>
-          <a class="navbar-item" href="/rules">
-            <span class="icon">
-              <i class="fas fa-scroll"></i>
-            </span>
-            <span>Rules Library</span>
           </a>
         </div>
       </div>
