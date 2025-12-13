@@ -1,0 +1,32 @@
+<div id="similar-missions" class="similar-missions">
+  {{#if missions.length}}
+    <div class="similar-missions-header">
+      <h4>Possible Existing Missions</h4>
+      <p class="similar-missions-hint">These missions have similar dates. You may want to join an existing mission instead of creating a duplicate.</p>
+    </div>
+    <ul class="similar-mission-list">
+      {{#each missions}}
+        <li class="similar-mission-item">
+          <div class="similar-mission-info">
+            <a href="/missions/{{id}}" target="_blank" class="similar-mission-name">{{name}}</a>
+            <span class="similar-mission-date">{{formatDate date}}</span>
+            {{#if creator_name}}
+              <span class="similar-mission-creator">by {{creator_name}}</span>
+            {{/if}}
+          </div>
+          <div class="similar-mission-characters">
+            {{#if characters.length}}
+              <span class="character-count">{{characters.length}} character{{#unless (eq characters.length 1)}}s{{/unless}}</span>
+            {{/if}}
+          </div>
+          <div class="similar-mission-actions">
+            <a href="/missions/{{id}}" target="_blank" class="btn btn-sm btn-secondary">View</a>
+          </div>
+        </li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p class="no-similar">No similar missions found for this date.</p>
+  {{/if}}
+</div>
+
