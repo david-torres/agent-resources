@@ -80,7 +80,11 @@ router.get('/', authOptional, async (req, res) => {
         profile,
         title: 'Rules Library',
         rules: rulesWithAccess,
-        isAdmin
+        isAdmin,
+        activeNav: 'rules',
+        breadcrumbs: [
+            { label: 'Rules Library', href: '/rules' }
+        ]
     });
 });
 
@@ -105,7 +109,12 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
     return res.render('rules-manage', {
         profile,
         title: 'Manage Rules PDFs',
-        rules: rulesWithUnlocks
+        rules: rulesWithUnlocks,
+        activeNav: 'rules',
+        breadcrumbs: [
+            { label: 'Rules Library', href: '/rules' },
+            { label: 'Manage', href: '/rules/manage' }
+        ]
     });
 });
 
@@ -287,7 +296,12 @@ router.get('/:id/view', authOptional, async (req, res) => {
         title: `${rulesPdf.title} (${rulesPdf.edition})`,
         viewerTitle: `${rulesPdf.title} — ${rulesPdf.edition}`,
         pdfUrl: signedUrl,
-        backUrl: '/rules'
+        backUrl: '/rules',
+        activeNav: 'rules',
+        breadcrumbs: [
+            { label: 'Rules Library', href: '/rules' },
+            { label: `${rulesPdf.title} (${rulesPdf.edition})`, href: `/rules/${id}/view` }
+        ]
     });
 });
 

@@ -252,7 +252,12 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
         title: `${classData.name} PDF`,
         viewerTitle: `${classData.name} Class PDF`,
         pdfUrl: signedUrl,
-        backUrl: `/classes/${classData.id}/${classData.name || ''}`
+        backUrl: `/classes/${classData.id}/${classData.name || ''}`,
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: classData.name, href: `/classes/${classData.id}/${encodeURIComponent(classData.name || '')}` },
+            { label: 'PDF', href: `/classes/${classData.id}/pdf` }
+        ]
     });
 });
 
