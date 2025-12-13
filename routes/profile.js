@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses } = require('../util/supabase');
+const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles } = require('../util/supabase');
 const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
@@ -151,6 +151,19 @@ router.delete('/agent-tokens/:id', isAuthenticated, async (req, res) => {
   }
 
   return res.json(data);
+});
+
+// Search profiles (for adding editors, etc.)
+router.get('/search', isAuthenticated, async (req, res) => {
+  const { q } = req.query;
+  const { data: profiles, error } = await searchProfiles(q, 10);
+  if (error) {
+    return res.status(400).send(error.message);
+  }
+  res.render('partials/profile-search-results', {
+    layout: false,
+    profiles
+  });
 });
 
 module.exports = router;

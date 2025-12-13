@@ -72,6 +72,15 @@ function dump(varName) {
 }
 
 /**
+ * Substring helper - gets a substring of a string
+ * Usage: {{substring name 0 1}} - gets first character
+ */
+function substring(str, start, end) {
+  if (!str || typeof str !== 'string') return '';
+  return str.substring(start, end);
+}
+
+/**
  * Video provider configurations
  */
 const videoProviders = {
@@ -174,5 +183,6 @@ module.exports = {
   isYoutubeUrl,
   videoEmbed,
   isSupportedVideoUrl,
-  getVideoProvider
+  getVideoProvider,
+  substring
 }
