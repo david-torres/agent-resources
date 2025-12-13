@@ -6,6 +6,7 @@
 
 {{#if missions.length}}
 <div class="block">
+  <h3 class="title is-4">Your Missions</h3>
   <table class="table is-fullwidth is-striped is-hoverable">
     <thead>
       <tr>
@@ -68,4 +69,58 @@
 </div>
 {{else}}
 <p class="has-text-centered">You don't have any missions logged.</p>
+{{/if}}
+
+{{!-- Editable Missions (where user is an editor but not creator) --}}
+{{#if editableMissions.length}}
+<div class="block mt-5">
+  <h3 class="title is-4">Missions You Can Edit</h3>
+  <p class="subtitle is-6 has-text-grey">Missions where you've been added as an editor</p>
+  <table class="table is-fullwidth is-striped is-hoverable">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th>Characters</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each editableMissions}}
+      <tr>
+        <td>
+          {{this.name}}
+          {{#if this.media_url}}
+          <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
+          {{/if}}
+          <span class="tag is-info is-light ml-2">Editor</span>
+        </td>
+        {{#if profile}}
+        <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
+        {{else}}
+        <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
+        {{/if}}
+        <td>{{this.outcome}}</td>
+        <td>
+          {{#if this.characters.length}}
+          {{#each this.characters}}
+          <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
+          {{/each}}
+          {{/if}}
+          {{#unless this.characters.length}}
+          -
+          {{/unless}}
+        </td>
+        <td>
+          <div class="buttons are-small">
+            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
+          </div>
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
 {{/if}}

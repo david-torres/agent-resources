@@ -535,3 +535,186 @@ a.dropdown-item:hover {
     padding: 0.5rem;
   }
 }
+
+/* ============================================
+   Mission Editors & Collaboration Styles
+   ============================================ */
+
+/* Editor list */
+.mission-editors {
+  background: #f5f5f5;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.editor-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.editor-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.editor-item:last-child {
+  border-bottom: none;
+}
+
+.editor-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editor-avatar,
+.profile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.editor-avatar-placeholder,
+.profile-avatar-placeholder {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: #3273dc;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.875rem;
+}
+
+.editor-name,
+.profile-name {
+  font-weight: 500;
+}
+
+.editor-added-by {
+  color: #7a7a7a;
+  font-size: 0.875rem;
+}
+
+.no-editors {
+  color: #7a7a7a;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Editor search results */
+.editor-search-results {
+  margin-top: 0.5rem;
+}
+
+.profile-search-results {
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.profile-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: white;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+}
+
+.profile-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.profile-item:hover {
+  background-color: #f5f5f5;
+}
+
+.profile-item:not(:last-child) {
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* Similar missions (deduplication) */
+.similar-missions {
+  background: #fffbeb;
+  border: 1px solid #ffe08a;
+  border-radius: 6px;
+  padding: 1rem;
+}
+
+.similar-missions-header h4 {
+  color: #946c00;
+  margin-bottom: 0.25rem;
+}
+
+.similar-missions-hint {
+  color: #7a7a7a;
+  font-size: 0.875rem;
+  margin-bottom: 0.75rem;
+}
+
+.similar-mission-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.similar-mission-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.75rem;
+  background: white;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.similar-mission-item:last-child {
+  margin-bottom: 0;
+}
+
+.similar-mission-info {
+  flex: 1;
+}
+
+.similar-mission-name {
+  font-weight: 500;
+  display: block;
+}
+
+.similar-mission-date,
+.similar-mission-creator {
+  color: #7a7a7a;
+  font-size: 0.875rem;
+}
+
+.similar-mission-characters {
+  color: #7a7a7a;
+  font-size: 0.875rem;
+}
+
+.no-similar {
+  color: #7a7a7a;
+  font-style: italic;
+  margin: 0;
+}
+
+/* Merge preview styles */
+.merged-summary {
+  white-space: pre-wrap;
+  background: #f5f5f5;
+  padding: 1rem;
+  border-radius: 4px;
+}

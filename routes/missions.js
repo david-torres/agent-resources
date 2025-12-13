@@ -1,6 +1,32 @@
 const express = require('express');
 const router = express.Router();
-const { getMissions, getMission, createMission, updateMission, deleteMission, addCharacterToMission, removeCharacterFromMission, getMissionCharacters, setUnregisteredCharacterNames, searchPublicMissions, getRandomPublicMissions, getClasses } = require('../util/supabase');
+const { 
+  getMissions, 
+  getMission, 
+  createMission, 
+  updateMission, 
+  deleteMission, 
+  addCharacterToMission, 
+  removeCharacterFromMission, 
+  getMissionCharacters, 
+  setUnregisteredCharacterNames, 
+  searchPublicMissions, 
+  getRandomPublicMissions, 
+  getClasses,
+  // Editor management
+  getMissionEditors,
+  addMissionEditor,
+  removeMissionEditor,
+  canEditMission,
+  isCreator,
+  getEditableMissions,
+  // Similar/merge
+  searchSimilarMissions,
+  mergeMissions,
+  previewMergeMissions,
+  // Profile search
+  searchProfiles
+} = require('../util/supabase');
 const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -64,19 +90,33 @@ router.get('/s', authOptional, async (req, res) => {
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: missions, error } = await getOwnMissions(profile);
-  if (error) {
-    return res.status(400).send(error.message);
-  } else {
-    res.render('mission-list', {
-      profile,
-      missions,
-      activeNav: 'missions',
-      breadcrumbs: [
-        { label: 'Missions', href: '/missions' }
-      ]
-    });
+  
+  // Get both own missions and editable missions
+  const [{ data: ownMissions, error: ownError }, { data: editableMissions, error: editableError }] = await Promise.all([
+    getOwnMissions(profile),
+    getEditableMissions(profile)
+  ]);
+  
+  if (ownError) {
+    return res.status(400).send(ownError.message);
   }
+  
+  // Mark own missions and filter duplicates from editable
+  const ownMissionsMarked = (ownMissions || []).map(m => ({ ...m, isOwner: true }));
+  const ownIds = new Set(ownMissionsMarked.map(m => m.id));
+  const editableOnly = (editableMissions || [])
+    .filter(m => !ownIds.has(m.id))
+    .map(m => ({ ...m, isEditor: true }));
+  
+  res.render('mission-list', {
+    profile,
+    missions: ownMissionsMarked,
+    editableMissions: editableOnly,
+    activeNav: 'missions',
+    breadcrumbs: [
+      { label: 'Missions', href: '/missions' }
+    ]
+  });
 });
 
 router.get('/new', isAuthenticated, (req, res) => {
@@ -145,22 +185,37 @@ router.get('/:id', authOptional, async (req, res) => {
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: mission, error } = await getMission(id);
+  
+  // Check if user can edit this mission
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return res.status(403).send('You do not have permission to edit this mission');
+  }
+  
+  const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
+    getMission(id),
+    getMissionEditors(id),
+    isCreator(id, profile)
+  ]);
+  
   if (error) {
     return res.status(400).send(error.message);
-  } else {
-    res.render('mission-form', {
-      profile,
-      mission,
-      isNew: false,
-      activeNav: 'missions',
-      breadcrumbs: [
-        { label: 'Missions', href: '/missions' },
-        { label: mission.name, href: `/missions/${id}` },
-        { label: 'Edit', href: '#' }
-      ]
-    });
   }
+  
+  res.render('mission-form', {
+    profile,
+    mission,
+    editors: editors || [],
+    isNew: false,
+    isCreator: userIsCreator,
+    canRemoveEditors: userIsCreator,
+    activeNav: 'missions',
+    breadcrumbs: [
+      { label: 'Missions', href: '/missions' },
+      { label: mission.name, href: `/missions/${id}` },
+      { label: 'Edit', href: '#' }
+    ]
+  });
 });
 
 router.put('/:id', isAuthenticated, async (req, res) => {
@@ -285,6 +340,162 @@ router.get('/character/:id', authOptional, async (req, res) => {
       }
     }
   }
+});
+
+// ============================================
+// Editor Management Endpoints
+// ============================================
+
+// Get editors for a mission
+router.get('/:id/editors', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+
+  // Check if user can view this mission's editors
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return res.status(403).send('Unauthorized');
+  }
+
+  const { data: editors, error } = await getMissionEditors(id);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  res.render('partials/mission-editors', {
+    layout: false,
+    editors,
+    missionId: id,
+    canRemoveEditors: await isCreator(id, profile)
+  });
+});
+
+// Add an editor to a mission
+router.post('/:id/editors', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const { profile_id } = req.body;
+
+  if (!profile_id) {
+    return res.status(400).send('Profile ID is required');
+  }
+
+  // Check if user can edit this mission
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return res.status(403).send('Unauthorized');
+  }
+
+  const { error } = await addMissionEditor(id, profile_id, profile.id);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  // Return updated editors list
+  const { data: editors } = await getMissionEditors(id);
+  res.render('partials/mission-editors', {
+    layout: false,
+    editors,
+    missionId: id,
+    canRemoveEditors: await isCreator(id, profile)
+  });
+});
+
+// Remove an editor from a mission
+router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id, profileId } = req.params;
+
+  // Only creator can remove editors
+  const creator = await isCreator(id, profile);
+  if (!creator) {
+    return res.status(403).send('Only the mission creator can remove editors');
+  }
+
+  const { error } = await removeMissionEditor(id, profileId);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  // Return updated editors list
+  const { data: editors } = await getMissionEditors(id);
+  res.render('partials/mission-editors', {
+    layout: false,
+    editors,
+    missionId: id,
+    canRemoveEditors: true
+  });
+});
+
+// ============================================
+// Similar Missions / Deduplication Endpoints
+// ============================================
+
+// Search for similar missions (for deduplication)
+router.get('/similar', isAuthenticated, async (req, res) => {
+  const { date, name, exclude_id } = req.query;
+
+  if (!date) {
+    return res.status(400).send('Date is required');
+  }
+
+  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  res.render('partials/similar-missions', {
+    layout: false,
+    missions
+  });
+});
+
+// ============================================
+// Mission Merge Endpoints
+// ============================================
+
+// Preview a merge
+router.get('/:id/merge/:targetId/preview', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id, targetId } = req.params;
+
+  // Check permissions for both missions
+  const canEditPrimary = await canEditMission(id, profile);
+  const canEditTarget = await canEditMission(targetId, profile);
+
+  if (!canEditPrimary || !canEditTarget) {
+    return res.status(403).send('You must be able to edit both missions to merge them');
+  }
+
+  const { data: preview, error } = await previewMergeMissions(id, targetId);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  res.render('mission-merge', {
+    profile,
+    preview,
+    primaryId: id,
+    secondaryId: targetId,
+    activeNav: 'missions',
+    breadcrumbs: [
+      { label: 'Missions', href: '/missions' },
+      { label: 'Merge Missions', href: '#' }
+    ]
+  });
+});
+
+// Execute a merge
+router.post('/:id/merge/:targetId', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id, targetId } = req.params;
+
+  const { data: mergedMission, error } = await mergeMissions(id, targetId, profile);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  return res.header('HX-Location', `/missions/${mergedMission.id}`).send();
 });
 
 module.exports = router;
