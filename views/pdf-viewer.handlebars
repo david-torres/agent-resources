@@ -24,8 +24,10 @@
     <button class="button is-small" data-action="prev" aria-label="Previous page">
       <span class="icon"><i class="fas fa-chevron-left"></i></span>
     </button>
-    <span class="button is-static is-small">
-      Page <span id="pdfCurrentPage">1</span> / <span id="pdfTotalPages">?</span>
+    <span class="button is-static is-small pdf-page-display">
+      Page
+      <input type="number" id="pdfPageInput" class="input is-small" min="1" value="1" aria-label="Jump to page">
+      / <span id="pdfTotalPages">?</span>
     </span>
     <button class="button is-small" data-action="next" aria-label="Next page">
       <span class="icon"><i class="fas fa-chevron-right"></i></span>
@@ -36,6 +38,9 @@
     </button>
     <button class="button is-small" data-action="zoom-in" aria-label="Zoom in">
       <span class="icon"><i class="fas fa-plus"></i></span>
+    </button>
+    <button class="button is-small" data-action="fit-width" aria-label="Fit to width">
+      <span class="icon"><i class="fas fa-arrows-alt-h"></i></span>
     </button>
   </div>
   <div class="pdf-viewer-canvas-wrapper">

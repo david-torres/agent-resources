@@ -12,9 +12,10 @@
     }
 
     const canvas = document.getElementById('pdfCanvas');
-    const currentPageEl = document.getElementById('pdfCurrentPage');
+    const pageInput = document.getElementById('pdfPageInput');
     const totalPagesEl = document.getElementById('pdfTotalPages');
     const buttons = container.querySelectorAll('button[data-action]');
+    const canvasWrapper = container.querySelector('.pdf-viewer-canvas-wrapper');
 
     const context = canvas.getContext('2d');
     const devicePixelRatio = window.devicePixelRatio || 1;
@@ -65,7 +66,7 @@
       }).then(() => {
         renderTask = null;
         currentPage = num;
-        currentPageEl.textContent = String(num);
+        pageInput.value = num;
         if (pendingPage !== null) {
           const next = pendingPage;
           pendingPage = null;
@@ -94,6 +95,30 @@
       if (nextScale === scale) return;
       scale = nextScale;
       queueRenderPage(currentPage);
+      canvasWrapper.scrollTop = 0;
+    };
+
+    const fitToWidth = () => {
+      if (!pdfDoc) return;
+      pdfDoc.getPage(currentPage).then((page) => {
+        const viewport = page.getViewport({ scale: 1 });
+        const containerWidth = canvasWrapper.clientWidth - 20; // account for padding
+        const newScale = containerWidth / viewport.width;
+        scale = Math.min(Math.max(newScale, MIN_SCALE), MAX_SCALE);
+        queueRenderPage(currentPage);
+        canvasWrapper.scrollTop = 0;
+      });
+    };
+
+    const jumpToPage = (pageNum) => {
+      const num = parseInt(pageNum, 10);
+      if (!pdfDoc || isNaN(num) || num < 1 || num > pdfDoc.numPages) {
+        pageInput.value = currentPage;
+        return;
+      }
+      if (num !== currentPage) {
+        queueRenderPage(num);
+      }
     };
 
     const handleAction = (action) => {
@@ -110,6 +135,9 @@
         case 'zoom-out':
           changeZoom(-SCALE_STEP);
           break;
+        case 'fit-width':
+          fitToWidth();
+          break;
         default:
           break;
       }
@@ -121,6 +149,18 @@
         const action = button.getAttribute('data-action');
         handleAction(action);
       });
+    });
+
+    pageInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        jumpToPage(pageInput.value);
+        pageInput.blur();
+      }
+    });
+
+    pageInput.addEventListener('blur', () => {
+      jumpToPage(pageInput.value);
     });
 
     container.addEventListener('contextmenu', (event) => {
@@ -140,7 +180,8 @@
     }).promise.then((doc) => {
       pdfDoc = doc;
       totalPagesEl.textContent = String(doc.numPages);
-      renderPage(currentPage);
+      pageInput.max = doc.numPages;
+      fitToWidth();
     }).catch((error) => {
       console.error('Failed to load PDF', error);
       container.innerHTML = '<p class="notification is-danger">Failed to load PDF.</p>';
