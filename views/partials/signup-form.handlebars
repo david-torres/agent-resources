@@ -8,8 +8,8 @@
       <span>Sign up with Discord</span>
     </button>
   </div>
-  <hr/
-  <form id="sign-up" method="POST" hx-on:submit="htmx.trigger('#sign-up', 'htmx:abort'); App.signUp(event);">
+  <hr/>
+  <form id="sign-up" hx-boost="false" hx-on:submit="event.preventDefault(); event.stopPropagation(); App.signUp(event);">
     <div class="field">
       <label class="label" for="sign-up-email">Email</label>
       <div class="control">

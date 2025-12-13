@@ -388,7 +388,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       if (error) throw error;
 
       const message = 'Please verify your email address to continue.';
-      htmx.swap(`#${event.target.id}`, `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
+      htmx.swap(form, `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
       _displayError(error.message);
     }
