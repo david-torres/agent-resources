@@ -60,6 +60,27 @@
           {{/if}}
           {{/if}}
         </div>
+        {{#if class.pdf_storage_path}}
+        <div class="content">
+          <hr>
+          <h3 class="title is-4">Class PDF</h3>
+          {{#if classPdfAccessible}}
+          <a class="button is-link is-fullwidth" href="/classes/{{class.id}}/pdf">
+            <span class="icon">
+              <i class="fas fa-file-pdf"></i>
+            </span>
+            <span>Open Class PDF</span>
+          </a>
+          {{else}}
+          <div class="notification is-warning is-light">
+            Unlock this class to gain access to the PDF.
+          </div>
+          {{/if}}
+          {{#if classPdfError}}
+          <p class="help is-danger">{{classPdfError}}</p>
+          {{/if}}
+        </div>
+        {{/if}}
         <div class="content">
         {{#if profile}}
         {{#if class.is_public}}

@@ -167,7 +167,9 @@ CREATE TABLE IF NOT EXISTS classes (
     base_class_id uuid REFERENCES classes(id),
     created_by uuid REFERENCES profiles(id),
     created_at timestamp NOT NULL DEFAULT now(),
-    updated_at timestamp NOT NULL DEFAULT now()
+    updated_at timestamp NOT NULL DEFAULT now(),
+    pdf_storage_path text,
+    pdf_updated_at timestamptz
 );
 
 -- Class unlocks table
@@ -193,6 +195,33 @@ CREATE TABLE IF NOT EXISTS class_unlock_codes (
 );
 
 ALTER TABLE class_unlock_codes ENABLE ROW LEVEL SECURITY;
+
+-- Rules PDF catalog
+CREATE TABLE IF NOT EXISTS rules_pdfs (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    title text NOT NULL,
+    edition text NOT NULL,
+    storage_path text NOT NULL,
+    is_active boolean NOT NULL DEFAULT true,
+    created_by uuid REFERENCES profiles(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now(),
+    UNIQUE (edition, title)
+);
+
+-- Track per-user unlocks for rules PDFs
+CREATE TABLE IF NOT EXISTS rules_pdf_unlocks (
+    user_id uuid NOT NULL REFERENCES auth.users(id),
+    profile_id uuid NOT NULL REFERENCES profiles(id),
+    rules_pdf_id uuid NOT NULL REFERENCES rules_pdfs(id) ON DELETE CASCADE,
+    granted_by uuid REFERENCES profiles(id),
+    unlocked_at timestamptz NOT NULL DEFAULT now(),
+    expires_at timestamptz,
+    PRIMARY KEY (user_id, rules_pdf_id)
+);
+
+ALTER TABLE rules_pdfs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rules_pdf_unlocks ENABLE ROW LEVEL SECURITY;
 
 -- Function to duplicate a class for new version
 CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text)
@@ -403,6 +432,11 @@ $$ language 'plpgsql';
 
 CREATE TRIGGER update_classes_updated_at
     BEFORE UPDATE ON classes
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_rules_pdfs_updated_at
+    BEFORE UPDATE ON rules_pdfs
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
@@ -928,4 +962,91 @@ CREATE POLICY "lfg_join_requests_delete"
         OR
         -- admin can delete
         is_admin()
+    );
+
+-- Rules PDFs policies
+CREATE POLICY "Rules PDFs viewable publicly"
+    ON rules_pdfs FOR SELECT
+    USING (is_active = true);
+
+CREATE POLICY "Rules PDFs admin manage"
+    ON rules_pdfs FOR ALL
+    USING (
+        auth.uid() IS NULL 
+        OR EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    )
+    WITH CHECK (
+        auth.uid() IS NULL 
+        OR EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Rules PDF unlocks policies
+CREATE POLICY "Users view own rules unlocks"
+    ON rules_pdf_unlocks FOR SELECT
+    USING (user_id = auth.uid() OR auth.uid() IS NULL);
+
+CREATE POLICY "Admins manage rules unlocks"
+    ON rules_pdf_unlocks FOR ALL
+    USING (
+        auth.uid() IS NULL 
+        OR EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    )
+    WITH CHECK (
+        auth.uid() IS NULL 
+        OR EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    );
+
+-- Storage bucket for rules PDFs
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('rules-pdfs', 'rules-pdfs', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- Storage RLS policies for rules-pdfs bucket
+CREATE POLICY "Admins can upload rules PDFs"
+    ON storage.objects FOR INSERT
+    WITH CHECK (
+        bucket_id = 'rules-pdfs'
+        AND EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins can update rules PDFs"
+    ON storage.objects FOR UPDATE
+    USING (
+        bucket_id = 'rules-pdfs'
+        AND EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Admins can delete rules PDFs"
+    ON storage.objects FOR DELETE
+    USING (
+        bucket_id = 'rules-pdfs'
+        AND EXISTS (
+            SELECT 1 FROM profiles 
+            WHERE user_id = auth.uid() AND role = 'admin'
+        )
+    );
+
+CREATE POLICY "Authenticated users can read rules PDFs"
+    ON storage.objects FOR SELECT
+    USING (
+        bucket_id = 'rules-pdfs'
+        AND auth.role() = 'authenticated'
     );

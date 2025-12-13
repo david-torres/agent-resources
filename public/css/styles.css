@@ -5,6 +5,16 @@
   color: black;
 }
 
+/* fixes styling issue with Bulma subtitles */
+.subtitle {
+  color: #4a4a4a;
+}
+
+/* prevent subtitle overlap with title - override Bulma's negative margin */
+.title + .subtitle {
+  margin-top: 0.75rem !important;
+}
+
 /* Page transition styles */
 .htmx-swapping {
   opacity: 0;
@@ -470,3 +480,58 @@ a.dropdown-item:hover {
   color: #0a0a0a !important;
 }
 
+/* PDF viewer layout */
+.pdf-viewer-container {
+  padding: 1.5rem;
+  background-color: #fdfdfd;
+}
+
+.pdf-viewer-toolbar {
+  gap: 0.25rem;
+}
+
+.pdf-page-display {
+  gap: 0.35rem;
+}
+
+.pdf-page-display #pdfPageInput {
+  width: 3rem;
+  text-align: center;
+  padding: 0 0.25rem;
+  height: 1.75rem;
+  font-size: 0.75rem;
+  border-radius: 4px;
+  -moz-appearance: textfield;
+}
+
+.pdf-page-display #pdfPageInput::-webkit-outer-spin-button,
+.pdf-page-display #pdfPageInput::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.pdf-viewer-canvas-wrapper {
+  overflow: auto;
+  max-height: 75vh;
+  border: 1px solid #dbdbdb;
+  background-color: #2f2f2f;
+  padding: 1rem;
+}
+
+.pdf-viewer-canvas {
+  display: block;
+  margin: 0 auto;
+  box-shadow: 0 0 12px rgba(10, 10, 10, 0.4);
+  background-color: white;
+}
+
+.pdf-viewer-container .help {
+  text-align: center;
+}
+
+@media screen and (max-width: 768px) {
+  .pdf-viewer-canvas-wrapper {
+    max-height: 65vh;
+    padding: 0.5rem;
+  }
+}
