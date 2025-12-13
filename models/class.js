@@ -90,11 +90,13 @@ const isClassUnlocked = async (userId, classId) => {
         return { data: false, error: null };
     }
 
+    const now = new Date().toISOString();
     const { data, error } = await supabase
         .from('class_unlocks')
-        .select('class_id')
+        .select('class_id, expires_at')
         .eq('user_id', userId)
         .eq('class_id', classId)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
         .limit(1);
 
     if (error) {
@@ -199,10 +201,12 @@ const saveClassPdfMetadata = async (classId, storagePath) => {
 };
 
 const getUnlockedClasses = async (userId) => {
+    const now = new Date().toISOString();
     const { data, error } = await supabase
         .from('class_unlocks')
-        .select('class:classes(*)')
-        .eq('user_id', userId);
+        .select('class:classes(*), expires_at')
+        .eq('user_id', userId)
+        .or(`expires_at.is.null,expires_at.gt.${now}`);
 
     if (error) {
         console.error(error);
@@ -241,13 +245,18 @@ const canViewClassPdf = async (userContext = {}, classData = {}) => {
     return { data: !!data, error: null };
 };
 
-const unlockClass = async (userId, classId) => {
+const unlockClass = async (userId, classId, expiresAt = null) => {
+    const payload = {
+        user_id: userId,
+        class_id: classId
+    };
+    if (expiresAt) {
+        payload.expires_at = expiresAt;
+    }
+
     const { data, error } = await supabase
         .from('class_unlocks')
-        .insert([{
-            user_id: userId,
-            class_id: classId
-        }])
+        .insert([payload])
         .select()
         .single();
 
