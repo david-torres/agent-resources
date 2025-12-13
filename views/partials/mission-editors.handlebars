@@ -1,0 +1,38 @@
+<div id="mission-editors-list" class="mission-editors">
+  {{#if editors.length}}
+    <ul class="editor-list">
+      {{#each editors}}
+        <li class="editor-item">
+          <div class="editor-info">
+            {{#if image_url}}
+              <img src="{{image_url}}" alt="{{name}}" class="editor-avatar">
+            {{else}}
+              <div class="editor-avatar editor-avatar-placeholder">
+                {{substring name 0 1}}
+              </div>
+            {{/if}}
+            <span class="editor-name">{{name}}</span>
+            {{#if added_by_name}}
+              <span class="editor-added-by">(added by {{added_by_name}})</span>
+            {{/if}}
+          </div>
+          {{#if ../canRemoveEditors}}
+            <button 
+              type="button"
+              class="btn btn-sm btn-danger editor-remove-btn"
+              hx-delete="/missions/{{../missionId}}/editors/{{profile_id}}"
+              hx-target="#mission-editors-list"
+              hx-swap="outerHTML"
+              hx-confirm="Remove {{name}} as an editor?"
+            >
+              Remove
+            </button>
+          {{/if}}
+        </li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p class="no-editors">No additional editors yet.</p>
+  {{/if}}
+</div>
+
