@@ -20,7 +20,7 @@ const uploadToBucket = async (bucket, storagePath, file, { cacheControl = '3600'
   const { error } = await supabase.storage
     .from(bucket)
     .upload(storagePath, file.buffer, {
-      contentType: file.mimetype || 'application/pdf',
+      contentType: 'application/pdf',
       cacheControl,
       upsert: true
     });

@@ -5,6 +5,16 @@
   color: black;
 }
 
+/* fixes styling issue with Bulma subtitles */
+.subtitle {
+  color: #4a4a4a;
+}
+
+/* prevent subtitle overlap with title - override Bulma's negative margin */
+.title + .subtitle {
+  margin-top: 0.75rem !important;
+}
+
 /* Page transition styles */
 .htmx-swapping {
   opacity: 0;

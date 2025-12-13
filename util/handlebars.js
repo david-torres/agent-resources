@@ -17,6 +17,10 @@ const times = function (n, block) {
 
 const date_tz = function (datetime, format, timezone) {
   if (!datetime) return '';
+  // Default format if not provided or if it's the Handlebars options object
+  if (!format || typeof format === 'object') format = 'lll';
+  // Default timezone if not provided or if it's the Handlebars options object
+  if (!timezone || typeof timezone === 'object') timezone = 'local';
   if (timezone === 'local') timezone = moment.tz.guess();
   return moment.utc(datetime).tz(timezone).format(format);
 }
