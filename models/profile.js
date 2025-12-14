@@ -20,6 +20,7 @@ const getProfile = async (user) => {
   }
 
   const { data, error } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
+
   if (error) {
     if (PROFILE_NOT_FOUND_ERROR === error.code) {
       if (user.confirmed_at) {
@@ -33,6 +34,20 @@ const getProfile = async (user) => {
       } else {
         return false;
       }
+    }
+  }
+
+  // Profile exists - check if user has any class unlocks, grant starter unlocks if missing
+  if (data && user.confirmed_at) {
+    const { data: unlockData, error: unlockError } = await supabase
+      .from('class_unlocks')
+      .select('class_id')
+      .eq('user_id', user.id)
+      .limit(1);
+
+    // If no unlocks exist, grant starter unlocks (handles existing profiles created before feature)
+    if (!unlockError && (!unlockData || unlockData.length === 0)) {
+      await grantStarterUnlocks(user.id, data.id);
     }
   }
 
@@ -69,33 +84,27 @@ const grantStarterUnlocks = async (userId, profileId) => {
   expiresAt.setDate(expiresAt.getDate() + STARTER_UNLOCK_DAYS);
   const expiresAtISO = expiresAt.toISOString();
 
-  // Grant rules PDF unlock
-  try {
-    await supabase
-      .from('rules_pdf_unlocks')
-      .insert({
-        user_id: userId,
-        profile_id: profileId,
-        rules_pdf_id: STARTER_RULES_PDF_ID,
-        expires_at: expiresAtISO
-      });
-  } catch (err) {
-    console.error('Failed to grant starter rules unlock:', err);
+  // Grant rules PDF unlock using SECURITY DEFINER function (bypasses RLS)
+  const rulesResult = await supabase.rpc('grant_starter_rules_unlock', {
+    p_user_id: userId,
+    p_profile_id: profileId,
+    p_rules_pdf_id: STARTER_RULES_PDF_ID,
+    p_expires_at: expiresAtISO
+  });
+
+  if (rulesResult.error) {
+    console.error('Failed to grant starter rules unlock:', rulesResult.error);
   }
 
-  // Grant class unlocks
-  const classUnlocks = STARTER_CLASS_IDS.map(classId => ({
-    user_id: userId,
-    class_id: classId,
-    expires_at: expiresAtISO
-  }));
+  // Grant class unlocks using SECURITY DEFINER function (bypasses RLS)
+  const classResult = await supabase.rpc('grant_starter_class_unlocks', {
+    p_user_id: userId,
+    p_class_ids: STARTER_CLASS_IDS,
+    p_expires_at: expiresAtISO
+  });
 
-  try {
-    await supabase
-      .from('class_unlocks')
-      .insert(classUnlocks);
-  } catch (err) {
-    console.error('Failed to grant starter class unlocks:', err);
+  if (classResult.error) {
+    console.error('Failed to grant starter class unlocks:', classResult.error);
   }
 }
 

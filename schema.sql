@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS class_unlocks (
     user_id uuid REFERENCES auth.users(id),
     class_id uuid REFERENCES classes(id),
     unlocked_at timestamp NOT NULL DEFAULT now(),
+    expires_at timestamptz,
     PRIMARY KEY (user_id, class_id)
 );
 
@@ -418,6 +419,37 @@ BEGIN
     WHERE id = v_code.id;
 
     RETURN v_code.class_id;
+END;
+$$;
+
+-- Function to grant starter class unlocks (server-side, bypasses RLS)
+CREATE OR REPLACE FUNCTION grant_starter_class_unlocks(p_user_id uuid, p_class_ids uuid[], p_expires_at timestamptz)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    v_class_id uuid;
+BEGIN
+    FOREACH v_class_id IN ARRAY p_class_ids
+    LOOP
+        INSERT INTO class_unlocks(user_id, class_id, expires_at)
+        VALUES (p_user_id, v_class_id, p_expires_at)
+        ON CONFLICT (user_id, class_id) DO UPDATE SET expires_at = p_expires_at;
+    END LOOP;
+END;
+$$;
+
+-- Function to grant starter rules PDF unlock (server-side, bypasses RLS)
+CREATE OR REPLACE FUNCTION grant_starter_rules_unlock(p_user_id uuid, p_profile_id uuid, p_rules_pdf_id uuid, p_expires_at timestamptz)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    INSERT INTO rules_pdf_unlocks(user_id, profile_id, rules_pdf_id, expires_at)
+    VALUES (p_user_id, p_profile_id, p_rules_pdf_id, p_expires_at)
+    ON CONFLICT (user_id, rules_pdf_id) DO UPDATE SET expires_at = p_expires_at;
 END;
 $$;
 
