@@ -435,7 +435,7 @@ BEGIN
     LOOP
         INSERT INTO class_unlocks(user_id, class_id, expires_at)
         VALUES (p_user_id, v_class_id, p_expires_at)
-        ON CONFLICT (user_id, class_id) DO UPDATE SET expires_at = p_expires_at;
+        ON CONFLICT (user_id, class_id) DO NOTHING;
     END LOOP;
 END;
 $$;
@@ -449,7 +449,7 @@ AS $$
 BEGIN
     INSERT INTO rules_pdf_unlocks(user_id, profile_id, rules_pdf_id, expires_at)
     VALUES (p_user_id, p_profile_id, p_rules_pdf_id, p_expires_at)
-    ON CONFLICT (user_id, rules_pdf_id) DO UPDATE SET expires_at = p_expires_at;
+    ON CONFLICT (user_id, rules_pdf_id) DO NOTHING;
 END;
 $$;
 
