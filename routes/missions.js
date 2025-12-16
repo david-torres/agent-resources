@@ -5,6 +5,7 @@ const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../ut
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const supabase = require('../util/supabase');
+const { processMissionImport } = require('../util/mission-import');
 
 router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -90,6 +91,29 @@ router.get('/new', isAuthenticated, (req, res) => {
       { label: 'New Mission', href: '/missions/new' }
     ]
   });
+});
+
+router.get('/import', isAuthenticated, (req, res) => {
+  const { profile } = res.locals;
+  res.render('mission-import', {
+    profile,
+    activeNav: 'missions',
+    breadcrumbs: [
+      { label: 'Missions', href: '/missions' },
+      { label: 'Import Mission', href: '/missions/import' }
+    ]
+  });
+});
+
+router.post('/import', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { inputText } = req.body;
+  try {
+    const { mission } = await processMissionImport(inputText, profile);
+    return res.header('HX-Location', `/missions/${mission.id}`).send();
+  } catch (error) {
+    return res.status(400).send(error.message);
+  }
 });
 
 router.post('/', isAuthenticated, async (req, res) => {
