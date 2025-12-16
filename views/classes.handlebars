@@ -2,6 +2,8 @@
 <h1 class="title is-2">Classes</h1>
 {{#if profile}}
 <div class="buttons is-right">
+  <button class="button is-light" id="importClassBtn" hx-get="/classes/import"
+      hx-target="body" hx-swap="innerHTML" hx-push-url="/classes/import">Import Class</button>
   <button class="button is-primary" id="createClassBtn" hx-get="/classes/new"
       hx-target="body" hx-swap="innerHTML" hx-push-url="/classes/new">Create Class</button>
 </div>

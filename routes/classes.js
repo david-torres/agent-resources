@@ -24,6 +24,7 @@ const {
     CLASS_PDF_BUCKET
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
+const { processClassImport } = require('../util/class-import');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -107,6 +108,31 @@ router.get('/new', isAuthenticated, (req, res) => {
             { label: 'New Class', href: '/classes/new' }
         ]
     });
+});
+
+router.get('/import', isAuthenticated, (req, res) => {
+    const { profile } = res.locals;
+    res.render('class-import', {
+        profile,
+        title: 'Import Class',
+        activeNav: 'classes',
+        breadcrumbs: [
+            { label: 'Classes', href: '/classes' },
+            { label: 'Import Class', href: '/classes/import' }
+        ]
+    });
+});
+
+router.post('/import', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    const { inputText } = req.body;
+    try {
+        const importedClass = await processClassImport(inputText, profile);
+        const classData = Array.isArray(importedClass) ? importedClass[0] : importedClass;
+        return res.header('HX-Location', `/classes/${classData.id}/${encodeURIComponent(classData.name)}`).send();
+    } catch (error) {
+        return res.status(400).send(error.message);
+    }
 });
 
 // Bulk Redeem: show form
