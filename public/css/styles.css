@@ -529,6 +529,69 @@ a.dropdown-item:hover {
   text-align: center;
 }
 
+.profile-image-editor {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+  align-items: stretch;
+}
+
+.profile-image-editor__canvas {
+  position: relative;
+  min-height: 280px;
+  border: 1px dashed #b5b5b5;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f9f9f9;
+}
+
+.profile-image-editor__canvas img {
+  max-width: 100%;
+  display: block;
+}
+
+.profile-image-editor__placeholder {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #7a7a7a;
+  text-align: center;
+  padding: 1rem;
+  font-style: italic;
+}
+
+.profile-image-editor__preview {
+  width: 100%;
+  min-height: 180px;
+  border: 1px solid #dbdbdb;
+  border-radius: 8px;
+  background-color: #f8f8f8;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  overflow: hidden;
+}
+
+.profile-image-render,
+.image-crop-render {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border-radius: 12px;
+  overflow: hidden;
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
+  border: 1px solid #dbdbdb;
+  box-shadow: 0 2px 6px rgba(10, 10, 10, 0.08);
+}
+
+@media screen and (max-width: 768px) {
+  .profile-image-editor {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media screen and (max-width: 768px) {
   .pdf-viewer-canvas-wrapper {
     max-height: 65vh;

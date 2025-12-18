@@ -11,9 +11,17 @@
 <div class="columns">
   <div class="column is-one-third">
     {{#if character.image_url}}
-    <figure class="image is-4by3">
-      <img src="{{character.image_url}}" alt="{{character.name}}">
-    </figure>
+    <div
+      class="image-crop-render"
+      data-cropped-image
+      data-image-src="{{character.image_url}}"
+      data-crop-x="{{character.image_crop.x}}"
+      data-crop-y="{{character.image_crop.y}}"
+      data-crop-width="{{character.image_crop.width}}"
+      data-crop-height="{{character.image_crop.height}}"
+      role="img"
+      aria-label="{{character.name}}"
+    ></div>
     {{else}}
     <div class="notification is-info">No image available</div>
     {{/if}}

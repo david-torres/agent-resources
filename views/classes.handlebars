@@ -98,9 +98,19 @@
     <div class="card">
       {{#if this.image_url}}
       <div class="card-image">
-        <figure class="image is-4by3">
-          <a href="/classes/{{this.id}}/{{this.name}}"><img src="{{this.image_url}}" alt="{{this.name}}"></a>
-        </figure>
+        <a href="/classes/{{this.id}}/{{this.name}}">
+          <div
+            class="image-crop-render"
+            data-cropped-image
+            data-image-src="{{this.image_url}}"
+            data-crop-x="{{this.image_crop.x}}"
+            data-crop-y="{{this.image_crop.y}}"
+            data-crop-width="{{this.image_crop.width}}"
+            data-crop-height="{{this.image_crop.height}}"
+            role="img"
+            aria-label="{{this.name}}"
+          ></div>
+        </a>
       </div>
       {{/if}}
       <div class="card-content">

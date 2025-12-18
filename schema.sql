@@ -4,6 +4,7 @@ CREATE TABLE profiles (
     name TEXT NOT NULL,
     bio TEXT,
     image_url TEXT,
+    image_crop JSONB,
     is_public BOOLEAN DEFAULT FALSE,
     timezone TEXT DEFAULT 'UTC',
     discord_id TEXT,
@@ -44,6 +45,7 @@ CREATE TABLE characters (
   appearance TEXT NULL,
   additional_gear TEXT NULL,
   image_url TEXT NULL,
+  image_crop JSONB,
   flavor TEXT NULL,
   ideas TEXT NULL,
   background TEXT NULL,
@@ -165,12 +167,19 @@ CREATE TABLE IF NOT EXISTS classes (
     rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
     rules_version text NOT NULL (rules_version IN ('v1', 'v2')),
     base_class_id uuid REFERENCES classes(id),
+    image_url text,
+    image_crop JSONB,
     created_by uuid REFERENCES profiles(id),
     created_at timestamp NOT NULL DEFAULT now(),
     updated_at timestamp NOT NULL DEFAULT now(),
     pdf_storage_path text,
     pdf_updated_at timestamptz
 );
+
+-- Backfill for deployments where tables already exist
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_crop JSONB;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
 
 -- Class unlocks table
 CREATE TABLE IF NOT EXISTS class_unlocks (

@@ -82,6 +82,211 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     form.setAttribute('aria-busy', isLoading ? 'true' : 'false');
   }
 
+  const _safeParseJson = (value) => {
+    if (!value) return null;
+    try {
+      return JSON.parse(value);
+    } catch (_) {
+      return null;
+    }
+  };
+
+  const _normalizeCropData = (data, imageData) => {
+    if (!data || !imageData || !imageData.naturalWidth || !imageData.naturalHeight) return null;
+    const naturalWidth = imageData.naturalWidth;
+    const naturalHeight = imageData.naturalHeight;
+    if (!naturalWidth || !naturalHeight) return null;
+    return {
+      x: data.x / naturalWidth,
+      y: data.y / naturalHeight,
+      width: data.width / naturalWidth,
+      height: data.height / naturalHeight,
+      naturalWidth,
+      naturalHeight
+    };
+  };
+
+  const _applyCropToElement = (el, src, crop) => {
+    if (!el) return;
+    if (!src) {
+      el.style.backgroundImage = '';
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.removeProperty('aspect-ratio');
+      return;
+    }
+    el.style.backgroundImage = `url(${src})`;
+    const width = crop?.width;
+    const height = crop?.height;
+    const x = crop?.x || 0;
+    const y = crop?.y || 0;
+    if (width && height) {
+      const sizeX = `${(100 / width).toFixed(4)}%`;
+      const sizeY = `${(100 / height).toFixed(4)}%`;
+      const posX = `${(-x / width * 100).toFixed(4)}%`;
+      const posY = `${(-y / height * 100).toFixed(4)}%`;
+      el.style.backgroundSize = `${sizeX} ${sizeY}`;
+      el.style.backgroundPosition = `${posX} ${posY}`;
+      el.style.aspectRatio = `${width} / ${height}`;
+    } else {
+      el.style.backgroundSize = 'cover';
+      el.style.backgroundPosition = 'center';
+      el.style.removeProperty('aspect-ratio');
+    }
+  };
+
+  const _applySavedCrops = (root) => {
+    const container = root || document;
+    container.querySelectorAll('[data-cropped-image]').forEach((el) => {
+      const src = el.getAttribute('data-image-src');
+      if (!src) return;
+      const crop = {
+        x: parseFloat(el.getAttribute('data-crop-x')) || 0,
+        y: parseFloat(el.getAttribute('data-crop-y')) || 0,
+        width: parseFloat(el.getAttribute('data-crop-width')) || 0,
+        height: parseFloat(el.getAttribute('data-crop-height')) || 0,
+      };
+      const hasCrop = crop.width > 0 && crop.height > 0;
+      _applyCropToElement(el, src, hasCrop ? crop : null);
+    });
+  };
+
+  const _initImageCroppers = (root) => {
+    const containerList = (root || document).querySelectorAll('[data-image-cropper]');
+    if (!containerList.length || typeof Cropper === 'undefined') return;
+
+    containerList.forEach((container) => {
+      if (container.dataset.initialized === 'true') return;
+      const img = container.querySelector('[data-cropper-image]');
+      const preview = container.querySelector('[data-crop-preview]');
+      const placeholder = container.querySelector('[data-crop-placeholder]');
+
+      const imageSelector = container.dataset.imageInput || container.getAttribute('data-image-input');
+      const cropSelector = container.dataset.cropInput || container.getAttribute('data-crop-input');
+      const urlInput = imageSelector
+        ? (container.querySelector(imageSelector) || (root || document).querySelector(imageSelector))
+        : container.querySelector('input[name="image_url"]');
+      const cropInput = cropSelector
+        ? (container.querySelector(cropSelector) || (root || document).querySelector(cropSelector))
+        : container.querySelector('input[name="image_crop"]');
+
+      if (!img || !urlInput || !cropInput || !preview) return;
+
+      container.dataset.initialized = 'true';
+
+      let cropper;
+      let currentUrl = null;
+      const defaultPlaceholderText = placeholder ? placeholder.textContent : '';
+
+      const syncPreview = () => {
+        if (!img.getAttribute('src')) {
+          cropInput.value = '';
+          _applyCropToElement(preview, null, null);
+          if (placeholder) placeholder.hidden = false;
+          return;
+        }
+        if (cropper) {
+          const data = cropper.getData();
+          const imageData = cropper.getImageData();
+          const normalized = _normalizeCropData(data, imageData);
+          if (normalized) {
+            cropInput.value = JSON.stringify(normalized);
+            _applyCropToElement(preview, img.src, normalized);
+          }
+        } else {
+          cropInput.value = '';
+          _applyCropToElement(preview, img.src, null);
+        }
+      };
+
+      const applySavedCrop = () => {
+        const savedCrop = _safeParseJson(cropInput.value);
+        if (cropper && savedCrop && savedCrop.width && savedCrop.height && savedCrop.naturalWidth && savedCrop.naturalHeight) {
+          cropper.setData({
+            x: savedCrop.x * savedCrop.naturalWidth,
+            y: savedCrop.y * savedCrop.naturalHeight,
+            width: savedCrop.width * savedCrop.naturalWidth,
+            height: savedCrop.height * savedCrop.naturalHeight,
+          });
+        }
+        syncPreview();
+      };
+
+      const destroyCropper = () => {
+        if (cropper) {
+          cropper.destroy();
+          cropper = null;
+        }
+      };
+
+      const handleUrlChange = (url) => {
+        const nextUrl = (url || '').trim();
+        if (nextUrl === currentUrl) return;
+        currentUrl = nextUrl;
+        destroyCropper();
+        cropInput.value = '';
+        if (!nextUrl) {
+          img.removeAttribute('src');
+          if (placeholder) {
+            placeholder.hidden = false;
+            placeholder.textContent = defaultPlaceholderText || placeholder.textContent;
+          }
+          _applyCropToElement(preview, null, null);
+          return;
+        }
+        img.crossOrigin = 'anonymous';
+        img.src = nextUrl;
+        if (placeholder) placeholder.hidden = true;
+      };
+
+      img.addEventListener('load', () => {
+        destroyCropper();
+        cropper = new Cropper(img, {
+          viewMode: 1,
+          autoCropArea: 1,
+          responsive: true,
+          background: false,
+          movable: true,
+          zoomable: true,
+          scalable: false,
+          rotatable: false,
+          ready() {
+            applySavedCrop();
+          },
+          crop() {
+            syncPreview();
+          },
+          zoom() {
+            syncPreview();
+          }
+        });
+      });
+
+      img.addEventListener('error', () => {
+        destroyCropper();
+        _applyCropToElement(preview, null, null);
+        cropInput.value = '';
+        if (placeholder) {
+          placeholder.hidden = false;
+          placeholder.textContent = 'Unable to load image. Check the URL and try again.';
+        }
+      });
+
+      urlInput.addEventListener('change', (event) => {
+        handleUrlChange(event.target.value);
+      });
+      urlInput.addEventListener('input', (event) => {
+        handleUrlChange(event.target.value);
+      });
+
+      if (urlInput.value) {
+        handleUrlChange(urlInput.value);
+      } else {
+        syncPreview();
+      }
+    });
+  };
+
   function init(supabaseUrl, supabaseKey) {
     document.addEventListener("DOMContentLoaded", async function () {
       // System message visibility control
@@ -206,6 +411,10 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         _initTooltips(targetEl || document);
         // Initialize searchable selects after swaps
         _initSearchableSelects(targetEl || document);
+        // Initialize profile image cropper when swapping in profile form
+        _initImageCroppers(targetEl || document);
+        // Apply saved crop styles on swapped content
+        _applySavedCrops(targetEl || document);
       });
 
       // Global keydown handler for closing modals on Escape
@@ -240,6 +449,10 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       _initTooltips(document);
       // Initialize any searchable selects present at load
       _initSearchableSelects(document);
+      // Initialize any image croppers if present
+      _initImageCroppers(document);
+      // Apply any persisted crop marks
+      _applySavedCrops(document);
     });
   }
 
