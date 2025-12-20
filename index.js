@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, json, videoEmbed, isSupportedVideoUrl } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl } = require('./util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -29,6 +29,7 @@ app.engine('handlebars', exphbs.engine({
   partialsDir: path.join(__dirname, 'views/partials'),
   defaultLayout: 'main',
     helpers: {
+      ...helpers,
       times,
       range,
       date_tz,
@@ -38,7 +39,6 @@ app.engine('handlebars', exphbs.engine({
       getTotalV2MissionsNeeded,
       setVariable,
       dump,
-      json,
       videoEmbed,
       isSupportedVideoUrl
   }

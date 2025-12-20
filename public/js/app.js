@@ -108,11 +108,15 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const _applyCropToElement = (el, src, crop) => {
     if (!el) return;
+    const isPreview = el.classList.contains('profile-image-editor__preview');
+    const isRenderedImage = el.hasAttribute('data-cropped-image');
     if (!src) {
       el.style.backgroundImage = '';
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
-      el.style.removeProperty('aspect-ratio');
+      if (!isPreview) {
+        el.style.removeProperty('aspect-ratio');
+      }
       return;
     }
     el.style.backgroundImage = `url(${src})`;
@@ -127,11 +131,25 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       const posY = `${(-y / height * 100).toFixed(4)}%`;
       el.style.backgroundSize = `${sizeX} ${sizeY}`;
       el.style.backgroundPosition = `${posX} ${posY}`;
-      el.style.aspectRatio = `${width} / ${height}`;
+      // Don't override aspect-ratio for preview - let CSS handle it
+      // For rendered images, always use 4:3 aspect ratio
+      if (!isPreview) {
+        if (isRenderedImage) {
+          el.style.aspectRatio = '4 / 3';
+        } else {
+          el.style.aspectRatio = `${width} / ${height}`;
+        }
+      }
     } else {
       el.style.backgroundSize = 'cover';
       el.style.backgroundPosition = 'center';
-      el.style.removeProperty('aspect-ratio');
+      if (!isPreview) {
+        if (isRenderedImage) {
+          el.style.aspectRatio = '4 / 3';
+        } else {
+          el.style.removeProperty('aspect-ratio');
+        }
+      }
     }
   };
 
@@ -241,6 +259,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
       img.addEventListener('load', () => {
         destroyCropper();
+        if (placeholder) placeholder.hidden = true;
         cropper = new Cropper(img, {
           viewMode: 1,
           autoCropArea: 1,
@@ -250,7 +269,12 @@ const App = (function (document, supabase, htmx, FullCalendar) {
           zoomable: true,
           scalable: false,
           rotatable: false,
+          aspectRatio: 4 / 3,
+          cropBoxMovable: true,
+          cropBoxResizable: true,
+          dragMode: 'crop',
           ready() {
+            if (placeholder) placeholder.hidden = true;
             applySavedCrop();
           },
           crop() {

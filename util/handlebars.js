@@ -71,14 +71,6 @@ function dump(varName) {
   return JSON.stringify(varName, null, 2);
 }
 
-function json(value) {
-  try {
-    return JSON.stringify(value) || '';
-  } catch (_) {
-    return '';
-  }
-}
-
 /**
  * Video provider configurations
  */
@@ -178,7 +170,6 @@ module.exports = {
   getTotalV2MissionsNeeded,
   setVariable,
   dump,
-  json,
   youtubeEmbed,
   isYoutubeUrl,
   videoEmbed,

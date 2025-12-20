@@ -543,6 +543,7 @@ a.dropdown-item:hover {
   border-radius: 8px;
   overflow: hidden;
   background: #f9f9f9;
+  z-index: 0;
 }
 
 .profile-image-editor__canvas img {
@@ -559,11 +560,17 @@ a.dropdown-item:hover {
   text-align: center;
   padding: 1rem;
   font-style: italic;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.profile-image-editor__placeholder[hidden] {
+  display: none;
 }
 
 .profile-image-editor__preview {
   width: 100%;
-  min-height: 180px;
+  aspect-ratio: 4 / 3;
   border: 1px solid #dbdbdb;
   border-radius: 8px;
   background-color: #f8f8f8;
