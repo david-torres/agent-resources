@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses } = require('../util/supabase');
+const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
@@ -62,10 +63,12 @@ router.get('/view/:name', authOptional, async (req, res) => {
 router.put('/', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
   const { email, password, name, bio, image_url, is_public, timezone, conduit_briefing } = req.body;
+  const image_crop = parseImageCrop(req.body.image_crop);
   const profile = {
     name,
     bio,
     image_url,
+    image_crop,
     is_public: (is_public ? true : false),
     timezone,
     conduit_briefing

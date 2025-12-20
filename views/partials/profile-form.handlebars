@@ -29,6 +29,20 @@
         <input class="input" type="url" id="image_url" name="image_url" placeholder="Image URL"
           value="{{profile.image_url}}">
       </div>
+      <p class="help">Paste a link to your image. We'll crop it visually without uploading anything.</p>
+    </div>
+
+    <div class="field">
+      <label class="label">Image Crop &amp; Preview</label>
+      <div class="profile-image-editor" data-image-cropper data-image-input="#image_url" data-crop-input="#image_crop">
+        <div class="profile-image-editor__canvas">
+          <img data-cropper-image src="{{profile.image_url}}" alt="Profile image cropper">
+          <div class="profile-image-editor__placeholder" data-crop-placeholder {{#if profile.image_url}}hidden{{/if}}>Add an image URL to start cropping</div>
+        </div>
+        <div class="profile-image-editor__preview" data-crop-preview aria-label="Profile image preview"></div>
+      </div>
+      <input type="hidden" id="image_crop" name="image_crop" value='{{{JSONstringify profile.image_crop}}}'>
+      <p class="help">Drag the crop marks to choose what shows on your public profile. Only the crop coordinates are saved.</p>
     </div>
 
     <div class="field">

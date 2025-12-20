@@ -25,6 +25,7 @@ const {
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { processClassImport } = require('../util/class-import');
+const { parseImageCrop } = require('../util/crop');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -509,6 +510,11 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
     // Always set created_by to the current profile
     req.body.created_by = profileId;
 
+    const image_crop = parseImageCrop(req.body.image_crop);
+    if (image_crop !== undefined) {
+        req.body.image_crop = image_crop;
+    }
+
     const { data: classData, error } = await createClass(req.body);
     if (error) {
         return res.status(500).json({ error: error.message });
@@ -534,6 +540,11 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
     const { data: existingClass, error: fetchError } = await getClass(id);
     if (fetchError || !existingClass) {
         return res.status(404).json({ error: fetchError?.message || 'Class not found' });
+    }
+
+    const image_crop = parseImageCrop(req.body.image_crop);
+    if (image_crop !== undefined) {
+        req.body.image_crop = image_crop;
     }
 
     const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);

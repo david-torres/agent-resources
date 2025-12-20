@@ -4,7 +4,17 @@
 <div class="columns">
   <div class="column is-one-third">
     {{#if viewProfile.image_url}}
-    <img src="{{viewProfile.image_url}}" alt="{{viewProfile.name}}'s profile picture" class="profile-image">
+    <div
+      class="profile-image-render"
+      data-cropped-image
+      data-image-src="{{viewProfile.image_url}}"
+      data-crop-x="{{viewProfile.image_crop.x}}"
+      data-crop-y="{{viewProfile.image_crop.y}}"
+      data-crop-width="{{viewProfile.image_crop.width}}"
+      data-crop-height="{{viewProfile.image_crop.height}}"
+      role="img"
+      aria-label="{{viewProfile.name}}'s profile picture"
+    ></div>
     {{else}}
     <div class="notification is-info">No image available</div>
     {{/if}}
@@ -29,15 +39,23 @@
   <div class="columns is-multiline">
     {{#each publicCharacters}}
     <div class="column is-4">
-      <div class="card">
-        <div class="card-content">
-          {{#if this.image_url}}
-          <figure class="image is-4by3">
-            <img src="{{this.image_url}}" alt="{{this.name}}">
-          </figure>
-          {{else}}
-          <div class="notification is-info">No image available</div>
-          {{/if}}
+        <div class="card">
+          <div class="card-content">
+            {{#if this.image_url}}
+            <div
+              class="image-crop-render"
+              data-cropped-image
+              data-image-src="{{this.image_url}}"
+              data-crop-x="{{this.image_crop.x}}"
+              data-crop-y="{{this.image_crop.y}}"
+              data-crop-width="{{this.image_crop.width}}"
+              data-crop-height="{{this.image_crop.height}}"
+              role="img"
+              aria-label="{{this.name}}"
+            ></div>
+            {{else}}
+            <div class="notification is-info">No image available</div>
+            {{/if}}
           <div class="container mt-4">
             <p class="title is-5">
               {{this.name}}
@@ -67,14 +85,24 @@
   <div class="columns is-multiline">
     {{#each publicClasses}}
     <div class="column is-3">
-      <div class="card">
-        {{#if this.image_url}}
-        <div class="card-image">
-          <figure class="image is-4by3">
-            <a href="/classes/{{this.id}}/{{this.name}}"><img src="{{this.image_url}}" alt="{{this.name}}"></a>
-          </figure>
-        </div>
-        {{/if}}
+        <div class="card">
+          {{#if this.image_url}}
+          <div class="card-image">
+            <a href="/classes/{{this.id}}/{{this.name}}">
+              <div
+                class="image-crop-render"
+                data-cropped-image
+                data-image-src="{{this.image_url}}"
+                data-crop-x="{{this.image_crop.x}}"
+                data-crop-y="{{this.image_crop.y}}"
+                data-crop-width="{{this.image_crop.width}}"
+                data-crop-height="{{this.image_crop.height}}"
+                role="img"
+                aria-label="{{this.name}}"
+              ></div>
+            </a>
+          </div>
+          {{/if}}
         <div class="card-content">
           <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></h5>
           {{#if this.teaser}}

@@ -187,6 +187,20 @@
     <div class="control">
       <input class="input" type="url" name="image_url" placeholder="Image URL" value="{{character.image_url}}">
     </div>
+    <p class="help">Provide a link; we'll crop how it's displayed without uploading.</p>
+  </div>
+
+  <div class="field">
+    <label class="label">Image Crop &amp; Preview</label>
+    <div class="profile-image-editor" data-image-cropper data-image-input="input[name='image_url']" data-crop-input="input[name='image_crop']">
+      <div class="profile-image-editor__canvas">
+        <img data-cropper-image src="{{character.image_url}}" alt="Character image cropper">
+        <div class="profile-image-editor__placeholder" data-crop-placeholder {{#if character.image_url}}hidden{{/if}}>Add an image URL to start cropping</div>
+      </div>
+      <div class="profile-image-editor__preview" data-crop-preview aria-label="Character image preview"></div>
+    </div>
+    <input type="hidden" name="image_crop" value='{{{JSONstringify character.image_crop}}}'>
+    <p class="help">Adjust the crop marks to control how the character image renders for viewers.</p>
   </div>
 
   <div class="field">

@@ -36,9 +36,17 @@
     {{#if class.image_url}}
     <div class="card mb-4">
       <div class="card-image">
-        <figure class="image is-4by3">
-          <img src="{{class.image_url}}" alt="{{class.name}}">
-        </figure>
+        <div
+          class="image-crop-render"
+          data-cropped-image
+          data-image-src="{{class.image_url}}"
+          data-crop-x="{{class.image_crop.x}}"
+          data-crop-y="{{class.image_crop.y}}"
+          data-crop-width="{{class.image_crop.width}}"
+          data-crop-height="{{class.image_crop.height}}"
+          role="img"
+          aria-label="{{class.name}}"
+        ></div>
       </div>
     </div>
     {{/if}}

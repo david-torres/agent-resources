@@ -29,6 +29,7 @@ app.engine('handlebars', exphbs.engine({
   partialsDir: path.join(__dirname, 'views/partials'),
   defaultLayout: 'main',
     helpers: {
+      ...helpers,
       times,
       range,
       date_tz,

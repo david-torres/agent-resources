@@ -6,6 +6,7 @@ const { getUnlockedClasses } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
+const { parseImageCrop } = require('../util/crop');
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
@@ -123,6 +124,10 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
 
 router.post('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
+  const image_crop = parseImageCrop(req.body.image_crop);
+  if (image_crop !== undefined) {
+    req.body.image_crop = image_crop;
+  }
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
     return res.status(400).send(error.message);
@@ -423,6 +428,10 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
+  const image_crop = parseImageCrop(req.body.image_crop);
+  if (image_crop !== undefined) {
+    req.body.image_crop = image_crop;
+  }
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
     return res.status(400).send(error.message);

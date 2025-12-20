@@ -75,6 +75,19 @@
     <div class="control">
       <input class="input" type="text" name="image_url" value="{{class.image_url}}">
     </div>
+    <p class="help">Use a link to your image. We'll render it using the crop below without uploading.</p>
+  </div>
+  <div class="field">
+    <label class="label">Image Crop &amp; Preview</label>
+    <div class="profile-image-editor" data-image-cropper data-image-input="input[name='image_url']" data-crop-input="input[name='image_crop']">
+      <div class="profile-image-editor__canvas">
+        <img data-cropper-image src="{{class.image_url}}" alt="Class image cropper">
+        <div class="profile-image-editor__placeholder" data-crop-placeholder {{#if class.image_url}}hidden{{/if}}>Add an image URL to start cropping</div>
+      </div>
+      <div class="profile-image-editor__preview" data-crop-preview aria-label="Class image preview"></div>
+    </div>
+    <input type="hidden" name="image_crop" value='{{{JSONstringify class.image_crop}}}'>
+    <p class="help">Adjust the crop to control how this class art appears across the app.</p>
   </div>
   <div class="field">
     <label class="label">Class PDF (optional)</label>
