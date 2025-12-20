@@ -127,26 +127,34 @@
     {{#if (or isNew (eq class.gear.length 0))}}
       {{#times 6}}
         <div class="field">
-          <label class="label">Gear {{add @index 1}}</label>
+          <label class="label">
+            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
+          </label>
           <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="Gear {{add @index 1}}" required>
+            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" required>
           </div>
-          <label class="label">Gear {{add @index 1}} Description</label>
+          <label class="label">
+            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
+          </label>
           <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="Gear {{add @index 1}} Description"></textarea>
+            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description"></textarea>
           </div>
         </div>
       {{/times}}
     {{else}}
       {{#each class.gear}}
         <div class="field">
-          <label class="label">Gear {{add @index 1}}</label>
+          <label class="label">
+            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
+          </label>
           <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="Gear {{add @index 1}}" value="{{this.name}}" required>
+            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" value="{{this.name}}" required>
           </div>
-          <label class="label">Gear {{add @index 1}} Description</label>
+          <label class="label">
+            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
+          </label>
           <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="Gear {{add @index 1}} Description">{{this.description}}</textarea>
+            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description">{{this.description}}</textarea>
           </div>
         </div>
       {{/each}}

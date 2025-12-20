@@ -114,11 +114,15 @@
             <h3 class="title is-3">Gear</h3>
             <div class="columns">
               <div class="column is-half">
+                <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
               {{#each (first class.gear 3) as |gear|}}
                 <div class="card">
                   <div class="card-content">
                     <div class="content">
-                      <h4 class="title is-4">{{gear.name}}</h4>
+                      <div class="is-flex is-justify-content-space-between is-align-items-center">
+                        <h4 class="title is-4 mb-1">{{gear.name}}</h4>
+                        <span class="tag is-info is-light">Base</span>
+                      </div>
                       {{{markdown gear.description}}}
                     </div>
                   </div>
@@ -127,11 +131,15 @@
               </div>
 
               <div class="column is-half">
+                <p class="has-text-weight-semibold has-text-grey mb-2">Elective Gear</p>
               {{#each (last class.gear 3) as |gear|}}
                 <div class="card">
                   <div class="card-content">
                     <div class="content">
-                      <h4 class="title is-4">{{gear.name}}</h4>
+                      <div class="is-flex is-justify-content-space-between is-align-items-center">
+                        <h4 class="title is-4 mb-1">{{gear.name}}</h4>
+                        <span class="tag is-link is-light">Elective</span>
+                      </div>
                       {{{markdown gear.description}}}
                     </div>
                   </div>
@@ -220,4 +228,3 @@
 
 {{/or}}
 {{/if}}
-

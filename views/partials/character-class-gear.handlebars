@@ -6,7 +6,7 @@
         {{#each classGearList}}
         <optgroup label="{{capitalize @key}}">
           {{#each this}}
-          <option value="{{@../key}}::{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
+          <option value="{{@../key}}::{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}} — {{#if (lt @index 3)}}Base{{else}}Elective{{/if}})</option>
           {{/each}}
         </optgroup>
         {{/each}}
