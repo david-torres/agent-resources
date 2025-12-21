@@ -203,10 +203,10 @@
       </div>
     </div>
 
+    {{#if character.common_items}}
+    {{#if character.common_items.length}}
     <div class="box">
       <h3 class="title is-4">Common Items</h3>
-      {{#if character.common_items}}
-      {{#if character.common_items.length}}
       <div class="content">
         <ul>
           {{#each character.common_items}}
@@ -214,13 +214,9 @@
           {{/each}}
         </ul>
       </div>
-      {{else}}
-      <p class="has-text-centered has-text-grey">No common items</p>
-      {{/if}}
-      {{else}}
-      <p class="has-text-centered has-text-grey">No common items</p>
-      {{/if}}
     </div>
+    {{/if}}
+    {{/if}}
 
     {{#if character.additional_gear}}
     <div class="box">
@@ -273,6 +269,7 @@
 
     {{#if profile}}
     {{#if (eq character.creator_id profile.id)}}
+    {{#if character.private_notes}}
     <div class="box">
       <h3 class="title is-4">
         <span class="icon-text">
@@ -281,13 +278,10 @@
         </span>
       </h3>
       <div class="content">
-        {{#if character.private_notes}}
         {{{markdown character.private_notes}}}
-        {{else}}
-        <p class="has-text-grey-light is-italic">No private notes yet.</p>
-        {{/if}}
       </div>
     </div>
+    {{/if}}
     {{/if}}
     {{/if}}
 
