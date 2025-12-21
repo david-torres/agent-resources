@@ -136,6 +136,12 @@ const getMissionCharacters = async (missionId) => {
 }
 
 const setUnregisteredCharacterNames = async (missionId, names, profile) => {
+  // Check if profile can edit this mission (creator, host, or editor)
+  const canEdit = await canEditMission(missionId, profile);
+  if (!canEdit) {
+    return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
+  }
+
   // Filter and clean names
   const cleanedNames = (Array.isArray(names) ? names : [])
     .map(n => (typeof n === 'string' ? n.trim() : ''))
@@ -145,7 +151,6 @@ const setUnregisteredCharacterNames = async (missionId, names, profile) => {
     .from('missions')
     .update({ unregistered_character_names: cleanedNames })
     .eq('id', missionId)
-    .eq('creator_id', profile.id)
     .select();
   
   return { data, error };
@@ -341,9 +346,21 @@ const getRandomPublicMissions = async (count = 12, hasVideo = false, characterNa
 // ============================================
 
 /**
- * Get all editors for a mission
+ * Get all editors for a mission (excluding creator and host)
  */
 const getMissionEditors = async (missionId) => {
+  // First get the mission to know creator_id and host_id
+  const { data: mission, error: missionError } = await supabase
+    .from('missions')
+    .select('creator_id, host_id')
+    .eq('id', missionId)
+    .single();
+  
+  if (missionError) {
+    console.error(missionError);
+    return { data: null, error: missionError };
+  }
+
   const { data, error } = await supabase
     .from('mission_editors')
     .select(`
@@ -367,15 +384,21 @@ const getMissionEditors = async (missionId) => {
     return { data: null, error };
   }
 
-  // Transform to a cleaner structure
-  const editors = data.map(e => ({
-    profile_id: e.profile_id,
-    name: e.profile?.name,
-    image_url: e.profile?.image_url,
-    added_by: e.added_by,
-    added_by_name: e.added_by_profile?.name,
-    added_at: e.added_at
-  }));
+  // Transform to a cleaner structure and filter out creator/host
+  const editors = data
+    .filter(e => {
+      // Exclude creator and host from editor list (they're already editors by default)
+      return e.profile_id !== mission.creator_id && 
+             e.profile_id !== mission.host_id;
+    })
+    .map(e => ({
+      profile_id: e.profile_id,
+      name: e.profile?.name,
+      image_url: e.profile?.image_url,
+      added_by: e.added_by,
+      added_by_name: e.added_by_profile?.name,
+      added_at: e.added_at
+    }));
 
   return { data: editors, error: null };
 };
@@ -410,20 +433,30 @@ const removeMissionEditor = async (missionId, profileId) => {
 /**
  * Check if a profile can edit a mission
  * Returns true if profile is creator, host, or an editor
+ * 
+ * Note: This function uses the service role client (bypasses RLS)
+ * because it's checking permissions in application code, not relying on RLS
  */
 const canEditMission = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
 
   // First check if user is creator or host
+  // Using service role client, so RLS is bypassed for this permission check
   const { data: mission, error: missionError } = await supabase
     .from('missions')
     .select('creator_id, host_id')
     .eq('id', missionId)
     .single();
 
-  if (missionError || !mission) return false;
+  if (missionError || !mission) {
+    // If we can't read the mission, check if it's an RLS issue
+    // In that case, we'll assume the user can't edit (fail closed)
+    console.error('Error checking mission permissions:', missionError);
+    return false;
+  }
 
-  if (mission.creator_id === profile.id || mission.host_id === profile.id) {
+  // Check if user is creator or host
+  if (mission.creator_id === profile.id || (mission.host_id && mission.host_id === profile.id)) {
     return true;
   }
 
@@ -436,7 +469,11 @@ const canEditMission = async (missionId, profile) => {
     .single();
 
   if (editorError && editorError.code !== 'PGRST116') {
-    console.error(editorError);
+    // PGRST116 is "not found" which is fine - means user is not an editor
+    // Other errors are logged but don't necessarily mean no access
+    if (editorError.code !== 'PGRST116') {
+      console.error('Error checking editor permissions:', editorError);
+    }
     return false;
   }
 

@@ -19,7 +19,7 @@
           {{#if ../canRemoveEditors}}
             <button 
               type="button"
-              class="btn btn-sm btn-danger editor-remove-btn"
+              class="button is-small is-danger editor-remove-btn"
               hx-delete="/missions/{{../missionId}}/editors/{{profile_id}}"
               hx-target="#mission-editors-list"
               hx-swap="outerHTML"

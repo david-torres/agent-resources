@@ -102,10 +102,15 @@ router.get('/', isAuthenticated, async (req, res) => {
     return res.status(400).send(ownError.message);
   }
   
+  if (editableError) {
+    // Log error but don't fail the request - just show empty editable missions
+    console.error('Error fetching editable missions:', editableError);
+  }
+  
   // Mark own missions and filter duplicates from editable
   const ownMissionsMarked = (ownMissions || []).map(m => ({ ...m, isOwner: true }));
   const ownIds = new Set(ownMissionsMarked.map(m => m.id));
-  const editableOnly = (editableMissions || [])
+  const editableOnly = ((editableMissions && !editableError) ? editableMissions : [])
     .filter(m => !ownIds.has(m.id))
     .map(m => ({ ...m, isEditor: true }));
   
@@ -160,11 +165,26 @@ router.post('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { characters, ...missionData } = req.body;
   
+  // Parse date from datetime-local input format
+  let missionDate = missionData.date;
+  if (missionDate && !missionDate.includes('T')) {
+    // If date doesn't have time, add default time
+    missionDate = missionDate + 'T00:00';
+  }
+  if (missionDate) {
+    missionDate = new Date(missionDate).toISOString();
+  } else {
+    missionDate = new Date().toISOString();
+  }
+  
+  // Use form outcome or default to 'pending'
+  const outcome = missionData.outcome || 'pending';
+  
   // Create the mission
   const { data: missionRes, error: missionError } = await createMission({
     ...missionData,
-    date: new Date().toISOString(),
-    outcome: 'success'
+    date: missionDate,
+    outcome: outcome
   }, profile);
 
   if (missionError) {
@@ -404,10 +424,25 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
     return res.status(400).send('Profile ID is required');
   }
 
+  // Validate profile_id is a valid UUID format
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (!uuidRegex.test(profile_id)) {
+    return res.status(400).send('Invalid profile ID format');
+  }
+
   // Check if user can edit this mission
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
     return res.status(403).send('Unauthorized');
+  }
+
+  // Prevent adding creator or host as editor (redundant)
+  const { data: mission, error: missionError } = await getMission(id);
+  if (missionError) {
+    return res.status(400).send('Mission not found');
+  }
+  if (mission && (mission.creator_id === profile_id || mission.host_id === profile_id)) {
+    return res.status(400).send('Creator and host are already editors by default');
   }
 
   const { error } = await addMissionEditor(id, profile_id, profile.id);

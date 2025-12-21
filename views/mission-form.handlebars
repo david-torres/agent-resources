@@ -143,22 +143,37 @@
 
   <script>
     // Handle clicking on a profile to add as editor
-    document.getElementById('editorSearchResults').addEventListener('click', function(e) {
-      const profileItem = e.target.closest('.profile-item');
-      if (profileItem) {
-        const profileId = profileItem.dataset.profileId;
-        const profileName = profileItem.dataset.profileName;
-        
-        // Send request to add editor
-        htmx.ajax('POST', '/missions/{{mission.id}}/editors', {
-          target: '#mission-editors-container',
-          swap: 'innerHTML',
-          values: { profile_id: profileId }
-        });
-        
-        // Clear search
-        document.getElementById('editorSearchInput').value = '';
-        document.getElementById('editorSearchResults').innerHTML = '';
+    const editorSearchResults = document.getElementById('editorSearchResults');
+    if (editorSearchResults) {
+      editorSearchResults.addEventListener('click', function(e) {
+        const profileItem = e.target.closest('.profile-item');
+        if (profileItem) {
+          const profileId = profileItem.dataset.profileId;
+          const profileName = profileItem.dataset.profileName;
+          
+          // Send request to add editor
+          htmx.ajax('POST', '/missions/{{mission.id}}/editors', {
+            target: '#mission-editors-container',
+            swap: 'innerHTML',
+            values: { profile_id: profileId },
+            error: function(content, xhr) {
+              // Show error message
+              const errorMsg = xhr.responseText || 'Failed to add editor';
+              alert('Error: ' + errorMsg);
+            }
+          });
+          
+          // Clear search
+          document.getElementById('editorSearchInput').value = '';
+          document.getElementById('editorSearchResults').innerHTML = '';
+        }
+      });
+    }
+
+    // Add error handling for profile search
+    document.body.addEventListener('htmx:responseError', function(event) {
+      if (event.detail.target && event.detail.target.id === 'editorSearchResults') {
+        event.detail.target.innerHTML = '<p class="has-text-danger">Error searching profiles. Please try again.</p>';
       }
     });
   </script>
