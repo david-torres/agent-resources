@@ -9,7 +9,7 @@ const { addCharacterToMission } = require('../models/mission');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
-  { model: "gpt-5.1-mini" }
+  { model: "gpt-5-mini" }
 );
 
 const traits = Object.values(personalityMap).join(', ');

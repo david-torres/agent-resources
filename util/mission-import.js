@@ -6,7 +6,7 @@ const { getOwnCharacters, searchPublicCharacters } = require('../models/characte
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
-  { model: "gpt-5.1-mini" }
+  { model: "gpt-5-mini" }
 );
 
 const missionSchema = z.object({

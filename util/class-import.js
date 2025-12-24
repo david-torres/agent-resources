@@ -5,7 +5,7 @@ const { createClass } = require("../models/class");
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
-  { model: "gpt-4o-mini" }
+  { model: "gpt-5-mini" }
 );
 
 const abilitySchema = z.object({
