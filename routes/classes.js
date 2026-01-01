@@ -25,6 +25,7 @@ const {
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { processClassImport } = require('../util/class-import');
+const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
 
 const upload = multer({
@@ -286,6 +287,36 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
             { label: 'PDF', href: `/classes/${classData.id}/pdf` }
         ]
     });
+});
+
+router.get('/:id/export', isAuthenticated, async (req, res) => {
+    const { profile } = res.locals;
+    const { id } = req.params;
+    const format = req.query.format || EXPORT_FORMATS.MARKDOWN;
+    
+    // Validate format
+    const supportedFormats = getSupportedFormats();
+    if (!supportedFormats.includes(format)) {
+        return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
+    }
+    
+    const { data: classData, error } = await getClass(id);
+    if (error) {
+        return res.status(400).send(error.message);
+    }
+    
+    // Only the creator or admin can export
+    if (classData.created_by !== profile.id && profile.role !== 'admin') {
+        return res.status(403).send('You can only export your own classes');
+    }
+    
+    const { content, mimeType, filename } = exportClass(classData, format);
+    
+    res.setHeader('Content-Type', `${mimeType}; charset=utf-8`);
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    res.setHeader('Content-Length', Buffer.byteLength(content, 'utf-8'));
+    res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.send(content);
 });
 
 router.get('/:id/:name?', authOptional, async (req, res) => {

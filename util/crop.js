@@ -104,3 +104,4 @@ function parseImageCrop(value) {
 module.exports = {
   parseImageCrop
 };
+
