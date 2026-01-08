@@ -3,6 +3,18 @@ const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 moment.tz.setDefault('UTC');
 
+const fetchProfileById = async (profileId) => {
+  if (!profileId) return { profile: null, error: null };
+  const { data, error } = await supabase.from('profiles').select('*').eq('id', profileId).single();
+  if (error && error.code !== 'PGRST116') return { profile: null, error };
+  return { profile: data || null, error: null };
+};
+
+const assignCreatorMeta = (post, creator) => {
+  post.creator_name = creator?.name || 'Unknown Agent';
+  post.creator_is_public = Boolean(creator?.is_public);
+};
+
 const getLfgPosts = async () => {
   const { data, error } = await supabase
     .from('lfg_posts')
@@ -10,10 +22,11 @@ const getLfgPosts = async () => {
     .eq('is_public', true)
     .eq('status', 'open')
     .order('created_at', { ascending: false });
+  if (error || !data) return { data, error };
   for (let post of data) {
-    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
-    post.creator_name = creator.name;
-    post.creator_is_public = creator.is_public;
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    if (creatorError) return { data: null, error: creatorError };
+    assignCreatorMeta(post, creator);
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
@@ -38,10 +51,11 @@ const getLfgPostsByOthers = async (profileId) => {
     .eq('status', 'open')
     .gte('date', today)
     .order('created_at', { ascending: false });
+  if (error || !data) return { data, error };
   for (let post of data) {
-    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
-    post.creator_name = creator.name;
-    post.creator_is_public = creator.is_public;
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    if (creatorError) return { data: null, error: creatorError };
+    assignCreatorMeta(post, creator);
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
@@ -62,14 +76,11 @@ const getLfgPostsByCreator = async (creator_id) => {
     .select('*')
     .eq('creator_id', creator_id)
     .order('created_at', { ascending: false });
+  if (error || !data) return { data, error };
   for (let post of data) {
-    const { data: creator, error: creatorError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', post.creator_id)
-      .single();
-    post.creator_name = creator.name;
-    post.creator_is_public = creator.is_public;
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    if (creatorError) return { data: null, error: creatorError };
+    assignCreatorMeta(post, creator);
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
@@ -94,13 +105,9 @@ const getLfgPost = async (id) => {
   if (error) return { data, error };
 
   let post = data;
-  const { data: creator, error: creatorError } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', post.creator_id)
-    .single();
-  post.creator_name = creator.name;
-  post.creator_is_public = creator.is_public;
+  const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+  if (creatorError) return { data: null, error: creatorError };
+  assignCreatorMeta(post, creator);
 
   const { data: host, error: hostError } = await supabase
     .from('profiles')
@@ -308,9 +315,9 @@ const getLfgJoinedPosts = async (profileId) => {
   const joinedPosts = data.map(request => request.lfg_posts);
 
   for (let post of joinedPosts) {
-    const { data: creator, error: creatorError } = await supabase.from('profiles').select('*').eq('id', post.creator_id).single();
-    post.creator_name = creator.name;
-    post.creator_is_public = creator.is_public;
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    if (creatorError) return { data: null, error: creatorError };
+    assignCreatorMeta(post, creator);
 
     const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
