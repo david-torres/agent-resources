@@ -1,0 +1,43 @@
+{{> breadcrumbs}}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">Manage Navigation</h1>
+  </div>
+  <div class="level-right">
+    <a class="button is-primary" href="/nav/new">
+      <span class="icon"><i class="fas fa-plus"></i></span>
+      <span>Create Navigation Item</span>
+    </a>
+  </div>
+</div>
+
+{{#if navItems.length}}
+<div class="table-container">
+  <table class="table is-fullwidth is-striped">
+    <thead>
+      <tr>
+        <th>Label</th>
+        <th>Type</th>
+        <th>Link/Page</th>
+        <th>Icon</th>
+        <th>Visibility</th>
+        <th>Status</th>
+        <th>Position</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each navItems}}
+        {{#with this}}
+          {{> nav-item-row navItem=this level=0}}
+        {{/with}}
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="notification is-light">
+  No navigation items found. <a href="/nav/new">Create your first navigation item</a>.
+</div>
+{{/if}}
+

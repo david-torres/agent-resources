@@ -13,75 +13,15 @@
 
   <div class="navbar-menu" id="navbar-menu">
     <div class="navbar-end">
-      <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link {{#if (or (eq activeNav 'classes') (eq activeNav 'my-classes') (eq activeNav 'redeem') (eq activeNav 'rules'))}}is-active{{/if}}">Game Info</a>
-        <div class="navbar-dropdown is-right">
-          <a class="navbar-item" href="/rules">
-            <span class="icon">
-              <i class="fas fa-scroll"></i>
-            </span>
-            <span>Rules Library</span>
-          </a>
-          <a class="navbar-item" href="/classes">
-            <span class="icon">
-              <i class="fas fa-chess-knight"></i>
-            </span>
-            <span>Classes</span>
-          </a>
-          {{#if profile}}
-          <a class="navbar-item" href="/classes/my">
-            <span class="icon">
-              <i class="fas fa-chess"></i>
-            </span>
-            <span>My PCCs</span>
-          </a>
-          {{/if}}
-          <a class="navbar-item" href="/classes/redeem/bulk">
-            <span class="icon">
-              <i class="fas fa-ticket"></i>
-            </span>
-            <span>Redeem Unlock Codes</span>
-          </a>
-        </div>
-      </div>
-      <div class="navbar-item has-dropdown is-hoverable">
-        <a class="navbar-link {{#if (or (eq activeNav 'lfg') (eq activeNav 'search-characters') (eq activeNav 'search-missions'))}}is-active{{/if}}">Social</a>
-        <div class="navbar-dropdown is-right">
-          {{#if profile}}
-          <a class="navbar-item" href="/lfg">
-            <span class="icon">
-              <i class="fas fa-people-group"></i>
-            </span>
-            <span>Looking for Game{{#if pendingLfgRequests}}<span class="badge is-danger">{{pendingLfgRequests}}</span>{{/if}}</span>
-          </a>
-          {{/if}}
-          <a class="navbar-item" href="/characters/search">
-            <span class="icon">
-              <i class="fas fa-search"></i>
-            </span>
-            <span>Search Characters</span>
-          </a>
-          <a class="navbar-item" href="/missions/search">
-            <span class="icon">
-              <i class="fas fa-scroll"></i>
-            </span>
-            <span>Search Mission Logs</span>
-          </a>
-        </div>
-      </div>
+      {{#if navItems}}
+        {{#if navItems.length}}
+          {{#each navItems}}
+            {{> nav-item navItem=this}}
+          {{/each}}
+        {{/if}}
+      {{/if}}
+      
       {{#if profile}}
-      <a class="navbar-item {{#if (eq activeNav 'characters')}}is-active{{/if}}" href="/characters">
-        <span class="icon">
-          <i class="fas fa-masks-theater"></i>
-        </span>
-        <span>Characters</span>
-      </a>
-      <a class="navbar-item {{#if (eq activeNav 'missions')}}is-active{{/if}}" href="/missions">
-        <span class="icon">
-          <i class="fas fa-book"></i>
-        </span>
-        <span>Mission Log</span>
-      </a>
       <a class="navbar-item {{#if (eq activeNav 'profile')}}is-active{{/if}}" href="/profile" aria-label="Profile" title="Profile">
         <span class="icon">
           <i class="fas fa-user"></i>

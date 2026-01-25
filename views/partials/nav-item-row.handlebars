@@ -1,0 +1,87 @@
+{{#if navItem}}
+<tr>
+  <td>
+    {{#if (gt level 0)}}
+      {{#times level}}&nbsp;&nbsp;&nbsp;&nbsp;{{/times}}└─
+    {{/if}}
+    <strong>{{navItem.label}}</strong>
+    {{#if navItem.parent_id}}
+      <span class="tag is-light is-small ml-2">Child</span>
+    {{/if}}
+  </td>
+  <td>
+    <span class="tag {{#if (eq navItem.type 'dropdown')}}is-info{{else if (eq navItem.type 'page')}}is-success{{else}}is-warning{{/if}} is-light">
+      {{navItem.type}}
+    </span>
+  </td>
+  <td>
+    {{#if (eq navItem.type 'page')}}
+      {{#if navItem.pages}}
+        <a href="/pages/{{navItem.pages.slug}}" target="_blank" rel="noopener">
+          {{navItem.pages.title}}
+          <span class="icon has-text-info is-small">
+            <i class="fas fa-external-link-alt"></i>
+          </span>
+        </a>
+      {{else}}
+        <span class="has-text-grey">Page not found</span>
+      {{/if}}
+    {{else if (eq navItem.type 'link')}}
+      <a href="{{navItem.url}}" target="_blank" rel="noopener">
+        {{navItem.url}}
+        <span class="icon has-text-info is-small">
+          <i class="fas fa-external-link-alt"></i>
+        </span>
+      </a>
+    {{else}}
+      <span class="has-text-grey">—</span>
+    {{/if}}
+  </td>
+  <td>
+    {{#if navItem.icon}}
+      <span class="icon">
+        <i class="{{navItem.icon}}"></i>
+      </span>
+      <code class="is-small">{{navItem.icon}}</code>
+    {{else}}
+      <span class="has-text-grey">—</span>
+    {{/if}}
+  </td>
+  <td>
+    {{#if navItem.requires_admin}}
+      <span class="tag is-danger is-light is-small">Admin</span>
+    {{else if navItem.requires_auth}}
+      <span class="tag is-warning is-light is-small">Auth</span>
+    {{else}}
+      <span class="tag is-success is-light is-small">Public</span>
+    {{/if}}
+  </td>
+  <td>
+    <span class="tag {{#if navItem.is_active}}is-success{{else}}is-danger{{/if}} is-light">
+      {{#if navItem.is_active}}Active{{else}}Inactive{{/if}}
+    </span>
+  </td>
+  <td>{{navItem.position}}</td>
+  <td>
+    <div class="buttons">
+      <a class="button is-small is-info" href="/nav/{{navItem.id}}/edit">
+        <span class="icon"><i class="fas fa-edit"></i></span>
+        <span>Edit</span>
+      </a>
+      <button class="button is-small is-danger"
+              hx-delete="/nav/{{navItem.id}}"
+              hx-confirm="Are you sure you want to delete '{{navItem.label}}'? This will also delete all child items. This cannot be undone."
+              hx-target="closest tr"
+              hx-swap="outerHTML">
+        <span class="icon"><i class="fas fa-trash"></i></span>
+        <span>Delete</span>
+      </button>
+    </div>
+  </td>
+</tr>
+{{#if navItem.children}}
+  {{#each navItem.children}}
+    {{> nav-item-row navItem=this level=(add ../level 1)}}
+  {{/each}}
+{{/if}}
+{{/if}}

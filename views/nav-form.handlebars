@@ -1,0 +1,178 @@
+{{> breadcrumbs}}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">{{#if navItem}}Edit Navigation Item{{else}}Create Navigation Item{{/if}}</h1>
+  </div>
+  <div class="level-right">
+    <a class="button" href="/nav/manage">
+      <span class="icon"><i class="fas fa-arrow-left"></i></span>
+      <span>Back to Manage</span>
+    </a>
+  </div>
+</div>
+
+<div class="box">
+  <form method="post" action="{{#if navItem}}/nav/{{navItem.id}}{{else}}/nav{{/if}}" id="nav-form">
+    <div class="field">
+      <label class="label">Label <span class="has-text-danger">*</span></label>
+      <div class="control">
+        <input class="input" type="text" name="label" id="label" value="{{navItem.label}}" placeholder="Navigation Label" required>
+      </div>
+      <p class="help">The text that will appear in the navigation menu</p>
+    </div>
+
+    <div class="field">
+      <label class="label">Type <span class="has-text-danger">*</span></label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          <select name="type" id="type" required>
+            <option value="link" {{#if (or (not navItem) (eq navItem.type 'link'))}}selected{{/if}}>Link (Custom URL)</option>
+            <option value="page" {{#if (eq navItem.type 'page')}}selected{{/if}}>Page (Link to CMS Page)</option>
+            <option value="dropdown" {{#if (eq navItem.type 'dropdown')}}selected{{/if}}>Dropdown (Parent Menu)</option>
+          </select>
+        </div>
+      </div>
+      <p class="help">Choose the type of navigation item</p>
+    </div>
+
+    <!-- URL field (shown for 'link' type) -->
+    <div class="field" id="url-field" style="display: {{#if (or (not navItem) (eq navItem.type 'link'))}}block{{else}}none{{/if}};">
+      <label class="label">URL <span class="has-text-danger">*</span></label>
+      <div class="control">
+        <input class="input" type="text" name="url" id="url" value="{{navItem.url}}" placeholder="/characters or https://example.com">
+      </div>
+      <p class="help">Can be a relative path (e.g., /characters) or absolute URL (e.g., https://example.com)</p>
+    </div>
+
+    <!-- Page field (shown for 'page' type) -->
+    <div class="field" id="page-field" style="display: {{#if (eq navItem.type 'page')}}block{{else}}none{{/if}};">
+      <label class="label">Page <span class="has-text-danger">*</span></label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          <select name="page_id" id="page_id">
+            <option value="">Select a page...</option>
+            {{#each pages}}
+              <option value="{{this.id}}" {{#if (and ../navItem (eq ../navItem.page_id this.id))}}selected{{/if}}>{{this.title}} ({{this.slug}})</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+      <p class="help">Select a page from the CMS to link to</p>
+    </div>
+
+    <div class="field">
+      <label class="label">Icon</label>
+      <div class="control">
+        <input class="input" type="text" name="icon" id="icon" value="{{navItem.icon}}" placeholder="fas fa-home">
+      </div>
+      <p class="help">FontAwesome icon class (e.g., <code>fas fa-home</code>, <code>fas fa-user</code>)</p>
+    </div>
+
+    <div class="field">
+      <label class="label">Parent Item</label>
+      <div class="control">
+        <div class="select is-fullwidth">
+          <select name="parent_id" id="parent_id">
+            <option value="">None (Top Level)</option>
+            {{#each dropdownParents}}
+              <option value="{{this.id}}" {{#if (and ../navItem (eq ../navItem.parent_id this.id))}}selected{{/if}}>{{this.label}}</option>
+            {{/each}}
+          </select>
+        </div>
+      </div>
+      <p class="help">Select a dropdown parent if this should be a sub-menu item</p>
+    </div>
+
+    <div class="field">
+      <label class="label">Position</label>
+      <div class="control">
+        <input class="input" type="number" name="position" id="position" value="{{navItem.position}}" placeholder="0" min="0">
+      </div>
+      <p class="help">Order within the same parent (lower numbers appear first). Leave empty to auto-assign.</p>
+    </div>
+
+    <div class="columns">
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label">Visibility</label>
+          <div class="control">
+            <label class="checkbox">
+              <input type="checkbox" name="requires_auth" id="requires_auth" {{#if navItem.requires_auth}}checked{{/if}}>
+              Requires Authentication
+            </label>
+          </div>
+          <p class="help">Only show to logged-in users</p>
+        </div>
+      </div>
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label">Admin Only</label>
+          <div class="control">
+            <label class="checkbox">
+              <input type="checkbox" name="requires_admin" id="requires_admin" {{#if navItem.requires_admin}}checked{{/if}}>
+              Requires Admin Role
+            </label>
+          </div>
+          <p class="help">Only show to administrators</p>
+        </div>
+      </div>
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label">Status</label>
+          <div class="control">
+            <label class="checkbox">
+              <input type="checkbox" name="is_active" id="is_active" {{#if (or (not navItem) navItem.is_active)}}checked{{/if}}>
+              Active
+            </label>
+          </div>
+          <p class="help">Inactive items are hidden from navigation</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="field">
+      <div class="buttons">
+        <button class="button is-primary" type="submit">
+          <span class="icon"><i class="fas fa-save"></i></span>
+          <span>{{#if navItem}}Save Changes{{else}}Create Navigation Item{{/if}}</span>
+        </button>
+        <a class="button" href="/nav/manage">
+          Cancel
+        </a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const typeSelect = document.getElementById('type');
+  const urlField = document.getElementById('url-field');
+  const pageField = document.getElementById('page-field');
+  const urlInput = document.getElementById('url');
+  const pageSelect = document.getElementById('page_id');
+
+  function toggleFields() {
+    const type = typeSelect.value;
+    if (type === 'link') {
+      urlField.style.display = 'block';
+      pageField.style.display = 'none';
+      urlInput.required = true;
+      pageSelect.required = false;
+    } else if (type === 'page') {
+      urlField.style.display = 'none';
+      pageField.style.display = 'block';
+      urlInput.required = false;
+      pageSelect.required = true;
+    } else { // dropdown
+      urlField.style.display = 'none';
+      pageField.style.display = 'none';
+      urlInput.required = false;
+      pageSelect.required = false;
+    }
+  }
+
+  typeSelect.addEventListener('change', toggleFields);
+  toggleFields(); // Initialize on page load
+});
+</script>

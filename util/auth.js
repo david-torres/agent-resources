@@ -1,6 +1,7 @@
 const { getUserFromToken, getProfile } = require('./supabase');
 const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
+const { loadNavItems } = require('./nav-loader');
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
@@ -46,6 +47,8 @@ async function isAuthenticated(req, res, next) {
       }
     }
 
+    // Load nav items after user/profile is set
+    await loadNavItems(req, res, () => {});
     next();
   }
 }
@@ -55,6 +58,8 @@ async function authOptional(req, res, next) {
   res.locals.authOptional = true;
 
   if (!req.headers['authorization']) {
+    // Load nav items even without auth
+    await loadNavItems(req, res, () => {});
     next();
     return;
   }
@@ -81,6 +86,8 @@ async function authOptional(req, res, next) {
     }
   }
 
+  // Load nav items after user/profile is set (or not set)
+  await loadNavItems(req, res, () => {});
   next();
 }
 
