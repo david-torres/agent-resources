@@ -54,7 +54,7 @@
   <div class="field">
     <label class="label">Teaser</label>
     <div class="control">
-      <textarea class="textarea" name="teaser" placeholder="Short description for class list display (optional)">{{class.teaser}}</textarea>
+      <textarea class="textarea" name="teaser" placeholder="Short description for class list display (optional)" data-toast-editor data-editor-height="150px">{{class.teaser}}</textarea>
     </div>
   </div>
   <div class="field">
@@ -67,7 +67,7 @@
     <label class="label">Description</label>
     <div class="control">
       <textarea class="textarea" name="description" placeholder="Class Description"
-        required>{{class.description}}</textarea>
+        data-toast-editor required>{{class.description}}</textarea>
     </div>
   </div>
   <div class="field">
@@ -118,7 +118,7 @@
           </div>
           <label class="label">Ability {{add @index 1}} Description</label>
           <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description"></textarea>
+            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px"></textarea>
           </div>
         </div>
       {{/times}}
@@ -131,7 +131,7 @@
           </div>
           <label class="label">Ability {{add @index 1}} Description</label>
           <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description">{{this.description}}</textarea>
+            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
           </div>
         </div>
       {{/each}}
@@ -150,7 +150,7 @@
             {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
           </label>
           <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description"></textarea>
+            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px"></textarea>
           </div>
         </div>
       {{/times}}
@@ -167,7 +167,7 @@
             {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
           </label>
           <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description">{{this.description}}</textarea>
+            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
           </div>
         </div>
       {{/each}}

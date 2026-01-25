@@ -605,3 +605,82 @@ a.dropdown-item:hover {
     padding: 0.5rem;
   }
 }
+
+/* ToastUI Editor Integration */
+/* Note: Textareas are hidden via JavaScript, not CSS, to avoid conflicts */
+
+/* Ensure editor container is visible and properly styled */
+.toastui-editor-container,
+[data-toast-editor-wrapper="true"] {
+  margin-top: 0.5rem;
+  display: block !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  position: relative !important;
+}
+
+/* Ensure editor container fits within Bulma form controls */
+.field .control .toastui-editor-container {
+  width: 100%;
+}
+
+/* Style the editor to match Bulma input styling */
+.toastui-editor-defaultUI {
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+}
+
+.toastui-editor-defaultUI:hover {
+  border-color: #b5b5b5;
+}
+
+.toastui-editor-defaultUI.focused {
+  border-color: #3273dc;
+  box-shadow: 0 0 0 0.125em rgba(50, 115, 220, 0.25);
+}
+
+/* Match editor toolbar to Bulma styling */
+.toastui-editor-toolbar {
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #dbdbdb;
+}
+
+/* Ensure editor content area is styled appropriately */
+.toastui-editor-contents {
+  font-family: inherit;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: #363636;
+}
+
+/* Preview styling */
+.toastui-editor-contents .toastui-editor-contents p {
+  margin-bottom: 1em;
+}
+
+/* Code block styling */
+.toastui-editor-contents pre {
+  background-color: #f5f5f5;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+/* Table styling in editor */
+.toastui-editor-contents table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+.toastui-editor-contents table th,
+.toastui-editor-contents table td {
+  border: 1px solid #dbdbdb;
+  padding: 0.5rem;
+}
+
+.toastui-editor-contents table th {
+  background-color: #f5f5f5;
+  font-weight: 600;
+}

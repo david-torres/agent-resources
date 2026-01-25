@@ -311,6 +311,251 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     });
   };
 
+  // Store ToastUI Editor instances for cleanup and form sync
+  const toastUIEditors = new Map();
+
+  const _initToastUIEditors = (root, retryCount = 0) => {
+    const container = root || document;
+    // ToastUI Editor can be exposed as Editor or toastui.Editor depending on CDN version
+    // Wait for library to be available
+    const EditorClass = (typeof Editor !== 'undefined') ? Editor : (typeof toastui !== 'undefined' && toastui.Editor) ? toastui.Editor : null;
+    if (!EditorClass) {
+      // If library not ready yet, retry after a short delay (max 10 retries = 1 second)
+      if (retryCount < 10) {
+        setTimeout(() => _initToastUIEditors(root, retryCount + 1), 100);
+      } else {
+        console.warn('ToastUI Editor library not available after retries');
+      }
+      return;
+    }
+
+    // Find all textareas with data-toast-editor attribute, or skip readonly ones
+    const textareas = container.querySelectorAll('textarea[data-toast-editor]:not([readonly])');
+    
+    textareas.forEach((textarea) => {
+      // Skip if already initialized - check both the dataset flag and if container exists
+      if (textarea.dataset.toastEditorInitialized === 'true' || textarea.classList.contains('toast-editor-initialized')) {
+        // Ensure textarea stays hidden
+        textarea.style.setProperty('display', 'none', 'important');
+        // Check if container exists and is still valid
+        const existingContainer = textarea.nextElementSibling;
+        if (existingContainer && existingContainer.classList.contains('toastui-editor-container')) {
+          // Ensure container is visible
+          existingContainer.style.setProperty('display', 'block', 'important');
+          existingContainer.style.setProperty('visibility', 'visible', 'important');
+        }
+        return;
+      }
+      
+      // Check if editor container already exists (might happen on re-initialization)
+      const existingContainer = textarea.nextElementSibling;
+      if (existingContainer && existingContainer.classList.contains('toastui-editor-container')) {
+        // Check if container is still in DOM and has a valid parent
+        if (!document.body.contains(existingContainer) || !textarea.parentNode) {
+          // Container was removed, clean it up and reinitialize
+          if (existingContainer._toastEditorObserver) {
+            existingContainer._toastEditorObserver.disconnect();
+          }
+          existingContainer.remove();
+        } else {
+          // Container exists and is valid, ensure it's visible and mark textarea as initialized
+          existingContainer.style.setProperty('display', 'block', 'important');
+          existingContainer.style.setProperty('visibility', 'visible', 'important');
+          existingContainer.style.setProperty('opacity', '1', 'important');
+          textarea.style.setProperty('display', 'none', 'important');
+          textarea.dataset.toastEditorInitialized = 'true';
+          textarea.classList.add('toast-editor-initialized');
+          return;
+        }
+      }
+      
+      // Skip if editor instance already exists
+      const textareaId = textarea.id || textarea.name || `toast-editor-${Date.now()}-${Math.random()}`;
+      if (toastUIEditors.has(textareaId)) {
+        // Clean up existing instance if textarea was removed and re-added
+        const existingEditor = toastUIEditors.get(textareaId);
+        if (existingEditor) {
+          try {
+            // Check if editor's container still exists before destroying
+            const editorEl = existingEditor.getRootElement ? existingEditor.getRootElement() : null;
+            if (editorEl && document.body.contains(editorEl)) {
+              if (existingEditor.destroy) {
+                existingEditor.destroy();
+              }
+            }
+          } catch (e) { 
+            // Ignore errors during cleanup
+          }
+        }
+        toastUIEditors.delete(textareaId);
+      }
+
+      try {
+        // Get configuration from data attributes
+        const height = textarea.getAttribute('data-editor-height') || '300px';
+        const minHeight = textarea.getAttribute('data-editor-min-height') || '200px';
+        const editType = textarea.getAttribute('data-editor-mode') || 'markdown';
+        const previewStyle = textarea.getAttribute('data-editor-preview') || 'vertical';
+        
+        // Get initial value from textarea
+        const initialValue = textarea.value || '';
+
+        // Create container div for editor
+        const editorContainer = document.createElement('div');
+        editorContainer.className = 'toastui-editor-container';
+        editorContainer.setAttribute('data-toast-editor-wrapper', 'true');
+        editorContainer.style.minHeight = minHeight;
+        editorContainer.style.width = '100%';
+        editorContainer.style.display = 'block';
+        editorContainer.style.visibility = 'visible';
+        editorContainer.style.opacity = '1';
+        
+        // Insert container after textarea (BEFORE hiding textarea)
+        textarea.parentNode.insertBefore(editorContainer, textarea.nextSibling);
+        
+        // Add a MutationObserver to prevent the container from being hidden
+        // Only observe the container itself, not the body, to avoid conflicts
+        const observer = new MutationObserver((mutations) => {
+          // Check if container still exists in DOM before manipulating
+          if (!document.body.contains(editorContainer) || !textarea.parentNode) {
+            observer.disconnect();
+            return;
+          }
+          
+          mutations.forEach((mutation) => {
+            if (mutation.type === 'attributes' && mutation.attributeName === 'style') {
+              // Verify container is still in DOM before checking styles
+              if (!document.body.contains(editorContainer)) {
+                observer.disconnect();
+                return;
+              }
+              const display = window.getComputedStyle(editorContainer).display;
+              const visibility = window.getComputedStyle(editorContainer).visibility;
+              if (display === 'none' || visibility === 'hidden') {
+                // Only restore if container is still in DOM
+                if (document.body.contains(editorContainer)) {
+                  editorContainer.style.setProperty('display', 'block', 'important');
+                  editorContainer.style.setProperty('visibility', 'visible', 'important');
+                }
+              }
+            }
+          });
+        });
+        observer.observe(editorContainer, { attributes: true, attributeFilter: ['style', 'class'] });
+        
+        // Store observer reference for cleanup if needed
+        editorContainer._toastEditorObserver = observer;
+
+        // Initialize ToastUI Editor in the container
+        const editor = new EditorClass({
+          el: editorContainer,
+          height: height,
+          initialEditType: editType,
+          previewStyle: previewStyle,
+          initialValue: initialValue,
+          usageStatistics: false
+        });
+
+        // Verify editor was created successfully (check for editor instance and container content)
+        if (!editor) {
+          throw new Error('ToastUI Editor instance not created');
+        }
+        
+        // Wait a tiny bit for editor to render, then verify
+        setTimeout(() => {
+          // Check if editor has rendered content (various possible class names)
+          const hasEditorContent = editorContainer.children.length > 0 || 
+                                   editorContainer.querySelector('.toastui-editor') ||
+                                   editorContainer.querySelector('[class*="toastui"]') ||
+                                   editorContainer.innerHTML.trim().length > 0;
+          
+          if (!hasEditorContent) {
+            console.warn('ToastUI Editor container appears empty after initialization');
+            // Don't throw - let it continue, might still work
+          }
+        }, 50);
+
+        // Store editor instance
+        toastUIEditors.set(textareaId, editor);
+        textarea.dataset.toastEditorId = textareaId;
+        
+        // Ensure editor container is visible immediately
+        editorContainer.style.setProperty('display', 'block', 'important');
+        editorContainer.style.setProperty('visibility', 'visible', 'important');
+        editorContainer.style.setProperty('opacity', '1', 'important');
+        
+        // NOW hide the original textarea after editor is created
+        textarea.style.setProperty('display', 'none', 'important');
+        textarea.style.setProperty('visibility', 'hidden', 'important');
+        textarea.style.setProperty('position', 'absolute', 'important');
+        textarea.style.setProperty('left', '-9999px', 'important');
+        textarea.setAttribute('aria-hidden', 'true');
+        textarea.dataset.toastEditorInitialized = 'true';
+        textarea.classList.add('toast-editor-initialized');
+
+        // Sync editor content to textarea on change
+        editor.on('change', () => {
+          const markdown = editor.getMarkdown();
+          textarea.value = markdown;
+          // Trigger input event for HTMX and other listeners
+          textarea.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        // Also sync on blur for safety
+        editor.on('blur', () => {
+          const markdown = editor.getMarkdown();
+          textarea.value = markdown;
+        });
+
+      } catch (e) {
+        console.error('ToastUI Editor init error:', e);
+        // If editor fails, show textarea again and remove initialization flag
+        textarea.style.display = '';
+        textarea.dataset.toastEditorInitialized = 'false';
+        textarea.classList.remove('toast-editor-initialized');
+      }
+    });
+  };
+
+  const _syncToastUIEditorsToTextareas = (form) => {
+    if (!form) return;
+    
+    // Find all textareas with editors in this form
+    const textareas = form.querySelectorAll('textarea[data-toast-editor]');
+    textareas.forEach((textarea) => {
+      const editorId = textarea.dataset.toastEditorId;
+      if (editorId && toastUIEditors.has(editorId)) {
+        const editor = toastUIEditors.get(editorId);
+        if (editor && editor.getMarkdown) {
+          try {
+            const markdown = editor.getMarkdown();
+            textarea.value = markdown;
+          } catch (e) {
+            console.error('Error syncing ToastUI Editor:', e);
+          }
+        }
+      }
+    });
+  };
+
+  // Handle form submissions - sync editors before submit
+  const _setupFormSync = () => {
+    document.body.addEventListener('submit', function(event) {
+      const form = event.target;
+      if (form && form.tagName === 'FORM') {
+        _syncToastUIEditorsToTextareas(form);
+      }
+    }, true); // Use capture phase to run before HTMX
+
+    // Also sync before HTMX requests
+    document.body.addEventListener('htmx:configRequest', function(event) {
+      const form = event.detail.elt;
+      if (form && form.tagName === 'FORM') {
+        _syncToastUIEditorsToTextareas(form);
+      }
+    });
+  };
+
   function init(supabaseUrl, supabaseKey) {
     document.addEventListener("DOMContentLoaded", async function () {
       // System message visibility control
@@ -439,6 +684,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         _initImageCroppers(targetEl || document);
         // Apply saved crop styles on swapped content
         _applySavedCrops(targetEl || document);
+        // Initialize ToastUI editors after swaps
+        // Use a delay to ensure DOM is fully settled after swap and auth redirects
+        setTimeout(() => {
+          _initToastUIEditors(targetEl || document);
+        }, 150);
       });
 
       // Global keydown handler for closing modals on Escape
@@ -465,18 +715,33 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         });
       });
 
+      // Setup form sync for ToastUI editors
+      _setupFormSync();
+
       // trigger initial session handling immediately
       const { data: { session } } = await supabaseClient.auth.getSession();
       await _handleAuthStateChange('INITIAL_SESSION', session);
 
-      // Initialize any tooltips present at load
-      _initTooltips(document);
-      // Initialize any searchable selects present at load
-      _initSearchableSelects(document);
-      // Initialize any image croppers if present
-      _initImageCroppers(document);
-      // Apply any persisted crop marks
-      _applySavedCrops(document);
+      // Initialize UI components after auth check completes
+      // Use a function that can be called after HTMX swaps
+      const initializeUIComponents = (root = document) => {
+        // Initialize any tooltips present
+        _initTooltips(root);
+        // Initialize any searchable selects present
+        _initSearchableSelects(root);
+        // Initialize any image croppers if present
+        _initImageCroppers(root);
+        // Apply any persisted crop marks
+        _applySavedCrops(root);
+        // Initialize any ToastUI editors present
+        // Use a small delay to ensure ToastUI Editor library is fully loaded
+        setTimeout(() => {
+          _initToastUIEditors(root);
+        }, 100);
+      };
+
+      // Initialize on initial load (after auth check)
+      initializeUIComponents();
     });
   }
 
@@ -488,7 +753,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       headers['Authorization'] = `Bearer ${token}`;
       headers['Refresh-Token'] = refresh;
     }
-    htmx.ajax('GET', url, { target: 'body', headers });
+    // Use swap: 'outerHTML' to ensure proper body replacement
+    htmx.ajax('GET', url, { target: 'body', swap: 'outerHTML', headers });
   }
 
   function getRedirectUrl() {
@@ -522,7 +788,10 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         } else {
           // Refresh the current page with auth headers so server can render authed view
           const current = window.location.pathname + window.location.search;
-          redirectTo(current);
+          // Use a small delay to ensure any editors are initialized first, then redirect
+          setTimeout(() => {
+            redirectTo(current);
+          }, 100);
         }
       } else {
         _clearTokens();
