@@ -1091,3 +1091,72 @@ CREATE POLICY "Authenticated users can read rules PDFs"
         bucket_id = 'rules-pdfs'
         AND auth.role() = 'authenticated'
     );
+
+-- CMS Pages table
+CREATE TABLE IF NOT EXISTS pages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    title text NOT NULL,
+    slug text NOT NULL UNIQUE,
+    content text NOT NULL DEFAULT '',
+    access_level text NOT NULL CHECK (access_level IN ('public', 'authenticated', 'admin')) DEFAULT 'public',
+    is_published boolean NOT NULL DEFAULT false,
+    created_by uuid REFERENCES profiles(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_slug ON pages(slug);
+CREATE INDEX IF NOT EXISTS idx_pages_published ON pages(is_published);
+CREATE INDEX IF NOT EXISTS idx_pages_access_level ON pages(access_level);
+
+ALTER TABLE pages ENABLE ROW LEVEL SECURITY;
+
+-- Trigger to update updated_at timestamp
+CREATE TRIGGER update_pages_updated_at
+    BEFORE UPDATE ON pages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- RLS Policies for pages table
+CREATE POLICY "Public pages are viewable by everyone"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level = 'public'
+    );
+
+CREATE POLICY "Authenticated pages are viewable by authenticated users"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level IN ('public', 'authenticated')
+        AND auth.role() = 'authenticated'
+    );
+
+CREATE POLICY "Admin pages are viewable by admins"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level = 'admin'
+        AND is_admin()
+    );
+
+CREATE POLICY "Admins can view unpublished pages"
+    ON pages FOR SELECT
+    USING (
+        is_published = false
+        AND is_admin()
+    );
+
+CREATE POLICY "Only admins can create pages"
+    ON pages FOR INSERT
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can update pages"
+    ON pages FOR UPDATE
+    USING (is_admin())
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can delete pages"
+    ON pages FOR DELETE
+    USING (is_admin());

@@ -6,6 +6,7 @@ const mission = require('../models/mission');
 const classModel = require('../models/class');
 const pdfModel = require('../models/pdf');
 const rulesModel = require('../models/rules');
+const pagesModel = require('../models/pages');
 
 module.exports = {
   ...auth,
@@ -15,5 +16,6 @@ module.exports = {
   ...mission,
   ...classModel,
   ...pdfModel,
-  ...rulesModel
+  ...rulesModel,
+  ...pagesModel
 };

@@ -14,6 +14,7 @@ const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
 const classesRoutes = require('./routes/classes');
 const rulesRoutes = require('./routes/rules');
+const pagesRoutes = require('./routes/pages');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -62,6 +63,7 @@ app.use('/lfg', lfgRoutes);
 app.use('/missions', missionsRoutes);
 app.use('/classes', classesRoutes);
 app.use('/rules', rulesRoutes);
+app.use('/pages', pagesRoutes);
 
 // Start server
 app.listen(PORT, () => {
