@@ -130,6 +130,35 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: navItem, error } = await createNavItem(payload);
     if (error) {
+        const status = error.message && error.message.includes('required') ? 400 : 500;
+        if (status === 400) {
+            const { data: pages } = await getPages();
+            const { data: dropdownParents } = await getDropdownParents();
+            return res.status(400).render('nav-form', {
+                profile,
+                title: 'Create Navigation Item',
+                navItem: {
+                    label: payload.label,
+                    type: payload.type,
+                    url: payload.url,
+                    page_id: payload.page_id,
+                    icon: payload.icon,
+                    parent_id: payload.parent_id,
+                    position: payload.position,
+                    requires_auth: payload.requires_auth,
+                    requires_admin: payload.requires_admin,
+                    is_active: payload.is_active
+                },
+                pages: pages || [],
+                dropdownParents: dropdownParents || [],
+                error: error.message,
+                activeNav: null,
+                breadcrumbs: [
+                    { label: 'Manage Navigation', href: '/nav/manage' },
+                    { label: 'Create Navigation Item', href: '/nav/new' }
+                ]
+            });
+        }
         return res.status(500).send(error.message || 'Failed to create navigation item');
     }
 
@@ -188,11 +217,12 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         return res.status(404).send(loadError?.message || 'Navigation item not found');
     }
 
+    const resolvedType = type || existingItem.type;
     const updates = {
         label: label?.trim() || existingItem.label,
-        type: type || existingItem.type,
-        url: type === 'link' ? (url?.trim() || null) : null,
-        page_id: type === 'page' ? (page_id || null) : null,
+        type: resolvedType,
+        url: resolvedType === 'link' ? (url?.trim() || null) : null,
+        page_id: resolvedType === 'page' ? (page_id || null) : null,
         icon: icon?.trim() || null,
         parent_id: parent_id || null,
         position: position ? parseInt(position, 10) : existingItem.position,
@@ -201,8 +231,48 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         is_active: normalizeBoolean(is_active, existingItem.is_active)
     };
 
+    if (resolvedType === 'page' && !updates.page_id) {
+        const { profile } = res.locals;
+        const { data: pages } = await getPages();
+        const { data: allDropdownParents } = await getDropdownParents();
+        const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
+        return res.status(400).render('nav-form', {
+            profile,
+            title: 'Edit Navigation Item',
+            navItem: { ...existingItem, ...updates },
+            pages: pages || [],
+            dropdownParents,
+            error: 'Page ID is required for page type',
+            activeNav: null,
+            breadcrumbs: [
+                { label: 'Manage Navigation', href: '/nav/manage' },
+                { label: 'Edit Navigation Item', href: `/nav/${id}/edit` }
+            ]
+        });
+    }
+
     const { error } = await updateNavItem(id, updates);
     if (error) {
+        const status = error.message && error.message.includes('required') ? 400 : 500;
+        if (status === 400) {
+            const { profile } = res.locals;
+            const { data: pages } = await getPages();
+            const { data: allDropdownParents } = await getDropdownParents();
+            const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
+            return res.status(400).render('nav-form', {
+                profile,
+                title: 'Edit Navigation Item',
+                navItem: { ...existingItem, ...updates },
+                pages: pages || [],
+                dropdownParents,
+                error: error.message,
+                activeNav: null,
+                breadcrumbs: [
+                    { label: 'Manage Navigation', href: '/nav/manage' },
+                    { label: 'Edit Navigation Item', href: `/nav/${id}/edit` }
+                ]
+            });
+        }
         return res.status(500).send(error.message || 'Failed to update navigation item');
     }
 

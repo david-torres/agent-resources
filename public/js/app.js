@@ -667,6 +667,44 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         });
       };
 
+      const _initNavForm = (root) => {
+        const container = root || document;
+        const form = container.querySelector('#nav-form');
+        if (!form || form.dataset.navFormInit === 'true') return;
+
+        const typeSelect = form.querySelector('#type');
+        const urlField = form.querySelector('#url-field');
+        const pageField = form.querySelector('#page-field');
+        const urlInput = form.querySelector('#url');
+        const pageSelect = form.querySelector('#page_id');
+
+        if (!typeSelect || !urlField || !pageField || !urlInput || !pageSelect) return;
+
+        const toggleFields = () => {
+          const type = typeSelect.value;
+          if (type === 'link') {
+            urlField.style.display = 'block';
+            pageField.style.display = 'none';
+            urlInput.required = true;
+            pageSelect.required = false;
+          } else if (type === 'page') {
+            urlField.style.display = 'none';
+            pageField.style.display = 'block';
+            urlInput.required = false;
+            pageSelect.required = true;
+          } else {
+            urlField.style.display = 'none';
+            pageField.style.display = 'none';
+            urlInput.required = false;
+            pageSelect.required = false;
+          }
+        };
+
+        typeSelect.addEventListener('change', toggleFields);
+        toggleFields();
+        form.dataset.navFormInit = 'true';
+      };
+
       document.body.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
         const targetEl = evt.detail && evt.detail.target;
@@ -680,6 +718,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         _initTooltips(targetEl || document);
         // Initialize searchable selects after swaps
         _initSearchableSelects(targetEl || document);
+        // Initialize nav form toggle behavior after swaps
+        _initNavForm(targetEl || document);
         // Initialize profile image cropper when swapping in profile form
         _initImageCroppers(targetEl || document);
         // Apply saved crop styles on swapped content
@@ -729,6 +769,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         _initTooltips(root);
         // Initialize any searchable selects present
         _initSearchableSelects(root);
+        // Initialize nav form toggle behavior
+        _initNavForm(root);
         // Initialize any image croppers if present
         _initImageCroppers(root);
         // Apply any persisted crop marks

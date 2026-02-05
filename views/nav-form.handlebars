@@ -1,4 +1,9 @@
 {{> breadcrumbs}}
+{{#if error}}
+<div class="block">
+  {{> alert/error message=error}}
+</div>
+{{/if}}
 <div class="level">
   <div class="level-left">
     <h1 class="title is-2">{{#if navItem}}Edit Navigation Item{{else}}Create Navigation Item{{/if}}</h1>
@@ -57,7 +62,11 @@
           </select>
         </div>
       </div>
+      {{#if (eq pages.length 0)}}
+      <p class="help is-danger">No pages available. Create a page first via <a href="/pages/manage">Manage Pages</a>.</p>
+      {{else}}
       <p class="help">Select a page from the CMS to link to</p>
+      {{/if}}
     </div>
 
     <div class="field">
@@ -143,36 +152,3 @@
     </div>
   </form>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const typeSelect = document.getElementById('type');
-  const urlField = document.getElementById('url-field');
-  const pageField = document.getElementById('page-field');
-  const urlInput = document.getElementById('url');
-  const pageSelect = document.getElementById('page_id');
-
-  function toggleFields() {
-    const type = typeSelect.value;
-    if (type === 'link') {
-      urlField.style.display = 'block';
-      pageField.style.display = 'none';
-      urlInput.required = true;
-      pageSelect.required = false;
-    } else if (type === 'page') {
-      urlField.style.display = 'none';
-      pageField.style.display = 'block';
-      urlInput.required = false;
-      pageSelect.required = true;
-    } else { // dropdown
-      urlField.style.display = 'none';
-      pageField.style.display = 'none';
-      urlInput.required = false;
-      pageSelect.required = false;
-    }
-  }
-
-  typeSelect.addEventListener('change', toggleFields);
-  toggleFields(); // Initialize on page load
-});
-</script>
