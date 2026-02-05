@@ -1,7 +1,7 @@
 <div class="column is-full">
   <div class="field has-addons">
     <div class="control is-expanded">
-      <textarea class="textarea" name="common_items[]" placeholder="Enter item name and description..." rows="2">{{commonItem}}</textarea>
+      <textarea class="textarea" name="common_items[]" placeholder="Enter item name and description..." rows="2" data-toast-editor data-editor-height="150px">{{commonItem}}</textarea>
     </div>
     <div class="control ml-2 mt-2">
       <button class="delete" hx-on:click="htmx.remove(htmx.closest(this, '.is-full'));"></button>

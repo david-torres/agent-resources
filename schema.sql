@@ -1091,3 +1091,119 @@ CREATE POLICY "Authenticated users can read rules PDFs"
         bucket_id = 'rules-pdfs'
         AND auth.role() = 'authenticated'
     );
+
+-- CMS Pages table
+CREATE TABLE IF NOT EXISTS pages (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    title text NOT NULL,
+    slug text NOT NULL UNIQUE,
+    content text NOT NULL DEFAULT '',
+    access_level text NOT NULL CHECK (access_level IN ('public', 'authenticated', 'admin')) DEFAULT 'public',
+    is_published boolean NOT NULL DEFAULT false,
+    created_by uuid REFERENCES profiles(id),
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_pages_slug ON pages(slug);
+CREATE INDEX IF NOT EXISTS idx_pages_published ON pages(is_published);
+CREATE INDEX IF NOT EXISTS idx_pages_access_level ON pages(access_level);
+
+ALTER TABLE pages ENABLE ROW LEVEL SECURITY;
+
+-- Trigger to update updated_at timestamp
+CREATE TRIGGER update_pages_updated_at
+    BEFORE UPDATE ON pages
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- RLS Policies for pages table
+CREATE POLICY "Public pages are viewable by everyone"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level = 'public'
+    );
+
+CREATE POLICY "Authenticated pages are viewable by authenticated users"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level IN ('public', 'authenticated')
+        AND auth.role() = 'authenticated'
+    );
+
+CREATE POLICY "Admin pages are viewable by admins"
+    ON pages FOR SELECT
+    USING (
+        is_published = true
+        AND access_level = 'admin'
+        AND is_admin()
+    );
+
+CREATE POLICY "Admins can view unpublished pages"
+    ON pages FOR SELECT
+    USING (
+        is_published = false
+        AND is_admin()
+    );
+
+CREATE POLICY "Only admins can create pages"
+    ON pages FOR INSERT
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can update pages"
+    ON pages FOR UPDATE
+    USING (is_admin())
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can delete pages"
+    ON pages FOR DELETE
+    USING (is_admin());
+
+-- Navigation Items table
+CREATE TABLE IF NOT EXISTS nav_items (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    label text NOT NULL,
+    type text NOT NULL CHECK (type IN ('link', 'page', 'dropdown')) DEFAULT 'link',
+    url text,  -- For 'link' type (can be internal or external)
+    page_id uuid REFERENCES pages(id) ON DELETE SET NULL,  -- For 'page' type
+    icon text,  -- FontAwesome icon class (e.g., 'fas fa-home')
+    parent_id uuid REFERENCES nav_items(id) ON DELETE CASCADE,  -- For dropdown sub-items
+    position integer NOT NULL DEFAULT 0,  -- Ordering within same parent
+    requires_auth boolean NOT NULL DEFAULT false,  -- Show only when authenticated
+    requires_admin boolean NOT NULL DEFAULT false,  -- Show only for admins
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_nav_items_parent ON nav_items(parent_id);
+CREATE INDEX IF NOT EXISTS idx_nav_items_position ON nav_items(parent_id, position);
+CREATE INDEX IF NOT EXISTS idx_nav_items_active ON nav_items(is_active);
+
+ALTER TABLE nav_items ENABLE ROW LEVEL SECURITY;
+
+-- Trigger to update updated_at timestamp
+CREATE TRIGGER update_nav_items_updated_at
+    BEFORE UPDATE ON nav_items
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- RLS Policies for nav_items table
+CREATE POLICY "Everyone can view active nav items"
+    ON nav_items FOR SELECT
+    USING (is_active = true);
+
+CREATE POLICY "Only admins can create nav items"
+    ON nav_items FOR INSERT
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can update nav items"
+    ON nav_items FOR UPDATE
+    USING (is_admin())
+    WITH CHECK (is_admin());
+
+CREATE POLICY "Only admins can delete nav items"
+    ON nav_items FOR DELETE
+    USING (is_admin());

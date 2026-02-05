@@ -14,6 +14,8 @@ const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
 const classesRoutes = require('./routes/classes');
 const rulesRoutes = require('./routes/rules');
+const pagesRoutes = require('./routes/pages');
+const navRoutes = require('./routes/nav');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -53,6 +55,11 @@ app.use((req, res, next) => {
   next();
 });
 
+// Load navigation items for routes that don't use auth middleware
+// (Routes with auth middleware will load nav items in the auth middleware itself)
+const { loadNavItems } = require('./util/nav-loader');
+app.use(loadNavItems);
+
 // Routes
 app.use('/', homeRoutes);
 app.use('/auth', authRoutes);
@@ -62,6 +69,8 @@ app.use('/lfg', lfgRoutes);
 app.use('/missions', missionsRoutes);
 app.use('/classes', classesRoutes);
 app.use('/rules', rulesRoutes);
+app.use('/pages', pagesRoutes);
+app.use('/nav', navRoutes);
 
 // Start server
 app.listen(PORT, () => {

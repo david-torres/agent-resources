@@ -1,0 +1,32 @@
+{{#if navItem}}
+  {{#if (eq navItem.type 'dropdown')}}
+    {{#if navItem.children}}
+      {{#if navItem.children.length}}
+        <div class="navbar-item has-dropdown is-hoverable">
+          <a class="navbar-link" href="#">{{navItem.label}}</a>
+          <div class="navbar-dropdown is-right">
+            {{#each navItem.children}}
+              {{> nav-item navItem=this}}
+            {{/each}}
+          </div>
+        </div>
+      {{else}}
+        {{!-- Dropdown with no children - show as regular link --}}
+        <a class="navbar-item" href="#">{{navItem.label}}</a>
+      {{/if}}
+    {{else}}
+      {{!-- Dropdown with no children array - show as regular link --}}
+      <a class="navbar-item" href="#">{{navItem.label}}</a>
+    {{/if}}
+  {{else}}
+    {{!-- Regular link or page link --}}
+    <a class="navbar-item" href="{{navItem.href}}">
+      {{#if navItem.icon}}
+        <span class="icon">
+          <i class="{{navItem.icon}}"></i>
+        </span>
+      {{/if}}
+      <span>{{navItem.label}}</span>
+    </a>
+  {{/if}}
+{{/if}}

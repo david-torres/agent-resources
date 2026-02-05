@@ -1,0 +1,83 @@
+{{> breadcrumbs}}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">Manage Pages</h1>
+  </div>
+  <div class="level-right">
+    <a class="button is-primary" href="/pages/new">
+      <span class="icon"><i class="fas fa-plus"></i></span>
+      <span>Create New Page</span>
+    </a>
+  </div>
+</div>
+
+{{#if pages.length}}
+<div class="table-container">
+  <table class="table is-fullwidth is-striped">
+    <thead>
+      <tr>
+        <th>Title</th>
+        <th>Slug</th>
+        <th>Access Level</th>
+        <th>Status</th>
+        <th>Updated</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each pages}}
+      <tr>
+        <td>
+          <strong>{{this.title}}</strong>
+          {{#if this.is_published}}
+          <a href="/pages/{{this.slug}}" target="_blank" rel="noopener" class="ml-2">
+            <span class="icon has-text-info">
+              <i class="fas fa-external-link-alt"></i>
+            </span>
+          </a>
+          {{/if}}
+        </td>
+        <td><code>{{this.slug}}</code></td>
+        <td>
+          <span class="tag {{#if (eq this.access_level 'public')}}is-success{{else if (eq this.access_level 'authenticated')}}is-warning{{else}}is-danger{{/if}} is-light">
+            {{this.access_level}}
+          </span>
+        </td>
+        <td>
+          <span class="tag {{#if this.is_published}}is-success{{else}}is-danger{{/if}} is-light">
+            {{#if this.is_published}}Published{{else}}Draft{{/if}}
+          </span>
+        </td>
+        <td>
+          {{#if this.updated_at}}
+          {{date_tz this.updated_at}}
+          {{else}}
+          <span class="has-text-grey">Never</span>
+          {{/if}}
+        </td>
+        <td>
+          <div class="buttons">
+            <a class="button is-small is-info" href="/pages/{{this.id}}/edit">
+              <span class="icon"><i class="fas fa-edit"></i></span>
+              <span>Edit</span>
+            </a>
+            <button class="button is-small is-danger"
+                    hx-delete="/pages/{{this.id}}"
+                    hx-confirm="Are you sure you want to delete '{{this.title}}'? This cannot be undone."
+                    hx-target="closest tr"
+                    hx-swap="outerHTML">
+              <span class="icon"><i class="fas fa-trash"></i></span>
+              <span>Delete</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{else}}
+<div class="notification is-light">
+  No pages found. <a href="/pages/new">Create your first page</a>.
+</div>
+{{/if}}
