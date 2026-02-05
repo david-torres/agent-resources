@@ -394,7 +394,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         // Get configuration from data attributes
         const height = textarea.getAttribute('data-editor-height') || '300px';
         const minHeight = textarea.getAttribute('data-editor-min-height') || '200px';
-        const editType = textarea.getAttribute('data-editor-mode') || 'markdown';
+        const editType = textarea.getAttribute('data-editor-mode') || 'wysiwyg';
         const previewStyle = textarea.getAttribute('data-editor-preview') || 'vertical';
         
         // Get initial value from textarea
