@@ -313,7 +313,8 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
     const { content, mimeType, filename } = exportClass(classData, format);
     
     res.setHeader('Content-Type', `${mimeType}; charset=utf-8`);
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
+    const safeFilename = filename.replace(/[^\x20-\x7E]/g, '_').replace(/"/g, '\\"');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeFilename}"; filename*=UTF-8''${encodeURIComponent(filename)}`);
     res.setHeader('Content-Length', Buffer.byteLength(content, 'utf-8'));
     res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
     res.send(content);
