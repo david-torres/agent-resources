@@ -13,7 +13,7 @@ const lfgRoutes = require('./routes/lfg');
 const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
 const classesRoutes = require('./routes/classes');
-const rulesRoutes = require('./routes/rules');
+const libraryRoutes = require('./routes/library');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
 
@@ -68,7 +68,7 @@ app.use('/characters', charactersRoutes);
 app.use('/lfg', lfgRoutes);
 app.use('/missions', missionsRoutes);
 app.use('/classes', classesRoutes);
-app.use('/rules', rulesRoutes);
+app.use('/library', libraryRoutes);
 app.use('/pages', pagesRoutes);
 app.use('/nav', navRoutes);
 

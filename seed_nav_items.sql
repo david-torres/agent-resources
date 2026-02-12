@@ -10,12 +10,12 @@ RETURNING id;
 -- Store the Game Info ID (you'll need to replace these with actual IDs after first insert)
 -- For now, we'll use a subquery approach
 
--- Rules Library (child of Game Info)
+-- Library (child of Game Info)
 INSERT INTO nav_items (label, type, url, icon, parent_id, position, requires_auth, requires_admin, is_active)
 VALUES (
-    'Rules Library',
+    'Library',
     'link',
-    '/rules',
+    '/library',
     'fas fa-scroll',
     (SELECT id FROM nav_items WHERE label = 'Game Info' AND type = 'dropdown' LIMIT 1),
     0,

@@ -1,11 +1,11 @@
 {{> breadcrumbs}}
 <div class="level">
   <div class="level-left">
-    <h1 class="title is-2">Rules Library</h1>
+    <h1 class="title is-2">Library</h1>
   </div>
   <div class="level-right">
     {{#if isAdmin}}
-    <a class="button is-primary" href="/rules/manage">
+    <a class="button is-primary" href="/library/manage">
       <span class="icon"><i class="fas fa-sliders"></i></span>
       <span>Manage Rules PDFs</span>
     </a>
@@ -15,6 +15,20 @@
 
 <div class="content">
   <p>Access gated PDFs for active rules editions. Viewing requires an active unlock on your account.</p>
+</div>
+
+<div class="box mb-5">
+  <h2 class="title is-4">Character Sheets</h2>
+  <div class="buttons">
+    <a class="button is-link" href="https://ndneltuukvijkvdfaqfu.supabase.co/storage/v1/object/public/misc/Character%20Sheet%20(Fillable).pdf" target="_blank" rel="noopener noreferrer">
+      <span class="icon"><i class="fas fa-file-pdf"></i></span>
+      <span>Fillable Character Sheet</span>
+    </a>
+    <a class="button is-link is-outlined" href="https://ndneltuukvijkvdfaqfu.supabase.co/storage/v1/object/public/misc/Character%20Sheet%20(Printable).pdf" target="_blank" rel="noopener noreferrer">
+      <span class="icon"><i class="fas fa-file-pdf"></i></span>
+      <span>Printable Character Sheet</span>
+    </a>
+  </div>
 </div>
 
 {{#if rules.length}}
@@ -44,7 +58,7 @@
             <span class="is-size-7">Expires {{date_tz this.expires_at}}</span>
             {{/if}}
           </div>
-          <a class="button is-link is-fullwidth" href="/rules/{{this.id}}/view">
+          <a class="button is-link is-fullwidth" href="/library/{{this.id}}/view">
             <span class="icon"><i class="fas fa-file-pdf"></i></span>
             <span>Open PDF</span>
           </a>

@@ -94,9 +94,9 @@ async function seedNavItems() {
 
         // Game Info children
         const rulesLib = await createNavItemDirect({
-            label: 'Rules Library',
+            label: 'Library',
             type: 'link',
-            url: '/rules',
+            url: '/library',
             icon: 'fas fa-scroll',
             parent_id: gameInfoId,
             position: 0,
@@ -104,8 +104,8 @@ async function seedNavItems() {
             requires_admin: false,
             is_active: true
         });
-        if (rulesLib.error) console.error('Error creating Rules Library:', rulesLib.error);
-        else console.log('Created Rules Library');
+        if (rulesLib.error) console.error('Error creating Library:', rulesLib.error);
+        else console.log('Created Library');
 
         const classes = await createNavItemDirect({
             label: 'Classes',

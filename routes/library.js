@@ -76,14 +76,14 @@ router.get('/', authOptional, async (req, res) => {
         };
     });
 
-    return res.render('rules', {
+    return res.render('library', {
         profile,
-        title: 'Rules Library',
+        title: 'Library',
         rules: rulesWithAccess,
         isAdmin,
-        activeNav: 'rules',
+        activeNav: 'library',
         breadcrumbs: [
-            { label: 'Rules Library', href: '/rules' }
+            { label: 'Library', href: '/library' }
         ]
     });
 });
@@ -106,14 +106,14 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
         })
     );
 
-    return res.render('rules-manage', {
+    return res.render('library-manage', {
         profile,
         title: 'Manage Rules PDFs',
         rules: rulesWithUnlocks,
-        activeNav: 'rules',
+        activeNav: 'library',
         breadcrumbs: [
-            { label: 'Rules Library', href: '/rules' },
-            { label: 'Manage', href: '/rules/manage' }
+            { label: 'Library', href: '/library' },
+            { label: 'Manage', href: '/library/manage' }
         ]
     });
 });
@@ -152,7 +152,7 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
         return res.status(500).send(error.message || 'Failed to create rules PDF');
     }
 
-    return res.redirect('/rules/manage');
+    return res.redirect('/library/manage');
 });
 
 router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), async (req, res) => {
@@ -190,7 +190,7 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
         return res.status(500).send(error.message || 'Failed to update rules PDF');
     }
 
-    return res.redirect('/rules/manage');
+    return res.redirect('/library/manage');
 });
 
 router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
@@ -238,7 +238,7 @@ router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
         return res.status(500).send(error.message || 'Failed to grant access');
     }
 
-    return res.redirect('/rules/manage');
+    return res.redirect('/library/manage');
 });
 
 router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req, res) => {
@@ -296,11 +296,11 @@ router.get('/:id/view', authOptional, async (req, res) => {
         title: `${rulesPdf.title} (${rulesPdf.edition})`,
         viewerTitle: `${rulesPdf.title} — ${rulesPdf.edition}`,
         pdfUrl: signedUrl,
-        backUrl: '/rules',
-        activeNav: 'rules',
+        backUrl: '/library',
+        activeNav: 'library',
         breadcrumbs: [
-            { label: 'Rules Library', href: '/rules' },
-            { label: `${rulesPdf.title} (${rulesPdf.edition})`, href: `/rules/${id}/view` }
+            { label: 'Library', href: '/library' },
+            { label: `${rulesPdf.title} (${rulesPdf.edition})`, href: `/library/${id}/view` }
         ]
     });
 });

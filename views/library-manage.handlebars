@@ -4,7 +4,7 @@
     <h1 class="title is-2">Manage Rules PDFs</h1>
   </div>
   <div class="level-right">
-    <a class="button" href="/rules">
+    <a class="button" href="/library">
       <span class="icon"><i class="fas fa-arrow-left"></i></span>
       <span>Back to Library</span>
     </a>
@@ -13,7 +13,7 @@
 
 <div class="box">
   <h2 class="title is-4">Add New Rules PDF</h2>
-  <form method="post" action="/rules" enctype="multipart/form-data">
+  <form method="post" action="/library" enctype="multipart/form-data">
     <div class="columns">
       <div class="column is-half">
         <div class="field">
@@ -72,7 +72,7 @@
       </div>
     </div>
 
-    <form method="post" action="/rules/{{this.id}}" enctype="multipart/form-data" class="mb-5">
+    <form method="post" action="/library/{{this.id}}" enctype="multipart/form-data" class="mb-5">
       <div class="columns">
         <div class="column is-one-third">
           <div class="field">
@@ -109,7 +109,7 @@
         <div class="mt-2">
           <p class="help">
             {{#if this.updated_at}}Last updated {{date_tz this.updated_at}}{{/if}}
-            · <a href="/rules/{{this.id}}/view" target="_blank" rel="noopener">Preview current PDF</a>
+            · <a href="/library/{{this.id}}/view" target="_blank" rel="noopener">Preview current PDF</a>
           </p>
           <label class="checkbox">
             <input type="checkbox" name="remove_pdf">
@@ -131,7 +131,7 @@
     <div class="columns">
       <div class="column is-half">
         <h3 class="title is-5">Grant Access</h3>
-        <form method="post" action="/rules/{{this.id}}/unlocks">
+        <form method="post" action="/library/{{this.id}}/unlocks">
           <div class="field">
             <label class="label">Profile Name</label>
             <div class="control">
@@ -187,7 +187,7 @@
                 </td>
                 <td class="has-text-right">
                   <button class="button is-small is-danger"
-                          hx-delete="/rules/{{../id}}/unlocks/{{this.user_id}}"
+                          hx-delete="/library/{{../id}}/unlocks/{{this.user_id}}"
                           hx-confirm="Revoke access for {{#if this.profile}}{{this.profile.name}}{{else}}this profile{{/if}}?"
                           hx-target="closest tr"
                           hx-swap="outerHTML">
