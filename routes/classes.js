@@ -505,6 +505,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         }))
         .filter((ability) => ability.name);
     req.body.abilities = abilities;
+    delete req.body['ability_name[]'];
+    delete req.body['ability_description[]'];
     delete req.body.ability_name;
     delete req.body.ability_description;
 
@@ -517,6 +519,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         }))
         .filter((item) => item.name);
     req.body.gear = gear;
+    delete req.body['gear_name[]'];
+    delete req.body['gear_description[]'];
     delete req.body.gear_name;
     delete req.body.gear_description;
 
@@ -588,6 +592,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
         }))
         .filter((ability) => ability.name);
     req.body.abilities = abilities;
+    delete req.body['ability_name[]'];
+    delete req.body['ability_description[]'];
     delete req.body.ability_name;
     delete req.body.ability_description;
 
@@ -600,6 +606,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
         }))
         .filter((item) => item.name);
     req.body.gear = gear;
+    delete req.body['gear_name[]'];
+    delete req.body['gear_description[]'];
     delete req.body.gear_name;
     delete req.body.gear_description;
 

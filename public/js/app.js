@@ -370,7 +370,7 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       }
       
       // Skip if editor instance already exists
-      const textareaId = textarea.id || textarea.name || `toast-editor-${Date.now()}-${Math.random()}`;
+      const textareaId = textarea.id || `toast-editor-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       if (toastUIEditors.has(textareaId)) {
         // Clean up existing instance if textarea was removed and re-added
         const existingEditor = toastUIEditors.get(textareaId);
