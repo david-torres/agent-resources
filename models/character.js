@@ -100,8 +100,8 @@ const createCharacter = async (characterReq, profile) => {
 
   // handle common items - normalize to array of non-empty strings
   if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items) 
-      ? characterReq.common_items 
+    const items = Array.isArray(characterReq.common_items)
+      ? characterReq.common_items
       : [characterReq.common_items];
     characterReq.common_items = items
       .map(item => (typeof item === 'string' ? item.trim() : ''))
@@ -212,8 +212,8 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // handle common items - normalize to array of non-empty strings
   if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items) 
-      ? characterReq.common_items 
+    const items = Array.isArray(characterReq.common_items)
+      ? characterReq.common_items
       : [characterReq.common_items];
     characterReq.common_items = items
       .map(item => (typeof item === 'string' ? item.trim() : ''))

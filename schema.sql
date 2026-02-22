@@ -255,9 +255,13 @@ BEGIN
         rules_edition,
         rules_version,
         base_class_id,
-        created_by
+        created_by,
+        gear,
+        abilities,
+        image_url,
+        image_crop
     )
-    SELECT 
+    SELECT
         new_id,
         name,
         description,
@@ -267,7 +271,11 @@ BEGIN
         rules_edition,
         new_version,
         id,
-        v_profile_id
+        v_profile_id,
+        gear,
+        abilities,
+        image_url,
+        image_crop
     FROM classes
     WHERE id = base_id
     RETURNING id INTO new_class_id;

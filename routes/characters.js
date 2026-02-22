@@ -101,6 +101,35 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     return res.status(400).send(error.message);
   } else {
     const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
+
+    // Inject existing character gear/abilities into dropdown options so
+    // items from classes the user no longer has unlocked still appear
+    const allFilteredClasses = [...filteredAdvent, ...filteredAspirant, ...filteredPCC];
+    if (Array.isArray(character.gear)) {
+      for (const g of character.gear) {
+        if (!g?.name || !g?.class_id) continue;
+        let className = allFilteredClasses.find(c => c.id === g.class_id)?.name;
+        if (!className) {
+          try { className = (await getClass(g.class_id))?.data?.name; } catch (_) {}
+        }
+        if (!className) continue;
+        if (!filteredGear[className]) filteredGear[className] = [];
+        if (!filteredGear[className].includes(g.name)) filteredGear[className].push(g.name);
+      }
+    }
+    if (Array.isArray(character.abilities)) {
+      for (const a of character.abilities) {
+        if (!a?.name || !a?.class_id) continue;
+        let className = allFilteredClasses.find(c => c.id === a.class_id)?.name;
+        if (!className) {
+          try { className = (await getClass(a.class_id))?.data?.name; } catch (_) {}
+        }
+        if (!className) continue;
+        if (!filteredAbilities[className]) filteredAbilities[className] = [];
+        if (!filteredAbilities[className].includes(a.name)) filteredAbilities[className].push(a.name);
+      }
+    }
+
     res.render('character-form', {
       profile,
       isNew: false,
