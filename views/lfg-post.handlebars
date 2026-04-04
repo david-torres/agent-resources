@@ -43,11 +43,11 @@
     </div>
     {{#if profile}}
     {{#if (eq post.host_id profile.id)}}
-    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure you want to leave this game as Conduit?"
       hx-swap="outerHTML">Unjoin as Conduit</button>
     {{else}}
     {{#inArray (pluck post.join_requests "profile_id") profile.id}}
-    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure?"
+    <button class="button is-danger" hx-delete="/lfg/{{post.id}}/join" hx-confirm="Are you sure you want to leave this game?"
       hx-swap="outerHTML">Unjoin</button>
     {{else}}
     <button class="button is-primary" hx-get="/lfg/{{post.id}}/join" hx-swap="outerHTML">Join</button>

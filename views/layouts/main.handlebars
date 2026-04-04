@@ -3,8 +3,9 @@
 {{> head}}
 
 <body hx-boost="true" data-auth-optional="{{#if authOptional}}{{authOptional}}{{else}}false{{/if}}">
+  <a href="#main-content" class="skip-to-content">Skip to content</a>
   {{> nav}}
-  <section class="section">
+  <section class="section" id="main-content">
     {{#if profile}}
     {{#if systemMessage}}
     {{> alert/system-banner systemMessage}}

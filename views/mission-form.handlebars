@@ -4,9 +4,9 @@
 <form hx-{{#if isNew}}post{{else}}put{{/if}}="/missions{{#unless isNew}}/{{mission.id}}{{/unless}}"
   hx-redirect="{{#if isNew}}/missions{{else}}/missions/{{mission.id}}{{/if}}">
   <div class="field">
-    <label class="label">Name</label>
+    <label class="label" for="mission-name">Name</label>
     <div class="control">
-      <input class="input" type="text" name="name" placeholder="Mission Name" value="{{mission.name}}" required>
+      <input class="input" type="text" name="name" id="mission-name" placeholder="Mission Name" value="{{mission.name}}" required>
     </div>
   </div>
 
@@ -24,40 +24,41 @@
           {{/if}}
       {{!-- </div> --}}
     </div>
+  </div>
 
   <div class="field">
-    <label class="label">Focus Words</label>
+    <label class="label" for="mission-focus-words">Focus Words</label>
     <div class="control">
-      <input class="input" type="text" name="focus_words" placeholder="Focus Words" value="{{mission.focus_words}}">
+      <input class="input" type="text" name="focus_words" id="mission-focus-words" placeholder="Focus Words" value="{{mission.focus_words}}">
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Statement</label>
+    <label class="label" for="mission-statement">Statement</label>
     <div class="control">
-      <textarea class="textarea" name="statement" placeholder="Mission Statement" data-toast-editor>{{mission.statement}}</textarea>
+      <textarea class="textarea" name="statement" id="mission-statement" placeholder="Mission Statement" data-toast-editor>{{mission.statement}}</textarea>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Summary</label>
+    <label class="label" for="mission-summary">Summary</label>
     <div class="control">
-      <textarea class="textarea" name="summary" placeholder="Mission Summary" data-toast-editor>{{mission.summary}}</textarea>
+      <textarea class="textarea" name="summary" id="mission-summary" placeholder="Mission Summary" data-toast-editor>{{mission.summary}}</textarea>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Date</label>
+    <label class="label" for="mission-date">Date</label>
     <div class="control">
-      <input class="input" type="datetime-local" name="date" value="{{#if mission}}{{date_tz mission.date "YYYY-MM-DDTHH:MM" profile.timezone}}{{else}}{{date_tz (date "now" "YYYY-MM-DDTHH:MM") "YYYY-MM-DDTHH:MM" profile.timezone}}{{/if}}" required>
+      <input class="input" type="datetime-local" name="date" id="mission-date" value="{{#if mission}}{{date_tz mission.date "YYYY-MM-DDTHH:MM" profile.timezone}}{{else}}{{date_tz (date "now" "YYYY-MM-DDTHH:MM") "YYYY-MM-DDTHH:MM" profile.timezone}}{{/if}}" required>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Outcome</label>
+    <label class="label" for="mission-outcome">Outcome</label>
     <div class="control">
       <div class="select">
-        <select name="outcome" required>
+        <select name="outcome" id="mission-outcome" required>
           <option value="pending" {{#if (eq mission.outcome 'pending')}}selected{{/if}}>Pending</option>
           <option value="success" {{#if (eq mission.outcome 'success')}}selected{{/if}}>Success</option>
           <option value="failure" {{#if (eq mission.outcome 'failure')}}selected{{/if}}>Failure</option>
@@ -67,9 +68,9 @@
   </div>
 
   <div class="field">
-    <label class="label">Media Link</label>
+    <label class="label" for="mission-media-url">Media Link</label>
     <div class="control">
-      <input class="input" type="url" name="media_url" placeholder="Video URL (YouTube or Twitch)" value="{{mission.media_url}}">
+      <input class="input" type="url" name="media_url" id="mission-media-url" placeholder="Video URL (YouTube or Twitch)" value="{{mission.media_url}}">
     </div>
     <p class="help">Optional: Add a YouTube or Twitch video/clip link to embed in the mission log</p>
   </div>

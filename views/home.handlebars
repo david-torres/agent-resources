@@ -1,6 +1,23 @@
 <div id="block">
   {{#if profile}}
-  <p>Welcome, Agent: {{profile.name}}</p>
+  <p class="title is-4">Welcome, Agent: {{profile.name}}</p>
+  {{#unless hasCharacters}}
+  <div class="notification is-info is-light">
+    <div class="columns is-vcentered">
+      <div class="column">
+        <p class="is-size-5 has-text-weight-semibold mb-1">Get started with Agent Resources</p>
+        <p>Create your first Enclave character, find a game, or browse available classes.</p>
+      </div>
+      <div class="column is-narrow">
+        <div class="buttons">
+          <a href="/characters/new" class="button is-primary">Create a Character</a>
+          <a href="/lfg" class="button is-link is-outlined">Find a Game</a>
+          <a href="/classes" class="button is-light">Browse Classes</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  {{/unless}}
   {{else}}
   <p>Please <a href="/auth">sign in</a> or <a href="/auth">sign up</a>.</p>
   {{/if}}
@@ -20,7 +37,7 @@
       <iframe src="https://www.youtube.com/embed/aBVeIi6s6rE?si=kT7MA-dEjunuU8Aq"
         title="YouTube video player" frameborder="0"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        referrerpolicy="strict-origin-when-cross-origin" allowfullscreen loading="lazy"></iframe>
     </div>
     <div class="mt-4">
       <a class="button is-primary"

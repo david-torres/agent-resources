@@ -17,17 +17,17 @@
     <div class="columns">
       <div class="column is-half">
         <div class="field">
-          <label class="label">Title</label>
+          <label class="label" for="new-rules-title">Title</label>
           <div class="control">
-            <input class="input" type="text" name="title" placeholder="Ruleset Name" required>
+            <input class="input" type="text" name="title" id="new-rules-title" placeholder="Ruleset Name" required>
           </div>
         </div>
       </div>
       <div class="column is-one-quarter">
         <div class="field">
-          <label class="label">Edition</label>
+          <label class="label" for="new-rules-edition">Edition</label>
           <div class="control">
-            <input class="input" type="text" name="edition" placeholder="e.g. Advent v2" required>
+            <input class="input" type="text" name="edition" id="new-rules-edition" placeholder="e.g. Advent v2" required>
           </div>
         </div>
       </div>
@@ -42,9 +42,9 @@
       </div>
     </div>
     <div class="field">
-      <label class="label">PDF File</label>
+      <label class="label" for="new-rules-pdf">PDF File</label>
       <div class="control">
-        <input class="input" type="file" name="rules_pdf" accept="application/pdf" required>
+        <input class="input" type="file" name="rules_pdf" id="new-rules-pdf" accept="application/pdf" required>
       </div>
       <p class="help">Max size 25MB. Upload the official PDF for this edition.</p>
     </div>

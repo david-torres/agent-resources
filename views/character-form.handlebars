@@ -9,17 +9,17 @@
 <form hx-{{#if isNew}}post{{else}}put{{/if}}="/characters{{#unless isNew}}/{{character.id}}{{/unless}}"
   hx-redirect="{{#if isNew}}/characters{{else}}/characters/{{character.id}}/{{encodeURIComponentH character.name}}{{/if}}">
   <div class="field">
-    <label class="label">Name</label>
+    <label class="label" for="char-name">Name</label>
     <div class="control">
-      <input class="input" type="text" name="name" placeholder="Character Name" value="{{character.name}}" required>
+      <input class="input" type="text" name="name" id="char-name" placeholder="Character Name" value="{{character.name}}" required>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Class</label>
+    <label class="label" for="char-class-id">Class</label>
     <div class="control">
       <div class="select">
-        <select name="class_id" required>
+        <select name="class_id" id="char-class-id" required>
           <option disabled>Advent Classes</option>
           {{#each adventClasses}}
           <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
@@ -39,31 +39,43 @@
     </div>
   </div>
 
-  <div class="field is-grouped">
-    <div class="control">
-      <label class="label">Level</label>
-      <input class="input" type="number" name="level" placeholder="Level"
-        value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="10">
-      {{#if (lt character.level 10)}}
-      <p class="help">
-        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
-        missions to reach level {{add character.level 1}}<br>
-        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
-        missions to reach level {{add character.level 1}}
-      </p>
-      {{/if}}
+  <div class="columns is-multiline">
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-level">Level</label>
+        <div class="control">
+          <input class="input" type="number" name="level" id="char-level" placeholder="Level"
+            value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="10">
+        </div>
+        {{#if (lt character.level 10)}}
+        <p class="help">
+          V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
+          missions to reach level {{add character.level 1}}<br>
+          V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
+          missions to reach level {{add character.level 1}}
+        </p>
+        {{/if}}
+      </div>
     </div>
 
-    <div class="control">
-      <label class="label">Completed Missions</label>
-      <input class="input" type="number" name="completed_missions" placeholder="Completed Missions"
-        value="{{#if character.completed_missions}}{{character.completed_missions}}{{else}}0{{/if}}" required>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-completed-missions">Completed Missions</label>
+        <div class="control">
+          <input class="input" type="number" name="completed_missions" id="char-completed-missions" placeholder="Completed Missions"
+            value="{{#if character.completed_missions}}{{character.completed_missions}}{{else}}0{{/if}}" required>
+        </div>
+      </div>
     </div>
 
-    <div class="control">
-      <label class="label">Commissary Reward</label>
-      <input class="input" type="number" name="commissary_reward" placeholder="Commissary Reward"
-        value="{{#if character.commissary_reward}}{{character.commissary_reward}}{{else}}0{{/if}}" required>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-commissary-reward">Commissary Reward</label>
+        <div class="control">
+          <input class="input" type="number" name="commissary_reward" id="char-commissary-reward" placeholder="Commissary Reward"
+            value="{{#if character.commissary_reward}}{{character.commissary_reward}}{{else}}0{{/if}}" required>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -162,9 +174,9 @@
   <hr />
 
   <div class="field">
-    <label class="label">Ability Perks</label>
+    <label class="label" for="char-perks">Ability Perks</label>
     <div class="control">
-      <textarea class="textarea" name="perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
+      <textarea class="textarea" name="perks" id="char-perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
     </div>
   </div>
 
@@ -185,9 +197,9 @@
   {{/if}}
 
   <div class="field">
-    <label class="label">Image URL</label>
+    <label class="label" for="char-image-url">Image URL</label>
     <div class="control">
-      <input class="input" type="url" name="image_url" placeholder="Image URL" value="{{character.image_url}}">
+      <input class="input" type="url" name="image_url" id="char-image-url" placeholder="Image URL" value="{{character.image_url}}">
     </div>
     <p class="help">Provide a link; we'll crop how it's displayed without uploading.</p>
   </div>
@@ -206,38 +218,38 @@
   </div>
 
   <div class="field">
-    <label class="label">Appearance</label>
+    <label class="label" for="char-appearance">Appearance</label>
     <div class="control">
-      <textarea class="textarea" name="appearance"
+      <textarea class="textarea" name="appearance" id="char-appearance"
         placeholder="Character Appearance" data-toast-editor>{{character.appearance}}</textarea>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Background</label>
+    <label class="label" for="char-background">Background</label>
     <div class="control">
-      <textarea class="textarea" name="background"
+      <textarea class="textarea" name="background" id="char-background"
         placeholder="Character Background" data-toast-editor>{{character.background}}</textarea>
     </div>
   </div>
   <div class="field">
-    <label class="label">Flavor</label>
+    <label class="label" for="char-flavor">Flavor</label>
     <div class="control">
-      <textarea class="textarea" name="flavor" placeholder="Character Flavor" data-toast-editor>{{character.flavor}}</textarea>
+      <textarea class="textarea" name="flavor" id="char-flavor" placeholder="Character Flavor" data-toast-editor>{{character.flavor}}</textarea>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Ideas</label>
+    <label class="label" for="char-ideas">Ideas</label>
     <div class="control">
-      <textarea class="textarea" name="ideas" placeholder="Character Ideas" data-toast-editor>{{character.ideas}}</textarea>
+      <textarea class="textarea" name="ideas" id="char-ideas" placeholder="Character Ideas" data-toast-editor>{{character.ideas}}</textarea>
     </div>
   </div>
 
   <div class="field">
-    <label class="label">Private Notes</label>
+    <label class="label" for="char-private-notes">Private Notes</label>
     <div class="control">
-      <textarea class="textarea" name="private_notes" placeholder="Personal notes (only visible to you)" data-toast-editor>{{character.private_notes}}</textarea>
+      <textarea class="textarea" name="private_notes" id="char-private-notes" placeholder="Personal notes (only visible to you)" data-toast-editor>{{character.private_notes}}</textarea>
     </div>
     <p class="help">These notes are private and will only be visible to you.</p>
   </div>

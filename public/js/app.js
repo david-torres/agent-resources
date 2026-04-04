@@ -1,9 +1,66 @@
-const App = (function (document, supabase, htmx, FullCalendar) {
+const App = (function (document, supabase, htmx) {
   let supabaseClient;
   let authToken = null;
   let refreshToken = null;
 
   let calendar;
+
+  // Lazy-loading utilities for on-demand script/stylesheet loading
+  const _loadedAssets = new Set();
+
+  const _loadScript = (src) => {
+    if (_loadedAssets.has(src)) return Promise.resolve();
+    if (document.querySelector(`script[src="${src}"]`)) {
+      _loadedAssets.add(src);
+      return Promise.resolve();
+    }
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.crossOrigin = 'anonymous';
+      script.onload = () => { _loadedAssets.add(src); resolve(); };
+      script.onerror = reject;
+      document.head.appendChild(script);
+    });
+  };
+
+  const _loadStylesheet = (href) => {
+    if (_loadedAssets.has(href)) return;
+    if (document.querySelector(`link[href="${href}"]`)) {
+      _loadedAssets.add(href);
+      return;
+    }
+    const link = document.createElement('link');
+    link.rel = 'stylesheet';
+    link.href = href;
+    link.crossOrigin = 'anonymous';
+    document.head.appendChild(link);
+    _loadedAssets.add(href);
+  };
+
+  const _loadTippy = () => Promise.all([
+    _loadScript('https://unpkg.com/@popperjs/core@2'),
+    _loadScript('https://unpkg.com/tippy.js@6')
+  ]).then(() => {
+    _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
+  });
+
+  const _loadTomSelect = () => {
+    _loadStylesheet('https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css');
+    return _loadScript('https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js');
+  };
+
+  const _loadCropper = () => {
+    _loadStylesheet('https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.css');
+    return _loadScript('https://cdn.jsdelivr.net/npm/cropperjs@1.6.2/dist/cropper.min.js');
+  };
+
+  const _loadToastUI = () => {
+    _loadStylesheet('https://uicdn.toast.com/editor/latest/toastui-editor.min.css');
+    return _loadScript('https://uicdn.toast.com/editor/latest/toastui-editor-all.min.js');
+  };
+
+  const _loadFullCalendar = () => _loadScript('https://cdn.jsdelivr.net/npm/fullcalendar@6.1.19/index.global.min.js');
 
   const _getAuthToken = () => {
     return authToken || localStorage.getItem('authToken');
@@ -29,7 +86,13 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const _displayNotification = (alertType, message) => {
     const messageContainer = document.getElementById('alerts');
-    messageContainer.innerHTML = `<div class="notification is-${alertType}">${message}</div>`;
+    const validTypes = ['danger', 'success', 'info', 'warning', 'primary', 'link'];
+    const safeType = validTypes.includes(alertType) ? alertType : 'info';
+    const notification = document.createElement('div');
+    notification.className = `notification is-${safeType}`;
+    notification.textContent = message;
+    messageContainer.innerHTML = '';
+    messageContainer.appendChild(notification);
   }
 
   const _displayError = (message) => {
@@ -171,8 +234,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const _initImageCroppers = (root) => {
     const containerList = (root || document).querySelectorAll('[data-image-cropper]');
-    if (!containerList.length || typeof Cropper === 'undefined') return;
-
+    if (!containerList.length) return;
+    const doInit = () => {
+    if (typeof Cropper === 'undefined') return;
     containerList.forEach((container) => {
       if (container.dataset.initialized === 'true') return;
       const img = container.querySelector('[data-cropper-image]');
@@ -309,6 +373,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         syncPreview();
       }
     });
+    };
+    if (typeof Cropper !== 'undefined') { doInit(); } else { _loadCropper().then(doInit).catch(() => {}); }
   };
 
   // Store ToastUI Editor instances for cleanup and form sync
@@ -316,11 +382,21 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const _initToastUIEditors = (root, retryCount = 0) => {
     const container = root || document;
+
+    // Find all textareas with data-toast-editor attribute, or skip readonly ones
+    const textareas = container.querySelectorAll('textarea[data-toast-editor]:not([readonly])');
+    if (!textareas.length) return;
+
     // ToastUI Editor can be exposed as Editor or toastui.Editor depending on CDN version
     // Wait for library to be available
     const EditorClass = (typeof Editor !== 'undefined') ? Editor : (typeof toastui !== 'undefined' && toastui.Editor) ? toastui.Editor : null;
     if (!EditorClass) {
-      // If library not ready yet, retry after a short delay (max 10 retries = 1 second)
+      // Lazy-load the library, then retry
+      if (retryCount === 0) {
+        _loadToastUI().then(() => _initToastUIEditors(root, 1)).catch(() => {});
+        return;
+      }
+      // If library not ready yet after load, retry after a short delay (max 10 retries = 1 second)
       if (retryCount < 10) {
         setTimeout(() => _initToastUIEditors(root, retryCount + 1), 100);
       } else {
@@ -328,9 +404,6 @@ const App = (function (document, supabase, htmx, FullCalendar) {
       }
       return;
     }
-
-    // Find all textareas with data-toast-editor attribute, or skip readonly ones
-    const textareas = container.querySelectorAll('textarea[data-toast-editor]:not([readonly])');
     
     textareas.forEach((textarea) => {
       // Skip if already initialized - check both the dataset flag and if container exists
@@ -609,9 +682,11 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
       const _initTooltips = (root) => {
         const container = root || document;
-        if (typeof tippy !== 'function') return;
         const els = container.querySelectorAll('[data-tooltip-markdown]');
-        els.forEach((el) => {
+        if (!els.length) return;
+        const doInit = () => {
+          if (typeof tippy !== 'function') return;
+          els.forEach((el) => {
           try {
             if (el._tippy) return;
             const ref = el.getAttribute('data-tooltip-markdown');
@@ -640,12 +715,16 @@ const App = (function (document, supabase, htmx, FullCalendar) {
             });
           } catch (e) { /* noop per element */ }
         });
+        };
+        if (typeof tippy === 'function') { doInit(); } else { _loadTippy().then(doInit).catch(() => {}); }
       };
 
       const _initSearchableSelects = (root) => {
         const container = root || document;
-        if (typeof TomSelect !== 'function') return;
         const els = container.querySelectorAll('[data-searchable-select]');
+        if (!els.length) return;
+        const doInit = () => {
+        if (typeof TomSelect !== 'function') return;
         els.forEach((el) => {
           try {
             // Skip if already initialized
@@ -665,6 +744,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
             });
           } catch (e) { console.error('Tom Select init error:', e); }
         });
+        };
+        if (typeof TomSelect === 'function') { doInit(); } else { _loadTomSelect().then(doInit).catch(() => {}); }
       };
 
       const _initNavForm = (root) => {
@@ -1112,7 +1193,9 @@ const App = (function (document, supabase, htmx, FullCalendar) {
 
   const renderCalendar = () => {
     const calendarEl = htmx.find('#calendar');
-    if (calendarEl) {
+    if (!calendarEl) return;
+    const doRender = () => {
+      if (typeof FullCalendar === 'undefined') return;
       calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         headerToolbar: {
@@ -1144,7 +1227,8 @@ const App = (function (document, supabase, htmx, FullCalendar) {
         }
       });
       calendar.render();
-    }
+    };
+    if (typeof FullCalendar !== 'undefined') { doRender(); } else { _loadFullCalendar().then(doRender).catch(() => {}); }
   };
 
   return {
@@ -1172,4 +1256,4 @@ const App = (function (document, supabase, htmx, FullCalendar) {
     closeModal,
     copyToClipboard
   };
-})(document, supabase, htmx, FullCalendar);
+})(document, supabase, htmx);

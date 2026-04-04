@@ -15,10 +15,10 @@
     </div>
     <div class="buttons is-right">
       {{#if (eq this.host_id ../profile.id)}}
-      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin as Conduit</button>
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure you want to leave this game as Conduit?" hx-swap="outerHTML">Unjoin as Conduit</button>
       {{else}}
       {{#inArray (pluck this.join_requests "profile_id") (lookup ../profile "id")}}
-      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Unjoin</button>
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure you want to leave this game?" hx-swap="outerHTML">Unjoin</button>
       {{else}}
       <button class="button is-primary" hx-get="/lfg/{{this.id}}/join" hx-swap="outerHTML">Join</button>
       {{/inArray}}
@@ -28,5 +28,9 @@
   {{/each}}
 </div>
 {{else}}
-<p class="has-text-centered">No public LFG posts available.</p>
+<div class="notification is-light has-text-centered">
+  <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-search fa-2x"></i></span></p>
+  <p class="is-size-5 mb-2">No games posted right now</p>
+  <p>Check back soon or create your own LFG post to get a game going.</p>
+</div>
 {{/if}}
