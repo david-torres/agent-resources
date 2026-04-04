@@ -180,6 +180,9 @@ CREATE TABLE IF NOT EXISTS classes (
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS teaser text;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Class unlocks table
 CREATE TABLE IF NOT EXISTS class_unlocks (
@@ -205,6 +208,24 @@ CREATE TABLE IF NOT EXISTS class_unlock_codes (
 );
 
 ALTER TABLE class_unlock_codes ENABLE ROW LEVEL SECURITY;
+
+-- Long-lived personal access tokens for agent integrations
+CREATE TABLE IF NOT EXISTS agent_api_tokens (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    token_hash text NOT NULL UNIQUE,
+    token_hint text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    last_used_at timestamptz,
+    revoked_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_api_tokens_user_profile
+    ON agent_api_tokens(user_id, profile_id, created_at DESC);
+
+ALTER TABLE agent_api_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Rules PDF catalog
 CREATE TABLE IF NOT EXISTS rules_pdfs (
@@ -368,6 +389,12 @@ CREATE POLICY "class_unlock_codes_admin_all"
     ON class_unlock_codes FOR ALL
     USING (is_admin())
     WITH CHECK (is_admin());
+
+DROP POLICY IF EXISTS "Users can manage own agent tokens" ON agent_api_tokens;
+CREATE POLICY "Users can manage own agent tokens"
+    ON agent_api_tokens FOR ALL
+    USING (user_id = auth.uid() OR is_admin())
+    WITH CHECK (user_id = auth.uid() OR is_admin());
 
 -- Secure, atomic redemption function for unlock codes
 CREATE OR REPLACE FUNCTION redeem_class_code(p_code text)

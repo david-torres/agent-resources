@@ -3,6 +3,7 @@ const router = express.Router();
 const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses } = require('../util/supabase');
 const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
+const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
 const { isAuthenticated, authOptional } = require('../util/auth');
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -98,6 +99,58 @@ router.post('/discord/clear', isAuthenticated, async (req, res) => {
     return res.status(400).send(error.message);
   }
   return res.status(204).send();
+});
+
+router.get('/agent-tokens', isAuthenticated, async (req, res) => {
+  const { user, profile } = res.locals;
+  const includeRevoked = req.query.include_revoked === 'true';
+  const { data, error } = await listAgentTokens({
+    userId: user.id,
+    profileId: profile.id,
+    includeRevoked
+  });
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.json({ tokens: data });
+});
+
+router.post('/agent-tokens', isAuthenticated, async (req, res) => {
+  const { user, profile } = res.locals;
+  const name = (req.body.name || '').trim();
+
+  if (!name) {
+    return res.status(400).json({ error: 'Token name is required' });
+  }
+
+  const { data, error } = await createAgentToken({
+    userId: user.id,
+    profileId: profile.id,
+    name
+  });
+
+  if (error) {
+    return res.status(500).json({ error: error.message });
+  }
+
+  return res.status(201).json(data);
+});
+
+router.delete('/agent-tokens/:id', isAuthenticated, async (req, res) => {
+  const { user, profile } = res.locals;
+  const { data, error } = await revokeAgentToken({
+    tokenId: req.params.id,
+    userId: user.id,
+    profileId: profile.id
+  });
+
+  if (error) {
+    return res.status(404).json({ error: 'Token not found' });
+  }
+
+  return res.json(data);
 });
 
 module.exports = router;

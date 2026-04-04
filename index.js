@@ -16,6 +16,7 @@ const classesRoutes = require('./routes/classes');
 const libraryRoutes = require('./routes/library');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
+const agentRoutes = require('./routes/agent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -71,6 +72,7 @@ app.use('/classes', classesRoutes);
 app.use('/library', libraryRoutes);
 app.use('/pages', pagesRoutes);
 app.use('/nav', navRoutes);
+app.use('/api/agent', agentRoutes);
 
 // Start server
 app.listen(PORT, () => {
