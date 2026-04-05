@@ -232,17 +232,38 @@
 
   <div class="field">
     <label class="label">Unregistered Characters</label>
-    <p class="help mb-2">Add names of characters not registered in the system</p>
+    <p class="help mb-2">Add names of characters not registered in the system, or link them to existing characters</p>
     <div id="unregisteredCharactersList">
       {{#each mission.unregistered_character_names}}
-      <div class="field has-addons unregistered-character-entry">
-        <div class="control is-expanded">
-          <input class="input" type="text" name="unregistered_character_names[]" value="{{this}}" placeholder="Character name">
+      <div class="unregistered-character-entry mb-2">
+        <div class="field has-addons mb-0">
+          <div class="control is-expanded">
+            <input class="input" type="text" name="unregistered_character_names[]" value="{{this}}" placeholder="Character name">
+          </div>
+          <div class="control">
+            <button type="button" class="button is-info is-light link-character-btn" data-name="{{this}}" title="Link to registered character">
+              <span class="icon"><i class="fas fa-link"></i></span>
+            </button>
+          </div>
+          <div class="control">
+            <button type="button" class="button is-danger is-light remove-unregistered-character">
+              <span class="icon"><i class="fas fa-times"></i></span>
+            </button>
+          </div>
         </div>
-        <div class="control">
-          <button type="button" class="button is-danger is-light remove-unregistered-character">
-            <span class="icon"><i class="fas fa-times"></i></span>
-          </button>
+        <div class="link-search-panel" style="display:none;">
+          <div class="field has-addons mt-1">
+            <div class="control is-expanded">
+              <input class="input is-small link-search-input" type="text" placeholder="Search characters..." value="{{this}}">
+            </div>
+            <div class="control">
+              <button type="button" class="button is-small link-search-go">Search</button>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-small is-light link-search-cancel">Cancel</button>
+            </div>
+          </div>
+          <div class="link-search-results"></div>
         </div>
       </div>
       {{/each}}
@@ -257,26 +278,137 @@
     document.getElementById('addUnregisteredCharacter').addEventListener('click', function() {
       const list = document.getElementById('unregisteredCharactersList');
       const entry = document.createElement('div');
-      entry.className = 'field has-addons unregistered-character-entry';
+      entry.className = 'unregistered-character-entry mb-2';
       entry.innerHTML = `
-        <div class="control is-expanded">
-          <input class="input" type="text" name="unregistered_character_names[]" placeholder="Character name">
+        <div class="field has-addons mb-0">
+          <div class="control is-expanded">
+            <input class="input" type="text" name="unregistered_character_names[]" placeholder="Character name">
+          </div>
+          <div class="control">
+            <button type="button" class="button is-info is-light link-character-btn" data-name="" title="Link to registered character">
+              <span class="icon"><i class="fas fa-link"></i></span>
+            </button>
+          </div>
+          <div class="control">
+            <button type="button" class="button is-danger is-light remove-unregistered-character">
+              <span class="icon"><i class="fas fa-times"></i></span>
+            </button>
+          </div>
         </div>
-        <div class="control">
-          <button type="button" class="button is-danger is-light remove-unregistered-character">
-            <span class="icon"><i class="fas fa-times"></i></span>
-          </button>
+        <div class="link-search-panel" style="display:none;">
+          <div class="field has-addons mt-1">
+            <div class="control is-expanded">
+              <input class="input is-small link-search-input" type="text" placeholder="Search characters...">
+            </div>
+            <div class="control">
+              <button type="button" class="button is-small link-search-go">Search</button>
+            </div>
+            <div class="control">
+              <button type="button" class="button is-small is-light link-search-cancel">Cancel</button>
+            </div>
+          </div>
+          <div class="link-search-results"></div>
         </div>
       `;
       list.appendChild(entry);
-      entry.querySelector('input').focus();
+      entry.querySelector('input[name]').focus();
     });
 
     document.getElementById('unregisteredCharactersList').addEventListener('click', function(e) {
       if (e.target.closest('.remove-unregistered-character')) {
         e.target.closest('.unregistered-character-entry').remove();
       }
+
+      // Toggle link search panel
+      var linkBtn = e.target.closest('.link-character-btn');
+      if (linkBtn) {
+        var entry = linkBtn.closest('.unregistered-character-entry');
+        var panel = entry.querySelector('.link-search-panel');
+        var searchInput = panel.querySelector('.link-search-input');
+        var isVisible = panel.style.display !== 'none';
+        // Close all other panels
+        document.querySelectorAll('.link-search-panel').forEach(function(p) { p.style.display = 'none'; });
+        if (!isVisible) {
+          panel.style.display = 'block';
+          // Pre-fill with current name
+          var nameInput = entry.querySelector('input[name="unregistered_character_names[]"]');
+          if (nameInput && nameInput.value && !searchInput.value) {
+            searchInput.value = nameInput.value;
+          }
+          searchInput.focus();
+          // Auto-search if pre-filled
+          if (searchInput.value.length >= 2) {
+            doLinkSearch(entry);
+          }
+        }
+      }
+
+      // Cancel link search
+      if (e.target.closest('.link-search-cancel')) {
+        var panel = e.target.closest('.link-search-panel');
+        panel.style.display = 'none';
+        panel.querySelector('.link-search-results').innerHTML = '';
+      }
+
+      // Search button
+      if (e.target.closest('.link-search-go')) {
+        var entry = e.target.closest('.unregistered-character-entry');
+        doLinkSearch(entry);
+      }
+
+      // Select a character from search results
+      var resultItem = e.target.closest('.link-result-item');
+      if (resultItem) {
+        var characterId = resultItem.dataset.characterId;
+        var entry = resultItem.closest('.unregistered-character-entry');
+        var unregisteredName = entry.querySelector('input[name="unregistered_character_names[]"]').value;
+
+        htmx.ajax('POST', '/missions/{{mission.id}}/link-character', {
+          values: { character_id: characterId, unregistered_name: unregisteredName }
+        });
+      }
     });
+
+    // Handle enter key in search input
+    document.getElementById('unregisteredCharactersList').addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && e.target.classList.contains('link-search-input')) {
+        e.preventDefault();
+        var entry = e.target.closest('.unregistered-character-entry');
+        doLinkSearch(entry);
+      }
+    });
+
+    function doLinkSearch(entry) {
+      var searchInput = entry.querySelector('.link-search-input');
+      var resultsDiv = entry.querySelector('.link-search-results');
+      var q = searchInput.value.trim();
+      if (q.length < 2) {
+        resultsDiv.innerHTML = '<p class="help">Type at least 2 characters</p>';
+        return;
+      }
+      resultsDiv.innerHTML = '<p class="help">Searching...</p>';
+      fetch('/missions/{{mission.id}}/search-characters?q=' + encodeURIComponent(q))
+        .then(function(r) { return r.json(); })
+        .then(function(characters) {
+          if (!characters.length) {
+            resultsDiv.innerHTML = '<p class="help has-text-grey">No characters found</p>';
+            return;
+          }
+          var html = '<div class="list mt-1" style="border:1px solid #dbdbdb; border-radius:4px; max-height:200px; overflow-y:auto;">';
+          characters.forEach(function(c) {
+            html += '<a class="list-item link-result-item" data-character-id="' + c.id + '" style="display:flex; align-items:center; gap:0.5rem; padding:0.4rem 0.75rem; cursor:pointer;">';
+            html += '<strong>' + c.name + '</strong>';
+            if (c.class) html += ' <span class="has-text-grey is-size-7">(' + c.class + ')</span>';
+            if (c.is_deceased) html += ' <span class="icon has-text-grey is-small"><i class="fas fa-skull"></i></span>';
+            html += '</a>';
+          });
+          html += '</div>';
+          resultsDiv.innerHTML = html;
+        })
+        .catch(function() {
+          resultsDiv.innerHTML = '<p class="help has-text-danger">Search failed</p>';
+        });
+    }
   </script>
 {{/if}}
   <div class="field is-grouped mt-4">

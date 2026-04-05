@@ -27,7 +27,7 @@ const {
   // Profile search
   searchProfiles
 } = require('../util/supabase');
-const { getCharacter, getCharacterAllMissions, getOwnMissions } = require('../util/supabase');
+const { getCharacter, getCharacterAllMissions, getOwnMissions, searchPublicCharacters } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const supabase = require('../util/supabase');
@@ -35,10 +35,10 @@ const { processMissionImport } = require('../util/mission-import');
 
 router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
-  const { has_video, character_name, character_class } = req.query;
+  const { has_video, character_name, character_class, conduit_name } = req.query;
   const [{ data: classes }, { data: initialMissions }] = await Promise.all([
     getClasses({ is_public: true }),
-    getRandomPublicMissions(12, has_video === 'true', character_name, character_class)
+    getRandomPublicMissions(12, has_video === 'true', character_name, character_class, conduit_name)
   ]);
 
   res.render('mission-search', {
@@ -53,15 +53,16 @@ router.get('/search', authOptional, async (req, res) => {
 });
 
 router.get('/s', authOptional, async (req, res) => {
-  const { q, count, has_video, character_name, character_class } = req.query;
+  const { q, count, has_video, character_name, character_class, conduit_name } = req.query;
 
-  // If no search query, no character name, no character class, and no video filter, return empty results
+  // If no search query, no character name, no character class, no conduit, and no video filter, return empty results
   const hasQuery = q && q.length >= 2;
   const hasCharacterName = character_name && character_name.length >= 2;
   const hasCharacterClass = character_class && character_class.length > 0;
+  const hasConduitName = conduit_name && conduit_name.length >= 2;
   const hasVideoFilter = has_video === 'true';
 
-  if (!hasQuery && !hasCharacterName && !hasCharacterClass && !hasVideoFilter) {
+  if (!hasQuery && !hasCharacterName && !hasCharacterClass && !hasConduitName && !hasVideoFilter) {
     res.render('partials/mission-search-results', {
       layout: false,
       missions: [],
@@ -75,7 +76,8 @@ router.get('/s', authOptional, async (req, res) => {
     count || 12,
     hasVideoFilter,
     hasCharacterName ? character_name : null,
-    hasCharacterClass ? character_class : null
+    hasCharacterClass ? character_class : null,
+    hasConduitName ? conduit_name : null
   );
 
   if (error) {
@@ -338,6 +340,52 @@ router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) =>
   } else {
     return res.header('HX-Location', `/missions/${id}/edit`).send();
   }
+});
+
+// Search characters (JSON, for link UI)
+router.get('/:id/search-characters', isAuthenticated, async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.length < 2) {
+    return res.json([]);
+  }
+  const { data, error } = await searchPublicCharacters(q, 8);
+  if (error) {
+    return res.json([]);
+  }
+  res.json((data || []).map(c => ({ id: c.id, name: c.name, class: c.class, is_deceased: c.is_deceased })));
+});
+
+// Link an unregistered character name to a real character
+// Adds the character to the mission and removes the unregistered name
+router.post('/:id/link-character', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const { character_id, unregistered_name } = req.body;
+
+  if (!character_id || !unregistered_name) {
+    return res.status(400).send('Character ID and unregistered name are required');
+  }
+
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return res.status(403).send('Unauthorized');
+  }
+
+  // Add character to mission
+  const { error: addError } = await addCharacterToMission(id, character_id);
+  if (addError) {
+    return res.status(400).send(addError.message);
+  }
+
+  // Remove the unregistered name
+  const { data: mission } = await getMission(id);
+  if (mission) {
+    const names = (mission.unregistered_character_names || [])
+      .filter(n => n !== unregistered_name);
+    await setUnregisteredCharacterNames(id, names, profile);
+  }
+
+  return res.header('HX-Location', `/missions/${id}/edit`).send();
 });
 
 router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) => {

@@ -156,10 +156,10 @@ const setUnregisteredCharacterNames = async (missionId, names, profile) => {
   return { data, error };
 }
 
-const searchPublicMissions = async (q, count = 12, hasVideo = false, characterName = null, characterClass = null) => {
+const searchPublicMissions = async (q, count = 12, hasVideo = false, characterName = null, characterClass = null, conduitName = null) => {
   try {
     // Determine pool size based on filters - fetch more if filtering in JS
-    const needsJsFiltering = characterName || characterClass;
+    const needsJsFiltering = characterName || characterClass || conduitName;
     const poolSize = needsJsFiltering ? Math.max(count * 5, 100) : count;
 
     let query = supabase
@@ -171,6 +171,7 @@ const searchPublicMissions = async (q, count = 12, hasVideo = false, characterNa
         outcome,
         summary,
         media_url,
+        host_name,
         unregistered_character_names,
         characters:mission_characters(
           character:characters(
@@ -233,6 +234,14 @@ const searchPublicMissions = async (q, count = 12, hasVideo = false, characterNa
       });
     }
 
+    // Filter by conduit name
+    if (conduitName && conduitName.trim().length > 0) {
+      const searchTerm = conduitName.trim().toLowerCase();
+      transformedData = transformedData.filter(mission =>
+        mission.host_name && mission.host_name.toLowerCase().includes(searchTerm)
+      );
+    }
+
     // Limit to requested count after filtering
     transformedData = transformedData.slice(0, count);
 
@@ -243,11 +252,11 @@ const searchPublicMissions = async (q, count = 12, hasVideo = false, characterNa
   }
 }
 
-const getRandomPublicMissions = async (count = 12, hasVideo = false, characterName = null, characterClass = null) => {
+const getRandomPublicMissions = async (count = 12, hasVideo = false, characterName = null, characterClass = null, conduitName = null) => {
   try {
     // Fetch a reasonably sized pool, then sample client-side for randomness
     // Fetch more if filtering in JS
-    const needsJsFiltering = characterName || characterClass;
+    const needsJsFiltering = characterName || characterClass || conduitName;
     const poolSize = needsJsFiltering ? Math.max(count * 10, 200) : Math.max(Math.min(count * 5, 100), count);
 
     let query = supabase
@@ -259,6 +268,7 @@ const getRandomPublicMissions = async (count = 12, hasVideo = false, characterNa
         outcome,
         summary,
         media_url,
+        host_name,
         unregistered_character_names,
         characters:mission_characters(
           character:characters(
@@ -316,6 +326,14 @@ const getRandomPublicMissions = async (count = 12, hasVideo = false, characterNa
         
         return hasMatchingRegistered || hasMatchingUnregistered;
       });
+    }
+
+    // Filter by conduit name
+    if (conduitName && conduitName.trim().length > 0) {
+      const searchTerm = conduitName.trim().toLowerCase();
+      transformedData = transformedData.filter(mission =>
+        mission.host_name && mission.host_name.toLowerCase().includes(searchTerm)
+      );
     }
 
     if (!Array.isArray(transformedData) || transformedData.length <= count) {

@@ -28,7 +28,19 @@
     </div>
   </div>
   <div class="columns is-multiline">
-    <div class="column is-6">
+    <div class="column is-4">
+      <div class="field">
+        <label class="label">Search by conduit</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" name="conduit_name" placeholder="Enter conduit name..." hx-get="/missions/s?count=12"
+            hx-trigger="keyup changed delay:500ms, search" hx-target="#search-results" hx-include="#search-filters">
+          <span class="icon is-left">
+            <i class="fas fa-hat-wizard"></i>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-4">
       <div class="field">
         <label class="label">Filter by character class</label>
         <div class="control">
@@ -43,7 +55,7 @@
         </div>
       </div>
     </div>
-    <div class="column is-6">
+    <div class="column is-4">
       <div class="field">
         <div class="control">
           <label class="checkbox">
