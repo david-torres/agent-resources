@@ -2,13 +2,15 @@ const App = (function (document, supabase, htmx) {
   let supabaseClient;
   let authToken = null;
   let refreshToken = null;
+  let isInitialized = false;
 
   let calendar;
 
   // Lazy-loading utilities for on-demand script/stylesheet loading
   const _loadedAssets = new Set();
 
-  const _loadScript = (src) => {
+  const _loadScript = (src, options = {}) => {
+    const { crossOrigin } = options;
     if (_loadedAssets.has(src)) return Promise.resolve();
     if (document.querySelector(`script[src="${src}"]`)) {
       _loadedAssets.add(src);
@@ -17,14 +19,17 @@ const App = (function (document, supabase, htmx) {
     return new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
-      script.crossOrigin = 'anonymous';
+      if (crossOrigin) {
+        script.crossOrigin = crossOrigin;
+      }
       script.onload = () => { _loadedAssets.add(src); resolve(); };
       script.onerror = reject;
       document.head.appendChild(script);
     });
   };
 
-  const _loadStylesheet = (href) => {
+  const _loadStylesheet = (href, options = {}) => {
+    const { crossOrigin } = options;
     if (_loadedAssets.has(href)) return;
     if (document.querySelector(`link[href="${href}"]`)) {
       _loadedAssets.add(href);
@@ -33,7 +38,9 @@ const App = (function (document, supabase, htmx) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.href = href;
-    link.crossOrigin = 'anonymous';
+    if (crossOrigin) {
+      link.crossOrigin = crossOrigin;
+    }
     document.head.appendChild(link);
     _loadedAssets.add(href);
   };
@@ -98,6 +105,11 @@ const App = (function (document, supabase, htmx) {
   const _displayError = (message) => {
     _displayNotification('danger', message);
   }
+
+  const _reportAuthError = (context, error) => {
+    console.error(`[auth] ${context}`, error);
+    _displayError(error?.message || 'Authentication failed');
+  };
 
   function _toggleFormLoading(form, isLoading) {
     if (!form) return;
@@ -316,7 +328,7 @@ const App = (function (document, supabase, htmx) {
           _applyCropToElement(preview, null, null);
           return;
         }
-        img.crossOrigin = 'anonymous';
+        img.removeAttribute('crossorigin');
         img.src = nextUrl;
         if (placeholder) placeholder.hidden = true;
       };
@@ -630,7 +642,10 @@ const App = (function (document, supabase, htmx) {
   };
 
   function init(supabaseUrl, supabaseKey) {
-    document.addEventListener("DOMContentLoaded", async function () {
+    const start = async function () {
+      if (isInitialized) return;
+      isInitialized = true;
+
       // System message visibility control
       (function () {
         const banner = document.getElementById('system-banner');
@@ -865,7 +880,14 @@ const App = (function (document, supabase, htmx) {
 
       // Initialize on initial load (after auth check)
       initializeUIComponents();
-    });
+    };
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', start, { once: true });
+      return;
+    }
+
+    start();
   }
 
   function redirectTo(url) {
@@ -989,6 +1011,7 @@ const App = (function (document, supabase, htmx) {
 
   const signIn = async (event) => {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
     const form = document.getElementById('sign-in');
     const formData = new FormData(form);
     const email = formData.get('email');
@@ -996,16 +1019,20 @@ const App = (function (document, supabase, htmx) {
 
     try {
       _toggleFormLoading(form, true);
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
       if (error) throw error;
       _setTokens(data.session.access_token, data.session.refresh_token);
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('signInWithPassword failed', error);
     }
   };
 
   const signUp = async (event) => {
     if (event && typeof event.preventDefault === 'function') event.preventDefault();
+    if (event && typeof event.stopPropagation === 'function') event.stopPropagation();
     const form = document.getElementById('sign-up');
     const formData = new FormData(form);
     const email = formData.get('email');
@@ -1013,13 +1040,16 @@ const App = (function (document, supabase, htmx) {
 
     try {
       _toggleFormLoading(form, true);
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const { data, error } = await supabaseClient.auth.signUp({ email, password });
       if (error) throw error;
 
       const message = 'Please verify your email address to continue.';
       htmx.swap(form, `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('signUp failed', error);
     }
   };
 
@@ -1034,6 +1064,9 @@ const App = (function (document, supabase, htmx) {
 
     try {
       _toggleFormLoading(form, true);
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/check` }
@@ -1042,7 +1075,7 @@ const App = (function (document, supabase, htmx) {
       const message = 'Check your email for a magic link to sign in.';
       htmx.swap('#sign-in', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('sendSignInLink failed', error);
     }
   };
 
@@ -1057,6 +1090,9 @@ const App = (function (document, supabase, htmx) {
 
     try {
       _toggleFormLoading(form, true);
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const { error } = await supabaseClient.auth.signInWithOtp({
         email,
         options: { emailRedirectTo: `${window.location.origin}/auth/check` }
@@ -1066,21 +1102,27 @@ const App = (function (document, supabase, htmx) {
       const message = 'Please check your email for a magic link to continue.';
       htmx.swap('#sign-up', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('sendSignUpLink failed', error);
     }
   };
 
   const signOut = async () => {
     try {
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const { error } = await supabaseClient.auth.signOut('global');
       if (error) throw error;
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('signOut failed', error);
     }
   };
 
   const signInWithDiscord = async () => {
     try {
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const r = getRedirectUrl();
       const redirectTo = r
         ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
@@ -1091,12 +1133,15 @@ const App = (function (document, supabase, htmx) {
       });
       if (error) throw error;
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('signInWithDiscord failed', error);
     }
   };
 
   const signUpWithDiscord = async () => {
     try {
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const r = getRedirectUrl();
       const redirectTo = r
         ? `${window.location.origin}/auth/check?r=${encodeURIComponent(r)}`
@@ -1107,12 +1152,15 @@ const App = (function (document, supabase, htmx) {
       });
       if (error) throw error;
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('signUpWithDiscord failed', error);
     }
   };
 
   const linkDiscord = async () => {
     try {
+      if (!supabaseClient) {
+        throw new Error('Auth client did not initialize. Reload the page and check the browser console.');
+      }
       const redirectTo = `${window.location.origin}/auth/check?r=${encodeURIComponent('/profile')}`
       const { error } = await supabaseClient.auth.linkIdentity({
         provider: 'discord',
@@ -1120,7 +1168,7 @@ const App = (function (document, supabase, htmx) {
       });
       if (error) throw error;
     } catch (error) {
-      _displayError(error.message);
+      _reportAuthError('linkDiscord failed', error);
     }
   };
 

@@ -2,5 +2,9 @@
   <span class="title is-2">Checking login status.</span>
   <div class="loader is-loading"></div>
   <p>If you are not redirected, please <a href="/auth">Login</a>.</p>
-  <script>App.checkSessionNow();</script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      App.checkSessionNow();
+    });
+  </script>
 </div>
