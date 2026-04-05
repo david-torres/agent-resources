@@ -556,6 +556,48 @@ BEGIN
 END;
 $$;
 
+-- Helper functions to break RLS recursion between missions/mission_editors/mission_characters
+CREATE OR REPLACE FUNCTION is_mission_editor(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM mission_editors me
+    JOIN profiles p ON p.id = me.profile_id
+    WHERE me.mission_id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_mission_owner_or_host(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    JOIN profiles p ON (p.id = m.creator_id OR p.id = m.host_id)
+    WHERE m.id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_mission_public(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    WHERE m.id = p_mission_id
+      AND m.is_public = true
+  );
+$$;
+
 -- Profiles policies
 DROP POLICY IF EXISTS "profiles_select" ON profiles;
 DROP POLICY IF EXISTS "profiles_insert" ON profiles;
@@ -804,17 +846,8 @@ CREATE POLICY "missions_public_select"
 CREATE POLICY "missions_owner_host_editor_admin_select"
     ON missions FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id)
-              AND (p.user_id = auth.uid() OR is_admin())
-        )
-        OR EXISTS (
-            SELECT 1 FROM mission_editors me
-            JOIN profiles p ON p.id = me.profile_id
-            WHERE me.mission_id = missions.id
-              AND p.user_id = auth.uid()
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
         OR is_admin()
     );
 
@@ -833,31 +866,13 @@ CREATE POLICY "missions_insert"
 CREATE POLICY "missions_update"
     ON missions FOR UPDATE
     USING (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id)
-              AND (p.user_id = auth.uid() OR is_admin())
-        )
-        OR EXISTS (
-            SELECT 1 FROM mission_editors me
-            JOIN profiles p ON p.id = me.profile_id
-            WHERE me.mission_id = missions.id
-              AND p.user_id = auth.uid()
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
         OR is_admin()
     )
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id)
-              AND (p.user_id = auth.uid() OR is_admin())
-        )
-        OR EXISTS (
-            SELECT 1 FROM mission_editors me
-            JOIN profiles p ON p.id = me.profile_id
-            WHERE me.mission_id = missions.id
-              AND p.user_id = auth.uid()
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
         OR is_admin()
     );
 
@@ -879,93 +894,42 @@ DROP POLICY IF EXISTS "mission_characters_mutate" ON mission_characters;
 CREATE POLICY "mission_characters_select"
     ON mission_characters FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM missions m
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                m.is_public = true
-                OR EXISTS (
-                    SELECT 1 FROM profiles pm
-                    WHERE (pm.id = m.creator_id OR pm.id = m.host_id)
-                      AND pm.user_id = auth.uid()
-                )
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me
-                    JOIN profiles pe ON pe.id = me.profile_id
-                    WHERE me.mission_id = m.id
-                      AND pe.user_id = auth.uid()
-                )
-                OR EXISTS (
-                    SELECT 1 FROM characters c
-                    JOIN profiles pc ON pc.id = c.creator_id
-                    WHERE c.id = mission_characters.character_id
-                      AND pc.user_id = auth.uid()
-                )
-                OR is_admin()
-              )
+        is_mission_public(mission_id)
+        OR is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
         )
+        OR is_admin()
     );
 
 -- Creators, hosts, editors, and character owners can mutate mission_characters
 CREATE POLICY "mission_characters_mutate"
     ON mission_characters FOR ALL
     USING (
-        EXISTS (
-            SELECT 1 FROM missions m
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                -- Creator or host can mutate
-                EXISTS (
-                    SELECT 1 FROM profiles pm
-                    WHERE (pm.id = m.creator_id OR pm.id = m.host_id)
-                      AND pm.user_id = auth.uid()
-                )
-                -- Editor can mutate
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me
-                    JOIN profiles pe ON pe.id = me.profile_id
-                    WHERE me.mission_id = m.id
-                      AND pe.user_id = auth.uid()
-                )
-                -- Character owner can mutate their own character's entry
-                OR EXISTS (
-                    SELECT 1 FROM characters c
-                    JOIN profiles pc ON pc.id = c.creator_id
-                    WHERE c.id = mission_characters.character_id
-                      AND pc.user_id = auth.uid()
-                )
-                OR is_admin()
-              )
+        is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
         )
+        OR is_admin()
     )
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM missions m
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                -- Creator or host can mutate
-                EXISTS (
-                    SELECT 1 FROM profiles pm
-                    WHERE (pm.id = m.creator_id OR pm.id = m.host_id)
-                      AND pm.user_id = auth.uid()
-                )
-                -- Editor can mutate
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me
-                    JOIN profiles pe ON pe.id = me.profile_id
-                    WHERE me.mission_id = m.id
-                      AND pe.user_id = auth.uid()
-                )
-                -- Character owner can mutate their own character's entry
-                OR EXISTS (
-                    SELECT 1 FROM characters c
-                    JOIN profiles pc ON pc.id = c.creator_id
-                    WHERE c.id = mission_characters.character_id
-                      AND pc.user_id = auth.uid()
-                )
-                OR is_admin()
-              )
+        is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
+            JOIN profiles pc ON pc.id = c.creator_id
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
         )
+        OR is_admin()
     );
 
 -- Mission editors policies
@@ -974,52 +938,23 @@ DROP POLICY IF EXISTS "mission_editors_insert" ON mission_editors;
 DROP POLICY IF EXISTS "mission_editors_delete" ON mission_editors;
 
 -- Anyone can see editors of public missions, or missions they're involved with
+-- Uses SECURITY DEFINER helpers to avoid infinite recursion with missions policies
 CREATE POLICY "mission_editors_select"
     ON mission_editors FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM missions m
-            WHERE m.id = mission_editors.mission_id
-              AND (
-                m.is_public = true
-                OR EXISTS (
-                    SELECT 1 FROM profiles p
-                    WHERE (p.id = m.creator_id OR p.id = m.host_id)
-                      AND p.user_id = auth.uid()
-                )
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me2
-                    JOIN profiles p ON p.id = me2.profile_id
-                    WHERE me2.mission_id = m.id
-                      AND p.user_id = auth.uid()
-                )
-                OR is_admin()
-              )
-        )
+        is_mission_public(mission_id)
+        OR is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR is_admin()
     );
 
--- Mission creator, host, or existing editors can add new editors
+-- Mission creator or host can add editors
+-- "existing editors can add" is enforced in application code
 CREATE POLICY "mission_editors_insert"
     ON mission_editors FOR INSERT
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM missions m
-            WHERE m.id = mission_editors.mission_id
-              AND (
-                EXISTS (
-                    SELECT 1 FROM profiles p
-                    WHERE (p.id = m.creator_id OR p.id = m.host_id)
-                      AND p.user_id = auth.uid()
-                )
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me2
-                    JOIN profiles p ON p.id = me2.profile_id
-                    WHERE me2.mission_id = m.id
-                      AND p.user_id = auth.uid()
-                )
-                OR is_admin()
-              )
-        )
+        is_mission_owner_or_host(mission_id)
+        OR is_admin()
     );
 
 -- Only mission creator can remove editors

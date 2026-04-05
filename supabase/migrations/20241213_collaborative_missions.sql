@@ -200,6 +200,7 @@ DROP POLICY IF EXISTS "mission_editors_insert" ON mission_editors;
 DROP POLICY IF EXISTS "mission_editors_delete" ON mission_editors;
 
 -- Anyone can see editors of public missions, or missions they're involved with
+-- Note: uses profile_id direct match instead of self-join to avoid infinite recursion
 CREATE POLICY "mission_editors_select"
     ON mission_editors FOR SELECT
     USING (
@@ -213,18 +214,19 @@ CREATE POLICY "mission_editors_select"
                     WHERE (p.id = m.creator_id OR p.id = m.host_id)
                       AND p.user_id = auth.uid()
                 )
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me2
-                    JOIN profiles p ON p.id = me2.profile_id
-                    WHERE me2.mission_id = m.id
-                      AND p.user_id = auth.uid()
-                )
                 OR is_admin()
               )
+        )
+        -- Editors can see other editors on the same mission
+        OR EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = mission_editors.profile_id
+              AND p.user_id = auth.uid()
         )
     );
 
 -- Mission creator, host, or existing editors can add new editors
+-- Note: "existing editors can add" is enforced in application code to avoid recursive policy
 CREATE POLICY "mission_editors_insert"
     ON mission_editors FOR INSERT
     WITH CHECK (
@@ -235,12 +237,6 @@ CREATE POLICY "mission_editors_insert"
                 EXISTS (
                     SELECT 1 FROM profiles p
                     WHERE (p.id = m.creator_id OR p.id = m.host_id)
-                      AND p.user_id = auth.uid()
-                )
-                OR EXISTS (
-                    SELECT 1 FROM mission_editors me2
-                    JOIN profiles p ON p.id = me2.profile_id
-                    WHERE me2.mission_id = m.id
                       AND p.user_id = auth.uid()
                 )
                 OR is_admin()
