@@ -6,3 +6,4 @@ supabase/.branches/
 .codex
 .cursor/
 .DS_Store
+backups/

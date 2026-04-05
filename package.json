@@ -7,7 +7,8 @@
     "start": "bun run index.js",
     "dev": "bun --watch index.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "seed:classes": "bun run util/seed-classes.js"
+    "seed:classes": "bun run util/seed-classes.js",
+    "db:backup": "sh scripts/db-backup.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
