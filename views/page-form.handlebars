@@ -16,7 +16,7 @@
     <div class="columns">
       <div class="column is-two-thirds">
         <div class="field">
-          <label class="label">Title <span class="has-text-danger">*</span></label>
+          <label class="label" for="title">Title <span class="has-text-danger">*</span></label>
           <div class="control">
             <input class="input" type="text" name="title" id="title" value="{{page.title}}" placeholder="Page Title" required>
           </div>
@@ -24,7 +24,7 @@
       </div>
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Slug</label>
+          <label class="label" for="slug">Slug</label>
           <div class="control">
             <input class="input" type="text" name="slug" id="slug" value="{{page.slug}}" placeholder="url-friendly-slug">
           </div>
@@ -34,7 +34,7 @@
     </div>
 
     <div class="field">
-      <label class="label">Content <span class="has-text-danger">*</span></label>
+      <label class="label" for="content">Content <span class="has-text-danger">*</span></label>
       <div class="control">
         <textarea class="textarea" name="content" id="content" rows="15" placeholder="Write your page content in Markdown..." data-toast-editor data-editor-height="500px" data-editor-preview="vertical" required>{{page.content}}</textarea>
       </div>
@@ -44,7 +44,7 @@
     <div class="columns">
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Access Level</label>
+          <label class="label" for="access_level">Access Level</label>
           <div class="control">
             <div class="select is-fullwidth">
               <select name="access_level" id="access_level">
@@ -58,7 +58,7 @@
       </div>
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Status</label>
+          <label class="label" for="is_published">Status</label>
           <div class="control">
             <label class="checkbox">
               <input type="checkbox" name="is_published" id="is_published" {{#if (or (not page) page.is_published)}}checked{{/if}}>

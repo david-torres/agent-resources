@@ -14,12 +14,16 @@
       {{{markdown this.description}}}
     </div>
     <div class="buttons is-right">
-      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure?" hx-swap="outerHTML">Leave Game</button>
-      <a class="button is-secondary" href="/lfg/{{this.id}}">View</a>
+      <button class="button is-danger" hx-delete="/lfg/{{this.id}}/join" hx-confirm="Are you sure you want to leave this game?" hx-swap="outerHTML">Leave Game</button>
+      <a class="button is-light" href="/lfg/{{this.id}}">View</a>
     </div>
   </div>
   {{/each}}
 </div>
 {{else}}
-<p class="has-text-centered">You have not joined any LFG posts.</p>
+<div class="notification is-light has-text-centered">
+  <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-handshake fa-2x"></i></span></p>
+  <p class="is-size-5 mb-2">No games joined</p>
+  <p>Browse the Public tab to find games looking for players.</p>
+</div>
 {{/if}}

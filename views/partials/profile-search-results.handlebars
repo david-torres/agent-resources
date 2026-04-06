@@ -1,0 +1,21 @@
+<div id="profile-search-results" class="profile-search-results">
+  {{#if profiles.length}}
+    <ul class="profile-list">
+      {{#each profiles}}
+        <li class="profile-item" data-profile-id="{{id}}" data-profile-name="{{name}}">
+          {{#if image_url}}
+            <img src="{{image_url}}" alt="{{name}}" class="profile-avatar">
+          {{else}}
+            <div class="profile-avatar profile-avatar-placeholder">
+              {{substring name 0 1}}
+            </div>
+          {{/if}}
+          <span class="profile-name">{{name}}</span>
+        </li>
+      {{/each}}
+    </ul>
+  {{else}}
+    <p class="no-results">No profiles found.</p>
+  {{/if}}
+</div>
+

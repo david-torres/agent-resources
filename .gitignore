@@ -2,5 +2,8 @@ node_modules/
 .env
 .vscode/
 supabase/.temp/
+supabase/.branches/
+.codex
 .cursor/
 .DS_Store
+backups/

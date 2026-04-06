@@ -127,11 +127,29 @@ const setDiscordId = async (user_id, discord_id, discord_email = null) => {
   return { data, error };
 }
 
+/**
+ * Search for profiles by name (for adding editors, etc.)
+ */
+const searchProfiles = async (query, limit = 10) => {
+  if (!query || query.trim().length < 2) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, name, image_url')
+    .ilike('name', `%${query}%`)
+    .limit(limit);
+
+  return { data, error };
+}
+
 module.exports = {
   getProfile,
   getProfileById,
   getProfileByName,
   createProfile,
   updateUser,
-  setDiscordId
+  setDiscordId,
+  searchProfiles
 };

@@ -1,12 +1,7 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const crypto = require('crypto');
 
-const getClasses = async (filters = {}) => {
-    let query = supabase
-        .from('classes')
-        .select('*');
-
-    // Apply filters
+const applyClassFilters = (query, filters = {}) => {
     if (filters.name) {
         query = query.eq('name', filters.name);
     }
@@ -29,8 +24,16 @@ const getClasses = async (filters = {}) => {
         query = query.eq('is_player_created', filters.is_player_created);
     }
 
-    // sort
-    query = query.order('name', { ascending: true });
+    return query.order('name', { ascending: true });
+};
+
+const getClasses = async (filters = {}) => {
+    const query = applyClassFilters(
+        supabase
+        .from('classes')
+        .select('*'),
+        filters
+    );
 
     const { data, error } = await query;
     if (error) {
@@ -218,6 +221,133 @@ const getUnlockedClasses = async (userId) => {
     };
 };
 
+const getUnlockedClassIdsForUser = async (userId) => {
+    if (!userId) {
+        return { data: new Set(), error: null };
+    }
+
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+        .from('class_unlocks')
+        .select('class_id')
+        .eq('user_id', userId)
+        .or(`expires_at.is.null,expires_at.gt.${now}`);
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+
+    return {
+        data: new Set((data || []).map((entry) => entry.class_id)),
+        error: null
+    };
+};
+
+const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
+    if (!classData) return null;
+
+    const isAdmin = actor.role === 'admin';
+    const isOwner = !!actor.profileId && actor.profileId === classData.created_by;
+    const isVisible = classData.is_public === true || isOwner || isAdmin;
+
+    if (!isVisible) {
+        return null;
+    }
+
+    const unlocked = !!actor.userId && unlockedClassIds.has(classData.id);
+    const accessLevel = classData.status === 'release' && !isAdmin && !isOwner && !unlocked
+        ? 'teaser_only'
+        : 'full';
+
+    const serialized = {
+        id: classData.id,
+        name: classData.name,
+        teaser: classData.teaser || '',
+        status: classData.status,
+        rules_edition: classData.rules_edition,
+        rules_version: classData.rules_version,
+        is_public: classData.is_public,
+        is_player_created: classData.is_player_created,
+        image_url: classData.image_url || null,
+        image_crop: classData.image_crop || null,
+        base_class_id: classData.base_class_id || null,
+        owner_profile_id: classData.created_by || null,
+        access_level: accessLevel,
+        unlocked,
+        pdf_available: accessLevel === 'full' && !!classData.pdf_storage_path,
+        updated_at: classData.updated_at || null,
+        created_at: classData.created_at || null
+    };
+
+    if (accessLevel === 'full') {
+        serialized.description = classData.description || '';
+        serialized.gear = Array.isArray(classData.gear) ? classData.gear : [];
+        serialized.abilities = Array.isArray(classData.abilities) ? classData.abilities : [];
+    }
+
+    return serialized;
+};
+
+const listClassesForAgent = async (filters = {}, actor = {}) => {
+    let query = supabaseAdmin
+        .from('classes')
+        .select('*');
+
+    query = applyClassFilters(query, filters);
+
+    if (actor.role !== 'admin') {
+        if (actor.profileId) {
+            query = query.or(`is_public.eq.true,created_by.eq.${actor.profileId}`);
+        } else {
+            query = query.eq('is_public', true);
+        }
+    }
+
+    const { data, error } = await query;
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+
+    const { data: unlockedClassIds, error: unlockedError } = await getUnlockedClassIdsForUser(actor.userId);
+    if (unlockedError) {
+        return { data: null, error: unlockedError };
+    }
+
+    return {
+        data: (data || [])
+            .map((classData) => serializeClassForAgent({ classData, actor, unlockedClassIds }))
+            .filter(Boolean),
+        error: null
+    };
+};
+
+const getClassForAgent = async (id, actor = {}) => {
+    const { data: classData, error } = await supabaseAdmin
+        .from('classes')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+
+    const { data: unlockedClassIds, error: unlockedError } = await getUnlockedClassIdsForUser(actor.userId);
+    if (unlockedError) {
+        return { data: null, error: unlockedError };
+    }
+
+    const serialized = serializeClassForAgent({ classData, actor, unlockedClassIds });
+    if (!serialized) {
+        return { data: null, error: null };
+    }
+
+    return { data: serialized, error: null };
+};
+
 const canViewClassPdf = async (userContext = {}, classData = {}) => {
     const { userId = null, profileId = null, role = null } = userContext;
 
@@ -360,5 +490,8 @@ module.exports = {
     deleteClass,
     buildClassContentLookupMaps,
     saveClassPdfMetadata,
-    canViewClassPdf
+    canViewClassPdf,
+    listClassesForAgent,
+    getClassForAgent,
+    serializeClassForAgent
 };

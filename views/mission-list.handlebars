@@ -6,12 +6,61 @@
 </div>
 
 {{#if missions.length}}
-<div class="block">
-  <table class="table is-fullwidth is-striped is-hoverable">
+<div class="box mb-4" id="mission-filters">
+  <div class="columns is-multiline is-variable is-3">
+    <div class="column is-4">
+      <div class="field">
+        <label class="label is-small">Mission name</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" id="filterName" placeholder="Mission name...">
+          <span class="icon is-left"><i class="fas fa-search"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-3">
+      <div class="field">
+        <label class="label is-small">Character</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" id="filterCharacter" placeholder="Character name...">
+          <span class="icon is-left"><i class="fas fa-user"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-3">
+      <div class="field">
+        <label class="label is-small">Conduit</label>
+        <div class="control has-icons-left">
+          <input class="input" type="text" id="filterConduit" placeholder="Conduit name...">
+          <span class="icon is-left"><i class="fas fa-hat-wizard"></i></span>
+        </div>
+      </div>
+    </div>
+    <div class="column is-2">
+      <div class="field">
+        <label class="label is-small">Outcome</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="filterOutcome">
+              <option value="">All</option>
+              <option value="pending">Pending</option>
+              <option value="success">Success</option>
+              <option value="failure">Failure</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="block table-container">
+  <h3 class="title is-4">Your Missions</h3>
+  <table class="table is-fullwidth is-striped is-hoverable app-table">
     <thead>
       <tr>
         <th>Name</th>
         <th>Date</th>
+        <th>Conduit</th>
         <th>Status</th>
         <th>Characters</th>
         <th>Actions</th>
@@ -20,7 +69,7 @@
     <tbody>
       {{#each missions}}
       {{#or this.is_public (eq ../profile.id this.creator_id)}}
-      <tr>
+      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}{{#each this.unregistered_character_names}}{{this}} {{/each}}" data-conduit="{{this.host_name}}">
         <td>
           {{this.name}}
           {{#if this.media_url}}
@@ -32,6 +81,7 @@
         {{else}}
         <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
         {{/if}}
+        <td>{{this.host_name}}</td>
         <td>{{this.outcome}}</td>
         <td>
           {{#if this.characters.length}}
@@ -53,7 +103,7 @@
         </td>
         <td>
           <div class="buttons are-small">
-            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            <a href="/missions/{{this.id}}" class="button is-light">View</a>
             {{#if (eq this.creator_id ../profile.id)}}
             <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
             <button class="button is-danger" hx-delete="/missions/{{this.id}}" hx-target="closest tr"
@@ -68,5 +118,106 @@
   </table>
 </div>
 {{else}}
-<p class="has-text-centered">You don't have any missions logged.</p>
+<div class="notification is-light has-text-centered">
+  <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-scroll fa-2x"></i></span></p>
+  <p class="is-size-5 mb-2">No missions logged</p>
+  <p class="mb-4">Log your completed Enclave missions to track progress and level up your characters.</p>
+  <div class="buttons is-centered">
+    <a href="/missions/new" class="button is-primary">Log Your First Mission</a>
+  </div>
+</div>
 {{/if}}
+
+{{!-- Editable Missions (where user is an editor but not creator) --}}
+{{#if editableMissions.length}}
+<div class="block mt-5 table-container">
+  <h3 class="title is-4">Missions You Can Edit</h3>
+  <p class="subtitle is-6 has-text-grey">Missions where you've been added as an editor</p>
+  <table class="table is-fullwidth is-striped is-hoverable app-table">
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Date</th>
+        <th>Conduit</th>
+        <th>Status</th>
+        <th>Characters</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each editableMissions}}
+      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}" data-conduit="{{this.host_name}}">
+        <td>
+          {{this.name}}
+          {{#if this.media_url}}
+          <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
+          {{/if}}
+          <span class="tag is-info is-light ml-2">Editor</span>
+        </td>
+        {{#if profile}}
+        <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
+        {{else}}
+        <td>{{date this.date "dddd, MMMM Do YYYY, h:mm A"}}</td>
+        {{/if}}
+        <td>{{this.host_name}}</td>
+        <td>{{this.outcome}}</td>
+        <td>
+          {{#if this.characters.length}}
+          {{#each this.characters}}
+          <a href="/characters/{{this.id}}">{{this.name}}</a>{{#unless @last}}, {{/unless}}
+          {{/each}}
+          {{/if}}
+          {{#unless this.characters.length}}
+          -
+          {{/unless}}
+        </td>
+        <td>
+          <div class="buttons are-small">
+            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
+          </div>
+        </td>
+      </tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+{{/if}}
+
+<script>
+(function() {
+  var nameInput = document.getElementById('filterName');
+  var charInput = document.getElementById('filterCharacter');
+  var conduitInput = document.getElementById('filterConduit');
+  var outcomeSelect = document.getElementById('filterOutcome');
+  if (!nameInput) return;
+
+  var timer;
+  function filterRows() {
+    var name = nameInput.value.toLowerCase();
+    var char = charInput.value.toLowerCase();
+    var conduit = conduitInput.value.toLowerCase();
+    var outcome = outcomeSelect.value;
+    var rows = document.querySelectorAll('.mission-row');
+
+    rows.forEach(function(row) {
+      var match = true;
+      if (name && row.dataset.name.toLowerCase().indexOf(name) === -1) match = false;
+      if (char && row.dataset.characters.toLowerCase().indexOf(char) === -1) match = false;
+      if (conduit && (row.dataset.conduit || '').toLowerCase().indexOf(conduit) === -1) match = false;
+      if (outcome && row.dataset.outcome !== outcome) match = false;
+      row.style.display = match ? '' : 'none';
+    });
+  }
+
+  function debounced() {
+    clearTimeout(timer);
+    timer = setTimeout(filterRows, 150);
+  }
+
+  nameInput.addEventListener('input', debounced);
+  charInput.addEventListener('input', debounced);
+  conduitInput.addEventListener('input', debounced);
+  outcomeSelect.addEventListener('change', filterRows);
+})();
+</script>

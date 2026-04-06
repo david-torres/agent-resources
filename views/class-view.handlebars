@@ -1,18 +1,18 @@
 {{> breadcrumbs}}
 <h1 class="title is-2">{{class.name}}
   {{#if (eq class.status 'release')}}
-  <span class="tag is-success is-light" style="margin-left: 0.5rem;">
+  <span class="tag is-success is-light ml-2">
     <span class="icon is-small"><i class="fas fa-star"></i></span>
   </span>
   {{/if}}
   {{#if (eq class.status 'beta')}}
-  <span class="tag is-warning is-light" style="margin-left: 0.5rem;">
+  <span class="tag is-warning is-light ml-2">
     <span class="icon is-small"><i class="fas fa-flask"></i></span>
     <span>{{class.status}}</span>
   </span>
   {{/if}}
   {{#if (eq class.status 'alpha')}}
-  <span class="tag is-danger is-light" style="margin-left: 0.5rem;">
+  <span class="tag is-danger is-light ml-2">
     <span class="icon is-small"><i class="fas fa-flask"></i></span>
     <span>{{class.status}}</span>
   </span>

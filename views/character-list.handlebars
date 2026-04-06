@@ -6,13 +6,11 @@
 </div>
 
 {{#if characters.length}}
-<div class="block">
+<div class="block table-container">
   <table class="table is-fullwidth is-striped is-hoverable">
     <thead>
       <tr>
-        <th>
-          <div style="width:600px;">Name</div>
-        </th>
+        <th>Name</th>
         <th>Actions</th>
       </tr>
     </thead>
@@ -29,7 +27,7 @@
         </td>
         <td>
           <div class="buttons are-small">
-            <a href="/characters/{{this.id}}/{{this.name}}" class="button is-secondary">View</a>
+            <a href="/characters/{{this.id}}/{{this.name}}" class="button is-light">View</a>
             <a href="/characters/{{this.id}}/edit" class="button is-warning">Edit</a>
             <button class="button is-danger" hx-delete="/characters/{{this.id}}" hx-target="closest tr"
               hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this character?">Delete</button>
@@ -41,5 +39,13 @@
   </table>
 </div>
 {{else}}
-<p class="has-text-centered">You haven't created any characters yet.</p>
+<div class="notification is-light has-text-centered">
+  <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-users fa-2x"></i></span></p>
+  <p class="is-size-5 mb-2">No characters yet</p>
+  <p class="mb-4">Create an Enclave character to track stats, gear, abilities, and mission history.</p>
+  <div class="buttons is-centered">
+    <a href="/characters/new" class="button is-primary">Create Your First Character</a>
+    <a href="/characters/import" class="button is-info is-outlined">Import Character</a>
+  </div>
+</div>
 {{/if}}

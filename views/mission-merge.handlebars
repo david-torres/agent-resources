@@ -1,0 +1,141 @@
+{{> breadcrumbs}}
+
+<h2 class="title is-2">Merge Missions</h2>
+
+<div class="notification is-warning">
+  <strong>Warning:</strong> This will combine the two missions below into one. The secondary mission will be deleted.
+  This action cannot be undone.
+</div>
+
+<div class="columns">
+  {{!-- Primary Mission --}}
+  <div class="column">
+    <div class="box">
+      <h3 class="title is-4">
+        <span class="tag is-success mr-2">Primary</span>
+        {{preview.primary.name}}
+      </h3>
+      <p class="subtitle is-6">This mission will be kept</p>
+      
+      <div class="content">
+        <p><strong>Date:</strong> {{date preview.primary.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
+        <p><strong>Outcome:</strong> {{preview.primary.outcome}}</p>
+        
+        {{#if preview.primary.summary}}
+        <p><strong>Summary:</strong></p>
+        <blockquote>{{preview.primary.summary}}</blockquote>
+        {{/if}}
+        
+        <p><strong>Characters:</strong></p>
+        {{#if preview.primary.characters.length}}
+        <ul>
+          {{#each preview.primary.characters}}
+          <li>{{this.name}}</li>
+          {{/each}}
+        </ul>
+        {{else}}
+        <p class="has-text-grey">No characters</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+
+  {{!-- Secondary Mission --}}
+  <div class="column">
+    <div class="box">
+      <h3 class="title is-4">
+        <span class="tag is-danger mr-2">Secondary</span>
+        {{preview.secondary.name}}
+      </h3>
+      <p class="subtitle is-6">This mission will be deleted</p>
+      
+      <div class="content">
+        <p><strong>Date:</strong> {{date preview.secondary.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
+        <p><strong>Outcome:</strong> {{preview.secondary.outcome}}</p>
+        
+        {{#if preview.secondary.summary}}
+        <p><strong>Summary:</strong></p>
+        <blockquote>{{preview.secondary.summary}}</blockquote>
+        {{/if}}
+        
+        <p><strong>Characters:</strong></p>
+        {{#if preview.secondary.characters.length}}
+        <ul>
+          {{#each preview.secondary.characters}}
+          <li>{{this.name}}</li>
+          {{/each}}
+        </ul>
+        {{else}}
+        <p class="has-text-grey">No characters</p>
+        {{/if}}
+      </div>
+    </div>
+  </div>
+</div>
+
+{{!-- Merged Preview --}}
+<div class="box mt-5">
+  <h3 class="title is-4">
+    <span class="tag is-info mr-2">Result</span>
+    Merged Mission Preview
+  </h3>
+  
+  <div class="content">
+    <p><strong>Name:</strong> {{preview.merged.name}}</p>
+    <p><strong>Date:</strong> {{date preview.merged.date "dddd, MMMM Do YYYY, h:mm A"}} 
+      <span class="has-text-grey">(using earlier date)</span>
+    </p>
+    <p><strong>Outcome:</strong> {{preview.merged.outcome}}</p>
+    
+    {{#if preview.merged.media_url}}
+    <p><strong>Media URL:</strong> {{preview.merged.media_url}}</p>
+    {{/if}}
+    
+    {{#if preview.merged.summary}}
+    <p><strong>Combined Summary:</strong></p>
+    <blockquote class="merged-summary">{{preview.merged.summary}}</blockquote>
+    {{/if}}
+    
+    <p><strong>All Characters ({{preview.merged.characters.length}}):</strong></p>
+    {{#if preview.merged.characters.length}}
+    <ul>
+      {{#each preview.merged.characters}}
+      <li>{{this.name}}</li>
+      {{/each}}
+    </ul>
+    {{else}}
+    <p class="has-text-grey">No characters</p>
+    {{/if}}
+    
+    {{#if preview.merged.unregistered_character_names.length}}
+    <p><strong>Unregistered Characters:</strong></p>
+    <ul>
+      {{#each preview.merged.unregistered_character_names}}
+      <li class="has-text-grey">{{this}}</li>
+      {{/each}}
+    </ul>
+    {{/if}}
+  </div>
+</div>
+
+{{!-- Actions --}}
+<div class="field is-grouped mt-5">
+  <div class="control">
+    <button class="button is-danger" 
+      hx-post="/missions/{{primaryId}}/merge/{{secondaryId}}"
+      hx-confirm="Are you sure you want to merge these missions? This cannot be undone.">
+      <span class="icon"><i class="fas fa-code-merge"></i></span>
+      <span>Confirm Merge</span>
+    </button>
+  </div>
+  <div class="control">
+    <a class="button is-light" href="/missions">Cancel</a>
+  </div>
+</div>
+
+<style>
+  .merged-summary {
+    white-space: pre-wrap;
+  }
+</style>
+

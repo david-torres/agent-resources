@@ -11,7 +11,7 @@
 {{/if}}
 
 {{#if missions.length}}
-<div class="block">
+<div class="block table-container">
   <table class="table is-fullwidth is-striped is-hoverable">
     <thead>
       <tr>
@@ -55,7 +55,7 @@
         <td>{{#if this.summary}}{{{markdown this.summary}}}{{else}}-{{/if}}</td>
         <td>
           <div class="buttons are-small">
-            <a href="/missions/{{this.id}}" class="button is-secondary">View</a>
+            <a href="/missions/{{this.id}}" class="button is-light">View</a>
             {{#if (eq this.creator_id ../profile.id)}}
             <a href="/missions/{{this.id}}/edit" class="button is-warning">Edit</a>
             {{/if}}
@@ -68,7 +68,9 @@
   </table>
 </div>
 {{else}}
-<div class="notification">
-  <p class="has-text-centered">No missions yet</p>
+<div class="notification is-light has-text-centered">
+  <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-scroll fa-2x"></i></span></p>
+  <p class="is-size-5 mb-2">No missions yet</p>
+  <p>Missions for {{character.name}} will appear here once they've been on an adventure.</p>
 </div>
 {{/if}}

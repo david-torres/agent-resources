@@ -18,7 +18,7 @@
   <button class="button is-primary" hx-get="/profile/edit" hx-target="#profile-info" hx-swap="innerHTML">
     Edit Profile
   </button>
-  <a href="/profile/view/{{profile.name}}" class="button is-secondary">View Profile</a>
+  <a href="/profile/view/{{profile.name}}" class="button is-light">View Profile</a>
 </div>
 
 {{#if unlockedClasses}}
@@ -58,9 +58,10 @@
     </table>
   </div>
   {{else}}
-  <div class="notification is-light">
-    You haven't unlocked any classes yet.
-    <a href="/classes/redeem/bulk" class="button is-small is-link ml-2">Redeem Unlock Codes</a>
+  <div class="notification is-light has-text-centered">
+    <p class="mb-2">You haven't unlocked any classes yet.</p>
+    <p>Unlock codes grant access to official Enclave class PDFs.</p>
+    <a href="/classes/redeem/bulk" class="button is-link mt-3">Redeem Unlock Codes</a>
   </div>
   {{/if}}
   <div class="buttons is-right">

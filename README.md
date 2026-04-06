@@ -41,6 +41,19 @@ To start the application in production mode:
 npm run start
 ```
 
+## Agent Tokens
+
+Long-lived personal access tokens can be created per user for agent integrations.
+
+- `POST /profile/agent-tokens` with `{ "name": "My agent" }` creates a token and returns the raw token once.
+- `GET /profile/agent-tokens` lists active tokens for the signed-in user.
+- `DELETE /profile/agent-tokens/:id` revokes a token.
+- `GET /api/agent/me` verifies a token sent via `X-Agent-Token` or `Authorization: Bearer ...`.
+- `GET /api/agent/classes` returns the class list visible to that user.
+- `GET /api/agent/classes/:id` returns full details or teaser-only details based on the same release/unlock rules as the web app.
+
+Server-side agent routes should use `SUPABASE_SERVICE_ROLE_KEY` so token-authenticated requests can evaluate ownership and unlock state without a Supabase browser session.
+
 ## Dependencies
 
 This project is built using:

@@ -9,7 +9,7 @@
     </button>
   </div>
   <hr/>
-  <form id="sign-in" method="POST" hx-on:submit="htmx.trigger('#sign-in', 'htmx:abort'); App.signIn(event);">
+  <form id="sign-in" method="POST" hx-boost="false" hx-on:submit="event.preventDefault(); event.stopPropagation(); App.signIn(event);">
     <div class="field">
       <label class="label" for="sign-in-email">Email</label>
       <div class="control">

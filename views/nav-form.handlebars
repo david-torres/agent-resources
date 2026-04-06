@@ -19,7 +19,7 @@
 <div class="box">
   <form method="post" action="{{#if navItem}}/nav/{{navItem.id}}{{else}}/nav{{/if}}" id="nav-form">
     <div class="field">
-      <label class="label">Label <span class="has-text-danger">*</span></label>
+      <label class="label" for="label">Label <span class="has-text-danger">*</span></label>
       <div class="control">
         <input class="input" type="text" name="label" id="label" value="{{navItem.label}}" placeholder="Navigation Label" required>
       </div>
@@ -27,7 +27,7 @@
     </div>
 
     <div class="field">
-      <label class="label">Type <span class="has-text-danger">*</span></label>
+      <label class="label" for="type">Type <span class="has-text-danger">*</span></label>
       <div class="control">
         <div class="select is-fullwidth">
           <select name="type" id="type" required>
@@ -42,7 +42,7 @@
 
     <!-- URL field (shown for 'link' type) -->
     <div class="field" id="url-field" style="display: {{#if (or (not navItem) (eq navItem.type 'link'))}}block{{else}}none{{/if}};">
-      <label class="label">URL <span class="has-text-danger">*</span></label>
+      <label class="label" for="url">URL <span class="has-text-danger">*</span></label>
       <div class="control">
         <input class="input" type="text" name="url" id="url" value="{{navItem.url}}" placeholder="/characters or https://example.com">
       </div>
@@ -51,7 +51,7 @@
 
     <!-- Page field (shown for 'page' type) -->
     <div class="field" id="page-field" style="display: {{#if (eq navItem.type 'page')}}block{{else}}none{{/if}};">
-      <label class="label">Page <span class="has-text-danger">*</span></label>
+      <label class="label" for="page_id">Page <span class="has-text-danger">*</span></label>
       <div class="control">
         <div class="select is-fullwidth">
           <select name="page_id" id="page_id">
@@ -70,7 +70,7 @@
     </div>
 
     <div class="field">
-      <label class="label">Icon</label>
+      <label class="label" for="icon">Icon</label>
       <div class="control">
         <input class="input" type="text" name="icon" id="icon" value="{{navItem.icon}}" placeholder="fas fa-home">
       </div>
@@ -78,7 +78,7 @@
     </div>
 
     <div class="field">
-      <label class="label">Parent Item</label>
+      <label class="label" for="parent_id">Parent Item</label>
       <div class="control">
         <div class="select is-fullwidth">
           <select name="parent_id" id="parent_id">
@@ -93,7 +93,7 @@
     </div>
 
     <div class="field">
-      <label class="label">Position</label>
+      <label class="label" for="position">Position</label>
       <div class="control">
         <input class="input" type="number" name="position" id="position" value="{{navItem.position}}" placeholder="0" min="0">
       </div>
@@ -103,7 +103,7 @@
     <div class="columns">
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Visibility</label>
+          <label class="label" for="requires_auth">Visibility</label>
           <div class="control">
             <label class="checkbox">
               <input type="checkbox" name="requires_auth" id="requires_auth" {{#if navItem.requires_auth}}checked{{/if}}>
@@ -115,7 +115,7 @@
       </div>
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Admin Only</label>
+          <label class="label" for="requires_admin">Admin Only</label>
           <div class="control">
             <label class="checkbox">
               <input type="checkbox" name="requires_admin" id="requires_admin" {{#if navItem.requires_admin}}checked{{/if}}>
@@ -127,7 +127,7 @@
       </div>
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">Status</label>
+          <label class="label" for="is_active">Status</label>
           <div class="control">
             <label class="checkbox">
               <input type="checkbox" name="is_active" id="is_active" {{#if (or (not navItem) navItem.is_active)}}checked{{/if}}>

@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring } = require('./util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -16,6 +16,7 @@ const classesRoutes = require('./routes/classes');
 const libraryRoutes = require('./routes/library');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
+const agentRoutes = require('./routes/agent');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -42,7 +43,8 @@ app.engine('handlebars', exphbs.engine({
       setVariable,
       dump,
       videoEmbed,
-      isSupportedVideoUrl
+      isSupportedVideoUrl,
+      substring
   }
 }));
 app.set('view engine', 'handlebars');
@@ -71,6 +73,7 @@ app.use('/classes', classesRoutes);
 app.use('/library', libraryRoutes);
 app.use('/pages', pagesRoutes);
 app.use('/nav', navRoutes);
+app.use('/api/agent', agentRoutes);
 
 // Start server
 app.listen(PORT, () => {

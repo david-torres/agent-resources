@@ -8,6 +8,7 @@ const pdfModel = require('../models/pdf');
 const rulesModel = require('../models/rules');
 const pagesModel = require('../models/pages');
 const navModel = require('../models/nav');
+const agentTokenModel = require('../models/agent-token');
 
 module.exports = {
   ...auth,
@@ -19,5 +20,6 @@ module.exports = {
   ...pdfModel,
   ...rulesModel,
   ...pagesModel,
-  ...navModel
+  ...navModel,
+  ...agentTokenModel
 };

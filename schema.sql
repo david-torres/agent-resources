@@ -80,6 +80,15 @@ CREATE TABLE mission_characters (
   CONSTRAINT unique_mission_character UNIQUE (mission_id, character_id)
 );
 
+-- mission_editors junction table for collaborative editing
+CREATE TABLE mission_editors (
+    mission_id UUID NOT NULL REFERENCES missions(id) ON DELETE CASCADE,
+    profile_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    added_by UUID REFERENCES profiles(id),
+    added_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (mission_id, profile_id)
+);
+
 -- traits table
 CREATE TABLE traits (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
@@ -180,6 +189,9 @@ CREATE TABLE IF NOT EXISTS classes (
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS teaser text;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- Class unlocks table
 CREATE TABLE IF NOT EXISTS class_unlocks (
@@ -205,6 +217,24 @@ CREATE TABLE IF NOT EXISTS class_unlock_codes (
 );
 
 ALTER TABLE class_unlock_codes ENABLE ROW LEVEL SECURITY;
+
+-- Long-lived personal access tokens for agent integrations
+CREATE TABLE IF NOT EXISTS agent_api_tokens (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    profile_id uuid NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    name text NOT NULL,
+    token_hash text NOT NULL UNIQUE,
+    token_hint text NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    last_used_at timestamptz,
+    revoked_at timestamptz
+);
+
+CREATE INDEX IF NOT EXISTS idx_agent_api_tokens_user_profile
+    ON agent_api_tokens(user_id, profile_id, created_at DESC);
+
+ALTER TABLE agent_api_tokens ENABLE ROW LEVEL SECURITY;
 
 -- Rules PDF catalog
 CREATE TABLE IF NOT EXISTS rules_pdfs (
@@ -369,6 +399,12 @@ CREATE POLICY "class_unlock_codes_admin_all"
     USING (is_admin())
     WITH CHECK (is_admin());
 
+DROP POLICY IF EXISTS "Users can manage own agent tokens" ON agent_api_tokens;
+CREATE POLICY "Users can manage own agent tokens"
+    ON agent_api_tokens FOR ALL
+    USING (user_id = auth.uid() OR is_admin())
+    WITH CHECK (user_id = auth.uid() OR is_admin());
+
 -- Secure, atomic redemption function for unlock codes
 CREATE OR REPLACE FUNCTION redeem_class_code(p_code text)
 RETURNS uuid
@@ -494,6 +530,7 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE characters ENABLE ROW LEVEL SECURITY;
 ALTER TABLE missions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE mission_characters ENABLE ROW LEVEL SECURITY;
+ALTER TABLE mission_editors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE traits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_gear ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_abilities ENABLE ROW LEVEL SECURITY;
@@ -517,6 +554,48 @@ BEGIN
 
   RETURN COALESCE(v_is_admin, false);
 END;
+$$;
+
+-- Helper functions to break RLS recursion between missions/mission_editors/mission_characters
+CREATE OR REPLACE FUNCTION is_mission_editor(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM mission_editors me
+    JOIN profiles p ON p.id = me.profile_id
+    WHERE me.mission_id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_mission_owner_or_host(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    JOIN profiles p ON (p.id = m.creator_id OR p.id = m.host_id)
+    WHERE m.id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_mission_public(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    WHERE m.id = p_mission_id
+      AND m.is_public = true
+  );
 $$;
 
 -- Profiles policies
@@ -754,6 +833,7 @@ CREATE POLICY "class_abilities_mutate"
 -- Missions policies
 DROP POLICY IF EXISTS "missions_public_select" ON missions;
 DROP POLICY IF EXISTS "missions_owner_host_admin_select" ON missions;
+DROP POLICY IF EXISTS "missions_owner_host_editor_admin_select" ON missions;
 DROP POLICY IF EXISTS "missions_insert" ON missions;
 DROP POLICY IF EXISTS "missions_update" ON missions;
 DROP POLICY IF EXISTS "missions_delete" ON missions;
@@ -762,15 +842,13 @@ CREATE POLICY "missions_public_select"
     ON missions FOR SELECT
     USING (is_public = true);
 
-CREATE POLICY "missions_owner_host_admin_select"
+-- Owners, hosts, editors, and admins can view private missions
+CREATE POLICY "missions_owner_host_editor_admin_select"
     ON missions FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid() OR is_admin()
-            )
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
+        OR is_admin()
     );
 
 CREATE POLICY "missions_insert"
@@ -784,33 +862,28 @@ CREATE POLICY "missions_insert"
         )
     );
 
+-- Owners, hosts, editors, and admins can update missions
 CREATE POLICY "missions_update"
     ON missions FOR UPDATE
     USING (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid() OR is_admin()
-            )
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
+        OR is_admin()
     )
     WITH CHECK (
-        EXISTS (
-            SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid() OR is_admin()
-            )
-        )
+        is_mission_owner_or_host(id)
+        OR is_mission_editor(id)
+        OR is_admin()
     );
 
+-- Only creator can delete missions (not editors or host)
 CREATE POLICY "missions_delete"
     ON missions FOR DELETE
     USING (
         EXISTS (
             SELECT 1 FROM profiles p
-            WHERE (p.id = creator_id OR p.id = host_id) AND (
-                p.user_id = auth.uid() OR is_admin()
-            )
+            WHERE p.id = creator_id
+              AND (p.user_id = auth.uid() OR is_admin())
         )
     );
 
@@ -821,45 +894,78 @@ DROP POLICY IF EXISTS "mission_characters_mutate" ON mission_characters;
 CREATE POLICY "mission_characters_select"
     ON mission_characters FOR SELECT
     USING (
-        EXISTS (
-            SELECT 1
-            FROM missions m
-            JOIN characters c ON c.id = mission_characters.character_id
-            JOIN profiles pm ON pm.id = m.creator_id
+        is_mission_public(mission_id)
+        OR is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
             JOIN profiles pc ON pc.id = c.creator_id
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                m.is_public = true OR pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
-              )
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
         )
+        OR is_admin()
     );
 
+-- Creators, hosts, editors, and character owners can mutate mission_characters
 CREATE POLICY "mission_characters_mutate"
     ON mission_characters FOR ALL
     USING (
-        EXISTS (
-            SELECT 1
-            FROM missions m
-            JOIN characters c ON c.id = mission_characters.character_id
-            JOIN profiles pm ON pm.id = m.creator_id
+        is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
             JOIN profiles pc ON pc.id = c.creator_id
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
-              )
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
         )
+        OR is_admin()
     )
     WITH CHECK (
-        EXISTS (
-            SELECT 1
-            FROM missions m
-            JOIN characters c ON c.id = mission_characters.character_id
-            JOIN profiles pm ON pm.id = m.creator_id
+        is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR EXISTS (
+            SELECT 1 FROM characters c
             JOIN profiles pc ON pc.id = c.creator_id
-            WHERE m.id = mission_characters.mission_id
-              AND (
-                pm.user_id = auth.uid() OR pc.user_id = auth.uid() OR is_admin()
-              )
+            WHERE c.id = mission_characters.character_id
+              AND pc.user_id = auth.uid()
+        )
+        OR is_admin()
+    );
+
+-- Mission editors policies
+DROP POLICY IF EXISTS "mission_editors_select" ON mission_editors;
+DROP POLICY IF EXISTS "mission_editors_insert" ON mission_editors;
+DROP POLICY IF EXISTS "mission_editors_delete" ON mission_editors;
+
+-- Anyone can see editors of public missions, or missions they're involved with
+-- Uses SECURITY DEFINER helpers to avoid infinite recursion with missions policies
+CREATE POLICY "mission_editors_select"
+    ON mission_editors FOR SELECT
+    USING (
+        is_mission_public(mission_id)
+        OR is_mission_owner_or_host(mission_id)
+        OR is_mission_editor(mission_id)
+        OR is_admin()
+    );
+
+-- Mission creator or host can add editors
+-- "existing editors can add" is enforced in application code
+CREATE POLICY "mission_editors_insert"
+    ON mission_editors FOR INSERT
+    WITH CHECK (
+        is_mission_owner_or_host(mission_id)
+        OR is_admin()
+    );
+
+-- Only mission creator can remove editors
+CREATE POLICY "mission_editors_delete"
+    ON mission_editors FOR DELETE
+    USING (
+        EXISTS (
+            SELECT 1 FROM missions m
+            JOIN profiles p ON p.id = m.creator_id
+            WHERE m.id = mission_editors.mission_id
+              AND (p.user_id = auth.uid() OR is_admin())
         )
     );
 
