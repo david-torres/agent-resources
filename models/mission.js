@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 
 const getMissions = async () => {
   const { data, error } = await supabase
@@ -82,7 +82,7 @@ const getOwnMissions = async (profile) => {
 
 const createMission = async (missionData, profile) => {
   missionData.creator_id = profile.id;
-  const { data, error } = await supabase.from('missions').insert(missionData).select();
+  const { data, error } = await supabaseAdmin.from('missions').insert(missionData).select();
   return { data, error };
 };
 
@@ -93,7 +93,7 @@ const updateMission = async (id, missionData, profile) => {
     return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('missions')
     .update(missionData)
     .eq('id', id)
@@ -102,7 +102,7 @@ const updateMission = async (id, missionData, profile) => {
 };
 
 const deleteMission = async (id, profile) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('missions')
     .delete()
     .eq('id', id)
@@ -111,7 +111,7 @@ const deleteMission = async (id, profile) => {
 };
 
 const addCharacterToMission = async (missionId, characterId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('mission_characters')
     .upsert({ mission_id: missionId, character_id: characterId })
     .select();
@@ -119,7 +119,7 @@ const addCharacterToMission = async (missionId, characterId) => {
 };
 
 const removeCharacterFromMission = async (missionId, characterId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('mission_characters')
     .delete()
     .eq('mission_id', missionId)
@@ -147,7 +147,7 @@ const setUnregisteredCharacterNames = async (missionId, names, profile) => {
     .map(n => (typeof n === 'string' ? n.trim() : ''))
     .filter(n => n.length > 0);
   
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('missions')
     .update({ unregistered_character_names: cleanedNames })
     .eq('id', missionId)
@@ -425,7 +425,7 @@ const getMissionEditors = async (missionId) => {
  * Add an editor to a mission
  */
 const addMissionEditor = async (missionId, profileId, addedBy) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('mission_editors')
     .upsert({
       mission_id: missionId,
@@ -440,7 +440,7 @@ const addMissionEditor = async (missionId, profileId, addedBy) => {
  * Remove an editor from a mission
  */
 const removeMissionEditor = async (missionId, profileId) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('mission_editors')
     .delete()
     .eq('mission_id', missionId)
@@ -459,7 +459,6 @@ const canEditMission = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
 
   // First check if user is creator or host
-  // Using service role client, so RLS is bypassed for this permission check
   const { data: mission, error: missionError } = await supabase
     .from('missions')
     .select('creator_id, host_id')
@@ -705,7 +704,7 @@ const mergeMissions = async (primaryId, secondaryId, profile) => {
     const mergedUnregistered = [...new Set([...primaryUnreg, ...secondaryUnreg])];
 
     // Update primary mission
-    const { error: updateError } = await supabase
+    const { error: updateError } = await supabaseAdmin
       .from('missions')
       .update({
         date: earlierDate,
@@ -743,7 +742,7 @@ const mergeMissions = async (primaryId, secondaryId, profile) => {
     }
 
     // Delete secondary mission
-    const { error: deleteError } = await supabase
+    const { error: deleteError } = await supabaseAdmin
       .from('missions')
       .delete()
       .eq('id', secondaryId);
