@@ -22,6 +22,11 @@
       {{else}}
       <p><strong>Date:</strong> {{date mission.date "dddd, MMMM Do YYYY, h:mm A"}}</p>
       {{/if}}
+      {{#if mission.host}}
+      <p><strong>Conduit:</strong> <a href="/profile/view/{{encodeURIComponentH mission.host.name}}">{{mission.host.name}}</a></p>
+      {{else if mission.host_name}}
+      <p><strong>Conduit:</strong> {{mission.host_name}}</p>
+      {{/if}}
       <p><strong>Status:</strong> {{mission.outcome}}</p>
       <p><strong>Focus Words:</strong> {{mission.focus_words}}</p>
     </div>

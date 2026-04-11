@@ -37,19 +37,23 @@ const getMission = async (id) => {
           name,
           is_deceased
         )
+      ),
+      host:profiles!missions_host_id_fkey(
+        id,
+        name
       )
     `)
     .eq('id', id)
     .single();
-  
+
   if (error) return { data: null, error };
-  
+
   // Transform the nested data structure
   const transformedData = {
     ...data,
     characters: data.characters.map(mc => mc.character)
   };
-  
+
   return { data: transformedData, error };
 };
 

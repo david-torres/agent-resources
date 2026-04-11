@@ -169,6 +169,11 @@ router.post('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { characters, ...missionData } = req.body;
   
+  // Normalize host_id: empty string means no linked profile
+  if (!missionData.host_id) {
+    missionData.host_id = null;
+  }
+
   // Parse date from datetime-local input format
   let missionDate = missionData.date;
   if (missionDate && !missionDate.includes('T')) {
@@ -271,6 +276,11 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   let { characters, unregistered_character_names, ...missionData } = req.body;
 
   delete missionData.q;
+
+  // Normalize host_id: empty string means no linked profile
+  if (!missionData.host_id) {
+    missionData.host_id = null;
+  }
 
   if (missionData.is_public === 'on') {
     missionData.is_public = true

@@ -20,18 +20,74 @@
   {{!-- conduit --}}
   <div class="field">
     <label class="label">Conduit</label>
-    <div class="control">
-      {{!-- <div class="select"> --}}
-          {{!-- if host get host.name other use mission.host_name --}}
-          {{#if host}}
-            <input type="hidden" name="host_id" value="{{host.id}}">
-            <input type="text" class="input" name="host_name" value="{{host.name}}" disabled>
-          {{else}}
-            <input type="text" class="input" name="host_name" value="{{host.name}}">
-          {{/if}}
-      {{!-- </div> --}}
+    <input type="hidden" name="host_id" id="conduitHostId" value="{{mission.host.id}}">
+    <input type="hidden" name="host_name" id="conduitHostName" value="{{#if mission.host}}{{mission.host.name}}{{else}}{{mission.host_name}}{{/if}}">
+    <div id="conduitDisplay" class="field has-addons" {{#unless mission.host}}style="display:none"{{/unless}}>
+      <div class="control is-expanded">
+        <input type="text" class="input" id="conduitDisplayName" value="{{mission.host.name}}" disabled>
+      </div>
+      <div class="control">
+        <button type="button" class="button is-danger is-light" id="conduitClearBtn">
+          <span class="icon"><i class="fas fa-times"></i></span>
+        </button>
+      </div>
+    </div>
+    <div id="conduitSearch" {{#if mission.host}}style="display:none"{{/if}}>
+      <div class="control">
+        <input class="input" type="text" id="conduitSearchInput"
+          placeholder="Search profiles or type a name..."
+          value="{{#unless mission.host}}{{mission.host_name}}{{/unless}}"
+          hx-get="/profile/search"
+          hx-trigger="input changed delay:300ms"
+          hx-target="#conduitSearchResults"
+          hx-swap="innerHTML"
+          hx-params="none"
+          hx-vals='js:{"q": document.getElementById("conduitSearchInput").value}'>
+      </div>
+      <div id="conduitSearchResults"></div>
     </div>
   </div>
+
+  <script>
+    (function() {
+      var searchResults = document.getElementById('conduitSearchResults');
+      var display = document.getElementById('conduitDisplay');
+      var search = document.getElementById('conduitSearch');
+      var searchInput = document.getElementById('conduitSearchInput');
+      var hostIdInput = document.getElementById('conduitHostId');
+      var hostNameInput = document.getElementById('conduitHostName');
+      var displayName = document.getElementById('conduitDisplayName');
+
+      if (searchResults) {
+        searchResults.addEventListener('click', function(e) {
+          var item = e.target.closest('.profile-item');
+          if (item) {
+            hostIdInput.value = item.dataset.profileId;
+            hostNameInput.value = item.dataset.profileName;
+            displayName.value = item.dataset.profileName;
+            display.style.display = '';
+            search.style.display = 'none';
+            searchInput.value = '';
+            searchResults.innerHTML = '';
+          }
+        });
+      }
+
+      searchInput.addEventListener('input', function() {
+        hostNameInput.value = searchInput.value;
+        hostIdInput.value = '';
+      });
+
+      document.getElementById('conduitClearBtn').addEventListener('click', function() {
+        hostIdInput.value = '';
+        hostNameInput.value = '';
+        displayName.value = '';
+        display.style.display = 'none';
+        search.style.display = '';
+        searchInput.focus();
+      });
+    })();
+  </script>
 
   <div class="field">
     <label class="label" for="mission-focus-words">Focus Words</label>
