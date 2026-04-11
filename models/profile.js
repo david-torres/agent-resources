@@ -131,7 +131,7 @@ const setDiscordId = async (user_id, discord_id, discord_email = null) => {
  * Search for profiles by name (for adding editors, etc.)
  */
 const searchProfiles = async (query, limit = 10) => {
-  if (!query || query.trim().length < 2) {
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
     return { data: [], error: null };
   }
 

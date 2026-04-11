@@ -1,6 +1,8 @@
 const express = require('express');
 const multer = require('multer');
 const router = express.Router();
+const { validateIdParam } = require('../util/validate');
+router.param('id', validateIdParam);
 const {
     getClasses,
     getClass,

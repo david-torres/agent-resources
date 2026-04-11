@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { validateIdParam } = require('../util/validate');
+router.param('id', validateIdParam);
 const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles } = require('../util/supabase');
 const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
