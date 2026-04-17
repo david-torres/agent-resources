@@ -224,8 +224,8 @@ const updateLfgPost = async (id, postReq, profile) => {
 
 const deleteLfgPost = async (id, profile) => {
   const { data: post, error: postError } = await getLfgPost(id);
-  if (postError) return { data: null, error: postError };
-  if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
+  if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
+  if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
 
   const { data, error } = await supabase.from('lfg_posts').delete().eq('id', id).eq('creator_id', profile.id);
   return { data, error };
