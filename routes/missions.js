@@ -215,6 +215,29 @@ router.post('/', isAuthenticated, async (req, res) => {
   return res.header('HX-Location', `/missions/${mission.id}/edit`).send();
 });
 
+// ============================================
+// Similar Missions / Deduplication Endpoints
+// ============================================
+
+// Search for similar missions (for deduplication)
+router.get('/similar', isAuthenticated, async (req, res) => {
+  const { date, name, exclude_id } = req.query;
+
+  if (!date) {
+    return res.status(400).send('Date is required');
+  }
+
+  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id);
+  if (error) {
+    return res.status(400).send(error.message || error);
+  }
+
+  res.render('partials/similar-missions', {
+    layout: false,
+    missions
+  });
+});
+
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
@@ -543,29 +566,6 @@ router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
     editors,
     missionId: id,
     canRemoveEditors: true
-  });
-});
-
-// ============================================
-// Similar Missions / Deduplication Endpoints
-// ============================================
-
-// Search for similar missions (for deduplication)
-router.get('/similar', isAuthenticated, async (req, res) => {
-  const { date, name, exclude_id } = req.query;
-
-  if (!date) {
-    return res.status(400).send('Date is required');
-  }
-
-  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id);
-  if (error) {
-    return res.status(400).send(error.message || error);
-  }
-
-  res.render('partials/similar-missions', {
-    layout: false,
-    missions
   });
 });
 
