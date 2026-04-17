@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 moment.tz.setDefault('UTC');
@@ -155,7 +155,8 @@ const createLfgPost = async (postReq, profile) => {
   postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
-  const { data: postRows, error } = await supabase
+  // authz: creator_id is set server-side to profile.id above
+  const { data: postRows, error } = await supabaseAdmin
     .from('lfg_posts')
     .insert(postReq)
     .select();
@@ -210,7 +211,8 @@ const updateLfgPost = async (id, postReq, profile) => {
   postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
-  const { data, error } = await supabase
+  // authz: creator_id check above + filter below
+  const { data, error } = await supabaseAdmin
     .from('lfg_posts')
     .update(postReq)
     .eq('id', id)
@@ -227,7 +229,8 @@ const deleteLfgPost = async (id, profile) => {
   if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
   if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
 
-  const { data, error } = await supabase.from('lfg_posts').delete().eq('id', id).eq('creator_id', profile.id);
+  // authz: creator_id check above + filter below
+  const { data, error } = await supabaseAdmin.from('lfg_posts').delete().eq('id', id).eq('creator_id', profile.id);
   return { data, error };
 }
 
@@ -248,7 +251,10 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
     status: 'pending'
   };
 
-  const { data, error } = await supabase.from('lfg_join_requests').insert(joinRequest).select();
+  // authz: profile_id is passed from the calling route/function using the authenticated session.
+  // Character ownership not enforced here — any LFG joiner can reference any character by id.
+  // (Pre-existing behavior; out of scope for this change.)
+  const { data, error } = await supabaseAdmin.from('lfg_join_requests').insert(joinRequest).select();
   return { data, error };
 }
 
@@ -275,7 +281,9 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId) => {
 }
 
 const updateJoinRequest = async (requestId, status) => {
-  const { data, error } = await supabase
+  // authz: caller (routes/lfg.js PUT /:id/requests/:requestId) verifies post.creator_id === profile.id;
+  // also called internally by createLfgPost/updateLfgPost (creator-gated) for auto-approval.
+  const { data, error } = await supabaseAdmin
     .from('lfg_join_requests')
     .update({ status })
     .eq('id', requestId);
@@ -283,7 +291,9 @@ const updateJoinRequest = async (requestId, status) => {
 }
 
 const deleteJoinRequest = async (requestId) => {
-  const { data, error } = await supabase
+  // authz: caller (routes/lfg.js DELETE /:id/join) scopes requestId to the authenticated profile;
+  // also called internally by createLfgPost/updateLfgPost (creator-gated) to clear prior requests.
+  const { data, error } = await supabaseAdmin
     .from('lfg_join_requests')
     .delete()
     .eq('id', requestId);
