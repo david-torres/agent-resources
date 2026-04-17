@@ -148,89 +148,78 @@ const getLfgPost = async (id) => {
 const createLfgPost = async (postReq, profile) => {
   postReq.creator_id = profile.id;
 
-  const characterId = postReq.character;
+  const characterId = postReq.character || null;
   delete postReq.character;
 
-  if (postReq.host_id == 'on') {
-    postReq.host_id = profile.id;
-  } else {
-    postReq.host_id = null;
-  }
-  if (postReq.is_public == 'on') {
-    postReq.is_public = true;
-  } else {
-    postReq.is_public = false;
-  }
-
-  // make sure the date is in UTC
+  postReq.host_id = postReq.host_id === 'on' ? profile.id : null;
+  postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
-  const { data: post, error } = await supabase.from('lfg_posts').insert(postReq).select();
+  const { data: postRows, error } = await supabase
+    .from('lfg_posts')
+    .insert(postReq)
+    .select();
 
-  if (postReq.character) {
-    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestForUserAndPost(profile.id, post.id);
+  if (error || !postRows || postRows.length === 0) {
+    return { data: null, error: error || 'Failed to create LFG post' };
+  }
+  const post = postRows[0];
 
-    if (lfgRequest) {
-      const { data: deleteRequest, error: deleteRequestError } = await deleteJoinRequest(lfgRequest.id);
-      if (deleteRequestError) return { data: null, error: deleteRequestError };
+  if (characterId) {
+    const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profile.id, post.id);
+    if (existingRequest) {
+      const { error: deleteErr } = await deleteJoinRequest(existingRequest.id);
+      if (deleteErr) return { data: null, error: deleteErr };
     }
 
-    const { data: lfgJoin, error: lfgJoinError } = await joinLfgPost(post.id, profile.id, 'player', character);
-    if (lfgJoinError) return { data: null, error: lfgJoinError };
+    const { data: joinRows, error: joinErr } = await joinLfgPost(post.id, profile.id, 'player', characterId);
+    if (joinErr) return { data: null, error: joinErr };
 
-    const { data: joinRequest, error: joinRequestError } = await updateJoinRequest(lfgJoin[0].id, 'approved');
-    if (joinRequestError) return { data: null, error: joinRequestError };
+    const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
+    if (approveErr) return { data: null, error: approveErr };
   }
 
-  return { data: post, error };
+  return { data: post, error: null };
 }
 
 const updateLfgPost = async (id, postReq, profile) => {
   const { data: post, error: postError } = await getLfgPost(id);
-  if (post.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
-  if (postReq.character) {
-    const { data: lfgRequest, error: lfgRequestError } = await getLfgJoinRequestForUserAndPost(profile.id, id);
+  if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
+  if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
 
-    if (lfgRequest) {
-      const { data: deleteRequest, error: deleteRequestError } = await deleteJoinRequest(lfgRequest.id);
-      if (deleteRequestError) return { data: null, error: deleteRequestError };
-    }
-
-    const { data: lfgJoin, error: lfgJoinError } = await joinLfgPost(id, profile.id, 'player', postReq.character);
-    if (lfgJoinError) return { data: null, error: lfgJoinError };
-
-    const { data: joinRequest, error: joinRequestError } = await updateJoinRequest(lfgJoin[0].id, 'approved');
-    if (joinRequestError) return { data: null, error: joinRequestError };
-  }
+  const characterId = postReq.character || null;
   delete postReq.character;
 
-  const creatorName = post.creator_name;
-  const hostName = post.host_name;
-  delete post.creator_name;
-  delete post.host_name;
-  delete post.join_requests;
+  if (characterId) {
+    const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profile.id, id);
+    if (existingRequest) {
+      const { error: deleteErr } = await deleteJoinRequest(existingRequest.id);
+      if (deleteErr) return { data: null, error: deleteErr };
+    }
+    const { data: joinRows, error: joinErr } = await joinLfgPost(id, profile.id, 'player', characterId);
+    if (joinErr) return { data: null, error: joinErr };
+    const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
+    if (approveErr) return { data: null, error: approveErr };
+  }
 
   delete postReq.creator_name;
   delete postReq.host_name;
   delete postReq.join_requests;
-  if (postReq.host_id == 'on') {
-    postReq.host_id = profile.id;
-  } else {
-    postReq.host_id = null;
-  }
 
-  if (postReq.is_public == 'on') {
-    postReq.is_public = true;
-  } else {
-    postReq.is_public = false;
-  }
-
-  // make sure the date is in UTC
+  postReq.host_id = postReq.host_id === 'on' ? profile.id : null;
+  postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
-  const { data, error } = await supabase.from('lfg_posts').update({ ...post, ...postReq }).eq('id', id).eq('creator_id', profile.id).select();
+  const { data, error } = await supabase
+    .from('lfg_posts')
+    .update(postReq)
+    .eq('id', id)
+    .eq('creator_id', profile.id)
+    .select();
 
-  return { data: data.pop(), error };
+  if (error) return { data: null, error };
+  if (!data || data.length === 0) return { data: null, error: 'Update returned no rows' };
+  return { data: data[0], error: null };
 }
 
 const deleteLfgPost = async (id, profile) => {
