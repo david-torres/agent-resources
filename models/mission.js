@@ -672,101 +672,25 @@ const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3
  * - Deletes secondary mission
  */
 const mergeMissions = async (primaryId, secondaryId, profile) => {
-  try {
-    // Verify profile can edit both missions
-    const canEditPrimary = await canEditMission(primaryId, profile);
-    const canEditSecondary = await canEditMission(secondaryId, profile);
+  const [canPrimary, canSecondary] = await Promise.all([
+    canEditMission(primaryId, profile),
+    canEditMission(secondaryId, profile)
+  ]);
+  if (!canPrimary || !canSecondary) {
+    return { data: null, error: 'You must be able to edit both missions to merge them' };
+  }
 
-    if (!canEditPrimary || !canEditSecondary) {
-      return { data: null, error: 'Unauthorized: You must be able to edit both missions to merge them' };
-    }
-
-    // Fetch both missions with full data
-    const [{ data: primary, error: primaryError }, { data: secondary, error: secondaryError }] = await Promise.all([
-      getMission(primaryId),
-      getMission(secondaryId)
-    ]);
-
-    if (primaryError || !primary) {
-      return { data: null, error: primaryError || 'Primary mission not found' };
-    }
-    if (secondaryError || !secondary) {
-      return { data: null, error: secondaryError || 'Secondary mission not found' };
-    }
-
-    // Determine merged values
-    const earlierDate = new Date(primary.date) <= new Date(secondary.date) ? primary.date : secondary.date;
-    
-    // Combine summaries if both exist
-    let mergedSummary = primary.summary || '';
-    if (secondary.summary && secondary.summary.trim()) {
-      if (mergedSummary) {
-        mergedSummary += '\n\n---\n\n' + secondary.summary;
-      } else {
-        mergedSummary = secondary.summary;
-      }
-    }
-
-    // Merge unregistered character names (union, deduplicated)
-    const primaryUnreg = Array.isArray(primary.unregistered_character_names) ? primary.unregistered_character_names : [];
-    const secondaryUnreg = Array.isArray(secondary.unregistered_character_names) ? secondary.unregistered_character_names : [];
-    const mergedUnregistered = [...new Set([...primaryUnreg, ...secondaryUnreg])];
-
-    // Update primary mission
-    const { error: updateError } = await supabaseAdmin
-      .from('missions')
-      .update({
-        date: earlierDate,
-        summary: mergedSummary || null,
-        unregistered_character_names: mergedUnregistered,
-        // Keep media_url from primary if it exists, otherwise use secondary's
-        media_url: primary.media_url || secondary.media_url || null
-      })
-      .eq('id', primaryId);
-
-    if (updateError) {
-      console.error(updateError);
-      return { data: null, error: updateError };
-    }
-
-    // Move characters from secondary to primary (ignore conflicts)
-    const { data: secondaryChars } = await getMissionCharacters(secondaryId);
-    if (secondaryChars && secondaryChars.length > 0) {
-      for (const char of secondaryChars) {
-        await addCharacterToMission(primaryId, char.character_id);
-      }
-    }
-
-    // Move editors from secondary to primary
-    const { data: secondaryEditors } = await getMissionEditors(secondaryId);
-    if (secondaryEditors && secondaryEditors.length > 0) {
-      for (const editor of secondaryEditors) {
-        await addMissionEditor(primaryId, editor.profile_id, profile.id);
-      }
-    }
-
-    // Add secondary's creator as editor on primary (if not already)
-    if (secondary.creator_id && secondary.creator_id !== primary.creator_id) {
-      await addMissionEditor(primaryId, secondary.creator_id, profile.id);
-    }
-
-    // Delete secondary mission
-    const { error: deleteError } = await supabaseAdmin
-      .from('missions')
-      .delete()
-      .eq('id', secondaryId);
-
-    if (deleteError) {
-      console.error('Warning: Failed to delete secondary mission after merge:', deleteError);
-      // Don't fail the whole operation, merge was successful
-    }
-
-    // Return updated primary mission
-    return await getMission(primaryId);
-  } catch (error) {
-    console.error(error);
+  const { error } = await supabaseAdmin.rpc('merge_missions', {
+    primary_id: primaryId,
+    secondary_id: secondaryId,
+    actor_profile_id: profile.id
+  });
+  if (error) {
+    console.error('merge_missions RPC failed:', error);
     return { data: null, error };
   }
+
+  return await getMission(primaryId);
 };
 
 /**
