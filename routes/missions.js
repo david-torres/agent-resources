@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUuidParams } = require('../util/validate');
+const { registerUuidParams, isValidUuid } = require('../util/validate');
 registerUuidParams(router, ['id', 'characterId', 'profileId', 'targetId']);
 const { 
   getMissions, 
@@ -511,8 +511,7 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   }
 
   // Validate profile_id is a valid UUID format
-  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  if (!uuidRegex.test(profile_id)) {
+  if (!isValidUuid(profile_id)) {
     return res.status(400).send('Invalid profile ID format');
   }
 

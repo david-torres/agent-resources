@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUuidParams } = require('../util/validate');
+const { registerUuidParams, isValidUuid } = require('../util/validate');
 registerUuidParams(router, ['id']);
 
 const {
@@ -156,8 +156,7 @@ router.get('/:slug', authOptional, async (req, res) => {
     }
 
     // Check if slug looks like a UUID (to avoid conflicts with edit route)
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (uuidRegex.test(slug)) {
+    if (isValidUuid(slug)) {
         // If it's a UUID, try to find by ID first (for backwards compatibility)
         // But this shouldn't normally happen since slugs shouldn't be UUIDs
         const { data: pageById, error: idError } = await getPage(slug);
