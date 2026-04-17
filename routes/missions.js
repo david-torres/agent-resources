@@ -199,6 +199,9 @@ router.post('/', isAuthenticated, async (req, res) => {
   if (missionError) {
     return res.status(400).send(missionError.message);
   }
+  if (!missionRes || missionRes.length === 0) {
+    return res.status(400).send('Mission creation returned no rows');
+  }
 
   const mission = missionRes[0];
 

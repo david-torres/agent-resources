@@ -455,6 +455,9 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
         });
     }
 
+    if (!data || data.length === 0) {
+        return res.status(400).send('Unlock code creation returned no rows');
+    }
     const code = data[0];
     return res.render('partials/unlock-code-result', {
         layout: false,

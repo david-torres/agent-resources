@@ -135,6 +135,9 @@ const createCharacter = async (characterReq, profile) => {
     console.error(error);
     return { data, error };
   }
+  if (!data || data.length === 0) {
+    return { data: null, error: 'Character creation returned no rows' };
+  }
   const character = data[0];
 
   // set personality traits
@@ -249,6 +252,9 @@ const updateCharacter = async (id, characterReq, profile) => {
   if (error) {
     console.error(error);
     return { data, error };
+  }
+  if (!data || data.length === 0) {
+    return { data: null, error: 'Character update returned no rows' };
   }
 
   const character = data[0];
@@ -670,6 +676,9 @@ const markCharacterDeceased = async (id, profile) => {
   if (error) {
     console.error(error);
     return { data: null, error };
+  }
+  if (!data || data.length === 0) {
+    return { data: null, error: 'Character update returned no rows' };
   }
 
   return { data: data[0], error: null };

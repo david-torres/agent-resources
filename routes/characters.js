@@ -164,6 +164,9 @@ router.post('/', isAuthenticated, async (req, res) => {
     return res.status(400).send(error.message);
   } else {
     const character = Array.isArray(data) ? data[0] : data;
+    if (!character) {
+      return res.status(400).send('Character creation returned no rows');
+    }
     return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   }
 });
