@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
 const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern } = require('../util/validate');
@@ -129,8 +129,8 @@ const createCharacter = async (characterReq, profile) => {
   // sanitize URL fields before insert
   sanitizeUrlFields(characterReq, ['image_url']);
 
-  // create character
-  const { data, error } = await supabase.from('characters').insert(characterReq).select();
+  // create character (authz: creator_id is set server-side to profile.id above)
+  const { data, error } = await supabaseAdmin.from('characters').insert(characterReq).select();
   if (error) {
     console.error(error);
     return { data, error };
@@ -244,8 +244,8 @@ const updateCharacter = async (id, characterReq, profile) => {
   // sanitize URL fields before update
   sanitizeUrlFields(characterReq, ['image_url']);
 
-  // update character
-  const { data, error } = await supabase.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
+  // update character (authz: creator_id check above + filter below)
+  const { data, error } = await supabaseAdmin.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
   if (error) {
     console.error(error);
     return { data, error };
@@ -289,7 +289,8 @@ const deleteCharacter = async (id, profile) => {
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
-  const { data, error } = await supabase.from('characters').delete().eq('id', id).eq('creator_id', profile.id);
+  // authz: creator_id check above + filter below
+  const { data, error } = await supabaseAdmin.from('characters').delete().eq('id', id).eq('creator_id', profile.id);
   return { data, error };
 }
 
@@ -301,14 +302,15 @@ const getCharacterTraits = async (id) => {
 }
 
 const setCharacterTraits = async (id, traits) => {
-  const { data, error } = await supabase.from('traits').delete().eq('character_id', id);
+  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+  const { data, error } = await supabaseAdmin.from('traits').delete().eq('character_id', id);
   if (error) {
     console.error(error);
     return { data: null, error };
   }
 
   const traitData = traits.map(trait => ({ character_id: id, name: trait }));
-  const { data: newTraits, error: newTraitsError } = await supabase.from('traits').insert(traitData);
+  const { data: newTraits, error: newTraitsError } = await supabaseAdmin.from('traits').insert(traitData);
   if (newTraitsError) {
     console.error(newTraitsError);
     return { data: null, error: newTraitsError };
@@ -396,7 +398,8 @@ const setCharacterGear = async (id, gear) => {
   const normalizedGear = normalizeGearItems(gear);
 
   if (normalizedGear.length === 0) {
-    const { error } = await supabase.from('class_gear').delete().eq('character_id', id);
+    // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+    const { error } = await supabaseAdmin.from('class_gear').delete().eq('character_id', id);
     if (error) {
       return { data: null, error };
     }
@@ -434,12 +437,13 @@ const setCharacterGear = async (id, gear) => {
     return { data: [], error: null };
   }
 
-  const { error: deleteError } = await supabase.from('class_gear').delete().eq('character_id', id);
+  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+  const { error: deleteError } = await supabaseAdmin.from('class_gear').delete().eq('character_id', id);
   if (deleteError) {
     return { data: null, error: deleteError };
   }
 
-  const { data: newGear, error: newGearError } = await supabase.from('class_gear').insert(gearData);
+  const { data: newGear, error: newGearError } = await supabaseAdmin.from('class_gear').insert(gearData);
   if (newGearError) {
     return { data: null, error: newGearError };
   }
@@ -531,7 +535,8 @@ const setCharacterAbilities = async (id, abilities) => {
   const normalizedAbilities = normalizeAbilityItems(abilities);
 
   if (normalizedAbilities.length === 0) {
-    const { error } = await supabase.from('class_abilities').delete().eq('character_id', id);
+    // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+    const { error } = await supabaseAdmin.from('class_abilities').delete().eq('character_id', id);
     if (error) {
       return { data: null, error };
     }
@@ -564,12 +569,13 @@ const setCharacterAbilities = async (id, abilities) => {
     return { data: [], error: null };
   }
 
-  const { error: deleteError } = await supabase.from('class_abilities').delete().eq('character_id', id);
+  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+  const { error: deleteError } = await supabaseAdmin.from('class_abilities').delete().eq('character_id', id);
   if (deleteError) {
     return { data: null, error: deleteError };
   }
 
-  const { data: newAbilities, error: newAbilitiesError } = await supabase.from('class_abilities').insert(abilitiesData);
+  const { data: newAbilities, error: newAbilitiesError } = await supabaseAdmin.from('class_abilities').insert(abilitiesData);
   if (newAbilitiesError) {
     return { data: null, error: newAbilitiesError };
   }
@@ -653,7 +659,8 @@ const markCharacterDeceased = async (id, profile) => {
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
   if (characterData.is_deceased) return { data: null, error: 'Character is already deceased' };
 
-  const { data, error } = await supabase
+  // authz: creator_id check above + filter below
+  const { data, error } = await supabaseAdmin
     .from('characters')
     .update({ is_deceased: true })
     .eq('id', id)
