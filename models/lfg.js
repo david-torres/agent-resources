@@ -280,13 +280,15 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId) => {
   return { data, error };
 }
 
-const updateJoinRequest = async (requestId, status) => {
-  // authz: caller (routes/lfg.js PUT /:id/requests/:requestId) verifies post.creator_id === profile.id;
-  // also called internally by createLfgPost/updateLfgPost (creator-gated) for auto-approval.
-  const { data, error } = await supabaseAdmin
+const updateJoinRequest = async (requestId, status, postId = null) => {
+  // authz: caller scopes by postId when mutating cross-user requests;
+  // internal callers (createLfgPost/updateLfgPost auto-approve) pass null because they just inserted the request.
+  let query = supabaseAdmin
     .from('lfg_join_requests')
     .update({ status })
     .eq('id', requestId);
+  if (postId) query = query.eq('lfg_post_id', postId);
+  const { data, error } = await query;
   return { data, error };
 }
 

@@ -201,12 +201,15 @@ router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: post, error: postError } = await getLfgPost(req.params.id);
 
+  if (postError || !post) {
+    return res.status(404).send('Not found');
+  }
   if (post.creator_id !== profile.id) {
     return res.status(403).send('Unauthorized');
   }
 
   const { status } = req.body;
-  const { data, error } = await updateJoinRequest(req.params.requestId, status);
+  const { data, error } = await updateJoinRequest(req.params.requestId, status, req.params.id);
   if (error) {
     return res.status(400).send(error.message);
   } else {
