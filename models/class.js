@@ -53,7 +53,8 @@ const createUnlockCodes = async ({ classId, createdByProfileId, expiresAt = null
         max_uses: maxUses
     }));
 
-    const { data, error } = await supabase
+    // authz: callers (admin-only route) gate access; createdByProfileId is set server-side
+    const { data, error } = await supabaseAdmin
         .from('class_unlock_codes')
         .insert(inserts)
         .select();
@@ -135,7 +136,8 @@ const createClass = async (classData) => {
 
     sanitizeUrlFields(classData, ['image_url']);
 
-    const { data, error } = await supabase
+    // authz: route sets created_by and restricts is_player_created/status for non-admins
+    const { data, error } = await supabaseAdmin
         .from('classes')
         .insert([classData])
         .select()
@@ -157,7 +159,8 @@ const updateClass = async (id, updates) => {
 
     sanitizeUrlFields(updates, ['image_url']);
 
-    const { data, error } = await supabase
+    // authz: caller route must verify requester is owner (created_by) or admin
+    const { data, error } = await supabaseAdmin
         .from('classes')
         .update(updates)
         .eq('id', id)
@@ -194,7 +197,8 @@ const saveClassPdfMetadata = async (classId, storagePath) => {
         pdf_storage_path: storagePath || null,
         pdf_updated_at: storagePath ? new Date().toISOString() : null
     };
-    const { data, error } = await supabase
+    // authz: called only from createClass/updateClass routes which gate access
+    const { data, error } = await supabaseAdmin
         .from('classes')
         .update(updates)
         .eq('id', classId)
@@ -389,7 +393,8 @@ const unlockClass = async (userId, classId, expiresAt = null) => {
         payload.expires_at = expiresAt;
     }
 
-    const { data, error } = await supabase
+    // authz: caller route verifies eligibility before calling (e.g. /unlock/self, redeem code)
+    const { data, error } = await supabaseAdmin
         .from('class_unlocks')
         .insert([payload])
         .select()
@@ -417,7 +422,8 @@ const getVersionHistory = async (classId) => {
 };
 
 const deleteClass = async (id) => {
-    const { error } = await supabase
+    // authz: caller route must verify requester is owner (created_by) or admin
+    const { error } = await supabaseAdmin
         .from('classes')
         .delete()
         .eq('id', id);

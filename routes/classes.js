@@ -574,10 +574,18 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
 
 router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
     const { id } = req.params;
+    const { profile } = res.locals;
 
     const { data: existingClass, error: fetchError } = await getClass(id);
     if (fetchError || !existingClass) {
         return res.status(404).json({ error: fetchError?.message || 'Class not found' });
+    }
+
+    // Authz: only the class creator or an admin may update
+    const isAdminCaller = profile?.role === 'admin';
+    const isOwner = !!profile?.id && profile.id === existingClass.created_by;
+    if (!isAdminCaller && !isOwner) {
+        return res.status(403).json({ error: 'Not authorized' });
     }
 
     const image_crop = parseImageCrop(req.body.image_crop);
@@ -658,9 +666,22 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
     return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
 });
 
-// Delete a class (owner or admin via RLS)
+// Delete a class (owner or admin)
 router.delete('/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
+    const { profile } = res.locals;
+
+    const { data: existingClass, error: fetchError } = await getClass(id);
+    if (fetchError || !existingClass) {
+        return res.status(404).send(fetchError?.message || 'Class not found');
+    }
+
+    const isAdminCaller = profile?.role === 'admin';
+    const isOwner = !!profile?.id && profile.id === existingClass.created_by;
+    if (!isAdminCaller && !isOwner) {
+        return res.status(403).send('Not authorized');
+    }
+
     const { error } = await deleteClass(id);
     if (error) {
         return res.status(400).send(error.message);
