@@ -15,4 +15,9 @@ function validateIdParam(req, res, next, value) {
   next();
 }
 
-module.exports = { isValidUuid, validateIdParam };
+function escapeLikePattern(value) {
+  if (typeof value !== 'string' || value.length === 0) return '';
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
+module.exports = { isValidUuid, validateIdParam, escapeLikePattern };

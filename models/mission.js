@@ -1,5 +1,6 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const { sanitizeUrlFields } = require('../util/url');
+const { escapeLikePattern } = require('../util/validate');
 
 const getMissions = async () => {
   const { data, error } = await supabase
@@ -195,7 +196,7 @@ const searchPublicMissions = async (q, count = 12, hasVideo = false, characterNa
       .limit(poolSize);
 
     if (q && q.trim().length > 0) {
-      query = query.ilike('name', `%${q}%`);
+      query = query.ilike('name', `%${escapeLikePattern(q)}%`);
     }
 
     if (hasVideo) {

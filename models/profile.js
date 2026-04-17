@@ -1,5 +1,6 @@
 const { supabase } = require('./_base');
 const { sanitizeUrlFields } = require('../util/url');
+const { escapeLikePattern } = require('../util/validate');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
@@ -140,7 +141,7 @@ const searchProfiles = async (query, limit = 10) => {
   const { data, error } = await supabase
     .from('profiles')
     .select('id, name, image_url')
-    .ilike('name', `%${query}%`)
+    .ilike('name', `%${escapeLikePattern(query.trim())}%`)
     .limit(limit);
 
   return { data, error };

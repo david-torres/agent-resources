@@ -1,6 +1,7 @@
 const { supabase } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
 const { sanitizeUrlFields } = require('../util/url');
+const { escapeLikePattern } = require('../util/validate');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -677,7 +678,7 @@ const searchPublicCharacters = async (q, count, options = {}) => {
       .limit(count);
 
     if (q && q.trim().length > 0) {
-      query = query.ilike('name', `%${q}%`);
+      query = query.ilike('name', `%${escapeLikePattern(q)}%`);
     }
 
     if (options.classId) {
