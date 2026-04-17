@@ -1,5 +1,6 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const crypto = require('crypto');
+const { sanitizeHttpUrl } = require('../util/url');
 
 const applyClassFilters = (query, filters = {}) => {
     if (filters.name) {
@@ -132,6 +133,10 @@ const createClass = async (classData) => {
     // classData.abilities = JSON.stringify(classData.abilities);
     // classData.gear = JSON.stringify(classData.gear);
 
+    if (classData && typeof classData === 'object' && 'image_url' in classData) {
+        classData.image_url = classData.image_url ? sanitizeHttpUrl(classData.image_url) : null;
+    }
+
     const { data, error } = await supabase
         .from('classes')
         .insert([classData])
@@ -151,6 +156,10 @@ const updateClass = async (id, updates) => {
     // updates.abilities = JSON.stringify(updates.abilities);
     // updates.gear = JSON.stringify(updates.gear);
     // console.log('updateClass after', updates);
+
+    if (updates && typeof updates === 'object' && 'image_url' in updates) {
+        updates.image_url = updates.image_url ? sanitizeHttpUrl(updates.image_url) : null;
+    }
 
     const { data, error } = await supabase
         .from('classes')

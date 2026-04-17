@@ -1,5 +1,6 @@
 const { supabase } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
+const { sanitizeHttpUrl } = require('../util/url');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -124,6 +125,11 @@ const createCharacter = async (characterReq, profile) => {
     characterReq.hide_from_search = false;
   }
 
+  // sanitize URL fields before insert
+  if ('image_url' in characterReq) {
+    characterReq.image_url = characterReq.image_url ? sanitizeHttpUrl(characterReq.image_url) : null;
+  }
+
   // create character
   const { data, error } = await supabase.from('characters').insert(characterReq).select();
   if (error) {
@@ -234,6 +240,11 @@ const updateCharacter = async (id, characterReq, profile) => {
     characterReq.hide_from_search = true;
   } else {
     characterReq.hide_from_search = false;
+  }
+
+  // sanitize URL fields before update
+  if ('image_url' in characterReq) {
+    characterReq.image_url = characterReq.image_url ? sanitizeHttpUrl(characterReq.image_url) : null;
   }
 
   // update character

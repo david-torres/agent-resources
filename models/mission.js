@@ -1,4 +1,5 @@
 const { supabase, supabaseAdmin } = require('./_base');
+const { sanitizeHttpUrl } = require('../util/url');
 
 const getMissions = async () => {
   const { data, error } = await supabase
@@ -86,6 +87,9 @@ const getOwnMissions = async (profile) => {
 
 const createMission = async (missionData, profile) => {
   missionData.creator_id = profile.id;
+  if ('media_url' in missionData) {
+    missionData.media_url = missionData.media_url ? sanitizeHttpUrl(missionData.media_url) : null;
+  }
   const { data, error } = await supabaseAdmin.from('missions').insert(missionData).select();
   return { data, error };
 };
@@ -95,6 +99,10 @@ const updateMission = async (id, missionData, profile) => {
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
     return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
+  }
+
+  if ('media_url' in missionData) {
+    missionData.media_url = missionData.media_url ? sanitizeHttpUrl(missionData.media_url) : null;
   }
 
   const { data, error } = await supabaseAdmin
