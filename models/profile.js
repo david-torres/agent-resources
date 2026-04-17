@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern } = require('../util/validate');
 
@@ -67,7 +67,8 @@ const getProfileByName = async (name) => {
 }
 
 const createProfile = async (user_id) => {
-  const { data, error } = await supabase
+  // authz: self-write; user_id comes from the verified auth session via getProfile(user)
+  const { data, error } = await supabaseAdmin
     .from('profiles')
     .insert({ user_id, name: `Agent #${user_id}`, role: 'user' })
     .select();
@@ -117,12 +118,14 @@ const updateUser = async (email, password, profile) => {
 
   const user = data.user;
   sanitizeUrlFields(profile, ['image_url']);
-  const { data: profileData, error: profileError } = await supabase.from('profiles').update(profile).eq('user_id', user.id);
+  // authz: self-write; user.id comes from supabase.auth.updateUser response for the authenticated caller
+  const { data: profileData, error: profileError } = await supabaseAdmin.from('profiles').update(profile).eq('user_id', user.id);
   return { data: profileData, error: profileError };
 }
 
 const setDiscordId = async (user_id, discord_id, discord_email = null) => {
-  const { data, error } = await supabase
+  // authz: self-write; user_id is the authenticated caller's auth user id (passed from route res.locals.user.id)
+  const { data, error } = await supabaseAdmin
     .from('profiles')
     .update({ discord_id, discord_email })
     .eq('user_id', user_id)
