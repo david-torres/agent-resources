@@ -6,7 +6,7 @@
   "scripts": {
     "start": "bun run index.js",
     "dev": "bun --watch index.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "bun test",
     "seed:classes": "bun run util/seed-classes.js",
     "db:backup": "sh scripts/db-backup.sh"
   },
