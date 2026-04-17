@@ -77,6 +77,31 @@ app.use('/pages', pagesRoutes);
 app.use('/nav', navRoutes);
 app.use('/api/agent', agentRoutes);
 
+// Global error handler (must be after all route mounts)
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err);
+  if (res.headersSent) return next(err);
+
+  const isHtmx = req.get('HX-Request');
+  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : String(err?.message || err);
+
+  if (isHtmx) {
+    res.set('HX-Retarget', '#alert').set('HX-Reswap', 'innerHTML');
+    return res.status(500).send(`<div class="notification is-danger">${message}</div>`);
+  }
+  if (req.accepts('html')) {
+    return res.status(500).send(message);
+  }
+  return res.status(500).json({ error: message });
+});
+
+process.on('unhandledRejection', (reason) => {
+  console.error('unhandledRejection:', reason);
+});
+process.on('uncaughtException', (err) => {
+  console.error('uncaughtException:', err);
+});
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
