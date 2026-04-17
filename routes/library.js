@@ -3,8 +3,8 @@ const multer = require('multer');
 const crypto = require('crypto');
 
 const router = express.Router();
-const { validateIdParam } = require('../util/validate');
-router.param('id', validateIdParam);
+const { registerUuidParams } = require('../util/validate');
+registerUuidParams(router, ['id', 'userId']);
 
 const {
     getRulesPdfs,

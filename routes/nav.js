@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { validateIdParam } = require('../util/validate');
-router.param('id', validateIdParam);
+const { registerUuidParams } = require('../util/validate');
+registerUuidParams(router, ['id']);
 
 const {
     getAllNavItems,

@@ -20,4 +20,10 @@ function escapeLikePattern(value) {
   return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
 
-module.exports = { isValidUuid, validateIdParam, escapeLikePattern };
+function registerUuidParams(router, names) {
+  for (const name of names) {
+    router.param(name, validateIdParam);
+  }
+}
+
+module.exports = { isValidUuid, validateIdParam, escapeLikePattern, registerUuidParams };
