@@ -25,4 +25,12 @@ const supabaseAdmin = createClient(
   clientOptions
 );
 
-module.exports = { supabase, supabaseAdmin, anonKey };
+const createUserClient = (accessToken) => {
+  if (!accessToken) return supabase;
+  return createClient(process.env.SUPABASE_URL, anonKey, {
+    ...clientOptions,
+    global: { headers: { Authorization: `Bearer ${accessToken}` } }
+  });
+};
+
+module.exports = { supabase, supabaseAdmin, anonKey, createUserClient };

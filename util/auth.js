@@ -3,6 +3,7 @@ const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { loadNavItems } = require('./nav-loader');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
+const { createUserClient } = require('../models/_base');
 
 const getBearerToken = (req) => {
   const header = req.headers['authorization'];
@@ -37,6 +38,7 @@ async function isAuthenticated(req, res, next) {
     return res.redirect('/auth');
   } else {
     res.locals.user = user;
+    res.locals.supabaseUser = createUserClient(authToken);
     if (user) {
       res.locals.profile = await getProfile(user);
       res.locals.systemMessage = getSystemMessage();
@@ -77,6 +79,7 @@ async function authOptional(req, res, next) {
   const refreshToken = req.headers['refresh-token'];
   const user = await getUserFromToken(authToken, refreshToken);
   res.locals.user = user;
+  res.locals.supabaseUser = createUserClient(authToken);
   if (user) {
     res.locals.profile = await getProfile(user);
     res.locals.systemMessage = getSystemMessage();
