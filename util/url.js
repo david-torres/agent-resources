@@ -13,4 +13,14 @@ function sanitizeHttpUrl(value) {
   return new URL(value).toString();
 }
 
-module.exports = { isSafeHttpUrl, sanitizeHttpUrl };
+function sanitizeUrlFields(obj, fields) {
+  if (!obj || typeof obj !== 'object') return obj;
+  for (const field of fields) {
+    if (field in obj) {
+      obj[field] = obj[field] ? sanitizeHttpUrl(obj[field]) : null;
+    }
+  }
+  return obj;
+}
+
+module.exports = { isSafeHttpUrl, sanitizeHttpUrl, sanitizeUrlFields };

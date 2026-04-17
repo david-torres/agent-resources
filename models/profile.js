@@ -1,5 +1,5 @@
 const { supabase } = require('./_base');
-const { sanitizeHttpUrl } = require('../util/url');
+const { sanitizeUrlFields } = require('../util/url');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
@@ -115,9 +115,7 @@ const updateUser = async (email, password, profile) => {
   if (error) return { data, error };
 
   const user = data.user;
-  if (profile && typeof profile === 'object' && 'image_url' in profile) {
-    profile.image_url = profile.image_url ? sanitizeHttpUrl(profile.image_url) : null;
-  }
+  sanitizeUrlFields(profile, ['image_url']);
   const { data: profileData, error: profileError } = await supabase.from('profiles').update(profile).eq('user_id', user.id);
   return { data: profileData, error: profileError };
 }

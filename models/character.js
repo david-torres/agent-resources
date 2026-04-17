@@ -1,6 +1,6 @@
 const { supabase } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
-const { sanitizeHttpUrl } = require('../util/url');
+const { sanitizeUrlFields } = require('../util/url');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -126,9 +126,7 @@ const createCharacter = async (characterReq, profile) => {
   }
 
   // sanitize URL fields before insert
-  if ('image_url' in characterReq) {
-    characterReq.image_url = characterReq.image_url ? sanitizeHttpUrl(characterReq.image_url) : null;
-  }
+  sanitizeUrlFields(characterReq, ['image_url']);
 
   // create character
   const { data, error } = await supabase.from('characters').insert(characterReq).select();
@@ -243,9 +241,7 @@ const updateCharacter = async (id, characterReq, profile) => {
   }
 
   // sanitize URL fields before update
-  if ('image_url' in characterReq) {
-    characterReq.image_url = characterReq.image_url ? sanitizeHttpUrl(characterReq.image_url) : null;
-  }
+  sanitizeUrlFields(characterReq, ['image_url']);
 
   // update character
   const { data, error } = await supabase.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
