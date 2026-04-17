@@ -6,7 +6,7 @@ const { adventClassList, aspirantPreviewClassList, playerCreatedClassList } = re
 // Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_KEY // Use service key for admin operations
+    process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
 // build a list of classes from the consts
