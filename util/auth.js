@@ -28,8 +28,7 @@ async function isAuthenticated(req, res, next) {
   }
 
   const authToken = getBearerToken(req);
-  const refreshToken = req.headers['refresh-token'];
-  const user = await getUserFromToken(authToken, refreshToken);
+  const user = await getUserFromToken(authToken);
   if (!user) {
     if (req.get('HX-Request')) {
       res.set('HX-Redirect', '/auth');
@@ -76,8 +75,7 @@ async function authOptional(req, res, next) {
   }
 
   const authToken = getBearerToken(req);
-  const refreshToken = req.headers['refresh-token'];
-  const user = await getUserFromToken(authToken, refreshToken);
+  const user = await getUserFromToken(authToken);
   res.locals.user = user;
   res.locals.supabaseUser = createUserClient(authToken);
   if (user) {
