@@ -55,7 +55,7 @@ app.set('views', path.join(__dirname, 'views'));
 // pass supabaseUrl and supabaseKey to the frontend
 app.use((req, res, next) => {
   res.locals.supabaseUrl = process.env.SUPABASE_URL;
-  res.locals.supabaseKey = process.env.SUPABASE_KEY;
+  res.locals.supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
   next();
 });
 
