@@ -31,3 +31,26 @@ test('returns empty string for nullish input', () => {
   expect(renderMarkdown(undefined)).toBe('');
   expect(renderMarkdown('')).toBe('');
 });
+
+test('links carry rel=noopener noreferrer and target=_blank', () => {
+  const out = renderMarkdown('[x](https://example.com)');
+  expect(out).toContain('rel="noopener noreferrer"');
+  expect(out).toContain('target="_blank"');
+});
+
+test('strips iframe/object/embed', () => {
+  expect(renderMarkdown('<iframe src="https://x"></iframe>')).not.toContain('<iframe');
+  expect(renderMarkdown('<object data="x"></object>')).not.toContain('<object');
+  expect(renderMarkdown('<embed src="x">')).not.toContain('<embed');
+});
+
+test('blocks data: and vbscript: schemes', () => {
+  expect(renderMarkdown('![x](data:image/svg+xml,<svg/>)')).not.toContain('data:');
+  expect(renderMarkdown('[x](vbscript:msgbox)')).not.toContain('vbscript');
+});
+
+test('strips style and srcset attributes', () => {
+  const out = renderMarkdown('<img src="https://x/y" style="color:red" srcset="y">');
+  expect(out).not.toContain('style=');
+  expect(out).not.toContain('srcset=');
+});

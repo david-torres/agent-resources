@@ -1,11 +1,9 @@
-const { marked } = require('marked');
+const { Marked } = require('marked');
 const sanitizeHtml = require('sanitize-html');
 
-marked.setOptions({
+const markedInstance = new Marked({
   gfm: true,
-  breaks: true,
-  headerIds: false,
-  mangle: false
+  breaks: true
 });
 
 const allowedTags = sanitizeHtml.defaults.allowedTags.concat([
@@ -30,7 +28,7 @@ const sanitizeOpts = {
 
 function renderMarkdown(input) {
   if (input == null || input === '') return '';
-  const rendered = marked.parse(String(input));
+  const rendered = markedInstance.parse(String(input));
   return sanitizeHtml(rendered, sanitizeOpts);
 }
 
