@@ -409,7 +409,7 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     if (error) return res.status(400).send(error.message);
     try {
         const { data: newClass } = await getClass(newClassId);
-        const slug = newClass?.name ? `/${newClass.name}` : '';
+        const slug = newClass?.name ? `/${encodeURIComponent(newClass.name)}` : '';
         return res.header('HX-Location', `/classes/${newClassId}${slug}`).status(204).send();
     } catch (_) {
         return res.header('HX-Location', `/classes/${newClassId}`).status(204).send();
@@ -483,7 +483,7 @@ router.post('/redeem', isAuthenticated, async (req, res) => {
     // Navigate to the unlocked class view using HX-Location for htmx
     try {
         const { data: classData } = await getClass(classId);
-        const slug = classData?.name ? `/${classData.name}` : '';
+        const slug = classData?.name ? `/${encodeURIComponent(classData.name)}` : '';
         return res.header('HX-Location', `/classes/${classId}${slug}`).status(204).send();
     } catch (_) {
         return res.header('HX-Location', `/classes/${classId}`).status(204).send();
@@ -569,7 +569,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         }
     }
 
-    return res.header('HX-Location', `/classes/${classData.id}/${classData.name}`).send();
+    return res.header('HX-Location', `/classes/${classData.id}/${encodeURIComponent(classData.name)}`).send();
 });
 
 router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
@@ -663,7 +663,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
         await saveClassPdfMetadata(id, null);
     }
 
-    return res.header('HX-Location', `/classes/${id}/${classData.name}`).send();
+    return res.header('HX-Location', `/classes/${id}/${encodeURIComponent(classData.name)}`).send();
 });
 
 // Delete a class (owner or admin)
