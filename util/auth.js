@@ -5,6 +5,22 @@ const { loadNavItems } = require('./nav-loader');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
 const { createUserClient } = require('../models/_base');
 
+function isSameOriginPath(value) {
+  if (typeof value !== 'string' || value.length === 0) return false;
+  if (!value.startsWith('/')) return false;
+  if (value.startsWith('//')) return false;
+  return true;
+}
+
+function safeRefererPath(refererHeader) {
+  if (typeof refererHeader !== 'string' || refererHeader.length === 0) return null;
+  try {
+    return new URL(refererHeader).pathname;
+  } catch {
+    return null;
+  }
+}
+
 const getBearerToken = (req) => {
   const header = req.headers['authorization'];
   if (!header) return null;
@@ -15,7 +31,8 @@ const getBearerToken = (req) => {
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
-    const redirectUrl = req.headers['redirect-to'] || req.originalUrl;
+    const headerRedirect = req.headers['redirect-to'];
+    const redirectUrl = isSameOriginPath(headerRedirect) ? headerRedirect : req.originalUrl;
     const dest = (redirectUrl == '/auth' || redirectUrl == '/')
       ? '/auth/check'
       : `/auth/check?r=${encodeURIComponent(redirectUrl)}`;
@@ -50,10 +67,11 @@ async function isAuthenticated(req, res, next) {
       res.locals.systemMessage = null;
     }
 
-    if (req.headers['redirect-to']) {
-      const referer = new URL(req.headers['referer']).pathname;
-      if (referer != req.headers['redirect-to']) {
-        res.header('HX-Push-Url', req.headers['redirect-to']);
+    const redirectTo = req.headers['redirect-to'];
+    if (isSameOriginPath(redirectTo)) {
+      const referer = safeRefererPath(req.headers['referer']);
+      if (referer !== redirectTo) {
+        res.header('HX-Push-Url', redirectTo);
       }
     }
 
@@ -89,10 +107,11 @@ async function authOptional(req, res, next) {
     res.locals.profile = null;
     res.locals.systemMessage = null;
   }
-  if (req.headers['redirect-to']) {
-    const referer = new URL(req.headers['referer']).pathname;
-    if (referer != req.headers['redirect-to']) {
-      res.header('HX-Push-Url', req.headers['redirect-to']);
+  const redirectTo = req.headers['redirect-to'];
+  if (isSameOriginPath(redirectTo)) {
+    const referer = safeRefererPath(req.headers['referer']);
+    if (referer !== redirectTo) {
+      res.header('HX-Push-Url', redirectTo);
     }
   }
 
