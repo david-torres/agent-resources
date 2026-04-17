@@ -245,7 +245,7 @@ const updateCharacter = async (id, characterReq, profile) => {
   sanitizeUrlFields(characterReq, ['image_url']);
 
   // update character (authz: creator_id check above + filter below)
-  const { data, error } = await supabaseAdmin.from('characters').update({ ...characterData, ...characterReq }).eq('id', id).eq('creator_id', profile.id).select();
+  const { data, error } = await supabaseAdmin.from('characters').update(characterReq).eq('id', id).eq('creator_id', profile.id).select();
   if (error) {
     console.error(error);
     return { data, error };
