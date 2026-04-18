@@ -100,6 +100,7 @@ process.on('unhandledRejection', (reason) => {
 });
 process.on('uncaughtException', (err) => {
   console.error('uncaughtException:', err);
+  process.exit(1);
 });
 
 // Start server
