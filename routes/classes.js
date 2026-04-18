@@ -403,8 +403,20 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 // Duplicate a class to a new version
 router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     const { id } = req.params;
+    const { profile } = res.locals;
     const { new_version } = req.body;
     if (!new_version) return res.status(400).send('new_version is required');
+
+    const { data: sourceClass, error: fetchError } = await getClass(id);
+    if (fetchError || !sourceClass) {
+        return res.status(404).send(fetchError?.message || 'Class not found');
+    }
+    const isAdminCaller = profile?.role === 'admin';
+    const isOwner = !!profile?.id && profile.id === sourceClass.created_by;
+    if (!isAdminCaller && !isOwner) {
+        return res.status(403).send('Not authorized');
+    }
+
     const { data: newClassId, error } = await duplicateClass(id, new_version);
     if (error) return res.status(400).send(error.message);
     try {
