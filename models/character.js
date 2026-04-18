@@ -768,27 +768,22 @@ const serializeCharacterSummaryForAgent = (row) => ({
   level: row.level,
   is_public: !!row.is_public,
   is_deceased: !!row.is_deceased,
-  owner_profile_id: row.created_by || null,
+  owner_profile_id: row.creator_id || null,
   owner_name: row.owner_name || row.profile?.name || null
 });
 
 const serializeCharacterForAgent = (row, actor = {}) => {
   if (!row) return null;
   const isAdmin = actor.role === 'admin';
-  const isOwner = !!actor.profileId && actor.profileId === row.created_by;
+  const isOwner = !!actor.profileId && actor.profileId === row.creator_id;
   const visible = row.is_public === true || isOwner || isAdmin;
   if (!visible) return null;
 
+  const stats = Object.fromEntries(statList.map((k) => [k, row[k] ?? null]));
+
   return {
     ...serializeCharacterSummaryForAgent(row),
-    stats: {
-      muscle: row.muscle ?? null,
-      moxie: row.moxie ?? null,
-      mind: row.mind ?? null,
-      magic: row.magic ?? null,
-      max_hp: row.max_hp ?? null,
-      current_hp: row.current_hp ?? null
-    },
+    stats,
     traits: Array.isArray(row.personality) ? row.personality.map((t) => t.name) : [],
     abilities: Array.isArray(row.abilities)
       ? row.abilities.map((a) => ({ name: a.name, description: a.description }))
@@ -803,13 +798,13 @@ const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
   let builder = supabase
     .from('characters')
-    .select('id, name, class, level, is_public, is_deceased, created_by, profile:created_by(name)')
+    .select('id, name, class, level, is_public, is_deceased, creator_id, profile:creator_id(name)')
     .order('name', { ascending: true })
     .limit(10);
 
   if (actor.role !== 'admin') {
     if (actor.profileId) {
-      builder = builder.or(`is_public.eq.true,created_by.eq.${actor.profileId}`);
+      builder = builder.or(`is_public.eq.true,creator_id.eq.${actor.profileId}`);
     } else {
       builder = builder.eq('is_public', true);
     }
@@ -819,7 +814,7 @@ const searchCharactersForAgent = async (query, actor = {}) => {
     const escaped = escapeLikePattern(q);
     builder = builder.ilike('name', `%${escaped}%`);
   } else if (actor.profileId) {
-    builder = builder.eq('created_by', actor.profileId).order('updated_at', { ascending: false });
+    builder = builder.eq('creator_id', actor.profileId).order('updated_at', { ascending: false });
   } else {
     return { data: [], error: null };
   }
@@ -837,9 +832,9 @@ const getCharacterForAgent = async (id, actor = {}) => {
   const { data, error } = await supabase
     .from('characters')
     .select(`
-      id, name, class, level, is_public, is_deceased, created_by,
+      id, name, class, level, is_public, is_deceased, creator_id,
       ${statList.join(',')},
-      profile:created_by(name),
+      profile:creator_id(name),
       personality:traits(name),
       abilities:class_abilities(name,description),
       gear:class_gear(name,description)

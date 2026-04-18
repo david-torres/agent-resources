@@ -8,7 +8,7 @@ const baseCharacter = {
   level: 3,
   is_public: true,
   is_deceased: false,
-  created_by: 'profile-1',
+  creator_id: 'profile-1',
   owner_name: 'Bob'
 };
 
@@ -27,19 +27,19 @@ test('serializeCharacterSummaryForAgent returns compact shape', () => {
 });
 
 test('serializeCharacterForAgent returns null when actor cannot see private char', () => {
-  const priv = { ...baseCharacter, is_public: false, created_by: 'profile-other' };
+  const priv = { ...baseCharacter, is_public: false, creator_id: 'profile-other' };
   expect(serializeCharacterForAgent(priv, { profileId: 'profile-self', role: 'player' })).toBe(null);
 });
 
 test('serializeCharacterForAgent returns detail when owner is the actor', () => {
-  const priv = { ...baseCharacter, is_public: false, created_by: 'profile-self' };
+  const priv = { ...baseCharacter, is_public: false, creator_id: 'profile-self' };
   const out = serializeCharacterForAgent(priv, { profileId: 'profile-self', role: 'player' });
   expect(out.id).toBe(priv.id);
   expect(out.is_public).toBe(false);
 });
 
 test('serializeCharacterForAgent returns detail for admin regardless of visibility', () => {
-  const priv = { ...baseCharacter, is_public: false, created_by: 'profile-other' };
+  const priv = { ...baseCharacter, is_public: false, creator_id: 'profile-other' };
   const out = serializeCharacterForAgent(priv, { profileId: 'profile-self', role: 'admin' });
   expect(out.id).toBe(priv.id);
 });
