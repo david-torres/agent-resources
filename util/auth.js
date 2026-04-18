@@ -2,7 +2,6 @@ const { getUserFromToken, getProfile } = require('./supabase');
 const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
-const { createUserClient } = require('../models/_base');
 
 function isSameOriginPath(value) {
   if (typeof value !== 'string' || value.length === 0) return false;
@@ -53,7 +52,6 @@ async function isAuthenticated(req, res, next) {
     return res.redirect('/auth');
   } else {
     res.locals.user = user;
-    res.locals.supabaseUser = createUserClient(authToken);
     if (user) {
       res.locals.profile = await getProfile(user);
       res.locals.systemMessage = getSystemMessage();
@@ -90,7 +88,6 @@ async function authOptional(req, res, next) {
   const authToken = getBearerToken(req);
   const user = await getUserFromToken(authToken);
   res.locals.user = user;
-  res.locals.supabaseUser = createUserClient(authToken);
   if (user) {
     res.locals.profile = await getProfile(user);
     res.locals.systemMessage = getSystemMessage();
