@@ -239,6 +239,7 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
   if (joinType == 'player') {
     const { data: character, error: characterError } = await supabase.from('characters').select('*').eq('id', characterId).single();
     if (characterError) return { data: null, error: characterError };
+    if (character.creator_id !== profileId) return { data: null, error: 'You can only join with your own character' };
     if (character.is_deceased) return { data: null, error: 'Deceased characters cannot join games' };
   }
   if (joinType == 'conduit') characterId = null;
@@ -251,9 +252,7 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
     status: 'pending'
   };
 
-  // authz: profile_id is passed from the calling route/function using the authenticated session.
-  // Character ownership not enforced here — any LFG joiner can reference any character by id.
-  // (Pre-existing behavior; out of scope for this change.)
+  // authz: profile_id comes from authenticated session; character ownership verified above for player joins.
   const { data, error } = await supabaseAdmin.from('lfg_join_requests').insert(joinRequest).select();
   return { data, error };
 }
