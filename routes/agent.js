@@ -17,6 +17,7 @@ const {
   cleanupStaleLinks
 } = require('../models/bot-link');
 const { supabaseAdmin } = require('../models/_base');
+const { revokeAgentToken } = require('../models/agent-token');
 
 const parseBooleanFilter = (value) => {
   if (value === 'true') return true;
@@ -146,6 +147,17 @@ router.get('/characters/:id', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Character not found' });
   return res.json({ character: data });
+});
+
+router.delete('/tokens/me', async (req, res) => {
+  const { data, error } = await revokeAgentToken({
+    tokenId: res.locals.agentToken.id,
+    userId: res.locals.user.id,
+    profileId: res.locals.profile.id
+  });
+  if (error) return res.status(500).json({ error: error.message });
+  if (!data) return res.status(404).json({ error: 'Token not found or already revoked' });
+  return res.json({ revoked: true });
 });
 
 module.exports = router;
