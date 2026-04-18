@@ -2,6 +2,7 @@ const { supabase, supabaseAdmin } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
 const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern } = require('../util/validate');
+const { statList } = require('../util/enclave-consts');
 
 const getOwnCharacters = async (profile) => {
   const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
@@ -760,6 +761,101 @@ const getRandomPublicCharacters = async (count = 12, options = {}) => {
     return { data: null, error };
   }
 }
+const serializeCharacterSummaryForAgent = (row) => ({
+  id: row.id,
+  name: row.name,
+  class: row.class,
+  level: row.level,
+  is_public: !!row.is_public,
+  is_deceased: !!row.is_deceased,
+  owner_profile_id: row.created_by || null,
+  owner_name: row.owner_name || row.profile?.name || null
+});
+
+const serializeCharacterForAgent = (row, actor = {}) => {
+  if (!row) return null;
+  const isAdmin = actor.role === 'admin';
+  const isOwner = !!actor.profileId && actor.profileId === row.created_by;
+  const visible = row.is_public === true || isOwner || isAdmin;
+  if (!visible) return null;
+
+  return {
+    ...serializeCharacterSummaryForAgent(row),
+    stats: {
+      muscle: row.muscle ?? null,
+      moxie: row.moxie ?? null,
+      mind: row.mind ?? null,
+      magic: row.magic ?? null,
+      max_hp: row.max_hp ?? null,
+      current_hp: row.current_hp ?? null
+    },
+    traits: Array.isArray(row.personality) ? row.personality.map((t) => t.name) : [],
+    abilities: Array.isArray(row.abilities)
+      ? row.abilities.map((a) => ({ name: a.name, description: a.description }))
+      : [],
+    gear: Array.isArray(row.gear)
+      ? row.gear.map((g) => ({ name: g.name, description: g.description }))
+      : []
+  };
+};
+
+const searchCharactersForAgent = async (query, actor = {}) => {
+  const q = typeof query === 'string' ? query.trim() : '';
+  let builder = supabase
+    .from('characters')
+    .select('id, name, class, level, is_public, is_deceased, created_by, profile:created_by(name)')
+    .order('name', { ascending: true })
+    .limit(10);
+
+  if (actor.role !== 'admin') {
+    if (actor.profileId) {
+      builder = builder.or(`is_public.eq.true,created_by.eq.${actor.profileId}`);
+    } else {
+      builder = builder.eq('is_public', true);
+    }
+  }
+
+  if (q.length > 0) {
+    const escaped = escapeLikePattern(q);
+    builder = builder.ilike('name', `%${escaped}%`);
+  } else if (actor.profileId) {
+    builder = builder.eq('created_by', actor.profileId).order('updated_at', { ascending: false });
+  } else {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await builder;
+  if (error) return { data: null, error };
+
+  const mapped = (data || []).map((row) =>
+    serializeCharacterSummaryForAgent({ ...row, owner_name: row.profile?.name || null })
+  );
+  return { data: mapped, error: null };
+};
+
+const getCharacterForAgent = async (id, actor = {}) => {
+  const { data, error } = await supabase
+    .from('characters')
+    .select(`
+      id, name, class, level, is_public, is_deceased, created_by,
+      ${statList.join(',')},
+      profile:created_by(name),
+      personality:traits(name),
+      abilities:class_abilities(name,description),
+      gear:class_gear(name,description)
+    `)
+    .eq('id', id)
+    .maybeSingle();
+  if (error && error.code !== 'PGRST116') return { data: null, error };
+  if (!data) return { data: null, error: null };
+
+  const serialized = serializeCharacterForAgent(
+    { ...data, owner_name: data.profile?.name || null },
+    actor
+  );
+  return { data: serialized, error: null };
+};
+
 module.exports = {
   getOwnCharacters,
   getCharacter,
@@ -772,5 +868,9 @@ module.exports = {
   getCharacterAllMissions,
   searchPublicCharacters,
   getRandomPublicCharacters,
-  getPublicCharactersByCreator
+  getPublicCharactersByCreator,
+  serializeCharacterSummaryForAgent,
+  serializeCharacterForAgent,
+  searchCharactersForAgent,
+  getCharacterForAgent
 };
