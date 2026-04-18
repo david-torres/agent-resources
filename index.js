@@ -18,6 +18,7 @@ const libraryRoutes = require('./routes/library');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
 const agentRoutes = require('./routes/agent');
+const botLinkRoutes = require('./routes/bot-link');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -75,6 +76,7 @@ app.use('/classes', classesRoutes);
 app.use('/library', libraryRoutes);
 app.use('/pages', pagesRoutes);
 app.use('/nav', navRoutes);
+app.use('/link/bot', botLinkRoutes);
 app.use('/api/agent', agentRoutes);
 
 // Global error handler (must be after all route mounts)
