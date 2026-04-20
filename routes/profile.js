@@ -76,7 +76,7 @@ router.put('/', isAuthenticated, async (req, res) => {
     timezone,
     conduit_briefing
   }
-  const { data, error } = await updateUser(email, password, profile);
+  const { data, error } = await updateUser(user.id, email, password, profile);
   if (error) {
     return res.status(400).send(error.message);
   } else {

@@ -21,7 +21,8 @@ const getProfile = async (user) => {
     throw new Error('User not found');
   }
 
-  const { data, error } = await supabase.from('profiles').select('*').eq('user_id', user.id).single();
+  // authz: self-read; user.id comes from the verified auth session (see util/auth.js isAuthenticated)
+  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('user_id', user.id).single();
 
   if (error) {
     if (PROFILE_NOT_FOUND_ERROR === error.code) {
@@ -111,15 +112,20 @@ const grantStarterUnlocks = async (userId, profileId) => {
   }
 }
 
-const updateUser = async (email, password, profile) => {
+const updateUser = async (userId, email, password, profile) => {
   if (password === '') password = null;
-  const { data, error } = await supabase.auth.updateUser({ email, password });
-  if (error) return { data, error };
+  const attrs = {};
+  if (email) attrs.email = email;
+  if (password) attrs.password = password;
 
-  const user = data.user;
+  // authz: self-write; userId is the authenticated caller (res.locals.user.id from isAuthenticated)
+  if (attrs.email || attrs.password) {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, attrs);
+    if (error) return { data: null, error };
+  }
+
   sanitizeUrlFields(profile, ['image_url']);
-  // authz: self-write; user.id comes from supabase.auth.updateUser response for the authenticated caller
-  const { data: profileData, error: profileError } = await supabaseAdmin.from('profiles').update(profile).eq('user_id', user.id);
+  const { data: profileData, error: profileError } = await supabaseAdmin.from('profiles').update(profile).eq('user_id', userId);
   return { data: profileData, error: profileError };
 }
 
