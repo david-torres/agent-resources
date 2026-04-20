@@ -3,7 +3,14 @@
     {{#if navItem.children}}
       {{#if navItem.children.length}}
         <div class="navbar-item has-dropdown is-hoverable">
-          <a class="navbar-link" href="#">{{navItem.label}}</a>
+          <a class="navbar-link {{#if navItem.isActive}}is-active{{/if}}" href="#">
+            {{#if navItem.icon}}
+              <span class="icon">
+                <i class="{{navItem.icon}}"></i>
+              </span>
+            {{/if}}
+            <span>{{navItem.label}}</span>
+          </a>
           <div class="navbar-dropdown is-right">
             {{#each navItem.children}}
               {{> nav-item navItem=this}}
@@ -20,13 +27,18 @@
     {{/if}}
   {{else}}
     {{!-- Regular link or page link --}}
-    <a class="navbar-item" href="{{navItem.href}}">
+    <a class="navbar-item {{#if navItem.isActive}}is-active{{/if}}" href="{{navItem.href}}">
       {{#if navItem.icon}}
         <span class="icon">
           <i class="{{navItem.icon}}"></i>
         </span>
       {{/if}}
-      <span>{{navItem.label}}</span>
+      <span>
+        {{navItem.label}}
+        {{#if (eq navItem.url '/lfg')}}
+          {{#if @root.pendingLfgRequests}}<span class="badge is-danger">{{@root.pendingLfgRequests}}</span>{{/if}}
+        {{/if}}
+      </span>
     </a>
   {{/if}}
 {{/if}}

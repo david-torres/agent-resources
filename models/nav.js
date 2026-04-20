@@ -5,7 +5,7 @@ const { supabase } = require('./_base');
  * Returns hierarchical structure with parent items containing children
  */
 const getNavItems = async (userContext = {}) => {
-    const { userId = null, role = null } = userContext;
+    const { userId = null, role = null, currentPath = null } = userContext;
     const isAuthenticated = !!userId;
     const isAdmin = role === 'admin';
 
@@ -85,6 +85,26 @@ const getNavItems = async (userContext = {}) => {
         });
     };
     sortByPosition(rootItems);
+
+    // Mark items whose href matches the current path. A leaf is active when
+    // currentPath equals its href or is nested under it. A parent is active
+    // when any descendant is active.
+    const markActive = (items) => {
+        let anyChildActive = false;
+        items.forEach(item => {
+            const childActive = item.children.length > 0 ? markActive(item.children) : false;
+            const selfActive = !!(
+                currentPath &&
+                item.href &&
+                item.href !== '#' &&
+                (currentPath === item.href || currentPath.startsWith(item.href + '/'))
+            );
+            item.isActive = selfActive || childActive;
+            if (item.isActive) anyChildActive = true;
+        });
+        return anyChildActive;
+    };
+    markActive(rootItems);
 
     return { data: rootItems, error: null };
 };
