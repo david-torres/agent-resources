@@ -4,7 +4,7 @@ const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
 const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById } = require('../util/supabase');
 const { statList, personalityMap } = require('../util/enclave-consts');
-const { getUnlockedClasses } = require('../models/class');
+const { getUnlockedClasses, getUnlockedClassIdsForUser } = require('../models/class');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
@@ -400,9 +400,12 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
           const userId = profile.user_id || (res.locals.user && res.locals.user.id) || null;
           let unlockedClassIds = new Set();
           try {
-            const { data: unlocked } = await getUnlockedClasses(userId);
-            if (Array.isArray(unlocked)) {
-              unlockedClassIds = new Set(unlocked.map(c => c.id));
+            // Use admin-backed lookup: the shared anon client no longer carries the
+            // user's JWT (setSession was removed), so RLS on class_unlocks would
+            // return zero rows and wipe every description.
+            const { data: ids } = await getUnlockedClassIdsForUser(userId);
+            if (ids instanceof Set) {
+              unlockedClassIds = ids;
             }
           } catch (e) {
             // On error fetching unlocks, default to hiding everything that is class-gated

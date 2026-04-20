@@ -45,12 +45,13 @@ const App = (function (document, supabase, htmx) {
     _loadedAssets.add(href);
   };
 
-  const _loadTippy = () => Promise.all([
-    _loadScript('https://unpkg.com/@popperjs/core@2'),
-    _loadScript('https://unpkg.com/tippy.js@6')
-  ]).then(() => {
-    _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
-  });
+  // Popper must be loaded before tippy — tippy's UMD wrapper captures
+  // window.Popper at IIFE execution time; loading them in parallel races.
+  const _loadTippy = () => _loadScript('https://unpkg.com/@popperjs/core@2')
+    .then(() => _loadScript('https://unpkg.com/tippy.js@6'))
+    .then(() => {
+      _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
+    });
 
   const _loadTomSelect = () => {
     _loadStylesheet('https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css');

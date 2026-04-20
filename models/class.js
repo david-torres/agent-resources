@@ -492,6 +492,7 @@ module.exports = {
     updateClass,
     duplicateClass,
     getUnlockedClasses,
+    getUnlockedClassIdsForUser,
     unlockClass,
     isClassUnlocked,
     getVersionHistory,
