@@ -1,3 +1,35 @@
+/* Bulmaswatch Lux is a light-only theme, but Bulma 1.0's base CSS flips its
+   scheme variables under @media (prefers-color-scheme: dark). Lux's hardcoded
+   colors keep the main page light, but anything using var(--bulma-scheme-main)
+   etc. (e.g. Tom Select dropdowns) turns dark on an OS dark-mode preference.
+   Pin the scheme vars to their light-mode values so the whole UI stays light. */
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bulma-scheme-brightness: light;
+    --bulma-scheme-main-l: 100%;
+    --bulma-scheme-main-bis-l: 98%;
+    --bulma-scheme-main-ter-l: 96%;
+    --bulma-background-l: 96%;
+    --bulma-border-weak-l: 93%;
+    --bulma-border-l: 86%;
+    --bulma-text-weak-l: 48%;
+    --bulma-text-l: 29%;
+    --bulma-text-strong-l: 21%;
+    --bulma-text-title-l: 14%;
+    --bulma-scheme-invert-ter-l: 14%;
+    --bulma-scheme-invert-bis-l: 7%;
+    --bulma-scheme-invert-l: 4%;
+    --bulma-hover-background-l-delta: -5%;
+    --bulma-active-background-l-delta: -10%;
+    --bulma-hover-border-l-delta: -10%;
+    --bulma-active-border-l-delta: -20%;
+  }
+}
+
 /* Skip to content link */
 .skip-to-content {
   position: absolute;
@@ -307,6 +339,13 @@ body.modal-open {
 .navbar.is-dark .navbar-item.is-active,
 .navbar.is-dark .navbar-link.is-active {
   background-color: rgba(255, 255, 255, 0.1);
+}
+
+/* Navbar dropdown - Bulmaswatch Lux sets background:#222, which shows as
+   dark bars in the top/bottom padding strips around the (light) items. */
+.navbar-dropdown {
+  background-color: var(--bulma-scheme-main);
+  border-top-color: var(--bulma-border);
 }
 
 /* Bulma dropdown - Bulmaswatch Lux theme fix */
