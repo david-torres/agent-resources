@@ -244,7 +244,7 @@ router.get('/similar', isAuthenticated, async (req, res) => {
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: mission, error } = await getMission(id);
+  const { data: mission, error } = await getMission(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -272,7 +272,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   }
   
   const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
-    getMission(id),
+    getMission(id, res.locals.supabase),
     getMissionEditors(id),
     isCreator(id, profile)
   ]);
@@ -416,7 +416,7 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
   }
 
   // Remove the unregistered name
-  const { data: mission } = await getMission(id);
+  const { data: mission } = await getMission(id, res.locals.supabase);
   if (mission) {
     const names = (mission.unregistered_character_names || [])
       .filter(n => n !== unregistered_name);
@@ -522,7 +522,7 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   }
 
   // Prevent adding creator or host as editor (redundant)
-  const { data: mission, error: missionError } = await getMission(id);
+  const { data: mission, error: missionError } = await getMission(id, res.locals.supabase);
   if (missionError) {
     return res.status(400).send('Mission not found');
   }

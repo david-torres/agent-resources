@@ -216,7 +216,7 @@ router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { q, count, mission:missionId } = req.query;
 
-  const { data: mission, errorMission } = await getMission(missionId);
+  const { data: mission, errorMission } = await getMission(missionId, res.locals.supabase);
   if (errorMission) {
     return res.status(400).send(errorMission.message);
   }

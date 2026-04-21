@@ -28,8 +28,8 @@ const getMissions = async () => {
   return { data: transformedData, error };
 };
 
-const getMission = async (id) => {
-  const { data, error } = await supabase
+const getMission = async (id, client = supabase) => {
+  const { data, error } = await client
     .from('missions')
     .select(`
       *,

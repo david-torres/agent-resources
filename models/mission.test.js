@@ -57,3 +57,15 @@ test('getOwnMissions falls back to the module-level anon client when no client p
   await getOwnMissions({ id: 'p1' });
   expect(defaultAnon.calls).toContain('missions');
 });
+
+test('getMission uses the passed client', async () => {
+  const userClient = makeSpyClient({
+    missions: [{ id: 'm1', characters: [], host: null }]
+  });
+  defaultAnon.calls.length = 0;
+  const { getMission } = require('./mission');
+  const { data } = await getMission('m1', userClient);
+  expect(userClient.calls).toContain('missions');
+  expect(defaultAnon.calls).not.toContain('missions');
+  expect(data.id).toBe('m1');
+});
