@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
-registerUuidParams(router, ['id']);
+registerUuidParams(router, ['id', 'requestId']);
 const { isAgentAuthenticated } = require('../util/auth');
 const { listClassesForAgent, getClassForAgent } = require('../models/class');
 const {
@@ -35,7 +35,9 @@ const sendLfgError = (res, err) => {
   const status = (err && err.status) || 500;
   const message = (err && (err.message || (typeof err === 'string' ? err : null))) || 'Unexpected error';
   const code = (err && err.code) || undefined;
-  return res.status(status).json({ error: message, code });
+  const payload = { error: message };
+  if (code) payload.code = code;
+  return res.status(status).json(payload);
 };
 
 const parseBooleanFilter = (value) => {
@@ -226,6 +228,9 @@ const validatePostBody = (body, { isEdit = false } = {}) => {
         return { error: { status: 400, code: 'missing_field', message: `${req} is required` } };
       }
     }
+  }
+  if (isEdit && Object.keys(out).length === 0) {
+    return { error: { status: 400, code: 'no_fields', message: 'At least one field is required' } };
   }
   return { body: out };
 };
