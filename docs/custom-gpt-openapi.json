@@ -1,0 +1,171 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Agent Resources API",
+    "version": "1.1.0"
+  },
+  "servers": [
+    { "url": "https://agent-resources.vip/api/agent" }
+  ],
+  "paths": {
+    "/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Verify token; returns current user/profile",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Me" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/classes": {
+      "get": {
+        "operationId": "listClasses",
+        "summary": "List visible classes (summary only). Fetch /classes/{id} for details.",
+        "parameters": [
+          { "in": "query", "name": "rules_edition", "schema": { "type": "string" } },
+          { "in": "query", "name": "rules_version", "schema": { "type": "string" } },
+          { "in": "query", "name": "status", "schema": { "type": "string" } },
+          { "in": "query", "name": "is_player_created", "schema": { "type": "boolean" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "classes": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ClassSummary" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/classes/{id}": {
+      "get": {
+        "operationId": "getClass",
+        "summary": "Full class detail (teaser-only if locked)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "class": { "$ref": "#/components/schemas/ClassDetail" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/characters": {
+      "get": {
+        "operationId": "searchCharacters",
+        "summary": "Search characters",
+        "parameters": [
+          { "in": "query", "name": "q", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/characters/{id}": {
+      "get": {
+        "operationId": "getCharacter",
+        "summary": "Get a single character",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "OK" },
+          "404": { "description": "Not found" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Me": {
+        "type": "object",
+        "properties": {
+          "user": { "type": "object", "properties": { "id": { "type": "string" } } },
+          "profile": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "user_id": { "type": "string" },
+              "name": { "type": "string" },
+              "role": { "type": "string" }
+            }
+          },
+          "token": { "type": "object" }
+        }
+      },
+      "ClassSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "teaser": { "type": "string" },
+          "status": { "type": "string" },
+          "rules_edition": { "type": "string" },
+          "rules_version": { "type": "string" },
+          "is_public": { "type": "boolean" },
+          "is_player_created": { "type": "boolean" },
+          "owner_profile_id": { "type": ["string", "null"] },
+          "access_level": { "type": "string", "enum": ["teaser_only", "full"] },
+          "unlocked": { "type": "boolean" },
+          "updated_at": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "ClassDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ClassSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "image_url": { "type": ["string", "null"] },
+              "image_crop": { "type": ["object", "null"] },
+              "base_class_id": { "type": ["string", "null"] },
+              "pdf_available": { "type": "boolean" },
+              "created_at": { "type": ["string", "null"], "format": "date-time" },
+              "description": { "type": "string" },
+              "gear": { "type": "array", "items": { "type": "object" } },
+              "abilities": { "type": "array", "items": { "type": "object" } }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

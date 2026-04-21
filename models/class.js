@@ -253,21 +253,47 @@ const getUnlockedClassIdsForUser = async (userId) => {
     };
 };
 
-const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
+const resolveClassAgentAccess = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
     if (!classData) return null;
 
     const isAdmin = actor.role === 'admin';
     const isOwner = !!actor.profileId && actor.profileId === classData.created_by;
     const isVisible = classData.is_public === true || isOwner || isAdmin;
-
-    if (!isVisible) {
-        return null;
-    }
+    if (!isVisible) return null;
 
     const unlocked = !!actor.userId && unlockedClassIds.has(classData.id);
     const accessLevel = classData.status === 'release' && !isAdmin && !isOwner && !unlocked
         ? 'teaser_only'
         : 'full';
+
+    return { isAdmin, isOwner, unlocked, accessLevel };
+};
+
+const serializeClassSummaryForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
+    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds });
+    if (!access) return null;
+
+    return {
+        id: classData.id,
+        name: classData.name,
+        teaser: classData.teaser || '',
+        status: classData.status,
+        rules_edition: classData.rules_edition,
+        rules_version: classData.rules_version,
+        is_public: classData.is_public,
+        is_player_created: classData.is_player_created,
+        owner_profile_id: classData.created_by || null,
+        access_level: access.accessLevel,
+        unlocked: access.unlocked,
+        updated_at: classData.updated_at || null
+    };
+};
+
+const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
+    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds });
+    if (!access) return null;
+
+    const { isAdmin, isOwner, unlocked, accessLevel } = access;
 
     const serialized = {
         id: classData.id,
@@ -326,7 +352,7 @@ const listClassesForAgent = async (filters = {}, actor = {}) => {
 
     return {
         data: (data || [])
-            .map((classData) => serializeClassForAgent({ classData, actor, unlockedClassIds }))
+            .map((classData) => serializeClassSummaryForAgent({ classData, actor, unlockedClassIds }))
             .filter(Boolean),
         error: null
     };
@@ -505,5 +531,6 @@ module.exports = {
     canViewClassPdf,
     listClassesForAgent,
     getClassForAgent,
-    serializeClassForAgent
+    serializeClassForAgent,
+    serializeClassSummaryForAgent
 };
