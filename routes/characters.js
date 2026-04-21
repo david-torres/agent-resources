@@ -374,7 +374,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // allow full descriptions regardless of unlocks
         if (profile && req.query.lfg) {
           try {
-            const { data: lfgPost } = await getLfgPost(req.query.lfg);
+            const { data: lfgPost } = await getLfgPost(req.query.lfg, res.locals.supabase);
             if (lfgPost && lfgPost.host_id === profile.id) {
               hostingViaLfg = Array.isArray(lfgPost.join_requests) && lfgPost.join_requests.some(r =>
                 r && r.status === 'approved' && r.character && r.character.id === characterId

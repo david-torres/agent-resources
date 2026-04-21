@@ -3,9 +3,9 @@ const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 moment.tz.setDefault('UTC');
 
-const fetchProfileById = async (profileId) => {
+const fetchProfileById = async (profileId, client = supabase) => {
   if (!profileId) return { profile: null, error: null };
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', profileId).single();
+  const { data, error } = await client.from('profiles').select('*').eq('id', profileId).single();
   if (error && error.code !== 'PGRST116') return { profile: null, error };
   return { profile: data || null, error: null };
 };
@@ -15,8 +15,8 @@ const assignCreatorMeta = (post, creator) => {
   post.creator_is_public = Boolean(creator?.is_public);
 };
 
-const getLfgPosts = async () => {
-  const { data, error } = await supabase
+const getLfgPosts = async (client = supabase) => {
+  const { data, error } = await client
     .from('lfg_posts')
     .select('*')
     .eq('is_public', true)
@@ -24,26 +24,26 @@ const getLfgPosts = async () => {
     .order('created_at', { ascending: false });
   if (error || !data) return { data, error };
   for (let post of data) {
-    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
       post.host_name = host.name;
       post.host_is_public = host.is_public;
     }
 
-    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
+    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
   }
   return { data, error };
 }
 
-const getLfgPostsByOthers = async (profileId) => {
+const getLfgPostsByOthers = async (profileId, client = supabase) => {
   const today = moment().startOf('day').toISOString();
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('lfg_posts')
     .select('*')
     .neq('creator_id', profileId)
@@ -53,42 +53,42 @@ const getLfgPostsByOthers = async (profileId) => {
     .order('created_at', { ascending: false });
   if (error || !data) return { data, error };
   for (let post of data) {
-    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
       post.host_name = host.name;
       post.host_is_public = host.is_public;
     }
 
-    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
+    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
   }
   return { data, error };
 }
 
-const getLfgPostsByCreator = async (creator_id) => {
-  const { data, error } = await supabase
+const getLfgPostsByCreator = async (creator_id, client = supabase) => {
+  const { data, error } = await client
     .from('lfg_posts')
     .select('*')
     .eq('creator_id', creator_id)
     .order('created_at', { ascending: false });
   if (error || !data) return { data, error };
   for (let post of data) {
-    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
       post.host_name = host.name;
       post.host_is_public = host.is_public;
     }
 
-    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
+    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
     post.pending_request_count = (joinRequests || []).filter(r => r.status === 'pending').length;
@@ -96,8 +96,8 @@ const getLfgPostsByCreator = async (creator_id) => {
   return { data, error };
 }
 
-const getLfgPost = async (id) => {
-  const { data, error } = await supabase
+const getLfgPost = async (id, client = supabase) => {
+  const { data, error } = await client
     .from('lfg_posts')
     .select('*')
     .eq('id', id)
@@ -105,11 +105,11 @@ const getLfgPost = async (id) => {
   if (error) return { data, error };
 
   let post = data;
-  const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+  const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
   if (creatorError) return { data: null, error: creatorError };
   assignCreatorMeta(post, creator);
 
-  const { data: host, error: hostError } = await supabase
+  const { data: host, error: hostError } = await client
     .from('profiles')
     .select('*')
     .eq('id', post.host_id)
@@ -119,7 +119,7 @@ const getLfgPost = async (id) => {
     post.host_is_public = host.is_public;
   }
 
-  const { data: joinRequests, error: joinRequestsError } = await supabase
+  const { data: joinRequests, error: joinRequestsError } = await client
     .from('lfg_join_requests')
     .select(`
       *,
@@ -257,8 +257,8 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
   return { data, error };
 }
 
-const getLfgJoinRequests = async (postId) => {
-  const { data, error } = await supabase
+const getLfgJoinRequests = async (postId, client = supabase) => {
+  const { data, error } = await client
     .from('lfg_join_requests')
     .select(`
       *,
@@ -269,8 +269,8 @@ const getLfgJoinRequests = async (postId) => {
   return { data, error };
 }
 
-const getLfgJoinRequestForUserAndPost = async (profileId, postId) => {
-  const { data, error } = await supabase
+const getLfgJoinRequestForUserAndPost = async (profileId, postId, client = supabase) => {
+  const { data, error } = await client
     .from('lfg_join_requests')
     .select('*')
     .eq('lfg_post_id', postId)
@@ -301,8 +301,8 @@ const deleteJoinRequest = async (requestId) => {
   return { data, error };
 }
 
-const getLfgJoinedPosts = async (profileId) => {
-  const { data, error } = await supabase
+const getLfgJoinedPosts = async (profileId, client = supabase) => {
+  const { data, error } = await client
     .from('lfg_join_requests')
     .select(`
       *,
@@ -315,17 +315,17 @@ const getLfgJoinedPosts = async (profileId) => {
   const joinedPosts = data.map(request => request.lfg_posts);
 
   for (let post of joinedPosts) {
-    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id);
+    const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await supabase.from('profiles').select('*').eq('id', post.host_id).single();
+    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
     if (!hostError) {
       post.host_name = host.name;
       post.host_is_public = host.is_public;
     }
 
-    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id);
+    const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data: null, error: joinRequestsError };
     post.join_requests = joinRequests;
   }
@@ -333,8 +333,8 @@ const getLfgJoinedPosts = async (profileId) => {
   return { data: joinedPosts, error: null };
 }
 
-const getPendingJoinRequestCount = async (profileId) => {
-  const { count, error } = await supabase
+const getPendingJoinRequestCount = async (profileId, client = supabase) => {
+  const { count, error } = await client
     .from('lfg_join_requests')
     .select('*, lfg_posts!inner(creator_id)', { count: 'exact', head: true })
     .eq('lfg_posts.creator_id', profileId)
@@ -343,6 +343,7 @@ const getPendingJoinRequestCount = async (profileId) => {
 }
 
 module.exports = {
+  fetchProfileById,
   getLfgPosts,
   getLfgPostsByCreator,
   getLfgPostsByOthers,

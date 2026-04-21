@@ -59,7 +59,7 @@ async function isAuthenticated(req, res, next) {
       res.locals.profile = await getProfile(user);
       res.locals.systemMessage = getSystemMessage();
       if (res.locals.profile) {
-        const { count } = await getPendingJoinRequestCount(res.locals.profile.id);
+        const { count } = await getPendingJoinRequestCount(res.locals.profile.id, res.locals.supabase);
         res.locals.pendingLfgRequests = count;
       }
     } else {
@@ -99,7 +99,7 @@ async function authOptional(req, res, next) {
     res.locals.profile = await getProfile(user);
     res.locals.systemMessage = getSystemMessage();
     if (res.locals.profile) {
-      const { count } = await getPendingJoinRequestCount(res.locals.profile.id);
+      const { count } = await getPendingJoinRequestCount(res.locals.profile.id, res.locals.supabase);
       res.locals.pendingLfgRequests = count;
     }
   } else {

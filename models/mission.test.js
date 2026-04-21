@@ -1,32 +1,6 @@
 const { test, expect, mock, afterAll } = require('bun:test');
 const realBase = require('./_base');
-
-const makeSpyClient = (tableToRows = {}) => {
-  const calls = [];
-  return {
-    calls,
-    from(table) {
-      calls.push(table);
-      const rows = tableToRows[table] ?? [];
-      const result = { data: rows, error: null };
-      const chain = {
-        select: () => chain,
-        eq: () => chain,
-        in: () => chain,
-        or: () => chain,
-        order: () => chain,
-        limit: () => chain,
-        gte: () => chain,
-        lte: () => chain,
-        neq: () => chain,
-        single: () => Promise.resolve({ data: rows[0] ?? null, error: null }),
-        maybeSingle: () => Promise.resolve({ data: rows[0] ?? null, error: null }),
-        then: (onF, onR) => Promise.resolve(result).then(onF, onR)
-      };
-      return chain;
-    }
-  };
-};
+const { makeSpyClient } = require('./test-helpers');
 
 const defaultAnon = makeSpyClient({ missions: [] });
 mock.module('./_base', () => ({
