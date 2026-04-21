@@ -482,7 +482,7 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
 // Admin: list unlock codes for a class
 router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { data, error } = await listUnlockCodes(id);
+    const { data, error } = await listUnlockCodes(id, res.locals.supabase);
     if (error) return res.status(400).send(error.message);
     return res.json(data);
 });
