@@ -349,6 +349,17 @@ const getPendingJoinRequestCount = async (profileId, client = supabase) => {
 // ─── Agent-scoped LFG wrappers ────────────────────────────────────────────────
 
 const closeLfgPost = async (id, profile) => {
+  // I1: Distinguish not-found vs not-host by probing existence first.
+  const { data: existing, error: fetchErr } = await supabaseAdmin
+    .from('lfg_posts')
+    .select('id, creator_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr) return { data: null, error: fetchErr };
+  if (!existing) return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
+  if (existing.creator_id !== profile.id) {
+    return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can close this post' } };
+  }
   const { data, error } = await supabaseAdmin
     .from('lfg_posts')
     .update({ status: 'closed', updated_at: new Date().toISOString() })
@@ -414,6 +425,15 @@ const serializePostForAgent = (post, { agentProfileId, includePending }) => {
   return base;
 };
 
+// I3: Shared helper to rename lfg_join_requests -> join_requests on result rows.
+const normalizeJoinRequests = (rows) => {
+  for (const row of rows) {
+    row.join_requests = row.lfg_join_requests || [];
+    delete row.lfg_join_requests;
+  }
+  return rows;
+};
+
 // Internal: fetch lfg_posts with full joins, filtered by arbitrary column equality + optional status
 const AGENT_POST_SELECT = '*, creator:creator_id(id,name), lfg_join_requests(*, profile:profile_id(id,name), character:character_id(*))';
 
@@ -428,13 +448,7 @@ const getPostsWithRequestsBy = async (filters, { status } = {}) => {
     query = query.eq('status', status);
   }
   const { data, error } = await query;
-  // Normalize: rename lfg_join_requests -> join_requests for serializePostForAgent
-  if (data) {
-    for (const row of data) {
-      row.join_requests = row.lfg_join_requests || [];
-      delete row.lfg_join_requests;
-    }
-  }
+  if (data) normalizeJoinRequests(data);
   return { data, error };
 };
 
@@ -457,13 +471,7 @@ const getPostsByJoiner = async (profileId, { status } = {}) => {
     query = query.eq('status', status);
   }
   const { data, error } = await query;
-  // Normalize: rename lfg_join_requests -> join_requests for serializePostForAgent
-  if (data) {
-    for (const row of data) {
-      row.join_requests = row.lfg_join_requests || [];
-      delete row.lfg_join_requests;
-    }
-  }
+  if (data) normalizeJoinRequests(data);
   return { data, error };
 };
 
@@ -528,10 +536,12 @@ const createForAgent = async ({ agentProfile, body }) => {
 const updateForAgent = async ({ agentProfile, postId, body }) => {
   const { data, error } = await updateLfgPost(postId, body, agentProfile);
   if (error) {
-    if (error.message === 'not found' || error.code === 'PGRST116') {
+    // C2: updateLfgPost returns string errors, not Supabase objects.
+    const msg = typeof error === 'string' ? error : (error.message || '');
+    if (/not found/i.test(msg) || /unauthori[sz]ed/i.test(msg)) {
       return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can edit this post' } };
     }
-    return { data: null, error };
+    return { data: null, error: { status: 500, code: 'update_failed', message: msg || 'Update failed' } };
   }
   return getPostForAgent({ agentProfileId: agentProfile.id, postId });
 };
@@ -546,10 +556,12 @@ const closeForAgent = async ({ agentProfileId, postId }) => {
 const deleteForAgent = async ({ agentProfile, postId }) => {
   const { error } = await deleteLfgPost(postId, agentProfile);
   if (error) {
-    if (error.code === 'PGRST116' || error.message === 'not found') {
+    // C2: deleteLfgPost returns string errors, not Supabase objects.
+    const msg = typeof error === 'string' ? error : (error.message || '');
+    if (/not found/i.test(msg) || /unauthori[sz]ed/i.test(msg)) {
       return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can delete this post' } };
     }
-    return { data: null, error };
+    return { data: null, error: { status: 500, code: 'delete_failed', message: msg || 'Delete failed' } };
   }
   return { data: { deleted: true }, error: null };
 };
@@ -607,7 +619,9 @@ const leaveForAgent = async ({ agentProfileId, postId }) => {
     .eq('profile_id', agentProfileId)
     .maybeSingle();
   if (!existing) {
-    const { data: post } = await getPostForAgent({ agentProfileId, postId });
+    // I2: propagate errors from getPostForAgent
+    const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
+    if (postErr) return { data: null, error: postErr };
     return { data: { deleted: false, post }, error: null };
   }
   const { error } = await supabaseAdmin
@@ -615,7 +629,9 @@ const leaveForAgent = async ({ agentProfileId, postId }) => {
     .delete()
     .eq('id', existing.id);
   if (error) return { data: null, error };
-  const { data: post } = await getPostForAgent({ agentProfileId, postId });
+  // I2: propagate errors from getPostForAgent
+  const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
+  if (postErr) return { data: null, error: postErr };
   return { data: { deleted: true, post }, error: null };
 };
 
@@ -632,10 +648,19 @@ const updateRequestForAgent = async ({ agentProfileId, requestId, status }) => {
   if (req.post?.creator_id !== agentProfileId) {
     return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can update requests on this post' } };
   }
-  const { data, error } = await updateJoinRequest(requestId, status, req.lfg_post_id);
-  if (error) return { data: null, error };
-  const { data: post } = await getPostForAgent({ agentProfileId, postId: req.lfg_post_id });
-  return { data: { request: data, post }, error: null };
+  // C1: updateJoinRequest does not .select(), so data is always null on success.
+  // Re-fetch the updated request row directly instead of relying on the update return value.
+  const { error: updateErr } = await updateJoinRequest(requestId, status, req.lfg_post_id);
+  if (updateErr) return { data: null, error: updateErr };
+  const { data: updatedRequest, error: fetchErr } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('id, lfg_post_id, profile_id, character_id, join_type, status')
+    .eq('id', requestId)
+    .single();
+  if (fetchErr) return { data: null, error: fetchErr };
+  const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId: req.lfg_post_id });
+  if (postErr) return { data: null, error: postErr };
+  return { data: { request: updatedRequest, post }, error: null };
 };
 
 const listEligibleCharactersForAgent = async ({ agentProfileId }) => {
@@ -662,7 +687,6 @@ module.exports = {
   createLfgPost,
   updateLfgPost,
   deleteLfgPost,
-  closeLfgPost,
   joinLfgPost,
   getLfgJoinRequests,
   getLfgJoinRequestForUserAndPost,

@@ -328,3 +328,81 @@ describe('closeForAgent', () => {
     expect(error.code).toBe('not_host');
   });
 });
+
+// ─── updateRequestForAgent ────────────────────────────────────────────────────
+
+describe('updateRequestForAgent', () => {
+  test('host approves a pending player request → request.status approved and id populated', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'player', joinerCharacter.id, 'pending');
+
+    const { data, error } = await updateRequestForAgent({
+      agentProfileId: hostProfile.id,
+      requestId: joinReq.id,
+      status: 'approved'
+    });
+    expect(error).toBeNull();
+    expect(data).toBeDefined();
+    expect(data.request).toBeDefined();
+    expect(data.request.id).toBe(joinReq.id);
+    expect(data.request.status).toBe('approved');
+  });
+
+  test('non-host tries to approve → error.status 403, error.code not_host', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'player', joinerCharacter.id, 'pending');
+
+    const { data, error } = await updateRequestForAgent({
+      agentProfileId: joinerProfile.id,
+      requestId: joinReq.id,
+      status: 'approved'
+    });
+    expect(data).toBeNull();
+    expect(error.status).toBe(403);
+    expect(error.code).toBe('not_host');
+  });
+
+  test('unknown requestId → error.status 404, error.code not_found', async () => {
+    const fakeId = '00000000-0000-0000-0000-000000000000';
+    const { data, error } = await updateRequestForAgent({
+      agentProfileId: hostProfile.id,
+      requestId: fakeId,
+      status: 'approved'
+    });
+    expect(data).toBeNull();
+    expect(error.status).toBe(404);
+    expect(error.code).toBe('not_found');
+  });
+});
+
+// ─── leaveForAgent ────────────────────────────────────────────────────────────
+
+describe('leaveForAgent', () => {
+  test('joiner withdraws an active request → deleted true and request row is gone', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'conduit', null, 'pending');
+
+    const { data, error } = await leaveForAgent({
+      agentProfileId: joinerProfile.id,
+      postId: openPost.id
+    });
+    expect(error).toBeNull();
+    expect(data.deleted).toBe(true);
+
+    // Verify the request row is gone from DB
+    const { data: row } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('id')
+      .eq('id', joinReq.id)
+      .maybeSingle();
+    expect(row).toBeNull();
+  });
+
+  test('joiner who never joined → deleted false and post is still returned', async () => {
+    const { data, error } = await leaveForAgent({
+      agentProfileId: joinerProfile.id,
+      postId: openPost.id
+    });
+    expect(error).toBeNull();
+    expect(data.deleted).toBe(false);
+    expect(data.post).toBeDefined();
+    expect(data.post.id).toBe(openPost.id);
+  });
+});
