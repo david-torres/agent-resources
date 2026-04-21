@@ -60,7 +60,7 @@ const filterClassDataForUser = async (user) => {
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: characters, error } = await getOwnCharacters(profile);
+  const { data: characters, error } = await getOwnCharacters(profile, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -98,7 +98,7 @@ router.get('/new', isAuthenticated, async (req, res) => {
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: character, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -216,7 +216,7 @@ router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { q, count, mission:missionId } = req.query;
 
-  const { data: mission, errorMission } = await getMission(missionId);
+  const { data: mission, errorMission } = await getMission(missionId, res.locals.supabase);
   if (errorMission) {
     return res.status(400).send(errorMission.message);
   }
@@ -310,11 +310,11 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
     return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
   }
   
-  const { data: character, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   }
-  
+
   // Only the owner can export their character
   if (character.creator_id !== profile.id) {
     return res.status(403).send('You can only export your own characters');
@@ -334,7 +334,7 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
 router.get('/:id/:name?', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: character, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -374,7 +374,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // allow full descriptions regardless of unlocks
         if (profile && req.query.lfg) {
           try {
-            const { data: lfgPost } = await getLfgPost(req.query.lfg);
+            const { data: lfgPost } = await getLfgPost(req.query.lfg, res.locals.supabase);
             if (lfgPost && lfgPost.host_id === profile.id) {
               hostingViaLfg = Array.isArray(lfgPost.join_requests) && lfgPost.join_requests.some(r =>
                 r && r.status === 'approved' && r.character && r.character.id === characterId
@@ -494,7 +494,7 @@ router.post('/:id/deceased', isAuthenticated, async (req, res) => {
   const { confirmName } = req.body;
 
   // Get the character to verify ownership and name
-  const { data: character, error: getError } = await getCharacter(id);
+  const { data: character, error: getError } = await getCharacter(id, res.locals.supabase);
   if (getError) {
     return res.status(400).send(getError.message || getError);
   }

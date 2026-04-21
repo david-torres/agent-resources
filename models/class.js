@@ -66,8 +66,8 @@ const createUnlockCodes = async ({ classId, createdByProfileId, expiresAt = null
     return { data, error: null };
 };
 
-const listUnlockCodes = async (classId) => {
-    const { data, error } = await supabase
+const listUnlockCodes = async (classId, client = supabase) => {
+    const { data, error } = await client
         .from('class_unlock_codes')
         .select('*')
         .eq('class_id', classId)

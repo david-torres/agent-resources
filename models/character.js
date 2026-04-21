@@ -4,8 +4,8 @@ const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 
-const getOwnCharacters = async (profile) => {
-  const { data, error } = await supabase.from('characters').select('*').eq('creator_id', profile.id);
+const getOwnCharacters = async (profile, client = supabase) => {
+  const { data, error } = await client.from('characters').select('*').eq('creator_id', profile.id);
   if (error) {
     console.error(error);
     return { data: null, error };
@@ -28,8 +28,8 @@ const getPublicCharactersByCreator = async (creatorId) => {
   return { data, error };
 }
 
-const getCharacter = async (id) => {
-  const { data, error } = await supabase.from('characters').select('*').eq('id', id).single();
+const getCharacter = async (id, client = supabase) => {
+  const { data, error } = await client.from('characters').select('*').eq('id', id).single();
   if (error) {
     console.error(error);
     return { data: null, error };

@@ -98,8 +98,8 @@ router.get('/', isAuthenticated, async (req, res) => {
   
   // Get both own missions and editable missions
   const [{ data: ownMissions, error: ownError }, { data: editableMissions, error: editableError }] = await Promise.all([
-    getOwnMissions(profile),
-    getEditableMissions(profile)
+    getOwnMissions(profile, res.locals.supabase),
+    getEditableMissions(profile, res.locals.supabase)
   ]);
   
   if (ownError) {
@@ -158,7 +158,7 @@ router.post('/import', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { inputText } = req.body;
   try {
-    const { mission } = await processMissionImport(inputText, profile);
+    const { mission } = await processMissionImport(inputText, profile, res.locals.supabase);
     return res.header('HX-Location', `/missions/${mission.id}`).send();
   } catch (error) {
     return res.status(400).send(error.message);
@@ -230,7 +230,7 @@ router.get('/similar', isAuthenticated, async (req, res) => {
     return res.status(400).send('Date is required');
   }
 
-  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id);
+  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id, 3, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message || error);
   }
@@ -244,7 +244,7 @@ router.get('/similar', isAuthenticated, async (req, res) => {
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: mission, error } = await getMission(id);
+  const { data: mission, error } = await getMission(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -272,8 +272,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   }
   
   const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
-    getMission(id),
-    getMissionEditors(id),
+    getMission(id, res.locals.supabase),
+    getMissionEditors(id, res.locals.supabase),
     isCreator(id, profile)
   ]);
   
@@ -333,7 +333,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   }
 
   // Get current characters
-  const { data: currentCharacters, error: characterError } = await getMissionCharacters(req.params.id);
+  const { data: currentCharacters, error: characterError } = await getMissionCharacters(req.params.id, res.locals.supabase);
   const newIds = characters || [];
   const currentIds = currentCharacters.map(mc => mc.character_id);
 
@@ -416,7 +416,7 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
   }
 
   // Remove the unregistered name
-  const { data: mission } = await getMission(id);
+  const { data: mission } = await getMission(id, res.locals.supabase);
   if (mission) {
     const names = (mission.unregistered_character_names || [])
       .filter(n => n !== unregistered_name);
@@ -439,7 +439,7 @@ router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) 
 router.get('/character/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: character, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
   
   if (error) {
     return res.status(400).send(error.message);
@@ -487,7 +487,7 @@ router.get('/:id/editors', isAuthenticated, async (req, res) => {
     return res.status(403).send('Unauthorized');
   }
 
-  const { data: editors, error } = await getMissionEditors(id);
+  const { data: editors, error } = await getMissionEditors(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message || error);
   }
@@ -522,7 +522,7 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   }
 
   // Prevent adding creator or host as editor (redundant)
-  const { data: mission, error: missionError } = await getMission(id);
+  const { data: mission, error: missionError } = await getMission(id, res.locals.supabase);
   if (missionError) {
     return res.status(400).send('Mission not found');
   }
@@ -536,7 +536,7 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   }
 
   // Return updated editors list
-  const { data: editors } = await getMissionEditors(id);
+  const { data: editors } = await getMissionEditors(id, res.locals.supabase);
   res.render('partials/mission-editors', {
     layout: false,
     editors,
@@ -562,7 +562,7 @@ router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
   }
 
   // Return updated editors list
-  const { data: editors } = await getMissionEditors(id);
+  const { data: editors } = await getMissionEditors(id, res.locals.supabase);
   res.render('partials/mission-editors', {
     layout: false,
     editors,

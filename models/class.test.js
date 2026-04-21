@@ -62,7 +62,7 @@ mock.module('./_base', () => ({
 // Bust the cache in case a sibling test file already loaded `./class` with
 // the real `_base`.
 delete require.cache[require.resolve('./class')];
-const { getUnlockedClasses, isClassUnlocked } = require('./class');
+const { getUnlockedClasses, isClassUnlocked, listUnlockCodes } = require('./class');
 
 afterAll(() => {
     mock.module('./_base', () => realBase);
@@ -78,4 +78,16 @@ test('unlock reads route through supabaseAdmin so anon RLS does not hide rows', 
 
     const unlockedResult = await isClassUnlocked('u1', 'class-1');
     expect(unlockedResult).toEqual({ data: true, error: null });
+});
+
+test('listUnlockCodes uses the passed client', async () => {
+    // fakeAnon has no class_unlock_codes rows, so seeing one proves the
+    // injected client is being dispatched to.
+    const userClient = makeClient({
+        class_unlock_codes: [{ id: 'code-1', class_id: 'class-1', code: 'ABCD' }]
+    });
+    const { data } = await listUnlockCodes('class-1', userClient);
+    expect(Array.isArray(data)).toBe(true);
+    expect(data.length).toBe(1);
+    expect(data[0].id).toBe('code-1');
 });

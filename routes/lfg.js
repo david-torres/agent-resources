@@ -23,7 +23,7 @@ const { statList } = require('../util/enclave-consts');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id);
+  const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id, res.locals.supabase);
   res.render('lfg', {
     profile,
     ownPosts,
@@ -36,7 +36,7 @@ router.get('/', isAuthenticated, async (req, res) => {
 
 router.get('/tab/my-posts', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id);
+  const { data: ownPosts, error: ownPostsError } = await getLfgPostsByCreator(profile.id, res.locals.supabase);
   if (ownPostsError) {
     console.error(ownPostsError);
     return res.status(400).send(ownPostsError.message);
@@ -47,7 +47,7 @@ router.get('/tab/my-posts', isAuthenticated, async (req, res) => {
 
 router.get('/tab/joined', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: joinedPosts, error: joinedPostsError } = await getLfgJoinedPosts(profile.id);
+  const { data: joinedPosts, error: joinedPostsError } = await getLfgJoinedPosts(profile.id, res.locals.supabase);
   if (joinedPostsError) {
     console.error(joinedPostsError);
     return res.status(400).send(joinedPostsError.message);
@@ -58,7 +58,7 @@ router.get('/tab/joined', isAuthenticated, async (req, res) => {
 
 router.get('/tab/public', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: publicPosts, error: publicPostsError } = await getLfgPostsByOthers(profile.id);
+  const { data: publicPosts, error: publicPostsError } = await getLfgPostsByOthers(profile.id, res.locals.supabase);
   if (publicPostsError) {
     console.error(publicPostsError);
     return res.status(400).send(publicPostsError.message);
@@ -69,7 +69,7 @@ router.get('/tab/public', isAuthenticated, async (req, res) => {
 
 router.get('/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
   res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
@@ -86,7 +86,7 @@ router.post('/', isAuthenticated, async (req, res) => {
 
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
-  const { data, error } = await getLfgPost(req.params.id);
+  const { data, error } = await getLfgPost(req.params.id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -125,9 +125,9 @@ router.get('/:id', authOptional, async (req, res) => {
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
-  const { data, error } = await getLfgPost(req.params.id);
+  const { data, error } = await getLfgPost(req.params.id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -157,8 +157,8 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 
 router.get('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: post, error: postError } = await getLfgPost(req.params.id);
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
 
   if (postError) {
@@ -172,7 +172,7 @@ router.post('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { joinType, characterId } = req.body;
 
-  const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId);
+  const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
@@ -182,13 +182,13 @@ router.post('/:id/join', isAuthenticated, async (req, res) => {
 
 router.get('/:id/requests', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: post, error: postError } = await getLfgPost(req.params.id);
+  const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
 
   if (post.creator_id !== profile.id) {
     return res.status(403).send('Unauthorized');
   }
 
-  const { data: requests, error: requestsError } = await getLfgJoinRequests(req.params.id);
+  const { data: requests, error: requestsError } = await getLfgJoinRequests(req.params.id, res.locals.supabase);
   if (requestsError) {
     return res.status(400).send(requestsError.message);
   } else {
@@ -199,7 +199,7 @@ router.get('/:id/requests', isAuthenticated, async (req, res) => {
 
 router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: post, error: postError } = await getLfgPost(req.params.id);
+  const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
 
   if (postError || !post) {
     return res.status(404).send('Not found');
@@ -220,7 +220,7 @@ router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
 router.delete('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
 
-  const { data: post, error: postError } = await getLfgPost(req.params.id);
+  const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
   if (postError) {
     return res.status(400).send(postError.message);
   }
@@ -234,7 +234,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
     return res.header('HX-Location', `/lfg`).send();
   }
 
-  const { data: request, error: requestError } = await getLfgJoinRequestForUserAndPost(profile.id, req.params.id);
+  const { data: request, error: requestError } = await getLfgJoinRequestForUserAndPost(profile.id, req.params.id, res.locals.supabase);
   if (requestError) {
     return res.status(400).send(requestError.message);
   }
@@ -248,7 +248,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
 
 router.get('/events/all', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: allPosts, error } = await getLfgPosts();
+  const { data: allPosts, error } = await getLfgPosts(res.locals.supabase);
 
   if (error) {
     console.error(error);
