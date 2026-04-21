@@ -538,7 +538,10 @@ const updateForAgent = async ({ agentProfile, postId, body }) => {
   if (error) {
     // C2: updateLfgPost returns string errors, not Supabase objects.
     const msg = typeof error === 'string' ? error : (error.message || '');
-    if (/not found/i.test(msg) || /unauthori[sz]ed/i.test(msg)) {
+    if (/not found/i.test(msg)) {
+      return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
+    }
+    if (/unauthori[sz]ed/i.test(msg)) {
       return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can edit this post' } };
     }
     return { data: null, error: { status: 500, code: 'update_failed', message: msg || 'Update failed' } };
@@ -558,7 +561,10 @@ const deleteForAgent = async ({ agentProfile, postId }) => {
   if (error) {
     // C2: deleteLfgPost returns string errors, not Supabase objects.
     const msg = typeof error === 'string' ? error : (error.message || '');
-    if (/not found/i.test(msg) || /unauthori[sz]ed/i.test(msg)) {
+    if (/not found/i.test(msg)) {
+      return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
+    }
+    if (/unauthori[sz]ed/i.test(msg)) {
       return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can delete this post' } };
     }
     return { data: null, error: { status: 500, code: 'delete_failed', message: msg || 'Delete failed' } };
@@ -582,24 +588,26 @@ const joinForAgent = async ({ agentProfileId, postId, joinType, characterId }) =
     }
   }
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: existingErr } = await supabaseAdmin
     .from('lfg_join_requests')
     .select('id, status')
     .eq('lfg_post_id', postId)
     .eq('profile_id', agentProfileId)
     .maybeSingle();
+  if (existingErr) return { data: null, error: existingErr };
   if (existing && existing.status !== 'rejected') {
     return { data: null, error: { status: 409, code: 'duplicate_request', message: 'You already have a request on this post' } };
   }
 
   if (joinType === 'conduit') {
-    const { data: conduitRequests } = await supabaseAdmin
+    const { data: conduitRequests, error: conduitErr } = await supabaseAdmin
       .from('lfg_join_requests')
       .select('id')
       .eq('lfg_post_id', postId)
       .eq('status', 'approved')
       .eq('join_type', 'conduit')
       .limit(1);
+    if (conduitErr) return { data: null, error: conduitErr };
     if (conduitRequests && conduitRequests.length > 0) {
       return { data: null, error: { status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' } };
     }
@@ -612,12 +620,13 @@ const joinForAgent = async ({ agentProfileId, postId, joinType, characterId }) =
 };
 
 const leaveForAgent = async ({ agentProfileId, postId }) => {
-  const { data: existing } = await supabaseAdmin
+  const { data: existing, error: probeErr } = await supabaseAdmin
     .from('lfg_join_requests')
     .select('id, status')
     .eq('lfg_post_id', postId)
     .eq('profile_id', agentProfileId)
     .maybeSingle();
+  if (probeErr) return { data: null, error: probeErr };
   if (!existing) {
     // I2: propagate errors from getPostForAgent
     const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
@@ -639,11 +648,12 @@ const updateRequestForAgent = async ({ agentProfileId, requestId, status }) => {
   if (status !== 'approved' && status !== 'rejected') {
     return { data: null, error: { status: 400, code: 'invalid_status', message: 'status must be approved or rejected' } };
   }
-  const { data: req } = await supabaseAdmin
+  const { data: req, error: probeErr } = await supabaseAdmin
     .from('lfg_join_requests')
     .select('id, lfg_post_id, post:lfg_post_id(creator_id)')
     .eq('id', requestId)
     .maybeSingle();
+  if (probeErr) return { data: null, error: probeErr };
   if (!req) return { data: null, error: { status: 404, code: 'not_found', message: 'Request not found' } };
   if (req.post?.creator_id !== agentProfileId) {
     return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can update requests on this post' } };
