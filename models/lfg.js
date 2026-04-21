@@ -173,7 +173,10 @@ const createLfgPost = async (postReq, profile) => {
       if (deleteErr) return { data: null, error: deleteErr };
     }
 
-    const { data: joinRows, error: joinErr } = await joinLfgPost(post.id, profile.id, 'player', characterId);
+    // creator-gated flow: use admin for the character read so private
+    // characters aren't hidden; the ownership check inside joinLfgPost
+    // enforces authz in app code.
+    const { data: joinRows, error: joinErr } = await joinLfgPost(post.id, profile.id, 'player', characterId, supabaseAdmin);
     if (joinErr) return { data: null, error: joinErr };
 
     const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
@@ -197,7 +200,8 @@ const updateLfgPost = async (id, postReq, profile) => {
       const { error: deleteErr } = await deleteJoinRequest(existingRequest.id);
       if (deleteErr) return { data: null, error: deleteErr };
     }
-    const { data: joinRows, error: joinErr } = await joinLfgPost(id, profile.id, 'player', characterId);
+    // creator-gated: see createLfgPost comment.
+    const { data: joinRows, error: joinErr } = await joinLfgPost(id, profile.id, 'player', characterId, supabaseAdmin);
     if (joinErr) return { data: null, error: joinErr };
     const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
     if (approveErr) return { data: null, error: approveErr };

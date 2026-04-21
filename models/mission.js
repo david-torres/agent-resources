@@ -460,23 +460,23 @@ const removeMissionEditor = async (missionId, profileId) => {
 /**
  * Check if a profile can edit a mission
  * Returns true if profile is creator, host, or an editor
- * 
- * Note: This function uses the service role client (bypasses RLS)
- * because it's checking permissions in application code, not relying on RLS
+ *
+ * Uses supabaseAdmin to bypass RLS — this is a permission check in
+ * application code, not a data-visibility read. Without admin, the
+ * anon client (no JWT) would fail-closed for private missions and
+ * lock creators out of their own mission edit pages.
  */
 const canEditMission = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
 
   // First check if user is creator or host
-  const { data: mission, error: missionError } = await supabase
+  const { data: mission, error: missionError } = await supabaseAdmin
     .from('missions')
     .select('creator_id, host_id')
     .eq('id', missionId)
     .single();
 
   if (missionError || !mission) {
-    // If we can't read the mission, check if it's an RLS issue
-    // In that case, we'll assume the user can't edit (fail closed)
     console.error('Error checking mission permissions:', missionError);
     return false;
   }
@@ -487,7 +487,7 @@ const canEditMission = async (missionId, profile) => {
   }
 
   // Check if user is an editor
-  const { data: editor, error: editorError } = await supabase
+  const { data: editor, error: editorError } = await supabaseAdmin
     .from('mission_editors')
     .select('profile_id')
     .eq('mission_id', missionId)
@@ -507,12 +507,13 @@ const canEditMission = async (missionId, profile) => {
 };
 
 /**
- * Check if a profile is the creator of a mission
+ * Check if a profile is the creator of a mission.
+ * Uses supabaseAdmin for the same reason as canEditMission.
  */
 const isCreator = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
 
-  const { data: mission, error } = await supabase
+  const { data: mission, error } = await supabaseAdmin
     .from('missions')
     .select('creator_id')
     .eq('id', missionId)

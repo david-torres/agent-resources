@@ -69,7 +69,7 @@ router.get('/tab/public', isAuthenticated, async (req, res) => {
 
 router.get('/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
   res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
@@ -125,7 +125,7 @@ router.get('/:id', authOptional, async (req, res) => {
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
   const { data, error } = await getLfgPost(req.params.id, res.locals.supabase);
   if (error) {
@@ -158,7 +158,7 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 router.get('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
-  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile);
+  const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);
   const characters = (allCharacters || []).filter(c => !c.is_deceased);
 
   if (postError) {

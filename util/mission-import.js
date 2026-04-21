@@ -150,7 +150,7 @@ const findCharacterMatch = async (name, ownCharactersCache) => {
   return { match, ambiguous };
 };
 
-async function processMissionImport(inputText, profile) {
+async function processMissionImport(inputText, profile, client) {
   const prompt = `Parse the following mission log and try to structure the data following the provided JSON schema info.
 
 Mission log:
@@ -184,7 +184,7 @@ JSON output:`;
     const participantNames = dedupe(validated.characters || []);
     const unresolved = [];
     const addedIds = new Set();
-    const { data: ownCharacters, error: ownError } = await getOwnCharacters(profile);
+    const { data: ownCharacters, error: ownError } = await getOwnCharacters(profile, client);
     const ownList = ownError ? [] : (ownCharacters || []);
 
     for (const name of participantNames) {

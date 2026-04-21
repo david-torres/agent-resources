@@ -158,7 +158,7 @@ router.post('/import', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { inputText } = req.body;
   try {
-    const { mission } = await processMissionImport(inputText, profile);
+    const { mission } = await processMissionImport(inputText, profile, res.locals.supabase);
     return res.header('HX-Location', `/missions/${mission.id}`).send();
   } catch (error) {
     return res.status(400).send(error.message);
