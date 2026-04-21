@@ -28,8 +28,8 @@ const getPublicCharactersByCreator = async (creatorId) => {
   return { data, error };
 }
 
-const getCharacter = async (id) => {
-  const { data, error } = await supabase.from('characters').select('*').eq('id', id).single();
+const getCharacter = async (id, client = supabase) => {
+  const { data, error } = await client.from('characters').select('*').eq('id', id).single();
   if (error) {
     console.error(error);
     return { data: null, error };

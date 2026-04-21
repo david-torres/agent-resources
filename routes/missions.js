@@ -439,7 +439,7 @@ router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) 
 router.get('/character/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
-  const { data: character, error } = await getCharacter(id);
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
   
   if (error) {
     return res.status(400).send(error.message);

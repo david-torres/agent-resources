@@ -159,3 +159,15 @@ test('getOwnCharacters uses the passed client', async () => {
   expect(data.length).toBe(1);
   expect(data[0].id).toBe('injected-only');
 });
+
+test('getCharacter uses the passed client for the characters SELECT', async () => {
+  // fakeAnon.characters returns id 'char-uuid-1'; inject a different id so
+  // we can tell which client dispatched the read.
+  const userClient = makeClient({
+    characters: [{ id: 'injected-char', name: 'Test', creator_id: 'p1', is_public: false }]
+  });
+  const { getCharacter } = require('./character');
+  const { data } = await getCharacter('injected-char', userClient);
+  expect(data).toBeTruthy();
+  expect(data.id).toBe('injected-char');
+});
