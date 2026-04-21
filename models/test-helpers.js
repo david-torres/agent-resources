@@ -12,6 +12,10 @@ const makeSpyClient = (tableToRows = {}) => {
       const result = { data: rows, error: null, count: rows.length };
       const chain = {
         select: () => chain,
+        insert: () => chain,
+        update: () => chain,
+        delete: () => chain,
+        upsert: () => chain,
         eq: () => chain,
         neq: () => chain,
         gte: () => chain,

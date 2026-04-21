@@ -234,10 +234,10 @@ const deleteLfgPost = async (id, profile) => {
   return { data, error };
 }
 
-const joinLfgPost = async (postId, profileId, joinType, characterId = null) => {
+const joinLfgPost = async (postId, profileId, joinType, characterId = null, client = supabase) => {
   if (joinType == 'player' && !characterId) return { data: null, error: 'Character is required for player join' };
   if (joinType == 'player') {
-    const { data: character, error: characterError } = await supabase.from('characters').select('*').eq('id', characterId).single();
+    const { data: character, error: characterError } = await client.from('characters').select('*').eq('id', characterId).single();
     if (characterError) return { data: null, error: characterError };
     if (character.creator_id !== profileId) return { data: null, error: 'You can only join with your own character' };
     if (character.is_deceased) return { data: null, error: 'Deceased characters cannot join games' };

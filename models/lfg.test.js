@@ -150,3 +150,19 @@ test('getLfgJoinRequests falls back to default anon client when no client passed
   await getLfgJoinRequests('l1');
   expect(defaultAnon.calls).toContain('lfg_join_requests');
 });
+
+test('joinLfgPost uses the passed client to read the character', async () => {
+  const userClient = makeSpyClient({
+    characters: [{ id: 'char-1', creator_id: 'p1', is_deceased: false }]
+  });
+  defaultAnon.calls.length = 0;
+  const { joinLfgPost } = require('./lfg');
+  // Note: the insert path goes through supabaseAdmin (the mock supabaseAdmin
+  // in _base returns empty arrays, so we get no error but empty data back).
+  const { error } = await joinLfgPost('l1', 'p1', 'player', 'char-1', userClient);
+  expect(userClient.calls).toContain('characters');
+  expect(defaultAnon.calls).not.toContain('characters');
+  // The function should have reached the insert phase without the character
+  // read failing.
+  expect(error).toBeFalsy();
+});

@@ -172,7 +172,7 @@ router.post('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { joinType, characterId } = req.body;
 
-  const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId);
+  const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {
