@@ -346,6 +346,312 @@ const getPendingJoinRequestCount = async (profileId, client = supabase) => {
   return { count: count || 0, error };
 }
 
+// ─── Agent-scoped LFG wrappers ────────────────────────────────────────────────
+
+const closeLfgPost = async (id, profile) => {
+  const { data, error } = await supabaseAdmin
+    .from('lfg_posts')
+    .update({ status: 'closed', updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('creator_id', profile.id)
+    .select()
+    .maybeSingle();
+  if (error) return { data: null, error };
+  if (!data) return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can close this post' } };
+  return { data, error: null };
+};
+
+const serializePostForAgent = (post, { agentProfileId, includePending }) => {
+  const host = post.creator || post.host || {};
+  const roster = (post.join_requests || [])
+    .filter((r) => r.status === 'approved' && r.join_type === 'player')
+    .map((r) => ({
+      character_id: r.character_id,
+      name: r.character?.name || null,
+      class_name: r.character?.class || null,
+      level: r.character?.level || null,
+      profile_id: r.profile_id,
+      profile_display_name: r.profile?.name || null
+    }));
+  const conduit = (post.join_requests || []).find(
+    (r) => r.status === 'approved' && r.join_type === 'conduit'
+  );
+  const myRequest = (post.join_requests || []).find(
+    (r) => r.profile_id === agentProfileId && r.status !== 'rejected'
+  );
+  const base = {
+    id: post.id,
+    title: post.title,
+    description: post.description,
+    date: post.date,
+    host: { id: host.id, display_name: host.name },
+    max_characters: post.max_characters,
+    is_public: post.is_public,
+    status: post.status,
+    player_count: roster.length,
+    has_conduit: !!conduit,
+    roster,
+    conduit: conduit
+      ? { profile_id: conduit.profile_id, display_name: conduit.profile?.name || null }
+      : null,
+    my_request: myRequest
+      ? { id: myRequest.id, join_type: myRequest.join_type, status: myRequest.status }
+      : null
+  };
+  if (includePending && host.id === agentProfileId) {
+    base.pending_requests = (post.join_requests || [])
+      .filter((r) => r.status === 'pending')
+      .map((r) => ({
+        id: r.id,
+        profile_id: r.profile_id,
+        profile_display_name: r.profile?.name || null,
+        join_type: r.join_type,
+        character: r.character
+          ? { id: r.character.id, name: r.character.name, class_name: r.character.class, level: r.character.level }
+          : null
+      }));
+  }
+  return base;
+};
+
+// Internal: fetch lfg_posts with full joins, filtered by arbitrary column equality + optional status
+const AGENT_POST_SELECT = '*, creator:creator_id(id,name), lfg_join_requests(*, profile:profile_id(id,name), character:character_id(*))';
+
+const getPostsWithRequestsBy = async (filters, { status } = {}) => {
+  let query = supabaseAdmin
+    .from('lfg_posts')
+    .select(AGENT_POST_SELECT);
+  for (const [key, value] of Object.entries(filters)) {
+    query = query.eq(key, value);
+  }
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+  const { data, error } = await query;
+  // Normalize: rename lfg_join_requests -> join_requests for serializePostForAgent
+  if (data) {
+    for (const row of data) {
+      row.join_requests = row.lfg_join_requests || [];
+      delete row.lfg_join_requests;
+    }
+  }
+  return { data, error };
+};
+
+// Internal: fetch lfg_posts where the given profile has a non-rejected join request
+const getPostsByJoiner = async (profileId, { status } = {}) => {
+  const { data: requests, error: reqError } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('lfg_post_id')
+    .eq('profile_id', profileId)
+    .neq('status', 'rejected');
+  if (reqError) return { data: null, error: reqError };
+  const ids = (requests || []).map((r) => r.lfg_post_id);
+  if (ids.length === 0) return { data: [], error: null };
+
+  let query = supabaseAdmin
+    .from('lfg_posts')
+    .select(AGENT_POST_SELECT)
+    .in('id', ids);
+  if (status && status !== 'all') {
+    query = query.eq('status', status);
+  }
+  const { data, error } = await query;
+  // Normalize: rename lfg_join_requests -> join_requests for serializePostForAgent
+  if (data) {
+    for (const row of data) {
+      row.join_requests = row.lfg_join_requests || [];
+      delete row.lfg_join_requests;
+    }
+  }
+  return { data, error };
+};
+
+const listPostsForAgent = async ({ agentProfileId, scope = 'public', status = 'open' }) => {
+  let rows;
+  let error;
+  if (scope === 'mine') {
+    ({ data: rows, error } = await getPostsWithRequestsBy(
+      { creator_id: agentProfileId },
+      { status }
+    ));
+  } else if (scope === 'joined') {
+    ({ data: rows, error } = await getPostsByJoiner(agentProfileId, { status }));
+  } else {
+    ({ data: rows, error } = await getPostsWithRequestsBy(
+      { is_public: true },
+      { status }
+    ));
+  }
+  if (error) return { data: null, error };
+  const projected = (rows || []).map((p) => {
+    const full = serializePostForAgent(p, { agentProfileId, includePending: false });
+    return {
+      id: full.id,
+      title: full.title,
+      date: full.date,
+      host: full.host,
+      max_characters: full.max_characters,
+      is_public: full.is_public,
+      status: full.status,
+      player_count: full.player_count,
+      has_conduit: full.has_conduit,
+      my_request_status: full.my_request?.status || null
+    };
+  });
+  return { data: projected, error: null };
+};
+
+const getPostForAgent = async ({ agentProfileId, postId }) => {
+  const { data: raw, error } = await supabaseAdmin
+    .from('lfg_posts')
+    .select(AGENT_POST_SELECT)
+    .eq('id', postId)
+    .maybeSingle();
+  if (error) return { data: null, error };
+  if (!raw) return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
+  // Normalize lfg_join_requests -> join_requests
+  raw.join_requests = raw.lfg_join_requests || [];
+  delete raw.lfg_join_requests;
+  return {
+    data: serializePostForAgent(raw, { agentProfileId, includePending: true }),
+    error: null
+  };
+};
+
+const createForAgent = async ({ agentProfile, body }) => {
+  const { data, error } = await createLfgPost(body, agentProfile);
+  if (error) return { data: null, error };
+  return getPostForAgent({ agentProfileId: agentProfile.id, postId: data.id });
+};
+
+const updateForAgent = async ({ agentProfile, postId, body }) => {
+  const { data, error } = await updateLfgPost(postId, body, agentProfile);
+  if (error) {
+    if (error.message === 'not found' || error.code === 'PGRST116') {
+      return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can edit this post' } };
+    }
+    return { data: null, error };
+  }
+  return getPostForAgent({ agentProfileId: agentProfile.id, postId });
+};
+
+const closeForAgent = async ({ agentProfileId, postId }) => {
+  const profile = { id: agentProfileId };
+  const { data, error } = await closeLfgPost(postId, profile);
+  if (error) return { data: null, error };
+  return getPostForAgent({ agentProfileId, postId: data.id });
+};
+
+const deleteForAgent = async ({ agentProfile, postId }) => {
+  const { error } = await deleteLfgPost(postId, agentProfile);
+  if (error) {
+    if (error.code === 'PGRST116' || error.message === 'not found') {
+      return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can delete this post' } };
+    }
+    return { data: null, error };
+  }
+  return { data: { deleted: true }, error: null };
+};
+
+const joinForAgent = async ({ agentProfileId, postId, joinType, characterId }) => {
+  if (joinType === 'player') {
+    if (!characterId) {
+      return { data: null, error: { status: 400, code: 'character_required', message: 'Player joins require a character' } };
+    }
+    const { data: character, error: charErr } = await supabaseAdmin
+      .from('characters')
+      .select('id, creator_id, is_deceased')
+      .eq('id', characterId)
+      .maybeSingle();
+    if (charErr) return { data: null, error: charErr };
+    if (!character || character.creator_id !== agentProfileId || character.is_deceased) {
+      return { data: null, error: { status: 400, code: 'character_ineligible', message: 'Character is deceased or not yours' } };
+    }
+  }
+
+  const { data: existing } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('id, status')
+    .eq('lfg_post_id', postId)
+    .eq('profile_id', agentProfileId)
+    .maybeSingle();
+  if (existing && existing.status !== 'rejected') {
+    return { data: null, error: { status: 409, code: 'duplicate_request', message: 'You already have a request on this post' } };
+  }
+
+  if (joinType === 'conduit') {
+    const { data: conduitRequests } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('id')
+      .eq('lfg_post_id', postId)
+      .eq('status', 'approved')
+      .eq('join_type', 'conduit')
+      .limit(1);
+    if (conduitRequests && conduitRequests.length > 0) {
+      return { data: null, error: { status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' } };
+    }
+  }
+
+  const { data: request, error } = await joinLfgPost(postId, agentProfileId, joinType, characterId || null);
+  if (error) return { data: null, error };
+  const { data: post } = await getPostForAgent({ agentProfileId, postId });
+  return { data: { request, post }, error: null };
+};
+
+const leaveForAgent = async ({ agentProfileId, postId }) => {
+  const { data: existing } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('id, status')
+    .eq('lfg_post_id', postId)
+    .eq('profile_id', agentProfileId)
+    .maybeSingle();
+  if (!existing) {
+    const { data: post } = await getPostForAgent({ agentProfileId, postId });
+    return { data: { deleted: false, post }, error: null };
+  }
+  const { error } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .delete()
+    .eq('id', existing.id);
+  if (error) return { data: null, error };
+  const { data: post } = await getPostForAgent({ agentProfileId, postId });
+  return { data: { deleted: true, post }, error: null };
+};
+
+const updateRequestForAgent = async ({ agentProfileId, requestId, status }) => {
+  if (status !== 'approved' && status !== 'rejected') {
+    return { data: null, error: { status: 400, code: 'invalid_status', message: 'status must be approved or rejected' } };
+  }
+  const { data: req } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('id, lfg_post_id, post:lfg_post_id(creator_id)')
+    .eq('id', requestId)
+    .maybeSingle();
+  if (!req) return { data: null, error: { status: 404, code: 'not_found', message: 'Request not found' } };
+  if (req.post?.creator_id !== agentProfileId) {
+    return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can update requests on this post' } };
+  }
+  const { data, error } = await updateJoinRequest(requestId, status, req.lfg_post_id);
+  if (error) return { data: null, error };
+  const { data: post } = await getPostForAgent({ agentProfileId, postId: req.lfg_post_id });
+  return { data: { request: data, post }, error: null };
+};
+
+const listEligibleCharactersForAgent = async ({ agentProfileId }) => {
+  const { data, error } = await supabaseAdmin
+    .from('characters')
+    .select('id, name, class, level')
+    .eq('creator_id', agentProfileId)
+    .eq('is_deceased', false)
+    .order('name', { ascending: true });
+  if (error) return { data: null, error };
+  return {
+    data: (data || []).map((c) => ({ id: c.id, name: c.name, class_name: c.class, level: c.level })),
+    error: null
+  };
+};
+
 module.exports = {
   fetchProfileById,
   getLfgPosts,
@@ -356,10 +662,21 @@ module.exports = {
   createLfgPost,
   updateLfgPost,
   deleteLfgPost,
+  closeLfgPost,
   joinLfgPost,
   getLfgJoinRequests,
   getLfgJoinRequestForUserAndPost,
   updateJoinRequest,
   deleteJoinRequest,
-  getPendingJoinRequestCount
+  getPendingJoinRequestCount,
+  listPostsForAgent,
+  getPostForAgent,
+  createForAgent,
+  updateForAgent,
+  closeForAgent,
+  deleteForAgent,
+  joinForAgent,
+  leaveForAgent,
+  updateRequestForAgent,
+  listEligibleCharactersForAgent
 };
