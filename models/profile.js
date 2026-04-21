@@ -42,7 +42,7 @@ const getProfile = async (user) => {
 
   // Profile exists - check if user has any class unlocks, grant starter unlocks if missing
   if (data && user.confirmed_at) {
-    const { data: unlockData, error: unlockError } = await supabase
+    const { data: unlockData, error: unlockError } = await supabaseAdmin
       .from('class_unlocks')
       .select('class_id')
       .eq('user_id', user.id)

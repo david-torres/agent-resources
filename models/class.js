@@ -96,7 +96,7 @@ const isClassUnlocked = async (userId, classId) => {
     }
 
     const now = new Date().toISOString();
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('class_unlocks')
         .select('class_id, expires_at')
         .eq('user_id', userId)
@@ -214,7 +214,7 @@ const saveClassPdfMetadata = async (classId, storagePath) => {
 
 const getUnlockedClasses = async (userId) => {
     const now = new Date().toISOString();
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('class_unlocks')
         .select('class:classes(*), expires_at')
         .eq('user_id', userId)

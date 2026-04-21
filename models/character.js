@@ -304,7 +304,7 @@ const deleteCharacter = async (id, profile) => {
 // helpers
 
 const getCharacterTraits = async (id) => {
-  const { data, error } = await supabase.from('traits').select('*').eq('character_id', id);
+  const { data, error } = await supabaseAdmin.from('traits').select('*').eq('character_id', id);
   return { data, error };
 }
 
@@ -328,7 +328,7 @@ const setCharacterTraits = async (id, traits) => {
 
 const getCharacterGear = async (id) => {
   // Fetch character gear rows
-  const { data: gear, error: gearError } = await supabase
+  const { data: gear, error: gearError } = await supabaseAdmin
     .from('class_gear')
     .select('*')
     .eq('character_id', id);
@@ -460,7 +460,7 @@ const setCharacterGear = async (id, gear) => {
 
 const getCharacterAbilities = async (id) => {
   // First get the character abilities
-  const { data: abilities, error: abilitiesError } = await supabase
+  const { data: abilities, error: abilitiesError } = await supabaseAdmin
     .from('class_abilities')
     .select('*')
     .eq('character_id', id);
