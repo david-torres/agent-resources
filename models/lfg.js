@@ -15,6 +15,25 @@ const assignCreatorMeta = (post, creator) => {
   post.creator_is_public = Boolean(creator?.is_public);
 };
 
+// Derive conduit metadata from the post's join_requests (single source of truth).
+// Overrides any stale host_id on the row and keeps post.host_id/host_name/host_is_public
+// in sync with the approved conduit join_request for template consumption.
+const applyConduitMeta = (post) => {
+  const conduit = (post.join_requests || []).find(
+    (r) => r.status === 'approved' && r.join_type === 'conduit'
+  );
+  if (conduit && conduit.profile) {
+    post.host_id = conduit.profile.id;
+    post.host_name = conduit.profile.name;
+    post.host_is_public = Boolean(conduit.profile.is_public);
+  } else {
+    post.host_id = null;
+    post.host_name = null;
+    post.host_is_public = false;
+  }
+  post.has_conduit = Boolean(conduit);
+};
+
 const getLfgPosts = async (client = supabase) => {
   const { data, error } = await client
     .from('lfg_posts')
@@ -28,15 +47,10 @@ const getLfgPosts = async (client = supabase) => {
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) {
-      post.host_name = host.name;
-      post.host_is_public = host.is_public;
-    }
-
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
+    applyConduitMeta(post);
   }
   return { data, error };
 }
@@ -57,15 +71,10 @@ const getLfgPostsByOthers = async (profileId, client = supabase) => {
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) {
-      post.host_name = host.name;
-      post.host_is_public = host.is_public;
-    }
-
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
+    applyConduitMeta(post);
   }
   return { data, error };
 }
@@ -82,15 +91,10 @@ const getLfgPostsByCreator = async (creator_id, client = supabase) => {
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) {
-      post.host_name = host.name;
-      post.host_is_public = host.is_public;
-    }
-
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data, error: joinRequestsError };
     post.join_requests = joinRequests;
+    applyConduitMeta(post);
     post.pending_request_count = (joinRequests || []).filter(r => r.status === 'pending').length;
   }
   return { data, error };
@@ -108,16 +112,6 @@ const getLfgPost = async (id, client = supabase) => {
   const { profile: creator, error: creatorError } = await fetchProfileById(post.creator_id, client);
   if (creatorError) return { data: null, error: creatorError };
   assignCreatorMeta(post, creator);
-
-  const { data: host, error: hostError } = await client
-    .from('profiles')
-    .select('*')
-    .eq('id', post.host_id)
-    .single();
-  if (!hostError) {
-    post.host_name = host.name;
-    post.host_is_public = host.is_public;
-  }
 
   const { data: joinRequests, error: joinRequestsError } = await client
     .from('lfg_join_requests')
@@ -141,17 +135,44 @@ const getLfgPost = async (id, client = supabase) => {
 
   if (joinRequestsError) return { data: post, error: joinRequestsError };
   post.join_requests = joinRequests;
+  applyConduitMeta(post);
 
   return { data: post, error };
 }
+
+// Reconcile the creator's own role on their post from form intent (host checkbox / character select).
+// host_id is never written directly — joinLfgPost inserts an approved conduit request, and
+// syncConduitHostId mirrors that onto lfg_posts.host_id. An absent role intent (neither field)
+// means "leave my existing role alone" so metadata-only edits don't clobber roles.
+const reconcileCreatorRole = async (postId, profileId, { hostFlag, characterId }) => {
+  const desired = hostFlag
+    ? { type: 'conduit', character: null }
+    : (characterId ? { type: 'player', character: characterId } : null);
+  if (!desired) return { error: null };
+
+  const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profileId, postId);
+  const matches = existingRequest
+    && existingRequest.join_type === desired.type
+    && existingRequest.character_id === desired.character;
+  if (matches) return { error: null };
+
+  if (existingRequest) {
+    const { error: delErr } = await deleteJoinRequest(existingRequest.id);
+    if (delErr) return { error: delErr };
+  }
+  const { error: joinErr } = await joinLfgPost(postId, profileId, desired.type, desired.character, supabaseAdmin);
+  if (joinErr) return { error: joinErr };
+  return { error: null };
+};
 
 const createLfgPost = async (postReq, profile) => {
   postReq.creator_id = profile.id;
 
   const characterId = postReq.character || null;
   delete postReq.character;
+  const hostFlag = postReq.host_id === 'on';
+  delete postReq.host_id;
 
-  postReq.host_id = postReq.host_id === 'on' ? profile.id : null;
   postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
@@ -166,22 +187,8 @@ const createLfgPost = async (postReq, profile) => {
   }
   const post = postRows[0];
 
-  if (characterId) {
-    const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profile.id, post.id);
-    if (existingRequest) {
-      const { error: deleteErr } = await deleteJoinRequest(existingRequest.id);
-      if (deleteErr) return { data: null, error: deleteErr };
-    }
-
-    // creator-gated flow: use admin for the character read so private
-    // characters aren't hidden; the ownership check inside joinLfgPost
-    // enforces authz in app code.
-    const { data: joinRows, error: joinErr } = await joinLfgPost(post.id, profile.id, 'player', characterId, supabaseAdmin);
-    if (joinErr) return { data: null, error: joinErr };
-
-    const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
-    if (approveErr) return { data: null, error: approveErr };
-  }
+  const { error: roleErr } = await reconcileCreatorRole(post.id, profile.id, { hostFlag, characterId });
+  if (roleErr) return { data: null, error: roleErr };
 
   return { data: post, error: null };
 }
@@ -193,25 +200,16 @@ const updateLfgPost = async (id, postReq, profile) => {
 
   const characterId = postReq.character || null;
   delete postReq.character;
+  const hostFlag = postReq.host_id === 'on';
+  delete postReq.host_id;
 
-  if (characterId) {
-    const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profile.id, id);
-    if (existingRequest) {
-      const { error: deleteErr } = await deleteJoinRequest(existingRequest.id);
-      if (deleteErr) return { data: null, error: deleteErr };
-    }
-    // creator-gated: see createLfgPost comment.
-    const { data: joinRows, error: joinErr } = await joinLfgPost(id, profile.id, 'player', characterId, supabaseAdmin);
-    if (joinErr) return { data: null, error: joinErr };
-    const { error: approveErr } = await updateJoinRequest(joinRows[0].id, 'approved');
-    if (approveErr) return { data: null, error: approveErr };
-  }
+  const { error: roleErr } = await reconcileCreatorRole(id, profile.id, { hostFlag, characterId });
+  if (roleErr) return { data: null, error: roleErr };
 
   delete postReq.creator_name;
   delete postReq.host_name;
   delete postReq.join_requests;
 
-  postReq.host_id = postReq.host_id === 'on' ? profile.id : null;
   postReq.is_public = postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
@@ -248,16 +246,39 @@ const joinLfgPost = async (postId, profileId, joinType, characterId = null, clie
   }
   if (joinType == 'conduit') characterId = null;
 
+  if (joinType === 'conduit') {
+    const { data: approvedConduit } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('id')
+      .eq('lfg_post_id', postId)
+      .eq('join_type', 'conduit')
+      .eq('status', 'approved')
+      .limit(1);
+    if (approvedConduit && approvedConduit.length > 0) {
+      return { data: null, error: 'Conduit slot is already filled' };
+    }
+  }
+
+  // Auto-approve when the joiner is the post's creator — they're picking a role for their own post.
+  const { data: postRow } = await supabaseAdmin
+    .from('lfg_posts')
+    .select('creator_id')
+    .eq('id', postId)
+    .maybeSingle();
+  const status = postRow?.creator_id === profileId ? 'approved' : 'pending';
+
   const joinRequest = {
     lfg_post_id: postId,
     profile_id: profileId,
     join_type: joinType,
     character_id: characterId,
-    status: 'pending'
+    status
   };
 
   // authz: profile_id comes from authenticated session; character ownership verified above for player joins.
   const { data, error } = await supabaseAdmin.from('lfg_join_requests').insert(joinRequest).select();
+  if (error) return { data, error };
+  if (status === 'approved' && joinType === 'conduit') await syncConduitHostId(postId);
   return { data, error };
 }
 
@@ -283,6 +304,26 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId, client = supab
   return { data, error };
 }
 
+// Keep lfg_posts.host_id in sync with the approved conduit join_request (if any).
+// host_id is treated as a denormalized cache of "who is the approved conduit", needed by
+// RLS policies (schema.sql) and by the character-view helper (routes/characters.js).
+// All conduit state changes go through lfg_join_requests; this helper mirrors the result.
+const syncConduitHostId = async (postId) => {
+  const { data: approved } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('profile_id')
+    .eq('lfg_post_id', postId)
+    .eq('join_type', 'conduit')
+    .eq('status', 'approved')
+    .maybeSingle();
+  const newHostId = approved?.profile_id || null;
+  const { error } = await supabaseAdmin
+    .from('lfg_posts')
+    .update({ host_id: newHostId })
+    .eq('id', postId);
+  return { error };
+};
+
 const updateJoinRequest = async (requestId, status, postId = null) => {
   // authz: caller scopes by postId when mutating cross-user requests;
   // internal callers (createLfgPost/updateLfgPost auto-approve) pass null because they just inserted the request.
@@ -292,16 +333,34 @@ const updateJoinRequest = async (requestId, status, postId = null) => {
     .eq('id', requestId);
   if (postId) query = query.eq('lfg_post_id', postId);
   const { data, error } = await query;
+  if (error) return { data, error };
+
+  let resolvedPostId = postId;
+  if (!resolvedPostId) {
+    const { data: row } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('lfg_post_id')
+      .eq('id', requestId)
+      .maybeSingle();
+    resolvedPostId = row?.lfg_post_id;
+  }
+  if (resolvedPostId) await syncConduitHostId(resolvedPostId);
   return { data, error };
 }
 
 const deleteJoinRequest = async (requestId) => {
   // authz: caller (routes/lfg.js DELETE /:id/join) scopes requestId to the authenticated profile;
   // also called internally by createLfgPost/updateLfgPost (creator-gated) to clear prior requests.
+  const { data: existing } = await supabaseAdmin
+    .from('lfg_join_requests')
+    .select('lfg_post_id')
+    .eq('id', requestId)
+    .maybeSingle();
   const { data, error } = await supabaseAdmin
     .from('lfg_join_requests')
     .delete()
     .eq('id', requestId);
+  if (!error && existing?.lfg_post_id) await syncConduitHostId(existing.lfg_post_id);
   return { data, error };
 }
 
@@ -323,15 +382,10 @@ const getLfgJoinedPosts = async (profileId, client = supabase) => {
     if (creatorError) return { data: null, error: creatorError };
     assignCreatorMeta(post, creator);
 
-    const { data: host, error: hostError } = await client.from('profiles').select('*').eq('id', post.host_id).single();
-    if (!hostError) {
-      post.host_name = host.name;
-      post.host_is_public = host.is_public;
-    }
-
     const { data: joinRequests, error: joinRequestsError } = await getLfgJoinRequests(post.id, client);
     if (joinRequestsError) return { data: null, error: joinRequestsError };
     post.join_requests = joinRequests;
+    applyConduitMeta(post);
   }
 
   return { data: joinedPosts, error: null };
@@ -638,10 +692,7 @@ const leaveForAgent = async ({ agentProfileId, postId }) => {
     if (postErr) return { data: null, error: postErr };
     return { data: { deleted: false, post }, error: null };
   }
-  const { error } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .delete()
-    .eq('id', existing.id);
+  const { error } = await deleteJoinRequest(existing.id);
   if (error) return { data: null, error };
   // I2: propagate errors from getPostForAgent
   const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
@@ -708,6 +759,7 @@ module.exports = {
   updateJoinRequest,
   deleteJoinRequest,
   getPendingJoinRequestCount,
+  syncConduitHostId,
   listPostsForAgent,
   getPostForAgent,
   createForAgent,

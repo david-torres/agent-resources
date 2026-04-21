@@ -305,6 +305,198 @@ describe('joinForAgent', () => {
   });
 });
 
+// ─── self-join auto-approve ───────────────────────────────────────────────────
+
+describe('self-join auto-approve', () => {
+  beforeEach(async () => {
+    // Clear seeded host_id so host can self-join as conduit without tripping conduit_taken
+    await supabaseAdmin.from('lfg_posts').update({ host_id: null }).eq('id', openPost.id);
+  });
+
+  test('creator joining own post as conduit → request auto-approved', async () => {
+    const { data, error } = await joinForAgent({
+      agentProfileId: hostProfile.id,
+      postId: openPost.id,
+      joinType: 'conduit'
+    });
+    expect(error).toBeNull();
+    expect(data.request[0].status).toBe('approved');
+  });
+
+  test('creator joining own post as player → request auto-approved', async () => {
+    const hostCharacter = await createCharacter(hostProfile.id, { name: 'Host Char' });
+    try {
+      const { data, error } = await joinForAgent({
+        agentProfileId: hostProfile.id,
+        postId: openPost.id,
+        joinType: 'player',
+        characterId: hostCharacter.id
+      });
+      expect(error).toBeNull();
+      expect(data.request[0].status).toBe('approved');
+    } finally {
+      await supabaseAdmin.from('characters').delete().eq('id', hostCharacter.id);
+    }
+  });
+
+  test('non-creator joining stays pending', async () => {
+    const { data, error } = await joinForAgent({
+      agentProfileId: joinerProfile.id,
+      postId: openPost.id,
+      joinType: 'conduit'
+    });
+    expect(error).toBeNull();
+    expect(data.request[0].status).toBe('pending');
+  });
+
+  test('creator conduit self-join syncs host_id on the post', async () => {
+    const { error } = await joinForAgent({
+      agentProfileId: hostProfile.id,
+      postId: openPost.id,
+      joinType: 'conduit'
+    });
+    expect(error).toBeNull();
+    const { data: postRow } = await supabaseAdmin
+      .from('lfg_posts').select('host_id').eq('id', openPost.id).single();
+    expect(postRow.host_id).toBe(hostProfile.id);
+  });
+});
+
+// ─── create/update role reconciliation ────────────────────────────────────────
+
+describe('createLfgPost host-flag flow', () => {
+  test('host_id=on creates+approves a conduit join_request and syncs host_id', async () => {
+    const { createLfgPost } = require('./lfg');
+    const { data: post, error } = await createLfgPost({
+      title: 'Host-flag post',
+      description: 'test',
+      date: new Date(Date.now() + 86400000).toISOString(),
+      max_characters: 4,
+      host_id: 'on'
+    }, hostProfile);
+    expect(error).toBeNull();
+    expect(post).toBeTruthy();
+    try {
+      const { data: req } = await supabaseAdmin
+        .from('lfg_join_requests')
+        .select('join_type, status')
+        .eq('lfg_post_id', post.id)
+        .eq('profile_id', hostProfile.id)
+        .maybeSingle();
+      expect(req).toBeTruthy();
+      expect(req.join_type).toBe('conduit');
+      expect(req.status).toBe('approved');
+
+      const { data: row } = await supabaseAdmin
+        .from('lfg_posts').select('host_id').eq('id', post.id).single();
+      expect(row.host_id).toBe(hostProfile.id);
+    } finally {
+      await supabaseAdmin.from('lfg_posts').delete().eq('id', post.id);
+    }
+  });
+
+  test('no host_id flag leaves post with no conduit', async () => {
+    const { createLfgPost } = require('./lfg');
+    const { data: post, error } = await createLfgPost({
+      title: 'No-host post',
+      description: 'test',
+      date: new Date(Date.now() + 86400000).toISOString(),
+      max_characters: 4
+    }, hostProfile);
+    expect(error).toBeNull();
+    try {
+      const { data: row } = await supabaseAdmin
+        .from('lfg_posts').select('host_id').eq('id', post.id).single();
+      expect(row.host_id).toBeNull();
+      const { data: reqs } = await supabaseAdmin
+        .from('lfg_join_requests')
+        .select('id')
+        .eq('lfg_post_id', post.id);
+      expect(reqs.length).toBe(0);
+    } finally {
+      await supabaseAdmin.from('lfg_posts').delete().eq('id', post.id);
+    }
+  });
+});
+
+describe('updateLfgPost role reconciliation', () => {
+  beforeEach(async () => {
+    await supabaseAdmin.from('lfg_posts').update({ host_id: null }).eq('id', openPost.id);
+  });
+
+  test('setting host_id=on when not yet conduit creates+approves the conduit request', async () => {
+    const { updateLfgPost } = require('./lfg');
+    const { error } = await updateLfgPost(openPost.id, {
+      title: openPost.title,
+      description: openPost.description,
+      date: new Date(Date.now() + 86400000).toISOString(),
+      max_characters: 4,
+      host_id: 'on'
+    }, hostProfile);
+    expect(error).toBeNull();
+
+    const { data: req } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('join_type, status')
+      .eq('lfg_post_id', openPost.id)
+      .eq('profile_id', hostProfile.id)
+      .maybeSingle();
+    expect(req.join_type).toBe('conduit');
+    expect(req.status).toBe('approved');
+
+    const { data: row } = await supabaseAdmin
+      .from('lfg_posts').select('host_id').eq('id', openPost.id).single();
+    expect(row.host_id).toBe(hostProfile.id);
+  });
+
+  test('update without host_id/character does not delete existing self-request', async () => {
+    // Creator already has an approved conduit request (e.g. joined via normal flow)
+    await createJoinRequest(openPost.id, hostProfile.id, 'conduit', null, 'approved');
+    await supabaseAdmin.from('lfg_posts').update({ host_id: hostProfile.id }).eq('id', openPost.id);
+
+    const { updateLfgPost } = require('./lfg');
+    const { error } = await updateLfgPost(openPost.id, {
+      title: 'Edited title',
+      description: openPost.description,
+      date: new Date(Date.now() + 86400000).toISOString(),
+      max_characters: 4
+      // note: no host_id field at all
+    }, hostProfile);
+    expect(error).toBeNull();
+
+    const { data: req } = await supabaseAdmin
+      .from('lfg_join_requests')
+      .select('join_type, status')
+      .eq('lfg_post_id', openPost.id)
+      .eq('profile_id', hostProfile.id)
+      .maybeSingle();
+    expect(req).toBeTruthy();
+    expect(req.join_type).toBe('conduit');
+    expect(req.status).toBe('approved');
+  });
+});
+
+// ─── joinLfgPost conduit_taken (shared impl) ──────────────────────────────────
+
+describe('joinLfgPost conduit slot enforcement', () => {
+  test('rejects a conduit join when an approved conduit already exists', async () => {
+    await createJoinRequest(openPost.id, joinerProfile.id, 'conduit', null, 'approved');
+    const thirdAuthId = await createAuthUser(`lfg-test-third-${Date.now()}@test.invalid`);
+    const thirdProfile = await createProfile(thirdAuthId, 'Third User');
+    try {
+      const { joinLfgPost } = require('./lfg');
+      const { data, error } = await joinLfgPost(openPost.id, thirdProfile.id, 'conduit');
+      expect(data).toBeNull();
+      expect(error).toBeTruthy();
+      const message = typeof error === 'string' ? error : error.message;
+      expect(message).toMatch(/conduit/i);
+    } finally {
+      await supabaseAdmin.from('profiles').delete().eq('id', thirdProfile.id);
+      await deleteAuthUser(thirdAuthId);
+    }
+  });
+});
+
 // ─── closeForAgent ────────────────────────────────────────────────────────────
 
 describe('closeForAgent', () => {
@@ -404,5 +596,88 @@ describe('leaveForAgent', () => {
     expect(data.deleted).toBe(false);
     expect(data.post).toBeDefined();
     expect(data.post.id).toBe(openPost.id);
+  });
+});
+
+// ─── conduit host_id sync ─────────────────────────────────────────────────────
+
+describe('conduit host_id sync', () => {
+  beforeEach(async () => {
+    // Start each sync test from a clean slate where host_id is null, so we can
+    // observe the sync logic flipping it on/off rather than the seed value.
+    await supabaseAdmin.from('lfg_posts').update({ host_id: null }).eq('id', openPost.id);
+  });
+
+  test('approving a conduit join_request sets lfg_posts.host_id to the conduit profile', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'conduit', null, 'pending');
+
+    const { error } = await updateRequestForAgent({
+      agentProfileId: hostProfile.id,
+      requestId: joinReq.id,
+      status: 'approved'
+    });
+    expect(error).toBeNull();
+
+    const { data: postRow } = await supabaseAdmin
+      .from('lfg_posts')
+      .select('host_id')
+      .eq('id', openPost.id)
+      .single();
+    expect(postRow.host_id).toBe(joinerProfile.id);
+  });
+
+  test('rejecting an approved conduit clears lfg_posts.host_id', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'conduit', null, 'approved');
+    await supabaseAdmin.from('lfg_posts').update({ host_id: joinerProfile.id }).eq('id', openPost.id);
+
+    const { error } = await updateRequestForAgent({
+      agentProfileId: hostProfile.id,
+      requestId: joinReq.id,
+      status: 'rejected'
+    });
+    expect(error).toBeNull();
+
+    const { data: postRow } = await supabaseAdmin
+      .from('lfg_posts')
+      .select('host_id')
+      .eq('id', openPost.id)
+      .single();
+    expect(postRow.host_id).toBeNull();
+  });
+
+  test('approving a player request does not touch host_id', async () => {
+    const joinReq = await createJoinRequest(openPost.id, joinerProfile.id, 'player', joinerCharacter.id, 'pending');
+
+    const { error } = await updateRequestForAgent({
+      agentProfileId: hostProfile.id,
+      requestId: joinReq.id,
+      status: 'approved'
+    });
+    expect(error).toBeNull();
+
+    const { data: postRow } = await supabaseAdmin
+      .from('lfg_posts')
+      .select('host_id')
+      .eq('id', openPost.id)
+      .single();
+    expect(postRow.host_id).toBeNull();
+  });
+
+  test('leaving as approved conduit clears host_id', async () => {
+    await createJoinRequest(openPost.id, joinerProfile.id, 'conduit', null, 'approved');
+    await supabaseAdmin.from('lfg_posts').update({ host_id: joinerProfile.id }).eq('id', openPost.id);
+
+    const { error } = await leaveForAgent({
+      agentProfileId: joinerProfile.id,
+      postId: openPost.id
+    });
+    expect(error).toBeNull();
+
+    const { data: postRow } = await supabaseAdmin
+      .from('lfg_posts')
+      .select('host_id')
+      .eq('id', openPost.id)
+      .single();
+    expect(postRow.host_id).toBeNull();
   });
 });

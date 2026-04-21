@@ -17,6 +17,7 @@ const {
     getLfgJoinRequestForUserAndPost,
     updateJoinRequest,
     deleteJoinRequest,
+    syncConduitHostId,
 } = require('../util/supabase');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { statList } = require('../util/enclave-consts');
@@ -174,7 +175,8 @@ router.post('/:id/join', isAuthenticated, async (req, res) => {
 
   const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    const message = typeof error === 'string' ? error : (error.message || 'Join failed');
+    return res.status(400).send(message);
   } else {
     return res.header('HX-Location', `/lfg/${req.params.id}`).send();
   }
@@ -220,30 +222,25 @@ router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
 router.delete('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
 
-  const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
-  if (postError) {
-    return res.status(400).send(postError.message);
-  }
-
-  if (post.host_id === profile.id) {
-    post.host_id = null;
-    const { data: updatePost, error: updatePostError } = await updateLfgPost(req.params.id, post, profile);
-    if (updatePostError) {
-      return res.status(400).send(updatePostError.message);
+  const { data: request } = await getLfgJoinRequestForUserAndPost(profile.id, req.params.id, res.locals.supabase);
+  if (request) {
+    const { error } = await deleteJoinRequest(request.id);
+    if (error) {
+      const msg = typeof error === 'string' ? error : (error.message || 'Failed to unjoin');
+      return res.status(400).send(msg);
     }
     return res.header('HX-Location', `/lfg`).send();
   }
 
-  const { data: request, error: requestError } = await getLfgJoinRequestForUserAndPost(profile.id, req.params.id, res.locals.supabase);
-  if (requestError) {
-    return res.status(400).send(requestError.message);
-  }
-  const { data, error } = await deleteJoinRequest(request.id);
-  if (error) {
-    return res.status(400).send(error.message);
-  } else {
+  // Legacy fallback: a pre-migration post may still have host_id set without a matching
+  // approved conduit join_request. syncConduitHostId re-derives host_id from join_requests,
+  // which will clear it when none exists.
+  const { data: post } = await getLfgPost(req.params.id, res.locals.supabase);
+  if (post && post.host_id === profile.id) {
+    await syncConduitHostId(req.params.id);
     return res.header('HX-Location', `/lfg`).send();
   }
+  return res.status(400).send('No join request found');
 });
 
 router.get('/events/all', isAuthenticated, async (req, res) => {
