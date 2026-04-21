@@ -1,3 +1,7 @@
+// In-memory per-key sliding window. The buckets Map grows with the number of
+// unique keys and is only reclaimed on process restart — fine for a single
+// Railway instance with a bounded user count; revisit if we scale beyond ~1k
+// active tokens.
 const createRateLimiter = ({ max, windowMs }) => {
   const buckets = new Map();
 
