@@ -30,6 +30,8 @@ const {
   updateRequestForAgent,
   listEligibleCharactersForAgent
 } = require('../models/lfg');
+const { createRateLimiter } = require('../util/rate-limit');
+const lfgLimiter = createRateLimiter({ max: 30, windowMs: 60_000 });
 
 const sendLfgError = (res, err) => {
   const status = (err && err.status) || 500;
@@ -235,7 +237,7 @@ const validatePostBody = (body, { isEdit = false } = {}) => {
   return { body: out };
 };
 
-router.get('/lfg/posts', async (req, res) => {
+router.get('/lfg/posts', lfgLimiter.middleware, async (req, res) => {
   const scope = ['public', 'mine', 'joined'].includes(req.query.scope) ? req.query.scope : 'public';
   const status = ['open', 'closed', 'all'].includes(req.query.status) ? req.query.status : 'open';
   const { data, error } = await listPostsForAgent({
@@ -247,7 +249,7 @@ router.get('/lfg/posts', async (req, res) => {
   return res.json({ posts: data });
 });
 
-router.get('/lfg/posts/:id', async (req, res) => {
+router.get('/lfg/posts/:id', lfgLimiter.middleware, async (req, res) => {
   const { data, error } = await getPostForAgent({
     agentProfileId: res.locals.profile.id,
     postId: req.params.id
@@ -256,7 +258,7 @@ router.get('/lfg/posts/:id', async (req, res) => {
   return res.json({ post: data });
 });
 
-router.post('/lfg/posts', async (req, res) => {
+router.post('/lfg/posts', lfgLimiter.middleware, async (req, res) => {
   const { body, error: validationError } = validatePostBody(req.body);
   if (validationError) return sendLfgError(res, validationError);
   const { data, error } = await createForAgent({
@@ -267,7 +269,7 @@ router.post('/lfg/posts', async (req, res) => {
   return res.json({ post: data });
 });
 
-router.patch('/lfg/posts/:id', async (req, res) => {
+router.patch('/lfg/posts/:id', lfgLimiter.middleware, async (req, res) => {
   const { body, error: validationError } = validatePostBody(req.body, { isEdit: true });
   if (validationError) return sendLfgError(res, validationError);
   const { data, error } = await updateForAgent({
@@ -279,7 +281,7 @@ router.patch('/lfg/posts/:id', async (req, res) => {
   return res.json({ post: data });
 });
 
-router.post('/lfg/posts/:id/close', async (req, res) => {
+router.post('/lfg/posts/:id/close', lfgLimiter.middleware, async (req, res) => {
   const { data, error } = await closeForAgent({
     agentProfileId: res.locals.profile.id,
     postId: req.params.id
@@ -288,7 +290,7 @@ router.post('/lfg/posts/:id/close', async (req, res) => {
   return res.json({ post: data });
 });
 
-router.delete('/lfg/posts/:id', async (req, res) => {
+router.delete('/lfg/posts/:id', lfgLimiter.middleware, async (req, res) => {
   const { data, error } = await deleteForAgent({
     agentProfile: res.locals.profile,
     postId: req.params.id
@@ -297,7 +299,7 @@ router.delete('/lfg/posts/:id', async (req, res) => {
   return res.json(data);
 });
 
-router.post('/lfg/posts/:id/join', async (req, res) => {
+router.post('/lfg/posts/:id/join', lfgLimiter.middleware, async (req, res) => {
   const { join_type, character_id } = req.body || {};
   if (join_type !== 'player' && join_type !== 'conduit') {
     return sendLfgError(res, { status: 400, code: 'invalid_join_type', message: 'join_type must be player or conduit' });
@@ -312,7 +314,7 @@ router.post('/lfg/posts/:id/join', async (req, res) => {
   return res.json(data);
 });
 
-router.delete('/lfg/posts/:id/join', async (req, res) => {
+router.delete('/lfg/posts/:id/join', lfgLimiter.middleware, async (req, res) => {
   const { data, error } = await leaveForAgent({
     agentProfileId: res.locals.profile.id,
     postId: req.params.id
@@ -321,7 +323,7 @@ router.delete('/lfg/posts/:id/join', async (req, res) => {
   return res.json(data);
 });
 
-router.patch('/lfg/requests/:requestId', async (req, res) => {
+router.patch('/lfg/requests/:requestId', lfgLimiter.middleware, async (req, res) => {
   const { status } = req.body || {};
   const { data, error } = await updateRequestForAgent({
     agentProfileId: res.locals.profile.id,
@@ -332,7 +334,7 @@ router.patch('/lfg/requests/:requestId', async (req, res) => {
   return res.json(data);
 });
 
-router.get('/lfg/characters', async (req, res) => {
+router.get('/lfg/characters', lfgLimiter.middleware, async (req, res) => {
   const { data, error } = await listEligibleCharactersForAgent({
     agentProfileId: res.locals.profile.id
   });
