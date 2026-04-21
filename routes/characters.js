@@ -60,7 +60,7 @@ const filterClassDataForUser = async (user) => {
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
-  const { data: characters, error } = await getOwnCharacters(profile);
+  const { data: characters, error } = await getOwnCharacters(profile, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
   } else {

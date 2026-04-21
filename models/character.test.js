@@ -146,3 +146,13 @@ test('getCharacterForAgent returns gear/abilities/personality even when anon emb
   expect(Array.isArray(data.gear)).toBe(true);
   expect(data.gear.length).toBeGreaterThan(0);
 });
+
+test('getOwnCharacters uses the passed client', async () => {
+  const userClient = makeClient({
+    characters: [{ id: 'c1', name: 'Test', creator_id: 'p1', is_public: false }]
+  });
+  const { getOwnCharacters } = require('./character');
+  const { data } = await getOwnCharacters({ id: 'p1' }, userClient);
+  expect(data).toBeTruthy();
+  expect(data.length).toBe(1);
+});
