@@ -148,11 +148,14 @@ test('getCharacterForAgent returns gear/abilities/personality even when anon emb
 });
 
 test('getOwnCharacters uses the passed client', async () => {
+  // fakeAnon.characters already has id 'char-uuid-1'; the injected client
+  // returns a different id, so data[0].id distinguishes which client ran.
   const userClient = makeClient({
-    characters: [{ id: 'c1', name: 'Test', creator_id: 'p1', is_public: false }]
+    characters: [{ id: 'injected-only', name: 'Test', creator_id: 'p1', is_public: false }]
   });
   const { getOwnCharacters } = require('./character');
   const { data } = await getOwnCharacters({ id: 'p1' }, userClient);
   expect(data).toBeTruthy();
   expect(data.length).toBe(1);
+  expect(data[0].id).toBe('injected-only');
 });
