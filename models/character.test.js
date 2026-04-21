@@ -38,6 +38,9 @@ const makeClient = (tableToRows, { singleTables = new Set(['characters']) } = {}
       single() {
         return Promise.resolve(singleResult);
       },
+      maybeSingle() {
+        return Promise.resolve(singleResult);
+      },
       // Allow the chain itself to be awaited as a fallback (e.g., if code
       // ever awaits a non-terminal node). Resolves to the list result.
       then(onFulfilled, onRejected) {
@@ -48,31 +51,47 @@ const makeClient = (tableToRows, { singleTables = new Set(['characters']) } = {}
   }
 });
 
-const characterRow = {
+const characterRowBase = {
   id: 'char-uuid-1',
   creator_id: 'profile-1',
   name: 'Testy',
   class_id: 'class-1',
-  is_public: true
+  class: 'Soldier',
+  level: 1,
+  is_public: true,
+  is_deceased: false,
+  profile: { name: 'Owner' }
 };
 
 // Anon client can still read the public `characters` row (its RLS policy
 // doesn't hop through profiles), but returns no rows for the related
 // tables — simulating RLS wiping those rows because the shared anon
-// client carries no JWT after `setSession` removal.
+// client carries no JWT after `setSession` removal. The embedded PostgREST
+// joins (personality/abilities/gear) likewise come back empty under anon RLS.
 const fakeAnon = makeClient({
-  characters: [characterRow],
+  characters: [{
+    ...characterRowBase,
+    personality: [],
+    abilities: [],
+    gear: []
+  }],
   traits: [],
   class_gear: [],
   class_abilities: [],
   classes: []
 });
 
-// Admin client has the full picture: the character row plus one each of
-// traits / gear / abilities. The fix under test routes all three reads
-// through this admin client.
+// Admin client has the full picture: the character row (with embedded
+// children populated, mirroring what PostgREST returns when the select
+// is actually authorized) plus one each of traits / gear / abilities for
+// the legacy `getCharacter` multi-query path.
 const fakeAdmin = makeClient({
-  characters: [characterRow],
+  characters: [{
+    ...characterRowBase,
+    personality: [{ name: 'Brave' }],
+    abilities: [{ name: 'Dodge', description: 'Evade an attack' }],
+    gear: [{ name: 'Knife', description: 'A sharp knife' }]
+  }],
   traits: [{ character_id: 'char-uuid-1', name: 'Brave' }],
   class_gear: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Knife' }],
   class_abilities: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Dodge' }],
@@ -91,7 +110,7 @@ mock.module('./_base', () => ({
 // loaded it with the real `_base`. Bust the cache so this require re-executes
 // `character.js` with the mocked `_base` in place.
 delete require.cache[require.resolve('./character')];
-const { getCharacter } = require('./character');
+const { getCharacter, getCharacterForAgent } = require('./character');
 
 afterAll(() => {
   mock.module('./_base', () => realBase);
@@ -110,4 +129,20 @@ test('getCharacter returns traits/gear/abilities even when anon client is RLS-bl
   expect(data.gear.length).toBeGreaterThan(0);
   expect(Array.isArray(data.abilities)).toBe(true);
   expect(data.abilities.length).toBeGreaterThan(0);
+});
+
+test('getCharacterForAgent returns gear/abilities/personality even when anon embedded select is RLS-blocked', async () => {
+  const { data, error } = await getCharacterForAgent('char-uuid-1', {
+    profileId: 'profile-1',
+    role: 'admin'
+  });
+
+  expect(error).toBeFalsy();
+  expect(data).toBeTruthy();
+  expect(Array.isArray(data.traits)).toBe(true);
+  expect(data.traits.length).toBeGreaterThan(0);
+  expect(Array.isArray(data.abilities)).toBe(true);
+  expect(data.abilities.length).toBeGreaterThan(0);
+  expect(Array.isArray(data.gear)).toBe(true);
+  expect(data.gear.length).toBeGreaterThan(0);
 });

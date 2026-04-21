@@ -796,7 +796,7 @@ const serializeCharacterForAgent = (row, actor = {}) => {
 
 const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
-  let builder = supabase
+  let builder = supabaseAdmin
     .from('characters')
     .select('id, name, class, level, is_public, is_deceased, creator_id, profile:creator_id(name)')
     .order('name', { ascending: true })
@@ -829,7 +829,7 @@ const searchCharactersForAgent = async (query, actor = {}) => {
 };
 
 const getCharacterForAgent = async (id, actor = {}) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('characters')
     .select(`
       id, name, class, level, is_public, is_deceased, creator_id,
