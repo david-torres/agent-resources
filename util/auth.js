@@ -1,3 +1,4 @@
+const { supabase, supabaseAdmin, createUserClient } = require('../models/_base');
 const { getUserFromToken, getProfile } = require('./supabase');
 const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
@@ -53,6 +54,7 @@ async function isAuthenticated(req, res, next) {
     return res.redirect('/auth');
   } else {
     res.locals.user = user;
+    res.locals.supabase = createUserClient(authToken);
     if (user) {
       res.locals.profile = await getProfile(user);
       res.locals.systemMessage = getSystemMessage();
@@ -84,6 +86,7 @@ async function authOptional(req, res, next) {
   res.locals.authOptional = true;
 
   if (!req.headers['authorization']) {
+    res.locals.supabase = supabase;
     next();
     return;
   }
@@ -91,6 +94,7 @@ async function authOptional(req, res, next) {
   const authToken = getBearerToken(req);
   const user = await getUserFromToken(authToken);
   res.locals.user = user;
+  res.locals.supabase = createUserClient(authToken);
   if (user) {
     res.locals.profile = await getProfile(user);
     res.locals.systemMessage = getSystemMessage();
@@ -141,6 +145,7 @@ const isAgentAuthenticated = async (req, res, next) => {
   }
 
   res.locals.user = { id: data.userId };
+  res.locals.supabase = supabaseAdmin;
   res.locals.profile = data.profile;
   res.locals.agentToken = {
     id: data.tokenId,
