@@ -136,8 +136,8 @@ const removeCharacterFromMission = async (missionId, characterId) => {
   return { data, error };
 };
 
-const getMissionCharacters = async (missionId) => {
-  const { data, error } = await supabase
+const getMissionCharacters = async (missionId, client = supabase) => {
+  const { data, error } = await client
     .from('mission_characters')
     .select('character_id')
     .eq('mission_id', missionId);
@@ -375,20 +375,20 @@ const getRandomPublicMissions = async (count = 12, hasVideo = false, characterNa
 /**
  * Get all editors for a mission (excluding creator and host)
  */
-const getMissionEditors = async (missionId) => {
+const getMissionEditors = async (missionId, client = supabase) => {
   // First get the mission to know creator_id and host_id
-  const { data: mission, error: missionError } = await supabase
+  const { data: mission, error: missionError } = await client
     .from('missions')
     .select('creator_id, host_id')
     .eq('id', missionId)
     .single();
-  
+
   if (missionError) {
     console.error(missionError);
     return { data: null, error: missionError };
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await client
     .from('mission_editors')
     .select(`
       profile_id,
@@ -525,8 +525,8 @@ const isCreator = async (missionId, profile) => {
 /**
  * Get missions where profile is an editor (but not creator)
  */
-const getEditableMissions = async (profile) => {
-  const { data, error } = await supabase
+const getEditableMissions = async (profile, client = supabase) => {
+  const { data, error } = await client
     .from('mission_editors')
     .select(`
       mission:missions(
@@ -571,7 +571,7 @@ const getEditableMissions = async (profile) => {
  * Search for potentially similar/duplicate missions
  * Searches by date proximity and name similarity
  */
-const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3) => {
+const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3, client = supabase) => {
   try {
     const targetDate = new Date(date);
     const startDate = new Date(targetDate);
@@ -579,7 +579,7 @@ const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3
     const endDate = new Date(targetDate);
     endDate.setDate(endDate.getDate() + daysRange);
 
-    let query = supabase
+    let query = client
       .from('missions')
       .select(`
         id,

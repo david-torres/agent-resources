@@ -99,7 +99,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   // Get both own missions and editable missions
   const [{ data: ownMissions, error: ownError }, { data: editableMissions, error: editableError }] = await Promise.all([
     getOwnMissions(profile, res.locals.supabase),
-    getEditableMissions(profile)
+    getEditableMissions(profile, res.locals.supabase)
   ]);
   
   if (ownError) {
@@ -230,7 +230,7 @@ router.get('/similar', isAuthenticated, async (req, res) => {
     return res.status(400).send('Date is required');
   }
 
-  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id);
+  const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id, 3, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message || error);
   }
@@ -273,7 +273,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   
   const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
     getMission(id, res.locals.supabase),
-    getMissionEditors(id),
+    getMissionEditors(id, res.locals.supabase),
     isCreator(id, profile)
   ]);
   
@@ -333,7 +333,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   }
 
   // Get current characters
-  const { data: currentCharacters, error: characterError } = await getMissionCharacters(req.params.id);
+  const { data: currentCharacters, error: characterError } = await getMissionCharacters(req.params.id, res.locals.supabase);
   const newIds = characters || [];
   const currentIds = currentCharacters.map(mc => mc.character_id);
 
@@ -487,7 +487,7 @@ router.get('/:id/editors', isAuthenticated, async (req, res) => {
     return res.status(403).send('Unauthorized');
   }
 
-  const { data: editors, error } = await getMissionEditors(id);
+  const { data: editors, error } = await getMissionEditors(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message || error);
   }
@@ -536,7 +536,7 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   }
 
   // Return updated editors list
-  const { data: editors } = await getMissionEditors(id);
+  const { data: editors } = await getMissionEditors(id, res.locals.supabase);
   res.render('partials/mission-editors', {
     layout: false,
     editors,
@@ -562,7 +562,7 @@ router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
   }
 
   // Return updated editors list
-  const { data: editors } = await getMissionEditors(id);
+  const { data: editors } = await getMissionEditors(id, res.locals.supabase);
   res.render('partials/mission-editors', {
     layout: false,
     editors,
