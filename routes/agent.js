@@ -110,7 +110,8 @@ router.get('/me', async (req, res) => {
       id: res.locals.profile.id,
       user_id: res.locals.profile.user_id,
       name: res.locals.profile.name,
-      role: res.locals.profile.role
+      role: res.locals.profile.role,
+      timezone: res.locals.profile.timezone || 'UTC'
     },
     token: res.locals.agentToken
   });

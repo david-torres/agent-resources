@@ -109,7 +109,7 @@ const verifyAgentToken = async (token) => {
   const tokenHash = hashAgentToken(token);
   const { data, error } = await supabaseAdmin
     .from('agent_api_tokens')
-    .select('id, user_id, profile_id, name, token_hint, revoked_at, profile:profile_id(id, user_id, name, role)')
+    .select('id, user_id, profile_id, name, token_hint, revoked_at, profile:profile_id(id, user_id, name, role, timezone)')
     .eq('token_hash', tokenHash)
     .is('revoked_at', null)
     .single();
