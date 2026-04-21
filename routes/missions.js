@@ -98,7 +98,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   
   // Get both own missions and editable missions
   const [{ data: ownMissions, error: ownError }, { data: editableMissions, error: editableError }] = await Promise.all([
-    getOwnMissions(profile),
+    getOwnMissions(profile, res.locals.supabase),
     getEditableMissions(profile)
   ]);
   

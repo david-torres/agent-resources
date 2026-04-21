@@ -59,8 +59,8 @@ const getMission = async (id) => {
   return { data: transformedData, error };
 };
 
-const getOwnMissions = async (profile) => {
-  const { data, error } = await supabase
+const getOwnMissions = async (profile, client = supabase) => {
+  const { data, error } = await client
     .from('missions')
     .select(`
       *,
