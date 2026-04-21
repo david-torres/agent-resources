@@ -437,7 +437,7 @@ const normalizeJoinRequests = (rows) => {
 // Internal: fetch lfg_posts with full joins, filtered by arbitrary column equality + optional status
 const AGENT_POST_SELECT = '*, creator:creator_id(id,name), lfg_join_requests(*, profile:profile_id(id,name), character:character_id(*))';
 
-const getPostsWithRequestsBy = async (filters, { status } = {}) => {
+const getPostsWithRequestsBy = async (filters, { status, dateFrom } = {}) => {
   let query = supabaseAdmin
     .from('lfg_posts')
     .select(AGENT_POST_SELECT);
@@ -446,6 +446,9 @@ const getPostsWithRequestsBy = async (filters, { status } = {}) => {
   }
   if (status && status !== 'all') {
     query = query.eq('status', status);
+  }
+  if (dateFrom) {
+    query = query.gte('date', dateFrom);
   }
   const { data, error } = await query;
   if (data) normalizeJoinRequests(data);
@@ -486,9 +489,11 @@ const listPostsForAgent = async ({ agentProfileId, scope = 'public', status = 'o
   } else if (scope === 'joined') {
     ({ data: rows, error } = await getPostsByJoiner(agentProfileId, { status }));
   } else {
+    const today = new Date();
+    today.setUTCHours(0, 0, 0, 0);
     ({ data: rows, error } = await getPostsWithRequestsBy(
       { is_public: true },
-      { status }
+      { status, dateFrom: today.toISOString() }
     ));
   }
   if (error) return { data: null, error };
