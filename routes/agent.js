@@ -18,6 +18,25 @@ const {
 } = require('../models/bot-link');
 const { supabaseAdmin } = require('../models/_base');
 const { revokeAgentToken } = require('../models/agent-token');
+const {
+  listPostsForAgent,
+  getPostForAgent,
+  createForAgent,
+  updateForAgent,
+  closeForAgent,
+  deleteForAgent,
+  joinForAgent,
+  leaveForAgent,
+  updateRequestForAgent,
+  listEligibleCharactersForAgent
+} = require('../models/lfg');
+
+const sendLfgError = (res, err) => {
+  const status = (err && err.status) || 500;
+  const message = (err && (err.message || (typeof err === 'string' ? err : null))) || 'Unexpected error';
+  const code = (err && err.code) || undefined;
+  return res.status(status).json({ error: message, code });
+};
 
 const parseBooleanFilter = (value) => {
   if (value === 'true') return true;
@@ -159,6 +178,161 @@ router.delete('/tokens/me', async (req, res) => {
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Token not found or already revoked' });
   return res.json({ revoked: true });
+});
+
+const validatePostBody = (body, { isEdit = false } = {}) => {
+  if (!body || typeof body !== 'object') {
+    return { error: { status: 400, code: 'invalid_body', message: 'Body is required' } };
+  }
+  const out = {};
+  if (body.title !== undefined) {
+    if (typeof body.title !== 'string' || body.title.length < 1 || body.title.length > 100) {
+      return { error: { status: 400, code: 'invalid_title', message: 'Title must be 1–100 characters' } };
+    }
+    out.title = body.title;
+  }
+  if (body.description !== undefined) {
+    if (typeof body.description !== 'string' || body.description.length > 4000) {
+      return { error: { status: 400, code: 'invalid_description', message: 'Description must be 0–4000 characters' } };
+    }
+    out.description = body.description;
+  }
+  if (body.date !== undefined) {
+    const d = new Date(body.date);
+    if (Number.isNaN(d.getTime())) {
+      return { error: { status: 400, code: 'invalid_date', message: 'Date must be a valid ISO timestamp' } };
+    }
+    if (!isEdit && d.getTime() < Date.now()) {
+      return { error: { status: 400, code: 'date_in_past', message: 'Date must be in the future' } };
+    }
+    out.date = d.toISOString();
+  }
+  if (body.max_characters !== undefined) {
+    const n = Number(body.max_characters);
+    if (!Number.isInteger(n) || n < 1 || n > 8) {
+      return { error: { status: 400, code: 'invalid_max', message: 'max_characters must be 1–8' } };
+    }
+    out.max_characters = n;
+  }
+  if (body.is_public !== undefined) {
+    if (typeof body.is_public !== 'boolean') {
+      return { error: { status: 400, code: 'invalid_is_public', message: 'is_public must be boolean' } };
+    }
+    out.is_public = body.is_public;
+  }
+  if (!isEdit) {
+    for (const req of ['title', 'description', 'date', 'max_characters']) {
+      if (out[req] === undefined) {
+        return { error: { status: 400, code: 'missing_field', message: `${req} is required` } };
+      }
+    }
+  }
+  return { body: out };
+};
+
+router.get('/lfg/posts', async (req, res) => {
+  const scope = ['public', 'mine', 'joined'].includes(req.query.scope) ? req.query.scope : 'public';
+  const status = ['open', 'closed', 'all'].includes(req.query.status) ? req.query.status : 'open';
+  const { data, error } = await listPostsForAgent({
+    agentProfileId: res.locals.profile.id,
+    scope,
+    status
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ posts: data });
+});
+
+router.get('/lfg/posts/:id', async (req, res) => {
+  const { data, error } = await getPostForAgent({
+    agentProfileId: res.locals.profile.id,
+    postId: req.params.id
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ post: data });
+});
+
+router.post('/lfg/posts', async (req, res) => {
+  const { body, error: validationError } = validatePostBody(req.body);
+  if (validationError) return sendLfgError(res, validationError);
+  const { data, error } = await createForAgent({
+    agentProfile: res.locals.profile,
+    body
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ post: data });
+});
+
+router.patch('/lfg/posts/:id', async (req, res) => {
+  const { body, error: validationError } = validatePostBody(req.body, { isEdit: true });
+  if (validationError) return sendLfgError(res, validationError);
+  const { data, error } = await updateForAgent({
+    agentProfile: res.locals.profile,
+    postId: req.params.id,
+    body
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ post: data });
+});
+
+router.post('/lfg/posts/:id/close', async (req, res) => {
+  const { data, error } = await closeForAgent({
+    agentProfileId: res.locals.profile.id,
+    postId: req.params.id
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ post: data });
+});
+
+router.delete('/lfg/posts/:id', async (req, res) => {
+  const { data, error } = await deleteForAgent({
+    agentProfile: res.locals.profile,
+    postId: req.params.id
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json(data);
+});
+
+router.post('/lfg/posts/:id/join', async (req, res) => {
+  const { join_type, character_id } = req.body || {};
+  if (join_type !== 'player' && join_type !== 'conduit') {
+    return sendLfgError(res, { status: 400, code: 'invalid_join_type', message: 'join_type must be player or conduit' });
+  }
+  const { data, error } = await joinForAgent({
+    agentProfileId: res.locals.profile.id,
+    postId: req.params.id,
+    joinType: join_type,
+    characterId: character_id || null
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json(data);
+});
+
+router.delete('/lfg/posts/:id/join', async (req, res) => {
+  const { data, error } = await leaveForAgent({
+    agentProfileId: res.locals.profile.id,
+    postId: req.params.id
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json(data);
+});
+
+router.patch('/lfg/requests/:requestId', async (req, res) => {
+  const { status } = req.body || {};
+  const { data, error } = await updateRequestForAgent({
+    agentProfileId: res.locals.profile.id,
+    requestId: req.params.requestId,
+    status
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json(data);
+});
+
+router.get('/lfg/characters', async (req, res) => {
+  const { data, error } = await listEligibleCharactersForAgent({
+    agentProfileId: res.locals.profile.id
+  });
+  if (error) return sendLfgError(res, error);
+  return res.json({ characters: data });
 });
 
 module.exports = router;
