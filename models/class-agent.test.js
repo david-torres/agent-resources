@@ -35,6 +35,7 @@ test('serializeClassSummaryForAgent omits heavy fields', () => {
   expect(out).not.toBeNull();
   expect(out).not.toHaveProperty('description');
   expect(out).not.toHaveProperty('gear');
+  expect(out).not.toHaveProperty('signature_gear');
   expect(out).not.toHaveProperty('abilities');
   expect(out).not.toHaveProperty('image_url');
   expect(out).not.toHaveProperty('image_crop');
@@ -86,6 +87,7 @@ test('serializeClassForAgent still returns full shape for detail endpoint', () =
     unlockedClassIds: new Set()
   });
   expect(out.description).toBe(baseClass.description);
-  expect(out.gear).toEqual(baseClass.gear);
+  expect(out.signature_gear).toEqual(baseClass.gear);
+  expect(out).not.toHaveProperty('gear');
   expect(out.abilities).toEqual(baseClass.abilities);
 });

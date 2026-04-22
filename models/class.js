@@ -317,7 +317,7 @@ const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new 
 
     if (accessLevel === 'full') {
         serialized.description = classData.description || '';
-        serialized.gear = Array.isArray(classData.gear) ? classData.gear : [];
+        serialized.signature_gear = Array.isArray(classData.gear) ? classData.gear : [];
         serialized.abilities = Array.isArray(classData.abilities) ? classData.abilities : [];
     }
 
