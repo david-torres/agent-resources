@@ -788,7 +788,7 @@ const serializeCharacterForAgent = (row, actor = {}) => {
     abilities: Array.isArray(row.abilities)
       ? row.abilities.map((a) => ({ name: a.name, description: a.description }))
       : [],
-    gear: Array.isArray(row.gear)
+    signature_gear: Array.isArray(row.gear)
       ? row.gear.map((g) => ({ name: g.name, description: g.description }))
       : []
   };

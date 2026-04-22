@@ -143,8 +143,9 @@ test('getCharacterForAgent returns gear/abilities/personality even when anon emb
   expect(data.traits.length).toBeGreaterThan(0);
   expect(Array.isArray(data.abilities)).toBe(true);
   expect(data.abilities.length).toBeGreaterThan(0);
-  expect(Array.isArray(data.gear)).toBe(true);
-  expect(data.gear.length).toBeGreaterThan(0);
+  expect(Array.isArray(data.signature_gear)).toBe(true);
+  expect(data.signature_gear.length).toBeGreaterThan(0);
+  expect(data).not.toHaveProperty('gear');
 });
 
 test('getOwnCharacters uses the passed client', async () => {
