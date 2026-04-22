@@ -150,7 +150,7 @@ const reconcileCreatorRole = async (postId, profileId, { hostFlag, characterId }
     : (characterId ? { type: 'player', character: characterId } : null);
   if (!desired) return { error: null };
 
-  const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profileId, postId);
+  const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profileId, postId, supabaseAdmin);
   const matches = existingRequest
     && existingRequest.join_type === desired.type
     && existingRequest.character_id === desired.character;
@@ -173,7 +173,7 @@ const createLfgPost = async (postReq, profile) => {
   const hostFlag = postReq.host_id === 'on';
   delete postReq.host_id;
 
-  postReq.is_public = postReq.is_public === 'on';
+  postReq.is_public = postReq.is_public === true || postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
   // authz: creator_id is set server-side to profile.id above
@@ -194,7 +194,7 @@ const createLfgPost = async (postReq, profile) => {
 }
 
 const updateLfgPost = async (id, postReq, profile) => {
-  const { data: post, error: postError } = await getLfgPost(id);
+  const { data: post, error: postError } = await getLfgPost(id, supabaseAdmin);
   if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
   if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
 
@@ -210,7 +210,7 @@ const updateLfgPost = async (id, postReq, profile) => {
   delete postReq.host_name;
   delete postReq.join_requests;
 
-  postReq.is_public = postReq.is_public === 'on';
+  postReq.is_public = postReq.is_public === true || postReq.is_public === 'on';
   postReq.date = moment.tz(postReq.date, profile.timezone).utc();
 
   // authz: creator_id check above + filter below
@@ -227,7 +227,7 @@ const updateLfgPost = async (id, postReq, profile) => {
 }
 
 const deleteLfgPost = async (id, profile) => {
-  const { data: post, error: postError } = await getLfgPost(id);
+  const { data: post, error: postError } = await getLfgPost(id, supabaseAdmin);
   if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
   if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
 
@@ -543,11 +543,12 @@ const listPostsForAgent = async ({ agentProfileId, scope = 'public', status = 'o
   } else if (scope === 'joined') {
     ({ data: rows, error } = await getPostsByJoiner(agentProfileId, { status }));
   } else {
-    const today = new Date();
-    today.setUTCHours(0, 0, 0, 0);
+    const cutoff = new Date();
+    cutoff.setUTCHours(0, 0, 0, 0);
+    cutoff.setUTCDate(cutoff.getUTCDate() - 14);
     ({ data: rows, error } = await getPostsWithRequestsBy(
       { is_public: true },
-      { status, dateFrom: today.toISOString() }
+      { status, dateFrom: cutoff.toISOString() }
     ));
   }
   if (error) return { data: null, error };
