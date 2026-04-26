@@ -36,25 +36,30 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_nav_items_updated_at ON nav_items;
 CREATE TRIGGER update_nav_items_updated_at
     BEFORE UPDATE ON nav_items
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- RLS Policies for nav_items table
+DROP POLICY IF EXISTS "Everyone can view active nav items" ON nav_items;
 CREATE POLICY "Everyone can view active nav items"
     ON nav_items FOR SELECT
     USING (is_active = true);
 
+DROP POLICY IF EXISTS "Only admins can create nav items" ON nav_items;
 CREATE POLICY "Only admins can create nav items"
     ON nav_items FOR INSERT
     WITH CHECK (is_admin());
 
+DROP POLICY IF EXISTS "Only admins can update nav items" ON nav_items;
 CREATE POLICY "Only admins can update nav items"
     ON nav_items FOR UPDATE
     USING (is_admin())
     WITH CHECK (is_admin());
 
+DROP POLICY IF EXISTS "Only admins can delete nav items" ON nav_items;
 CREATE POLICY "Only admins can delete nav items"
     ON nav_items FOR DELETE
     USING (is_admin());

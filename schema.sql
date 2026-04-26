@@ -1,3 +1,13 @@
+-- Extensions and shared types must exist before any table that references them.
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'roles') THEN
+        CREATE TYPE public.roles AS ENUM ('user', 'admin');
+    END IF;
+END$$;
+
 CREATE TABLE profiles (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID NOT NULL UNIQUE REFERENCES auth.users(id),
@@ -10,8 +20,7 @@ CREATE TABLE profiles (
     discord_id TEXT,
     discord_email TEXT,
     conduit_briefing TEXT,
-    role public.roles NOT NULL DEFAULT 'user',
-    CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin'))
+    role public.roles NOT NULL DEFAULT 'user'
 );
 
 CREATE INDEX IF NOT EXISTS idx_profiles_role ON profiles(role);
@@ -50,7 +59,9 @@ CREATE TABLE characters (
   ideas TEXT NULL,
   background TEXT NULL,
   perks TEXT NULL,
-  private_notes TEXT NULL
+  private_notes TEXT NULL,
+  class_id UUID NULL,
+  common_items JSONB DEFAULT '[]'::jsonb
 );
 
 -- missions table
@@ -60,8 +71,8 @@ CREATE TABLE missions (
   focus_words TEXT,
   statement TEXT,
   summary TEXT,
-  outcome TEXT CHECK (status IN ('success', 'failure', 'pending')) NOT NULL DEFAULT 'pending',
-  creator_id UUID NOT NULL REFERENCES profiles(id),
+  outcome TEXT CHECK (outcome IN ('success', 'failure', 'pending')) NOT NULL DEFAULT 'pending',
+  creator_id UUID REFERENCES profiles(id),
   date TIMESTAMP WITH TIME ZONE NOT NULL,
   is_public BOOLEAN DEFAULT FALSE,
   host_id UUID REFERENCES profiles(id),
@@ -76,7 +87,7 @@ CREATE TABLE mission_characters (
   mission_id UUID NOT NULL,
   character_id UUID NOT NULL,
   FOREIGN KEY (mission_id) REFERENCES missions(id) ON DELETE CASCADE,
-  FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+  FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE,
   CONSTRAINT unique_mission_character UNIQUE (mission_id, character_id)
 );
 
@@ -96,6 +107,45 @@ CREATE TABLE traits (
   name TEXT NOT NULL,
   FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
 );
+
+-- classes table (must exist before class_gear / class_abilities reference it)
+CREATE TABLE IF NOT EXISTS classes (
+    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    name text NOT NULL,
+    description text,
+    is_public BOOLEAN DEFAULT FALSE,
+    status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
+    is_player_created bool NOT NULL DEFAULT false,
+    rules_edition text NOT NULL CHECK (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
+    rules_version text NOT NULL CHECK (rules_version IN ('v1', 'v2')),
+    base_class_id uuid REFERENCES classes(id),
+    image_url text,
+    image_crop JSONB,
+    teaser text,
+    visibility text,
+    gear JSONB DEFAULT '[]'::jsonb,
+    abilities JSONB DEFAULT '[]'::jsonb,
+    created_by uuid REFERENCES profiles(id),
+    created_at timestamp NOT NULL DEFAULT now(),
+    updated_at timestamp NOT NULL DEFAULT now(),
+    pdf_storage_path text,
+    pdf_updated_at timestamptz
+);
+
+-- Deferred FK now that classes exists
+ALTER TABLE characters
+    ADD CONSTRAINT characters_class_id_fkey FOREIGN KEY (class_id) REFERENCES classes(id);
+
+CREATE TABLE IF NOT EXISTS class_unlocks (
+    user_id uuid REFERENCES auth.users(id),
+    class_id uuid REFERENCES classes(id),
+    unlocked_at timestamp NOT NULL DEFAULT now(),
+    expires_at timestamptz,
+    PRIMARY KEY (user_id, class_id)
+);
+
+ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE class_unlocks ENABLE ROW LEVEL SECURITY;
 
 -- class_gear table
 CREATE TABLE class_gear (
@@ -126,7 +176,7 @@ CREATE TABLE lfg_posts (
   title TEXT NOT NULL,
   description TEXT NOT NULL,
   date TIMESTAMP WITH TIME ZONE NOT NULL,
-  creator_id UUID REFERENCES profiles(id),
+  creator_id UUID NOT NULL REFERENCES profiles(id),
   host_id UUID REFERENCES profiles(id),
   max_characters INTEGER NOT NULL,
   is_public BOOLEAN DEFAULT FALSE,
@@ -149,58 +199,89 @@ CREATE TABLE lfg_join_requests (
 );
 
 drop function if exists increment_missions_count;
-create function increment_missions_count (x int, character_id uuid) 
+create function increment_missions_count (x int, character_id uuid)
 returns void as
 $$
-  update characters 
+  update characters
   set completed_missions = completed_missions + x
   where id = character_id
-$$ 
+$$
 language sql volatile;
 
--- Supabase Class Management Schema
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+-- Helper admin check used in policies (avoid selecting from auth.users in RLS).
+-- Defined here so RLS policies below can reference it.
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS boolean
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, auth
+AS $$
+DECLARE
+  v_is_admin boolean;
+BEGIN
+  SELECT role = 'admin'
+    INTO v_is_admin
+  FROM profiles
+  WHERE user_id = auth.uid();
 
--- Enable Row Level Security
-ALTER TABLE classes ENABLE ROW LEVEL SECURITY;
-ALTER TABLE class_unlocks ENABLE ROW LEVEL SECURITY;
+  RETURN COALESCE(v_is_admin, false);
+END;
+$$;
 
--- Classes table
-CREATE TABLE IF NOT EXISTS classes (
-    id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    name text NOT NULL,
-    description text,
-    is_public BOOLEAN DEFAULT FALSE,
-    status text NOT NULL CHECK (status IN ('alpha','beta','release')) DEFAULT 'alpha',
-    is_player_created bool NOT NULL DEFAULT false,
-    rules_edition text NOT NULL (rules_edition IN ('advent', 'aspirant')) DEFAULT 'advent',
-    rules_version text NOT NULL (rules_version IN ('v1', 'v2')),
-    base_class_id uuid REFERENCES classes(id),
-    image_url text,
-    image_crop JSONB,
-    created_by uuid REFERENCES profiles(id),
-    created_at timestamp NOT NULL DEFAULT now(),
-    updated_at timestamp NOT NULL DEFAULT now(),
-    pdf_storage_path text,
-    pdf_updated_at timestamptz
-);
+-- Helper functions to break RLS recursion between missions/mission_editors/mission_characters
+CREATE OR REPLACE FUNCTION is_mission_editor(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM mission_editors me
+    JOIN profiles p ON p.id = me.profile_id
+    WHERE me.mission_id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
 
--- Backfill for deployments where tables already exist
+CREATE OR REPLACE FUNCTION is_mission_owner_or_host(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    JOIN profiles p ON (p.id = m.creator_id OR p.id = m.host_id)
+    WHERE m.id = p_mission_id
+      AND p.user_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_mission_public(p_mission_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM missions m
+    WHERE m.id = p_mission_id
+      AND m.is_public = true
+  );
+$$;
+
+-- Backfill for existing deployments where some columns may be missing.
+-- (No-ops on a fresh database since the canonical CREATE statements above
+-- already include these columns.)
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS teaser text;
-ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB NOT NULL DEFAULT '[]'::jsonb;
-
--- Class unlocks table
-CREATE TABLE IF NOT EXISTS class_unlocks (
-    user_id uuid REFERENCES auth.users(id),
-    class_id uuid REFERENCES classes(id),
-    unlocked_at timestamp NOT NULL DEFAULT now(),
-    expires_at timestamptz,
-    PRIMARY KEY (user_id, class_id)
-);
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB DEFAULT '[]'::jsonb;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS visibility text;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS class_id UUID;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS common_items JSONB DEFAULT '[]'::jsonb;
 
 -- One-time unlock codes for classes
 CREATE TABLE IF NOT EXISTS class_unlock_codes (
@@ -537,66 +618,8 @@ ALTER TABLE class_abilities ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lfg_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lfg_join_requests ENABLE ROW LEVEL SECURITY;
 
--- Helper admin check used in policies (avoid selecting from auth.users in RLS)
-CREATE OR REPLACE FUNCTION is_admin()
-RETURNS boolean
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public, auth
-AS $$
-DECLARE
-  v_is_admin boolean;
-BEGIN
-  SELECT role = 'admin'
-    INTO v_is_admin
-  FROM profiles
-  WHERE user_id = auth.uid();
-
-  RETURN COALESCE(v_is_admin, false);
-END;
-$$;
-
--- Helper functions to break RLS recursion between missions/mission_editors/mission_characters
-CREATE OR REPLACE FUNCTION is_mission_editor(p_mission_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM mission_editors me
-    JOIN profiles p ON p.id = me.profile_id
-    WHERE me.mission_id = p_mission_id
-      AND p.user_id = auth.uid()
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION is_mission_owner_or_host(p_mission_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM missions m
-    JOIN profiles p ON (p.id = m.creator_id OR p.id = m.host_id)
-    WHERE m.id = p_mission_id
-      AND p.user_id = auth.uid()
-  );
-$$;
-
-CREATE OR REPLACE FUNCTION is_mission_public(p_mission_id UUID)
-RETURNS BOOLEAN
-LANGUAGE sql
-SECURITY DEFINER
-STABLE
-AS $$
-  SELECT EXISTS (
-    SELECT 1 FROM missions m
-    WHERE m.id = p_mission_id
-      AND m.is_public = true
-  );
-$$;
+-- (is_admin / is_mission_* helpers are defined earlier so the policies below
+-- can reference them at CREATE POLICY time.)
 
 -- Profiles policies
 DROP POLICY IF EXISTS "profiles_select" ON profiles;
