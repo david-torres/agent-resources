@@ -6,3 +6,7 @@ create table if not exists public.pending_bot_links_raw_tokens (
   raw_token text not null,
   created_at timestamptz not null default now()
 );
+
+-- Server-only table (accessed via service role); RLS with no policies
+-- denies all anon/authenticated access.
+alter table public.pending_bot_links_raw_tokens enable row level security;

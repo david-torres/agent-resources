@@ -15,3 +15,7 @@ create index if not exists pending_bot_links_discord_user_id_idx
 
 create index if not exists pending_bot_links_expires_at_idx
   on public.pending_bot_links (expires_at);
+
+-- Server-only table (accessed via service role); RLS with no policies
+-- denies all anon/authenticated access.
+alter table public.pending_bot_links enable row level security;
