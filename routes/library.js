@@ -290,6 +290,12 @@ router.get('/:id/view', authOptional, async (req, res) => {
     });
 
     if (signedError || !signedUrl) {
+        console.error('Failed to create signed URL for rules PDF', {
+            rulesPdfId: id,
+            bucket: RULES_PDF_BUCKET,
+            storagePath: rulesPdf.storage_path,
+            error: signedError?.message || signedError
+        });
         return res.status(500).send('Failed to prepare rules PDF');
     }
 

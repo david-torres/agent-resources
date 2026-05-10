@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const path = require('path');
 
 const CLASS_PDF_BUCKET = process.env.SUPABASE_CLASS_PDF_BUCKET || 'class-pdfs';
@@ -77,7 +77,7 @@ const getSignedPdfUrl = async ({ bucket, path: storagePath, expiresIn } = {}) =>
     return { data: null, error: new Error('Missing bucket or storage path') };
   }
   const ttl = Number.isFinite(expiresIn) && expiresIn > 0 ? expiresIn : DEFAULT_SIGNED_URL_TTL;
-  const { data, error } = await supabase.storage
+  const { data, error } = await supabaseAdmin.storage
     .from(bucket)
     .createSignedUrl(storagePath, ttl);
   if (error) {

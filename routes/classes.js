@@ -274,6 +274,12 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
     });
 
     if (signedError || !signedUrl) {
+        console.error('Failed to create signed URL for class PDF', {
+            classId: id,
+            bucket: CLASS_PDF_BUCKET,
+            storagePath: classData.pdf_storage_path,
+            error: signedError?.message || signedError
+        });
         return res.status(500).send('Failed to prepare class PDF');
     }
 
