@@ -28,9 +28,9 @@ const applyClassFilters = (query, filters = {}) => {
     return query.order('name', { ascending: true });
 };
 
-const getClasses = async (filters = {}) => {
+const getClasses = async (filters = {}, client = supabase) => {
     const query = applyClassFilters(
-        supabase
+        client
         .from('classes')
         .select('*'),
         filters
@@ -111,8 +111,8 @@ const isClassUnlocked = async (userId, classId) => {
     return { data: Array.isArray(data) && data.length > 0, error: null };
 };
 
-const getClass = async (id) => {
-    const { data, error } = await supabase
+const getClass = async (id, client = supabase) => {
+    const { data, error } = await client
         .from('classes')
         .select('*')
         .eq('id', id)

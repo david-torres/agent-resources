@@ -20,8 +20,8 @@ const {
     getSignedPdfUrl,
     canViewRulesPdf,
     RULES_PDF_BUCKET,
-    getProfileByName,
-    getProfileById
+    getProfileByNameAdmin,
+    getProfileByIdAdmin
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 
@@ -206,13 +206,13 @@ router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     }
 
     let profileRecord = null;
-    if (profile_id) {
-        const result = await getProfileById(profile_id.trim());
+    if (profile_id && profile_id.trim()) {
+        const result = await getProfileByIdAdmin(profile_id.trim());
         if (result?.data) {
             profileRecord = result.data;
         }
-    } else if (profile_name) {
-        const result = await getProfileByName(profile_name.trim());
+    } else if (profile_name && profile_name.trim()) {
+        const result = await getProfileByNameAdmin(profile_name.trim());
         if (result?.data) {
             profileRecord = result.data;
         }

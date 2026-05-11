@@ -82,7 +82,7 @@ router.get('/my', isAuthenticated, async (req, res) => {
         status: req.query.status,
     };
 
-    const { data: classes, error } = await getClasses(filters);
+    const { data: classes, error } = await getClasses(filters, res.locals.supabase);
     if (error) {
         return res.status(500).json({ error: error.message });
     }
@@ -193,7 +193,7 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
             }
             let className = null;
             try {
-                const { data: classData } = await getClass(classId);
+                const { data: classData } = await getClass(classId, res.locals.supabase);
                 className = classData?.name || null;
             } catch (_) {
                 // ignore
@@ -220,7 +220,7 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
-    const { data: classData, error } = await getClass(id);
+    const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
         return res.status(500).json({ error: error.message });
     }
@@ -241,7 +241,7 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
     const { profile, user } = res.locals;
     const { id } = req.params;
 
-    const { data: classData, error } = await getClass(id);
+    const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error || !classData) {
         return res.status(404).send('Class not found');
     }
@@ -308,11 +308,11 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
         return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
     }
     
-    const { data: classData, error } = await getClass(id);
+    const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
         return res.status(400).send(error.message);
     }
-    
+
     // Only the creator or admin can export
     if (classData.created_by !== profile.id && profile.role !== 'admin') {
         return res.status(403).send('You can only export your own classes');
@@ -331,7 +331,7 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
 router.get('/:id/:name?', authOptional, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
-    const { data: classData, error } = await getClass(id);
+    const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
         return res.status(500).json({ error: error.message });
     }
@@ -365,7 +365,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     // Load owner profile for linking (if public)
     let ownerProfile = null;
     try {
-        const { data: creator } = await getProfileById(classData.created_by);
+        const { data: creator } = await getProfileById(classData.created_by, res.locals.supabase);
         if (creator && creator.is_public !== false) {
             ownerProfile = creator;
         }
@@ -413,7 +413,7 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     const { new_version } = req.body;
     if (!new_version) return res.status(400).send('new_version is required');
 
-    const { data: sourceClass, error: fetchError } = await getClass(id);
+    const { data: sourceClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !sourceClass) {
         return res.status(404).send(fetchError?.message || 'Class not found');
     }
@@ -426,7 +426,7 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     const { data: newClassId, error } = await duplicateClass(id, new_version);
     if (error) return res.status(400).send(error.message);
     try {
-        const { data: newClass } = await getClass(newClassId);
+        const { data: newClass } = await getClass(newClassId, res.locals.supabase);
         const slug = newClass?.name ? `/${encodeURIComponent(newClass.name)}` : '';
         return res.header('HX-Location', `/classes/${newClassId}${slug}`).status(204).send();
     } catch (_) {
@@ -447,7 +447,7 @@ router.get('/:id/history', isAuthenticated, async (req, res) => {
 router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const userId = res.locals.user.id;
-    const { data: cls, error } = await getClass(id);
+    const { data: cls, error } = await getClass(id, res.locals.supabase);
     if (error || !cls) return res.status(400).send(error?.message || 'Class not found');
     if (!((cls.is_public === true) && cls.is_player_created === true && ['alpha','beta'].includes(cls.status))) {
         return res.status(403).send('Not eligible for self-unlock');
@@ -503,7 +503,7 @@ router.post('/redeem', isAuthenticated, async (req, res) => {
 
     // Navigate to the unlocked class view using HX-Location for htmx
     try {
-        const { data: classData } = await getClass(classId);
+        const { data: classData } = await getClass(classId, res.locals.supabase);
         const slug = classData?.name ? `/${encodeURIComponent(classData.name)}` : '';
         return res.header('HX-Location', `/classes/${classId}${slug}`).status(204).send();
     } catch (_) {
@@ -597,7 +597,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
     const { id } = req.params;
     const { profile } = res.locals;
 
-    const { data: existingClass, error: fetchError } = await getClass(id);
+    const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
         return res.status(404).json({ error: fetchError?.message || 'Class not found' });
     }
@@ -692,7 +692,7 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { profile } = res.locals;
 
-    const { data: existingClass, error: fetchError } = await getClass(id);
+    const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
         return res.status(404).send(fetchError?.message || 'Class not found');
     }

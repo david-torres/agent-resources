@@ -57,13 +57,24 @@ const getProfile = async (user) => {
   return data;
 }
 
-const getProfileById = async (id) => {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', id).single();
+const getProfileById = async (id, client = supabase) => {
+  const { data, error } = await client.from('profiles').select('*').eq('id', id).single();
   return { data, error };
 }
 
 const getProfileByName = async (name) => {
   const { data, error } = await supabase.from('profiles').select('*').eq('name', name).single();
+  return { data, error };
+}
+
+// Admin variants bypass RLS — only call from routes already gated by requireAdmin.
+const getProfileByIdAdmin = async (id) => {
+  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('id', id).single();
+  return { data, error };
+}
+
+const getProfileByNameAdmin = async (name) => {
+  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('name', name).single();
   return { data, error };
 }
 
@@ -160,6 +171,8 @@ module.exports = {
   getProfile,
   getProfileById,
   getProfileByName,
+  getProfileByIdAdmin,
+  getProfileByNameAdmin,
   createProfile,
   updateUser,
   setDiscordId,

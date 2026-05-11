@@ -112,7 +112,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         if (!g?.name || !g?.class_id) continue;
         let className = allFilteredClasses.find(c => c.id === g.class_id)?.name;
         if (!className) {
-          try { className = (await getClass(g.class_id))?.data?.name; } catch (_) {}
+          try { className = (await getClass(g.class_id, res.locals.supabase))?.data?.name; } catch (_) {}
         }
         if (!className) continue;
         if (!filteredGear[className]) filteredGear[className] = [];
@@ -124,7 +124,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         if (!a?.name || !a?.class_id) continue;
         let className = allFilteredClasses.find(c => c.id === a.class_id)?.name;
         if (!className) {
-          try { className = (await getClass(a.class_id))?.data?.name; } catch (_) {}
+          try { className = (await getClass(a.class_id, res.locals.supabase))?.data?.name; } catch (_) {}
         }
         if (!className) continue;
         if (!filteredAbilities[className]) filteredAbilities[className] = [];
@@ -347,7 +347,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       let characterClass = null;
       try {
         if (character.class_id) {
-          const { data: cls } = await getClass(character.class_id);
+          const { data: cls } = await getClass(character.class_id, res.locals.supabase);
           if (cls) {
             characterClass = cls;
           }
@@ -359,7 +359,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       // fetch creator profile
       let ownerProfile = null;
       try {
-        const { data: creator } = await getProfileById(character.creator_id);
+        const { data: creator } = await getProfileById(character.creator_id, res.locals.supabase);
         if (creator) ownerProfile = creator;
       } catch (_) {
         // owner link is optional

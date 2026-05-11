@@ -42,14 +42,14 @@ const getCharacter = async (id, client = supabase) => {
   }
   data.traits = traits.map(trait => trait.name);
 
-  const { data: gear, error: gearError } = await getCharacterGear(id);
+  const { data: gear, error: gearError } = await getCharacterGear(id, client);
   if (gearError) {
     console.error(gearError);
     return { data: null, error: gearError };
   }
   data.gear = gear;
 
-  const { data: abilities, error: abilitiesError } = await getCharacterAbilities(id);
+  const { data: abilities, error: abilitiesError } = await getCharacterAbilities(id, client);
   if (abilitiesError) {
     console.error(abilitiesError);
     return { data: null, error: abilitiesError };
@@ -326,7 +326,7 @@ const setCharacterTraits = async (id, traits) => {
   return { data: newTraits, error: null };
 }
 
-const getCharacterGear = async (id) => {
+const getCharacterGear = async (id, client = supabase) => {
   // Fetch character gear rows
   const { data: gear, error: gearError } = await supabaseAdmin
     .from('class_gear')
@@ -345,7 +345,7 @@ const getCharacterGear = async (id) => {
   if (classIds.length === 0) {
     return { data: gear, error: null };
   }
-  const { data: classes, error: classesError } = await supabase
+  const { data: classes, error: classesError } = await client
     .from('classes')
     .select('id, name, gear')
     .in('id', classIds);
@@ -458,7 +458,7 @@ const setCharacterGear = async (id, gear) => {
   return { data: newGear, error: null };
 }
 
-const getCharacterAbilities = async (id) => {
+const getCharacterAbilities = async (id, client = supabase) => {
   // First get the character abilities
   const { data: abilities, error: abilitiesError } = await supabaseAdmin
     .from('class_abilities')
@@ -480,7 +480,7 @@ const getCharacterAbilities = async (id) => {
   }
   
   // Get classes with their abilities JSONB (non-fatal)
-  const { data: classes, error: classesError } = await supabase
+  const { data: classes, error: classesError } = await client
     .from('classes')
     .select('id, name, abilities')
     .in('id', classIds);
