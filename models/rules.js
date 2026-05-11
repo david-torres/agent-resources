@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 
 const getRulesPdfs = async ({ includeInactive = false } = {}) => {
     let query = supabase
@@ -59,8 +59,10 @@ const updateRulesPdf = async (id, updates) => {
     return { data, error: null };
 };
 
+// Admin-only: embedded profile/granter joins require bypassing RLS so
+// non-public grantee profiles still resolve in the manage UI.
 const listRulesPdfUnlocks = async (rulesPdfId) => {
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
         .from('rules_pdf_unlocks')
         .select(`
             user_id,
