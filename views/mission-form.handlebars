@@ -270,15 +270,7 @@
         <div class="content">
           <ul id="selectedCharactersList">
             {{#each mission.characters}}
-            <li>
-              {{this.name}}
-              <button type="button" 
-                class="button is-small is-danger is-light" 
-                hx-delete="/missions/{{../mission.id}}/characters/{{this.id}}"
-                hx-target="#selectedCharactersList"
-                hx-swap="outerHTML">Remove</button>
-              <input type="hidden" name="characters[]" value="{{this.id}}">
-            </li>
+            {{> selected-character-item character=this mission=../mission}}
             {{/each}}
           </ul>
         </div>
@@ -420,7 +412,11 @@
         var unregisteredName = entry.querySelector('input[name="unregistered_character_names[]"]').value;
 
         htmx.ajax('POST', '/missions/{{mission.id}}/link-character', {
+          target: '#selectedCharactersList',
+          swap: 'beforeend',
           values: { character_id: characterId, unregistered_name: unregisteredName }
+        }).then(function() {
+          entry.remove();
         });
       }
     });

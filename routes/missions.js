@@ -375,9 +375,16 @@ router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) =>
   const { error } = await addCharacterToMission(id, characterId);
   if (error) {
     return res.status(400).send(error.message);
-  } else {
-    return res.header('HX-Location', `/missions/${id}/edit`).send();
   }
+  const { data: character, error: characterError } = await getCharacter(characterId, res.locals.supabase);
+  if (characterError || !character) {
+    return res.status(400).send(characterError ? characterError.message : 'Character not found');
+  }
+  return res.render('partials/selected-character-item', {
+    layout: false,
+    mission: { id },
+    character: { id: character.id, name: character.name },
+  });
 });
 
 // Search characters (JSON, for link UI)
@@ -423,7 +430,15 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
     await setUnregisteredCharacterNames(id, names, profile);
   }
 
-  return res.header('HX-Location', `/missions/${id}/edit`).send();
+  const { data: character, error: characterError } = await getCharacter(character_id, res.locals.supabase);
+  if (characterError || !character) {
+    return res.status(400).send(characterError ? characterError.message : 'Character not found');
+  }
+  return res.render('partials/selected-character-item', {
+    layout: false,
+    mission: { id },
+    character: { id: character.id, name: character.name },
+  });
 });
 
 router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) => {
@@ -431,9 +446,8 @@ router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) 
   const { error } = await removeCharacterFromMission(id, characterId);
   if (error) {
     return res.status(400).send(error.message);
-  } else {
-    return res.header('HX-Location', `/missions/${id}/edit`).send();
   }
+  return res.send('');
 });
 
 router.get('/character/:id', authOptional, async (req, res) => {
