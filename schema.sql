@@ -507,9 +507,11 @@ BEGIN
         RAISE EXCEPTION 'Invalid or expired code';
     END IF;
 
-    INSERT INTO class_unlocks(user_id, class_id)
-    VALUES (auth.uid(), v_code.class_id)
-    ON CONFLICT (user_id, class_id) DO NOTHING;
+    INSERT INTO class_unlocks(user_id, class_id, unlocked_at, expires_at)
+    VALUES (auth.uid(), v_code.class_id, now(), NULL)
+    ON CONFLICT (user_id, class_id) DO UPDATE
+    SET expires_at = NULL,
+        unlocked_at = LEAST(class_unlocks.unlocked_at, EXCLUDED.unlocked_at);
 
     UPDATE class_unlock_codes
     SET used_count = used_count + 1,
@@ -542,9 +544,11 @@ BEGIN
         RAISE EXCEPTION 'Invalid or expired code';
     END IF;
 
-    INSERT INTO class_unlocks(user_id, class_id)
-    VALUES (p_user_id, v_code.class_id)
-    ON CONFLICT (user_id, class_id) DO NOTHING;
+    INSERT INTO class_unlocks(user_id, class_id, unlocked_at, expires_at)
+    VALUES (p_user_id, v_code.class_id, now(), NULL)
+    ON CONFLICT (user_id, class_id) DO UPDATE
+    SET expires_at = NULL,
+        unlocked_at = LEAST(class_unlocks.unlocked_at, EXCLUDED.unlocked_at);
 
     UPDATE class_unlock_codes
     SET used_count = used_count + 1,
