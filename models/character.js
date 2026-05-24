@@ -5,7 +5,10 @@ const { escapeLikePattern } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 
 const getOwnCharacters = async (profile, client = supabase) => {
-  const { data, error } = await client.from('characters').select('*').eq('creator_id', profile.id);
+  const { data, error } = await client
+    .from('characters')
+    .select('*, linked_class:classes(rules_edition, rules_version)')
+    .eq('creator_id', profile.id);
   if (error) {
     console.error(error);
     return { data: null, error };

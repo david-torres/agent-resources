@@ -7,23 +7,35 @@
 
 {{#if characters.length}}
 <div class="block table-container">
-  <table class="table is-fullwidth is-striped is-hoverable">
+  <table class="table is-fullwidth is-striped is-hoverable" data-sortable>
     <thead>
       <tr>
-        <th>Name</th>
+        <th data-sort-key="name" data-sort-type="string">Name</th>
+        <th data-sort-key="class" data-sort-type="string">Class</th>
+        <th data-sort-key="level" data-sort-type="number">Level</th>
+        <th data-sort-key="edition" data-sort-type="string">Edition</th>
         <th>Actions</th>
       </tr>
     </thead>
     <tbody>
       {{#each characters}}
       <tr>
-        <td>
+        <td data-sort-value="{{this.name}}">
           <span class="title is-4">
             <a href="/characters/{{this.id}}/{{this.name}}">{{this.name}}</a>
             {{#if this.is_deceased}}
             <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
             {{/if}}
           </span>
+        </td>
+        <td data-sort-value="{{this.class}}">{{this.class}}</td>
+        <td data-sort-value="{{this.level}}">{{this.level}}</td>
+        <td data-sort-value="{{#if this.linked_class}}{{this.linked_class.rules_edition}} {{this.linked_class.rules_version}}{{/if}}">
+          {{#if this.linked_class}}
+          {{capitalize this.linked_class.rules_edition}} {{this.linked_class.rules_version}}
+          {{else}}
+          <span class="has-text-grey-light">—</span>
+          {{/if}}
         </td>
         <td>
           <div class="buttons are-small">
@@ -38,6 +50,55 @@
     </tbody>
   </table>
 </div>
+<script>
+  (function () {
+    const table = document.querySelector('table[data-sortable]');
+    if (!table) return;
+    const tbody = table.tBodies[0];
+    const headers = table.tHead.rows[0].cells;
+    let activeIndex = -1;
+    let activeDir = 1;
+    const getVal = (row, idx, type) => {
+      const cell = row.cells[idx];
+      const raw = cell.dataset.sortValue ?? cell.textContent.trim();
+      return type === 'number' ? parseFloat(raw) || 0 : raw.toLowerCase();
+    };
+    Array.from(headers).forEach((th, idx) => {
+      if (!th.dataset.sortKey) return;
+      th.style.cursor = 'pointer';
+      th.style.userSelect = 'none';
+      const indicator = document.createElement('span');
+      indicator.className = 'sort-indicator has-text-grey-light';
+      indicator.style.marginLeft = '0.35em';
+      indicator.textContent = '⇅';
+      th.appendChild(indicator);
+      th.addEventListener('click', () => {
+        const type = th.dataset.sortType || 'string';
+        if (activeIndex === idx) {
+          activeDir = -activeDir;
+        } else {
+          activeIndex = idx;
+          activeDir = 1;
+        }
+        Array.from(headers).forEach(h => {
+          const ind = h.querySelector('.sort-indicator');
+          if (ind) { ind.textContent = '⇅'; ind.classList.add('has-text-grey-light'); }
+        });
+        indicator.textContent = activeDir === 1 ? '▲' : '▼';
+        indicator.classList.remove('has-text-grey-light');
+        const rows = Array.from(tbody.rows);
+        rows.sort((a, b) => {
+          const va = getVal(a, idx, type);
+          const vb = getVal(b, idx, type);
+          if (va < vb) return -1 * activeDir;
+          if (va > vb) return 1 * activeDir;
+          return 0;
+        });
+        rows.forEach(r => tbody.appendChild(r));
+      });
+    });
+  })();
+</script>
 {{else}}
 <div class="notification is-light has-text-centered">
   <p class="mb-3"><span class="icon is-large has-text-grey-light"><i class="fas fa-users fa-2x"></i></span></p>
