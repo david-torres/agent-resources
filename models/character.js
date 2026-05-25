@@ -176,7 +176,11 @@ const createCharacter = async (characterReq, profile) => {
 }
 
 const updateCharacter = async (id, characterReq, profile) => {
-  const { data: characterData, error: characterError } = await getCharacter(id);
+  // Use admin to read for the ownership probe: the anon client can't see
+  // private rows under RLS, which would 404 a user trying to edit their own
+  // private character (PGRST116). Authz is enforced by the creator_id check
+  // immediately below + the .eq('creator_id', ...) filter on the UPDATE.
+  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
@@ -295,7 +299,9 @@ const updateCharacter = async (id, characterReq, profile) => {
 }
 
 const deleteCharacter = async (id, profile) => {
-  const { data: characterData, error: characterError } = await getCharacter(id);
+  // Admin read for the ownership probe — see updateCharacter for the same
+  // reasoning. The creator_id JS check + .eq() filter still enforce authz.
+  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
@@ -664,7 +670,9 @@ const getCharacterAllMissions = async (characterId) => {
 };
 
 const markCharacterDeceased = async (id, profile) => {
-  const { data: characterData, error: characterError } = await getCharacter(id);
+  // Admin read for the ownership probe — see updateCharacter for the same
+  // reasoning. The creator_id JS check + .eq() filter still enforce authz.
+  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
   if (characterData.is_deceased) return { data: null, error: 'Character is already deceased' };
