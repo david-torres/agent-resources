@@ -203,8 +203,10 @@ const App = (function (document, supabase, htmx) {
     if (width && height) {
       const sizeX = `${(100 / width).toFixed(4)}%`;
       const sizeY = `${(100 / height).toFixed(4)}%`;
-      const posX = `${(-x / width * 100).toFixed(4)}%`;
-      const posY = `${(-y / height * 100).toFixed(4)}%`;
+      // background-position percent aligns the P% point of the image to the P%
+      // point of the container, so the correct value is x/(1-width), not -x/width.
+      const posX = `${(width >= 1 ? 0 : x / (1 - width) * 100).toFixed(4)}%`;
+      const posY = `${(height >= 1 ? 0 : y / (1 - height) * 100).toFixed(4)}%`;
       el.style.backgroundSize = `${sizeX} ${sizeY}`;
       el.style.backgroundPosition = `${posX} ${posY}`;
       // Don't override aspect-ratio for preview - let CSS handle it
