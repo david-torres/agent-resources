@@ -84,17 +84,13 @@ characters. v2 characters do not write to it. When a v1 character later
 links to a v2 class, its `perks` text renders as a read-only "Legacy perks
 (v1)" block so nothing is lost.
 
-### `classes` — JSONB shape only
+### `classes` — no change
 
-No DDL. The abilities JSONB array items grow one optional field:
-
-```json
-{ "name": "...", "description": "...", "compounding": true }
-```
-
-The class form gains a per-perk "Compounding perk" checkbox. The flag is
-meaningful only when `classes.rules_version = 'v2'`; on v1 classes the
-checkbox shows a hint and is otherwise a no-op for rendering.
+Classes today only store name + description per ability (no per-ability
+perk list), so the "compounding" marker has nowhere to live on a class.
+It lives entirely on the character's perk row via
+`character_perks.compounds_with` (a self-reference to another perk on the
+same character + same ability).
 
 ## Validation (v2 characters only)
 
@@ -136,9 +132,7 @@ them).
 
 ## Model changes (`models/class.js`)
 
-None. `dup_class` already forks v1 → v2. The optional `compounding`
-boolean on ability perks rides inside the existing abilities JSONB and is
-persisted via the unchanged `updateClass` path.
+None. `dup_class` already forks v1 → v2.
 
 ## Route changes (`routes/characters.js`)
 
@@ -196,9 +190,8 @@ new shape.
 
 ### `views/class-form.handlebars`
 
-- Each ability's perk-list editor gains a per-perk `compounding`
-  checkbox, persisted as `{ ..., compounding: true }` inside the
-  existing abilities JSONB.
+No changes. Classes have no per-ability perk editor; the compounding
+marker lives on the character's perk row, not the class.
 
 ### Stat-scaling hint copy (v2)
 
@@ -221,9 +214,6 @@ New tests sit next to existing model tests.
   - Perk validation: rejects >25 words, >5 perks per ability,
     `compounds_with_id` referencing a perk on a different ability or
     different character.
-- `models/class.test.js`:
-  - `compounding: true` on an ability perk round-trips through
-    `updateClass`.
 
 ## Migrations and rollout
 
