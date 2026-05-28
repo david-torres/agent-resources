@@ -1,0 +1,9 @@
+{{> breadcrumbs}}
+<h1 class="title is-2">Spend a Conduit Credit</h1>
+<h2 class="subtitle is-5">{{character.name}} — available Conduit Credits: {{profileCredits.balance}}</h2>
+
+{{> offscreen-mission-form
+    character=character
+    availableHostedMissions=availableHostedMissions
+    mode="new"
+    formAction=formAction}}

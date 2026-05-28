@@ -1,0 +1,13 @@
+<div class="column is-full">
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <input class="input" type="text" name="quirk_name[]" placeholder="Quirk name (e.g. Synthetic)" value="{{quirk.name}}" required>
+    </div>
+    <div class="control is-expanded ml-2">
+      <input class="input" type="text" name="quirk_description[]" placeholder="Short description (optional)" value="{{quirk.description}}">
+    </div>
+    <div class="control ml-2 mt-2">
+      <button type="button" class="delete" hx-on:click="htmx.remove(htmx.closest(this, '.is-full'));"></button>
+    </div>
+  </div>
+</div>

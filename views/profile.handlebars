@@ -21,6 +21,15 @@
   <a href="/profile/view/{{profile.name}}" class="button is-light">View Profile</a>
 </div>
 
+{{#if (or conduitCredits.earned conduitCredits.spent_linked)}}
+<div class="box">
+  <h3 class="title is-4">Conduit Credits</h3>
+  <p><strong>Earned:</strong> {{conduitCredits.earned}} <span class="has-text-grey">(missions hosted)</span></p>
+  <p><strong>Spent:</strong> {{conduitCredits.spent_linked}} <span class="has-text-grey">(offscreen missions with linked source)</span></p>
+  <p><strong>Available:</strong> {{conduitCredits.balance}}</p>
+</div>
+{{/if}}
+
 {{#if unlockedClasses}}
 <div class="box">
   <h3 class="title is-4">Unlocked Classes</h3>

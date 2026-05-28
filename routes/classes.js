@@ -46,17 +46,21 @@ router.get('/', authOptional, async (req, res) => {
     const { profile } = res.locals;
 
     // get class filters
+    const isAdmin = profile?.role === 'admin';
     const filters = {
-        is_public: true,
         rules_edition: req.query.rules_edition,
         rules_version: req.query.rules_version,
         status: req.query.status,
+    };
+    // Non-admins see only public classes. Admins see all (RLS-permitted) entries.
+    if (!isAdmin) {
+        filters.is_public = true;
     }
     if (req.query.is_player_created) {
         filters.is_player_created = req.query.is_player_created === 'true';
     }
 
-    const { data: classes, error } = await getClasses(filters);
+    const { data: classes, error } = await getClasses(filters, res.locals.supabase);
     if (error) {
         return res.status(500).json({ error: error.message });
     }
@@ -65,6 +69,7 @@ router.get('/', authOptional, async (req, res) => {
         title: 'Classes',
         classes: classes,
         filters: filters,
+        isAdmin,
         activeNav: 'classes',
         breadcrumbs: [
             { label: 'Classes', href: '/classes' }
@@ -410,8 +415,11 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { profile } = res.locals;
-    const { new_version } = req.body;
+    const { new_version, new_edition } = req.body;
     if (!new_version) return res.status(400).send('new_version is required');
+    if (new_edition && !['advent', 'aspirant'].includes(new_edition)) {
+      return res.status(400).send('Invalid new_edition');
+    }
 
     const { data: sourceClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !sourceClass) {
@@ -423,7 +431,7 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
         return res.status(403).send('Not authorized');
     }
 
-    const { data: newClassId, error } = await duplicateClass(id, new_version);
+    const { data: newClassId, error } = await duplicateClass(id, new_version, new_edition || null);
     if (error) return res.status(400).send(error.message);
     try {
         const { data: newClass } = await getClass(newClassId, res.locals.supabase);

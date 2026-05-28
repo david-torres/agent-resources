@@ -115,6 +115,9 @@
       {{/if}}
       <div class="card-content">
         <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+          {{#if (and ../isAdmin (not this.is_public))}}
+          <span class="tag is-dark is-light ml-2" title="Not public — only admins can see this">Private</span>
+          {{/if}}
           {{#if (eq this.status 'release')}}
           <span class="tag is-success is-light ml-2">
             <span class="icon is-small"><i class="fas fa-star"></i></span>

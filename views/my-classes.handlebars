@@ -107,7 +107,10 @@
         <td class="has-text-right">
           <div class="buttons are-small is-right">
             <a class="button is-warning" href="/classes/{{this.id}}/edit">Edit</a>
-            <button class="button is-info" hx-post="/classes/{{this.id}}/duplicate" hx-vals='{"new_version":"v2"}' hx-confirm="Duplicate to new version v2?" hx-swap="none">Duplicate</button>
+            <button type="button" class="button is-info"
+                    hx-on:click="App.openModal('#duplicateModal-{{this.id}}')">
+              Duplicate…
+            </button>
             <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
           </div>
           <!-- History Modal -->
@@ -122,6 +125,47 @@
               <footer class="modal-card-foot">
                 <button class="button" hx-on:click="App.closeModal('#historyModal-{{this.id}}')">Close</button>
               </footer>
+            </div>
+          </div>
+          <!-- Duplicate Modal -->
+          <div id="duplicateModal-{{this.id}}" class="modal">
+            <div class="modal-background" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')"></div>
+            <div class="modal-card">
+              <header class="modal-card-head">
+                <p class="modal-card-title">Duplicate {{this.name}}</p>
+                <button type="button" class="delete" aria-label="close" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')"></button>
+              </header>
+              <form hx-post="/classes/{{this.id}}/duplicate" hx-swap="none">
+                <section class="modal-card-body">
+                  <p class="mb-3">Source: <strong>{{capitalize this.rules_edition}} {{this.rules_version}}</strong>. Pick the new edition and version for the fork. The new class will reference this one via <code>base_class_id</code>.</p>
+                  <div class="field">
+                    <label class="label" for="dup-edition-{{this.id}}">Edition</label>
+                    <div class="control">
+                      <div class="select">
+                        <select name="new_edition" id="dup-edition-{{this.id}}">
+                          <option value="advent" {{#if (eq this.rules_edition 'advent')}}selected{{/if}}>Advent</option>
+                          <option value="aspirant" {{#if (eq this.rules_edition 'aspirant')}}selected{{/if}}>Aspirant</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="label" for="dup-version-{{this.id}}">Version</label>
+                    <div class="control">
+                      <div class="select">
+                        <select name="new_version" id="dup-version-{{this.id}}" required>
+                          <option value="v1">v1</option>
+                          <option value="v2" selected>v2</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+                <footer class="modal-card-foot">
+                  <button type="button" class="button" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')">Cancel</button>
+                  <button type="submit" class="button is-info">Duplicate</button>
+                </footer>
+              </form>
             </div>
           </div>
         </td>

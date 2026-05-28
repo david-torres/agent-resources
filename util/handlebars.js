@@ -170,6 +170,29 @@ function isYoutubeUrl(url) {
   return videoProviders.youtube.detectPattern.test(url);
 }
 
+const effectiveRulesVersionH = function (character, characterClass) {
+  if (characterClass && characterClass.rules_version === 'v2') return 'v2';
+  if (character && character.linked_class && character.linked_class.rules_version === 'v2') return 'v2';
+  return 'v1';
+};
+
+const wordCountH = function (text) {
+  if (typeof text !== 'string') return 0;
+  const trimmed = text.trim();
+  return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
+};
+
+const perksForAbilityH = function (perks, abilityId) {
+  if (!Array.isArray(perks)) return [];
+  return perks.filter(p => p && p.class_ability_id === abilityId);
+};
+
+const nextPerkPositionH = function (perks, abilityId) {
+  const peers = (Array.isArray(perks) ? perks : []).filter(p => p && p.class_ability_id === abilityId);
+  if (peers.length === 0) return 0;
+  return Math.max(...peers.map(p => Number(p.position) || 0)) + 1;
+};
+
 module.exports = {
   times,
   date_tz,
@@ -184,5 +207,9 @@ module.exports = {
   videoEmbed,
   isSupportedVideoUrl,
   getVideoProvider,
-  substring
+  substring,
+  effectiveRulesVersion: effectiveRulesVersionH,
+  wordCount: wordCountH,
+  perksForAbility: perksForAbilityH,
+  nextPerkPosition: nextPerkPositionH
 }

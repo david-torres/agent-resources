@@ -80,6 +80,22 @@ test('getEditableMissions uses the passed client', async () => {
   expect(defaultAnon.calls).not.toContain('mission_editors');
 });
 
+test('getHostedMissions uses the passed client and queries the missions table', async () => {
+  const userClient = makeSpyClient({
+    missions: [
+      { id: 'mis-1', name: 'Recent Host', date: '2026-05-01' },
+      { id: 'mis-2', name: 'Older Host', date: '2026-03-01' }
+    ]
+  });
+  defaultAnon.calls.length = 0;
+  const { getHostedMissions } = require('./mission');
+  const { data, error } = await getHostedMissions({ profileId: 'p1', supabase: userClient });
+  expect(error).toBeNull();
+  expect(userClient.calls).toContain('missions');
+  expect(defaultAnon.calls).not.toContain('missions');
+  expect(data).toHaveLength(2);
+});
+
 test('searchSimilarMissions uses the passed client', async () => {
   const userClient = makeSpyClient({ missions: [] });
   defaultAnon.calls.length = 0;

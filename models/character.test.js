@@ -24,12 +24,12 @@ const makeClient = (tableToRows, { singleTables = new Set(['characters']) } = {}
     const chain = {
       select() { return chain; },
       eq() {
-        // Terminal in the code paths we care about — return a thenable.
-        if (singleTables.has(table)) {
-          // `characters` uses `.eq(...).single()`, so keep the chain alive
-          // but also allow awaiting directly.
-          return chain;
-        }
+        // Always return the chain (thenable) so callers can either await
+        // directly or continue chaining (e.g. .eq(...).order(...)).
+        return chain;
+      },
+      order() {
+        // Terminal for ordered list queries — return a resolved promise.
         return Promise.resolve(result);
       },
       in() {
@@ -41,6 +41,9 @@ const makeClient = (tableToRows, { singleTables = new Set(['characters']) } = {}
       maybeSingle() {
         return Promise.resolve(singleResult);
       },
+      insert() { return chain; },
+      update() { return chain; },
+      delete() { return chain; },
       // Allow the chain itself to be awaited as a fallback (e.g., if code
       // ever awaits a non-terminal node). Resolves to the list result.
       then(onFulfilled, onRejected) {
@@ -78,7 +81,7 @@ const fakeAnon = makeClient({
   traits: [],
   class_gear: [],
   class_abilities: [],
-  classes: []
+  classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }]
 });
 
 // Admin client has the full picture: the character row (with embedded
@@ -95,8 +98,26 @@ const fakeAdmin = makeClient({
   traits: [{ character_id: 'char-uuid-1', name: 'Brave' }],
   class_gear: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Knife' }],
   class_abilities: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Dodge' }],
-  classes: []
+  classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }]
 });
+
+const fakeAdminV2 = makeClient({
+  characters: [{
+    ...characterRowBase,
+    class_id: 'class-v2',
+    class: 'Thane-v2',
+    quirks: [],
+    accessories: [],
+    personality: [{ name: 'Brave' }],
+    abilities: [],
+    gear: []
+  }],
+  traits: [],
+  class_gear: [],
+  class_abilities: [],
+  character_perks: [],
+  classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }]
+}, { singleTables: new Set(['characters', 'classes']) });
 
 mock.module('./_base', () => ({
   supabase: fakeAnon,
@@ -171,4 +192,210 @@ test('getCharacter uses the passed client for the characters SELECT', async () =
   const { data } = await getCharacter('injected-char', userClient);
   expect(data).toBeTruthy();
   expect(data.id).toBe('injected-char');
+});
+
+test('createCharacter drops v2-only fields when linked class is v1', async () => {
+  const { createCharacter } = require('./character');
+  const payload = {
+    name: 'Versionless',
+    class_id: 'class-1',          // class is v1 in fakeAnon
+    class: 'Soldier',
+    level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    quirks: [{ name: 'Synthetic', description: 'Built, not born' }],
+    accessories: [{ name: 'Monocle' }]
+  };
+  const { data, error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeFalsy();
+  expect(data).toBeTruthy();
+  // The fake admin client always echoes characterRowBase, so we check that
+  // the payload mutation happened: createCharacter should have deleted v2
+  // keys before insert.
+  expect(payload.quirks).toBeUndefined();
+  expect(payload.accessories).toBeUndefined();
+});
+
+test('createCharacter preserves v2 fields when linked class is v2', async () => {
+  mock.module('./_base', () => ({
+    supabase: fakeAdminV2,
+    supabaseAdmin: fakeAdminV2,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeAdminV2
+  }));
+  delete require.cache[require.resolve('./character')];
+  const { createCharacter } = require('./character');
+
+  const payload = {
+    name: 'V2',
+    class_id: 'class-v2',
+    class: 'Thane-v2',
+    level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    quirks: [{ name: 'Synthetic', description: 'Built, not born' }],
+    accessories: [{ name: 'Monocle' }]
+  };
+  const { data, error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeFalsy();
+  expect(Array.isArray(payload.quirks)).toBe(true);
+  expect(payload.quirks.length).toBe(1);
+  expect(payload.accessories[0].name).toBe('Monocle');
+
+  // Restore the original module mock for subsequent tests.
+  mock.module('./_base', () => ({
+    supabase: fakeAnon,
+    supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
+test('createCharacter rejects v2 perks that violate validation', async () => {
+  mock.module('./_base', () => ({
+    supabase: fakeAdminV2,
+    supabaseAdmin: fakeAdminV2,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeAdminV2
+  }));
+  delete require.cache[require.resolve('./character')];
+  const { createCharacter } = require('./character');
+
+  const longText = Array.from({ length: 26 }, (_, i) => `w${i}`).join(' ');
+  const payload = {
+    name: 'V2', class_id: 'class-v2', class: 'Thane-v2', level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    ability_perks: [{ class_ability_id: 'a1', text: longText }]
+  };
+  const { error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeTruthy();
+  expect(String(error)).toMatch(/25 words/);
+
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
+test('getCharacter attaches ability_perks for v2 characters', async () => {
+  mock.module('./_base', () => {
+    const v2Admin = makeClient({
+      characters: [{
+        ...characterRowBase,
+        class_id: 'class-v2',
+        class: 'Thane-v2',
+        personality: [],
+        abilities: [],
+        gear: []
+      }],
+      traits: [],
+      class_gear: [],
+      class_abilities: [],
+      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }],
+      character_perks: [
+        { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Bigger sword', position: 0, compounds_with: null },
+        { id: 'p2', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Even bigger',  position: 1, compounds_with: 'p1' }
+      ]
+    }, { singleTables: new Set(['characters', 'classes']) });
+    return {
+      supabase: v2Admin, supabaseAdmin: v2Admin,
+      anonKey: 'test-anon-key', createUserClient: () => v2Admin
+    };
+  });
+  delete require.cache[require.resolve('./character')];
+  const { getCharacter } = require('./character');
+  const { data, error } = await getCharacter('char-uuid-1');
+  expect(error).toBeFalsy();
+  expect(Array.isArray(data.ability_perks)).toBe(true);
+  expect(data.ability_perks.length).toBe(2);
+  expect(data.ability_perks[0].text).toBe('Bigger sword');
+
+  // restore
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
+test('getCharacter rewrites compounds_with UUIDs into position-N sentinels', async () => {
+  mock.module('./_base', () => {
+    const v2Admin = makeClient({
+      characters: [{
+        ...characterRowBase,
+        class_id: 'class-v2',
+        class: 'Thane-v2',
+        personality: [],
+        abilities: [],
+        gear: []
+      }],
+      traits: [],
+      class_gear: [],
+      class_abilities: [],
+      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }],
+      character_perks: [
+        { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Base', position: 0, compounds_with: null },
+        { id: 'p2', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Stacks',  position: 1, compounds_with: 'p1' },
+        { id: 'p3', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Orphan',  position: 2, compounds_with: '00000000-0000-0000-0000-000000000000' }
+      ]
+    }, { singleTables: new Set(['characters', 'classes']) });
+    return {
+      supabase: v2Admin, supabaseAdmin: v2Admin,
+      anonKey: 'test-anon-key', createUserClient: () => v2Admin
+    };
+  });
+  delete require.cache[require.resolve('./character')];
+  const { getCharacter } = require('./character');
+  const { data } = await getCharacter('char-uuid-1');
+  const perks = data.ability_perks;
+  expect(perks[0].compounds_with).toBeNull();
+  expect(perks[1].compounds_with).toBe('position-0');
+  // Orphan reference (UUID points to nothing) collapses to null.
+  expect(perks[2].compounds_with).toBeNull();
+
+  // restore
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
+test('serializeCharacterForAgent omits v2 fields on v1 characters', () => {
+  const { serializeCharacterForAgent } = require('./character');
+  const row = {
+    id: 'c1', creator_id: 'p1', name: 'V1', class: 'Soldier', level: 1,
+    is_public: true, is_deceased: false,
+    // version is resolved externally; the serializer receives it as a hint:
+    rules_version: 'v1',
+    quirks: [], accessories: [], ability_perks: []
+  };
+  const out = serializeCharacterForAgent(row, { profileId: 'p1', role: 'admin' });
+  expect(out.rules_version).toBe('v1');
+  expect(out).not.toHaveProperty('quirks');
+  expect(out).not.toHaveProperty('accessories');
+  expect(out).not.toHaveProperty('ability_perks');
+});
+
+test('serializeCharacterForAgent includes v2 fields on v2 characters', () => {
+  const { serializeCharacterForAgent } = require('./character');
+  const row = {
+    id: 'c2', creator_id: 'p1', name: 'V2', class: 'Thane-v2', level: 1,
+    is_public: true, is_deceased: false,
+    rules_version: 'v2',
+    quirks: [{ name: 'Synthetic' }],
+    accessories: [{ name: 'Monocle' }],
+    ability_perks: [{ class_ability_id: 'a1', text: 'Bigger sword', position: 0 }]
+  };
+  const out = serializeCharacterForAgent(row, { profileId: 'p1', role: 'admin' });
+  expect(out.rules_version).toBe('v2');
+  expect(out.quirks[0].name).toBe('Synthetic');
+  expect(out.accessories[0].name).toBe('Monocle');
+  expect(out.ability_perks[0].text).toBe('Bigger sword');
 });

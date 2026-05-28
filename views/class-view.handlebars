@@ -22,6 +22,10 @@
 {{#or (eq profile.role 'admin') (eq profile.id class.created_by)}}
 <div class="buttons">
   <a href="/classes/{{class.id}}/edit" class="button is-warning">Edit</a>
+  <button type="button" class="button is-info"
+          hx-on:click="App.openModal('#duplicateModal-{{class.id}}')">
+    Duplicate…
+  </button>
   <button class="button is-danger" hx-delete="/classes/{{class.id}}" hx-target="closest tr"
     hx-swap="outerHTML" hx-confirm="Are you sure you want to delete this class?">Delete</button>
   {{#unless (or (eq class.status 'beta') (eq class.status 'alpha'))}}
@@ -205,6 +209,47 @@
 
 {{#if profile}}
 {{#or (eq profile.role 'admin') (eq profile.id class.creator_id)}}
+<!-- Duplicate Modal -->
+<div id="duplicateModal-{{class.id}}" class="modal">
+  <div class="modal-background" hx-on:click="App.closeModal('#duplicateModal-{{class.id}}')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Duplicate {{class.name}}</p>
+      <button type="button" class="delete" aria-label="close" hx-on:click="App.closeModal('#duplicateModal-{{class.id}}')"></button>
+    </header>
+    <form hx-post="/classes/{{class.id}}/duplicate" hx-swap="none">
+      <section class="modal-card-body">
+        <p class="mb-3">Source: <strong>{{capitalize class.rules_edition}} {{class.rules_version}}</strong>. Pick the new edition and version for the fork. The new class will reference this one via <code>base_class_id</code>.</p>
+        <div class="field">
+          <label class="label" for="dup-edition-{{class.id}}">Edition</label>
+          <div class="control">
+            <div class="select">
+              <select name="new_edition" id="dup-edition-{{class.id}}">
+                <option value="advent" {{#if (eq class.rules_edition 'advent')}}selected{{/if}}>Advent</option>
+                <option value="aspirant" {{#if (eq class.rules_edition 'aspirant')}}selected{{/if}}>Aspirant</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="dup-version-{{class.id}}">Version</label>
+          <div class="control">
+            <div class="select">
+              <select name="new_version" id="dup-version-{{class.id}}" required>
+                <option value="v1">v1</option>
+                <option value="v2" selected>v2</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
+      <footer class="modal-card-foot">
+        <button type="button" class="button" hx-on:click="App.closeModal('#duplicateModal-{{class.id}}')">Cancel</button>
+        <button type="submit" class="button is-info">Duplicate</button>
+      </footer>
+    </form>
+  </div>
+</div>
 <!-- Unlock Code Modal -->
 <div id="unlockCodeModal" class="modal" data-clear-on-close="true" data-clear-target="#codeResult-{{class.id}}">
   <div class="modal-background" hx-on:click="App.closeModal('#unlockCodeModal')"></div>

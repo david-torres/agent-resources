@@ -1,0 +1,83 @@
+<form method="POST" action="{{formAction}}">
+  <div class="field">
+    <label class="label" for="om-name">Offscreen Mission Name</label>
+    <div class="control">
+      <input class="input" type="text" name="name" id="om-name" required
+             value="{{offscreenMission.name}}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label" for="om-summary">Summary</label>
+    <div class="control">
+      <textarea class="textarea" name="summary" id="om-summary" rows="4" required
+                placeholder="2–3 sentences describing the offscreen mission.">{{offscreenMission.summary}}</textarea>
+    </div>
+    <p class="help">2–3 sentences.</p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="om-merx">Merx Gained</label>
+    <div class="control">
+      <input class="input" type="number" name="merx_gained" id="om-merx" min="0" step="1"
+             value="{{#if offscreenMission}}{{offscreenMission.merx_gained}}{{else}}0{{/if}}">
+    </div>
+  </div>
+
+  <div class="field">
+    <label class="label">Source Mission</label>
+    <div class="control">
+      <div class="select is-fullwidth">
+        <select name="source_mission_id" id="om-source-select"
+                onchange="document.getElementById('om-source-other').style.display = this.value === '__other__' ? 'block' : 'none';">
+          {{#each availableHostedMissions}}
+          <option value="{{this.id}}"
+                  data-name="{{this.name}}"
+                  data-date="{{date this.date "YYYY-MM-DD"}}"
+                  {{#if (eq this.id ../offscreenMission.source_mission_id)}}selected{{/if}}>
+            {{this.name}} — {{date this.date "MMM D, YYYY"}}
+          </option>
+          {{/each}}
+          <option value="__other__"
+                  {{#unless ../offscreenMission.source_mission_id}}{{#if ../offscreenMission}}selected{{/if}}{{/unless}}>
+            Other / not in the system
+          </option>
+        </select>
+      </div>
+    </div>
+    {{#if availableHostedMissions.length}}
+    <p class="help">The hosted mission that earned this credit. Pick from the list, or "Other" to enter manually.</p>
+    {{else}}
+    <p class="help">You have no available Conduit Credits to spend. To create an offscreen mission anyway, choose "Other / not in the system" above.</p>
+    {{/if}}
+  </div>
+
+  <div id="om-source-other"
+       style="display: {{#unless offscreenMission.source_mission_id}}{{#if offscreenMission}}block{{else}}none{{/if}}{{/unless}};">
+    <div class="field">
+      <label class="label" for="om-source-name">Source Mission Name</label>
+      <div class="control">
+        <input class="input" type="text" name="source_mission_name_other" id="om-source-name"
+               value="{{#unless offscreenMission.source_mission_id}}{{offscreenMission.source_mission_name}}{{/unless}}">
+      </div>
+    </div>
+    <div class="field">
+      <label class="label" for="om-source-date">Source Mission Date</label>
+      <div class="control">
+        <input class="input" type="date" name="source_mission_date_other" id="om-source-date"
+               value="{{#unless offscreenMission.source_mission_id}}{{date offscreenMission.source_mission_date "YYYY-MM-DD"}}{{/unless}}">
+      </div>
+    </div>
+  </div>
+
+  <div class="field is-grouped mt-4">
+    <div class="control">
+      <button class="button is-primary" type="submit">
+        {{#if (eq mode "new")}}Spend Credit &amp; Add Offscreen Mission{{else}}Save Changes{{/if}}
+      </button>
+    </div>
+    <div class="control">
+      <a class="button is-light" href="/characters/{{character.id}}">Cancel</a>
+    </div>
+  </div>
+</form>

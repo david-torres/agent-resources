@@ -59,6 +59,15 @@ const getMission = async (id, client = supabase) => {
   return { data: transformedData, error };
 };
 
+const getHostedMissions = async ({ profileId, supabase: client = supabase }) => {
+  const { data, error } = await client
+    .from('missions')
+    .select('id, name, date')
+    .eq('host_id', profileId)
+    .order('date', { ascending: false });
+  return { data, error };
+};
+
 const getOwnMissions = async (profile, client = supabase) => {
   const { data, error } = await client
     .from('missions')
@@ -763,6 +772,7 @@ module.exports = {
   getMissionCharacters,
   setUnregisteredCharacterNames,
   getOwnMissions,
+  getHostedMissions,
   searchPublicMissions,
   getRandomPublicMissions,
   // Editor management

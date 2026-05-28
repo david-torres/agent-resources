@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
-const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles } = require('../util/supabase');
+const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles, getProfileConduitCredits } = require('../util/supabase');
 const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
@@ -15,10 +15,21 @@ router.get('/', isAuthenticated, async (req, res) => {
     const { data } = await getUnlockedClasses(user.id);
     if (Array.isArray(data)) unlockedClasses = data;
   } catch (_) {}
+
+  let conduitCredits = { earned: 0, spent_linked: 0, balance: 0 };
+  try {
+    const { data } = await getProfileConduitCredits({
+      profileId: profile.id,
+      supabase: res.locals.supabase
+    });
+    if (data) conduitCredits = data;
+  } catch (_) {}
+
   res.render('profile', {
     user,
     profile,
     unlockedClasses,
+    conduitCredits,
     activeNav: 'profile',
     breadcrumbs: [
       { label: 'Profile', href: '/profile' }

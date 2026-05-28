@@ -91,7 +91,19 @@
         "parameters": [
           { "in": "query", "name": "q", "schema": { "type": "string" } }
         ],
-        "responses": { "200": { "description": "OK" } }
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/CharacterSummary" }
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/characters/{id}": {
@@ -107,7 +119,14 @@
           }
         ],
         "responses": {
-          "200": { "description": "OK" },
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CharacterDetail" }
+              }
+            }
+          },
           "404": { "description": "Not found" }
         }
       }
@@ -162,6 +181,91 @@
               "description": { "type": "string" },
               "gear": { "type": "array", "items": { "type": "object" } },
               "abilities": { "type": "array", "items": { "type": "object" } }
+            }
+          }
+        ]
+      },
+      "CharacterSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "class": { "type": "string" },
+          "level": { "type": "integer" },
+          "is_public": { "type": "boolean" },
+          "is_deceased": { "type": "boolean" },
+          "owner_profile_id": { "type": ["string", "null"] },
+          "owner_name": { "type": ["string", "null"] }
+        }
+      },
+      "CharacterDetail": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CharacterSummary" },
+          {
+            "type": "object",
+            "properties": {
+              "rules_version": { "type": "string", "enum": ["v1", "v2"] },
+              "stats": { "type": "object", "additionalProperties": { "type": ["integer", "null"] } },
+              "traits": { "type": "array", "items": { "type": "string" } },
+              "abilities": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              },
+              "signature_gear": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "description": { "type": "string" }
+                  }
+                }
+              },
+              "conduit_credits": { "type": "integer", "description": "v2 only" },
+              "quirks": {
+                "type": "array",
+                "description": "v2 only",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "description": { "type": "string" }
+                  },
+                  "required": ["name"]
+                }
+              },
+              "accessories": {
+                "type": "array",
+                "description": "v2 only",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "description": { "type": "string" }
+                  },
+                  "required": ["name"]
+                }
+              },
+              "ability_perks": {
+                "type": "array",
+                "description": "v2 only. Each item is at most 25 words; up to 5 per class_ability_id.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "class_ability_id": { "type": "string", "format": "uuid" },
+                    "text": { "type": "string" },
+                    "position": { "type": "integer" },
+                    "compounds_with": { "type": ["string", "null"], "format": "uuid" }
+                  },
+                  "required": ["class_ability_id", "text"]
+                }
+              }
             }
           }
         ]

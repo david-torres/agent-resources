@@ -33,6 +33,7 @@ CREATE TABLE characters (
   is_public BOOLEAN DEFAULT FALSE,
   is_deceased BOOLEAN NOT NULL DEFAULT FALSE,
   hide_from_search BOOLEAN NOT NULL DEFAULT FALSE,
+  auto_calculate BOOLEAN NOT NULL DEFAULT FALSE,
   name TEXT NOT NULL,
   class TEXT NOT NULL,
   vitality INTEGER NOT NULL,
@@ -61,7 +62,9 @@ CREATE TABLE characters (
   perks TEXT NULL,
   private_notes TEXT NULL,
   class_id UUID NULL,
-  common_items JSONB DEFAULT '[]'::jsonb
+  common_items JSONB DEFAULT '[]'::jsonb,
+  quirks JSONB NOT NULL DEFAULT '[]'::jsonb,
+  accessories JSONB NOT NULL DEFAULT '[]'::jsonb
 );
 
 -- missions table
@@ -169,6 +172,20 @@ CREATE TABLE class_abilities (
   class_id uuid NOT NULL REFERENCES classes(id),
   FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
 );
+
+-- character_perks: structured Ability Perks for v2 characters
+CREATE TABLE IF NOT EXISTS character_perks (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    class_ability_id UUID NOT NULL REFERENCES class_abilities(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    compounds_with UUID REFERENCES character_perks(id) ON DELETE SET NULL,
+    position INTEGER NOT NULL DEFAULT 0,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_perks_character ON character_perks(character_id);
+CREATE INDEX IF NOT EXISTS idx_character_perks_ability   ON character_perks(class_ability_id);
 
 -- lfg_posts table
 CREATE TABLE lfg_posts (
@@ -283,6 +300,101 @@ ALTER TABLE classes ADD COLUMN IF NOT EXISTS visibility text;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS class_id UUID;
 ALTER TABLE characters ADD COLUMN IF NOT EXISTS common_items JSONB DEFAULT '[]'::jsonb;
 
+-- Offscreen missions: per-character log entries created by spending a Conduit credit.
+CREATE TABLE IF NOT EXISTS offscreen_missions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  merx_gained INTEGER NOT NULL DEFAULT 0,
+  source_mission_id UUID NULL REFERENCES missions(id) ON DELETE SET NULL,
+  source_mission_name TEXT NOT NULL,
+  source_mission_date DATE NOT NULL,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS offscreen_missions_character_id_idx
+  ON offscreen_missions (character_id, source_mission_date DESC);
+
+ALTER TABLE offscreen_missions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "offscreen_missions_select" ON offscreen_missions;
+DROP POLICY IF EXISTS "offscreen_missions_mutate" ON offscreen_missions;
+
+CREATE POLICY "offscreen_missions_select"
+  ON offscreen_missions FOR SELECT
+  USING (
+    EXISTS (
+      SELECT 1 FROM characters c
+      JOIN profiles p ON p.id = c.creator_id
+      WHERE c.id = offscreen_missions.character_id
+        AND (c.is_public = true OR p.user_id = auth.uid() OR is_admin())
+    )
+  );
+
+CREATE POLICY "offscreen_missions_mutate"
+  ON offscreen_missions FOR ALL
+  USING (
+    EXISTS (
+      SELECT 1 FROM characters c
+      JOIN profiles p ON p.id = c.creator_id
+      WHERE c.id = offscreen_missions.character_id
+        AND (p.user_id = auth.uid() OR is_admin())
+    )
+  )
+  WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM characters c
+      JOIN profiles p ON p.id = c.creator_id
+      WHERE c.id = offscreen_missions.character_id
+        AND (p.user_id = auth.uid() OR is_admin())
+    )
+  );
+
+-- SECURITY INVOKER (default): runs as the caller so characters_update RLS applies as defense in depth.
+-- Adjust commissary_reward by a signed delta, clamped at 0.
+-- General signed adjustment; currently used by offscreen-mission updates.
+CREATE OR REPLACE FUNCTION adjust_commissary_reward(p_character_id UUID, p_delta INT)
+RETURNS void
+LANGUAGE sql
+AS $$
+  UPDATE characters
+     SET commissary_reward = GREATEST(commissary_reward + COALESCE(p_delta, 0), 0)
+   WHERE id = p_character_id;
+$$;
+
+CREATE UNIQUE INDEX IF NOT EXISTS offscreen_missions_source_unique_idx
+  ON offscreen_missions (source_mission_id)
+  WHERE source_mission_id IS NOT NULL;
+
+-- SECURITY INVOKER (default): runs as the caller so characters_update RLS applies as defense in depth.
+-- Bumps completed_missions +1 and commissary_reward + p_merx. Used by createOffscreenMission.
+CREATE OR REPLACE FUNCTION apply_offscreen_mission_progress(p_character_id UUID, p_merx INT)
+RETURNS void
+LANGUAGE sql
+AS $$
+  UPDATE characters
+     SET completed_missions = completed_missions + 1,
+         commissary_reward = commissary_reward + COALESCE(p_merx, 0)
+   WHERE id = p_character_id;
+$$;
+
+-- SECURITY INVOKER (default): runs as the caller so characters_update RLS applies as defense in depth.
+-- Reverses apply_offscreen_mission_progress, clamped at 0. Used by removeOffscreenMission.
+CREATE OR REPLACE FUNCTION revert_offscreen_mission_progress(p_character_id UUID, p_merx INT)
+RETURNS void
+LANGUAGE sql
+AS $$
+  UPDATE characters
+     SET completed_missions = GREATEST(completed_missions - 1, 0),
+         commissary_reward = GREATEST(commissary_reward - COALESCE(p_merx, 0), 0)
+   WHERE id = p_character_id;
+$$;
+
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS quirks JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE characters ADD COLUMN IF NOT EXISTS accessories JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 -- One-time unlock codes for classes
 CREATE TABLE IF NOT EXISTS class_unlock_codes (
     id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -345,7 +457,9 @@ ALTER TABLE rules_pdfs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rules_pdf_unlocks ENABLE ROW LEVEL SECURITY;
 
 -- Function to duplicate a class for new version
-CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text)
+-- Extend dup_class to optionally retarget the rules_edition. Existing
+-- callers that pass only (new_id, base_id, new_version) keep working.
+CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text, new_edition text DEFAULT NULL)
 RETURNS uuid
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -379,7 +493,7 @@ BEGIN
         is_public,
         status,
         is_player_created,
-        rules_edition,
+        COALESCE(new_edition, rules_edition),
         new_version,
         id,
         v_profile_id,
@@ -390,7 +504,7 @@ BEGIN
     FROM classes
     WHERE id = base_id
     RETURNING id INTO new_class_id;
-    
+
     RETURN new_class_id;
 END;
 $$;
@@ -619,6 +733,7 @@ ALTER TABLE mission_editors ENABLE ROW LEVEL SECURITY;
 ALTER TABLE traits ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_gear ENABLE ROW LEVEL SECURITY;
 ALTER TABLE class_abilities ENABLE ROW LEVEL SECURITY;
+ALTER TABLE character_perks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lfg_posts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE lfg_join_requests ENABLE ROW LEVEL SECURITY;
 
@@ -854,6 +969,43 @@ CREATE POLICY "class_abilities_mutate"
               AND (
                 p.user_id = auth.uid() OR is_admin()
               )
+        )
+    );
+
+-- character_perks policies
+DROP POLICY IF EXISTS "character_perks_select" ON character_perks;
+DROP POLICY IF EXISTS "character_perks_mutate" ON character_perks;
+
+CREATE POLICY "character_perks_select"
+    ON character_perks FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = character_perks.character_id
+              AND (c.is_public = true OR p.user_id = auth.uid() OR is_admin())
+        )
+    );
+
+CREATE POLICY "character_perks_mutate"
+    ON character_perks FOR ALL
+    USING (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = character_perks.character_id
+              AND (p.user_id = auth.uid() OR is_admin())
+        )
+    )
+    WITH CHECK (
+        EXISTS (
+            SELECT 1
+            FROM characters c
+            JOIN profiles p ON p.id = c.creator_id
+            WHERE c.id = character_perks.character_id
+              AND (p.user_id = auth.uid() OR is_admin())
         )
     );
 

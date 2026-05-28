@@ -284,6 +284,16 @@ const playerCreatedClassList = [
 const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6];
 
+// Merx awarded per successful real mission. Current editions are a flat 1
+// across v1 and v2; future editions are expected to tier this by level or
+// mission difficulty — when that lands, replace the constant with a function
+// of (character, mission) and update util/character-derived.js accordingly.
+const MERX_PER_MISSION_SUCCESS = 1;
+
+// Number of on-class signature gear items character creation grants for free.
+// On-class gear beyond this count costs merx like any other purchase.
+const STARTING_ON_CLASS_GEAR_ALLOTMENT = 4;
+
 module.exports = {
   statList,
   personalityMap,
@@ -293,5 +303,7 @@ module.exports = {
   classGearList,
   classAbilityList,
   v1LevelingSequence,
-  v2LevelingSequence
+  v2LevelingSequence,
+  MERX_PER_MISSION_SUCCESS,
+  STARTING_ON_CLASS_GEAR_ALLOTMENT
 };

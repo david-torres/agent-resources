@@ -29,7 +29,7 @@ const {
   // Profile search
   searchProfiles
 } = require('../util/supabase');
-const { getCharacter, getCharacterAllMissions, getOwnMissions, searchPublicCharacters } = require('../util/supabase');
+const { getCharacter, getCharacterAllMissions, getOwnMissions, searchPublicCharacters, listOffscreenMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const supabase = require('../util/supabase');
@@ -454,36 +454,44 @@ router.get('/character/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
-  
-  if (error) {
-    return res.status(400).send(error.message);
-  } else {
-    if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
-      return res.status(404).send('Not found');
-    } else {
-      const { data: missions, error: missionsError } = await getCharacterAllMissions(id);
-      if (missionsError) {
-        return res.status(400).send(missionsError.message);
-      } else {
-        res.render('character-missions', {
-          profile,
-          character,
-          missions,
-          statList,
-          adventClassList,
-          aspirantPreviewClassList,
-          playerCreatedClassList,
-          classAbilityList,
-          activeNav: 'characters',
-          breadcrumbs: [
-            { label: 'Characters', href: '/characters' },
-            { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` },
-            { label: 'Missions', href: '#' }
-          ]
-        });
-      }
-    }
+
+  if (error) return res.status(400).send(error.message);
+  if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
+    return res.status(404).send('Not found');
   }
+
+  const { data: missions, error: missionsError } = await getCharacterAllMissions(id);
+  if (missionsError) return res.status(400).send(missionsError.message);
+
+  const { data: offscreenMissions } = await listOffscreenMissions({
+    characterId: id,
+    supabase: res.locals.supabase
+  });
+
+  const merged = [
+    ...(missions || []).map(m => ({ _kind: 'mission', ...m })),
+    ...(offscreenMissions || []).map(om => ({ _kind: 'offscreen', ...om }))
+  ];
+  const dateOf = (e) => e._kind === 'offscreen' ? e.source_mission_date : e.date;
+  merged.sort((a, b) => new Date(dateOf(b)) - new Date(dateOf(a)));
+
+  res.render('character-missions', {
+    profile,
+    character,
+    missions,
+    mergedMissions: merged,
+    statList,
+    adventClassList,
+    aspirantPreviewClassList,
+    playerCreatedClassList,
+    classAbilityList,
+    activeNav: 'characters',
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` },
+      { label: 'Missions', href: '#' }
+    ]
+  });
 });
 
 // ============================================

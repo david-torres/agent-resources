@@ -9,6 +9,7 @@ const rulesModel = require('../models/rules');
 const pagesModel = require('../models/pages');
 const navModel = require('../models/nav');
 const agentTokenModel = require('../models/agent-token');
+const offscreenMission = require('../models/offscreen-mission');
 
 module.exports = {
   ...auth,
@@ -21,5 +22,6 @@ module.exports = {
   ...rulesModel,
   ...pagesModel,
   ...navModel,
-  ...agentTokenModel
+  ...agentTokenModel,
+  ...offscreenMission
 };

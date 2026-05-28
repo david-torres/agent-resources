@@ -1,0 +1,9 @@
+{{#if character.perks}}
+<hr />
+<div class="notification is-warning is-light">
+  <p><strong>Legacy perks (v1)</strong> — your character is now on a v2 class; new perks should use the structured Ability Perks editor above. This block is read-only and your old text is preserved.</p>
+  <div class="content mt-2">
+    {{{markdown character.perks}}}
+  </div>
+</div>
+{{/if}}

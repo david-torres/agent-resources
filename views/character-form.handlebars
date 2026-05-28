@@ -1,5 +1,10 @@
 {{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Character{{else}}Edit Character{{/if}}</h2>
+{{#if characterClass}}
+<p class="subtitle is-6 has-text-grey">
+  <span class="tag is-light">{{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
+</p>
+{{/if}}
 {{#unless isNew}}
 <div class="buttons">
   <a href="/characters/{{character.id}}/{{encodeURIComponentH character.name}}" class="button is-primary">View Character</a>
@@ -19,26 +24,107 @@
     <label class="label" for="char-class-id">Class</label>
     <div class="control">
       <div class="select">
-        <select name="class_id" id="char-class-id" required>
-          <option disabled>Advent Classes</option>
-          {{#each adventClasses}}
+        <select name="class_id" id="char-class-id" required
+                hx-get="/characters/version-fields"
+                hx-trigger="change"
+                hx-target="#v2-fields-container"
+                hx-swap="outerHTML"
+                hx-include="this">
+          {{#if adventV1Classes.length}}
+          <option disabled>Advent v1 Classes</option>
+          {{#each adventV1Classes}}
           <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
+          {{/if}}
 
-          <option disabled>Aspirant Preview classes</option>
-          {{#each aspirantPreviewClasses}}
+          {{#if adventV2Classes.length}}
+          <option disabled>Advent v2 Classes</option>
+          {{#each adventV2Classes}}
           <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
+          {{/if}}
 
-          <option disabled>Player Created Classes</option>
-          {{#each playerCreatedClasses}}
+          {{#if aspirantPreviewV1Classes.length}}
+          <option disabled>Aspirant Preview v1 Classes</option>
+          {{#each aspirantPreviewV1Classes}}
           <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
+          {{/if}}
+
+          {{#if aspirantPreviewV2Classes.length}}
+          <option disabled>Aspirant Preview v2 Classes</option>
+          {{#each aspirantPreviewV2Classes}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+          {{/if}}
+
+          {{#if playerCreatedAdventV1Classes.length}}
+          <option disabled>Player Created · Advent v1</option>
+          {{#each playerCreatedAdventV1Classes}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+          {{/if}}
+
+          {{#if playerCreatedAdventV2Classes.length}}
+          <option disabled>Player Created · Advent v2</option>
+          {{#each playerCreatedAdventV2Classes}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+          {{/if}}
+
+          {{#if playerCreatedAspirantV1Classes.length}}
+          <option disabled>Player Created · Aspirant v1</option>
+          {{#each playerCreatedAspirantV1Classes}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+          {{/if}}
+
+          {{#if playerCreatedAspirantV2Classes.length}}
+          <option disabled>Player Created · Aspirant v2</option>
+          {{#each playerCreatedAspirantV2Classes}}
+          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          {{/each}}
+          {{/if}}
         </select>
       </div>
     </div>
   </div>
 
+  {{#if upgradeTargets.length}}
+  <div class="notification is-info is-light">
+    <p>This character can be upgraded to a newer variant of <strong>{{characterClass.name}}</strong>:</p>
+    <div class="buttons mt-2">
+      {{#each upgradeTargets}}
+      <button type="button" class="button is-info"
+              hx-post="/characters/{{../character.id}}/upgrade"
+              hx-vals='{"target_class_id":"{{this.id}}"}'
+              hx-confirm="Upgrade {{../character.name}} to {{this.name}} ({{capitalize this.rules_edition}} {{this.rules_version}})? This cannot be undone."
+              hx-swap="none">
+        Upgrade to {{capitalize this.rules_edition}} {{this.rules_version}}
+      </button>
+      {{/each}}
+    </div>
+    <p class="is-size-7 has-text-grey mt-2">One-way. Your existing Ability Perks text will be preserved as a read-only legacy block.</p>
+  </div>
+  {{/if}}
+
+  {{#unless isNew}}
+  <div class="field">
+    <div class="control">
+      <label class="checkbox">
+        <input type="checkbox" name="auto_calculate" {{#if character.auto_calculate}}checked{{/if}}
+               hx-get="/characters/{{character.id}}/auto-calc-fields"
+               hx-trigger="change"
+               hx-target="#auto-calc-fields"
+               hx-swap="outerHTML"
+               hx-vals='js:{on: event.target.checked ? 1 : 0}'>
+        Auto-calculate from mission log
+      </label>
+    </div>
+    <p class="help">Recomputes Level, Completed Missions, and Commissary Reward from your mission log and item costs when you save.</p>
+  </div>
+  {{> character-auto-calc-fields character=character derived=derived autoCalculate=character.auto_calculate effectiveVersion=effectiveVersion}}
+  {{else}}
   <div class="columns is-multiline">
     <div class="column is-one-third-tablet">
       <div class="field">
@@ -47,14 +133,6 @@
           <input class="input" type="number" name="level" id="char-level" placeholder="Level"
             value="{{#if character.level}}{{character.level}}{{else}}1{{/if}}" required min="1" max="10">
         </div>
-        {{#if (lt character.level 10)}}
-        <p class="help">
-          V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
-          missions to reach level {{add character.level 1}}<br>
-          V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
-          missions to reach level {{add character.level 1}}
-        </p>
-        {{/if}}
       </div>
     </div>
 
@@ -78,6 +156,7 @@
       </div>
     </div>
   </div>
+  {{/unless}}
 
   <hr />
 
@@ -171,16 +250,25 @@
       Class Abilities</button>
   </div>
 
+  {{#if (eq effectiveVersion 'v2')}}
+    {{> character-v2-fields character=character}}
+    {{> character-v1-perks-legacy character=character}}
+  {{else}}
+    <div id="v2-fields-container"></div>
+  {{/if}}
+
   <hr />
 
+  {{#if (eq effectiveVersion 'v1')}}
   <div class="field">
     <label class="label" for="char-perks">Ability Perks</label>
     <div class="control">
       <textarea class="textarea" name="perks" id="char-perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
     </div>
   </div>
+  {{/if}}
 
-  {{#if character.additional_gear}}
+  {{#if (and (eq effectiveVersion 'v1') character.additional_gear)}}
   <hr />
 
   <div class="field">

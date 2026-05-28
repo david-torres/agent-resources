@@ -12,14 +12,20 @@ const anonTables = {
   traits: [],
   class_gear: [],
   class_abilities: [],
-  classes: []
+  classes: [],
+  offscreen_missions: [],
+  mission_characters: [],
+  missions: []
 };
 const adminTables = {
   characters: [],
   traits: [],
   class_gear: [],
   class_abilities: [],
-  classes: []
+  classes: [],
+  offscreen_missions: [],
+  mission_characters: [],
+  missions: []
 };
 
 // Build a tiny chainable PostgREST-shaped fake. Reads return whatever the
@@ -155,12 +161,18 @@ beforeEach(() => {
   anonTables.class_gear = [];
   anonTables.class_abilities = [];
   anonTables.classes = [];
+  anonTables.offscreen_missions = [];
+  anonTables.mission_characters = [];
+  anonTables.missions = [];
 
   adminTables.characters = [{ ...PRIVATE_CHARACTER }];
   adminTables.traits = [];
   adminTables.class_gear = [];
   adminTables.class_abilities = [];
   adminTables.classes = [{ id: 'class-soldier', name: 'Soldier' }];
+  adminTables.offscreen_missions = [];
+  adminTables.mission_characters = [];
+  adminTables.missions = [];
 });
 
 test('updateCharacter can flip is_public on a private character (regression)', async () => {
@@ -189,4 +201,73 @@ test('updateCharacter still rejects edits from non-owners on a private character
   expect(data).toBeNull();
   // The row must not have been flipped.
   expect(adminTables.characters[0].is_public).toBe(false);
+});
+
+test('updateCharacter with auto_calculate=true overwrites the three derived fields', async () => {
+  // Setup: 2 successful real missions + 1 offscreen with 3 merx.
+  adminTables.characters = [{
+    ...PRIVATE_CHARACTER,
+    level: 1,
+    completed_missions: 0,
+    commissary_reward: 0,
+    auto_calculate: false
+  }];
+  adminTables.classes = [{ id: 'class-soldier', name: 'Soldier', rules_version: 'v1' }];
+  adminTables.mission_characters = [
+    { character_id: 'char-private-1', mission_id: 'mis-1', missions: { id: 'mis-1', outcome: 'success' } },
+    { character_id: 'char-private-1', mission_id: 'mis-2', missions: { id: 'mis-2', outcome: 'success' } }
+  ];
+  anonTables.mission_characters = adminTables.mission_characters;
+  adminTables.offscreen_missions = [
+    { id: 'om-1', character_id: 'char-private-1', merx_gained: 3 }
+  ];
+  anonTables.offscreen_missions = adminTables.offscreen_missions;
+
+  const { data, error } = await updateCharacter(
+    'char-private-1',
+    {
+      // User-submitted (wrong) values that should be overwritten:
+      level: 1,
+      completed_missions: 0,
+      commissary_reward: 0,
+      // The flag:
+      auto_calculate: 'on',
+      // No item spend:
+      common_items: [],
+      gear: []
+    },
+    { id: 'profile-1' }
+  );
+
+  expect(error).toBeFalsy();
+  expect(data).toBeTruthy();
+  // 2 success + 1 offscreen = 3 completed; v1 sequence: 3 >= 2 -> level 2
+  expect(data.completed_missions).toBe(3);
+  expect(data.level).toBe(2);
+  // 2*1 + 3 = 5 merx, no spend
+  expect(data.commissary_reward).toBe(5);
+  expect(data.auto_calculate).toBe(true);
+});
+
+test('updateCharacter with auto_calculate=false persists submitted values verbatim', async () => {
+  adminTables.characters = [{ ...PRIVATE_CHARACTER, auto_calculate: false }];
+
+  const { data, error } = await updateCharacter(
+    'char-private-1',
+    {
+      level: 7,
+      completed_missions: 42,
+      commissary_reward: 99,
+      auto_calculate: undefined,
+      common_items: [],
+      gear: []
+    },
+    { id: 'profile-1' }
+  );
+
+  expect(error).toBeFalsy();
+  expect(data.level).toBe(7);
+  expect(data.completed_missions).toBe(42);
+  expect(data.commissary_reward).toBe(99);
+  expect(data.auto_calculate).toBe(false);
 });

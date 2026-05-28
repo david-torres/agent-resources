@@ -1,0 +1,36 @@
+<div class="offscreen-mission-entry">
+  <strong>
+    {{entry.name}}
+    <span class="tag is-info is-light ml-2">Offscreen</span>
+  </strong>
+  <br>
+  <small>
+    {{#if profile}}{{date_tz entry.source_mission_date "MMM D, YYYY" profile.timezone}}{{else}}{{date entry.source_mission_date "MMM D, YYYY"}}{{/if}}
+    {{#if entry.merx_gained}} · +{{entry.merx_gained}} Merx{{/if}}
+  </small>
+  {{#if entry.summary}}
+  <div class="content mt-2">{{{markdown entry.summary}}}</div>
+  {{/if}}
+  <p class="help">
+    Sourced from
+    {{#if (and entry.source_mission_id canViewSource)}}
+      <a href="/missions/{{entry.source_mission_id}}"><em>{{entry.source_mission_name}}</em></a>
+    {{else}}
+      <em>{{entry.source_mission_name}}</em>
+    {{/if}}
+    on
+    {{#if profile}}{{date_tz entry.source_mission_date "MMM D, YYYY" profile.timezone}}{{else}}{{date entry.source_mission_date "MMM D, YYYY"}}{{/if}}.
+  </p>
+  {{#if (and profile (eq character.creator_id profile.id))}}
+  <div class="buttons are-small">
+    <a class="button is-warning is-light"
+       href="/characters/{{character.id}}/offscreen-missions/{{entry.id}}/edit">Edit</a>
+    <form method="POST"
+          action="/characters/{{character.id}}/offscreen-missions/{{entry.id}}/delete"
+          onsubmit="return confirm('Delete this offscreen mission? The credit and counters will be refunded.');"
+          style="display: inline;">
+      <button class="button is-danger is-light" type="submit">Delete</button>
+    </form>
+  </div>
+  {{/if}}
+</div>

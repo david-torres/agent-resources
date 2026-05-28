@@ -1,0 +1,30 @@
+<div class="column is-full perk-row" data-ability-id="{{abilityId}}" data-position="{{position}}">
+  <input type="hidden" name="ability_perk_class_ability_id[]" value="{{abilityId}}">
+  <input type="hidden" name="ability_perk_position[]" value="{{position}}">
+  <div class="field has-addons">
+    <div class="control is-expanded">
+      <input class="input perk-text" type="text" name="ability_perk_text[]"
+             placeholder="Perk text (≤25 words)" value="{{perk.text}}"
+             maxlength="500" required
+             oninput="this.nextElementSibling.querySelector('.word-count').textContent = (this.value.trim() ? this.value.trim().split(/\s+/).length : 0) + ' / 25 words';">
+      <p class="help"><span class="word-count">{{wordCount perk.text}} / 25 words</span></p>
+    </div>
+    <div class="control ml-2">
+      <div class="select">
+        <select name="ability_perk_compounds_with[]">
+          <option value="">(no compound)</option>
+          {{#each siblingPerks}}
+            {{#unless (eq this.position ../position)}}
+            <option value="position-{{this.position}}" {{#if (eq (or ../perk.compounds_with '') (concat 'position-' this.position))}}selected{{/if}}>
+              Compounds with #{{add this.position 1}}: {{this.text}}
+            </option>
+            {{/unless}}
+          {{/each}}
+        </select>
+      </div>
+    </div>
+    <div class="control ml-2 mt-2">
+      <button type="button" class="delete" hx-on:click="htmx.remove(htmx.closest(this, '.perk-row'));"></button>
+    </div>
+  </div>
+</div>

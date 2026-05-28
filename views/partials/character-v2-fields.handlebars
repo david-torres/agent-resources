@@ -1,0 +1,58 @@
+<div id="v2-fields-container">
+  <hr />
+
+  <div class="block">
+    <label class="label">Quirks</label>
+    <p class="help mb-2">Use these to describe non-human or otherwise atypical aspects of your character.</p>
+    <div class="columns is-multiline" id="quirks-list">
+      {{#if character.quirks}}
+        {{#each character.quirks}}
+          {{> character-quirk quirk=this}}
+        {{/each}}
+      {{/if}}
+    </div>
+    <button type="button" class="button is-primary"
+            hx-get="/characters/quirk" hx-target="#quirks-list" hx-swap="beforeend">Add Quirk</button>
+  </div>
+
+  <hr />
+
+  <div class="block">
+    <label class="label">Accessories</label>
+    <div class="columns is-multiline" id="accessories-list">
+      {{#if character.accessories}}
+        {{#each character.accessories}}
+          {{> character-accessory accessory=this}}
+        {{/each}}
+      {{/if}}
+    </div>
+    <button type="button" class="button is-primary"
+            hx-get="/characters/accessory" hx-target="#accessories-list" hx-swap="beforeend">Add Accessory</button>
+  </div>
+
+  <hr />
+
+  <div class="block">
+    <label class="label">Ability Perks</label>
+    <p class="help mb-2">Each perk is at most 25 words; max five per ability. Use the "Compounds with" picker to stack a perk onto another perk for the same ability.</p>
+    {{#if character.abilities}}
+      {{#each character.abilities}}
+        <div class="box perk-group" data-ability-id="{{this.id}}">
+          <h4 class="title is-5">{{capitalize this.name}}</h4>
+          <div class="columns is-multiline" id="perks-list-{{this.id}}">
+            {{#each (perksForAbility ../character.ability_perks this.id) }}
+              {{> character-ability-perk perk=this abilityId=../this.id position=this.position siblingPerks=(perksForAbility ../../character.ability_perks ../this.id) }}
+            {{/each}}
+          </div>
+          <button type="button" class="button is-primary is-small"
+                  hx-get="/characters/ability-perk?ability_id={{this.id}}&position={{nextPerkPosition ../character.ability_perks this.id}}"
+                  hx-target="#perks-list-{{this.id}}" hx-swap="beforeend">
+            Add Perk
+          </button>
+        </div>
+      {{/each}}
+    {{else}}
+      <p class="has-text-grey">Add at least one Class Ability above before authoring perks.</p>
+    {{/if}}
+  </div>
+</div>

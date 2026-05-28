@@ -26,4 +26,46 @@ function registerUuidParams(router, names) {
   }
 }
 
-module.exports = { isValidUuid, validateIdParam, escapeLikePattern, registerUuidParams };
+function countWords(value) {
+  if (typeof value !== 'string') return 0;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+function validateAbilityPerks(perks, { wordLimit = 25, perAbility = 5 } = {}) {
+  if (!Array.isArray(perks)) return { ok: true };
+
+  const errors = [];
+  const countsByAbility = new Map();
+
+  for (let i = 0; i < perks.length; i++) {
+    const perk = perks[i];
+    if (!perk || typeof perk !== 'object') continue;
+
+    const abilityId = perk.class_ability_id;
+    const text = typeof perk.text === 'string' ? perk.text : '';
+    const words = countWords(text);
+    if (words > wordLimit) {
+      errors.push(`Perk #${i + 1}: must be at most ${wordLimit} words (was ${words}).`);
+    }
+
+    if (abilityId) {
+      const next = (countsByAbility.get(abilityId) || 0) + 1;
+      countsByAbility.set(abilityId, next);
+    }
+  }
+
+  for (const [abilityId, count] of countsByAbility.entries()) {
+    if (count > perAbility) {
+      errors.push(`Ability ${abilityId}: at most ${perAbility} perks per ability (had ${count}).`);
+    }
+  }
+
+  return errors.length === 0 ? { ok: true } : { ok: false, errors };
+}
+
+module.exports = {
+  isValidUuid, validateIdParam, escapeLikePattern, registerUuidParams,
+  countWords, validateAbilityPerks
+};

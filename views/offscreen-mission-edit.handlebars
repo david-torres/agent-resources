@@ -1,0 +1,10 @@
+{{> breadcrumbs}}
+<h1 class="title is-2">Edit Offscreen Mission</h1>
+<h2 class="subtitle is-5">{{character.name}}</h2>
+
+{{> offscreen-mission-form
+    character=character
+    offscreenMission=offscreenMission
+    availableHostedMissions=availableHostedMissions
+    mode="edit"
+    formAction=formAction}}

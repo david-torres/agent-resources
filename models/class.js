@@ -174,13 +174,16 @@ const updateClass = async (id, updates) => {
     return { data, error };
 };
 
-const duplicateClass = async (baseId, newVersion) => {
+const duplicateClass = async (baseId, newVersion, newEdition = null) => {
+    const params = {
+        new_id: crypto.randomUUID(),
+        base_id: baseId,
+        new_version: newVersion
+    };
+    if (newEdition) params.new_edition = newEdition;
+
     const { data, error } = await supabase
-        .rpc('dup_class', {
-            new_id: crypto.randomUUID(),
-            base_id: baseId,
-            new_version: newVersion
-        });
+        .rpc('dup_class', params);
 
     if (error) {
         console.error(error);

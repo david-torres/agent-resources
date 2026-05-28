@@ -167,6 +167,28 @@ const searchProfiles = async (query, limit = 10) => {
   return { data, error };
 }
 
+const getProfileConduitCredits = async ({ profileId, supabase: client = supabase }) => {
+  const { count: earnedCount, error: earnedError } = await client
+    .from('missions')
+    .select('*', { count: 'exact', head: true })
+    .eq('host_id', profileId);
+  if (earnedError) return { data: null, error: earnedError };
+
+  const { count: spentLinkedCount, error: spentError } = await client
+    .from('offscreen_missions')
+    .select('*', { count: 'exact', head: true })
+    .eq('created_by', profileId)
+    .not('source_mission_id', 'is', null);
+  if (spentError) return { data: null, error: spentError };
+
+  const earned = earnedCount || 0;
+  const spent_linked = spentLinkedCount || 0;
+  return {
+    data: { earned, spent_linked, balance: earned - spent_linked },
+    error: null
+  };
+};
+
 module.exports = {
   getProfile,
   getProfileById,
@@ -176,5 +198,6 @@ module.exports = {
   createProfile,
   updateUser,
   setDiscordId,
-  searchProfiles
+  searchProfiles,
+  getProfileConduitCredits
 };

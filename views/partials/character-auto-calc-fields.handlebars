@@ -1,0 +1,70 @@
+<div id="auto-calc-fields">
+  <div class="columns is-multiline">
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-level">Level</label>
+        <div class="control">
+          <input class="input" type="number" name="level" id="char-level" placeholder="Level"
+            value="{{#if autoCalculate}}{{derived.level}}{{else}}{{#if character.level}}{{character.level}}{{else}}1{{/if}}{{/if}}"
+            {{#if autoCalculate}}disabled{{/if}} required min="1" max="10">
+        </div>
+        {{#if autoCalculate}}
+          {{#if (lt derived.level 10)}}
+          <p class="help">
+            {{#if (eq effectiveVersion 'v2')}}
+            V2: Need {{subtract (getTotalV2MissionsNeeded (add derived.level 1)) derived.completed_missions}} more
+            missions to reach level {{add derived.level 1}}
+            {{else}}
+            V1: Need {{subtract (getTotalV1MissionsNeeded (add derived.level 1)) derived.completed_missions}} more
+            missions to reach level {{add derived.level 1}}
+            {{/if}}
+          </p>
+          {{/if}}
+        {{else}}
+          {{#if (lt character.level 10)}}
+          <p class="help">
+            {{#if (eq effectiveVersion 'v2')}}
+            V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
+            missions to reach level {{add character.level 1}}
+            {{else}}
+            V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
+            missions to reach level {{add character.level 1}}
+            {{/if}}
+          </p>
+          {{/if}}
+        {{/if}}
+      </div>
+    </div>
+
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-completed-missions">Completed Missions</label>
+        <div class="control">
+          <input class="input" type="number" name="completed_missions" id="char-completed-missions" placeholder="Completed Missions"
+            value="{{#if autoCalculate}}{{derived.completed_missions}}{{else}}{{#if character.completed_missions}}{{character.completed_missions}}{{else}}0{{/if}}{{/if}}"
+            {{#if autoCalculate}}disabled{{/if}} required>
+        </div>
+      </div>
+    </div>
+
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="char-commissary-reward">Commissary Reward</label>
+        <div class="control">
+          <input class="input" type="number" name="commissary_reward" id="char-commissary-reward" placeholder="Commissary Reward"
+            value="{{#if autoCalculate}}{{derived.commissary_reward}}{{else}}{{#if character.commissary_reward}}{{character.commissary_reward}}{{else}}0{{/if}}{{/if}}"
+            {{#if autoCalculate}}disabled{{/if}} required>
+        </div>
+        {{#if autoCalculate}}
+          {{#if derived.merx_deficit}}
+          <p class="help has-text-danger">You're {{derived.merx_deficit}} merx over budget — remove items or gear, or earn more.</p>
+          {{/if}}
+        {{/if}}
+      </div>
+    </div>
+  </div>
+
+  {{#if autoCalculate}}
+  <p class="help has-text-grey">Values will be recomputed when you save.</p>
+  {{/if}}
+</div>

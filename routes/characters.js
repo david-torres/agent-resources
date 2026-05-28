@@ -2,13 +2,53 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById } = require('../util/supabase');
+const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById, getCharacterRealMissionsForDerivation } = require('../util/supabase');
+const { supabaseAdmin } = require('../models/_base');
 const { statList, personalityMap } = require('../util/enclave-consts');
+const { deriveCharacterTotals } = require('../util/character-derived');
 const { getUnlockedClasses, getUnlockedClassIdsForUser } = require('../models/class');
+const { upgradeCharacterClass, findUpgradeTargetsFor } = require('../models/character');
+const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission, removeOffscreenMission, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
+const { getProfileConduitCredits } = require('../models/profile');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
+
+const asArray = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
+
+const collectAbilityPerks = (body) => {
+  const ids   = asArray(body.ability_perk_class_ability_id);
+  const texts = asArray(body.ability_perk_text);
+  const pos   = asArray(body.ability_perk_position);
+  const cw    = asArray(body.ability_perk_compounds_with);
+  const n = Math.max(ids.length, texts.length, pos.length, cw.length);
+  const perks = [];
+  for (let i = 0; i < n; i++) {
+    const id = ids[i]; const text = texts[i];
+    if (!id || !text) continue;
+    perks.push({
+      class_ability_id: id,
+      text: String(text),
+      position: Number(pos[i]) || i,
+      compounds_with: cw[i] || null
+    });
+  }
+  return perks;
+};
+
+const collectNamed = (body, nameKey, descKey) => {
+  const names = asArray(body[nameKey]);
+  const descs = asArray(body[descKey]);
+  const out = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = (names[i] || '').toString().trim();
+    if (!name) continue;
+    const desc = (descs[i] || '').toString().trim();
+    out.push(desc ? { name, description: desc } : { name });
+  }
+  return out;
+};
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
@@ -55,7 +95,44 @@ const filterClassDataForUser = async (user) => {
     }
   }
 
-  return { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities };
+  const splitByVersion = (arr) => ({
+    v1: arr.filter(c => (c.rules_version || 'v1') === 'v1'),
+    v2: arr.filter(c => c.rules_version === 'v2')
+  });
+  const splitByEdition = (arr) => ({
+    advent:   arr.filter(c => (c.rules_edition || 'advent') === 'advent'),
+    aspirant: arr.filter(c => c.rules_edition === 'aspirant')
+  });
+  const { v1: filteredAdventV1, v2: filteredAdventV2 } = splitByVersion(filteredAdvent);
+  const { v1: filteredAspirantV1, v2: filteredAspirantV2 } = splitByVersion(filteredAspirant);
+  const { v1: filteredPCCv1, v2: filteredPCCv2 } = splitByVersion(filteredPCC);
+  const { advent: filteredPCCAdventV1, aspirant: filteredPCCAspirantV1 } = splitByEdition(filteredPCCv1);
+  const { advent: filteredPCCAdventV2, aspirant: filteredPCCAspirantV2 } = splitByEdition(filteredPCCv2);
+
+  return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities };
+};
+
+const resolveOffscreenSource = async ({ body, profileId, supabaseClient }) => {
+  if (body.source_mission_id && body.source_mission_id !== '__other__') {
+    const { data: srcMission, error: srcErr } = await getMission(body.source_mission_id, supabaseClient);
+    if (srcErr || !srcMission) return { error: 'Source mission not found.' };
+    if (srcMission.host_id !== profileId) return { error: 'Only the host of a mission can use it as a credit source.' };
+    return {
+      source_mission_id: srcMission.id,
+      source_mission_name: srcMission.name,
+      source_mission_date: typeof srcMission.date === 'string'
+        ? srcMission.date.slice(0, 10)
+        : new Date(srcMission.date).toISOString().slice(0, 10)
+    };
+  }
+  const name = (body.source_mission_name_other || '').trim();
+  const date = (body.source_mission_date_other || '').trim();
+  if (!name || !date) return { error: 'Source mission name and date are required.' };
+  return {
+    source_mission_id: null,
+    source_mission_name: name,
+    source_mission_date: date
+  };
 };
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -76,14 +153,20 @@ router.get('/', isAuthenticated, async (req, res) => {
 
 router.get('/new', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
-  const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
+  const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
   res.render('character-form', {
     profile,
     isNew: true,
+    effectiveVersion: 'v1',
     statList,
-    adventClasses: filteredAdvent,
-    aspirantPreviewClasses: filteredAspirant,
-    playerCreatedClasses: filteredPCC,
+    adventV1Classes: filteredAdventV1,
+    adventV2Classes: filteredAdventV2,
+    aspirantPreviewV1Classes: filteredAspirantV1,
+    aspirantPreviewV2Classes: filteredAspirantV2,
+    playerCreatedAdventV1Classes: filteredPCCAdventV1,
+    playerCreatedAdventV2Classes: filteredPCCAdventV2,
+    playerCreatedAspirantV1Classes: filteredPCCAspirantV1,
+    playerCreatedAspirantV2Classes: filteredPCCAspirantV2,
     personalityMap,
     classGearList: filteredGear,
     classAbilityList: filteredAbilities,
@@ -101,8 +184,10 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
     return res.status(400).send(error.message);
+  } else if (character.creator_id !== profile.id) {
+    return res.status(403).send('Forbidden');
   } else {
-    const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
+    const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
 
     // Inject existing character gear/abilities into dropdown options so
     // items from classes the user no longer has unlocked still appear
@@ -132,14 +217,52 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       }
     }
 
+    let characterClass = null;
+    let effectiveVersion = 'v1';
+    if (character.class_id) {
+      try {
+        const { data: cls } = await getClass(character.class_id, res.locals.supabase);
+        if (cls) {
+          characterClass = cls;
+          if (cls.rules_version === 'v2') effectiveVersion = 'v2';
+        }
+      } catch (_) {}
+    }
+
+    const [missionsRes, offscreenRes] = await Promise.all([
+      getCharacterRealMissionsForDerivation(id, supabaseAdmin),
+      listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
+    ]);
+    const derived = deriveCharacterTotals({
+      character,
+      realMissions: missionsRes.data || [],
+      offscreenMissions: offscreenRes.data || [],
+      rulesVersion: effectiveVersion
+    });
+
+    let upgradeTargets = [];
+    if (characterClass) {
+      upgradeTargets = await findUpgradeTargetsFor(characterClass.id, res.locals.supabase);
+    }
+
     res.render('character-form', {
       profile,
       isNew: false,
       character,
+      effectiveVersion,
+      characterClass,
+      upgradeTargets,
+      derived,
+      autoCalculate: character.auto_calculate,
       statList,
-      adventClasses: filteredAdvent,
-      aspirantPreviewClasses: filteredAspirant,
-      playerCreatedClasses: filteredPCC,
+      adventV1Classes: filteredAdventV1,
+      adventV2Classes: filteredAdventV2,
+      aspirantPreviewV1Classes: filteredAspirantV1,
+      aspirantPreviewV2Classes: filteredAspirantV2,
+      playerCreatedAdventV1Classes: filteredPCCAdventV1,
+      playerCreatedAdventV2Classes: filteredPCCAdventV2,
+      playerCreatedAspirantV1Classes: filteredPCCAspirantV1,
+      playerCreatedAspirantV2Classes: filteredPCCAspirantV2,
       personalityMap,
       classGearList: filteredGear,
       classAbilityList: filteredAbilities,
@@ -153,12 +276,260 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   }
 });
 
+router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const on = req.query.on === '1' || req.query.on === 1 || req.query.on === true || req.query.on === 'true';
+
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
+  if (error || !character) return res.status(400).send(error ? error.message : 'Character not found');
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  let effectiveVersion = 'v1';
+  if (character.class_id) {
+    try {
+      const { data: cls } = await getClass(character.class_id, res.locals.supabase);
+      if (cls && cls.rules_version === 'v2') effectiveVersion = 'v2';
+    } catch (_) {}
+  }
+
+  let derived = { completed_missions: 0, commissary_reward: 0, level: 1 };
+  if (on) {
+    const [missionsRes, offscreenRes] = await Promise.all([
+      getCharacterRealMissionsForDerivation(id, supabaseAdmin),
+      listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
+    ]);
+    if (missionsRes.error || offscreenRes.error) {
+      return res.status(503).send('Failed to load mission data');
+    }
+    derived = deriveCharacterTotals({
+      character,
+      realMissions: missionsRes.data || [],
+      offscreenMissions: offscreenRes.data || [],
+      rulesVersion: effectiveVersion
+    });
+  }
+
+  return res.render('partials/character-auto-calc-fields', {
+    layout: false,
+    character,
+    derived,
+    autoCalculate: on,
+    effectiveVersion
+  });
+});
+
+router.get('/:id/offscreen-missions/new', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const { data: character, error } = await getCharacter(id, res.locals.supabase);
+  if (error) return res.status(400).send(error.message);
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  const { data: availableHostedMissions } = await getAvailableHostedMissionsForPicker({
+    profileId: profile.id,
+    supabase: res.locals.supabase
+  });
+  const { data: profileCredits } = await getProfileConduitCredits({
+    profileId: profile.id,
+    supabase: res.locals.supabase
+  });
+
+  res.render('offscreen-mission-new', {
+    title: `Spend a Credit — ${character.name}`,
+    profile,
+    character,
+    availableHostedMissions: availableHostedMissions || [],
+    profileCredits: profileCredits || { earned: 0, spent_linked: 0, balance: 0 },
+    formAction: `/characters/${id}/offscreen-missions`,
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: character.name, href: `/characters/${id}/${encodeURIComponent(character.name)}` },
+      { label: 'Spend Conduit Credit', href: '#' }
+    ]
+  });
+});
+
+router.post('/:id/offscreen-missions', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id: characterId } = req.params;
+
+  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
+  if (charError) return res.status(400).send(charError.message);
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  const src = await resolveOffscreenSource({
+    body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
+  });
+  if (src.error) return res.status(400).send(src.error);
+
+  if (!req.body.name || !req.body.summary) {
+    return res.status(400).send('Name and summary are required.');
+  }
+
+  // If the user picked a hosted mission as the source, gate on the profile's balance.
+  // Free-text sources bypass the gate.
+  if (src.source_mission_id) {
+    const { data: credits } = await getProfileConduitCredits({
+      profileId: profile.id,
+      supabase: res.locals.supabase
+    });
+    if (!credits || credits.balance <= 0) {
+      return res.status(400).send('No Conduit Credits available.');
+    }
+  }
+
+  const { error } = await createOffscreenMission({
+    characterId,
+    profileId: profile.id,
+    payload: {
+      name: req.body.name,
+      summary: req.body.summary,
+      merx_gained: req.body.merx_gained,
+      source_mission_id: src.source_mission_id,
+      source_mission_name: src.source_mission_name,
+      source_mission_date: src.source_mission_date
+    },
+    supabase: res.locals.supabase
+  });
+
+  if (error) {
+    if (error.code === '23505' || error.message === 'duplicate_source_mission') {
+      return res.status(400).send('That mission has already funded a credit.');
+    }
+    return res.status(400).send(error.message);
+  }
+
+  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
+});
+
+router.get('/:id/offscreen-missions/:omId/edit', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id: characterId, omId } = req.params;
+
+  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
+  if (charError) return res.status(400).send(charError.message);
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  const { data: offscreenMission, error: omError } = await getOffscreenMissionById({
+    id: omId,
+    supabase: res.locals.supabase
+  });
+  if (omError) return res.status(400).send(omError.message);
+  if (!offscreenMission || offscreenMission.character_id !== characterId) {
+    return res.status(404).send('Not found');
+  }
+
+  const { data: availableHostedMissions } = await getAvailableHostedMissionsForPicker({
+    profileId: profile.id,
+    currentSourceId: offscreenMission.source_mission_id || null,
+    supabase: res.locals.supabase
+  });
+
+  res.render('offscreen-mission-edit', {
+    title: `Edit Offscreen Mission — ${character.name}`,
+    profile,
+    character,
+    offscreenMission,
+    availableHostedMissions: availableHostedMissions || [],
+    formAction: `/characters/${characterId}/offscreen-missions/${omId}`,
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: character.name, href: `/characters/${characterId}/${encodeURIComponent(character.name)}` },
+      { label: 'Edit Offscreen Mission', href: '#' }
+    ]
+  });
+});
+
+router.post('/:id/offscreen-missions/:omId', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id: characterId, omId } = req.params;
+
+  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
+  if (charError) return res.status(400).send(charError.message);
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  const { data: existing, error: omError } = await getOffscreenMissionById({
+    id: omId,
+    supabase: res.locals.supabase
+  });
+  if (omError) return res.status(400).send(omError.message);
+  if (!existing || existing.character_id !== characterId) {
+    return res.status(404).send('Not found');
+  }
+
+  if (!req.body.name || !req.body.summary) {
+    return res.status(400).send('Name and summary are required.');
+  }
+
+  const src = await resolveOffscreenSource({
+    body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
+  });
+  if (src.error) return res.status(400).send(src.error);
+
+  const { error } = await updateOffscreenMission({
+    id: omId,
+    payload: {
+      name: req.body.name,
+      summary: req.body.summary,
+      merx_gained: req.body.merx_gained,
+      source_mission_id: src.source_mission_id,
+      source_mission_name: src.source_mission_name,
+      source_mission_date: src.source_mission_date
+    },
+    supabase: res.locals.supabase
+  });
+  if (error) {
+    if (error.code === '23505' || error.message === 'duplicate_source_mission') {
+      return res.status(400).send('That mission has already funded a credit.');
+    }
+    return res.status(400).send(error.message);
+  }
+
+  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
+});
+
+router.post('/:id/offscreen-missions/:omId/delete', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id: characterId, omId } = req.params;
+
+  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
+  if (charError) return res.status(400).send(charError.message);
+  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+
+  const { data: existing, error: omError } = await getOffscreenMissionById({
+    id: omId,
+    supabase: res.locals.supabase
+  });
+  if (omError) return res.status(400).send(omError.message);
+  if (!existing || existing.character_id !== characterId) {
+    return res.status(404).send('Not found');
+  }
+
+  const { error } = await removeOffscreenMission({ id: omId, supabase: res.locals.supabase });
+  if (error) return res.status(400).send(error.message);
+
+  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
+});
+
 router.post('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const image_crop = parseImageCrop(req.body.image_crop);
   if (image_crop !== undefined) {
     req.body.image_crop = image_crop;
   }
+  req.body.ability_perks = collectAbilityPerks(req.body);
+  req.body.quirks = collectNamed(req.body, 'quirk_name', 'quirk_description');
+  req.body.accessories = collectNamed(req.body, 'accessory_name', 'accessory_description');
+  // Strip the parallel arrays so they don't reach Supabase as unknown columns.
+  delete req.body.ability_perk_class_ability_id;
+  delete req.body.ability_perk_text;
+  delete req.body.ability_perk_position;
+  delete req.body.ability_perk_compounds_with;
+  delete req.body.quirk_name;
+  delete req.body.quirk_description;
+  delete req.body.accessory_name;
+  delete req.body.accessory_description;
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
     return res.status(400).send(error.message);
@@ -183,6 +554,51 @@ router.get('/class-abilities', authOptional, async (req, res) => {
 
 router.get('/common-item', authOptional, async (req, res) => {
   res.render('partials/character-common-item', { layout: false });
+});
+
+router.get('/quirk', authOptional, (req, res) => {
+  res.render('partials/character-quirk', { layout: false, quirk: {} });
+});
+
+router.get('/accessory', authOptional, (req, res) => {
+  res.render('partials/character-accessory', { layout: false, accessory: {} });
+});
+
+router.get('/ability-perk', authOptional, (req, res) => {
+  const abilityId = req.query.ability_id;
+  const position = Number(req.query.position) || 0;
+  if (!abilityId) return res.status(400).send('ability_id required');
+  res.render('partials/character-ability-perk', {
+    layout: false,
+    perk: { text: '', compounds_with: null },
+    abilityId,
+    position,
+    siblingPerks: []
+  });
+});
+
+router.get('/version-fields', authOptional, async (req, res) => {
+  const classId = req.query.class_id;
+  let effectiveVersion = 'v1';
+  if (classId) {
+    try {
+      const { data: cls } = await getClass(classId, res.locals.supabase);
+      if (cls && cls.rules_version === 'v2') effectiveVersion = 'v2';
+    } catch (_) {}
+  }
+
+  if (effectiveVersion !== 'v2') {
+    // Return an empty container so the swap target stays present for future
+    // version changes within the same form session.
+    return res.send('<div id="v2-fields-container"></div>');
+  }
+
+  res.render('partials/character-v2-fields', {
+    layout: false,
+    // No existing character context yet (this is the change-on-select path);
+    // render with an empty character so the v2 fields show as blank rows.
+    character: { quirks: [], accessories: [], ability_perks: [], abilities: [] }
+  });
 });
 
 router.get('/import', isAuthenticated, (req, res) => {
@@ -343,6 +759,21 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
 
+      const { data: offscreenMissions } = await listOffscreenMissions({
+        characterId: id,
+        supabase: res.locals.supabase
+      });
+
+      // Merge real missions and offscreen entries into a single chronological list.
+      // Each entry carries a `_kind` discriminator so the view can choose its renderer.
+      const mergedRecent = [
+        ...(recentMissions || []).map(m => ({ _kind: 'mission', ...m })),
+        ...(offscreenMissions || []).map(om => ({ _kind: 'offscreen', ...om }))
+      ];
+      const dateOf = (e) => e._kind === 'offscreen' ? e.source_mission_date : e.date;
+      mergedRecent.sort((a, b) => new Date(dateOf(b)) - new Date(dateOf(a)));
+      const recentMerged = mergedRecent.slice(0, 5);
+
       // fetch class record (non-fatal on failure)
       let characterClass = null;
       try {
@@ -443,13 +874,17 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         } catch (_) { /* ignore */ }
       }
 
+      const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
+
       res.render('character', {
         title: character.name,
         profile,
         character,
         characterClass,
+        effectiveVersion,
         ownerProfile,
         recentMissions,
+        recentMerged,
         statList,
         authOptional: true,
         activeNav: 'characters',
@@ -469,6 +904,18 @@ router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   if (image_crop !== undefined) {
     req.body.image_crop = image_crop;
   }
+  req.body.ability_perks = collectAbilityPerks(req.body);
+  req.body.quirks = collectNamed(req.body, 'quirk_name', 'quirk_description');
+  req.body.accessories = collectNamed(req.body, 'accessory_name', 'accessory_description');
+  // Strip the parallel arrays so they don't reach Supabase as unknown columns.
+  delete req.body.ability_perk_class_ability_id;
+  delete req.body.ability_perk_text;
+  delete req.body.ability_perk_position;
+  delete req.body.ability_perk_compounds_with;
+  delete req.body.quirk_name;
+  delete req.body.quirk_description;
+  delete req.body.accessory_name;
+  delete req.body.accessory_description;
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
     return res.status(400).send(error.message);
@@ -486,6 +933,15 @@ router.delete('/:id/:name?', isAuthenticated, async (req, res) => {
   } else {
     return res.header('HX-Location', '/characters').send();
   }
+});
+
+router.post('/:id/upgrade', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  const { id } = req.params;
+  const { target_class_id } = req.body;
+  const { data, error } = await upgradeCharacterClass(id, target_class_id, profile, res.locals.supabase);
+  if (error) return res.status(400).send(error.message || error);
+  return res.header('HX-Location', `/characters/${id}/edit`).send();
 });
 
 router.post('/:id/deceased', isAuthenticated, async (req, res) => {
