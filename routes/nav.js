@@ -14,6 +14,7 @@ const {
 } = require('../util/supabase');
 const { getPages } = require('../util/supabase');
 const { isAuthenticated, requireAdmin } = require('../util/auth');
+const { sendError } = require('../util/http-error');
 
 const normalizeBoolean = (value, fallback = false) => {
     if (value === undefined || value === null) return fallback;
@@ -28,7 +29,7 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: navItems, error } = await getAllNavItems();
     if (error) {
-        return res.status(500).send(error.message || 'Failed to load navigation items');
+        return sendError(req, res, error, { message: 'Failed to load navigation items' });
     }
 
     // Build hierarchical structure for display
@@ -114,7 +115,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
     } = req.body;
 
     if (!label || !type) {
-        return res.status(400).send('Label and type are required');
+        return sendError(req, res, null, { status: 400, message: 'Label and type are required' });
     }
 
     const payload = {
@@ -161,7 +162,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
                 ]
             });
         }
-        return res.status(500).send(error.message || 'Failed to create navigation item');
+        return sendError(req, res, error, { message: 'Failed to create navigation item' });
     }
 
     return res.redirect('/nav/manage');
@@ -174,7 +175,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: navItem, error } = await getNavItem(id);
     if (error || !navItem) {
-        return res.status(404).send(error?.message || 'Navigation item not found');
+        return sendError(req, res, error, { status: 404, message: 'Navigation item not found' });
     }
 
     // Get pages for dropdown
@@ -216,7 +217,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: existingItem, error: loadError } = await getNavItem(id);
     if (loadError || !existingItem) {
-        return res.status(404).send(loadError?.message || 'Navigation item not found');
+        return sendError(req, res, loadError, { status: 404, message: 'Navigation item not found' });
     }
 
     const resolvedType = type || existingItem.type;
@@ -275,7 +276,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
                 ]
             });
         }
-        return res.status(500).send(error.message || 'Failed to update navigation item');
+        return sendError(req, res, error, { message: 'Failed to update navigation item' });
     }
 
     return res.redirect('/nav/manage');
@@ -288,9 +289,9 @@ router.delete('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     const { error } = await deleteNavItem(id);
     if (error) {
         if (req.get('HX-Request')) {
-            return res.status(500).send(error.message || 'Failed to delete navigation item');
+            return sendError(req, res, error, { message: 'Failed to delete navigation item' });
         }
-        return res.status(500).send(error.message || 'Failed to delete navigation item');
+        return sendError(req, res, error, { message: 'Failed to delete navigation item' });
     }
 
     // For htmx requests, return empty content (will be swapped out)
@@ -305,12 +306,12 @@ router.post('/reorder', isAuthenticated, requireAdmin, async (req, res) => {
     const { items } = req.body;
 
     if (!Array.isArray(items)) {
-        return res.status(400).send('Items must be an array');
+        return sendError(req, res, null, { status: 400, message: 'Items must be an array' });
     }
 
     const { error } = await reorderNavItems(items);
     if (error) {
-        return res.status(500).send(error.message || 'Failed to reorder navigation items');
+        return sendError(req, res, error, { message: 'Failed to reorder navigation items' });
     }
 
     return res.status(200).json({ success: true });
