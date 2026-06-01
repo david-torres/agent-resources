@@ -3,6 +3,7 @@ const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
 const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition } = require('./util/handlebars');
 const { renderMarkdown } = require('./util/markdown');
+const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
 const path = require('path');
 require('dotenv').config();
@@ -87,18 +88,7 @@ app.use('/api/agent', agentRoutes);
 app.use((err, req, res, next) => {
   console.error('Unhandled error:', err);
   if (res.headersSent) return next(err);
-
-  const isHtmx = req.get('HX-Request');
-  const message = process.env.NODE_ENV === 'production' ? 'Internal server error' : String(err?.message || err);
-
-  if (isHtmx) {
-    res.set('HX-Retarget', '#alert').set('HX-Reswap', 'innerHTML');
-    return res.status(500).send(`<div class="notification is-danger">${message}</div>`);
-  }
-  if (req.accepts('html')) {
-    return res.status(500).send(message);
-  }
-  return res.status(500).json({ error: message });
+  return sendError(req, res, err);
 });
 
 process.on('unhandledRejection', (reason) => {
