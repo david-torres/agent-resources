@@ -32,6 +32,7 @@ const {
 const { getCharacter, getCharacterAllMissions, getOwnMissions, searchPublicCharacters, listOffscreenMissions } = require('../util/supabase');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
+const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const supabase = require('../util/supabase');
 const { processMissionImport } = require('../util/mission-import');
 
@@ -83,7 +84,7 @@ router.get('/s', authOptional, async (req, res) => {
   );
 
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     res.render('partials/mission-search-results', {
       layout: false,
@@ -103,7 +104,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   ]);
   
   if (ownError) {
-    return res.status(400).send(ownError.message);
+    return sendError(req, res, ownError);
   }
   
   if (editableError) {
@@ -161,7 +162,7 @@ router.post('/import', isAuthenticated, async (req, res) => {
     const { mission } = await processMissionImport(inputText, profile, res.locals.supabase);
     return res.header('HX-Location', `/missions/${mission.id}`).send();
   } catch (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 });
 
@@ -197,10 +198,10 @@ router.post('/', isAuthenticated, async (req, res) => {
   }, profile);
 
   if (missionError) {
-    return res.status(400).send(missionError.message);
+    return sendError(req, res, missionError);
   }
   if (!missionRes || missionRes.length === 0) {
-    return res.status(400).send('Mission creation returned no rows');
+    return sendError(req, res, null, { status: 400, message: 'Mission creation returned no rows' });
   }
 
   const mission = missionRes[0];
@@ -210,7 +211,7 @@ router.post('/', isAuthenticated, async (req, res) => {
     for (const characterId of characters) {
       const { error: characterError } = await addCharacterToMission(mission.id, characterId);
       if (characterError) {
-        return res.status(400).send(characterError.message);
+        return sendError(req, res, characterError);
       }
     }
   }
@@ -227,12 +228,12 @@ router.get('/similar', isAuthenticated, async (req, res) => {
   const { date, name, exclude_id } = req.query;
 
   if (!date) {
-    return res.status(400).send('Date is required');
+    return sendError(req, res, null, { status: 400, message: 'Date is required' });
   }
 
   const { data: missions, error } = await searchSimilarMissions(date, name, exclude_id, 3, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   res.render('partials/similar-missions', {
@@ -246,7 +247,7 @@ router.get('/:id', authOptional, async (req, res) => {
   const { id } = req.params;
   const { data: mission, error } = await getMission(id, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     res.render('mission', {
       profile,
@@ -268,17 +269,17 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   // Check if user can edit this mission
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
-    return res.status(403).send('You do not have permission to edit this mission');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have permission to edit this mission' });
   }
-  
+
   const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
     getMission(id, res.locals.supabase),
     getMissionEditors(id, res.locals.supabase),
     isCreator(id, profile)
   ]);
-  
+
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   
   res.render('mission-form', {
@@ -329,7 +330,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   // Update the mission
   const { data, error } = await updateMission(req.params.id, missionData, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 
   // Get current characters
@@ -342,7 +343,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     if (!newIds.includes(id)) {
       const { error: removeError } = await removeCharacterFromMission(req.params.id, id);
       if (removeError) {
-        return res.status(400).send(removeError.message);
+        return sendError(req, res, removeError);
       }
     }
   }
@@ -352,7 +353,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
     if (!currentIds.includes(id)) {
       const { error: addError } = await addCharacterToMission(req.params.id, id);
       if (addError) {
-        return res.status(400).send(addError.message);
+        return sendError(req, res, addError);
       }
     }
   }
@@ -364,7 +365,7 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { error } = await deleteMission(req.params.id, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/missions').send();
   }
@@ -374,11 +375,11 @@ router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) =>
   const { id, characterId } = req.params;
   const { error } = await addCharacterToMission(id, characterId);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   const { data: character, error: characterError } = await getCharacter(characterId, res.locals.supabase);
   if (characterError || !character) {
-    return res.status(400).send(characterError ? characterError.message : 'Character not found');
+    return sendError(req, res, characterError, { message: 'Character not found' });
   }
   return res.render('partials/selected-character-item', {
     layout: false,
@@ -408,18 +409,18 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
   const { character_id, unregistered_name } = req.body;
 
   if (!character_id || !unregistered_name) {
-    return res.status(400).send('Character ID and unregistered name are required');
+    return sendError(req, res, null, { status: 400, message: 'Character ID and unregistered name are required' });
   }
 
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
-    return res.status(403).send('Unauthorized');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
 
   // Add character to mission
   const { error: addError } = await addCharacterToMission(id, character_id);
   if (addError) {
-    return res.status(400).send(addError.message);
+    return sendError(req, res, addError);
   }
 
   // Remove the unregistered name
@@ -432,7 +433,7 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
 
   const { data: character, error: characterError } = await getCharacter(character_id, res.locals.supabase);
   if (characterError || !character) {
-    return res.status(400).send(characterError ? characterError.message : 'Character not found');
+    return sendError(req, res, characterError, { message: 'Character not found' });
   }
   return res.render('partials/selected-character-item', {
     layout: false,
@@ -445,7 +446,7 @@ router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) 
   const { id, characterId } = req.params;
   const { error } = await removeCharacterFromMission(id, characterId);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   return res.send('');
 });
@@ -455,13 +456,13 @@ router.get('/character/:id', authOptional, async (req, res) => {
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
 
-  if (error) return res.status(400).send(error.message);
+  if (error) return sendError(req, res, error);
   if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
-    return res.status(404).send('Not found');
+    return sendError(req, res, null, { status: 404, message: 'Not found' });
   }
 
   const { data: missions, error: missionsError } = await getCharacterAllMissions(id);
-  if (missionsError) return res.status(400).send(missionsError.message);
+  if (missionsError) return sendError(req, res, missionsError);
 
   const { data: offscreenMissions } = await listOffscreenMissions({
     characterId: id,
@@ -506,12 +507,12 @@ router.get('/:id/editors', isAuthenticated, async (req, res) => {
   // Check if user can view this mission's editors
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
-    return res.status(403).send('Unauthorized');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
 
   const { data: editors, error } = await getMissionEditors(id, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   res.render('partials/mission-editors', {
@@ -529,32 +530,32 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
   const { profile_id } = req.body;
 
   if (!profile_id) {
-    return res.status(400).send('Profile ID is required');
+    return sendError(req, res, null, { status: 400, message: 'Profile ID is required' });
   }
 
   // Validate profile_id is a valid UUID format
   if (!isValidUuid(profile_id)) {
-    return res.status(400).send('Invalid profile ID format');
+    return sendError(req, res, null, { status: 400, message: 'Invalid profile ID format' });
   }
 
   // Check if user can edit this mission
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
-    return res.status(403).send('Unauthorized');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
 
   // Prevent adding creator or host as editor (redundant)
   const { data: mission, error: missionError } = await getMission(id, res.locals.supabase);
   if (missionError) {
-    return res.status(400).send('Mission not found');
+    return sendError(req, res, null, { status: 400, message: 'Mission not found' });
   }
   if (mission && (mission.creator_id === profile_id || mission.host_id === profile_id)) {
-    return res.status(400).send('Creator and host are already editors by default');
+    return sendError(req, res, null, { status: 400, message: 'Creator and host are already editors by default' });
   }
 
   const { error } = await addMissionEditor(id, profile_id, profile.id);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   // Return updated editors list
@@ -575,12 +576,12 @@ router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
   // Only creator can remove editors
   const creator = await isCreator(id, profile);
   if (!creator) {
-    return res.status(403).send('Only the mission creator can remove editors');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: 'Only the mission creator can remove editors' });
   }
 
   const { error } = await removeMissionEditor(id, profileId);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   // Return updated editors list
@@ -607,12 +608,12 @@ router.get('/:id/merge/:targetId/preview', isAuthenticated, async (req, res) => 
   const canEditTarget = await canEditMission(targetId, profile);
 
   if (!canEditPrimary || !canEditTarget) {
-    return res.status(403).send('You must be able to edit both missions to merge them');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: 'You must be able to edit both missions to merge them' });
   }
 
   const { data: preview, error } = await previewMergeMissions(id, targetId);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   res.render('mission-merge', {
@@ -635,7 +636,7 @@ router.post('/:id/merge/:targetId', isAuthenticated, async (req, res) => {
 
   const { data: mergedMission, error } = await mergeMissions(id, targetId, profile);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   return res.header('HX-Location', `/missions/${mergedMission.id}`).send();
