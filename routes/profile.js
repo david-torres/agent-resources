@@ -48,7 +48,7 @@ router.get('/view/:name', authOptional, async (req, res) => {
   const { name } = req.params;
   const { data: viewProfile, error } = await getProfileByName(name);
   if (error) {
-    return sendError(req, res, error, { message: 'Not found' });
+    return sendError(req, res, null, { status: 400, message: 'Not found' });
   }
   if (viewProfile.is_public === false) {
     return sendError(req, res, null, { status: 404, message: 'Not found' });
