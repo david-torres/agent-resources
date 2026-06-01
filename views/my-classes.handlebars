@@ -90,6 +90,7 @@
       <tr id="row-{{this.id}}">
         <td>
           <span class="title is-4"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a></span>
+          {{> private-badge isPublic=this.is_public}}
         </td>
         <td>
           {{#if (eq this.status 'release')}}

@@ -1,5 +1,5 @@
 {{> breadcrumbs}}
-<h1 class="title is-2">{{mission.name}}</h1>
+<h1 class="title is-2">{{mission.name}}{{> private-badge isPublic=mission.is_public}}</h1>
 <div class="columns">
   <div class="column is-two-thirds">
     {{#if mission.media_url}}

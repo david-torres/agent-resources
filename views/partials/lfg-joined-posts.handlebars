@@ -2,7 +2,7 @@
 <div id="lfg-posts" class="block">
   {{#each joinedPosts}}
   <div class="box lfg-post">
-    <h3 class="title is-4">{{this.title}}</h3>
+    <h3 class="title is-4">{{this.title}}{{> private-badge isPublic=this.is_public}}</h3>
     <p>Date: {{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</p>
     <p class="is-size-7">Created by: {{#if this.creator_is_public}}<a href="/profile/view/{{encodeURIComponentH this.creator_name}}">{{this.creator_name}}</a>{{else}}{{this.creator_name}}{{/if}}</p>
     <p class="mt-4">

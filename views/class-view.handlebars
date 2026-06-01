@@ -1,5 +1,5 @@
 {{> breadcrumbs}}
-<h1 class="title is-2">{{class.name}}
+<h1 class="title is-2">{{class.name}}{{> private-badge isPublic=class.is_public}}
   {{#if (eq class.status 'release')}}
   <span class="tag is-success is-light ml-2">
     <span class="icon is-small"><i class="fas fa-star"></i></span>

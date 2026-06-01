@@ -75,6 +75,7 @@
           {{#if this.media_url}}
           <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
           {{/if}}
+          {{> private-badge isPublic=this.is_public}}
         </td>
         {{#if profile}}
         <td>{{date_tz this.date "dddd, MMMM Do YYYY, h:mm A" ../profile.timezone}}</td>
@@ -152,6 +153,7 @@
           {{#if this.media_url}}
           <span class="icon has-text-info" title="Has video recording"><i class="fas fa-video"></i></span>
           {{/if}}
+          {{> private-badge isPublic=this.is_public}}
           <span class="tag is-info is-light ml-2">Editor</span>
         </td>
         {{#if profile}}
