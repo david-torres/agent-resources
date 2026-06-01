@@ -11,6 +11,7 @@ const { upgradeCharacterClass, findUpgradeTargetsFor } = require('../models/char
 const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission, removeOffscreenMission, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { getProfileConduitCredits } = require('../models/profile');
 const { isAuthenticated, authOptional } = require('../util/auth');
+const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
@@ -139,7 +140,7 @@ router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: characters, error } = await getOwnCharacters(profile, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     res.render('character-list', {
       characters,
@@ -183,9 +184,9 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else if (character.creator_id !== profile.id) {
-    return res.status(403).send('Forbidden');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   } else {
     const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
 
@@ -282,8 +283,8 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   const on = req.query.on === '1' || req.query.on === 1 || req.query.on === true || req.query.on === 'true';
 
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
-  if (error || !character) return res.status(400).send(error ? error.message : 'Character not found');
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (error || !character) return sendError(req, res, error, { message: 'Character not found' });
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   let effectiveVersion = 'v1';
   if (character.class_id) {
@@ -300,7 +301,7 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
       listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
     ]);
     if (missionsRes.error || offscreenRes.error) {
-      return res.status(503).send('Failed to load mission data');
+      return sendError(req, res, null, { status: 503, message: 'Failed to load mission data' });
     }
     derived = deriveCharacterTotals({
       character,
@@ -323,8 +324,8 @@ router.get('/:id/offscreen-missions/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
-  if (error) return res.status(400).send(error.message);
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (error) return sendError(req, res, error);
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   const { data: availableHostedMissions } = await getAvailableHostedMissionsForPicker({
     profileId: profile.id,
@@ -355,16 +356,16 @@ router.post('/:id/offscreen-missions', isAuthenticated, async (req, res) => {
   const { id: characterId } = req.params;
 
   const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return res.status(400).send(charError.message);
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (charError) return sendError(req, res, charError);
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   const src = await resolveOffscreenSource({
     body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
   });
-  if (src.error) return res.status(400).send(src.error);
+  if (src.error) return sendError(req, res, null, { status: 400, message: src.error });
 
   if (!req.body.name || !req.body.summary) {
-    return res.status(400).send('Name and summary are required.');
+    return sendError(req, res, null, { status: 400, message: 'Name and summary are required.' });
   }
 
   // If the user picked a hosted mission as the source, gate on the profile's balance.
@@ -375,7 +376,7 @@ router.post('/:id/offscreen-missions', isAuthenticated, async (req, res) => {
       supabase: res.locals.supabase
     });
     if (!credits || credits.balance <= 0) {
-      return res.status(400).send('No Conduit Credits available.');
+      return sendError(req, res, null, { status: 400, message: 'No Conduit Credits available.' });
     }
   }
 
@@ -395,9 +396,9 @@ router.post('/:id/offscreen-missions', isAuthenticated, async (req, res) => {
 
   if (error) {
     if (error.code === '23505' || error.message === 'duplicate_source_mission') {
-      return res.status(400).send('That mission has already funded a credit.');
+      return sendError(req, res, error, { status: 400, message: 'That mission has already funded a credit.' });
     }
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 
   return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
@@ -408,16 +409,16 @@ router.get('/:id/offscreen-missions/:omId/edit', isAuthenticated, async (req, re
   const { id: characterId, omId } = req.params;
 
   const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return res.status(400).send(charError.message);
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (charError) return sendError(req, res, charError);
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   const { data: offscreenMission, error: omError } = await getOffscreenMissionById({
     id: omId,
     supabase: res.locals.supabase
   });
-  if (omError) return res.status(400).send(omError.message);
+  if (omError) return sendError(req, res, omError);
   if (!offscreenMission || offscreenMission.character_id !== characterId) {
-    return res.status(404).send('Not found');
+    return sendError(req, res, null, { status: 404, message: 'Not found' });
   }
 
   const { data: availableHostedMissions } = await getAvailableHostedMissionsForPicker({
@@ -446,26 +447,26 @@ router.post('/:id/offscreen-missions/:omId', isAuthenticated, async (req, res) =
   const { id: characterId, omId } = req.params;
 
   const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return res.status(400).send(charError.message);
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (charError) return sendError(req, res, charError);
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   const { data: existing, error: omError } = await getOffscreenMissionById({
     id: omId,
     supabase: res.locals.supabase
   });
-  if (omError) return res.status(400).send(omError.message);
+  if (omError) return sendError(req, res, omError);
   if (!existing || existing.character_id !== characterId) {
-    return res.status(404).send('Not found');
+    return sendError(req, res, null, { status: 404, message: 'Not found' });
   }
 
   if (!req.body.name || !req.body.summary) {
-    return res.status(400).send('Name and summary are required.');
+    return sendError(req, res, null, { status: 400, message: 'Name and summary are required.' });
   }
 
   const src = await resolveOffscreenSource({
     body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
   });
-  if (src.error) return res.status(400).send(src.error);
+  if (src.error) return sendError(req, res, null, { status: 400, message: src.error });
 
   const { error } = await updateOffscreenMission({
     id: omId,
@@ -481,9 +482,9 @@ router.post('/:id/offscreen-missions/:omId', isAuthenticated, async (req, res) =
   });
   if (error) {
     if (error.code === '23505' || error.message === 'duplicate_source_mission') {
-      return res.status(400).send('That mission has already funded a credit.');
+      return sendError(req, res, error, { status: 400, message: 'That mission has already funded a credit.' });
     }
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 
   return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
@@ -494,20 +495,20 @@ router.post('/:id/offscreen-missions/:omId/delete', isAuthenticated, async (req,
   const { id: characterId, omId } = req.params;
 
   const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return res.status(400).send(charError.message);
-  if (character.creator_id !== profile.id) return res.status(403).send('Forbidden');
+  if (charError) return sendError(req, res, charError);
+  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   const { data: existing, error: omError } = await getOffscreenMissionById({
     id: omId,
     supabase: res.locals.supabase
   });
-  if (omError) return res.status(400).send(omError.message);
+  if (omError) return sendError(req, res, omError);
   if (!existing || existing.character_id !== characterId) {
-    return res.status(404).send('Not found');
+    return sendError(req, res, null, { status: 404, message: 'Not found' });
   }
 
   const { error } = await removeOffscreenMission({ id: omId, supabase: res.locals.supabase });
-  if (error) return res.status(400).send(error.message);
+  if (error) return sendError(req, res, error);
 
   return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
 });
@@ -532,11 +533,11 @@ router.post('/', isAuthenticated, async (req, res) => {
   delete req.body.accessory_description;
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     const character = Array.isArray(data) ? data[0] : data;
     if (!character) {
-      return res.status(400).send('Character creation returned no rows');
+      return sendError(req, res, null, { status: 400, message: 'Character creation returned no rows' });
     }
     return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   }
@@ -567,7 +568,7 @@ router.get('/accessory', authOptional, (req, res) => {
 router.get('/ability-perk', authOptional, (req, res) => {
   const abilityId = req.query.ability_id;
   const position = Number(req.query.position) || 0;
-  if (!abilityId) return res.status(400).send('ability_id required');
+  if (!abilityId) return sendError(req, res, null, { status: 400, message: 'ability_id required' });
   res.render('partials/character-ability-perk', {
     layout: false,
     perk: { text: '', compounds_with: null },
@@ -620,11 +621,11 @@ router.post('/import', isAuthenticated, async (req, res) => {
     const result = await processCharacterImport(inputText, profile);
     const character = result.character;
     if (!character) {
-      return res.status(400).send('No character found in import');
+      return sendError(req, res, null, { status: 400, message: 'No character found in import' });
     }
     return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
   } catch (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 });
 
@@ -634,7 +635,7 @@ router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
 
   const { data: mission, errorMission } = await getMission(missionId, res.locals.supabase);
   if (errorMission) {
-    return res.status(400).send(errorMission.message);
+    return sendError(req, res, errorMission);
   }
 
   if (!q || q.length < 2) {
@@ -649,7 +650,7 @@ router.get('/add-to-mission-search', isAuthenticated, async (req, res) => {
   const { data: characters, error } = await searchPublicCharacters(q, count);
 
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     res.render('partials/add-to-mission-search-results', { 
       layout: false, 
@@ -686,7 +687,7 @@ router.get('/s', authOptional, async (req, res) => {
   const { data: characters, error } = await searchPublicCharacters(hasQuery ? q : null, count, options);
 
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     res.render('partials/character-search-results', {
       layout: false,
@@ -723,17 +724,17 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
   // Validate format
   const supportedFormats = getSupportedFormats();
   if (!supportedFormats.includes(format)) {
-    return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
+    return sendError(req, res, null, { status: 400, message: `Unsupported format. Supported formats: ${supportedFormats.join(', ')}` });
   }
-  
+
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
 
   // Only the owner can export their character
   if (character.creator_id !== profile.id) {
-    return res.status(403).send('You can only export your own characters');
+    return sendError(req, res, null, { status: 403, title: 'No access', message: 'You can only export your own characters' });
   }
   
   const { content, mimeType, filename } = exportCharacter(character, format, {
@@ -752,10 +753,10 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     if (character.is_public === false && (!profile || character.creator_id !== profile.id)) {
-      return res.status(404).send('Not found');
+      return sendError(req, res, null, { status: 404, message: 'Not found' });
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
 
@@ -918,7 +919,7 @@ router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   delete req.body.accessory_description;
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
   }
@@ -929,7 +930,7 @@ router.delete('/:id/:name?', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   const { error } = await deleteCharacter(id, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/characters').send();
   }
@@ -940,7 +941,7 @@ router.post('/:id/upgrade', isAuthenticated, async (req, res) => {
   const { id } = req.params;
   const { target_class_id } = req.body;
   const { data, error } = await upgradeCharacterClass(id, target_class_id, profile, res.locals.supabase);
-  if (error) return res.status(400).send(error.message || error);
+  if (error) return sendError(req, res, error);
   return res.header('HX-Location', `/characters/${id}/edit`).send();
 });
 
@@ -952,18 +953,18 @@ router.post('/:id/deceased', isAuthenticated, async (req, res) => {
   // Get the character to verify ownership and name
   const { data: character, error: getError } = await getCharacter(id, res.locals.supabase);
   if (getError) {
-    return res.status(400).send(getError.message || getError);
+    return sendError(req, res, getError);
   }
 
   // Verify the confirmation name matches
   if (!confirmName || confirmName.trim() !== character.name) {
-    return res.status(400).send('Character name does not match. Please type the exact name to confirm.');
+    return sendError(req, res, null, { status: 400, message: 'Character name does not match. Please type the exact name to confirm.' });
   }
 
   // Mark as deceased
   const { data, error } = await markCharacterDeceased(id, profile);
   if (error) {
-    return res.status(400).send(error.message || error);
+    return sendError(req, res, error);
   }
 
   return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();

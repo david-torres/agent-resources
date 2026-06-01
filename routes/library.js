@@ -24,6 +24,7 @@ const {
     getProfileByIdAdmin
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
+const { sendError } = require('../util/http-error');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -50,7 +51,7 @@ router.get('/', authOptional, async (req, res) => {
 
     const { data: rules, error } = await getRulesPdfs({ includeInactive: isAdmin });
     if (error) {
-        return res.status(500).send(error.message || 'Failed to load rules PDFs');
+        return sendError(req, res, error, { message: 'Failed to load rules PDFs' });
     }
 
     let unlocksMap = new Map();
@@ -95,7 +96,7 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: rules, error } = await getRulesPdfs({ includeInactive: true });
     if (error) {
-        return res.status(500).send(error.message || 'Failed to load rules PDFs');
+        return sendError(req, res, error, { message: 'Failed to load rules PDFs' });
     }
 
     const rulesWithUnlocks = await Promise.all(
@@ -126,17 +127,17 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
     const isActive = normalizeBoolean(req.body.is_active, true);
 
     if (!title || !edition) {
-        return res.status(400).send('Title and edition are required');
+        return sendError(req, res, null, { status: 400, message: 'Title and edition are required' });
     }
 
     if (!req.file) {
-        return res.status(400).send('A PDF file is required');
+        return sendError(req, res, null, { status: 400, message: 'A PDF file is required' });
     }
 
     const rulesPdfId = crypto.randomUUID();
     const { data: storageInfo, error: storageError } = await storeRulesPdf(rulesPdfId, req.file);
     if (storageError) {
-        return res.status(500).send(storageError.message || 'Failed to store PDF');
+        return sendError(req, res, storageError, { message: 'Failed to store PDF' });
     }
 
     const payload = {
@@ -151,7 +152,7 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
     const { error } = await createRulesPdf(payload);
     if (error) {
         await deletePdfObject({ bucket: RULES_PDF_BUCKET, path: storageInfo.path });
-        return res.status(500).send(error.message || 'Failed to create rules PDF');
+        return sendError(req, res, error, { message: 'Failed to create rules PDF' });
     }
 
     return res.redirect('/library/manage');
@@ -165,7 +166,7 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
 
     const { data: existingRule, error: loadError } = await getRulesPdf(id);
     if (loadError || !existingRule) {
-        return res.status(404).send(loadError?.message || 'Rules PDF not found');
+        return sendError(req, res, loadError, { status: 404, message: 'Rules PDF not found' });
     }
 
     const updates = {
@@ -179,7 +180,7 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
             previousPath: existingRule.storage_path
         });
         if (storageError) {
-            return res.status(500).send(storageError.message || 'Failed to store PDF');
+            return sendError(req, res, storageError, { message: 'Failed to store PDF' });
         }
         updates.storage_path = storageInfo.path;
     } else if (removePdf && existingRule.storage_path) {
@@ -189,7 +190,7 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
 
     const { error } = await updateRulesPdf(id, updates);
     if (error) {
-        return res.status(500).send(error.message || 'Failed to update rules PDF');
+        return sendError(req, res, error, { message: 'Failed to update rules PDF' });
     }
 
     return res.redirect('/library/manage');
@@ -202,7 +203,7 @@ router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: rulesPdf, error: loadError } = await getRulesPdf(id);
     if (loadError || !rulesPdf) {
-        return res.status(404).send(loadError?.message || 'Rules PDF not found');
+        return sendError(req, res, loadError, { status: 404, message: 'Rules PDF not found' });
     }
 
     let profileRecord = null;
@@ -219,11 +220,11 @@ router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     }
 
     if (!profileRecord) {
-        return res.status(400).send('Profile not found');
+        return sendError(req, res, null, { status: 400, message: 'Profile not found' });
     }
 
     if (!profileRecord.user_id) {
-        return res.status(400).send('Profile is missing a linked user');
+        return sendError(req, res, null, { status: 400, message: 'Profile is missing a linked user' });
     }
 
     const expiresAt = parseExpiresAt(expires_at);
@@ -237,7 +238,7 @@ router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     });
 
     if (error) {
-        return res.status(500).send(error.message || 'Failed to grant access');
+        return sendError(req, res, error, { message: 'Failed to grant access' });
     }
 
     return res.redirect('/library/manage');
@@ -248,7 +249,7 @@ router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req,
 
     const { error } = await deleteRulesPdfUnlock({ userId, rulesPdfId: id });
     if (error) {
-        return res.status(500).send(error.message || 'Failed to revoke access');
+        return sendError(req, res, error, { message: 'Failed to revoke access' });
     }
 
     return res.status(204).send();
@@ -260,11 +261,11 @@ router.get('/:id/view', authOptional, async (req, res) => {
 
     const { data: rulesPdf, error } = await getRulesPdf(id);
     if (error || !rulesPdf) {
-        return res.status(404).send(error?.message || 'Rules PDF not found');
+        return sendError(req, res, error, { status: 404, message: 'Rules PDF not found' });
     }
 
     if (!rulesPdf.storage_path) {
-        return res.status(404).send('Rules PDF not available');
+        return sendError(req, res, null, { status: 404, message: 'Rules PDF not available' });
     }
 
     const { data: canView, error: accessError } = await canViewRulesPdf(
@@ -276,11 +277,11 @@ router.get('/:id/view', authOptional, async (req, res) => {
     );
 
     if (accessError) {
-        return res.status(500).send(accessError.message || 'Unable to verify access');
+        return sendError(req, res, accessError, { message: 'Unable to verify access' });
     }
 
     if (!canView) {
-        return res.status(403).send('You do not have access to this rules PDF');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have access to this rules PDF' });
     }
 
     const { data: signedUrl, error: signedError } = await getSignedPdfUrl({
@@ -296,7 +297,7 @@ router.get('/:id/view', authOptional, async (req, res) => {
             storagePath: rulesPdf.storage_path,
             error: signedError?.message || signedError
         });
-        return res.status(500).send('Failed to prepare rules PDF');
+        return sendError(req, res, null, { status: 500, message: 'Failed to prepare rules PDF' });
     }
 
     return res.render('pdf-viewer', {

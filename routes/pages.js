@@ -13,6 +13,7 @@ const {
     canViewPage
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
+const { sendError } = require('../util/http-error');
 
 const normalizeBoolean = (value, fallback = false) => {
     if (value === undefined || value === null) return fallback;
@@ -29,7 +30,7 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: pages, error } = await getPages();
     if (error) {
-        return res.status(500).send(error.message || 'Failed to load pages');
+        return sendError(req, res, error, { message: 'Failed to load pages' });
     }
 
     return res.render('pages-manage', {
@@ -65,7 +66,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
     const { title, slug, content, access_level, is_published } = req.body;
 
     if (!title) {
-        return res.status(400).send('Title is required');
+        return sendError(req, res, null, { status: 400, message: 'Title is required' });
     }
 
     const payload = {
@@ -79,7 +80,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: page, error } = await createPage(payload);
     if (error) {
-        return res.status(500).send(error.message || 'Failed to create page');
+        return sendError(req, res, error, { message: 'Failed to create page' });
     }
 
     return res.redirect('/pages/manage');
@@ -92,7 +93,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: page, error } = await getPage(id);
     if (error || !page) {
-        return res.status(404).send(error?.message || 'Page not found');
+        return sendError(req, res, error, { status: 404, message: 'Page not found' });
     }
 
     return res.render('page-form', {
@@ -114,7 +115,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { data: existingPage, error: loadError } = await getPage(id);
     if (loadError || !existingPage) {
-        return res.status(404).send(loadError?.message || 'Page not found');
+        return sendError(req, res, loadError, { status: 404, message: 'Page not found' });
     }
 
     const updates = {
@@ -127,7 +128,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { error } = await updatePage(id, updates);
     if (error) {
-        return res.status(500).send(error.message || 'Failed to update page');
+        return sendError(req, res, error, { message: 'Failed to update page' });
     }
 
     return res.redirect('/pages/manage');
@@ -139,7 +140,7 @@ router.delete('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 
     const { error } = await deletePage(id);
     if (error) {
-        return res.status(500).send(error.message || 'Failed to delete page');
+        return sendError(req, res, error, { message: 'Failed to delete page' });
     }
 
     return res.status(204).send();
@@ -152,7 +153,7 @@ router.get('/:slug', authOptional, async (req, res) => {
 
     // Exclude admin paths
     if (slug === 'manage' || slug === 'new') {
-        return res.status(404).send('Page not found');
+        return sendError(req, res, null, { status: 404, message: 'Page not found' });
     }
 
     // Check if slug looks like a UUID (to avoid conflicts with edit route)
@@ -169,7 +170,7 @@ router.get('/:slug', authOptional, async (req, res) => {
 
     const { data: page, error } = await getPageBySlug(slug);
     if (error || !page) {
-        return res.status(404).send(error?.message || 'Page not found');
+        return sendError(req, res, error, { status: 404, message: 'Page not found' });
     }
 
     // Check if user can view this page
@@ -182,11 +183,11 @@ router.get('/:slug', authOptional, async (req, res) => {
     );
 
     if (accessError) {
-        return res.status(500).send(accessError.message || 'Unable to verify access');
+        return sendError(req, res, accessError, { message: 'Unable to verify access' });
     }
 
     if (!canView) {
-        return res.status(403).send('You do not have access to this page');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have access to this page' });
     }
 
     return res.render('page-view', {

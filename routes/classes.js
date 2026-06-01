@@ -26,6 +26,7 @@ const {
     CLASS_PDF_BUCKET
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
+const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
@@ -140,7 +141,7 @@ router.post('/import', isAuthenticated, async (req, res) => {
         const classData = Array.isArray(importedClass) ? importedClass[0] : importedClass;
         return res.header('HX-Location', `/classes/${classData.id}/${encodeURIComponent(classData.name)}`).send();
     } catch (error) {
-        return res.status(400).send(error.message);
+        return sendError(req, res, error);
     }
 });
 
@@ -248,11 +249,11 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
 
     const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error || !classData) {
-        return res.status(404).send('Class not found');
+        return sendError(req, res, null, { status: 404, message: 'Class not found' });
     }
 
     if (!classData.pdf_storage_path) {
-        return res.status(404).send('Class PDF not available');
+        return sendError(req, res, null, { status: 404, message: 'Class PDF not available' });
     }
 
     const { data: canView, error: canViewError } = await canViewClassPdf(
@@ -265,11 +266,11 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
     );
 
     if (canViewError) {
-        return res.status(500).send(canViewError.message || 'Unable to verify access');
+        return sendError(req, res, canViewError, { message: 'Unable to verify access' });
     }
 
     if (!canView) {
-        return res.status(403).send('You do not have access to this class PDF');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have access to this class PDF' });
     }
 
     const { data: signedUrl, error: signedError } = await getSignedPdfUrl({
@@ -285,7 +286,7 @@ router.get('/:id/pdf', authOptional, async (req, res) => {
             storagePath: classData.pdf_storage_path,
             error: signedError?.message || signedError
         });
-        return res.status(500).send('Failed to prepare class PDF');
+        return sendError(req, res, null, { status: 500, message: 'Failed to prepare class PDF' });
     }
 
     return res.render('pdf-viewer', {
@@ -310,17 +311,17 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
     // Validate format
     const supportedFormats = getSupportedFormats();
     if (!supportedFormats.includes(format)) {
-        return res.status(400).send(`Unsupported format. Supported formats: ${supportedFormats.join(', ')}`);
+        return sendError(req, res, null, { status: 400, message: `Unsupported format. Supported formats: ${supportedFormats.join(', ')}` });
     }
-    
+
     const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
-        return res.status(400).send(error.message);
+        return sendError(req, res, error);
     }
 
     // Only the creator or admin can export
     if (classData.created_by !== profile.id && profile.role !== 'admin') {
-        return res.status(403).send('You can only export your own classes');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You can only export your own classes' });
     }
     
     const { content, mimeType, filename } = exportClass(classData, format);
@@ -416,23 +417,23 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { profile } = res.locals;
     const { new_version, new_edition } = req.body;
-    if (!new_version) return res.status(400).send('new_version is required');
+    if (!new_version) return sendError(req, res, null, { status: 400, message: 'new_version is required' });
     if (new_edition && !['advent', 'aspirant'].includes(new_edition)) {
-      return res.status(400).send('Invalid new_edition');
+      return sendError(req, res, null, { status: 400, message: 'Invalid new_edition' });
     }
 
     const { data: sourceClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !sourceClass) {
-        return res.status(404).send(fetchError?.message || 'Class not found');
+        return sendError(req, res, fetchError, { status: 404, message: 'Class not found' });
     }
     const isAdminCaller = profile?.role === 'admin';
     const isOwner = !!profile?.id && profile.id === sourceClass.created_by;
     if (!isAdminCaller && !isOwner) {
-        return res.status(403).send('Not authorized');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
     }
 
     const { data: newClassId, error } = await duplicateClass(id, new_version, new_edition || null);
-    if (error) return res.status(400).send(error.message);
+    if (error) return sendError(req, res, error);
     try {
         const { data: newClass } = await getClass(newClassId, res.locals.supabase);
         const slug = newClass?.name ? `/${encodeURIComponent(newClass.name)}` : '';
@@ -447,7 +448,7 @@ router.get('/:id/history', isAuthenticated, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
     const { data: history, error } = await getVersionHistory(id);
-    if (error) return res.status(400).send(error.message);
+    if (error) return sendError(req, res, error);
     return res.render('partials/class-history', { layout: false, profile, history });
 });
 
@@ -456,12 +457,12 @@ router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const userId = res.locals.user.id;
     const { data: cls, error } = await getClass(id, res.locals.supabase);
-    if (error || !cls) return res.status(400).send(error?.message || 'Class not found');
+    if (error || !cls) return sendError(req, res, error, { message: 'Class not found' });
     if (!((cls.is_public === true) && cls.is_player_created === true && ['alpha','beta'].includes(cls.status))) {
-        return res.status(403).send('Not eligible for self-unlock');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'Not eligible for self-unlock' });
     }
     const { error: unlockError } = await unlockClass(userId, id);
-    if (unlockError) return res.status(400).send(unlockError.message);
+    if (unlockError) return sendError(req, res, unlockError);
     return res.status(204).send();
 });
 
@@ -472,7 +473,7 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
     const createdByProfileId = res.locals.profile.id;
     const count = parseInt(amount, 10) || 1;
     const { data, error } = await createUnlockCodes({ classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1, amount: count });
-    if (error) return res.status(400).send(error.message);
+    if (error) return sendError(req, res, error);
 
     if (count > 1) {
         return res.render('partials/unlock-code-result', {
@@ -482,7 +483,7 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
     }
 
     if (!data || data.length === 0) {
-        return res.status(400).send('Unlock code creation returned no rows');
+        return sendError(req, res, null, { status: 400, message: 'Unlock code creation returned no rows' });
     }
     const code = data[0];
     return res.render('partials/unlock-code-result', {
@@ -497,17 +498,17 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
 router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { data, error } = await listUnlockCodes(id, res.locals.supabase);
-    if (error) return res.status(400).send(error.message);
+    if (error) return sendError(req, res, error);
     return res.json(data);
 });
 
 // User: redeem code
 router.post('/redeem', isAuthenticated, async (req, res) => {
     const { code } = req.body;
-    if (!code) return res.status(400).send('Code is required');
+    if (!code) return sendError(req, res, null, { status: 400, message: 'Code is required' });
     const userId = res.locals.user.id;
     const { data: classId, error } = await redeemUnlockCode(code, userId);
-    if (error) return res.status(400).send(error.message);
+    if (error) return sendError(req, res, error);
 
     // Navigate to the unlocked class view using HX-Location for htmx
     try {
@@ -702,18 +703,18 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 
     const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
-        return res.status(404).send(fetchError?.message || 'Class not found');
+        return sendError(req, res, fetchError, { status: 404, message: 'Class not found' });
     }
 
     const isAdminCaller = profile?.role === 'admin';
     const isOwner = !!profile?.id && profile.id === existingClass.created_by;
     if (!isAdminCaller && !isOwner) {
-        return res.status(403).send('Not authorized');
+        return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
     }
 
     const { error } = await deleteClass(id);
     if (error) {
-        return res.status(400).send(error.message);
+        return sendError(req, res, error);
     }
     return res.status(204).send();
 });
