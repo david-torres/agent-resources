@@ -7,6 +7,7 @@ const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
 const { isAuthenticated, authOptional } = require('../util/auth');
+const { sendError } = require('../util/http-error');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
@@ -47,18 +48,18 @@ router.get('/view/:name', authOptional, async (req, res) => {
   const { name } = req.params;
   const { data: viewProfile, error } = await getProfileByName(name);
   if (error) {
-    return res.status(400).send('Not found');
+    return sendError(req, res, error, { message: 'Not found' });
   }
   if (viewProfile.is_public === false) {
-    return res.status(404).send('Not found');
+    return sendError(req, res, null, { status: 404, message: 'Not found' });
   }
   const { data: publicCharacters, error: charsError } = await getPublicCharactersByCreator(viewProfile.id);
   if (charsError) {
-    return res.status(400).send(charsError.message);
+    return sendError(req, res, charsError);
   }
   const { data: publicClasses, error: classesError } = await getClasses({ is_public: true, created_by: viewProfile.id });
   if (classesError) {
-    return res.status(400).send(classesError.message);
+    return sendError(req, res, classesError);
   }
   res.render('profile-view', {
     user,
@@ -89,7 +90,7 @@ router.put('/', isAuthenticated, async (req, res) => {
   }
   const { data, error } = await updateUser(user.id, email, password, profile);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/profile').send();
   }
@@ -100,7 +101,7 @@ router.post('/discord/sync', isAuthenticated, async (req, res) => {
   const { discord_id, discord_email } = req.body;
   const { error } = await setDiscordId(user.id, discord_id, discord_email);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   return res.status(204).send();
 });
@@ -109,7 +110,7 @@ router.post('/discord/clear', isAuthenticated, async (req, res) => {
   const user = res.locals.user;
   const { error } = await setDiscordId(user.id, null, null);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   return res.status(204).send();
 });
@@ -171,7 +172,7 @@ router.get('/search', isAuthenticated, async (req, res) => {
   const { q } = req.query;
   const { data: profiles, error } = await searchProfiles(q, 10);
   if (error) {
-    return res.status(400).send(error.message);
+    return sendError(req, res, error);
   }
   res.render('partials/profile-search-results', {
     layout: false,
