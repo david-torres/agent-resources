@@ -1,6 +1,6 @@
 {{> breadcrumbs}}
 <div class="box lfg-post">
-  <h3 class="title is-4">{{post.title}}</h3>
+  <h3 class="title is-4">{{post.title}}{{> private-badge isPublic=post.is_public}}</h3>
   <p>Date: {{#if profile}}{{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}{{else}}{{date_tz
     post.date "dddd, MMMM Do YYYY, h:mm A" "local"}}{{/if}}</p>
   <p class="is-size-7">Created by: {{#if post.creator_is_public}}<a href="/profile/view/{{encodeURIComponentH post.creator_name}}">{{post.creator_name}}</a>{{else}}{{post.creator_name}}{{/if}}</p>
