@@ -32,4 +32,17 @@ function classifyError(error, fallback = {}) {
   };
 }
 
-module.exports = { classifyError, FRIENDLY_NOT_FOUND };
+function sendError(req, res, error, opts = {}) {
+  if (res.headersSent) return;
+  const d = classifyError(error, opts);
+  if (req.get('HX-Request')) {
+    res.set('HX-Retarget', '#alerts').set('HX-Reswap', 'innerHTML');
+    return res.status(d.status).render('error-inline', { ...d, layout: false });
+  }
+  if (req.accepts('html')) {
+    return res.status(d.status).render('error', d);
+  }
+  return res.status(d.status).json({ error: d.message });
+}
+
+module.exports = { classifyError, sendError, FRIENDLY_NOT_FOUND };

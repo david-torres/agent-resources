@@ -54,3 +54,53 @@ test('unknown error in production hides the raw message', () => {
   expect(d.message).toBe('An unexpected error occurred. Please try again.');
   process.env.NODE_ENV = prev;
 });
+
+const { sendError } = require('./http-error');
+
+function mockRes() {
+  const res = { statusCode: 200, headers: {}, headersSent: false };
+  res.status = (s) => { res.statusCode = s; return res; };
+  res.set = (k, v) => { res.headers[k] = v; return res; };
+  res.json = (b) => { res.body = b; res.headersSent = true; return res; };
+  res.render = (view, data) => { res.rendered = { view, data }; res.headersSent = true; return res; };
+  return res;
+}
+function mockReq({ htmx = false, html = true } = {}) {
+  return {
+    get: (h) => (h === 'HX-Request' && htmx ? 'true' : undefined),
+    accepts: (t) => (t === 'html' ? html : false),
+  };
+}
+
+test('sendError (HTMX) renders error-inline and retargets #alerts', () => {
+  const res = mockRes();
+  sendError(mockReq({ htmx: true }), res, { code: 'PGRST116' });
+  expect(res.statusCode).toBe(404);
+  expect(res.headers['HX-Retarget']).toBe('#alerts');
+  expect(res.headers['HX-Reswap']).toBe('innerHTML');
+  expect(res.rendered.view).toBe('error-inline');
+  expect(res.rendered.data.layout).toBe(false);
+});
+
+test('sendError (HTML) renders the full error page', () => {
+  const res = mockRes();
+  sendError(mockReq({ htmx: false, html: true }), res, { code: 'PGRST116' });
+  expect(res.statusCode).toBe(404);
+  expect(res.rendered.view).toBe('error');
+  expect(res.rendered.data.title).toBe('Not found');
+});
+
+test('sendError (API/JSON) returns json error', () => {
+  const res = mockRes();
+  sendError(mockReq({ htmx: false, html: false }), res, { code: 'PGRST116' });
+  expect(res.statusCode).toBe(404);
+  expect(res.body.error).toBeDefined();
+});
+
+test('sendError short-circuits when headers already sent', () => {
+  const res = mockRes();
+  res.headersSent = true;
+  sendError(mockReq(), res, { code: 'PGRST116' });
+  expect(res.rendered).toBeUndefined();
+  expect(res.body).toBeUndefined();
+});
