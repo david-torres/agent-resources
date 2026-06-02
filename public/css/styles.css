@@ -470,6 +470,10 @@ a.dropdown-item:hover {
 
 .profile-image-editor__preview {
   width: 100%;
+  /* Anchor to the top so the grid's default `align-items: stretch` doesn't
+     stretch this cell to match the tall canvas, which would override the
+     aspect-ratio below and distort the crop preview. */
+  align-self: start;
   aspect-ratio: 4 / 3;
   border: 1px solid var(--bulma-border);
   border-radius: var(--bulma-box-radius);
