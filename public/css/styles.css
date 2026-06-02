@@ -777,4 +777,33 @@ a.dropdown-item:hover {
   .form-loading-spinner {
     animation: none;
   }
+
+  .anchor-link {
+    transition: none;
+  }
+}
+
+/* Section anchor headings with hover-reveal copy-link icon */
+.anchor-heading {
+  scroll-margin-top: 1rem;
+}
+
+.anchor-link {
+  margin-left: 0.4em;
+  font-size: 0.7em;
+  vertical-align: middle;
+  color: var(--bulma-grey-light);
+  opacity: 0;
+  transition: opacity 0.15s ease-in-out, color 0.15s ease-in-out;
+}
+
+.anchor-heading:hover .anchor-link,
+.anchor-heading:focus-within .anchor-link,
+.anchor-link:focus {
+  opacity: 1;
+}
+
+.anchor-link:hover,
+.anchor-link:focus {
+  color: var(--bulma-text-strong);
 }

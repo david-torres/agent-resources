@@ -107,6 +107,30 @@ const App = (function (document, supabase, htmx) {
     _displayNotification('danger', message);
   }
 
+  // Copy text to the clipboard, falling back to a temporary textarea +
+  // execCommand for insecure contexts or browsers without the async API.
+  const _copyToClipboard = (text) => {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+      try {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        const ok = document.execCommand('copy');
+        document.body.removeChild(textarea);
+        if (ok) { resolve(); } else { reject(new Error('copy command failed')); }
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
   const _reportAuthError = (context, error) => {
     console.error(`[auth] ${context}`, error);
     _displayError(error?.message || 'Authentication failed');
@@ -852,6 +876,29 @@ const App = (function (document, supabase, htmx) {
             dropdown.classList.remove('is-active');
           }
         });
+      });
+
+      // Delegated handler: copy a deep link to a section anchor to the clipboard.
+      // Survives htmx hx-boost swaps because it is bound once to the document.
+      document.addEventListener('click', function(event) {
+        const trigger = event.target.closest('[data-anchor-copy]');
+        if (!trigger) return;
+        event.preventDefault();
+        const hash = (trigger.getAttribute('href') || '').replace(/^#/, '');
+        const closestWithId = trigger.closest('[id]');
+        const id = hash || (closestWithId && closestWithId.id);
+        if (!id) return;
+        const url = window.location.origin + window.location.pathname + '#' + id;
+        try {
+          history.replaceState(null, '', '#' + id);
+        } catch (_) { /* ignore history failures */ }
+        _copyToClipboard(url)
+          .then(function () {
+            _displayNotification('success', 'Link copied to clipboard');
+          })
+          .catch(function () {
+            _displayNotification('warning', 'Could not copy — copy the link from the address bar');
+          });
       });
 
       // Setup form sync for ToastUI editors

@@ -26,15 +26,15 @@
 </div>
 
 {{#if viewProfile.conduit_briefing}}
-<div id="conduit-briefing" class="box">
-  <h3 class="title is-4">Conduit Briefing</h3>
+<div class="box">
+  {{> section-heading tag="h3" id="conduit-briefing" title="Conduit Briefing"}}
   <div class="content">{{{markdown viewProfile.conduit_briefing}}}</div>
 </div>
 {{/if}}
 
 {{#if publicCharacters}}
 <div class="box">
-  <h2 class="title is-4">Public Characters</h2>
+  {{> section-heading tag="h2" id="public-characters" title="Public Characters"}}
   {{#if publicCharacters.length}}
   <div class="columns is-multiline">
     {{#each publicCharacters}}
@@ -80,7 +80,7 @@
 
 {{#if publicClasses}}
 <div class="box">
-  <h2 class="title is-4">Public Classes</h2>
+  {{> section-heading tag="h2" id="public-classes" title="Public Classes"}}
   {{#if publicClasses.length}}
   <div class="columns is-multiline">
     {{#each publicClasses}}
