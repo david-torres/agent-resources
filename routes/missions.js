@@ -372,7 +372,12 @@ router.delete('/:id', isAuthenticated, async (req, res) => {
 });
 
 router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
   const { id, characterId } = req.params;
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
+  }
   const { error } = await addCharacterToMission(id, characterId);
   if (error) {
     return sendError(req, res, error);
@@ -443,7 +448,12 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
 });
 
 router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
   const { id, characterId } = req.params;
+  const canEdit = await canEditMission(id, profile);
+  if (!canEdit) {
+    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
+  }
   const { error } = await removeCharacterFromMission(id, characterId);
   if (error) {
     return sendError(req, res, error);

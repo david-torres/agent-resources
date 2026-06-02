@@ -28,7 +28,16 @@ const { sendError } = require('../util/http-error');
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 25 * 1024 * 1024 }
+    limits: { fileSize: 25 * 1024 * 1024 },
+    // First gate: reject obviously non-PDF uploads by declared type. The
+    // authoritative content check (%PDF- magic bytes) lives in pdf.js, since
+    // this mimetype is client-supplied and spoofable.
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype !== 'application/pdf') {
+            return cb(null, false);
+        }
+        cb(null, true);
+    }
 });
 
 const normalizeBoolean = (value, fallback = false) => {

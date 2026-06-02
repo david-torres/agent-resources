@@ -13,9 +13,22 @@ const sanitizeFilename = (filename = 'document.pdf') => {
   return `${normalized.replace(/\.+$/, '')}.pdf`;
 };
 
+// Every uploaded "PDF" must actually begin with the %PDF- signature. The
+// multer fileFilter only sees the client-supplied Content-Type (trivially
+// spoofed), so this content-based check is the authoritative gate that stops
+// HTML/SVG/script payloads from being stored under a .pdf name.
+const PDF_MAGIC = Buffer.from('%PDF-', 'latin1');
+const looksLikePdf = (buffer) =>
+  Buffer.isBuffer(buffer) &&
+  buffer.length >= PDF_MAGIC.length &&
+  buffer.subarray(0, PDF_MAGIC.length).equals(PDF_MAGIC);
+
 const uploadToBucket = async (bucket, storagePath, file, { cacheControl = '3600' } = {}) => {
   if (!file?.buffer) {
     return { data: null, error: new Error('Missing file buffer') };
+  }
+  if (!looksLikePdf(file.buffer)) {
+    return { data: null, error: new Error('Uploaded file is not a valid PDF') };
   }
   const { error } = await supabase.storage
     .from(bucket)

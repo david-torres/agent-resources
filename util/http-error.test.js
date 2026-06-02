@@ -55,6 +55,16 @@ test('unknown error in production hides the raw message', () => {
   process.env.NODE_ENV = prev;
 });
 
+test('unknown error with NODE_ENV unset fails safe and hides the raw message', () => {
+  const prev = process.env.NODE_ENV;
+  delete process.env.NODE_ENV;
+  const d = classifyError({ message: 'boom' });
+  expect(d.status).toBe(500);
+  expect(d.message).toBe('An unexpected error occurred. Please try again.');
+  if (prev === undefined) delete process.env.NODE_ENV;
+  else process.env.NODE_ENV = prev;
+});
+
 const { sendError } = require('./http-error');
 
 function mockRes() {

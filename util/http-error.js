@@ -1,6 +1,9 @@
 // util/http-error.js
 const FRIENDLY_NOT_FOUND = "We couldn't find that, or you don't have access to it.";
-const isProd = () => process.env.NODE_ENV === 'production';
+// Fail safe: only expose raw error detail when NODE_ENV is *explicitly*
+// 'development'. An unset or misspelled NODE_ENV is treated as production so a
+// misconfigured deploy never leaks internal DB/Postgres error text to users.
+const isProd = () => process.env.NODE_ENV !== 'development';
 
 function classifyError(error, fallback = {}) {
   let base;

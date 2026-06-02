@@ -33,7 +33,16 @@ const { parseImageCrop } = require('../util/crop');
 
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 25 * 1024 * 1024 } // 25MB limit
+    limits: { fileSize: 25 * 1024 * 1024 }, // 25MB limit
+    // First gate: reject obviously non-PDF uploads by declared type. The
+    // authoritative content check (%PDF- magic bytes) lives in pdf.js, since
+    // this mimetype is client-supplied and spoofable.
+    fileFilter: (req, file, cb) => {
+        if (file.mimetype !== 'application/pdf') {
+            return cb(null, false);
+        }
+        cb(null, true);
+    }
 });
 
 const ensureArray = (value) => {

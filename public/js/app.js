@@ -907,7 +907,15 @@ const App = (function (document, supabase, htmx) {
 
   function getRedirectUrl() {
     const url = new URL(window.location.href);
-    return url.searchParams.get('r');
+    const r = url.searchParams.get('r');
+    // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
+    // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
+    // values so a crafted ?r= cannot redirect the user off-site. Mirrors the
+    // server-side isSameOriginPath check.
+    if (!r || r[0] !== '/' || r[1] === '/' || r[1] === '\\') {
+      return null;
+    }
+    return r;
   }
 
   function getReturnUrl() {
