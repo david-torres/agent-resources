@@ -6,6 +6,7 @@ const { getClasses } = require('../models/class');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classGearList, classAbilityList, personalityMap } = require('../util/enclave-consts');
 const { processMissionImport } = require('./mission-import');
 const { addCharacterToMission } = require('../models/mission');
+const { assertNonEmptyImportText } = require('./validate');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -89,12 +90,13 @@ const formatClassContent = (items, classId) => {
 };
 
 async function processCharacterImport(inputText, profile) {
+  const text = assertNonEmptyImportText(inputText, 'character sheet');
   const prompt = `Parse the following character sheet and try to structure the data following the provided JSON schema info.
 
 If the character sheet includes mission logs or mission recaps (often found in sections labeled "Missions", "Mission Log", "Mission History", "Adventures", etc.), extract each mission log as a separate string in the mission_logs array. Each mission log should be a complete, standalone entry that can be parsed independently.
 
 Character sheet:
-${inputText}
+${text}
 
 JSON output:`;
 

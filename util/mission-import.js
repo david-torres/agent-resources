@@ -3,6 +3,7 @@ const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
 const { createMission, addCharacterToMission, updateMission } = require('../models/mission');
 const { getOwnCharacters, searchPublicCharacters } = require('../models/character');
+const { assertNonEmptyImportText } = require('./validate');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -151,10 +152,11 @@ const findCharacterMatch = async (name, ownCharactersCache) => {
 };
 
 async function processMissionImport(inputText, profile, client) {
+  const text = assertNonEmptyImportText(inputText, 'mission log');
   const prompt = `Parse the following mission log and try to structure the data following the provided JSON schema info.
 
 Mission log:
-${inputText}
+${text}
 
 JSON output:`;
 
@@ -170,7 +172,7 @@ JSON output:`;
       outcome: coerceOutcome(validated.outcome),
       focus_words: toText(validated.focus_words),
       statement: toText(validated.statement),
-      summary: toText(validated.summary) || inputText,
+      summary: toText(validated.summary) || text,
       media_url: toUrlOrNull(validated.media_url),
       unregistered_character_names: []
     };

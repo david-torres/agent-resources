@@ -48,6 +48,30 @@ test('countWords handles newlines and tabs', () => {
   expect(countWords('a\nb\tc')).toBe(3);
 });
 
+const { assertNonEmptyImportText } = require('./validate');
+
+test('assertNonEmptyImportText returns trimmed text for valid input', () => {
+  expect(assertNonEmptyImportText('  hello world  ')).toBe('hello world');
+});
+
+test('assertNonEmptyImportText throws on empty string', () => {
+  expect(() => assertNonEmptyImportText('')).toThrow(/no .* provided/i);
+});
+
+test('assertNonEmptyImportText throws on whitespace-only string', () => {
+  expect(() => assertNonEmptyImportText('   \n\t  ')).toThrow(/no .* provided/i);
+});
+
+test('assertNonEmptyImportText throws on non-string input', () => {
+  expect(() => assertNonEmptyImportText(null)).toThrow(/no .* provided/i);
+  expect(() => assertNonEmptyImportText(undefined)).toThrow(/no .* provided/i);
+  expect(() => assertNonEmptyImportText(42)).toThrow(/no .* provided/i);
+});
+
+test('assertNonEmptyImportText uses the subject in the error message', () => {
+  expect(() => assertNonEmptyImportText('', 'character sheet')).toThrow(/no character sheet provided/i);
+});
+
 const { validateAbilityPerks } = require('./validate');
 
 test('validateAbilityPerks accepts empty input', () => {

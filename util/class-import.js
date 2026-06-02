@@ -2,6 +2,7 @@ const z = require("zod");
 const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
 const { createClass } = require("../models/class");
+const { assertNonEmptyImportText } = require("./validate");
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -80,10 +81,11 @@ const normalizeGear = (gear, limit = 6) => {
 };
 
 async function processClassImport(inputText, profile) {
+  const text = assertNonEmptyImportText(inputText, 'class writeup');
   const prompt = `Parse the following class writeup into the JSON schema described below. Focus on creating a PCC (player-created class) entry.
 
 Class writeup:
-${inputText}
+${text}
 
 JSON output:`;
 

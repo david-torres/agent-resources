@@ -33,6 +33,18 @@ function countWords(value) {
   return trimmed.split(/\s+/).length;
 }
 
+/**
+ * Guard for AI import entry points: ensures we never send empty/whitespace
+ * input to the LLM. Throws on missing, non-string, or blank text; otherwise
+ * returns the trimmed text so callers can reuse it.
+ */
+function assertNonEmptyImportText(inputText, subject = 'content') {
+  if (typeof inputText !== 'string' || inputText.trim().length === 0) {
+    throw new Error(`No ${subject} provided to import`);
+  }
+  return inputText.trim();
+}
+
 function validateAbilityPerks(perks, { wordLimit = 25, perAbility = 5 } = {}) {
   if (!Array.isArray(perks)) return { ok: true };
 
@@ -67,5 +79,5 @@ function validateAbilityPerks(perks, { wordLimit = 25, perAbility = 5 } = {}) {
 
 module.exports = {
   isValidUuid, validateIdParam, escapeLikePattern, registerUuidParams,
-  countWords, validateAbilityPerks
+  countWords, validateAbilityPerks, assertNonEmptyImportText
 };
