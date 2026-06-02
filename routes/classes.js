@@ -63,7 +63,7 @@ router.get('/', authOptional, async (req, res) => {
 
     const { data: classes, error } = await getClasses(filters, res.locals.supabase);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
     res.render('classes', {
         profile,
@@ -90,7 +90,7 @@ router.get('/my', isAuthenticated, async (req, res) => {
 
     const { data: classes, error } = await getClasses(filters, res.locals.supabase);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
     res.render('my-classes', {
         profile,
@@ -228,7 +228,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     const { id } = req.params;
     const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
     res.render('class-form', {
         profile,
@@ -339,9 +339,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     const { id } = req.params;
     const { data: classData, error } = await getClass(id, res.locals.supabase);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
-    
+
     let unlocked = false;
     if (profile) {
         const result = await isClassUnlocked(profile.user_id, id);
@@ -524,7 +524,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
     const { profile } = res.locals;
     const profileId = profile?.id;
     if (!profileId) {
-        return res.status(500).json({ error: 'Missing profile id' });
+        return sendError(req, res, null, { status: 500, message: 'Missing profile id' });
     }
     
     // Process abilities and gear arrays
@@ -585,17 +585,17 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
 
     const { data: classData, error } = await createClass(req.body);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
 
     if (req.file) {
         const { data: storageInfo, error: storageError } = await storeClassPdf(classData.id, req.file);
         if (storageError) {
-            return res.status(500).json({ error: storageError.message || 'Failed to store class PDF' });
+            return sendError(req, res, storageError, { status: 500, message: 'Failed to store class PDF' });
         }
         const { error: metaError } = await saveClassPdfMetadata(classData.id, storageInfo.path);
         if (metaError) {
-            return res.status(500).json({ error: metaError.message || 'Failed to update class PDF metadata' });
+            return sendError(req, res, metaError, { status: 500, message: 'Failed to update class PDF metadata' });
         }
     }
 
@@ -608,14 +608,14 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
 
     const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
-        return res.status(404).json({ error: fetchError?.message || 'Class not found' });
+        return sendError(req, res, fetchError, { status: 404, title: 'Not found', message: 'Class not found' });
     }
 
     // Authz: only the class creator or an admin may update
     const isAdminCaller = profile?.role === 'admin';
     const isOwner = !!profile?.id && profile.id === existingClass.created_by;
     if (!isAdminCaller && !isOwner) {
-        return res.status(403).json({ error: 'Not authorized' });
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'Not authorized' });
     }
 
     const image_crop = parseImageCrop(req.body.image_crop);
@@ -676,17 +676,17 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
 
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
-        return res.status(500).json({ error: error.message });
+        return sendError(req, res, error);
     }
 
     if (req.file) {
         const { data: storageInfo, error: storageError } = await storeClassPdf(id, req.file, { previousPath: existingClass.pdf_storage_path });
         if (storageError) {
-            return res.status(500).json({ error: storageError.message || 'Failed to store class PDF' });
+            return sendError(req, res, storageError, { status: 500, message: 'Failed to store class PDF' });
         }
         const { error: metaError } = await saveClassPdfMetadata(id, storageInfo.path);
         if (metaError) {
-            return res.status(500).json({ error: metaError.message || 'Failed to update class PDF metadata' });
+            return sendError(req, res, metaError, { status: 500, message: 'Failed to update class PDF metadata' });
         }
     } else if (removePdf && existingClass.pdf_storage_path) {
         await deletePdfObject({ bucket: CLASS_PDF_BUCKET, path: existingClass.pdf_storage_path });
