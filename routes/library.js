@@ -25,6 +25,7 @@ const {
 } = require('../util/supabase');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
+const { expandRulesUnlocksByTitle } = require('../util/rules-family');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -67,9 +68,9 @@ router.get('/', authOptional, async (req, res) => {
     if (user) {
         const { data: unlocks } = await listRulesPdfUnlocksForUser(user.id);
         if (Array.isArray(unlocks)) {
-            unlocksMap = new Map(
-                unlocks.map((unlock) => [unlock.rules_pdf_id, unlock])
-            );
+            // Family expansion: an unlock for any version of a title badges
+            // every version in the rendered list.
+            unlocksMap = expandRulesUnlocksByTitle(rules || [], unlocks);
         }
     }
 

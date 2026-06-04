@@ -143,6 +143,27 @@ const listRulesPdfUnlocksForUser = async (userId) => {
     return { data, error: null };
 };
 
+// Resolve the title family of a rules PDF: every version of the same product
+// shares a title (UNIQUE(edition, title); edition holds the version). Admin
+// client so the lookup isn't RLS-filtered. Falls back to the exact id on
+// failure so access checks degrade to current behavior.
+const getRulesPdfFamilyIds = async (rulesPdf) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('rules_pdfs')
+            .select('id')
+            .eq('title', rulesPdf.title);
+        if (error || !Array.isArray(data) || data.length === 0) {
+            if (error) console.error(error);
+            return [rulesPdf.id];
+        }
+        return data.map(r => r.id);
+    } catch (e) {
+        console.error(e);
+        return [rulesPdf.id];
+    }
+};
+
 const canViewRulesPdf = async (userContext = {}, rulesPdf) => {
     const { userId = null, role = null } = userContext;
 
@@ -158,25 +179,24 @@ const canViewRulesPdf = async (userContext = {}, rulesPdf) => {
         return { data: false, error: null };
     }
 
-    const { data, error } = await getRulesPdfUnlock(userId, rulesPdf.id);
+    // An unlock for any version of this title counts (see getRulesPdfFamilyIds).
+    // Admin read mirrors isClassUnlocked: the shared anon client carries no
+    // JWT, so RLS would hide the user's own unlock rows.
+    const familyIds = await getRulesPdfFamilyIds(rulesPdf);
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+        .from('rules_pdf_unlocks')
+        .select('rules_pdf_id, expires_at')
+        .eq('user_id', userId)
+        .in('rules_pdf_id', familyIds)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .limit(1);
+
     if (error) {
+        console.error(error);
         return { data: false, error };
     }
-
-    if (!data) {
-        return { data: false, error: null };
-    }
-
-    if (!data.expires_at) {
-        return { data: true, error: null };
-    }
-
-    const expiresAt = new Date(data.expires_at);
-    if (Number.isNaN(expiresAt.getTime())) {
-        return { data: false, error: null };
-    }
-
-    return { data: expiresAt > new Date(), error: null };
+    return { data: Array.isArray(data) && data.length > 0, error: null };
 };
 
 module.exports = {
