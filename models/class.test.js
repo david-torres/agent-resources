@@ -26,6 +26,7 @@ const makeClient = (tableToRows) => ({
             or() { return chain; },
             limit() { return chain; },
             order() { return chain; },
+            in() { return chain; },
             single() { return Promise.resolve(singleResult); },
             then(onFulfilled, onRejected) {
                 return Promise.resolve(result).then(onFulfilled, onRejected);

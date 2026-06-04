@@ -1,6 +1,7 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const crypto = require('crypto');
 const { sanitizeUrlFields } = require('../util/url');
+const { computeVersionFamily, expandIdsToFamilies } = require('../util/class-family');
 
 const applyClassFilters = (query, filters = {}) => {
     if (filters.name) {
@@ -90,17 +91,47 @@ const redeemUnlockCode = async (code, userId) => {
     return { data, error: null };
 };
 
+// Lean projection of all classes for version-family resolution. Admin client
+// so private forks don't break chain links. Returns null on any failure so
+// callers can degrade to exact-id behavior.
+const fetchClassFamilyRows = async () => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('classes')
+            .select('id, base_class_id, rules_edition');
+        if (error || !Array.isArray(data)) {
+            if (error) console.error(error);
+            return null;
+        }
+        return data;
+    } catch (e) {
+        console.error(e);
+        return null;
+    }
+};
+
+// Resolve the same-edition version family of a class (see util/class-family).
+// Falls back to a singleton set on error: unlock checks degrade to exact-id.
+const getVersionFamilyIds = async (classId) => {
+    const rows = await fetchClassFamilyRows();
+    if (!rows) return new Set([classId]);
+    return computeVersionFamily(rows, classId);
+};
+
 const isClassUnlocked = async (userId, classId) => {
     if (!userId || !classId) {
         return { data: false, error: null };
     }
+
+    // An unlock for any same-edition version of the class counts.
+    const familyIds = await getVersionFamilyIds(classId);
 
     const now = new Date().toISOString();
     const { data, error } = await supabaseAdmin
         .from('class_unlocks')
         .select('class_id, expires_at')
         .eq('user_id', userId)
-        .eq('class_id', classId)
+        .in('class_id', [...familyIds])
         .or(`expires_at.is.null,expires_at.gt.${now}`)
         .limit(1);
 
