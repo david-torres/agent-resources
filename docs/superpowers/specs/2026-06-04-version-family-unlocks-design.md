@@ -39,7 +39,7 @@ directions, but never across editions.
 
 ## Architecture
 
-### Pure core (`models/class.js`, unit-testable, no DB)
+### Pure core (`util/class-family.js`, unit-testable, no DB)
 
 - `computeVersionFamily(allClasses, classId)` → `Set<id>`
   BFS over same-edition `base_class_id` edges. Visited set guards against
