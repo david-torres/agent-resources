@@ -6,7 +6,8 @@ const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, delete
 const { supabaseAdmin } = require('../models/_base');
 const { statList, personalityMap } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
-const { getUnlockedClasses, getUnlockedClassIdsForUser } = require('../models/class');
+const { getUnlockedClassIdsForUser } = require('../models/class');
+const { filterClassListsByIds } = require('../util/class-filter');
 const { upgradeCharacterClass, findUpgradeTargetsFor } = require('../models/character');
 const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission, removeOffscreenMission, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { getProfileConduitCredits } = require('../models/profile');
@@ -75,16 +76,20 @@ const filterClassDataForUser = async (user) => {
   let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
   let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.abilities) ? c.abilities.map(a => a.name) : []]));
 
-  // If user provided, reduce to unlocked set
+  // If user provided, reduce to unlocked set. Unlocks match by class id and
+  // extend to same-edition version families (a v1 unlock covers its v2 fork)
+  // but never across editions — see util/class-family.js.
   if (user) {
-    const { data: unlocked } = await getUnlockedClasses(user.id);
-    if (Array.isArray(unlocked) && unlocked.length > 0) {
-      const allowed = new Set(unlocked.map(c => c.name));
-      const filterArr = arr => arr.filter(c => allowed.has(c.name));
-      const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowed.has(k)));
-      filteredAdvent = filterArr(filteredAdvent);
-      filteredAspirant = filterArr(filteredAspirant);
-      filteredPCC = filterArr(filteredPCC);
+    const { data: allowedIds } = await getUnlockedClassIdsForUser(user.id);
+    if (allowedIds && allowedIds.size > 0) {
+      const filtered = filterClassListsByIds(
+        { advent: filteredAdvent, aspirant: filteredAspirant, pcc: filteredPCC },
+        allowedIds
+      );
+      filteredAdvent = filtered.advent;
+      filteredAspirant = filtered.aspirant;
+      filteredPCC = filtered.pcc;
+      const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => filtered.allowedNames.has(k)));
       filteredGear = filterMap(filteredGear);
       filteredAbilities = filterMap(filteredAbilities);
     } else {
