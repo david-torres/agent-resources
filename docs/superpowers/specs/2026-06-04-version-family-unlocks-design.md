@@ -102,6 +102,28 @@ Unit tests for the pure core:
 Integration-level tests for `filterClassDataForUser` filtering logic: family
 members admitted, cross-edition same-name forks rejected.
 
+## Rules PDF unlocks (added 2026-06-04)
+
+The same family principle applies to rules PDFs. `rules_pdfs` has no
+`base_class_id`-style linkage; versions of the same product share a `title`
+(`UNIQUE(edition, title)`, where the `edition` column holds the version, e.g.
+v1/v2 of "Enclave: Advent"). The **family key is `title`**.
+
+- `canViewRulesPdf` (`models/rules.js`) — resolve same-title PDF ids via
+  `supabaseAdmin`, then check `rules_pdf_unlocks` with `.in('rules_pdf_id',
+  familyIds)` plus the standard expiry filter. Mirrors `isClassUnlocked`.
+  Falls back to the exact id on query failure.
+- Library list badges (`routes/library.js`) — pure helper
+  `expandRulesUnlocksByTitle(rules, unlocks)` in `util/rules-family.js` maps
+  each visible PDF to the best unlock in its title family (non-expiring
+  preferred, else latest expiry).
+- The starter grant (`STARTER_RULES_PDF_ID`, v1) stays unchanged — computed-
+  on-read expansion makes it cover v2 automatically.
+- Known edge: badge expansion only sees PDFs in the rendered list, so an
+  unlock pointing at an *inactive* PDF won't badge its active siblings for
+  non-admins. The serving gate (`canViewRulesPdf`) queries by title in the DB
+  and is not affected. Accepted.
+
 ## Out of scope
 
 - Upgrade-target eligibility (`findUpgradeTargetsFor` stays visibility-gated,

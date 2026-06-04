@@ -676,7 +676,309 @@ Replaces name-based unlock matching, which leaked cross-edition forks
 
 ---
 
-### Task 7: Final verification
+### Task 7: Family-aware rules PDF unlocks
+
+Rules PDFs version-family by **title**: `rules_pdfs` is `UNIQUE(edition, title)` and the
+`edition` column holds the version (v1/v2 of "Enclave: Advent"). An unlock for any
+version of a title applies to every version of that title. The starter signup grant
+(v1 only) stays unchanged — expansion is computed on read.
+
+**Files:**
+- Create: `util/rules-family.js`
+- Test: `util/rules-family.test.js`
+- Modify: `models/rules.js` (`canViewRulesPdf`, lines 146-180)
+- Modify: `routes/library.js` (badge map, lines 66-74)
+- Test: `models/rules-unlock-family.test.js`
+
+- [ ] **Step 1: Write the failing tests for the pure helper**
+
+Create `util/rules-family.test.js`:
+
+```js
+const { test, expect, describe } = require('bun:test');
+const { expandRulesUnlocksByTitle } = require('./rules-family');
+
+const pdf = (id, title, edition) => ({ id, title, edition });
+
+describe('expandRulesUnlocksByTitle', () => {
+    const rules = [
+        pdf('adv-v1', 'Enclave: Advent', 'v1'),
+        pdf('adv-v2', 'Enclave: Advent', 'v2'),
+        pdf('other', 'Enclave: Aspirant', 'v1')
+    ];
+
+    test('an unlock for one version maps to every version of that title', () => {
+        const unlocks = [{ rules_pdf_id: 'adv-v1', expires_at: null, unlocked_at: 't' }];
+        const map = expandRulesUnlocksByTitle(rules, unlocks);
+        expect(map.get('adv-v1')).toBeTruthy();
+        expect(map.get('adv-v2')).toBeTruthy();
+        expect(map.has('other')).toBe(false);
+    });
+
+    test('does not leak across titles', () => {
+        const unlocks = [{ rules_pdf_id: 'other', expires_at: null }];
+        const map = expandRulesUnlocksByTitle(rules, unlocks);
+        expect(map.has('adv-v1')).toBe(false);
+        expect(map.get('other')).toBeTruthy();
+    });
+
+    test('prefers a non-expiring unlock over an expiring one', () => {
+        const unlocks = [
+            { rules_pdf_id: 'adv-v1', expires_at: '2026-07-01T00:00:00Z' },
+            { rules_pdf_id: 'adv-v2', expires_at: null }
+        ];
+        const map = expandRulesUnlocksByTitle(rules, unlocks);
+        expect(map.get('adv-v1').expires_at).toBeNull();
+    });
+
+    test('otherwise prefers the latest expiry', () => {
+        const unlocks = [
+            { rules_pdf_id: 'adv-v1', expires_at: '2026-07-01T00:00:00Z' },
+            { rules_pdf_id: 'adv-v2', expires_at: '2026-08-01T00:00:00Z' }
+        ];
+        const map = expandRulesUnlocksByTitle(rules, unlocks);
+        expect(map.get('adv-v1').expires_at).toBe('2026-08-01T00:00:00Z');
+    });
+
+    test('unlock for a PDF not in the visible list is ignored', () => {
+        const unlocks = [{ rules_pdf_id: 'inactive-id', expires_at: null }];
+        const map = expandRulesUnlocksByTitle(rules, unlocks);
+        expect(map.size).toBe(0);
+    });
+
+    test('empty unlocks produce an empty map', () => {
+        expect(expandRulesUnlocksByTitle(rules, []).size).toBe(0);
+    });
+});
+```
+
+- [ ] **Step 2: Run tests to verify they fail**
+
+Run: `bun test util/rules-family.test.js`
+Expected: FAIL — `Cannot find module './rules-family'`
+
+- [ ] **Step 3: Implement the pure helper**
+
+Create `util/rules-family.js`:
+
+```js
+// Rules-PDF version families: versions of the same product share a title
+// (rules_pdfs is UNIQUE(edition, title); the edition column holds the
+// version). An unlock for any version applies to every version of that
+// title — mirrors class version-family unlocks (util/class-family.js).
+
+// rules: array of { id, title } (the rendered PDF list)
+// unlocks: array of { rules_pdf_id, expires_at, ... }
+// Returns Map of rules_pdf_id -> best unlock covering it (non-expiring
+// preferred, else latest expiry).
+const expandRulesUnlocksByTitle = (rules, unlocks) => {
+    const titleById = new Map(rules.map(r => [r.id, r.title]));
+
+    const better = (a, b) => {
+        if (!a) return b;
+        if (!a.expires_at) return a;
+        if (!b.expires_at) return b;
+        return new Date(a.expires_at) >= new Date(b.expires_at) ? a : b;
+    };
+
+    const bestByTitle = new Map();
+    for (const unlock of unlocks) {
+        const title = titleById.get(unlock.rules_pdf_id);
+        if (!title) continue; // unlock for a PDF outside the visible list
+        bestByTitle.set(title, better(bestByTitle.get(title), unlock));
+    }
+
+    const covered = new Map();
+    for (const rule of rules) {
+        const unlock = bestByTitle.get(rule.title);
+        if (unlock) covered.set(rule.id, unlock);
+    }
+    return covered;
+};
+
+module.exports = { expandRulesUnlocksByTitle };
+```
+
+- [ ] **Step 4: Run tests to verify they pass**
+
+Run: `bun test util/rules-family.test.js`
+Expected: PASS (6 tests)
+
+- [ ] **Step 5: Write the failing model test**
+
+Create `models/rules-unlock-family.test.js` (same recording-client pattern as
+`models/class-unlock-family.test.js`):
+
+```js
+const { mock, test, expect, afterAll } = require('bun:test');
+
+const realBase = require('./_base');
+
+const makeRecordingClient = (tableToRows, inCalls) => ({
+    from(table) {
+        const rows = tableToRows[table] ?? [];
+        const result = { data: rows, error: null };
+        const chain = {
+            select() { return chain; },
+            eq() { return chain; },
+            or() { return chain; },
+            limit() { return chain; },
+            order() { return chain; },
+            in(column, values) {
+                inCalls.push({ table, column, values });
+                return chain;
+            },
+            single() { return Promise.resolve({ data: rows[0] ?? null, error: null }); },
+            maybeSingle() { return Promise.resolve({ data: rows[0] ?? null, error: null }); },
+            then(onFulfilled, onRejected) {
+                return Promise.resolve(result).then(onFulfilled, onRejected);
+            }
+        };
+        return chain;
+    }
+});
+
+const inCalls = [];
+const fakeClient = makeRecordingClient({
+    rules_pdfs: [
+        { id: 'adv-v1', title: 'Enclave: Advent', edition: 'v1' },
+        { id: 'adv-v2', title: 'Enclave: Advent', edition: 'v2' }
+    ],
+    rules_pdf_unlocks: [{ rules_pdf_id: 'adv-v1', expires_at: null }]
+}, inCalls);
+
+mock.module('./_base', () => ({
+    supabase: fakeClient,
+    supabaseAdmin: fakeClient,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeClient
+}));
+
+delete require.cache[require.resolve('./rules')];
+const { canViewRulesPdf } = require('./rules');
+
+afterAll(() => {
+    mock.module('./_base', () => realBase);
+    delete require.cache[require.resolve('./rules')];
+});
+
+test('canViewRulesPdf honors unlocks across the title family', async () => {
+    inCalls.length = 0;
+    // User holds a v1 unlock; viewing the v2 PDF must be allowed.
+    const result = await canViewRulesPdf(
+        { userId: 'u1', role: null },
+        { id: 'adv-v2', title: 'Enclave: Advent', storage_path: 'p.pdf' }
+    );
+    expect(result).toEqual({ data: true, error: null });
+
+    const unlockCall = inCalls.find(c => c.table === 'rules_pdf_unlocks' && c.column === 'rules_pdf_id');
+    expect(unlockCall).toBeTruthy();
+    expect(new Set(unlockCall.values)).toEqual(new Set(['adv-v1', 'adv-v2']));
+});
+```
+
+- [ ] **Step 6: Run the model test to verify it fails**
+
+Run: `bun test models/rules-unlock-family.test.js`
+Expected: FAIL — `unlockCall` is undefined (current implementation queries by exact id via `getRulesPdfUnlock`)
+
+- [ ] **Step 7: Implement family-aware `canViewRulesPdf` in `models/rules.js`**
+
+Add above `canViewRulesPdf`:
+
+```js
+// Resolve the title family of a rules PDF: every version of the same product
+// shares a title (UNIQUE(edition, title); edition holds the version). Admin
+// client so the lookup isn't RLS-filtered. Falls back to the exact id on
+// failure so access checks degrade to current behavior.
+const getRulesPdfFamilyIds = async (rulesPdf) => {
+    try {
+        const { data, error } = await supabaseAdmin
+            .from('rules_pdfs')
+            .select('id')
+            .eq('title', rulesPdf.title);
+        if (error || !Array.isArray(data) || data.length === 0) {
+            if (error) console.error(error);
+            return [rulesPdf.id];
+        }
+        return data.map(r => r.id);
+    } catch (e) {
+        console.error(e);
+        return [rulesPdf.id];
+    }
+};
+```
+
+Replace the unlock lookup in `canViewRulesPdf` (everything from the
+`getRulesPdfUnlock` call to the end of the function):
+
+```js
+    // An unlock for any version of this title counts (see getRulesPdfFamilyIds).
+    // Admin read mirrors isClassUnlocked: the shared anon client carries no
+    // JWT, so RLS would hide the user's own unlock rows.
+    const familyIds = await getRulesPdfFamilyIds(rulesPdf);
+    const now = new Date().toISOString();
+    const { data, error } = await supabaseAdmin
+        .from('rules_pdf_unlocks')
+        .select('rules_pdf_id, expires_at')
+        .eq('user_id', userId)
+        .in('rules_pdf_id', familyIds)
+        .or(`expires_at.is.null,expires_at.gt.${now}`)
+        .limit(1);
+
+    if (error) {
+        console.error(error);
+        return { data: false, error };
+    }
+    return { data: Array.isArray(data) && data.length > 0, error: null };
+};
+```
+
+(`getRulesPdfUnlock` stays — the admin manage UI may still need exact-pair reads.)
+
+- [ ] **Step 8: Wire the library badge map in `routes/library.js`**
+
+Add the require near the other requires at the top:
+
+```js
+const { expandRulesUnlocksByTitle } = require('../util/rules-family');
+```
+
+Replace the `unlocksMap` construction (lines 66-74):
+
+```js
+    let unlocksMap = new Map();
+    if (user) {
+        const { data: unlocks } = await listRulesPdfUnlocksForUser(user.id);
+        if (Array.isArray(unlocks)) {
+            // Family expansion: an unlock for any version of a title badges
+            // every version in the rendered list.
+            unlocksMap = expandRulesUnlocksByTitle(rules || [], unlocks);
+        }
+    }
+```
+
+(The downstream `rulesWithAccess` mapping is unchanged — it already reads from `unlocksMap`.)
+
+- [ ] **Step 9: Run the suite**
+
+Run: `bun test`
+Expected: PASS — new tests green, no regressions
+
+- [ ] **Step 10: Commit**
+
+```bash
+git add util/rules-family.js util/rules-family.test.js models/rules.js models/rules-unlock-family.test.js routes/library.js
+git commit -m "feat: rules PDF unlocks apply across title version families
+
+A starter v1 unlock now opens the v2 rules PDF (and badges it in the
+library). Family key is title: rules_pdfs is UNIQUE(edition, title) with
+edition holding the version."
+```
+
+---
+
+### Task 8: Final verification
 
 - [ ] **Step 1: Run the entire suite once more**
 
@@ -690,5 +992,6 @@ Confirm each spec requirement maps to shipped code:
 - `isClassUnlocked` family-aware → Task 3 (covers class view, PDF via `canViewClassPdf`, self-unlock display)
 - `getUnlockedClassIdsForUser` expanded → Task 4 (covers agent access)
 - Dropdown id-based + edition leak closed → Tasks 5-6
+- Rules PDF title families (canViewRulesPdf + library badges) → Task 7
 - `getUnlockedClasses` untouched → confirm with `git diff main -- models/class.js` showing no changes to that function
-- Error fallback to direct-id behavior → `fetchClassFamilyRows` null paths (Tasks 3-4)
+- Error fallback to direct-id behavior → `fetchClassFamilyRows` null paths (Tasks 3-4), `getRulesPdfFamilyIds` fallback (Task 7)
