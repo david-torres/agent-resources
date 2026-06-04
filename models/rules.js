@@ -82,20 +82,6 @@ const listRulesPdfUnlocks = async (rulesPdfId) => {
     return { data, error: null };
 };
 
-const getRulesPdfUnlock = async (userId, rulesPdfId) => {
-    const { data, error } = await supabase
-        .from('rules_pdf_unlocks')
-        .select('user_id, profile_id, expires_at, unlocked_at')
-        .eq('user_id', userId)
-        .eq('rules_pdf_id', rulesPdfId)
-        .maybeSingle();
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
-};
-
 const upsertRulesPdfUnlock = async ({ userId, profileId, rulesPdfId, expiresAt, grantedBy }) => {
     const payload = {
         user_id: userId,
