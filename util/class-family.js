@@ -39,4 +39,16 @@ const computeVersionFamily = (classes, classId) => {
   return family;
 };
 
-module.exports = { computeVersionFamily };
+// Expand a set of unlocked class ids to include every member of each id's
+// version family.
+const expandIdsToFamilies = (classes, ids) => {
+  const expanded = new Set();
+  for (const id of ids) {
+    for (const member of computeVersionFamily(classes, id)) {
+      expanded.add(member);
+    }
+  }
+  return expanded;
+};
+
+module.exports = { computeVersionFamily, expandIdsToFamilies };

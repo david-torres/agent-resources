@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { computeVersionFamily } = require('./class-family');
+const { computeVersionFamily, expandIdsToFamilies } = require('./class-family');
 
 // Minimal class row shape used by the family resolver.
 const cls = (id, base = null, edition = 'advent') => ({
@@ -63,5 +63,31 @@ describe('computeVersionFamily', () => {
   test('base pointing at a missing class is ignored', () => {
     const classes = [cls('v2', 'deleted-id')];
     expect(computeVersionFamily(classes, 'v2')).toEqual(new Set(['v2']));
+  });
+});
+
+describe('expandIdsToFamilies', () => {
+  test('expands each unlocked id to its whole family', () => {
+    const classes = [
+      cls('lib-v1'), cls('lib-v2', 'lib-v1'),
+      cls('gun-v1'), cls('gun-v2', 'gun-v1'),
+      cls('thane-v1')
+    ];
+    const expanded = expandIdsToFamilies(classes, new Set(['lib-v1', 'thane-v1']));
+    expect(expanded).toEqual(new Set(['lib-v1', 'lib-v2', 'thane-v1']));
+  });
+
+  test('does not cross editions when expanding', () => {
+    const classes = [
+      cls('adv-v1'),
+      cls('adv-v2', 'adv-v1'),
+      cls('asp-v1', 'adv-v1', 'aspirant')
+    ];
+    const expanded = expandIdsToFamilies(classes, new Set(['adv-v1']));
+    expect(expanded).toEqual(new Set(['adv-v1', 'adv-v2']));
+  });
+
+  test('empty input set stays empty', () => {
+    expect(expandIdsToFamilies([cls('a')], new Set())).toEqual(new Set());
   });
 });
