@@ -6,6 +6,8 @@ const realBase = require('./_base');
 
 // Like class.test.js's makeClient, but records `.in()` calls so tests can
 // assert which ids the unlock query was given.
+// NOTE: the fake ignores filter args, so negative cases (expired/missing unlocks)
+// can't be asserted in this file; they're covered by util/class-family.test.js and class.test.js.
 const makeRecordingClient = (tableToRows, inCalls) => ({
     from(table) {
         const rows = tableToRows[table] ?? [];
@@ -52,7 +54,7 @@ mock.module('./_base', () => ({
 
 // Bust the cache in case a sibling test file already loaded `./class`.
 delete require.cache[require.resolve('./class')];
-const { isClassUnlocked } = require('./class');
+const { isClassUnlocked, getUnlockedClassIdsForUser } = require('./class');
 
 afterAll(() => {
     mock.module('./_base', () => realBase);
@@ -70,4 +72,12 @@ test('isClassUnlocked checks the whole same-edition version family', async () =>
     const unlockCall = inCalls.find(c => c.table === 'class_unlocks' && c.column === 'class_id');
     expect(unlockCall).toBeTruthy();
     expect(new Set(unlockCall.values)).toEqual(new Set(['lib-v1', 'lib-v2']));
+});
+
+test('getUnlockedClassIdsForUser expands direct unlocks to version families', async () => {
+    const { data, error } = await getUnlockedClassIdsForUser('u1');
+    expect(error).toBeNull();
+    expect(data.has('lib-v1')).toBe(true);   // direct unlock
+    expect(data.has('lib-v2')).toBe(true);   // same-edition fork included
+    expect(data.has('lib-asp')).toBe(false); // edition fork excluded
 });

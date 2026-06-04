@@ -281,10 +281,18 @@ const getUnlockedClassIdsForUser = async (userId) => {
         return { data: null, error };
     }
 
-    return {
-        data: new Set((data || []).map((entry) => entry.class_id)),
-        error: null
-    };
+    const directIds = new Set((data || []).map((entry) => entry.class_id));
+    if (directIds.size === 0) {
+        return { data: directIds, error: null };
+    }
+
+    // An unlock applies to the whole same-edition version family. Degrade to
+    // direct ids if the classes projection can't be loaded.
+    const classRows = await fetchClassFamilyRows();
+    if (!classRows) {
+        return { data: directIds, error: null };
+    }
+    return { data: expandIdsToFamilies(classRows, directIds), error: null };
 };
 
 const resolveClassAgentAccess = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
