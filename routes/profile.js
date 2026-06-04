@@ -61,6 +61,9 @@ router.get('/view/:name', authOptional, async (req, res) => {
   if (classesError) {
     return sendError(req, res, classesError);
   }
+  const classList = Array.isArray(publicClasses) ? publicClasses : [];
+  const releasedClasses = classList.filter(cls => !cls.is_player_created);
+  const pccClasses = classList.filter(cls => cls.is_player_created);
   res.render('profile-view', {
     user,
     profile,
@@ -68,6 +71,8 @@ router.get('/view/:name', authOptional, async (req, res) => {
     authOptional: true,
     publicCharacters,
     publicClasses,
+    releasedClasses,
+    pccClasses,
     activeNav: 'profile',
     breadcrumbs: [
       { label: viewProfile.name, href: `/profile/view/${encodeURIComponent(name)}` }
