@@ -27,6 +27,9 @@
             {{#if this.class_id}}
               Unlocked class <a class="tag button is-black" href="/classes/{{this.class_id}}/{{this.class_name}}">{{this.class_name}}</a>
             {{/if}}
+            {{#if this.pdf_id}}
+              Unlocked rules PDF <a class="tag button is-black" href="/library">{{#if this.pdf_title}}{{this.pdf_title}}{{else}}View in Library{{/if}}</a>
+            {{/if}}
           </div>
         {{else}}
           <div class="notification is-danger is-light">
@@ -41,7 +44,7 @@
     <div class="card">
       <div class="card-content">
         <p class="content">
-          Paste one or more unlock codes you received. You can separate them with newlines or commas.
+          Paste one or more unlock codes you received — codes can unlock classes or rules PDFs. You can separate them with newlines or commas.
         </p>
       </div>
     </div>

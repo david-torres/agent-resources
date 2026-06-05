@@ -6,6 +6,7 @@ registerUuidParams(router, ['id']);
 const {
     getClasses,
     getClass,
+    getRulesPdf,
     createClass,
     updateClass,
     duplicateClass,
@@ -30,6 +31,7 @@ const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
+const { redeemAnyCode } = require('../util/redeem-code');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -201,19 +203,30 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
     const results = [];
     for (const code of codes) {
         try {
-            const { data: classId, error } = await redeemUnlockCode(code, userId);
+            const { type, id, error } = await redeemAnyCode(code, userId);
             if (error) {
                 results.push({ code, success: false, error: error.message });
                 continue;
             }
+            if (type === 'pdf') {
+                let pdfTitle = null;
+                try {
+                    const { data: pdfData } = await getRulesPdf(id);
+                    pdfTitle = pdfData?.title || null;
+                } catch (_) {
+                    // ignore
+                }
+                results.push({ code, success: true, type, pdf_id: id, pdf_title: pdfTitle });
+                continue;
+            }
             let className = null;
             try {
-                const { data: classData } = await getClass(classId, res.locals.supabase);
+                const { data: classData } = await getClass(id, res.locals.supabase);
                 className = classData?.name || null;
             } catch (_) {
                 // ignore
             }
-            results.push({ code, success: true, class_id: classId, class_name: className });
+            results.push({ code, success: true, type, class_id: id, class_name: className });
         } catch (e) {
             results.push({ code, success: false, error: e?.message || 'Unknown error' });
         }
