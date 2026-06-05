@@ -15,6 +15,8 @@ const {
     listRulesPdfUnlocksForUser,
     upsertRulesPdfUnlock,
     deleteRulesPdfUnlock,
+    createRulesPdfUnlockCodes,
+    listRulesPdfUnlockCodes,
     storeRulesPdf,
     deletePdfObject,
     getSignedPdfUrl,
@@ -263,6 +265,48 @@ router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req,
     }
 
     return res.status(204).send();
+});
+
+// Admin: generate unlock codes for a rules PDF
+router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { expires_at, max_uses, amount } = req.body;
+    const createdByProfileId = res.locals.profile.id;
+    const count = parseInt(amount, 10) || 1;
+    const { data, error } = await createRulesPdfUnlockCodes({
+        rulesPdfId: id,
+        createdByProfileId,
+        expiresAt: parseExpiresAt(expires_at),
+        maxUses: parseInt(max_uses, 10) || 1,
+        amount: count
+    });
+    if (error) return sendError(req, res, error);
+
+    if (count > 1) {
+        return res.render('partials/unlock-code-result', {
+            layout: false,
+            codes: data
+        });
+    }
+
+    if (!data || data.length === 0) {
+        return sendError(req, res, null, { status: 400, message: 'Unlock code creation returned no rows' });
+    }
+    const codeRow = data[0];
+    return res.render('partials/unlock-code-result', {
+        layout: false,
+        code: codeRow.code,
+        max_uses: codeRow.max_uses,
+        expires_at: codeRow.expires_at
+    });
+});
+
+// Admin: list unlock codes for a rules PDF
+router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+    const { id } = req.params;
+    const { data, error } = await listRulesPdfUnlockCodes(id, res.locals.supabase);
+    if (error) return sendError(req, res, error);
+    return res.json(data);
 });
 
 router.get('/:id/view', authOptional, async (req, res) => {
