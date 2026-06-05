@@ -1,4 +1,5 @@
 const { supabase, supabaseAdmin } = require('./_base');
+const crypto = require('crypto');
 
 const getRulesPdfs = async ({ includeInactive = false } = {}) => {
     let query = supabase
@@ -129,6 +130,52 @@ const listRulesPdfUnlocksForUser = async (userId) => {
     return { data, error: null };
 };
 
+const createRulesPdfUnlockCodes = async ({ rulesPdfId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
+    const inserts = Array.from({ length: amount }, () => ({
+        code: crypto.randomBytes(12).toString('base64url'),
+        rules_pdf_id: rulesPdfId,
+        created_by: createdByProfileId,
+        expires_at: expiresAt,
+        max_uses: maxUses
+    }));
+
+    // authz: callers (admin-only route) gate access; createdByProfileId is set server-side
+    const { data, error } = await supabaseAdmin
+        .from('rules_pdf_unlock_codes')
+        .insert(inserts)
+        .select();
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
+const listRulesPdfUnlockCodes = async (rulesPdfId, client = supabase) => {
+    const { data, error } = await client
+        .from('rules_pdf_unlock_codes')
+        .select('*')
+        .eq('rules_pdf_id', rulesPdfId)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
+const redeemRulesPdfUnlockCode = async (code, userId) => {
+    const { data, error } = await supabase
+        .rpc('redeem_rules_pdf_code_for_user', { p_code: code, p_user_id: userId });
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
 // Resolve the title family of a rules PDF: every version of the same product
 // shares a title (UNIQUE(edition, title); edition holds the version). Admin
 // client so the lookup isn't RLS-filtered. Falls back to the exact id on
@@ -194,6 +241,9 @@ module.exports = {
     listRulesPdfUnlocksForUser,
     upsertRulesPdfUnlock,
     deleteRulesPdfUnlock,
+    createRulesPdfUnlockCodes,
+    listRulesPdfUnlockCodes,
+    redeemRulesPdfUnlockCode,
     canViewRulesPdf
 };
 
