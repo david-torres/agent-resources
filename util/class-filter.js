@@ -12,4 +12,22 @@ const filterClassListsByIds = (lists, allowedIds) => {
   return { advent, aspirant, pcc, allowedNames };
 };
 
-module.exports = { filterClassListsByIds };
+// Split a profile's public classes into the two sections shown on the profile
+// view. A PCC that has been released (status='release') has been incorporated
+// into the game, so it graduates into the official "released" section and drops
+// out of the PCC section — no class appears in both.
+const partitionProfileClasses = (classes) => {
+  const list = Array.isArray(classes) ? classes : [];
+  const released = [];
+  const pcc = [];
+  for (const cls of list) {
+    if (cls.is_player_created && cls.status !== 'release') {
+      pcc.push(cls);
+    } else {
+      released.push(cls);
+    }
+  }
+  return { released, pcc };
+};
+
+module.exports = { filterClassListsByIds, partitionProfileClasses };

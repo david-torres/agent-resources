@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { filterClassListsByIds } = require('./class-filter');
+const { filterClassListsByIds, partitionProfileClasses } = require('./class-filter');
 
 const mk = (id, name, edition = 'advent') => ({ id, name, rules_edition: edition });
 
@@ -32,5 +32,52 @@ describe('filterClassListsByIds', () => {
     expect(out.aspirant).toEqual([]);
     expect(out.pcc).toEqual([]);
     expect(out.allowedNames).toEqual(new Set());
+  });
+});
+
+describe('partitionProfileClasses', () => {
+  const cls = (id, { pcc = false, status = 'release' } = {}) =>
+    ({ id, is_player_created: pcc, status });
+
+  test('official (non-PCC) classes go to released regardless of status', () => {
+    const list = [cls('off-rel'), cls('off-alpha', { status: 'alpha' })];
+    const { released, pcc } = partitionProfileClasses(list);
+    expect(released.map(c => c.id)).toEqual(['off-rel', 'off-alpha']);
+    expect(pcc).toEqual([]);
+  });
+
+  test('a released PCC is incorporated into the released (official) section', () => {
+    const list = [cls('pcc-rel', { pcc: true, status: 'release' })];
+    const { released, pcc } = partitionProfileClasses(list);
+    expect(released.map(c => c.id)).toEqual(['pcc-rel']);
+    expect(pcc).toEqual([]);
+  });
+
+  test('non-released PCCs (alpha/beta) stay in the PCC section only', () => {
+    const list = [
+      cls('pcc-alpha', { pcc: true, status: 'alpha' }),
+      cls('pcc-beta', { pcc: true, status: 'beta' })
+    ];
+    const { released, pcc } = partitionProfileClasses(list);
+    expect(released).toEqual([]);
+    expect(pcc.map(c => c.id)).toEqual(['pcc-alpha', 'pcc-beta']);
+  });
+
+  test('no class appears in both sections', () => {
+    const list = [
+      cls('off'),
+      cls('pcc-rel', { pcc: true, status: 'release' }),
+      cls('pcc-beta', { pcc: true, status: 'beta' })
+    ];
+    const { released, pcc } = partitionProfileClasses(list);
+    const ids = [...released, ...pcc].map(c => c.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(released.map(c => c.id)).toEqual(['off', 'pcc-rel']);
+    expect(pcc.map(c => c.id)).toEqual(['pcc-beta']);
+  });
+
+  test('handles non-array input', () => {
+    expect(partitionProfileClasses(null)).toEqual({ released: [], pcc: [] });
+    expect(partitionProfileClasses(undefined)).toEqual({ released: [], pcc: [] });
   });
 });

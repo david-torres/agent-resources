@@ -4,6 +4,7 @@ const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
 const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles, getProfileConduitCredits } = require('../util/supabase');
 const { parseImageCrop } = require('../util/crop');
+const { partitionProfileClasses } = require('../util/class-filter');
 const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
 const { getProfileBadges } = require('../models/badge');
@@ -70,9 +71,7 @@ router.get('/view/:name', authOptional, async (req, res) => {
   if (classesError) {
     return sendError(req, res, classesError);
   }
-  const classList = Array.isArray(publicClasses) ? publicClasses : [];
-  const releasedClasses = classList.filter(cls => !cls.is_player_created);
-  const pccClasses = classList.filter(cls => cls.is_player_created);
+  const { released: releasedClasses, pcc: pccClasses } = partitionProfileClasses(publicClasses);
   let badges = null;
   try {
     const { data } = await getProfileBadges(viewProfile.id);
