@@ -92,53 +92,62 @@
 
 <!-- Class List -->
 <div class="columns is-multiline" id="classList">
-  <!-- loop over classes -->
-  {{#each classes}}
+  <!-- loop over version-collapsed class groups -->
+  {{#each classGroups}}
   <div class="column is-3">
     <div class="card">
-      {{#if this.image_url}}
+      {{#if this.primary.image_url}}
       <div class="card-image">
-        <a href="/classes/{{this.id}}/{{this.name}}">
+        <a href="/classes/{{this.primary.id}}/{{this.primary.name}}">
           <div
             class="image-crop-render"
             data-cropped-image
-            data-image-src="{{this.image_url}}"
-            data-crop-x="{{this.image_crop.x}}"
-            data-crop-y="{{this.image_crop.y}}"
-            data-crop-width="{{this.image_crop.width}}"
-            data-crop-height="{{this.image_crop.height}}"
+            data-image-src="{{this.primary.image_url}}"
+            data-crop-x="{{this.primary.image_crop.x}}"
+            data-crop-y="{{this.primary.image_crop.y}}"
+            data-crop-width="{{this.primary.image_crop.width}}"
+            data-crop-height="{{this.primary.image_crop.height}}"
             role="img"
-            aria-label="{{this.name}}"
+            aria-label="{{this.primary.name}}"
           ></div>
         </a>
       </div>
       {{/if}}
       <div class="card-content">
-        <h5 class="title is-5"><a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
-          {{#if (and ../isAdmin (not this.is_public))}}
+        <h5 class="title is-5"><a href="/classes/{{this.primary.id}}/{{this.primary.name}}">{{this.primary.name}}</a>
+          {{#if (and ../isAdmin (not this.primary.is_public))}}
           <span class="tag is-dark is-light ml-2" title="Not public — only admins can see this">Private</span>
           {{/if}}
-          {{#if (eq this.status 'release')}}
+          {{#if (eq this.primary.status 'release')}}
           <span class="tag is-success is-light ml-2">
             <span class="icon is-small"><i class="fas fa-star"></i></span>
           </span>
           {{/if}}
-          {{#if (eq this.status 'beta')}}
+          {{#if (eq this.primary.status 'beta')}}
           <span class="tag is-warning is-light ml-2">
             <span class="icon is-small"><i class="fas fa-flask"></i></span>
           </span>
           {{/if}}
-          {{#if (eq this.status 'alpha')}}
+          {{#if (eq this.primary.status 'alpha')}}
           <span class="tag is-danger is-light ml-2">
             <span class="icon is-small"><i class="fas fa-flask"></i></span>
           </span>
           {{/if}}
         </h5>
-        <p class="subtitle is-7 has-text-grey mb-2">{{capitalize this.rules_edition}} {{this.rules_version}}</p>
-        {{#if this.teaser}}
-          <p>{{this.teaser}}</p>
+        <p class="subtitle is-7 has-text-grey mb-2">{{capitalize this.primary.rules_edition}} {{this.primary.rules_version}}</p>
+        {{#if this.previous.length}}
+        <p class="is-size-7 mb-2">
+          Previous:
+          {{#each this.previous}}
+          <a class="tag is-light ml-1" href="/classes/{{this.id}}/{{this.name}}">{{this.rules_version}}</a>
+          {{/each}}
+        </p>
+        {{/if}}
+        {{#if this.primary.teaser}}
+          <p>{{this.primary.teaser}}</p>
         {{/if}}
       </div>
     </div>
   </div>
   {{/each}}
+</div>
