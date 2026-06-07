@@ -1,0 +1,64 @@
+// Diff-based reconciliation for character child tables (traits, class_gear,
+// class_abilities, character_perks). Replaces delete-then-insert so surviving
+// rows keep their UUIDs (and anything referencing them stays valid).
+// See docs/superpowers/specs/2026-06-07-child-table-reconciliation-design.md.
+
+// Desired items omit optional fields (undefined); the persisted value for an
+// omitted field is null — treat them as equal.
+const fieldEqual = (a, b) => (a ?? null) === (b ?? null);
+
+/**
+ * Greedy multiset diff between existing child rows and desired items.
+ *
+ * keyOf(rowOrItem)  -> natural-key string used for matching.
+ * rowFields(item)   -> column values to persist (insert payload minus
+ *                      character_id; also the fields compared for updates).
+ *
+ * Returns { toInsert, toUpdate, toDelete }:
+ *   toInsert — rowFields() objects for unmatched desired items
+ *   toUpdate — { id, ...changedFields } for matched rows that differ
+ *   toDelete — ids of existing rows with no desired counterpart
+ *
+ * Duplicates need no special casing: existing rows queue FIFO per key, so two
+ * identical desired items consume two existing rows (or insert the shortfall).
+ */
+function diffChildRows(existingRows, desiredItems, { keyOf, rowFields }) {
+  const existing = Array.isArray(existingRows) ? existingRows : [];
+  const desired = Array.isArray(desiredItems) ? desiredItems : [];
+
+  const byKey = new Map();
+  for (const row of existing) {
+    const key = keyOf(row);
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(row);
+  }
+
+  const toInsert = [];
+  const toUpdate = [];
+
+  for (const item of desired) {
+    const fields = rowFields(item);
+    const queue = byKey.get(keyOf(item));
+    const match = queue && queue.length > 0 ? queue.shift() : null;
+    if (!match) {
+      toInsert.push(fields);
+      continue;
+    }
+    const changes = {};
+    for (const [k, v] of Object.entries(fields)) {
+      if (!fieldEqual(v, match[k])) changes[k] = v ?? null;
+    }
+    if (Object.keys(changes).length > 0) {
+      toUpdate.push({ id: match.id, ...changes });
+    }
+  }
+
+  const toDelete = [];
+  for (const queue of byKey.values()) {
+    for (const row of queue) toDelete.push(row.id);
+  }
+
+  return { toInsert, toUpdate, toDelete };
+}
+
+module.exports = { diffChildRows };
