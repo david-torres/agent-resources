@@ -549,9 +549,13 @@ const setCharacterTraits = async (id, traits) => {
     return { data: null, error: fetchError };
   }
 
-  const desired = (Array.isArray(traits) ? traits : []).map(name => ({ name }));
+  // Drop empty/missing slots so we never persist null- or ''-named traits
+  // (the form always submits three non-empty traits; this guards other callers).
+  const desired = (Array.isArray(traits) ? traits : [])
+    .filter(name => name != null && name !== '')
+    .map(name => ({ name }));
   const diff = diffChildRows(existing, desired, {
-    keyOf: r => `${r.name}`,
+    keyOf: r => r.name,
     rowFields: item => ({ name: item.name })
   });
   return applyChildDiff('traits', id, diff);
