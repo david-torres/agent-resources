@@ -4,6 +4,7 @@ const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern, validateAbilityPerks } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
+const { remapPerkAbilityIds } = require('../util/ability-perks');
 const { listOffscreenMissions } = require('./offscreen-mission');
 
 // Resolve the rules version a character should be rendered/validated against.
@@ -332,6 +333,11 @@ const updateCharacter = async (id, characterReq, profile) => {
 
   // handle class abilities
   const classAbilities = characterReq.abilities;
+  // Snapshot existing ability rows: setCharacterAbilities replaces them with
+  // fresh UUIDs, but submitted ability_perks reference the old row ids (the
+  // form bakes them into hidden inputs at render time). We remap old→new by
+  // name+class_id below before persisting perks.
+  const previousAbilities = Array.isArray(characterData.abilities) ? characterData.abilities : [];
   delete characterReq.abilities;
   delete characterData.abilities;
 
@@ -459,16 +465,25 @@ const updateCharacter = async (id, characterReq, profile) => {
   }
 
   // update abilities
+  let newAbilityRows = null;
   if (classAbilities) {
     const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
     }
+    newAbilityRows = abilitiesSet;
   }
 
   if (linkedVersion === 'v2') {
-    const { error: perksError } = await setCharacterPerks(character.id, abilityPerks);
+    // Abilities were replaced above (new row ids), so remap the submitted
+    // perks' class_ability_id from the old rows to the new ones; otherwise
+    // the insert hits a foreign key violation. When abilities weren't
+    // submitted, the old rows (and ids) are still in place — no remap needed.
+    const perksToSave = newAbilityRows
+      ? remapPerkAbilityIds(abilityPerks, previousAbilities, newAbilityRows)
+      : abilityPerks;
+    const { error: perksError } = await setCharacterPerks(character.id, perksToSave);
     if (perksError) {
       return { data: null, error: perksError };
     }
@@ -890,7 +905,8 @@ const setCharacterAbilities = async (id, abilities) => {
     return { data: null, error: deleteError };
   }
 
-  const { data: newAbilities, error: newAbilitiesError } = await supabaseAdmin.from('class_abilities').insert(abilitiesData);
+  // .select() so callers can remap perk references onto the new row ids
+  const { data: newAbilities, error: newAbilitiesError } = await supabaseAdmin.from('class_abilities').insert(abilitiesData).select();
   if (newAbilitiesError) {
     return { data: null, error: newAbilitiesError };
   }
