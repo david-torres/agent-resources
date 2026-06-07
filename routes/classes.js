@@ -32,6 +32,7 @@ const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
 const { redeemAnyCode } = require('../util/redeem-code');
+const { groupClassVersions } = require('../util/class-list-grouping');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -76,10 +77,18 @@ router.get('/', authOptional, async (req, res) => {
     if (error) {
         return sendError(req, res, error);
     }
+
+    // Collapse version families to their latest (leaf) version, UNLESS the user
+    // explicitly filtered by a specific rules_version — then show each match flat.
+    const versionFiltered = filters.rules_version === 'v1' || filters.rules_version === 'v2';
+    const classGroups = versionFiltered
+        ? (classes || []).map((c) => ({ primary: c, previous: [] }))
+        : groupClassVersions(classes || []);
+
     res.render('classes', {
         profile,
         title: 'Classes',
-        classes: classes,
+        classGroups,
         filters: filters,
         isAdmin,
         activeNav: 'classes',
