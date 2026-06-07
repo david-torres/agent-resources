@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { diffChildRows } = require('./reconcile');
+const { diffChildRows, resolveCompoundLinks } = require('./reconcile');
 
 // Options used by the gear/abilities helpers: key = class_id + name,
 // updatable field = description.
@@ -121,5 +121,75 @@ describe('diffChildRows', () => {
       toUpdate: [{ id: 'r1', description: 'new', cooldown: '2' }],
       toDelete: []
     });
+  });
+});
+
+// Current character_perks rows as persisted (compounds_with is a row id or null).
+const perkRow = (id, class_ability_id, position, compounds_with = null) =>
+  ({ id, class_ability_id, position, compounds_with });
+// Desired perks as normalized from the form (compounds_with is a
+// 'position-N' sentinel, a row UUID from the agent/API path, or null).
+const desiredPerk = (class_ability_id, position, compounds_with = null) =>
+  ({ class_ability_id, position, text: 'x', compounds_with });
+
+describe('resolveCompoundLinks', () => {
+  test('resolves a position-N sentinel to the peer row id on the same ability', () => {
+    const rows = [perkRow('p0', 'a1', 0), perkRow('p1', 'a1', 1)];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a1', 1, 'position-0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p1', compounds_with: 'p0' }]);
+  });
+
+  test('keeps a UUID link that references a current row on the same ability', () => {
+    const rows = [perkRow('p0', 'a1', 0), perkRow('p1', 'a1', 1)];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a1', 1, 'p0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p1', compounds_with: 'p0' }]);
+  });
+
+  test('rejects a UUID link to a row on a different ability (clears stored link)', () => {
+    const rows = [perkRow('p0', 'a1', 0), perkRow('p1', 'a2', 0, 'p0')];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a2', 0, 'p0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p1', compounds_with: null }]);
+  });
+
+  test('rejects a self-referencing link', () => {
+    const rows = [perkRow('p0', 'a1', 0, 'pX')];
+    const desired = [desiredPerk('a1', 0, 'position-0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p0', compounds_with: null }]);
+  });
+
+  test('clears a stale stored link when the desired perk has none', () => {
+    const rows = [perkRow('p0', 'a1', 0), perkRow('p1', 'a1', 1, 'p0')];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a1', 1, null)];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p1', compounds_with: null }]);
+  });
+
+  test('emits nothing when the stored link already matches', () => {
+    const rows = [perkRow('p0', 'a1', 0), perkRow('p1', 'a1', 1, 'p0')];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a1', 1, 'position-0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([]);
+  });
+
+  test('skips desired perks with no surviving row', () => {
+    const rows = [perkRow('p0', 'a1', 0)];
+    const desired = [desiredPerk('a1', 0), desiredPerk('a9', 5, 'position-0')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([]);
+  });
+
+  test('unresolvable sentinel clears the stored link', () => {
+    const rows = [perkRow('p0', 'a1', 0, 'pX')];
+    const desired = [desiredPerk('a1', 0, 'position-7')];
+
+    expect(resolveCompoundLinks(desired, rows)).toEqual([{ id: 'p0', compounds_with: null }]);
+  });
+
+  test('non-array inputs are treated as empty', () => {
+    expect(resolveCompoundLinks(null, undefined)).toEqual([]);
   });
 });

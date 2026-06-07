@@ -63,4 +63,46 @@ function diffChildRows(existingRows, desiredItems, { keyOf, rowFields }) {
   return { toInsert, toUpdate, toDelete };
 }
 
-module.exports = { diffChildRows };
+/**
+ * Resolve desired compounds_with links against the current perk rows
+ * (pass 2 of the perk save). Desired links are 'position-N' sentinels from
+ * the form or row UUIDs from the agent/API path. A UUID is honored only if it
+ * references a current row on the same ability; unresolvable or
+ * self-referencing links become null.
+ *
+ * Returns [{ id, compounds_with }] — only rows whose stored link must change.
+ */
+function resolveCompoundLinks(desiredPerks, currentRows) {
+  const desired = Array.isArray(desiredPerks) ? desiredPerks : [];
+  const rows = Array.isArray(currentRows) ? currentRows : [];
+
+  const byId = new Map(rows.map(r => [r.id, r]));
+  const byKey = new Map(rows.map(r => [`${r.class_ability_id}:${r.position}`, r]));
+
+  const updates = [];
+  for (const perk of desired) {
+    const row = byKey.get(`${perk.class_ability_id}:${perk.position}`);
+    if (!row) continue; // perk's row was dropped; nothing to link
+
+    let target = null;
+    const link = perk.compounds_with;
+    if (typeof link === 'string' && link.startsWith('position-')) {
+      const pos = Number(link.slice('position-'.length));
+      const candidate = byKey.get(`${perk.class_ability_id}:${pos}`);
+      if (candidate) target = candidate.id;
+    } else if (link) {
+      const candidate = byId.get(link);
+      if (candidate && candidate.class_ability_id === perk.class_ability_id) {
+        target = candidate.id;
+      }
+    }
+    if (target === row.id) target = null;
+
+    if ((row.compounds_with ?? null) !== target) {
+      updates.push({ id: row.id, compounds_with: target });
+    }
+  }
+  return updates;
+}
+
+module.exports = { diffChildRows, resolveCompoundLinks };
