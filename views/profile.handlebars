@@ -21,6 +21,8 @@
   <a href="/profile/view/{{profile.name}}" class="button is-light">View Profile</a>
 </div>
 
+{{> badge-shelf badges=badges}}
+
 {{#if (or conduitCredits.earned conduitCredits.spent_linked)}}
 <div class="box">
   <h3 class="title is-4">Conduit Credits</h3>

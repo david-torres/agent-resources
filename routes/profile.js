@@ -6,6 +6,7 @@ const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator
 const { parseImageCrop } = require('../util/crop');
 const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
+const { getProfileBadges } = require('../models/badge');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 
@@ -26,11 +27,19 @@ router.get('/', isAuthenticated, async (req, res) => {
     if (data) conduitCredits = data;
   } catch (_) {}
 
+  // Badge shelf is decoration: render the page without it on failure.
+  let badges = null;
+  try {
+    const { data } = await getProfileBadges(profile.id, { includeProgress: true });
+    if (data) badges = data;
+  } catch (_) {}
+
   res.render('profile', {
     user,
     profile,
     unlockedClasses,
     conduitCredits,
+    badges,
     activeNav: 'profile',
     breadcrumbs: [
       { label: 'Profile', href: '/profile' }
@@ -64,11 +73,17 @@ router.get('/view/:name', authOptional, async (req, res) => {
   const classList = Array.isArray(publicClasses) ? publicClasses : [];
   const releasedClasses = classList.filter(cls => !cls.is_player_created);
   const pccClasses = classList.filter(cls => cls.is_player_created);
+  let badges = null;
+  try {
+    const { data } = await getProfileBadges(viewProfile.id);
+    if (data) badges = data;
+  } catch (_) {}
   res.render('profile-view', {
     user,
     profile,
     viewProfile,
     authOptional: true,
+    badges,
     publicCharacters,
     publicClasses,
     releasedClasses,
