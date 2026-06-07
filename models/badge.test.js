@@ -201,3 +201,83 @@ test('getMissionProfileIds returns host + character creators, deduped', async ()
   const ids = await badge.getMissionProfileIds('m1');
   expect(new Set(ids)).toEqual(new Set(['p-host', 'p-a']));
 });
+
+// ---------------------------------------------------------------------------
+// listProfileBadges / getProfileBadges / getBadgeCatalog
+// ---------------------------------------------------------------------------
+
+const HELD_ROWS = [
+  { profile_id: 'p1', awarded_at: '2026-01-01T00:00:00Z', granted_by: null,
+    badge: { id: 'b-n3', slug: 'newcomer-3', name: 'Newcomer III', description: null, category: 'milestone', track: 'newcomer', rank: 3, threshold: 3, image_path: 'newcomer-3.png', is_active: true } },
+  { profile_id: 'p1', awarded_at: '2026-01-02T00:00:00Z', granted_by: null,
+    badge: { id: 'b-n1', slug: 'newcomer-1', name: 'Newcomer I', description: null, category: 'milestone', track: 'newcomer', rank: 1, threshold: 1, image_path: 'newcomer-1.png', is_active: true } },
+  { profile_id: 'p1', awarded_at: '2026-01-03T00:00:00Z', granted_by: 'p-admin',
+    badge: { id: 'b-ed1', slug: 'enclave-day-1', name: 'Enclave Day 1', description: 'Participated in Enclave Day 1.', category: 'event', track: null, rank: null, threshold: null, image_path: 'enclave-day-1.png', is_active: true } },
+  { profile_id: 'p1', awarded_at: '2026-01-04T00:00:00Z', granted_by: null,
+    badge: { id: 'b-old', slug: 'retired', name: 'Retired', description: null, category: 'event', track: null, rank: null, threshold: null, image_path: 'retired.png', is_active: false } }
+];
+
+test('listProfileBadges returns active held badges with public image URLs', async () => {
+  state.tables = { profile_badges: HELD_ROWS };
+  const { data, error } = await badge.listProfileBadges('p1');
+  expect(error).toBeNull();
+  expect(data.map(b => b.slug).sort()).toEqual(['enclave-day-1', 'newcomer-1', 'newcomer-3']);
+  expect(data[0].image_url).toMatch(/^https:\/\/cdn\.test\/badges\//);
+});
+
+test('getProfileBadges display keeps only the highest rank per milestone track plus all event/personal', async () => {
+  state.tables = { profile_badges: HELD_ROWS };
+  const { data, error } = await badge.getProfileBadges('p1');
+  expect(error).toBeNull();
+  expect(data.display.map(b => b.slug)).toEqual(['newcomer-3', 'enclave-day-1']);
+});
+
+test('getProfileBadges with includeProgress reports count and next threshold per track', async () => {
+  state.tables = {
+    profile_badges: HELD_ROWS,
+    // 3 played missions, 0 hosted.
+    mission_characters: [{ mission_id: 'm1' }, { mission_id: 'm2' }, { mission_id: 'm3' }],
+    missions: [],
+    badges: [
+      { id: 'b-n3', slug: 'newcomer-3', name: 'Newcomer III', category: 'milestone', track: 'newcomer', rank: 3, threshold: 3, is_active: true },
+      { id: 'b-n4', slug: 'newcomer-4', name: 'Newcomer IV', category: 'milestone', track: 'newcomer', rank: 4, threshold: 4, is_active: true },
+      { id: 'b-vp1', slug: 'veteran-player-1', name: 'Veteran Player I', category: 'milestone', track: 'veteran_player', rank: 1, threshold: 23, is_active: true },
+      { id: 'b-vc1', slug: 'veteran-conduit-1', name: 'Veteran Conduit I', category: 'milestone', track: 'veteran_conduit', rank: 1, threshold: 5, is_active: true }
+    ]
+  };
+  const { data } = await badge.getProfileBadges('p1', { includeProgress: true });
+  expect(data.progress).toEqual([
+    { track: 'newcomer', label: 'Newcomer', count: 3, currentSlug: 'newcomer-3', nextName: 'Newcomer IV', nextThreshold: 4, complete: false },
+    { track: 'veteran_player', label: 'Veteran Player', count: 3, currentSlug: null, nextName: 'Veteran Player I', nextThreshold: 23, complete: false },
+    { track: 'veteran_conduit', label: 'Veteran Conduit', count: 0, currentSlug: null, nextName: 'Veteran Conduit I', nextThreshold: 5, complete: false }
+  ]);
+  expect(data.veteranBaseUrl).toBe('https://cdn.test/badges/veteran-base.png');
+});
+
+test('getProfileBadges marks a track complete when no higher threshold exists', async () => {
+  state.tables = {
+    profile_badges: HELD_ROWS,
+    mission_characters: Array.from({ length: 13 }, (_, i) => ({ mission_id: `m${i}` })),
+    missions: [],
+    badges: [
+      { id: 'b-n3', slug: 'newcomer-3', name: 'Newcomer III', category: 'milestone', track: 'newcomer', rank: 3, threshold: 3, is_active: true }
+    ]
+  };
+  const { data } = await badge.getProfileBadges('p1', { includeProgress: true });
+  const newcomer = data.progress.find(p => p.track === 'newcomer');
+  expect(newcomer.complete).toBe(true);
+  expect(newcomer.nextThreshold).toBeNull();
+});
+
+test('getBadgeCatalog returns active badges with image URLs', async () => {
+  state.tables = {
+    badges: [
+      { id: 'b1', slug: 'enclave-day-1', name: 'Enclave Day 1', category: 'event', image_path: 'enclave-day-1.png', is_active: true },
+      { id: 'b2', slug: 'gone', name: 'Gone', category: 'event', image_path: 'gone.png', is_active: false }
+    ]
+  };
+  const { data, error } = await badge.getBadgeCatalog();
+  expect(error).toBeNull();
+  expect(data.map(b => b.slug)).toEqual(['enclave-day-1']);
+  expect(data[0].image_url).toBe('https://cdn.test/badges/enclave-day-1.png');
+});

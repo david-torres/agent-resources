@@ -114,11 +114,126 @@ const getMissionProfileIds = async (missionId) => {
   }
 };
 
+const badgeImageUrl = (imagePath) =>
+  supabaseAdmin.storage.from(BADGES_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+
+const TRACK_LABELS = {
+  newcomer: 'Newcomer',
+  veteran_player: 'Veteran Player',
+  veteran_conduit: 'Veteran Conduit'
+};
+
+// Every active badge a profile holds, flat (admin manage page; also the
+// basis for the public display shelf).
+const listProfileBadges = async (profileId) => {
+  const { data: rows, error } = await supabaseAdmin
+    .from('profile_badges')
+    .select('awarded_at, granted_by, badge:badges(id, slug, name, description, category, track, rank, threshold, image_path, is_active)')
+    .eq('profile_id', profileId)
+    .order('awarded_at', { ascending: true });
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  const held = (rows || [])
+    .filter(r => r.badge && r.badge.is_active)
+    .map(r => ({
+      ...r.badge,
+      awarded_at: r.awarded_at,
+      granted_by: r.granted_by,
+      image_url: badgeImageUrl(r.badge.image_path)
+    }));
+  return { data: held, error: null };
+};
+
+// Display shelf: highest earned rank per milestone track + all event/personal
+// badges. With includeProgress, also returns per-track counters and the next
+// unearned threshold (own-profile view).
+const getProfileBadges = async (profileId, { includeProgress = false } = {}) => {
+  const { data: held, error } = await listProfileBadges(profileId);
+  if (error) return { data: null, error };
+
+  const bestByTrack = {};
+  const others = [];
+  for (const b of held) {
+    if (b.category === 'milestone' && b.track) {
+      if (!bestByTrack[b.track] || b.rank > bestByTrack[b.track].rank) {
+        bestByTrack[b.track] = b;
+      }
+    } else {
+      others.push(b);
+    }
+  }
+  const display = [
+    ...MILESTONE_TRACKS.map(t => bestByTrack[t]).filter(Boolean),
+    ...others
+  ];
+
+  if (!includeProgress) {
+    return { data: { display }, error: null };
+  }
+
+  const { data: counters, error: countersError } = await getMissionCounters(profileId);
+  if (countersError) {
+    // Progress is decoration; degrade to display-only rather than failing.
+    return { data: { display }, error: null };
+  }
+
+  const { data: catalog, error: catalogError } = await supabaseAdmin
+    .from('badges')
+    .select('track, threshold, name')
+    .eq('category', 'milestone')
+    .eq('is_active', true)
+    .order('threshold', { ascending: true });
+  if (catalogError) {
+    console.error(catalogError);
+    return { data: { display }, error: null };
+  }
+
+  const progress = MILESTONE_TRACKS.map(track => {
+    const count = counterForTrack(counters, track);
+    const next = (catalog || []).find(b => b.track === track && b.threshold > count) || null;
+    return {
+      track,
+      label: TRACK_LABELS[track],
+      count,
+      currentSlug: bestByTrack[track]?.slug ?? null,
+      nextName: next?.name ?? null,
+      nextThreshold: next?.threshold ?? null,
+      complete: !next
+    };
+  });
+
+  return {
+    data: { display, progress, veteranBaseUrl: badgeImageUrl('veteran-base.png') },
+    error: null
+  };
+};
+
+const getBadgeCatalog = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('badges')
+    .select('*')
+    .eq('is_active', true)
+    .order('category', { ascending: true })
+    .order('track', { ascending: true })
+    .order('rank', { ascending: true })
+    .order('name', { ascending: true });
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data: (data || []).map(b => ({ ...b, image_url: badgeImageUrl(b.image_path) })), error: null };
+};
+
 module.exports = {
   BADGES_BUCKET,
   MILESTONE_TRACKS,
   getMissionCounters,
   recalculateMilestoneBadges,
   recalcMilestoneBadgesSafely,
-  getMissionProfileIds
+  getMissionProfileIds,
+  listProfileBadges,
+  getProfileBadges,
+  getBadgeCatalog
 };
