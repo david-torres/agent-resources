@@ -33,7 +33,9 @@ const makeClient = (tableToRows, { singleTables = new Set(['characters']) } = {}
         return Promise.resolve(result);
       },
       in() {
-        return Promise.resolve(result);
+        // Return the chain (thenable) so callers can continue chaining
+        // (e.g. .in(...).eq(...)) or await directly — mirrors .eq() behavior.
+        return chain;
       },
       single() {
         return Promise.resolve(singleResult);

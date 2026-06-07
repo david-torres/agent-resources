@@ -5,6 +5,7 @@ const { escapeLikePattern, validateAbilityPerks } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { remapPerkAbilityIds } = require('../util/ability-perks');
+const { diffChildRows, resolveCompoundLinks } = require('../util/reconcile');
 const { listOffscreenMissions } = require('./offscreen-mission');
 
 // Resolve the rules version a character should be rendered/validated against.
@@ -511,23 +512,50 @@ const getCharacterTraits = async (id) => {
   return { data, error };
 }
 
+// Apply a diffChildRows result: inserts -> updates -> deletes. Deletes run
+// last and target only truly-removed row ids, so a mid-flight failure leaves
+// extra rows rather than missing ones (never a mass delete).
+const applyChildDiff = async (table, characterId, { toInsert, toUpdate, toDelete }) => {
+  if (toInsert.length > 0) {
+    const rows = toInsert.map(fields => ({ character_id: characterId, ...fields }));
+    const { error } = await supabaseAdmin.from(table).insert(rows);
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+  }
+  for (const { id: rowId, ...changes } of toUpdate) {
+    const { error } = await supabaseAdmin.from(table).update(changes).eq('id', rowId);
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+  }
+  if (toDelete.length > 0) {
+    const { error } = await supabaseAdmin.from(table).delete().in('id', toDelete).eq('character_id', characterId);
+    if (error) {
+      console.error(error);
+      return { data: null, error };
+    }
+  }
+  return { data: true, error: null };
+};
+
 const setCharacterTraits = async (id, traits) => {
   // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { data, error } = await supabaseAdmin.from('traits').delete().eq('character_id', id);
-  if (error) {
-    console.error(error);
-    return { data: null, error };
+  const { data: existing, error: fetchError } = await supabaseAdmin.from('traits').select('*').eq('character_id', id);
+  if (fetchError) {
+    console.error(fetchError);
+    return { data: null, error: fetchError };
   }
 
-  const traitData = traits.map(trait => ({ character_id: id, name: trait }));
-  const { data: newTraits, error: newTraitsError } = await supabaseAdmin.from('traits').insert(traitData);
-  if (newTraitsError) {
-    console.error(newTraitsError);
-    return { data: null, error: newTraitsError };
-  }
-
-  return { data: newTraits, error: null };
-}
+  const desired = (Array.isArray(traits) ? traits : []).map(name => ({ name }));
+  const diff = diffChildRows(existing, desired, {
+    keyOf: r => `${r.name}`,
+    rowFields: item => ({ name: item.name })
+  });
+  return applyChildDiff('traits', id, diff);
+};
 
 const getCharacterGear = async (id, client = supabase) => {
   // Fetch character gear rows
