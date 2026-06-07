@@ -80,7 +80,7 @@ router.get('/', authOptional, async (req, res) => {
 
     // Collapse version families to their latest (leaf) version, UNLESS the user
     // explicitly filtered by a specific rules_version — then show each match flat.
-    const versionFiltered = filters.rules_version === 'v1' || filters.rules_version === 'v2';
+    const versionFiltered = !!filters.rules_version;
     const classGroups = versionFiltered
         ? (classes || []).map((c) => ({ primary: c, previous: [] }))
         : groupClassVersions(classes || []);
