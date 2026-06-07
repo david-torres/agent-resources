@@ -281,3 +281,50 @@ test('getBadgeCatalog returns active badges with image URLs', async () => {
   expect(data.map(b => b.slug)).toEqual(['enclave-day-1']);
   expect(data[0].image_url).toBe('https://cdn.test/badges/enclave-day-1.png');
 });
+
+// ---------------------------------------------------------------------------
+// grantBadge / revokeBadge
+// ---------------------------------------------------------------------------
+
+const GRANT_CATALOG = [
+  { id: 'b-ed1', slug: 'enclave-day-1', category: 'event', is_active: true },
+  { id: 'b-n1', slug: 'newcomer-1', category: 'milestone', is_active: true },
+  { id: 'b-off', slug: 'retired', category: 'event', is_active: false }
+];
+
+test('grantBadge upserts an award with granted_by', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  const { error } = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' });
+  expect(error).toBeNull();
+  const upsert = state.upserts.find(u => u.table === 'profile_badges');
+  expect(upsert.payload).toEqual({ profile_id: 'p1', badge_id: 'b-ed1', granted_by: 'p-admin' });
+  expect(upsert.opts).toEqual({ onConflict: 'profile_id,badge_id', ignoreDuplicates: true });
+});
+
+test('grantBadge rejects milestone badges', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  const { error } = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'newcomer-1', grantedById: 'p-admin' });
+  expect(error?.message).toMatch(/milestone/i);
+  expect(state.upserts.length).toBe(0);
+});
+
+test('grantBadge rejects unknown and inactive badges', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  const missing = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'nope', grantedById: 'p-admin' });
+  expect(missing.error?.message).toMatch(/not found/i);
+  const inactive = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'retired', grantedById: 'p-admin' });
+  expect(inactive.error?.message).toMatch(/not found/i);
+  expect(state.upserts.length).toBe(0);
+});
+
+test('revokeBadge deletes the award row and rejects milestones', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  const ok = await badge.revokeBadge({ profileId: 'p1', badgeSlug: 'enclave-day-1' });
+  expect(ok.error).toBeNull();
+  expect(state.deletes.length).toBe(1);
+  expect(state.deletes[0].table).toBe('profile_badges');
+
+  const milestone = await badge.revokeBadge({ profileId: 'p1', badgeSlug: 'newcomer-1' });
+  expect(milestone.error?.message).toMatch(/milestone/i);
+  expect(state.deletes.length).toBe(1); // unchanged
+});

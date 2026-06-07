@@ -226,6 +226,61 @@ const getBadgeCatalog = async () => {
   return { data: (data || []).map(b => ({ ...b, image_url: badgeImageUrl(b.image_path) })), error: null };
 };
 
+// Admin operations. Milestone badges are automatic-only: enforced here (the
+// authoritative gate), not just in the routes.
+const findGrantableBadge = async (badgeSlug) => {
+  const { data: badgeRow, error } = await supabaseAdmin
+    .from('badges')
+    .select('id, slug, category, is_active')
+    .eq('slug', badgeSlug)
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  if (!badgeRow || !badgeRow.is_active) {
+    return { data: null, error: new Error('Badge not found') };
+  }
+  if (badgeRow.category === 'milestone') {
+    return { data: null, error: new Error('Milestone badges are awarded automatically and cannot be granted or revoked') };
+  }
+  return { data: badgeRow, error: null };
+};
+
+const grantBadge = async ({ profileId, badgeSlug, grantedById }) => {
+  const { data: badgeRow, error } = await findGrantableBadge(badgeSlug);
+  if (error) return { data: null, error };
+
+  const { error: upsertError } = await supabaseAdmin
+    .from('profile_badges')
+    .upsert(
+      { profile_id: profileId, badge_id: badgeRow.id, granted_by: grantedById || null },
+      { onConflict: 'profile_id,badge_id', ignoreDuplicates: true }
+    );
+  if (upsertError) {
+    console.error(upsertError);
+    return { data: null, error: upsertError };
+  }
+  return { data: { slug: badgeRow.slug }, error: null };
+};
+
+// Revoking a badge the profile doesn't hold deletes 0 rows — no-op success.
+const revokeBadge = async ({ profileId, badgeSlug }) => {
+  const { data: badgeRow, error } = await findGrantableBadge(badgeSlug);
+  if (error) return { data: null, error };
+
+  const { error: deleteError } = await supabaseAdmin
+    .from('profile_badges')
+    .delete()
+    .eq('profile_id', profileId)
+    .eq('badge_id', badgeRow.id);
+  if (deleteError) {
+    console.error(deleteError);
+    return { data: null, error: deleteError };
+  }
+  return { data: { slug: badgeRow.slug }, error: null };
+};
+
 module.exports = {
   BADGES_BUCKET,
   MILESTONE_TRACKS,
@@ -235,5 +290,7 @@ module.exports = {
   getMissionProfileIds,
   listProfileBadges,
   getProfileBadges,
-  getBadgeCatalog
+  getBadgeCatalog,
+  grantBadge,
+  revokeBadge
 };
