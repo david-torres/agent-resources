@@ -805,68 +805,51 @@ const normalizeAbilityPerks = (perks) => {
 const setCharacterPerks = async (characterId, perks) => {
   const normalized = normalizeAbilityPerks(perks);
 
-  // delete-then-insert, mirroring setCharacterGear/setCharacterAbilities
-  const { error: delError } = await supabaseAdmin
+  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
+  const { data: existing, error: fetchError } = await supabaseAdmin
     .from('character_perks')
-    .delete()
+    .select('*')
     .eq('character_id', characterId);
-  if (delError) return { data: null, error: delError };
-
-  if (normalized.length === 0) return { data: [], error: null };
-
-  // Two-pass insert so we can resolve compounds_with references that point
-  // to perks created in the same submission (referenced by their position).
-  const rowsWithoutLinks = normalized.map(p => ({
-    character_id: characterId,
-    class_ability_id: p.class_ability_id,
-    text: p.text,
-    position: p.position
-  }));
-  const { data: inserted, error: insError } = await supabaseAdmin
-    .from('character_perks')
-    .insert(rowsWithoutLinks)
-    .select();
-  if (insError) return { data: null, error: insError };
-
-  // Map by ability+position so we can resolve symbolic compounds_with
-  // references the form submits ("position-N" sentinels point at peer
-  // perks on the same ability — see Task 19).
-  const byKey = new Map();
-  for (const row of inserted) {
-    byKey.set(`${row.class_ability_id}:${row.position}`, row.id);
+  if (fetchError) {
+    return { data: null, error: fetchError };
   }
 
-  const updates = normalized
-    .map((p, i) => {
-      const id = inserted[i]?.id;
-      if (!id || !p.compounds_with) return null;
-      // compounds_with may already be a UUID (existing row) or a
-      // "position-{n}" sentinel from a fresh form submission.
-      let target = null;
-      if (typeof p.compounds_with === 'string' && p.compounds_with.startsWith('position-')) {
-        const targetPos = Number(p.compounds_with.slice('position-'.length));
-        target = byKey.get(`${p.class_ability_id}:${targetPos}`);
-      } else {
-        // Verify it points to a perk we just inserted on the same ability
-        const candidate = inserted.find(r => r.id === p.compounds_with);
-        if (candidate && candidate.class_ability_id === p.class_ability_id) {
-          target = candidate.id;
-        }
-      }
-      if (!target || target === id) return null;
-      return { id, compounds_with: target };
-    })
-    .filter(Boolean);
+  // Pass 1: reconcile rows on ability+position. compounds_with is resolved in
+  // pass 2 against the surviving row set, so it is not part of the row diff
+  // (inserts therefore store it as NULL via DB default).
+  const diff = diffChildRows(existing, normalized, {
+    keyOf: r => `${r.class_ability_id}:${r.position}`,
+    rowFields: p => ({ class_ability_id: p.class_ability_id, text: p.text, position: p.position })
+  });
+  const { error: applyError } = await applyChildDiff('character_perks', characterId, diff);
+  if (applyError) {
+    return { data: null, error: applyError };
+  }
 
-  for (const u of updates) {
+  // Pass 2: resolve compound links ('position-N' sentinels from the form,
+  // row UUIDs from the agent/API path) against the current rows. With stable
+  // ids a UUID may legitimately reference a kept row, which the old
+  // inserted-rows-only check could not honor.
+  const { data: current, error: selError } = await supabaseAdmin
+    .from('character_perks')
+    .select('*')
+    .eq('character_id', characterId);
+  if (selError) {
+    return { data: null, error: selError };
+  }
+
+  const linkUpdates = resolveCompoundLinks(normalized, current);
+  for (const u of linkUpdates) {
     const { error: updError } = await supabaseAdmin
       .from('character_perks')
       .update({ compounds_with: u.compounds_with })
       .eq('id', u.id);
-    if (updError) return { data: null, error: updError };
+    if (updError) {
+      return { data: null, error: updError };
+    }
   }
 
-  return { data: inserted, error: null };
+  return { data: current, error: null };
 };
 
 const setCharacterAbilities = async (id, abilities) => {
