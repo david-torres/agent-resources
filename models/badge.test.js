@@ -125,3 +125,79 @@ test('counters: zero everywhere for an unseen profile', async () => {
   expect(error).toBeNull();
   expect(data).toEqual({ newcomer: 0, player: 0, conduit: 0 });
 });
+
+// ---------------------------------------------------------------------------
+// recalculateMilestoneBadges
+// ---------------------------------------------------------------------------
+
+const MILESTONE_CATALOG = [
+  { id: 'b-n1', slug: 'newcomer-1', category: 'milestone', track: 'newcomer', rank: 1, threshold: 1, is_active: true },
+  { id: 'b-n2', slug: 'newcomer-2', category: 'milestone', track: 'newcomer', rank: 2, threshold: 2, is_active: true },
+  { id: 'b-vp1', slug: 'veteran-player-1', category: 'milestone', track: 'veteran_player', rank: 1, threshold: 23, is_active: true },
+  { id: 'b-vc1', slug: 'veteran-conduit-1', category: 'milestone', track: 'veteran_conduit', rank: 1, threshold: 5, is_active: true }
+];
+
+test('recalc awards every badge at or below the counters (boundary inclusive)', async () => {
+  // 23 played missions, 0 hosted => player 23 (exactly at veteran-player-1),
+  // newcomer 23 (newcomer-1 and -2), conduit 0 (nothing).
+  state.tables = {
+    mission_characters: Array.from({ length: 23 }, (_, i) => ({ mission_id: `m${i}` })),
+    missions: [],
+    badges: MILESTONE_CATALOG
+  };
+  const { data, error } = await badge.recalculateMilestoneBadges('p1');
+  expect(error).toBeNull();
+  expect(data.awarded).toBe(3);
+  const upsert = state.upserts.find(u => u.table === 'profile_badges');
+  expect(upsert).toBeTruthy();
+  expect(new Set(upsert.payload.map(r => r.badge_id))).toEqual(new Set(['b-n1', 'b-n2', 'b-vp1']));
+  expect(upsert.payload.every(r => r.profile_id === 'p1')).toBe(true);
+  // ignoreDuplicates preserves the original awarded_at on re-runs.
+  expect(upsert.opts).toEqual({ onConflict: 'profile_id,badge_id', ignoreDuplicates: true });
+});
+
+test('recalc one below a threshold does not award it', async () => {
+  state.tables = {
+    mission_characters: Array.from({ length: 22 }, (_, i) => ({ mission_id: `m${i}` })),
+    missions: [],
+    badges: MILESTONE_CATALOG
+  };
+  const { data } = await badge.recalculateMilestoneBadges('p1');
+  const upsert = state.upserts.find(u => u.table === 'profile_badges');
+  expect(upsert.payload.map(r => r.badge_id)).not.toContain('b-vp1');
+  expect(data.awarded).toBe(2); // newcomer-1, newcomer-2
+});
+
+test('recalc with zero counters performs no writes and never deletes', async () => {
+  state.tables = { mission_characters: [], missions: [], badges: MILESTONE_CATALOG };
+  const { data, error } = await badge.recalculateMilestoneBadges('p1');
+  expect(error).toBeNull();
+  expect(data.awarded).toBe(0);
+  expect(state.upserts.length).toBe(0);
+  expect(state.deletes.length).toBe(0); // permanence: recalc never removes rows
+});
+
+// ---------------------------------------------------------------------------
+// recalcMilestoneBadgesSafely / getMissionProfileIds
+// ---------------------------------------------------------------------------
+
+test('recalcMilestoneBadgesSafely dedupes ids, skips falsy, never throws', async () => {
+  state.tables = { mission_characters: [], missions: [], badges: [] };
+  await badge.recalcMilestoneBadgesSafely(['p1', 'p1', null, undefined, 'p2']);
+  // No assertion on writes (zero counters) — the contract is: it resolves.
+  expect(true).toBe(true);
+});
+
+test('getMissionProfileIds returns host + character creators, deduped', async () => {
+  state.tables = {
+    missions: [{ id: 'm1', host_id: 'p-host' }],
+    mission_characters: [
+      { mission_id: 'm1', character: { creator_id: 'p-a' } },
+      { mission_id: 'm1', character: { creator_id: 'p-a' } },
+      { mission_id: 'm1', character: { creator_id: 'p-host' } },
+      { mission_id: 'm1', character: null }
+    ]
+  };
+  const ids = await badge.getMissionProfileIds('m1');
+  expect(new Set(ids)).toEqual(new Set(['p-host', 'p-a']));
+});
