@@ -662,59 +662,33 @@ const normalizeGearItems = (gear) => {
 const setCharacterGear = async (id, gear) => {
   const normalizedGear = normalizeGearItems(gear);
 
-  if (normalizedGear.length === 0) {
-    // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-    const { error } = await supabaseAdmin.from('class_gear').delete().eq('character_id', id);
-    if (error) {
-      return { data: null, error };
-    }
-    return { data: [], error: null };
-  }
-
-  const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-  const gearData = [];
-
-  for (const item of normalizedGear) {
-    const itemClassId = item.class_id;
-    const lookupClassId = gearNameToClassId.get(item.name);
-    const clsId = itemClassId ?? lookupClassId;
-
-    if (!clsId) {
-      const errorMessage = `[setCharacterGear] Missing class_id for gear item "${item.name}"`;
-      console.error(errorMessage, { characterId: id, item });
-      return { data: null, error: errorMessage };
-    }
-
-    const record = {
-      character_id: id,
-      name: item.name,
-      class_id: clsId
-    };
-
-    const desc = item.description ?? gearNameToDescription.get(item.name);
-    if (desc) {
-      record.description = desc;
-    }
-    gearData.push(record);
-  }
-
-  if (gearData.length === 0) {
-    return { data: [], error: null };
-  }
-
   // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { error: deleteError } = await supabaseAdmin.from('class_gear').delete().eq('character_id', id);
-  if (deleteError) {
-    return { data: null, error: deleteError };
+  const { data: existing, error: fetchError } = await supabaseAdmin.from('class_gear').select('*').eq('character_id', id);
+  if (fetchError) {
+    return { data: null, error: fetchError };
   }
 
-  const { data: newGear, error: newGearError } = await supabaseAdmin.from('class_gear').insert(gearData);
-  if (newGearError) {
-    return { data: null, error: newGearError };
+  const desired = [];
+  if (normalizedGear.length > 0) {
+    const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
+    for (const item of normalizedGear) {
+      const clsId = item.class_id ?? gearNameToClassId.get(item.name);
+      if (!clsId) {
+        const errorMessage = `[setCharacterGear] Missing class_id for gear item "${item.name}"`;
+        console.error(errorMessage, { characterId: id, item });
+        return { data: null, error: errorMessage };
+      }
+      const desc = item.description ?? gearNameToDescription.get(item.name);
+      desired.push({ name: item.name, class_id: clsId, description: desc || null });
+    }
   }
 
-  return { data: newGear, error: null };
-}
+  const diff = diffChildRows(existing, desired, {
+    keyOf: r => `${r.class_id}:${r.name}`,
+    rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
+  });
+  return applyChildDiff('class_gear', id, diff);
+};
 
 const getCharacterAbilities = async (id, client = supabase) => {
   // First get the character abilities
