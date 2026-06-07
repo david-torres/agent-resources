@@ -167,6 +167,24 @@ const searchProfiles = async (query, limit = 10) => {
   return { data, error };
 }
 
+/**
+ * Admin variant of searchProfiles: bypasses RLS so non-public profiles are
+ * findable in admin tooling. Only call from requireAdmin-gated routes.
+ */
+const searchProfilesAdmin = async (query, limit = 10) => {
+  if (!query || typeof query !== 'string' || query.trim().length < 2) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, name, image_url')
+    .ilike('name', `%${escapeLikePattern(query.trim())}%`)
+    .limit(limit);
+
+  return { data, error };
+}
+
 const getProfileConduitCredits = async ({ profileId, supabase: client = supabase }) => {
   const { count: earnedCount, error: earnedError } = await client
     .from('missions')
@@ -199,5 +217,6 @@ module.exports = {
   updateUser,
   setDiscordId,
   searchProfiles,
+  searchProfilesAdmin,
   getProfileConduitCredits
 };
