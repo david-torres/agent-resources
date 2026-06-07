@@ -477,10 +477,12 @@ const updateCharacter = async (id, characterReq, profile) => {
   }
 
   if (linkedVersion === 'v2') {
-    // Abilities were replaced above (new row ids), so remap the submitted
-    // perks' class_ability_id from the old rows to the new ones; otherwise
-    // the insert hits a foreign key violation. When abilities weren't
-    // submitted, the old rows (and ids) are still in place — no remap needed.
+    // Abilities are reconciled above: kept abilities retain their row ids, so
+    // the form's perk references pass through remap unchanged. Only abilities
+    // the user swapped out get a different id (their old row is gone), and
+    // remap drops the submitted perks that pointed at them — otherwise the
+    // perk insert would hit a foreign key violation. When abilities weren't
+    // submitted at all, the rows (and ids) are untouched — no remap needed.
     const perksToSave = newAbilityRows
       ? remapPerkAbilityIds(abilityPerks, previousAbilities, newAbilityRows)
       : abilityPerks;
@@ -891,6 +893,9 @@ const setCharacterAbilities = async (id, abilities) => {
     }
   }
 
+  // rowFields intentionally omits essence_cost/cooldown/duration: the save
+  // path never writes them (they live on the class catalog and are merged in
+  // at read time by getCharacterAbilities), so they aren't part of the diff.
   const diff = diffChildRows(existing, desired, {
     keyOf: r => `${r.class_id}:${r.name}`,
     rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
