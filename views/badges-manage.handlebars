@@ -1,0 +1,52 @@
+{{> breadcrumbs}}
+<h1 class="title is-2">Manage Badges</h1>
+
+<div class="box">
+  <h3 class="title is-4">Find a user</h3>
+  <form method="get" action="/badges/manage">
+    <div class="field has-addons">
+      <div class="control is-expanded">
+        <input class="input" type="text" name="q" value="{{q}}" placeholder="Search profiles by name" autofocus>
+      </div>
+      <div class="control">
+        <button class="button is-link" type="submit">Search</button>
+      </div>
+    </div>
+  </form>
+  {{#if matches.length}}
+  <div class="buttons mt-3">
+    {{#each matches}}
+    <a class="button is-light" href="/badges/manage?profile_id={{this.id}}">{{this.name}}</a>
+    {{/each}}
+  </div>
+  {{else}}
+  {{#if q}}
+  <p class="has-text-grey mt-3">No profiles matched "{{q}}".</p>
+  {{/if}}
+  {{/if}}
+</div>
+
+{{#if selectedProfile}}
+<div class="box">
+  <h3 class="title is-4">Badges for {{selectedProfile.name}}</h3>
+
+  <h4 class="title is-5">Event Badges</h4>
+  {{> badge-grant-table badges=eventBadges profileId=selectedProfile.id}}
+
+  <h4 class="title is-5 mt-5">Personal Badges</h4>
+  {{> badge-grant-table badges=personalBadges profileId=selectedProfile.id}}
+
+  <h4 class="title is-5 mt-5">Milestone Badges <span class="tag is-info is-light">automatic</span></h4>
+  <p class="is-size-7 has-text-grey mb-3">Earned from mission counters; cannot be granted or revoked manually.</p>
+  <div class="is-flex is-flex-wrap-wrap" style="gap: 0.75rem;">
+    {{#each milestoneBadges}}
+    <figure class="has-text-centered" style="width: 80px; {{#unless this.held}}filter: grayscale(1); opacity: 0.35;{{/unless}}">
+      <img src="{{this.image_url}}" alt="{{this.name}}" title="{{this.name}}" width="64" height="64" loading="lazy">
+      <figcaption class="is-size-7">{{this.name}}</figcaption>
+    </figure>
+    {{/each}}
+  </div>
+</div>
+{{else}}
+<div class="notification is-light">Search for a user above, then select them to grant or revoke badges.</div>
+{{/if}}

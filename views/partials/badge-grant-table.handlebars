@@ -1,0 +1,29 @@
+<table class="table is-fullwidth is-striped">
+  <tbody>
+    {{#each badges}}
+    <tr>
+      <td style="width: 56px;"><img src="{{this.image_url}}" alt="{{this.name}}" width="48" height="48" loading="lazy"></td>
+      <td>
+        {{this.name}}
+        {{#if this.held}}<span class="tag is-success is-light ml-2">held</span>{{/if}}
+        <br><span class="is-size-7 has-text-grey">{{this.description}}</span>
+      </td>
+      <td class="has-text-right" style="vertical-align: middle;">
+        {{#if this.held}}
+        <form method="post" action="/badges/revoke">
+          <input type="hidden" name="profile_id" value="{{../profileId}}">
+          <input type="hidden" name="badge_slug" value="{{this.slug}}">
+          <button class="button is-danger is-light is-small" type="submit">Revoke</button>
+        </form>
+        {{else}}
+        <form method="post" action="/badges/grant">
+          <input type="hidden" name="profile_id" value="{{../profileId}}">
+          <input type="hidden" name="badge_slug" value="{{this.slug}}">
+          <button class="button is-success is-small" type="submit">Grant</button>
+        </form>
+        {{/if}}
+      </td>
+    </tr>
+    {{/each}}
+  </tbody>
+</table>
