@@ -107,4 +107,19 @@ describe('diffChildRows', () => {
     expect(existing).toEqual(existingSnap);
     expect(desired).toEqual(desiredSnap);
   });
+
+  test('update carries all changed fields when multiple differ', () => {
+    const opts = {
+      keyOf: (r) => `${r.class_id}:${r.name}`,
+      rowFields: (it) => ({ name: it.name, class_id: it.class_id, description: it.description ?? null, cooldown: it.cooldown ?? null })
+    };
+    const existing = [{ id: 'r1', name: 'Strike', class_id: 'c1', description: 'old', cooldown: '1' }];
+    const desired = [{ name: 'Strike', class_id: 'c1', description: 'new', cooldown: '2' }];
+
+    expect(diffChildRows(existing, desired, opts)).toEqual({
+      toInsert: [],
+      toUpdate: [{ id: 'r1', description: 'new', cooldown: '2' }],
+      toDelete: []
+    });
+  });
 });

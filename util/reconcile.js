@@ -11,6 +11,8 @@ const fieldEqual = (a, b) => (a ?? null) === (b ?? null);
  * Greedy multiset diff between existing child rows and desired items.
  *
  * keyOf(rowOrItem)  -> natural-key string used for matching.
+ * Callers must build keys from parts that cannot contain the chosen separator;
+ * in this codebase keys combine UUID class_id + name, which are colon-free.
  * rowFields(item)   -> column values to persist (insert payload minus
  *                      character_id; also the fields compared for updates).
  *
@@ -46,7 +48,7 @@ function diffChildRows(existingRows, desiredItems, { keyOf, rowFields }) {
     }
     const changes = {};
     for (const [k, v] of Object.entries(fields)) {
-      if (!fieldEqual(v, match[k])) changes[k] = v ?? null;
+      if (!fieldEqual(v, match[k])) changes[k] = v ?? null; // coerce undefined -> null for the DB write
     }
     if (Object.keys(changes).length > 0) {
       toUpdate.push({ id: match.id, ...changes });
