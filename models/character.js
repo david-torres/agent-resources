@@ -870,55 +870,44 @@ const setCharacterPerks = async (characterId, perks) => {
 const setCharacterAbilities = async (id, abilities) => {
   const normalizedAbilities = normalizeAbilityItems(abilities);
 
-  if (normalizedAbilities.length === 0) {
-    // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-    const { error } = await supabaseAdmin.from('class_abilities').delete().eq('character_id', id);
-    if (error) {
-      return { data: null, error };
-    }
-    return { data: [], error: null };
-  }
-
-  const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-  const abilitiesData = [];
-
-  for (const item of normalizedAbilities) {
-    const itemClassId = item.class_id;
-    const lookupClassId = abilityNameToClassId.get(item.name);
-    const clsId = itemClassId ?? lookupClassId;
-
-    if (!clsId) {
-      const errorMessage = `[setCharacterAbilities] Missing class_id for ability "${item.name}"`;
-      console.error(errorMessage, { characterId: id, item });
-      return { data: null, error: errorMessage };
-    }
-
-    const record = { character_id: id, name: item.name, class_id: clsId };
-    const desc = item.description ?? abilityNameToDescription.get(item.name);
-    if (desc) {
-      record.description = desc;
-    }
-    abilitiesData.push(record);
-  }
-
-  if (abilitiesData.length === 0) {
-    return { data: [], error: null };
-  }
-
   // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { error: deleteError } = await supabaseAdmin.from('class_abilities').delete().eq('character_id', id);
-  if (deleteError) {
-    return { data: null, error: deleteError };
+  const { data: existing, error: fetchError } = await supabaseAdmin.from('class_abilities').select('*').eq('character_id', id);
+  if (fetchError) {
+    return { data: null, error: fetchError };
   }
 
-  // .select() so callers can remap perk references onto the new row ids
-  const { data: newAbilities, error: newAbilitiesError } = await supabaseAdmin.from('class_abilities').insert(abilitiesData).select();
-  if (newAbilitiesError) {
-    return { data: null, error: newAbilitiesError };
+  const desired = [];
+  if (normalizedAbilities.length > 0) {
+    const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
+    for (const item of normalizedAbilities) {
+      const clsId = item.class_id ?? abilityNameToClassId.get(item.name);
+      if (!clsId) {
+        const errorMessage = `[setCharacterAbilities] Missing class_id for ability "${item.name}"`;
+        console.error(errorMessage, { characterId: id, item });
+        return { data: null, error: errorMessage };
+      }
+      const desc = item.description ?? abilityNameToDescription.get(item.name);
+      desired.push({ name: item.name, class_id: clsId, description: desc || null });
+    }
   }
 
-  return { data: newAbilities, error: null };
-}
+  const diff = diffChildRows(existing, desired, {
+    keyOf: r => `${r.class_id}:${r.name}`,
+    rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
+  });
+  const { error: applyError } = await applyChildDiff('class_abilities', id, diff);
+  if (applyError) {
+    return { data: null, error: applyError };
+  }
+
+  // Return the full post-reconcile set (kept + inserted): updateCharacter
+  // remaps the form's perk references against these rows.
+  const { data: current, error: selError } = await supabaseAdmin.from('class_abilities').select('*').eq('character_id', id);
+  if (selError) {
+    return { data: null, error: selError };
+  }
+  return { data: current, error: null };
+};
 
 const getCharacterRecentMissions = async (characterId, limit = 5) => {
   const { data, error } = await supabase
