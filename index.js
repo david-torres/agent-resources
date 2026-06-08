@@ -1,7 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json } = require('./util/handlebars');
 const { renderMarkdown } = require('./util/markdown');
 const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
@@ -53,6 +53,7 @@ app.engine('handlebars', exphbs.engine({
       wordCount,
       perksForAbility,
       nextPerkPosition,
+      json,
       markdown: renderMarkdown
   }
 }));
@@ -62,7 +63,7 @@ app.set('views', path.join(__dirname, 'views'));
 // pass supabaseUrl and supabaseKey to the frontend
 app.use((req, res, next) => {
   res.locals.supabaseUrl = process.env.SUPABASE_URL;
-  res.locals.supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+  res.locals.supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
   next();
 });
 

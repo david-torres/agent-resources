@@ -1,0 +1,98 @@
+{{> breadcrumbs}}
+<h2 class="title is-3">Create a New Character</h2>
+<p class="subtitle is-6 has-text-grey">Choose how you want to build your character.</p>
+
+<div class="columns is-multiline is-centered mt-4">
+  <div class="column is-one-quarter">
+    <a href="/characters/wizard?mode=advent&fresh=1" class="button is-primary is-large is-fullwidth">
+      <span class="icon"><i class="fas fa-hat-wizard"></i></span>
+      <span>Advent</span>
+    </a>
+  </div>
+  <div class="column is-one-quarter">
+    <a href="/characters/wizard?mode=aspiring&fresh=1" class="button is-info is-large is-fullwidth">
+      <span class="icon"><i class="fas fa-seedling"></i></span>
+      <span>Aspiring</span>
+    </a>
+  </div>
+  <div class="column is-one-quarter">
+    <a href="/characters/wizard?mode=aspirant&fresh=1" class="button is-link is-large is-fullwidth">
+      <span class="icon"><i class="fas fa-scroll"></i></span>
+      <span>Aspirant</span>
+    </a>
+  </div>
+  <div class="column is-one-quarter">
+    <a href="/characters/new/expert" class="button is-warning is-large is-fullwidth">
+      <span class="icon"><i class="fas fa-cogs"></i></span>
+      <span>Expert Mode</span>
+    </a>
+  </div>
+</div>
+
+<p class="has-text-centered has-text-grey mt-2 is-size-7">
+  Expert Mode uses the original form-based creator.
+</p>
+
+<!-- Restore saved draft modal: shown by JS if a wizard draft exists. -->
+<div id="restoreDraftModal" class="modal">
+  <div class="modal-background" data-restore-action="dismiss"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Resume a saved draft?</p>
+      <button type="button" class="delete" aria-label="close" data-restore-action="dismiss"></button>
+    </header>
+    <section class="modal-card-body">
+      <p>You have an unfinished character draft saved in this browser.</p>
+      <p class="has-text-grey is-size-7 mt-2">
+        Mode: <strong id="restoreDraftMode">—</strong>
+        · Class: <strong id="restoreDraftClass">—</strong>
+      </p>
+    </section>
+    <footer class="modal-card-foot is-justify-content-space-between">
+      <button type="button" class="button is-danger is-light" data-restore-action="delete">
+        <span class="icon"><i class="fas fa-trash"></i></span>
+        <span>Start Over</span>
+      </button>
+      <button type="button" class="button is-primary" data-restore-action="resume">
+        <span class="icon"><i class="fas fa-play"></i></span>
+        <span>Resume</span>
+      </button>
+    </footer>
+  </div>
+</div>
+
+<script src="/js/character-wizard.js" defer></script>
+<script>
+  (function () {
+    var STORAGE_KEY = 'agentResources.characterWizard';
+    function read() {
+      try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); }
+      catch (_) { return null; }
+    }
+    var draft = read();
+    var modal = document.getElementById('restoreDraftModal');
+    if (draft && modal) {
+      var modeEl = document.getElementById('restoreDraftMode');
+      var classEl = document.getElementById('restoreDraftClass');
+      if (modeEl) modeEl.textContent = draft.mode || '—';
+      if (classEl) {
+        classEl.textContent = draft.classId ? 'class chosen' : 'class not yet chosen';
+      }
+      modal.classList.add('is-active');
+    }
+    modal.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-restore-action]');
+      if (!btn) return;
+      var action = btn.getAttribute('data-restore-action');
+      if (action === 'resume') {
+        var mode = (draft && draft.mode) || 'advent';
+        window.location.href = '/characters/wizard?mode=' + encodeURIComponent(mode);
+      } else if (action === 'delete') {
+        localStorage.removeItem(STORAGE_KEY);
+        modal.classList.remove('is-active');
+      } else {
+        modal.classList.remove('is-active');
+      }
+    });
+  })();
+</script>

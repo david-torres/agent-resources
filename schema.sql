@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS classes (
     image_url text,
     image_crop JSONB,
     teaser text,
+    tips text,
     visibility text,
     gear JSONB DEFAULT '[]'::jsonb,
     abilities JSONB DEFAULT '[]'::jsonb,
@@ -294,6 +295,7 @@ ALTER TABLE characters ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS teaser text;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS tips text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS visibility text;
@@ -500,7 +502,8 @@ BEGIN
         gear,
         abilities,
         image_url,
-        image_crop
+        image_crop,
+        tips
     )
     SELECT
         new_id,
@@ -516,7 +519,8 @@ BEGIN
         gear,
         abilities,
         image_url,
-        image_crop
+        image_crop,
+        tips
     FROM classes
     WHERE id = base_id
     RETURNING id INTO new_class_id;

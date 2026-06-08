@@ -4,7 +4,7 @@ const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
 const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById, getCharacterRealMissionsForDerivation } = require('../util/supabase');
 const { supabaseAdmin } = require('../models/_base');
-const { statList, personalityMap } = require('../util/enclave-consts');
+const { statList, personalityMap, classStatSpread } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { getUnlockedClassIdsForUser } = require('../models/class');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -13,6 +13,8 @@ const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission,
 const { getProfileConduitCredits } = require('../models/profile');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { renderMarkdown } = require('../util/markdown');
+const { commonItemList } = require('../util/enclave-consts');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
@@ -157,7 +159,19 @@ router.get('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/new', isAuthenticated, async (req, res) => {
+router.get('/new', isAuthenticated, (req, res) => {
+  const { profile } = res.locals;
+  res.render('character-new-selector', {
+    profile,
+    activeNav: 'characters',
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: 'New Character', href: '/characters/new' }
+    ]
+  });
+});
+
+router.get('/new/expert', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
   const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
   res.render('character-form', {
@@ -181,6 +195,177 @@ router.get('/new', isAuthenticated, async (req, res) => {
       { label: 'Characters', href: '/characters' },
       { label: 'New Character', href: '/characters/new' }
     ]
+  });
+});
+
+router.get('/wizard', isAuthenticated, async (req, res) => {
+  const { profile, user } = res.locals;
+  const mode = (req.query.mode || 'advent').toString();
+  const allowed = ['advent', 'aspiring', 'aspirant'];
+  if (!allowed.includes(mode)) {
+    return sendError(req, res, null, { status: 400, message: `Invalid mode: ${mode}` });
+  }
+  const preselectedClassId = (req.query.class || '').toString() || null;
+
+  // Union class list (mode does not filter the class pool per requirements).
+  // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
+  // and display fields for the slider card. Description and tips are stored
+  // as markdown and rendered to safe HTML here so the client can drop them
+  // into the wizard panel verbatim (no client-side markdown lib).
+  const { filteredAdvent, filteredAspirant, filteredPCC } = await filterClassDataForUser(user);
+  const wizardClasses = [...filteredAdvent, ...filteredAspirant, ...filteredPCC]
+    .map((c) => ({
+      id: c.id,
+      name: c.name,
+      description_html: renderMarkdown(c.description || ''),
+      teaser_html: renderMarkdown(c.teaser || ''),
+      tips_html: renderMarkdown(c.tips || ''),
+      image_url: c.image_url || null,
+      image_crop: c.image_crop || null,
+      rules_edition: c.rules_edition || 'advent',
+      rules_version: c.rules_version || 'v1',
+      is_player_created: !!c.is_player_created,
+      // stat_spread isn't a column on the classes table; backfill it from
+      // the canonical map in util/enclave-consts keyed by class name. The
+      // proper fix is a migration adding a stat_spread JSONB column, but
+      // until then this keeps the wizard's step 2 personality selects
+      // populated.
+      stat_spread: c.stat_spread && Object.keys(c.stat_spread).length
+        ? c.stat_spread
+        : (classStatSpread[c.name] || {}),
+      gear: Array.isArray(c.gear) ? c.gear : [],
+      abilities: Array.isArray(c.abilities) ? c.abilities : [],
+      // Pre-render each ability's description to safe HTML so the step 3
+      // primer can drop it in directly (consistent with class description).
+      abilities_html: Array.isArray(c.abilities)
+        ? c.abilities.map((a) => ({
+            name: a.name || '',
+            description_html: renderMarkdown(a.description || '')
+          }))
+        : [],
+      // Step 4 gear: all 6 class items are available on the right-hand shop
+      // at 2 merx each (duplicates allowed, so the user can re-pick a base
+      // item from the left list). The first 3 ("base") are also auto-loaded
+      // for free on the left. The JS uses `subtype` to badge each card so
+      // the user can see which is which.
+      class_gear: Array.isArray(c.gear)
+        ? c.gear.slice(0, 6).map((g, idx) => ({
+            name: g.name || '',
+            description_html: renderMarkdown(g.description || ''),
+            subtype: idx < 3 ? 'base' : 'elective'
+          }))
+        : [],
+      base_gear: Array.isArray(c.gear)
+        ? c.gear.slice(0, 3).map((g) => ({
+            name: g.name || '',
+            description_html: renderMarkdown(g.description || '')
+          }))
+        : []
+    }));
+
+  // Pre-render common-item descriptions for the step 4 spending list.
+  const commonItemsHtml = (commonItemList || []).map((item) => ({
+    name: item.name || '',
+    description_html: renderMarkdown(item.description || '')
+  }));
+
+  res.render('character-wizard', {
+    profile,
+    mode,
+    preselectedClassId,
+    wizardClasses,
+    statList,
+    personalityMap,
+    commonItemsHtml,
+    wizardData: {
+      mode,
+      preselectedClassId,
+      classes: wizardClasses,
+      statList,
+      personalityMap,
+      commonItems: commonItemsHtml
+    },
+    activeNav: 'characters',
+    breadcrumbs: [
+      { label: 'Characters', href: '/characters' },
+      { label: 'New Character', href: '/characters/new' },
+      { label: 'Wizard', href: '#' }
+    ]
+  });
+});
+
+router.post('/wizard', isAuthenticated, async (req, res) => {
+  const { profile } = res.locals;
+  // The wizard's client builds a payload that mirrors the field names
+  // views/character-form.handlebars uses (trait0/1/2, gear, common_items,
+  // is_public/hide_from_search, creator_mode, ...). createCharacter already
+  // knows how to translate those into the characters / traits / class_gear
+  // rows, so this handler is mostly a validation pass and a JSON-friendly
+  // response wrapper.
+  const body = req.body || {};
+
+  const trimmedName = (body.name || '').toString().trim();
+  if (!trimmedName) {
+    return sendError(req, res, null, { status: 400, message: 'Character name is required.' });
+  }
+  if (trimmedName.length > 120) {
+    return sendError(req, res, null, { status: 400, message: 'Character name is too long (max 120 characters).' });
+  }
+
+  // Whitelist creator_mode to the same set the wizard exposes in its mode
+  // selector. createCharacter will re-validate and reject anything else.
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (body.creator_mode != null && body.creator_mode !== '' && !allowedModes.includes(body.creator_mode)) {
+    return sendError(req, res, null, { status: 400, message: `Invalid mode: ${body.creator_mode}` });
+  }
+
+  // Coerce stat values to integers; the model passes them straight through
+  // to the characters row. Unknown stat keys (shouldn't happen, but the
+  // wizard is client-built) are silently dropped.
+  const knownStats = new Set(statList);
+  for (const k of Object.keys(body)) {
+    if (knownStats.has(k)) {
+      const n = parseInt(body[k], 10);
+      body[k] = Number.isFinite(n) ? n : 0;
+    }
+  }
+
+  // Coerce level / completed_missions / visibility booleans to defensible
+  // shapes. The form-input handlers in createCharacter also do this for
+  // is_public / hide_from_search, but doing it here keeps the DB write from
+  // seeing "on" as a string and stops an out-of-range number from
+  // contaminating the row.
+  if (body.level != null) {
+    const lvl = parseInt(body.level, 10);
+    body.level = Number.isFinite(lvl) ? Math.max(1, Math.min(20, lvl)) : 1;
+  }
+  if (body.completed_missions != null) {
+    const cm = parseInt(body.completed_missions, 10);
+    body.completed_missions = Number.isFinite(cm) ? Math.max(0, cm) : 0;
+  }
+  body.name = trimmedName;
+  body.is_public = body.is_public === false ? false : true;
+  body.hide_from_search = !!body.hide_from_search;
+
+  // Strip the per-stat keys before insert so they reach the characters row
+  // alongside every other column; createCharacter only deletes the keys
+  // it knows about (trait0/1/2, gear, abilities, ability_perks,
+  // common_items), so the 12 stat ints pass through as normal columns.
+
+  const { data, error } = await createCharacter(body, profile);
+  if (error) {
+    // createCharacter returns string errors for some validation paths
+    // (e.g. invalid creator_mode, v2 ability-perk validation). Wrap those
+    // so sendError gets a recognizable shape.
+    const errObj = typeof error === 'string' ? { message: error } : error;
+    return sendError(req, res, errObj);
+  }
+  const character = Array.isArray(data) ? data[0] : data;
+  if (!character) {
+    return sendError(req, res, null, { status: 400, message: 'Character creation returned no rows' });
+  }
+  return res.status(200).json({
+    redirect: `/characters/${character.id}/${encodeURIComponent(character.name)}`
   });
 });
 

@@ -211,5 +211,6 @@ module.exports = {
   effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
-  nextPerkPosition: nextPerkPositionH
+  nextPerkPosition: nextPerkPositionH,
+  json: (v) => JSON.stringify(v ?? null)
 }

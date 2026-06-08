@@ -1,0 +1,266 @@
+<!-- ====== Data: mode, preselected class, class list, stats, personality ====== -->
+<script type="application/json" id="wizard-data">{{{json wizardData}}}</script>
+
+<!-- ====== Summary panel: topmost box, with 4 columns: Class / Stats / Abilities / Gear ====== -->
+<aside class="wizard-summary box" id="wizardSummary" aria-live="polite">
+  <h3 class="title is-6 mb-2">Summary</h3>
+  <div class="columns is-multiline">
+    <div class="column is-one-quarter">
+      <h4 class="title is-6 mb-2">Class</h4>
+      <div id="summaryClass">
+        <!-- Class card + traits, rendered by character-wizard.js -->
+      </div>
+    </div>
+    <div class="column is-one-quarter">
+      <h4 class="title is-6 mb-2">Stats</h4>
+      <div id="summaryStats">
+        <!-- Rendered by character-wizard.js -->
+      </div>
+    </div>
+    <div class="column is-one-quarter">
+      <h4 class="title is-6 mb-2">Abilities</h4>
+      <div id="summaryAbilities">
+        <!-- Rendered by character-wizard.js -->
+      </div>
+    </div>
+    <div class="column is-one-quarter">
+      <h4 class="title is-6 mb-2">Gear</h4>
+      <div id="summaryGear">
+        <!-- Rendered by character-wizard.js -->
+      </div>
+    </div>
+  </div>
+  <div class="wizard-summary-meta mt-3 pt-3">
+    <div class="columns is-mobile is-multiline is-gapless mb-0">
+      <div class="column is-one-third">
+        <label class="label is-small mb-1" for="wizardLevel">Level</label>
+        <input class="input is-small" type="number" id="wizardLevel" value="{{state.level}}" min="1" max="20" step="1">
+      </div>
+      <div class="column is-one-third">
+        <label class="label is-small mb-1">Missions</label>
+        <span id="summaryMissions" class="tag is-light is-fullwidth">0</span>
+      </div>
+      <div class="column is-one-third">
+        <label class="label is-small mb-1" for="summarySuccessful">Successful</label>
+        <input class="input is-small" type="number" id="summarySuccessful" value="{{state.successfulMissions}}" min="0" step="1">
+      </div>
+    </div>
+  </div>
+</aside>
+
+<!-- ====== Step panels ====== -->
+<section class="wizard-step" data-step-panel="1" hidden>
+  <h3 class="title is-4">1. Class Selection</h3>
+
+  <div class="field">
+    <div class="control has-icons-left">
+      <input class="input" type="search" id="classSearch" placeholder="Search classes…" autocomplete="off">
+      <span class="icon is-small is-left"><i class="fas fa-search"></i></span>
+    </div>
+  </div>
+
+  <div class="wizard-kiosk" id="classKiosk" aria-label="Class selector">
+    <div class="wizard-kiosk-frame" aria-hidden="true"></div>
+    <div class="wizard-kiosk-track" id="classKioskTrack">
+      <!-- Cards injected by character-wizard.js -->
+    </div>
+    <p class="wizard-kiosk-hint has-text-grey is-size-7">
+      Click a card to select it. Scroll or use the arrow keys to browse, scroll past either end to roll a random class.
+    </p>
+  </div>
+
+  <div class="box mt-4" id="selectedClassPanel">
+    <p class="has-text-grey">Loading selected class…</p>
+  </div>
+
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button is-primary" id="step1Next">Next: Personality &amp; Stats</button></p>
+  </div>
+</section>
+
+<section class="wizard-step" data-step-panel="2" hidden>
+  <h3 class="title is-4">2. Personality &amp; Stats</h3>
+
+  <!-- ====== Personality ====== -->
+  <div class="box">
+    <h4 class="title is-5 mb-2">Personality</h4>
+    <p class="has-text-grey is-size-7 mb-3">
+      Choose 3 personality traits. The first two come from your class's stat spread (two different stats). The third comes from any other stat.
+    </p>
+    <div class="columns is-multiline">
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label" for="trait1Select">Trait 1 <span class="has-text-grey is-size-7" id="trait1StatLabel"></span></label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select id="trait1Select" disabled>
+                <option value="">— Pick a class first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label" for="trait2Select">Trait 2 <span class="has-text-grey is-size-7" id="trait2StatLabel"></span></label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select id="trait2Select" disabled>
+                <option value="">— Pick a class first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-third">
+        <div class="field">
+          <label class="label" for="trait3Select">Trait 3 <span class="has-text-grey is-size-7">any other stat</span></label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select id="trait3Select" disabled>
+                <option value="">— Pick a class first —</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== Stats ====== -->
+  <div class="box" id="statsBox" aria-disabled="true">
+    <h4 class="title is-5 mb-2">Stats</h4>
+    <p class="wizard-stats-prompt has-text-grey is-size-7 mb-3">
+      Pick all 3 personality traits to enable stat distribution.
+    </p>
+    <p class="has-text-grey is-size-7 mb-3" id="statPointsLine" hidden>
+      You have <strong id="statPointsTotal">0</strong> points total
+      · <strong id="statPointsAssigned">0</strong> assigned
+      · <strong id="statPointsRemaining">0</strong> remaining.
+    </p>
+    <div id="statGrid" class="wizard-stat-grid" hidden>
+      <!-- Generated by character-wizard.js -->
+    </div>
+  </div>
+
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
+    <p class="control"><button type="button" class="button is-primary" data-wizard-next id="step2Next">Next: Ability Primer</button></p>
+  </div>
+</section>
+
+<section class="wizard-step" data-step-panel="3" hidden>
+  <h3 class="title is-4">3. Ability Primer</h3>
+  <p class="has-text-grey is-size-7 mb-3">
+    A quick look at what your class can do. These come straight from the class rules.
+  </p>
+  <div id="abilityPrimerList">
+    <!-- Abilities injected by character-wizard.js (advent mode only) -->
+  </div>
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
+    <p class="control"><button type="button" class="button is-primary" data-wizard-next>Next: Gear</button></p>
+  </div>
+</section>
+
+<section class="wizard-step" data-step-panel="4" hidden>
+  <h3 class="title is-4">4. Gear Selection</h3>
+  <p class="has-text-grey is-size-7 mb-3">
+    Your class's base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — pick any combination of common items (1 Merx) or elective class gear (2 Merx). Duplicates are allowed.
+  </p>
+
+  <div class="columns is-variable is-4">
+    <div class="column is-half">
+      <h4 class="title is-5">Base Gear <span class="tag is-success is-light ml-2">Free</span></h4>
+      <div id="baseGearList">
+        <!-- Auto-loaded base gear rendered by character-wizard.js -->
+      </div>
+    </div>
+    <div class="column is-half">
+      <h4 class="title is-5">
+        Spend Merx
+        <span class="tag is-warning is-light ml-2">
+          <span id="merxSpent">0</span> / <span id="merxBudget">2</span> Merx
+        </span>
+      </h4>
+      <div class="tabs is-small is-boxed mb-2">
+        <ul>
+          <li class="is-active" data-shop-tab="common"><a>Common Items <span class="tag is-light ml-1" id="commonCountBadge">0</span></a></li>
+          <li data-shop-tab="class"><a>Class Gear <span class="tag is-light ml-1" id="classCountBadge">0</span></a></li>
+        </ul>
+      </div>
+      <div class="field has-addons mb-3" id="customCommonItemForm">
+        <div class="control is-expanded">
+          <input class="input is-small" type="text" id="customCommonItemInput" placeholder="Make your own common item (e.g. Lucky Coin)" maxlength="80">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-small is-link" id="customCommonItemAdd">Add (1 Merx)</button>
+        </div>
+      </div>
+      <div id="spendList">
+        <!-- Common items / class gear rendered by character-wizard.js -->
+      </div>
+      <p class="has-text-grey is-size-7 mt-2">
+        Click an item to add it to your loadout. Each pick costs the listed Merx. Duplicates are allowed, and you can name your own common item above.
+      </p>
+    </div>
+  </div>
+
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
+    <p class="control"><button type="button" class="button is-primary" data-wizard-next id="step4Next">Next: Finishing Touches</button></p>
+  </div>
+</section>
+
+<section class="wizard-step" data-step-panel="5" hidden>
+  <h3 class="title is-4">5. Finishing Touches</h3>
+  <p class="has-text-grey is-size-7 mb-4">
+    Give your character a name, choose how they appear to the rest of the enclave, and (optionally) sketch what they look like and where they come from.
+  </p>
+  <div class="field">
+    <label class="label" for="wizardName">Name <span class="has-text-danger" aria-hidden="true">*</span></label>
+    <div class="control">
+      <input class="input" type="text" id="wizardName" name="name" maxlength="120" required placeholder="Character name" value="{{state.name}}">
+    </div>
+    <p class="help">Required. This is how other players will refer to your character.</p>
+  </div>
+
+  <div class="field">
+    <label class="label" for="wizardAppearance">Appearance</label>
+    <div class="control">
+      <textarea class="textarea" id="wizardAppearance" rows="8" placeholder="What do they look like? Distinctive features, gear, posture, expressions…">{{state.appearance}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="wizardBackground">Backstory</label>
+    <div class="control">
+      <textarea class="textarea" id="wizardBackground" rows="10" placeholder="Where do they come from? What set them on this path? Allies, enemies, secrets…">{{state.background}}</textarea>
+    </div>
+  </div>
+
+  <div class="box has-background-light">
+    <h4 class="title is-6 mb-2">Visibility</h4>
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="wizardIsPublic" {{#if state.isPublic}}checked{{/if}}>
+        List on my public character page
+      </label>
+      <p class="help">When off, only you can see this character on your roster.</p>
+    </div>
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" id="wizardHideFromSearch" {{#if state.hideFromSearch}}checked{{/if}}>
+        Hide from directory search
+      </label>
+      <p class="help">When on, the character still appears on your public page but is excluded from the enclave-wide search index.</p>
+    </div>
+  </div>
+
+  <p class="has-text-danger is-size-7 mb-3" id="wizardSubmitError" hidden></p>
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
+    <p class="control"><button type="button" class="button is-success" id="wizardSubmit" disabled>Submit</button></p>
+  </div>
+</section>
+
+<script src="/js/character-wizard.js" defer></script>

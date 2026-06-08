@@ -90,32 +90,18 @@
           <p><strong>Owner: </strong><a href="/profile/view/{{encodeURIComponentH ownerProfile.name}}">{{ownerProfile.name}}</a></p>
           {{else}}
           <p><strong>Owner: </strong>{{ownerProfile.name}}</p>
-          {{/if}}
-          {{/if}}
-        </div>
-        {{#if class.pdf_storage_path}}
-        <div class="content">
-          <hr>
-          <h3 class="title is-4">Class PDF</h3>
-          {{#if classPdfAccessible}}
-          <a class="button is-link is-fullwidth" href="/classes/{{class.id}}/pdf">
-            <span class="icon">
-              <i class="fas fa-file-pdf"></i>
-            </span>
-            <span>Open Class PDF</span>
-          </a>
-          {{else}}
-          <div class="notification is-warning is-light">
-            Unlock this class to gain access to the PDF.
-          </div>
-          {{/if}}
-          {{#if classPdfError}}
-          <p class="help is-danger">{{classPdfError}}</p>
-          {{/if}}
-        </div>
-        {{/if}}
-        <div class="content">
-        {{#if profile}}
+  {{/if}}
+  {{/if}}
+</h1>
+{{#if profile}}
+<div class="buttons mb-4">
+  <a href="/characters/wizard?mode=advent&class={{class.id}}&fresh=1" class="button is-primary">
+    <span class="icon"><i class="fas fa-hat-wizard"></i></span>
+    <span>Create a character with this class</span>
+  </a>
+</div>
+{{/if}}
+{{#if profile}}
         {{#if class.is_public}}
         {{#if class.is_player_created}}
         {{#or (eq class.status 'alpha') (eq class.status 'beta')}}
