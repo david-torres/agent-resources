@@ -1467,11 +1467,35 @@
     submitEl.disabled = true;
     clearSubmitError();
 
+    var headers = { 'Content-Type': 'application/json', 'Accept': 'application/json' };
+    // The wizard posts JSON via fetch (no htmx), so the Authorization header
+    // doesn't get attached automatically. Mirror what app.js does for the
+    // rest of the app and read the token from localStorage; without it the
+    // server's isAuthenticated middleware redirects to /auth/check and the
+    // user lands on the unauthed login page.
+    try {
+      var authToken = localStorage.getItem('authToken');
+      if (authToken) headers['Authorization'] = 'Bearer ' + authToken;
+    } catch (_) { /* private mode / disabled storage — let the server redirect */ }
+
     fetch('/characters/wizard', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify(payload)
+      headers: headers,
+      body: JSON.stringify(payload),
+      // Don't follow a server-side redirect to /auth — the redirect target
+      // is the HTML login page, which would be returned as a "successful"
+      // 200 and break the JSON parse. Detect it explicitly and surface a
+      // session-expired message.
+      redirect: 'manual'
     }).then(function (res) {
+      // type 'opaqueredirect' means the browser refused to follow a
+      // non-GET/HEAD redirect (or we asked it not to). Treat that the same
+      // as a redirect to login: the user is no longer authenticated.
+      if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+        showSubmitError('Your session expired. Please sign in and try again.');
+        submitEl.disabled = false;
+        return;
+      }
       // Always re-enable the button — even on error — so the user can retry
       // (or hit Back to fix something). Validation/save errors come back with
       // a JSON body; htmx-style redirects come back as a 200 with a body
