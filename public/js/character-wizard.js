@@ -18,6 +18,10 @@
   // and class gear. Other modes have a richer merx economy (earned per
   // mission); the wizard for those is out of scope for now.
   var ADVENT_MERX_BUDGET = 2;
+  // Bonus merx awarded per successful mission in advent mode. 1 merx per
+  // successful mission on top of the base 2. Unbounded — character history
+  // matters.
+  var BONUS_MERX_PER_SUCCESSFUL = 1;
 
   // ---------- Data ----------
   var dataEl = document.getElementById('wizard-data');
@@ -52,11 +56,19 @@
     };
   };
 
-  // Mission count per level. Spec: 1→2, 2→2, 3→3, 4→3, 5→4, 6→4, 7→5, 8→5,
-  // 9→6, 10→6. Follows 2 + floor((level-1)/2), so it extends sensibly past 10.
+  // Mission count per level (cumulative). Spec: at level L the character
+  // has needed N missions total to reach L. v2 sequence: 0, 2, 4, 7, 10,
+  // 14, 18, 23, 28, 34 (for L=1..10). Each step costs 2, 2, 3, 3, 4, 4,
+  // 5, 5, 6, 6 missions; the running total is what's displayed.
+  var v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6];
   var missionsForLevel = function (level) {
     var lvl = Math.max(1, parseInt(level, 10) || 1);
-    return 2 + Math.floor((lvl - 1) / 2);
+    if (lvl <= 1) return 0;
+    var sum = 0;
+    for (var i = 0; i < lvl - 1 && i < v2LevelingSequence.length; i++) {
+      sum += v2LevelingSequence[i];
+    }
+    return sum;
   };
 
   var readStorage = function () {
@@ -254,6 +266,21 @@
       // runs before step 4 listeners are wired up).
       if (typeof syncBaseGear === 'function') syncBaseGear();
     }
+    // Toggle selected/not-selected state on the cards. Tracked alongside
+    // state.classId so CSS can dim non-selected cards and emphasize the
+    // selected one (the .wizard-kiosk-frame corner brackets still mark the
+    // pick visually, but the card itself now also signals its state).
+    var cards = track.querySelectorAll('.wizard-kiosk-card');
+    for (var i = 0; i < cards.length; i++) {
+      var cid = cards[i].getAttribute('data-id');
+      if (cid === id) {
+        cards[i].classList.add('is-selected');
+        cards[i].classList.remove('is-not-selected');
+      } else {
+        cards[i].classList.add('is-not-selected');
+        cards[i].classList.remove('is-selected');
+      }
+    }
   };
 
   var renderSelectedPanel = function () {
@@ -301,7 +328,7 @@
     if (successful > missions) successful = missions;
     state.successfulMissions = successful;
     if (levelInput && levelInput.value !== String(lvl)) levelInput.value = String(lvl);
-    if (summaryMissionsEl) summaryMissionsEl.textContent = String(missions);
+    if (summaryMissionsEl) summaryMissionsEl.value = String(missions);
     if (summarySuccessfulInput && summarySuccessfulInput.value !== String(successful)) {
       summarySuccessfulInput.value = String(successful);
     }
@@ -404,13 +431,22 @@
   };
 
   // ---------- Scroll helpers ----------
+  // Center `id`'s card inside the kiosk. Uses scrollIntoView with
+  // { inline: 'center' } because the kiosk has scroll-snap-type: x mandatory
+  // and cards have scroll-snap-align: center: a raw scrollBy() can be
+  // overridden by the browser's snap pass on the next frame, leaving the
+  // kiosk on a *different* card than the one we just picked. scrollIntoView
+  // is the documented way to compose with scroll-snap and lands on the
+  // exact target card on first try. `smooth` controls the animation; the
+  // snap target is the same either way.
   var scrollToCard = function (id, smooth) {
     var el = track.querySelector('[data-id="' + id.replace(/"/g, '\\"') + '"]');
     if (!el) return;
-    var kioskRect = kiosk.getBoundingClientRect();
-    var elRect = el.getBoundingClientRect();
-    var delta = (elRect.left + elRect.width / 2) - (kioskRect.left + kioskRect.width / 2);
-    kiosk.scrollBy({ left: delta, behavior: smooth ? 'smooth' : 'auto' });
+    el.scrollIntoView({
+      inline: 'center',
+      block: 'nearest',
+      behavior: smooth ? 'smooth' : 'auto'
+    });
   };
 
   // Briefly tag the card as "just selected" so CSS can flash a flourish. Re-run
@@ -561,6 +597,16 @@
     var c = selectedClass();
     if (!c || !c.stat_spread) return [];
     return Object.keys(c.stat_spread);
+  };
+
+  // Merx budget. In advent mode the base budget (2) is bumped by 1 per
+  // successful mission, so a veteran can spend more on elective gear.
+  // Outside advent mode the budget is unbounded (free pick).
+  var getMerxBudget = function () {
+    if (DATA.mode !== 'advent') return Infinity;
+    var successful = parseInt(state.successfulMissions, 10) || 0;
+    if (successful < 0) successful = 0;
+    return ADVENT_MERX_BUDGET + (successful * BONUS_MERX_PER_SUCCESSFUL);
   };
 
   // Map a trait name back to the stat it belongs to (via personalityMap).
@@ -948,6 +994,11 @@
     summarySuccessfulInput.addEventListener('input', function () {
       state.successfulMissions = parseInt(summarySuccessfulInput.value, 10) || 0;
       renderSummaryMeta();
+      // The merx budget depends on successfulMissions in advent mode, so
+      // re-render the gear step so the budget badge + Next button reflect
+      // the new total. Safe to call when not on step 4 (it just rewrites
+      // the same DOM).
+      if (typeof renderGearStep === 'function') renderGearStep();
     });
   }
 
@@ -1073,7 +1124,7 @@
       if (pool[i].key === key) { shop = pool[i]; break; }
     }
     if (!shop) return;
-    var budget = DATA.mode === 'advent' ? ADVENT_MERX_BUDGET : Infinity;
+    var budget = getMerxBudget();
     if (computeMerxSpent() + shop.cost > budget) return; // over budget
     if (shop.kind === 'common') {
       if (!Array.isArray(state.commonItems)) state.commonItems = [];
@@ -1094,7 +1145,7 @@
     var name = (rawName == null ? customCommonItemInput.value : rawName).trim();
     if (!name) return;
     if (name.length > 80) name = name.slice(0, 80);
-    var budget = DATA.mode === 'advent' ? ADVENT_MERX_BUDGET : Infinity;
+    var budget = getMerxBudget();
     if (computeMerxSpent() + COMMON_ITEM_COST > budget) return; // over budget
     if (!Array.isArray(state.commonItems)) state.commonItems = [];
     state.commonItems.push({ name: name, custom: true });
@@ -1139,7 +1190,7 @@
     } else {
       var tab = activeShopTab();
       var filtered = pool.filter(function (it) { return it.kind === tab; });
-      var budget = DATA.mode === 'advent' ? ADVENT_MERX_BUDGET : Infinity;
+      var budget = getMerxBudget();
       var spent = computeMerxSpent();
       var remaining = budget === Infinity ? Infinity : budget - spent;
       if (filtered.length === 0) {
@@ -1210,7 +1261,7 @@
     // ----- Next button gates on budget being spent (advent mode only) -----
     if (step4Next) {
       if (DATA.mode === 'advent') {
-        step4Next.disabled = spent < ADVENT_MERX_BUDGET;
+        step4Next.disabled = spent < getMerxBudget();
       } else {
         step4Next.disabled = false;
       }
@@ -1403,6 +1454,7 @@
       is_public: state.isPublic !== false, // default true on the wizard
       hide_from_search: !!state.hideFromSearch,
       creator_mode: state.mode || null,
+      commissary_reward: 0,
       // 3 trait rows. Use trait0/trait1/trait2 keys — the model pulls these
       // out before insert and writes them to the traits table.
       trait0: state.traits[0] || null,
@@ -1425,6 +1477,16 @@
     if (Array.isArray(state.commonItems) && state.commonItems.length) {
       payload.common_items = state.commonItems
         .map(function (i) { return i && i.name ? i.name : null; })
+        .filter(Boolean);
+    }
+    // Class abilities: the chosen class's full ability list is auto-granted
+    // to the character in advent mode. We send them as {name, class_id} so
+    // the server's normalizeAbilityItems + setCharacterAbilities writes
+    // rows into public.class_abilities.
+    var c = (typeof selectedClass === 'function') ? selectedClass() : null;
+    if (c && Array.isArray(c.abilities) && c.abilities.length) {
+      payload.abilities = c.abilities
+        .map(function (a) { return a && a.name ? { name: a.name, class_id: state.classId } : null; })
         .filter(Boolean);
     }
     return payload;
@@ -1548,19 +1610,33 @@
   // onto it. Scrolling no longer mutates state.classId, so the ring tracks
   // the card we set here (and any later arrow-key step) instead of the
   // whichever card happens to be under the kiosk's center line.
-  var initialId = state.classId && classesById[state.classId]
+  // On a fresh page load, pick a random class so the kiosk pre-scrolls to
+  // something interesting. Order of preference:
+  //   1. state.classId from a stored draft (so refreshes don't re-roll a
+  //      class the user already picked).
+  //   2. ?class=... on the URL (preselected class).
+  //   3. Random pick from the class list.
+  var initialId = (state.classId && classesById[state.classId])
     ? state.classId
-    : DATA.classes[Math.floor(Math.random() * DATA.classes.length)].id;
+    : (DATA.preselectedClassId && classesById[DATA.preselectedClassId]
+        ? DATA.preselectedClassId
+        : DATA.classes[Math.floor(Math.random() * DATA.classes.length)].id);
   setClassId(initialId);
   renderSelectedPanel();
   renderSummary();
   // Defer the initial scroll to the next frame so the kiosk and its
   // children have their final layout dimensions. Without this, the first
   // call to getBoundingClientRect on the kiosk can return a 0-width rect
-  // and the random card ends up off-screen.
+  // and the random card ends up off-screen. A single delayed retry guards
+  // against cards' art images still loading and shifting the track width
+  // a beat after the first scroll.
   requestAnimationFrame(function () {
     scrollToCard(initialId, false);
     positionRing();
-    setTimeout(function () { flashSelectedCard(initialId); }, 250);
   });
+  setTimeout(function () {
+    scrollToCard(initialId, false);
+    positionRing();
+    flashSelectedCard(initialId);
+  }, 200);
 })();

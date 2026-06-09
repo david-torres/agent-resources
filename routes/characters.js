@@ -343,6 +343,14 @@ router.post('/wizard', isAuthenticated, async (req, res) => {
     const cm = parseInt(body.completed_missions, 10);
     body.completed_missions = Number.isFinite(cm) ? Math.max(0, cm) : 0;
   }
+  // The wizard's UI has no commissary_reward field; the column is NOT NULL,
+  // so default to 0 unless auto_calculate-derived downstream overrides it.
+  if (body.commissary_reward == null || body.commissary_reward === '') {
+    body.commissary_reward = 0;
+  } else {
+    const cr = parseInt(body.commissary_reward, 10);
+    body.commissary_reward = Number.isFinite(cr) ? Math.max(0, cr) : 0;
+  }
   body.name = trimmedName;
   body.is_public = body.is_public === false ? false : true;
   body.hide_from_search = !!body.hide_from_search;

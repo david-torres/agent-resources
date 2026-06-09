@@ -64,7 +64,8 @@ CREATE TABLE characters (
   class_id UUID NULL,
   common_items JSONB DEFAULT '[]'::jsonb,
   quirks JSONB NOT NULL DEFAULT '[]'::jsonb,
-  accessories JSONB NOT NULL DEFAULT '[]'::jsonb
+  accessories JSONB NOT NULL DEFAULT '[]'::jsonb,
+  creator_mode TEXT CHECK (creator_mode IS NULL OR creator_mode IN ('advent', 'aspiring', 'aspirant'))
 );
 
 -- missions table
@@ -129,6 +130,7 @@ CREATE TABLE IF NOT EXISTS classes (
     visibility text,
     gear JSONB DEFAULT '[]'::jsonb,
     abilities JSONB DEFAULT '[]'::jsonb,
+    stat_spread JSONB NOT NULL DEFAULT '{}'::jsonb,
     created_by uuid REFERENCES profiles(id),
     created_at timestamp NOT NULL DEFAULT now(),
     updated_at timestamp NOT NULL DEFAULT now(),
@@ -296,6 +298,7 @@ ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_url text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS image_crop JSONB;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS teaser text;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS tips text;
+ALTER TABLE classes ADD COLUMN IF NOT EXISTS stat_spread JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS gear JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS abilities JSONB DEFAULT '[]'::jsonb;
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS visibility text;

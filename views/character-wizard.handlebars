@@ -38,7 +38,7 @@
       </div>
       <div class="column is-one-third">
         <label class="label is-small mb-1">Missions</label>
-        <span id="summaryMissions" class="tag is-light is-fullwidth">0</span>
+        <input class="input is-small" id="summaryMissions" type="text" readonly value="0">
       </div>
       <div class="column is-one-third">
         <label class="label is-small mb-1" for="summarySuccessful">Successful</label>
@@ -60,7 +60,12 @@
   </div>
 
   <div class="wizard-kiosk" id="classKiosk" aria-label="Class selector">
-    <div class="wizard-kiosk-frame" aria-hidden="true"></div>
+    <div class="wizard-kiosk-frame" aria-hidden="true">
+      <span class="wizard-kiosk-frame-corner wizard-kiosk-frame-corner-tl"></span>
+      <span class="wizard-kiosk-frame-corner wizard-kiosk-frame-corner-tr"></span>
+      <span class="wizard-kiosk-frame-corner wizard-kiosk-frame-corner-bl"></span>
+      <span class="wizard-kiosk-frame-corner wizard-kiosk-frame-corner-br"></span>
+    </div>
     <div class="wizard-kiosk-track" id="classKioskTrack">
       <!-- Cards injected by character-wizard.js -->
     </div>

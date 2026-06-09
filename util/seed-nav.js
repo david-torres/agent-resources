@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('./env');
 const { createClient } = require('@supabase/supabase-js');
 
 // Initialize Supabase client with secret key to bypass RLS

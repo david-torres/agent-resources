@@ -90,18 +90,38 @@
           <p><strong>Owner: </strong><a href="/profile/view/{{encodeURIComponentH ownerProfile.name}}">{{ownerProfile.name}}</a></p>
           {{else}}
           <p><strong>Owner: </strong>{{ownerProfile.name}}</p>
-  {{/if}}
-  {{/if}}
-</h1>
-{{#if profile}}
-<div class="buttons mb-4">
-  <a href="/characters/wizard?mode=advent&class={{class.id}}&fresh=1" class="button is-primary">
-    <span class="icon"><i class="fas fa-hat-wizard"></i></span>
-    <span>Create a character with this class</span>
-  </a>
-</div>
-{{/if}}
-{{#if profile}}
+          {{/if}}
+          {{/if}}
+        </div>
+        {{#if class.pdf_storage_path}}
+        <div class="content">
+          <hr>
+          <h3 class="title is-4">Class PDF</h3>
+          {{#if classPdfAccessible}}
+          <a class="button is-link is-fullwidth" href="/classes/{{class.id}}/pdf">
+            <span class="icon">
+              <i class="fas fa-file-pdf"></i>
+            </span>
+            <span>Open Class PDF</span>
+          </a>
+          {{else}}
+          <div class="notification is-warning is-light">
+            Unlock this class to gain access to the PDF.
+          </div>
+          {{/if}}
+          {{#if classPdfError}}
+          <p class="help is-danger">{{classPdfError}}</p>
+          {{/if}}
+        </div>
+        {{/if}}
+        {{#if profile}}
+        <div class="content">
+          <hr>
+          <a href="/characters/wizard?mode=advent&class={{class.id}}&fresh=1" class="button is-primary is-fullwidth">
+            <span class="icon"><i class="fas fa-hat-wizard"></i></span>
+            <span>Create a character with this class</span>
+          </a>
+        </div>
         {{#if class.is_public}}
         {{#if class.is_player_created}}
         {{#or (eq class.status 'alpha') (eq class.status 'beta')}}
@@ -120,73 +140,67 @@
         {{/if}}
         {{/if}}
         {{/if}}
-        </div>
       </div>
     </div>
-    
   </div>
-  <div class="columns is-two-thirds">
-    <div class="column">
-      <div class="card">
-        <div class="card-content">
-          <div class="content">
-            <h3 class="title is-3">Signature Gear</h3>
-            <div class="columns">
-              <div class="column is-half">
-                <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
-              {{#each (first class.gear 3) as |gear|}}
-                <div class="card">
-                  <div class="card-content">
-                    <div class="content">
-                      <div class="is-flex is-justify-content-space-between is-align-items-center">
-                        <h4 class="title is-4 mb-1">{{gear.name}}</h4>
-                        <span class="tag is-info is-light">Base</span>
-                      </div>
-                      {{{markdown gear.description}}}
-                    </div>
-                  </div>
-                </div>
-              {{/each}}
-              </div>
-
-              <div class="column is-half">
-                <p class="has-text-weight-semibold has-text-grey mb-2">Elective Gear</p>
-              {{#each (last class.gear 3) as |gear|}}
-                <div class="card">
-                  <div class="card-content">
-                    <div class="content">
-                      <div class="is-flex is-justify-content-space-between is-align-items-center">
-                        <h4 class="title is-4 mb-1">{{gear.name}}</h4>
-                        <span class="tag is-link is-light">Elective</span>
-                      </div>
-                      {{{markdown gear.description}}}
-                    </div>
-                  </div>
-                </div>
-              {{/each}}
-              </div>
-
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="column">
-        <div class="card">
-          <div class="card-content">
-            <div class="content">
-              <h3 class="title is-3">Abilities</h3>
-              {{#each class.abilities}}
+  <div class="column is-two-thirds">
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-3">Signature Gear</h3>
+          <div class="columns">
+            <div class="column is-half">
+              <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
+            {{#each (first class.gear 3) as |gear|}}
               <div class="card">
                 <div class="card-content">
                   <div class="content">
-                    <h4 class="title is-4">{{this.name}}</h4>
-                    {{{markdown this.description}}}
+                    <div class="is-flex is-justify-content-space-between is-align-items-center">
+                      <h4 class="title is-4 mb-1">{{gear.name}}</h4>
+                      <span class="tag is-info is-light">Base</span>
+                    </div>
+                    {{{markdown gear.description}}}
                   </div>
                 </div>
               </div>
-              {{/each}}
+            {{/each}}
+            </div>
+
+            <div class="column is-half">
+              <p class="has-text-weight-semibold has-text-grey mb-2">Elective Gear</p>
+            {{#each (last class.gear 3) as |gear|}}
+              <div class="card">
+                <div class="card-content">
+                  <div class="content">
+                    <div class="is-flex is-justify-content-space-between is-align-items-center">
+                      <h4 class="title is-4 mb-1">{{gear.name}}</h4>
+                      <span class="tag is-link is-light">Elective</span>
+                    </div>
+                    {{{markdown gear.description}}}
+                  </div>
+                </div>
+              </div>
+            {{/each}}
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-3">Abilities</h3>
+          {{#each class.abilities}}
+          <div class="card">
+            <div class="card-content">
+              <div class="content">
+                <h4 class="title is-4">{{this.name}}</h4>
+                {{{markdown this.description}}}
+              </div>
             </div>
           </div>
+          {{/each}}
         </div>
       </div>
     </div>

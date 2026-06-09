@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('./env');
 const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread } = require('./enclave-consts');

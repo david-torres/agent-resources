@@ -1,3 +1,4 @@
+require('./util/env');
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
@@ -6,7 +7,6 @@ const { renderMarkdown } = require('./util/markdown');
 const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
 const path = require('path');
-require('dotenv').config();
 
 const homeRoutes = require('./routes/home');
 const authRoutes = require('./routes/auth');
