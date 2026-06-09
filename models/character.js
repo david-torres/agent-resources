@@ -205,6 +205,15 @@ const createCharacter = async (characterReq, profile) => {
     characterReq.hide_from_search = false;
   }
 
+  // handle creator_mode (wizard mode label). Reject anything outside the
+  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
+    characterReq.creator_mode = null;
+  } else if (!allowedModes.includes(characterReq.creator_mode)) {
+    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
+  }
+
   // normalize v2 JSONB fields before insert
   if (linkedVersion === 'v2') {
     characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
@@ -366,6 +375,15 @@ const updateCharacter = async (id, characterReq, profile) => {
     characterReq.hide_from_search = true;
   } else {
     characterReq.hide_from_search = false;
+  }
+
+  // handle creator_mode (wizard mode label). Reject anything outside the
+  // allowed set; treat empty/missing as NULL.
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
+    characterReq.creator_mode = null;
+  } else if (!allowedModes.includes(characterReq.creator_mode)) {
+    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
   }
 
   // handle auto_calculate
