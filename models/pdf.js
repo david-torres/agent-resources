@@ -1,4 +1,4 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { supabaseAdmin } = require('./_base');
 const path = require('path');
 
 const CLASS_PDF_BUCKET = process.env.SUPABASE_CLASS_PDF_BUCKET || 'class-pdfs';
@@ -30,7 +30,7 @@ const uploadToBucket = async (bucket, storagePath, file, { cacheControl = '3600'
   if (!looksLikePdf(file.buffer)) {
     return { data: null, error: new Error('Uploaded file is not a valid PDF') };
   }
-  const { error } = await supabase.storage
+  const { error } = await supabaseAdmin.storage
     .from(bucket)
     .upload(storagePath, file.buffer, {
       contentType: 'application/pdf',
@@ -46,7 +46,7 @@ const uploadToBucket = async (bucket, storagePath, file, { cacheControl = '3600'
 const removeIfExists = async (bucket, storagePath) => {
   if (!storagePath) return;
   try {
-    await supabase.storage.from(bucket).remove([storagePath]);
+    await supabaseAdmin.storage.from(bucket).remove([storagePath]);
   } catch (error) {
     // noop – deletion failures should not block upload flows
     console.error('Failed to remove storage object', bucket, storagePath, error.message);
@@ -103,7 +103,7 @@ const deletePdfObject = async ({ bucket, path: storagePath } = {}) => {
   if (!bucket || !storagePath) {
     return { error: new Error('Missing bucket or storage path') };
   }
-  const { error } = await supabase.storage.from(bucket).remove([storagePath]);
+  const { error } = await supabaseAdmin.storage.from(bucket).remove([storagePath]);
   if (error) {
     console.error('Failed to delete PDF from storage', bucket, storagePath, error.message);
     return { error };
@@ -119,4 +119,3 @@ module.exports = {
   getSignedPdfUrl,
   deletePdfObject
 };
-
