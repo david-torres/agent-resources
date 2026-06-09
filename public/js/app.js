@@ -107,6 +107,18 @@ const App = (function (document, supabase, htmx) {
     _displayNotification('danger', message);
   }
 
+  const _extractErrorMessage = (response) => {
+    const fallback = 'An unexpected error occurred. Please try again.';
+    if (!response) return fallback;
+    const raw = String(response).trim();
+    if (!raw) return fallback;
+
+    const template = document.createElement('template');
+    template.innerHTML = raw;
+    const text = template.content.textContent.trim();
+    return text || raw;
+  };
+
   // Copy text to the clipboard, falling back to a temporary textarea +
   // execCommand for insecure contexts or browsers without the async API.
   const _copyToClipboard = (text) => {
@@ -700,7 +712,7 @@ const App = (function (document, supabase, htmx) {
 
       // handle htmx errors
       document.body.addEventListener("htmx:responseError", function (event) {
-        _displayError(event.detail.xhr.response);
+        _displayError(_extractErrorMessage(event.detail.xhr.response));
       });
 
       document.addEventListener('htmx:afterRequest', function (evt) {
