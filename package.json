@@ -8,6 +8,7 @@
     "dev": "bun --watch index.js",
     "test": "bun test",
     "seed:classes": "bun run util/seed-classes.js",
+    "seed:admin": "bun run util/seed-admin.js",
     "db:backup": "sh scripts/db-backup.sh"
   },
   "dependencies": {
