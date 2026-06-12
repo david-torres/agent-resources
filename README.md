@@ -129,6 +129,15 @@ bun run seed:admin
 bun run seed:classes
 ```
 
+#### 5. (Optional) Check schema and tables
+
+You can see a visual representation of the database schema on the Supabase
+dashboard for your project under Database > Schema Visualizser.
+
+You can check the rows of your table from the Supabase dashboard for your
+project under Table Editor. If you ran `seed:admin` and `seed:classes` above,
+you should see them in your database.
+
 #### Backups
 
 `scripts/db-backup.sh` runs `pg_dump` against the configured Supabase pooler
