@@ -65,7 +65,8 @@
 
       <h4 class="title is-5 mt-5">Abilities</h4>
       <p class="has-text-grey is-size-7 mb-2">
-        Add a perk to any ability you have.
+        Add a perk to any ability you have. A new perk can compound with an
+        existing perk or another perk you add here.
       </p>
       <div id="levelUpAbilities">
         {{#each character.abilities}}
@@ -77,6 +78,20 @@
               <span>Add perk</span>
             </button>
           </div>
+          {{#with (perksForAbility ../character.ability_perks this.id) as |perks|}}
+          {{#if perks.length}}
+          <div class="level-up-existing-perks content is-small mb-2">
+            <ol>
+              {{#each perks}}
+              <li class="level-up-existing-perk" data-perk-id="{{this.id}}" data-position="{{this.position}}">
+                <span class="level-up-existing-perk-text">{{this.text}}</span>
+                {{#if this.compounds_with}}<span class="tag is-info is-light ml-1">compounding</span>{{/if}}
+              </li>
+              {{/each}}
+            </ol>
+          </div>
+          {{/if}}
+          {{/with}}
           <div class="level-up-perks"></div>
         </div>
         {{/each}}

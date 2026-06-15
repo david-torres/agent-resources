@@ -261,11 +261,18 @@
     </div>
   </div>
 
-  <p class="has-text-danger is-size-7 mb-3" id="wizardSubmitError" hidden></p>
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
-    <p class="control"><button type="button" class="button is-success" id="wizardSubmit" disabled>Submit</button></p>
+    <p class="control">
+      <button type="button" class="button is-success" id="wizardSubmit" disabled
+              hx-post="/characters/wizard"
+              hx-vals='js:{payload: JSON.stringify(CharacterWizard.buildSubmitPayload())}'
+              hx-disabled-elt="this"
+              hx-indicator="this"
+              hx-on::after-request="if(event.detail.successful) CharacterWizard.onSubmitSuccess()">Submit</button>
+    </p>
   </div>
 </section>
 
+<script src="/js/character-common.js" defer></script>
 <script src="/js/character-wizard.js" defer></script>

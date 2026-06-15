@@ -2,109 +2,71 @@
 //
 // Flow:
 //   - Open the modal with App.openModal('#levelUpModal').
-//   - User can edit stat values, add a perk to any ability, fill in
+//   - User can edit stat values, add a perk to any ability (optionally
+//     compounding it with an existing or sibling perk), fill in
 //     missing-mission text boxes, and toggle "Conduit Credit".
-//   - On Save:
-//       1. PUT /characters/:id/:name? with the new level, completed_missions,
-//          and the 12 stat integers.
-//       2. For each non-empty missing-mission box, POST /missions to create
-//          a real mission row tied to this character.
-//       3. Reload the page.
+//   - On Save: a single POST /characters/:id/level-up carries the new level,
+//     completed_missions, the 12 stat integers, any backfill mission names (or
+//     the conduit-credit flag), and the newly-added perks. The server creates
+//     the mission/credit rows, re-derives the character's totals, and appends
+//     the perks (resolving their compound links). Then the page reloads.
 //
-// Perks added in the modal are kept in local JS state; a follow-up
-// PUT to the character with ability_perks persists them via the
-// existing updateCharacter path.
+// Perks added here are append-only: each carries a client `ref` so a new perk
+// can compound with another perk added in the same save (`new:<ref>`) or with
+// an existing perk (by its row id). The server validates and persists the link.
 
-(function () {
-  'use strict';
+const CharacterLevelUp = (function () {
+  const { missionsForLevel, ready, getAuthHeader } = CharacterCommon;
+  const showError = (msg) => CharacterCommon.showError('levelUpError', msg);
+  const clearError = () => CharacterCommon.clearError('levelUpError');
 
-  var STATS = [
-    'vitality', 'might', 'resilience', 'spirit',
-    'arcane', 'will', 'sensory', 'reflex',
-    'vigor', 'skill', 'intelligence', 'luck'
-  ];
-
-  // Cumulative v2 missions needed to reach level L (matches
-  // v2LevelingSequence in util/enclave-consts.js).
-  var v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6];
-  function missionsForLevel(level) {
-    var lvl = Math.max(1, parseInt(level, 10) || 1);
-    if (lvl <= 1) return 0;
-    var sum = 0;
-    for (var i = 0; i < lvl - 1 && i < v2LevelingSequence.length; i++) sum += v2LevelingSequence[i];
-    return sum;
-  }
-
-  function ready(fn) {
-    if (document.readyState !== 'loading') fn();
-    else document.addEventListener('DOMContentLoaded', fn);
-  }
-
-  function getAuthHeader() {
-    var token = localStorage.getItem('authToken');
-    return token ? { 'Authorization': 'Bearer ' + token, 'Refresh-Token': localStorage.getItem('refreshToken') || '' } : {};
-  }
-
-  function showError(msg) {
-    var box = document.getElementById('levelUpError');
-    if (!box) return;
-    box.textContent = msg;
-    box.classList.remove('is-hidden');
-  }
-  function clearError() {
-    var box = document.getElementById('levelUpError');
-    if (!box) return;
-    box.classList.add('is-hidden');
-    box.textContent = '';
-  }
-
-  function updateStatTotal() {
-    var sum = Array.prototype.slice.call(document.querySelectorAll('.level-up-stat'))
-      .reduce(function (s, el) {
-        var n = parseInt(el.value, 10);
+  const updateStatTotal = () => {
+    const sum = Array.from(document.querySelectorAll('.level-up-stat'))
+      .reduce((s, el) => {
+        const n = parseInt(el.value, 10);
         return s + (isNaN(n) ? 0 : n);
       }, 0);
-    var t = document.getElementById('levelUpTotal');
+    const t = document.getElementById('levelUpTotal');
     if (t) t.textContent = sum;
-  }
+  };
 
   // Build a single mission textbox row.
-  function makeMissionRow(value) {
-    var row = document.createElement('div');
+  const makeMissionRow = (value) => {
+    const row = document.createElement('div');
     row.className = 'field has-addons mb-2 level-up-mission-row';
-    var control = document.createElement('div');
+    const control = document.createElement('div');
     control.className = 'control is-expanded';
-    var input = document.createElement('input');
+    const input = document.createElement('input');
     input.className = 'input is-small level-up-mission';
     input.type = 'text';
     input.placeholder = 'Mission name';
     input.value = value || '';
     control.appendChild(input);
     row.appendChild(control);
-    var removeCtl = document.createElement('div');
+    const removeCtl = document.createElement('div');
     removeCtl.className = 'control';
-    var removeBtn = document.createElement('button');
+    const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'button is-small is-light level-up-remove-mission';
     removeBtn.innerHTML = '<span class="icon"><i class="fas fa-times"></i></span>';
-    removeBtn.addEventListener('click', function () { row.remove(); });
+    removeBtn.addEventListener('click', () => { row.remove(); });
     removeCtl.appendChild(removeBtn);
     row.appendChild(removeCtl);
     return row;
-  }
+  };
 
-  function ensureEmptyMissionRow() {
-    var container = document.getElementById('levelUpMissingMissions');
+  const ensureEmptyMissionRow = () => {
+    const container = document.getElementById('levelUpMissingMissions');
     if (!container) return;
-    var rows = container.querySelectorAll('.level-up-mission-row');
-    var last = rows[rows.length - 1];
+    const rows = container.querySelectorAll('.level-up-mission-row');
+    const last = rows[rows.length - 1];
     if (!last || last.querySelector('.level-up-mission').value.trim() !== '') {
       container.appendChild(makeMissionRow(''));
     }
-  }
+  };
 
-  function renderInitialMissingMissions(count) {
-    var container = document.getElementById('levelUpMissingMissions');
+  const renderInitialMissingMissions = (count) => {
+    const container = document.getElementById('levelUpMissingMissions');
     if (!container) return;
     container.innerHTML = '';
     if (count <= 0) {
@@ -113,50 +75,131 @@
       container.appendChild(makeMissionRow(''));
       return;
     }
-    for (var i = 0; i < count; i++) container.appendChild(makeMissionRow(''));
-  }
+    for (let i = 0; i < count; i++) container.appendChild(makeMissionRow(''));
+  };
 
-  function buildPerkInput(abilityId) {
-    var wrapper = document.createElement('div');
+  let perkRefSeq = 0;
+
+  const truncateLabel = (s) => {
+    s = (s || '').trim();
+    if (s.length > 40) s = s.slice(0, 39) + '…';
+    return s || '(empty)';
+  };
+
+  const makeOption = (value, label) => {
+    const o = document.createElement('option');
+    o.value = value;
+    o.textContent = label;
+    return o;
+  };
+
+  // Rebuild the compound-with <select> for every new perk in this ability box.
+  // Targets are the ability's existing perks (by row id) plus the other new
+  // perks added in this session (by `new:<ref>`); a perk can't compound with
+  // itself. Options are built via the DOM (textContent) so perk text can't
+  // inject markup. The server validates the chosen target independently.
+  const refreshCompoundOptions = (box) => {
+    const existingPerks = Array.from(box.querySelectorAll('.level-up-existing-perk'))
+      .map((el) => {
+        const textEl = el.querySelector('.level-up-existing-perk-text');
+        return {
+          value: el.getAttribute('data-perk-id'),
+          label: 'Existing: ' + truncateLabel(textEl ? textEl.textContent : '')
+        };
+      });
+    const newWrappers = Array.from(box.querySelectorAll('.level-up-perk'));
+
+    newWrappers.forEach((wrapper) => {
+      const sel = wrapper.querySelector('.level-up-perk-compound');
+      if (!sel) return;
+      const selfRef = wrapper.getAttribute('data-ref');
+      const prev = sel.value;
+
+      while (sel.firstChild) sel.removeChild(sel.firstChild);
+      sel.appendChild(makeOption('', '(no compound)'));
+      existingPerks.forEach((p) => {
+        if (p.value) sel.appendChild(makeOption(p.value, p.label));
+      });
+      newWrappers.forEach((other) => {
+        const ref = other.getAttribute('data-ref');
+        if (ref === selfRef) return;
+        const t = other.querySelector('.level-up-perk-text');
+        sel.appendChild(makeOption('new:' + ref, 'New: ' + truncateLabel(t ? t.value : '')));
+      });
+
+      // Keep the prior choice when its target still exists; else clear it.
+      sel.value = prev;
+      if (sel.value !== prev) sel.value = '';
+    });
+  };
+
+  const buildPerkInput = (abilityId) => {
+    const wrapper = document.createElement('div');
     wrapper.className = 'field has-addons mb-2 level-up-perk';
     wrapper.setAttribute('data-ability-id', abilityId);
-    var c1 = document.createElement('div');
+    wrapper.setAttribute('data-ref', 'p' + (++perkRefSeq));
+
+    const c1 = document.createElement('div');
     c1.className = 'control is-expanded';
-    var input = document.createElement('input');
+    const input = document.createElement('input');
     input.className = 'input is-small level-up-perk-text';
     input.type = 'text';
     input.placeholder = 'Perk text';
     c1.appendChild(input);
     wrapper.appendChild(c1);
-    var c2 = document.createElement('div');
+
+    // Compound-with selector; options are filled by refreshCompoundOptions.
+    const c2 = document.createElement('div');
     c2.className = 'control';
-    var btn = document.createElement('button');
+    const selectWrap = document.createElement('div');
+    selectWrap.className = 'select is-small';
+    const sel = document.createElement('select');
+    sel.className = 'level-up-perk-compound';
+    sel.appendChild(makeOption('', '(no compound)'));
+    selectWrap.appendChild(sel);
+    c2.appendChild(selectWrap);
+    wrapper.appendChild(c2);
+
+    // Refresh sibling labels when this perk's text settles.
+    input.addEventListener('change', () => {
+      const box = wrapper.closest('.level-up-ability');
+      if (box) refreshCompoundOptions(box);
+    });
+
+    const c3 = document.createElement('div');
+    c3.className = 'control';
+    const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'button is-small is-light';
     btn.innerHTML = '<span class="icon"><i class="fas fa-times"></i></span>';
-    btn.addEventListener('click', function () { wrapper.remove(); });
-    c2.appendChild(btn);
-    wrapper.appendChild(c2);
-    return wrapper;
-  }
+    btn.addEventListener('click', () => {
+      const box = wrapper.closest('.level-up-ability');
+      wrapper.remove();
+      if (box) refreshCompoundOptions(box);
+    });
+    c3.appendChild(btn);
+    wrapper.appendChild(c3);
 
-  function init() {
-    var openBtn = document.getElementById('levelUpBtn');
-    var modal = document.getElementById('levelUpModal');
+    return wrapper;
+  };
+
+  const init = () => {
+    const openBtn = document.getElementById('levelUpBtn');
+    const modal = document.getElementById('levelUpModal');
     if (!openBtn || !modal) return;
 
-    var statBox = document.getElementById('statsBox');
+    const statBox = document.getElementById('statsBox');
     if (!statBox) return;
-    var characterId = statBox.getAttribute('data-character-id');
-    var characterName = statBox.getAttribute('data-character-name') || '';
-    var currentLevel = parseInt(statBox.getAttribute('data-character-level') || '1', 10);
+    const characterId = statBox.getAttribute('data-character-id');
+    const characterName = statBox.getAttribute('data-character-name') || '';
+    let currentLevel = parseInt(statBox.getAttribute('data-character-level') || '1', 10);
     if (isNaN(currentLevel) || currentLevel < 1) currentLevel = 1;
-    var completedMissions = parseInt(openBtn.getAttribute('data-completed-missions') || '0', 10);
+    let completedMissions = parseInt(openBtn.getAttribute('data-completed-missions') || '0', 10);
     if (isNaN(completedMissions) || completedMissions < 0) completedMissions = 0;
 
-    var nextLevel = currentLevel + 1;
-    var required = missionsForLevel(nextLevel);
-    var missing = Math.max(0, required - completedMissions);
+    const nextLevel = currentLevel + 1;
+    const required = missionsForLevel(nextLevel);
+    const missing = Math.max(0, required - completedMissions);
 
     // Render initial mission rows only if the section is in the DOM (the
     // server only emits the container when there's at least one missing
@@ -167,118 +210,106 @@
     }
 
     // Wire stat input live total.
-    Array.prototype.forEach.call(document.querySelectorAll('.level-up-stat'), function (el) {
+    document.querySelectorAll('.level-up-stat').forEach((el) => {
       el.addEventListener('input', updateStatTotal);
     });
     updateStatTotal();
 
     // Wire "Add perk" buttons.
-    Array.prototype.forEach.call(document.querySelectorAll('.level-up-add-perk'), function (btn) {
-      btn.addEventListener('click', function () {
-        var abilityBox = btn.closest('.level-up-ability');
+    document.querySelectorAll('.level-up-add-perk').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const abilityBox = btn.closest('.level-up-ability');
         if (!abilityBox) return;
-        var abilityId = abilityBox.getAttribute('data-ability-id');
-        var perksContainer = abilityBox.querySelector('.level-up-perks');
+        const abilityId = abilityBox.getAttribute('data-ability-id');
+        const perksContainer = abilityBox.querySelector('.level-up-perks');
         if (!perksContainer) return;
-        perksContainer.appendChild(buildPerkInput(abilityId));
-        var firstInput = perksContainer.querySelector('.level-up-perk-text');
-        if (firstInput) firstInput.focus();
+        const newPerk = buildPerkInput(abilityId);
+        perksContainer.appendChild(newPerk);
+        refreshCompoundOptions(abilityBox);
+        const textInput = newPerk.querySelector('.level-up-perk-text');
+        if (textInput) textInput.focus();
       });
     });
 
     // Open / close the modal.
-    openBtn.addEventListener('click', function () {
+    openBtn.addEventListener('click', () => {
       if (typeof App !== 'undefined' && App.openModal) App.openModal('#levelUpModal');
       else modal.classList.add('is-active');
     });
 
-    // Save handler.
-    var saveBtn = document.getElementById('levelUpSaveBtn');
-    if (saveBtn) saveBtn.addEventListener('click', onSave);
-
-    function onSave() {
+    const onSave = () => {
       clearError();
       saveBtn.classList.add('is-loading');
       saveBtn.disabled = true;
 
-      var stats = {};
-      Array.prototype.forEach.call(document.querySelectorAll('.level-up-stat'), function (el) {
-        var stat = el.getAttribute('data-stat');
-        var n = parseInt(el.value, 10);
+      const stats = {};
+      document.querySelectorAll('.level-up-stat').forEach((el) => {
+        const stat = el.getAttribute('data-stat');
+        let n = parseInt(el.value, 10);
         if (isNaN(n) || n < 0) n = 0;
         if (n > 20) n = 20;
         stats[stat] = n;
       });
 
-      var perksByAbility = {};
-      Array.prototype.forEach.call(document.querySelectorAll('.level-up-perk-text'), function (el) {
-        var text = (el.value || '').trim();
+      // Each new perk carries its client `ref` and chosen compound link. The
+      // server appends perks (assigning positions) and resolves the link to a
+      // row id: `new:<ref>` points at another perk in this batch, a bare value
+      // is an existing perk's id. Empty perks are skipped.
+      const flatPerks = [];
+      document.querySelectorAll('.level-up-perk').forEach((wrapper) => {
+        const textEl = wrapper.querySelector('.level-up-perk-text');
+        const text = (textEl && textEl.value || '').trim();
         if (!text) return;
-        var perk = el.closest('.level-up-perk');
-        if (!perk) return;
-        var abilityId = perk.getAttribute('data-ability-id');
-        if (!perksByAbility[abilityId]) perksByAbility[abilityId] = [];
-        perksByAbility[abilityId].push({ class_ability_id: abilityId, text: text });
-      });
-      var flatPerks = [];
-      Object.keys(perksByAbility).forEach(function (k) {
-        perksByAbility[k].forEach(function (p, i) {
-          flatPerks.push({ class_ability_id: p.class_ability_id, text: p.text, position: i });
+        const sel = wrapper.querySelector('.level-up-perk-compound');
+        flatPerks.push({
+          class_ability_id: wrapper.getAttribute('data-ability-id'),
+          text: text,
+          ref: wrapper.getAttribute('data-ref'),
+          compounds_with: (sel && sel.value) ? sel.value : null
         });
       });
 
-      var useConduitCredit = document.getElementById('levelUpConduitCredit').checked;
-      var missionNames = useConduitCredit
+      const conduitCreditEl = document.getElementById('levelUpConduitCredit');
+      const useConduitCredit = !!(conduitCreditEl && conduitCreditEl.checked);
+      const missionNames = useConduitCredit
         ? []
-        : Array.prototype.slice.call(document.querySelectorAll('.level-up-mission'))
-            .map(function (el) { return (el.value || '').trim(); })
-            .filter(function (v) { return v.length > 0; });
+        : Array.from(document.querySelectorAll('.level-up-mission'))
+            .map((el) => (el.value || '').trim())
+            .filter((v) => v.length > 0);
 
-      var putUrl = '/characters/' + encodeURIComponent(characterId) + '/' + encodeURIComponent(characterName);
-      var fd = new FormData();
-      fd.set('level', String(nextLevel));
-      fd.set('completed_missions', String(completedMissions + missionNames.length));
-      Object.keys(stats).forEach(function (k) { fd.set(k, String(stats[k])); });
-      // Send perks as JSON blob (server is json-aware for this field; the
-      // existing updateCharacter normalizes ability_perks).
-      if (flatPerks.length) fd.set('ability_perks', JSON.stringify(flatPerks));
+      let targetCompleted = useConduitCredit ? required : (completedMissions + missionNames.length);
+      if (targetCompleted < required) targetCompleted = required;
+      const putUrl = '/characters/' + encodeURIComponent(characterId) + '/level-up';
+      const payload = {
+        level: nextLevel,
+        completed_missions: targetCompleted,
+        stats: stats,
+        mission_names: missionNames,
+        use_conduit_credit: useConduitCredit,
+        ability_perks: flatPerks
+      };
 
       fetch(putUrl, {
-        method: 'PUT',
-        headers: Object.assign(getAuthHeader(), { 'Accept': 'application/json', 'HX-Request': 'true' }),
-        body: fd
-      }).then(function (res) {
+        method: 'POST',
+        headers: Object.assign(getAuthHeader(), { 'Accept': 'application/json', 'Content-Type': 'application/json' }),
+        body: JSON.stringify(payload)
+      }).then((res) => {
         if (!res.ok) {
-          return res.text().then(function (t) { throw new Error(t || ('HTTP ' + res.status)); });
+          return res.text().then((t) => { throw new Error(t || ('HTTP ' + res.status)); });
         }
-        // Create mission rows, if any.
-        var chain = Promise.resolve();
-        missionNames.forEach(function (name) {
-          chain = chain.then(function () {
-            var mfd = new FormData();
-            mfd.set('name', name);
-            mfd.set('date', new Date().toISOString());
-            mfd.set('outcome', 'success');
-            mfd.set('characters[]', characterId);
-            return fetch('/missions', {
-              method: 'POST',
-              headers: Object.assign(getAuthHeader(), { 'Accept': 'application/json', 'HX-Request': 'true' }),
-              body: mfd
-            }).then(function (r) {
-              if (!r.ok) {
-                return r.text().then(function (t) { throw new Error('mission "' + name + '": ' + (t || r.status)); });
-              }
-            });
-          });
-        });
-        return chain.then(function () { window.location.reload(); });
-      }).catch(function (err) {
+        window.location.reload();
+      }).catch((err) => {
         saveBtn.classList.remove('is-loading');
         saveBtn.disabled = false;
         showError('Save failed: ' + (err && err.message ? err.message : 'Unknown error'));
       });
-    }
-  }
+    };
+
+    // Save handler.
+    const saveBtn = document.getElementById('levelUpSaveBtn');
+    if (saveBtn) saveBtn.addEventListener('click', onSave);
+  };
 
   ready(init);
+  return { init };
 })();

@@ -5,6 +5,13 @@
    Pin the scheme vars to their light-mode values so the whole UI stays light. */
 :root {
   color-scheme: light;
+
+  /* Character wizard stat-box gray ramp (see .wizard-stat-box states). */
+  --wizard-stat-class: #1a1a1a;
+  --wizard-stat-user: #595959;
+  --wizard-stat-user-edge: #404040;
+  --wizard-stat-empty: #f0f0f0;
+  --wizard-stat-empty-hover: #e0e0e0;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1181,28 +1188,28 @@ a.dropdown-item:hover {
   height: 1.4rem;
   border: 2.5px solid var(--bulma-border, #1a1a1a);
   border-radius: 3px;
-  background: #f0f0f0;
+  background: var(--wizard-stat-empty);
   cursor: default;
   transition: transform 80ms ease, background 80ms ease, border-color 80ms ease;
 }
 .wizard-stat-box.is-class {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
+  background: var(--wizard-stat-class);
+  border-color: var(--wizard-stat-class);
   cursor: default;
 }
 .wizard-stat-box.is-user {
-  background: #595959;
-  border-color: #404040;
+  background: var(--wizard-stat-user);
+  border-color: var(--wizard-stat-user-edge);
   cursor: pointer;
 }
-.wizard-stat-box.is-user:hover { background: #404040; }
+.wizard-stat-box.is-user:hover { background: var(--wizard-stat-user-edge); }
 .wizard-stat-box.is-assignable {
-  background: #f0f0f0;
-  border-color: #595959;
+  background: var(--wizard-stat-empty);
+  border-color: var(--wizard-stat-user);
   cursor: pointer;
 }
 .wizard-stat-box.is-assignable:hover {
-  background: #e0e0e0;
+  background: var(--wizard-stat-empty-hover);
   transform: translateY(-1px);
 }
 .wizard-stat-box.is-locked {
