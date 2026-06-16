@@ -251,10 +251,21 @@ const filterClassDataForUser = async (user) => {
   let filteredAspirant = aspirant;
   let filteredPCC = pcc;
 
-  // Build lookup maps for gear and abilities keyed by class name
+  // Build lookup maps for gear and abilities keyed by class name. We also
+  // track which abilities are advanced (is_advanced: true) so the character
+  // form's searchable select can render them as disabled — the expert
+  // form's "Add Class Ability" picker should never offer them as a real
+  // choice at creation, since the model layer also drops them defensively.
   const allClasses = [...advent, ...aspirant, ...pcc];
   let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
   let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.abilities) ? c.abilities.map(a => a.name) : []]));
+  let filteredAdvancedAbilities = Object.fromEntries(
+    allClasses
+      .map((c) => [c.name, Array.isArray(c.abilities)
+        ? c.abilities.filter((a) => a && a.is_advanced === true).map((a) => a.name)
+        : []])
+      .filter(([, list]) => list.length > 0)
+  );
 
   // If user provided, reduce to unlocked set. Unlocks match by class id and
   // extend to same-edition version families (a v1 unlock covers its v2 fork)
@@ -272,12 +283,14 @@ const filterClassDataForUser = async (user) => {
       const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => filtered.allowedNames.has(k)));
       filteredGear = filterMap(filteredGear);
       filteredAbilities = filterMap(filteredAbilities);
+      filteredAdvancedAbilities = filterMap(filteredAdvancedAbilities);
     } else {
       filteredAdvent = [];
       filteredAspirant = [];
       filteredPCC = [];
       filteredGear = {};
       filteredAbilities = {};
+      filteredAdvancedAbilities = {};
     }
   }
 
@@ -295,7 +308,7 @@ const filterClassDataForUser = async (user) => {
   const { advent: filteredPCCAdventV1, aspirant: filteredPCCAspirantV1 } = splitByEdition(filteredPCCv1);
   const { advent: filteredPCCAdventV2, aspirant: filteredPCCAspirantV2 } = splitByEdition(filteredPCCv2);
 
-  return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities };
+  return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities, filteredAdvancedAbilities };
 };
 
 const resolveOffscreenSource = async ({ body, profileId, supabaseClient }) => {
@@ -351,7 +364,7 @@ router.get('/new', isAuthenticated, (req, res) => {
 
 router.get('/new/expert', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
-  const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
+  const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities, filteredAdvancedAbilities } = await filterClassDataForUser(user);
   res.render('character-form', {
     profile,
     isNew: true,
@@ -368,6 +381,7 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
     personalityMap,
     classGearList: filteredGear,
     classAbilityList: filteredAbilities,
+    classAdvancedAbilities: filteredAdvancedAbilities || {},
     activeNav: 'characters',
     breadcrumbs: [
       { label: 'Characters', href: '/characters' },
@@ -412,10 +426,14 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       abilities: Array.isArray(c.abilities) ? c.abilities : [],
       // Pre-render each ability's description to safe HTML so the step 3
       // primer can drop it in directly (consistent with class description).
+      // is_advanced flags abilities the user does NOT get at creation
+      // (e.g., Gunslinger's "Deadeye") so the primer can style them as
+      // locked and the aspirant perk picker can skip them entirely.
       abilities_html: Array.isArray(c.abilities)
         ? c.abilities.map((a) => ({
             name: a.name || '',
-            description_html: renderMarkdown(a.description || '')
+            description_html: renderMarkdown(a.description || ''),
+            is_advanced: a.is_advanced === true
           }))
         : [],
       // Step 4 gear: all 6 class items are available on the right-hand shop
@@ -554,7 +572,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   } else if (character.creator_id !== profile.id) {
     return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   } else {
-    const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
+    const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities, filteredAdvancedAbilities } = await filterClassDataForUser(res.locals.user);
 
     // Inject existing character gear/abilities into dropdown options so
     // items from classes the user no longer has unlocked still appear
@@ -633,6 +651,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       personalityMap,
       classGearList: filteredGear,
       classAbilityList: filteredAbilities,
+      classAdvancedAbilities: filteredAdvancedAbilities || {},
       activeNav: 'characters',
       breadcrumbs: [
         { label: 'Characters', href: '/characters' },
@@ -915,8 +934,12 @@ router.get('/class-gear', authOptional, async (req, res) => {
 });
 
 router.get('/class-abilities', authOptional, async (req, res) => {
-  const { filteredAbilities } = await filterClassDataForUser(res.locals.user);
-  res.render('partials/character-class-abilities', { layout: false, classAbilityList: filteredAbilities });
+  const { filteredAbilities, filteredAdvancedAbilities } = await filterClassDataForUser(res.locals.user);
+  res.render('partials/character-class-abilities', {
+    layout: false,
+    classAbilityList: filteredAbilities,
+    classAdvancedAbilities: filteredAdvancedAbilities || {}
+  });
 });
 
 router.get('/common-item', authOptional, async (req, res) => {

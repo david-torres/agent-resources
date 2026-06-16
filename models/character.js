@@ -164,11 +164,25 @@ const createCharacter = async (characterReq, profile) => {
   const abilityPerks = characterReq.ability_perks;
   delete characterReq.ability_perks;
 
-  if (linkedVersion === 'v2') {
-    const v = validateAbilityPerks(normalizeAbilityPerks(abilityPerks));
-    if (!v.ok) {
-      return { data: null, error: v.errors.join(' ') };
-    }
+  // handle creator_mode (wizard mode label). Reject anything outside the
+  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
+    characterReq.creator_mode = null;
+  } else if (!allowedModes.includes(characterReq.creator_mode)) {
+    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
+  }
+
+  // Perks are a v2 mechanic, but aspirant characters always start with one
+  // perk regardless of the underlying class's rules version. We hold off on
+  // the full normalization/validation pass until AFTER the class_abilities
+  // rows are inserted, so aspirant perks (submitted with ability_name) can
+  // be resolved to a real class_ability_id and then validated like any
+  // other perk. For non-v2 / non-aspirant characters, drop any stray perks
+  // up front.
+  const perksAllowed = linkedVersion === 'v2' || characterReq.creator_mode === 'aspirant';
+  if (!perksAllowed && Array.isArray(abilityPerks) && abilityPerks.length > 0) {
+    abilityPerks.length = 0;
   }
 
   // handle class gear
@@ -178,6 +192,23 @@ const createCharacter = async (characterReq, profile) => {
   // handle class abilities
   const classAbilities = characterReq.abilities;
   delete characterReq.abilities;
+  // Advanced abilities (is_advanced: true) on the class template are locked
+  // content the character has yet to earn, so they must not become
+  // character_abilities rows at creation. The wizard's submit payload
+  // already filters them, but the expert form (which posts the raw
+  // abilities array) might still send one — drop them here as the source
+  // of truth.
+  let cleanedClassAbilities = null;
+  if (Array.isArray(classAbilities)) {
+    const cleaned = classAbilities
+      .filter((a) => a && a.is_advanced !== true)
+      .map((a) => {
+        const out = { ...a };
+        delete out.is_advanced;
+        return out;
+      });
+    cleanedClassAbilities = cleaned.length > 0 ? cleaned : null;
+  }
 
   // handle common items - normalize to array of non-empty strings
   if (characterReq.common_items) {
@@ -203,15 +234,6 @@ const createCharacter = async (characterReq, profile) => {
     characterReq.hide_from_search = true;
   } else {
     characterReq.hide_from_search = false;
-  }
-
-  // handle creator_mode (wizard mode label). Reject anything outside the
-  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
-    characterReq.creator_mode = null;
-  } else if (!allowedModes.includes(characterReq.creator_mode)) {
-    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
   }
 
   // normalize v2 JSONB fields before insert
@@ -254,18 +276,53 @@ const createCharacter = async (characterReq, profile) => {
   }
 
   // set class abilities
-  if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
+  if (cleanedClassAbilities) {
+    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, cleanedClassAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
     }
   }
 
-  if (linkedVersion === 'v2') {
-    const { error: perksError } = await setCharacterPerks(character.id, abilityPerks);
-    if (perksError) {
-      return { data: null, error: perksError };
+  if (perksAllowed && Array.isArray(abilityPerks) && abilityPerks.length > 0) {
+    // Aspirant submits perks as { ability_name, text, class_id } because the
+    // client doesn't know the server-assigned class_abilities row id. Resolve
+    // each perk to its row id before handing it to setCharacterPerks (which
+    // needs the FK). v2 perks arrive with class_ability_id already set; pass
+    // them through unchanged.
+    const resolvedPerks = [];
+    for (const p of abilityPerks) {
+      if (!p) continue;
+      if (p.class_ability_id) {
+        resolvedPerks.push(p);
+        continue;
+      }
+      if (!p.ability_name) continue;
+      const { data: rows, error: lookupError } = await supabaseAdmin
+        .from('class_abilities')
+        .select('id')
+        .eq('character_id', character.id)
+        .eq('name', p.ability_name)
+        .limit(1);
+      if (lookupError) {
+        return { data: null, error: lookupError };
+      }
+      if (Array.isArray(rows) && rows.length > 0) {
+        resolvedPerks.push({ ...p, class_ability_id: rows[0].id });
+      }
+    }
+    // Validate the resolved perks now that they carry FKs. validateAbilityPerks
+    // is the same gate the v2 path uses, so aspirant perks are bounded by the
+    // same word limit + per-ability cap.
+    if (resolvedPerks.length > 0) {
+      const v = validateAbilityPerks(normalizeAbilityPerks(resolvedPerks));
+      if (!v.ok) {
+        return { data: null, error: v.errors.join(' ') };
+      }
+      const { error: perksError } = await setCharacterPerks(character.id, resolvedPerks);
+      if (perksError) {
+        return { data: null, error: perksError };
+      }
     }
   }
 
@@ -1173,7 +1230,11 @@ const serializeCharacterForAgent = (row, actor = {}) => {
     stats,
     traits: Array.isArray(row.personality) ? row.personality.map((t) => t.name) : [],
     abilities: Array.isArray(row.abilities)
-      ? row.abilities.map((a) => ({ name: a.name, description: a.description }))
+      ? row.abilities.map((a) => ({
+          name: a.name,
+          description: a.description,
+          is_advanced: a.is_advanced === true
+        }))
       : [],
     signature_gear: Array.isArray(row.gear)
       ? row.gear.map((g) => ({ name: g.name, description: g.description }))

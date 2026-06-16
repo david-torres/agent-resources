@@ -162,21 +162,21 @@
 
 <section class="wizard-step" data-step-panel="3" hidden>
   <h3 class="title is-4">3. Ability Primer</h3>
-  <p class="has-text-grey is-size-7 mb-3">
+  <p class="has-text-grey is-size-7 mb-3" id="abilityPrimerIntro">
     A quick look at what your class can do. These come straight from the class rules.
   </p>
   <div id="abilityPrimerList">
-    <!-- Abilities injected by character-wizard.js (advent mode only) -->
+    <!-- Abilities injected by character-wizard.js (advent + aspirant modes) -->
   </div>
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
-    <p class="control"><button type="button" class="button is-primary" data-wizard-next>Next: Gear Selection</button></p>
+    <p class="control"><button type="button" class="button is-primary" data-wizard-next id="step3Next">Next: Gear Selection</button></p>
   </div>
 </section>
 
 <section class="wizard-step" data-step-panel="4" hidden>
   <h3 class="title is-4">4. Gear Selection</h3>
-  <p class="has-text-grey is-size-7 mb-3">
+  <p class="has-text-grey is-size-7 mb-3" id="gearStepIntro">
     Your class's base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — pick any combination of common items (1 Merx) or elective signature items (2 Merx). Duplicates are allowed.
   </p>
 

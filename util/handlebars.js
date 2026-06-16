@@ -201,6 +201,16 @@ const nextPerkPositionH = function (perks, abilityId) {
   return Math.max(...peers.map(p => Number(p.position) || 0)) + 1;
 };
 
+// True if `value` is in `list` (Array or Set). Used by the character
+// form's class-abilities picker to disable advanced abilities in the
+// dropdown without expanding the lookup map into a parallel object.
+const inArrayH = function (list, value) {
+  if (list == null) return false;
+  if (Array.isArray(list)) return list.indexOf(value) !== -1;
+  if (list instanceof Set) return list.has(value);
+  return false;
+};
+
 module.exports = {
   times,
   date_tz,
@@ -221,5 +231,6 @@ module.exports = {
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
   nextPerkPosition: nextPerkPositionH,
+  inArray: inArrayH,
   json: (v) => JSON.stringify(v ?? null)
 }

@@ -1289,6 +1289,18 @@ a.dropdown-item:hover {
   cursor: not-allowed;
   position: relative;
 }
+/* Advanced class abilities: locked content the character has not yet
+   earned. Dashed border + reduced opacity + softer title color signal
+   "this is not a creation option" everywhere the abilities are shown
+   (class view, wizard primer, agent surfaces). */
+.ability-advanced {
+  border: 2px dashed var(--bulma-border, #dbdbdb);
+  opacity: 0.72;
+  background: var(--bulma-background, #fafafa);
+}
+.ability-advanced .title {
+  color: var(--bulma-text, #4a4a4a);
+}
 .is-disabled-mode::after {
   content: "Coming soon";
   position: absolute;

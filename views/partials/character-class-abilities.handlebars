@@ -6,7 +6,13 @@
         {{#each classAbilityList}}
         <optgroup label="{{capitalize @key}}">
           {{#each this}}
+          {{#if (inArray (lookup ../classAdvancedAbilities @../key) this)}}
+          <option value="{{@../key}}::{{this}}" disabled
+                  title="Advanced abilities are not granted at character creation. Perks cannot be attached."
+                  {{#if (eq this (lookup ../../../characterAbility 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}}) — Advanced</option>
+          {{else}}
           <option value="{{@../key}}::{{this}}" {{#if (eq this (lookup ../../characterAbility 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}})</option>
+          {{/if}}
           {{/each}}
         </optgroup>
         {{/each}}

@@ -16,9 +16,12 @@ window.CharacterWizard = (function () {
   const COMMON_ITEM_COST = 1;
   const CLASS_GEAR_COST = 2;
   // Advent mode hands every new character 2 merx to spend on common items
-  // and class gear. Other modes have a richer merx economy (earned per
-  // mission); the wizard for those is out of scope for now.
+  // and class gear. Aspirant mode starts with 12 merx and no auto-loaded
+  // base gear — the user distributes the 12 freely across the same shop.
+  // Other modes have a richer merx economy (earned per mission); the wizard
+  // for those is out of scope for now.
   const ADVENT_MERX_BUDGET = 2;
+  const ASPIRANT_MERX_BUDGET = 12;
   // Bonus merx awarded per successful mission in advent mode. 1 merx per
   // successful mission on top of the base 2. Unbounded — character history
   // matters.
@@ -110,6 +113,7 @@ window.CharacterWizard = (function () {
   const step2Next = document.getElementById('step2Next');
   // Step 3
   const abilityPrimerList = document.getElementById('abilityPrimerList');
+  const step3Next = document.getElementById('step3Next');
   // Step 4
   const baseGearList = document.getElementById('baseGearList');
   const spendList = document.getElementById('spendList');
@@ -244,10 +248,12 @@ window.CharacterWizard = (function () {
   const setClassId = (id) => {
     const prev = state.classId;
     state.classId = id;
-    if (prev !== id && DATA.mode === 'advent') {
+    if (prev !== id && (DATA.mode === 'advent' || DATA.mode === 'aspirant')) {
       // resetBaseGear() is defined further down — guarded by a flag to
       // avoid a forward-reference issue (we're called from kiosk code that
-      // runs before step 4 listeners are wired up).
+      // runs before step 4 listeners are wired up). Both advent and
+      // aspirant rebind gear on class change; aspirant just clears instead
+      // of auto-loading the new class's base items.
       if (typeof syncBaseGear === 'function') syncBaseGear();
     }
     // Toggle selected/not-selected state on the cards. Tracked alongside
@@ -379,10 +385,11 @@ window.CharacterWizard = (function () {
 
     // ----- Gear column -----
     // List each class gear entry with a Base / Picked tag (the first
-    // FREE_BASE_GEAR_COUNT entries are auto-loaded and free; anything beyond
-    // that was picked from the shop at 2 merx). Custom common items get a
-    // "Custom" tag so the user can tell apart their typed-in items from the
-    // seeded list.
+    // getFreeBaseGearCount() entries are auto-loaded and free; anything
+    // beyond that was picked from the shop at 2 merx). Aspirant mode
+    // grants no free base slots, so every gear entry is "Picked" there.
+    // Custom common items get a "Custom" tag so the user can tell apart
+    // their typed-in items from the seeded list.
     let gearHtml = '';
     const hasGear = (Array.isArray(state.gear) && state.gear.length)
       || (Array.isArray(state.commonItems) && state.commonItems.length);
@@ -391,7 +398,7 @@ window.CharacterWizard = (function () {
       if (Array.isArray(state.gear)) {
         state.gear.forEach((g, idx) => {
           if (!g || !g.name) return;
-          const isFree = idx < FREE_BASE_GEAR_COUNT;
+          const isFree = idx < getFreeBaseGearCount();
           const tag = isFree
             ? ' <span class="tag is-success is-light is-small">Base</span>'
             : ' <span class="tag is-warning is-light is-small">Picked</span>';
@@ -603,15 +610,32 @@ window.CharacterWizard = (function () {
     return Object.keys(c.stat_spread);
   };
 
-  // Merx budget. In advent mode the base budget (2) is bumped by 1 per
-  // successful mission, so a veteran can spend more on elective gear.
-  // Outside advent mode the budget is unbounded (free pick).
+  // Merx budget by mode:
+  //  - advent: 2 merx, plus 1 per successful mission (veteran scaling)
+  //  - aspirant: 12 merx flat, no per-mission bonus
+  //  - anything else: unbounded (free pick)
   const getMerxBudget = () => {
-    if (DATA.mode !== 'advent') return Infinity;
-    let successful = parseInt(state.successfulMissions, 10) || 0;
-    if (successful < 0) successful = 0;
-    return ADVENT_MERX_BUDGET + (successful * BONUS_MERX_PER_SUCCESSFUL);
+    if (DATA.mode === 'advent') {
+      let successful = parseInt(state.successfulMissions, 10) || 0;
+      if (successful < 0) successful = 0;
+      return ADVENT_MERX_BUDGET + (successful * BONUS_MERX_PER_SUCCESSFUL);
+    }
+    if (DATA.mode === 'aspirant') return ASPIRANT_MERX_BUDGET;
+    return Infinity;
   };
+
+  // Number of class-gear slots the class grants for free. Advent gives 3
+  // (the "base" items auto-loaded on the left); aspirant gives none — the
+  // user buys everything from the shop.
+  const getFreeBaseGearCount = () => {
+    return DATA.mode === 'aspirant' ? 0 : FREE_BASE_GEAR_COUNT;
+  };
+
+  // Whether the Next button on step 4 should be gated on spending the
+  // whole budget. Advent requires it (the spec gives 2 merx that must be
+  // spent); aspirant lets the user keep unspent merx for the post-creation
+  // mission-reward economy.
+  const requiresFullMerxSpend = () => DATA.mode === 'advent';
 
   // Map a trait name back to the stat it belongs to (via personalityMap).
   const getStatForTrait = (trait) => {
@@ -1010,10 +1034,53 @@ window.CharacterWizard = (function () {
   // Renders the selected class's 3 abilities as read-only cards. Per current
   // scope the primer is only shown in advent mode; other modes fall back to
   // a one-liner so the step still has a body to display.
+  // Validate the aspirant perk (ability name + text). Returns an error
+  // string or null. Aspirant requires a non-empty perk text attached to
+  // one of the selected class's abilities. The server also re-validates
+  // the perk at submit time (word limit + per-ability cap) — this client
+  // check is just a UX gate on the Next button.
+  const validateAspirantPerk = () => {
+    if (DATA.mode !== 'aspirant') return null;
+    const perk = state.abilityPerks && state.abilityPerks[0];
+    if (!perk || !perk.ability_name || !perk.text || !perk.text.trim()) {
+      return 'Pick an ability and write a perk for it.';
+    }
+    return null;
+  };
+
+  // Render a single ability card in the step-3 primer. Advanced abilities
+  // (is_advanced: true) are not granted at character creation and cannot
+  // have perks attached, so we render them as a locked card with dashed
+  // borders and reduced opacity, plus an "Advanced" tag for clarity.
+  const renderAbilityCard = (a) => {
+    const advanced = a && a.is_advanced === true;
+    const cardCls = 'card mb-3' + (advanced ? ' ability-advanced' : '');
+    const advancedTag = advanced
+      ? ' <span class="tag is-warning is-light ml-2">Advanced</span>'
+      : '';
+    const advancedNote = advanced
+      ? '<p class="has-text-grey is-size-7 mt-2">Not granted at character creation. No perks can be attached to this ability.</p>'
+      : '';
+    return ''
+      + '<div class="' + cardCls + '">'
+      +   '<div class="card-content">'
+      +     '<div class="content">'
+      +       '<h4 class="title is-5 mb-2">' + esc(a.name) + advancedTag + '</h4>'
+      +       (a.description_html || '<p class="has-text-grey">No description.</p>')
+      +       advancedNote
+      +     '</div>'
+      +   '</div>'
+      + '</div>';
+  };
+
   const renderAbilityPrimer = () => {
     if (!abilityPrimerList) return;
+    if (DATA.mode === 'aspirant') {
+      renderAspirantPrimer();
+      return;
+    }
     if (DATA.mode !== 'advent') {
-      abilityPrimerList.innerHTML = '<p class="has-text-grey">Ability primer is only available in Advent mode.</p>';
+      abilityPrimerList.innerHTML = '<p class="has-text-grey">Ability primer is only available in Advent and Aspirant modes.</p>';
       return;
     }
     const c = selectedClass();
@@ -1021,17 +1088,105 @@ window.CharacterWizard = (function () {
       abilityPrimerList.innerHTML = '<p class="has-text-grey">No abilities to show for this class.</p>';
       return;
     }
-    abilityPrimerList.innerHTML = c.abilities_html.map((a) => {
+    abilityPrimerList.innerHTML = c.abilities_html.map(renderAbilityCard).join('');
+  };
+
+  // Aspirant mode: render the 3 ability cards, plus a "starting perk" form
+  // that lets the user pick which ability to attach a free-text perk to.
+  // The perk rides into the character via the existing character_perks
+  // table; the server's class_ability_id resolution happens at submit time
+  // (we send { ability_name, text } and the route resolves to a row id).
+  // Advanced abilities are not in the perk radio list — they aren't granted
+  // at creation, so no perk can be attached to them.
+  const renderAspirantPrimer = () => {
+    const c = selectedClass();
+    if (!c || !Array.isArray(c.abilities_html) || c.abilities_html.length === 0) {
+      abilityPrimerList.innerHTML = '<p class="has-text-grey">No abilities to show for this class.</p>';
+      return;
+    }
+    const abilityCards = c.abilities_html.map(renderAbilityCard).join('');
+
+    // Only non-advanced abilities can take the starting perk. If the
+    // user's stored pick somehow points at an advanced ability (e.g., a
+    // draft was saved with the old code), reset it to nothing so the
+    // form doesn't show a perk bound to a now-disabled target.
+    const perkableAbilities = c.abilities_html.filter((a) => a && a.is_advanced !== true);
+    if (perkableAbilities.length === 0) {
+      abilityPrimerList.innerHTML = abilityCards
+        + '<p class="has-text-grey is-size-7">This class has no non-advanced abilities to attach a perk to.</p>';
+      return;
+    }
+    if (state.abilityPerks && state.abilityPerks[0]
+        && !perkableAbilities.some((a) => a.name === state.abilityPerks[0].ability_name)) {
+      state.abilityPerks[0] = { ability_name: '', text: state.abilityPerks[0].text || '' };
+    }
+
+    // The single perk row: radio per (perkable) ability + a shared textarea.
+    // The perk is bound to whichever ability the user picked; switching the
+    // radio moves the text with it (so a typo doesn't lose the user's words).
+    const currentPerk = (state.abilityPerks && state.abilityPerks[0]) || { ability_name: '', text: '' };
+    const perkRadios = perkableAbilities.map((a) => {
+      const checked = currentPerk.ability_name === a.name ? ' checked' : '';
       return ''
-        + '<div class="card mb-3">'
-        +   '<div class="card-content">'
-        +     '<div class="content">'
-        +       '<h4 class="title is-5 mb-2">' + esc(a.name) + '</h4>'
-        +       (a.description_html || '<p class="has-text-grey">No description.</p>')
-        +     '</div>'
-        +   '</div>'
-        + '</div>';
+        + '<label class="radio mr-3">'
+        +   '<input type="radio" name="aspirantPerkAbility" value="' + esc(a.name) + '"' + checked + ' data-aspirant-perk-ability="1">'
+        +   ' ' + esc(a.name)
+        + '</label>';
     }).join('');
+
+    const perkHelp = 'One perk, attached to one ability. Up to 25 words.';
+    const perkField = ''
+      + '<div class="field">'
+      +   '<label class="label" for="aspirantPerkText">Perk text <span class="has-text-grey is-size-7">(up to 25 words)</span></label>'
+      +   '<div class="control">'
+      +     '<textarea class="textarea" id="aspirantPerkText" rows="3" maxlength="500" placeholder="Describe what your perk does, in plain words.">' + esc(currentPerk.text || '') + '</textarea>'
+      +   '</div>'
+      +   '<p class="help">' + perkHelp + '</p>'
+      + '</div>';
+
+    const perkForm = ''
+      + '<div class="box has-background-light mt-4">'
+      +   '<h4 class="title is-5 mb-2">Starting Perk</h4>'
+      +   '<p class="has-text-grey is-size-7 mb-3">'
+      +     'Every Aspirant character begins with one perk. Pick the ability to attach it to, then describe what it does.'
+      +   '</p>'
+      +   '<div class="field">'
+      +     '<label class="label">Attach to ability</label>'
+      +     '<div class="control">' + perkRadios + '</div>'
+      +   '</div>'
+      +   perkField
+      + '</div>';
+
+    abilityPrimerList.innerHTML = abilityCards + perkForm;
+
+    // Wire up listeners (delegated to the container so re-renders work).
+    const textEl = document.getElementById('aspirantPerkText');
+    if (textEl) {
+      textEl.addEventListener('input', () => {
+        if (!Array.isArray(state.abilityPerks)) state.abilityPerks = [];
+        const cur = state.abilityPerks[0] || { ability_name: '', text: '' };
+        cur.text = textEl.value;
+        state.abilityPerks[0] = cur;
+        // Recompute the step's Next-button enable state on the fly.
+        const err = validateAspirantPerk();
+        if (step3Next) step3Next.disabled = !!err;
+      });
+    }
+    const radioEls = abilityPrimerList.querySelectorAll('[data-aspirant-perk-ability]');
+    radioEls.forEach((r) => {
+      r.addEventListener('change', () => {
+        if (!Array.isArray(state.abilityPerks)) state.abilityPerks = [];
+        const cur = state.abilityPerks[0] || { ability_name: '', text: '' };
+        cur.ability_name = r.value;
+        state.abilityPerks[0] = cur;
+        const err = validateAspirantPerk();
+        if (step3Next) step3Next.disabled = !!err;
+      });
+    });
+
+    // Apply current validation state to the Next button.
+    const err = validateAspirantPerk();
+    if (step3Next) step3Next.disabled = !!err;
   };
 
   // ---------- Step 4: Gear Selection ----------
@@ -1083,7 +1238,7 @@ window.CharacterWizard = (function () {
   };
 
   // Sum the merx cost of the user's current right-column picks. Common items
-  // cost 1 each. Class gear is free for the first FREE_BASE_GEAR_COUNT
+  // cost 1 each. Class gear is free for the first getFreeBaseGearCount()
   // entries (auto-loaded base), then 2 merx for each additional pick —
   // including duplicates of base items.
   const computeMerxSpent = () => {
@@ -1092,7 +1247,8 @@ window.CharacterWizard = (function () {
       spent += state.commonItems.length * COMMON_ITEM_COST;
     }
     if (Array.isArray(state.gear)) {
-      const charged = Math.max(0, state.gear.length - FREE_BASE_GEAR_COUNT);
+      const free = getFreeBaseGearCount();
+      const charged = Math.max(0, state.gear.length - free);
       spent += charged * CLASS_GEAR_COST;
     }
     return spent;
@@ -1144,7 +1300,7 @@ window.CharacterWizard = (function () {
   // How many picks of `key` can the user remove? For common items this is
   // every seeded pick (custom items are removed via removeCustomCommonItem).
   // For class gear it EXCLUDES the auto-loaded free base slots (the first
-  // FREE_BASE_GEAR_COUNT entries of state.gear) — those are free and
+  // getFreeBaseGearCount() entries of state.gear) — those are free and
   // class-defining, so they aren't deselectable from the shop.
   const removablePicks = (key) => {
     if (key.indexOf('common:') === 0) {
@@ -1161,9 +1317,10 @@ window.CharacterWizard = (function () {
       if (colonAt < 0) return 0;
       const gname = rest.slice(colonAt + 1);
       let n = 0;
+      const free = getFreeBaseGearCount();
       if (Array.isArray(state.gear)) {
         state.gear.forEach((g, idx) => {
-          if (idx >= FREE_BASE_GEAR_COUNT && g && g.kind === 'class' && g.name === gname) n++;
+          if (idx >= free && g && g.kind === 'class' && g.name === gname) n++;
         });
       }
       return n;
@@ -1188,8 +1345,9 @@ window.CharacterWizard = (function () {
       const colonAt = rest.indexOf(':');
       if (colonAt < 0) return;
       const gname = rest.slice(colonAt + 1);
-      // Stop at FREE_BASE_GEAR_COUNT so the free base slots stay put.
-      for (let i = state.gear.length - 1; i >= FREE_BASE_GEAR_COUNT; i--) {
+      // Stop at getFreeBaseGearCount() so the free base slots stay put.
+      const free = getFreeBaseGearCount();
+      for (let i = state.gear.length - 1; i >= free; i--) {
         const g = state.gear[i];
         if (g && g.kind === 'class' && g.name === gname) { state.gear.splice(i, 1); break; }
       }
@@ -1238,7 +1396,15 @@ window.CharacterWizard = (function () {
     const c = selectedClass();
 
     // ----- Left column: base gear (auto-loaded) -----
-    if (!c) {
+    // Aspirant mode has no auto-loaded base gear — the user picks every
+    // item from the shop within the 12 merx budget. Replace the list with
+    // a short reminder rather than rendering an empty box.
+    if (DATA.mode === 'aspirant') {
+      baseGearList.innerHTML = '<p class="has-text-grey is-size-7 mb-0">'
+        + 'No gear is auto-loaded in Aspirant mode. Use the shop on the right to '
+        + 'spend your 12 Merx on common items (1 Merx) and class items (2 Merx).'
+        + '</p>';
+    } else if (!c) {
       baseGearList.innerHTML = '<p class="has-text-grey">No class selected.</p>';
     } else if (!Array.isArray(c.base_gear) || c.base_gear.length === 0) {
       baseGearList.innerHTML = '<p class="has-text-grey">This class has no base gear.</p>';
@@ -1338,8 +1504,8 @@ window.CharacterWizard = (function () {
     if (Array.isArray(state.commonItems)) commonCount = state.commonItems.length;
     if (Array.isArray(state.gear)) {
       // The badge shows "picks from the shop" — i.e., class gear beyond the
-      // 3 free base slots, which is the same thing computeMerxSpent charges.
-      classCount = Math.max(0, state.gear.length - FREE_BASE_GEAR_COUNT);
+      // free base slots, which is the same thing computeMerxSpent charges.
+      classCount = Math.max(0, state.gear.length - getFreeBaseGearCount());
     }
     if (commonCountBadge) commonCountBadge.textContent = commonCount;
     if (classCountBadge) classCountBadge.textContent = classCount;
@@ -1358,9 +1524,9 @@ window.CharacterWizard = (function () {
       if (customCommonItemAdd) customCommonItemAdd.disabled = !canAffordAny;
     }
 
-    // ----- Next button gates on budget being spent (advent mode only) -----
+    // ----- Next button gates on budget being spent (mode-dependent) -----
     if (step4Next) {
-      if (DATA.mode === 'advent') {
+      if (requiresFullMerxSpend()) {
         step4Next.disabled = spent < getMerxBudget();
       } else {
         step4Next.disabled = false;
@@ -1370,22 +1536,29 @@ window.CharacterWizard = (function () {
 
   // Auto-load the selected class's base gear into state.gear if no class
   // gear is currently recorded. Idempotent: changing class in step 1 then
-  // returning clears any prior gear and reloads.
+  // returning clears any prior gear and reloads. Aspirant skips the
+  // auto-load — aspirant characters buy all their gear from the shop with
+  // the 12 merx budget.
   const syncBaseGear = () => {
     const c = selectedClass();
     if (!c) return;
-    const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Drop any class-gear picks the user made against the old class — they
     // are class-bound, and the user has not been able to evaluate them
     // against the new class's pool. Common items are class-agnostic and
     // stay, but the brief "safe" rule from the prior round (clear in
     // advent) is kept: the user is re-entering step 1 and should re-pick.
     state.gear = [];
-    if (DATA.mode === 'advent') {
+    if (DATA.mode === 'advent' || DATA.mode === 'aspirant') {
       state.commonItems = [];
     }
+    if (DATA.mode === 'aspirant') {
+      // No free base gear in aspirant — the user picks everything from the
+      // shop within the 12 merx budget.
+      return;
+    }
+    const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.
-    // All gear picks share kind 'class' — the FREE_BASE_GEAR_COUNT constant
+    // All gear picks share kind 'class' — the getFreeBaseGearCount() value
     // in computeMerxSpent is what separates free base slots from paid picks.
     const additions = base.map((g) => {
       return { name: g.name, kind: 'class', subtype: 'base' };
@@ -1597,15 +1770,30 @@ window.CharacterWizard = (function () {
         .map((i) => i && i.name ? i.name : null)
         .filter(Boolean);
     }
-    // Class abilities: the chosen class's full ability list is auto-granted
-    // to the character in advent mode. We send them as {name, class_id} so
-    // the server's normalizeAbilityItems + setCharacterAbilities writes
-    // rows into public.class_abilities.
+    // Class abilities: every NON-ADVANCED ability on the chosen class is
+    // auto-granted to the character. Advanced abilities (is_advanced: true)
+    // are not part of creation — they're displayed in the class view +
+    // primer as locked content the character has yet to earn, and they
+    // can't have perks attached, so dropping them here matches the spec.
     const c = (typeof selectedClass === 'function') ? selectedClass() : null;
     if (c && Array.isArray(c.abilities) && c.abilities.length) {
       payload.abilities = c.abilities
-        .map((a) => a && a.name ? { name: a.name, class_id: state.classId } : null)
-        .filter(Boolean);
+        .filter((a) => a && a.name && a.is_advanced !== true)
+        .map((a) => ({ name: a.name, class_id: state.classId }));
+    }
+    // Aspirant starting perk. Send as {ability_name, text, class_id}; the
+    // server route resolves ability_name → class_ability_id against the
+    // freshly-inserted character_abilities rows so the perk's FK is valid
+    // without an extra round-trip from the client.
+    if (DATA.mode === 'aspirant' && Array.isArray(state.abilityPerks) && state.abilityPerks.length) {
+      const perk = state.abilityPerks[0];
+      if (perk && perk.ability_name && perk.text && perk.text.trim()) {
+        payload.ability_perks = [{
+          ability_name: perk.ability_name,
+          text: perk.text.trim(),
+          class_id: state.classId
+        }];
+      }
     }
     return payload;
   };
@@ -1646,6 +1834,30 @@ window.CharacterWizard = (function () {
   renderKiosk();
   renderSelectedPanel();
   renderSummary();
+
+  // Mode-aware intro copy for steps 3 and 4. The handlebars view ships
+  // advent-mode defaults; aspirant swaps the text and budget headline so
+  // the user sees the right framing the first time the step panel opens.
+  const abilityIntroEl = document.getElementById('abilityPrimerIntro');
+  if (abilityIntroEl) {
+    if (DATA.mode === 'aspirant') {
+      abilityIntroEl.textContent = 'Your class abilities, plus your starting perk. Pick an ability to attach the perk to, then describe what it does.';
+    } else {
+      abilityIntroEl.textContent = 'A quick look at what your class can do. These come straight from the class rules.';
+    }
+  }
+  const gearIntroEl = document.getElementById('gearStepIntro');
+  if (gearIntroEl) {
+    if (DATA.mode === 'aspirant') {
+      gearIntroEl.innerHTML = ''
+        + 'No gear is auto-loaded in Aspirant mode. You have <strong>12 Merx</strong> to distribute freely on the right — '
+        + 'pick any combination of common items (1 Merx) or class items (2 Merx). Duplicates are allowed.';
+    } else {
+      gearIntroEl.innerHTML = ''
+        + 'Your class\'s base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — '
+        + 'pick any combination of common items (1 Merx) or elective signature items (2 Merx). Duplicates are allowed.';
+    }
+  }
   // Refresh step 2 first if we're resuming a draft past step 1, so the
   // personality selects and stat grid reflect stored picks before showStep
   // reveals the panel. Same trick for the step 3 primer, step 4 gear, and

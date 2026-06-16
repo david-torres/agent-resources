@@ -192,11 +192,19 @@
         <div class="content">
           <h3 class="title is-3">Abilities</h3>
           {{#each class.abilities}}
-          <div class="card">
+          <div class="card {{#if this.is_advanced}}ability-advanced{{/if}}">
             <div class="card-content">
               <div class="content">
-                <h4 class="title is-4">{{this.name}}</h4>
+                <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+                  <h4 class="title is-4 mb-0">{{this.name}}</h4>
+                  {{#if this.is_advanced}}
+                  <span class="tag is-warning is-light" title="Locked content — not granted at character creation. Perks cannot be attached.">Advanced</span>
+                  {{/if}}
+                </div>
                 {{{markdown this.description}}}
+                {{#if this.is_advanced}}
+                <p class="has-text-grey is-size-7 mt-2">Not granted at character creation. No perks can be attached to this ability.</p>
+                {{/if}}
               </div>
             </div>
           </div>
