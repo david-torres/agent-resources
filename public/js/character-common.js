@@ -1,8 +1,16 @@
 // Shared helpers for the character creator, stats editor, and level-up modules
 // (character-wizard.js, character-stats.js, character-level-up.js). Loaded
 // before them on every page that uses those modules; exposes the
-// CharacterCommon namespace in the same single-IIFE style as public/js/app.js.
-const CharacterCommon = (function () {
+// CharacterCommon namespace.
+//
+// Assigned to `window` rather than a top-level `const` so the script is safe to
+// re-execute. The layout sets hx-boost, which swaps the <body> (where these
+// module scripts live) on navigation while keeping the JS realm alive, so each
+// script runs again on every boosted page change — a `const` throws
+// "redeclaration of const X" on the second run. app.js can use `const` because
+// it loads in <head>, outside the swapped region, and never re-runs. The other
+// character modules follow this same window-assignment for the same reason.
+window.CharacterCommon = (function () {
   // The 12 stats in canonical order (matches statList in
   // util/enclave-consts.js).
   const STATS = [

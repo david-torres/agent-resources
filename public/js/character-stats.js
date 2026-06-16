@@ -6,7 +6,9 @@
 // integers; the server's existing full-character handler accepts them
 // and ignores any unrelated fields it doesn't receive.
 
-const CharacterStats = (function () {
+// window-assigned (not `const`) so it survives hx-boost re-execution — see
+// character-common.js for the full rationale.
+window.CharacterStats = (function () {
   const { STATS, ready, getAuthHeader } = CharacterCommon;
   const showError = (msg) => CharacterCommon.showError('statsEditorError', msg);
   const clearError = () => CharacterCommon.clearError('statsEditorError');

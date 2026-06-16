@@ -1,6 +1,8 @@
 // Character Creator wizard — step 1 (class kiosk) + shell scaffolding for steps 2-5.
 // Vanilla JS, single IIFE, no deps beyond what's already loaded (htmx on the layout).
-const CharacterWizard = (function () {
+// window-assigned (not `const`) so it survives hx-boost re-execution — see
+// character-common.js for the full rationale.
+window.CharacterWizard = (function () {
   const { missionsForLevel } = CharacterCommon;
   const STORAGE_KEY = 'agentResources.characterWizard';
   const OVERSCROLL_THRESHOLD = 3; // wheel events past the end before triggering random pick

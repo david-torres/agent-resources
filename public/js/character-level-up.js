@@ -15,7 +15,9 @@
 // can compound with another perk added in the same save (`new:<ref>`) or with
 // an existing perk (by its row id). The server validates and persists the link.
 
-const CharacterLevelUp = (function () {
+// window-assigned (not `const`) so it survives hx-boost re-execution — see
+// character-common.js for the full rationale.
+window.CharacterLevelUp = (function () {
   const { missionsForLevel, ready, getAuthHeader } = CharacterCommon;
   const showError = (msg) => CharacterCommon.showError('levelUpError', msg);
   const clearError = () => CharacterCommon.clearError('levelUpError');
