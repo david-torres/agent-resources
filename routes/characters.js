@@ -4,7 +4,7 @@ const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
 const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById, getCharacterRealMissionsForDerivation, createMission, addCharacterToMission } = require('../util/supabase');
 const { supabaseAdmin } = require('../models/_base');
-const { statList, personalityMap, classStatSpread, commonItemList } = require('../util/enclave-consts');
+const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { getUnlockedClassIdsForUser } = require('../models/class');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -403,14 +403,11 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       rules_edition: c.rules_edition || 'advent',
       rules_version: c.rules_version || 'v1',
       is_player_created: !!c.is_player_created,
-      // stat_spread isn't a column on the classes table; backfill it from
-      // the canonical map in util/enclave-consts keyed by class name. The
-      // proper fix is a migration adding a stat_spread JSONB column, but
-      // until then this keeps the wizard's step 2 personality selects
-      // populated.
-      stat_spread: c.stat_spread && Object.keys(c.stat_spread).length
-        ? c.stat_spread
-        : (classStatSpread[c.name] || {}),
+      // Drives the wizard's step 2 (personality & stat selection). Stored on
+      // the class row (migration 20260609_classes_stat_spread); the column
+      // defaults to '{}' and is backfilled for official classes via
+      // scripts/backfill-class-stats.js.
+      stat_spread: c.stat_spread || {},
       gear: Array.isArray(c.gear) ? c.gear : [],
       abilities: Array.isArray(c.abilities) ? c.abilities : [],
       // Pre-render each ability's description to safe HTML so the step 3

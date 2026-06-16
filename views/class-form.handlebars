@@ -96,6 +96,20 @@
     </div>
   </div>
   <div class="field">
+    <label class="label">Class Stats</label>
+    <p class="help mb-2">Points the class pre-assigns at level 1. The character creator wizard uses these in step 2 (personality &amp; stat selection): the stats with points define which traits a player picks, and the points are auto-assigned. Most classes total 3 points; leave a stat at 0 to omit it.</p>
+    <div class="columns is-multiline is-mobile">
+      {{#each statList}}
+      <div class="column is-2-tablet is-4-mobile">
+        <label class="label is-small is-capitalized" for="stat-{{this}}">{{this}}</label>
+        <div class="control">
+          <input class="input" type="number" min="0" max="3" step="1" id="stat-{{this}}" name="stat_spread[{{this}}]" value="{{lookup ../class.stat_spread this}}">
+        </div>
+      </div>
+      {{/each}}
+    </div>
+  </div>
+  <div class="field">
     <label class="label" for="class-image">Image</label>
     <div class="control">
       <input class="input" type="text" name="image_url" id="class-image" value="{{class.image_url}}">
