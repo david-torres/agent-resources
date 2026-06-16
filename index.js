@@ -2,7 +2,7 @@ require('./util/env');
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json } = require('./util/handlebars');
+const { times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json } = require('./util/handlebars');
 const { renderMarkdown } = require('./util/markdown');
 const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
@@ -49,6 +49,7 @@ app.engine('handlebars', exphbs.engine({
       videoEmbed,
       isSupportedVideoUrl,
       substring,
+      concat,
       effectiveRulesVersion,
       wordCount,
       perksForAbility,

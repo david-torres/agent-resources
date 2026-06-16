@@ -182,6 +182,14 @@ const wordCountH = function (text) {
   return trimmed.length === 0 ? 0 : trimmed.split(/\s+/).length;
 };
 
+// Concatenates all string arguments into one string.
+// Usage: {{concat 'position-' this.position}} -> "position-0"
+const concat = function (...args) {
+  // Drop the trailing Handlebars options object before joining.
+  args.pop();
+  return args.join('');
+};
+
 const perksForAbilityH = function (perks, abilityId) {
   if (!Array.isArray(perks)) return [];
   return perks.filter(p => p && p.class_ability_id === abilityId);
@@ -208,6 +216,7 @@ module.exports = {
   isSupportedVideoUrl,
   getVideoProvider,
   substring,
+  concat,
   effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
