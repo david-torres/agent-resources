@@ -535,13 +535,6 @@ a.dropdown-item:hover {
     max-height: 65vh;
     padding: 0.5rem;
   }
-
-  /* Step 2 stat grid: the 4-up desktop grid is unreadable on phones, so
-     drop to 2 columns. 12 stats in a single column would be an excessive
-     scroll, so 2 (not 1) keeps it scannable on the smallest screens. */
-  .wizard-stat-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
 }
 
 /* ToastUI Editor - Bulma integration */
@@ -1211,6 +1204,15 @@ a.dropdown-item:hover {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 0.5rem;
+}
+/* Phones: the 4-up grid is cramped and the pips wrap raggedly. Drop to 2
+   columns. This override MUST come after the base rule above — media queries
+   add no specificity, so an earlier-in-file media rule would lose to the base
+   declaration. 12 stats in a single column would scroll too much, so 2. */
+@media screen and (max-width: 768px) {
+  .wizard-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 .wizard-stat-row {
   display: flex;
