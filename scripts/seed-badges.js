@@ -3,7 +3,7 @@
 // Idempotent — safe to re-run (uploads use upsert, catalog upserts on slug).
 //
 // Usage: bun run scripts/seed-badges.js
-require('dotenv').config();
+require('../util/env');
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');

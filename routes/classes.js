@@ -33,6 +33,7 @@ const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/cl
 const { parseImageCrop } = require('../util/crop');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
+const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -52,6 +53,22 @@ const ensureArray = (value) => {
     if (Array.isArray(value)) return value;
     if (value === undefined || value === null) return [];
     return [value];
+};
+
+const parseStatSpread = (body) => {
+    const nested = (body.stat_spread && typeof body.stat_spread === 'object' && !Array.isArray(body.stat_spread))
+        ? body.stat_spread
+        : null;
+    const spread = {};
+    for (const stat of statList) {
+        const raw = nested ? nested[stat] : body[`stat_spread[${stat}]`];
+        delete body[`stat_spread[${stat}]`];
+        const points = parseInt(raw, 10);
+        if (Number.isInteger(points) && points > 0) {
+            spread[stat] = Math.min(points, 3);
+        }
+    }
+    return spread;
 };
 
 // View Routes
@@ -132,6 +149,7 @@ router.get('/new', isAuthenticated, (req, res) => {
         title: 'New Class',
         isNew: true,
         class: null,
+        statList,
         activeNav: 'classes',
         breadcrumbs: [
             { label: 'Classes', href: '/classes' },
@@ -265,6 +283,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         profile,
         title: 'Edit Class',
         class: classData,
+        statList,
         activeNav: 'classes',
         breadcrumbs: [
             { label: 'Classes', href: '/classes' },
@@ -614,6 +633,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         req.body.image_crop = image_crop;
     }
 
+    req.body.stat_spread = parseStatSpread(req.body);
+
     const { data: classData, error } = await createClass(req.body);
     if (error) {
         return sendError(req, res, error);
@@ -704,6 +725,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
     }
     const removePdf = req.body.remove_pdf === 'on';
     delete req.body.remove_pdf;
+
+    req.body.stat_spread = parseStatSpread(req.body);
 
     const { data: classData, error } = await updateClass(id, req.body);
     if (error) {
