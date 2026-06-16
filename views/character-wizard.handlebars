@@ -4,26 +4,29 @@
 <!-- ====== Summary panel: topmost box, with 4 columns: Class / Stats / Abilities / Gear ====== -->
 <aside class="wizard-summary box" id="wizardSummary" aria-live="polite">
   <h3 class="title is-6 mb-2">Summary</h3>
+  <!-- Columns stack full-width on mobile (Bulma default), go 2x2 on tablet
+       portrait, and 4-up on desktop, so each summary section stays readable
+       at every width instead of cramming four quarters onto a narrow tablet. -->
   <div class="columns is-multiline">
-    <div class="column is-one-quarter">
+    <div class="column is-half-tablet is-one-quarter-desktop">
       <h4 class="title is-6 mb-2">Class</h4>
       <div id="summaryClass">
         <!-- Class card + traits, rendered by character-wizard.js -->
       </div>
     </div>
-    <div class="column is-one-quarter">
+    <div class="column is-half-tablet is-one-quarter-desktop">
       <h4 class="title is-6 mb-2">Stats</h4>
       <div id="summaryStats">
         <!-- Rendered by character-wizard.js -->
       </div>
     </div>
-    <div class="column is-one-quarter">
+    <div class="column is-half-tablet is-one-quarter-desktop">
       <h4 class="title is-6 mb-2">Abilities</h4>
       <div id="summaryAbilities">
         <!-- Rendered by character-wizard.js -->
       </div>
     </div>
-    <div class="column is-one-quarter">
+    <div class="column is-half-tablet is-one-quarter-desktop">
       <h4 class="title is-6 mb-2">Gear</h4>
       <div id="summaryGear">
         <!-- Rendered by character-wizard.js -->
@@ -37,7 +40,7 @@
         <input class="input is-small" type="number" id="wizardLevel" value="{{state.level}}" min="1" max="20" step="1">
       </div>
       <div class="column is-one-third">
-        <label class="label is-small mb-1">Missions</label>
+        <label class="label is-small mb-1" for="summaryMissions">Missions</label>
         <input class="input is-small" id="summaryMissions" type="text" readonly value="0">
       </div>
       <div class="column is-one-third">
@@ -69,6 +72,9 @@
     <div class="wizard-kiosk-track" id="classKioskTrack">
       <!-- Cards injected by character-wizard.js -->
     </div>
+    <p class="wizard-kiosk-empty has-text-grey" id="classKioskEmpty" role="status" hidden>
+      No classes match <strong id="classKioskEmptyTerm"></strong>. Clear the search to see them all.
+    </p>
     <p class="wizard-kiosk-hint has-text-grey is-size-7">
       Click a card to select it. Scroll or use the arrow keys to browse, scroll past either end to roll a random class.
     </p>
@@ -164,7 +170,7 @@
   </div>
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
-    <p class="control"><button type="button" class="button is-primary" data-wizard-next>Next: Gear</button></p>
+    <p class="control"><button type="button" class="button is-primary" data-wizard-next>Next: Gear Selection</button></p>
   </div>
 </section>
 
@@ -220,14 +226,14 @@
 <section class="wizard-step" data-step-panel="5" hidden>
   <h3 class="title is-4">5. Finishing Touches</h3>
   <p class="has-text-grey is-size-7 mb-4">
-    Give your character a name, choose how they appear to the rest of the enclave, and (optionally) sketch what they look like and where they come from.
+    Give your character a name — that's the only requirement. Describe how they look and where they come from, both optional.
   </p>
   <div class="field">
     <label class="label" for="wizardName">Name <span class="has-text-danger" aria-hidden="true">*</span></label>
     <div class="control">
       <input class="input" type="text" id="wizardName" name="name" maxlength="120" required placeholder="Character name" value="{{state.name}}">
     </div>
-    <p class="help">Required. This is how other players will refer to your character.</p>
+    <p class="help">This is how other players will refer to your character.</p>
   </div>
 
   <div class="field">
@@ -257,7 +263,7 @@
         <input type="checkbox" id="wizardHideFromSearch" {{#if state.hideFromSearch}}checked{{/if}}>
         Hide from directory search
       </label>
-      <p class="help">When on, the character still appears on your public page but is excluded from the enclave-wide search index.</p>
+      <p class="help">When on, the character still appears on your public page but won't appear in directory search.</p>
     </div>
   </div>
 
@@ -269,7 +275,7 @@
               hx-vals='js:{payload: JSON.stringify(CharacterWizard.buildSubmitPayload())}'
               hx-disabled-elt="this"
               hx-indicator="this"
-              hx-on::after-request="if(event.detail.successful) CharacterWizard.onSubmitSuccess()">Submit</button>
+              hx-on::after-request="if(event.detail.successful) CharacterWizard.onSubmitSuccess()">Create character</button>
     </p>
   </div>
 </section>

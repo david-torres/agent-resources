@@ -491,13 +491,23 @@ window.CharacterWizard = (function () {
   kiosk.addEventListener('wheel', onWheel, { passive: false });
 
   // ---------- Search filter ----------
+  const kioskEmpty = document.getElementById('classKioskEmpty');
+  const kioskEmptyTerm = document.getElementById('classKioskEmptyTerm');
   const applySearch = () => {
     const q = (search.value || '').trim().toLowerCase();
+    let visibleCount = 0;
     track.querySelectorAll('.wizard-kiosk-card').forEach((el) => {
       const name = (el.getAttribute('data-name') || '').toLowerCase();
       const hit = !q || name.indexOf(q) !== -1;
       el.style.display = hit ? '' : 'none';
+      if (hit) visibleCount += 1;
     });
+    // Surface a "no matches" message instead of a silently empty scroller.
+    // textContent (not innerHTML) keeps the user's raw query safe to echo.
+    if (kioskEmpty) {
+      kioskEmpty.hidden = visibleCount !== 0;
+      if (kioskEmptyTerm) kioskEmptyTerm.textContent = search.value || '';
+    }
   };
   if (search) search.addEventListener('input', applySearch);
 
@@ -526,7 +536,17 @@ window.CharacterWizard = (function () {
   // "moves" the ring onto it. Instant scroll (not smooth) so the
   // IntersectionObserver doesn't fire for every intermediate card on the
   // way to the target.
-  document.addEventListener('keydown', (e) => {
+  //
+  // hx-boost swaps the <body> on navigation while keeping the JS realm alive
+  // (see character-common.js), so this module re-runs on every boosted page
+  // change. `document` is NOT swapped, so registering a fresh keydown listener
+  // each run would pile them up on `document` — a slow leak of handlers plus
+  // stale closures over the detached DOM. Remove the previous run's handler
+  // before registering this one.
+  if (window.__wizardKeydownHandler) {
+    document.removeEventListener('keydown', window.__wizardKeydownHandler);
+  }
+  const onKioskKeydown = (e) => {
     if (state.step !== 1) return;
     // Don't hijack arrow keys while typing in form fields (e.g., the search).
     const t = e.target;
@@ -566,7 +586,9 @@ window.CharacterWizard = (function () {
     scrollToCard(targetId, false);
     positionRing();
     flashSelectedCard(targetId);
-  });
+  };
+  window.__wizardKeydownHandler = onKioskKeydown;
+  document.addEventListener('keydown', onKioskKeydown);
 
   // ---------- Step 2: Personality & Stats ----------
 
@@ -1414,6 +1436,9 @@ window.CharacterWizard = (function () {
 
   // ---------- Step navigation ----------
   const showStep = (n) => {
+    // Defensive clamp: callers are gated, but never let a stray value put the
+    // wizard into a non-existent step (which would hide every panel).
+    n = Math.max(1, Math.min(STEP_COUNT, n));
     state.step = n;
     steps.forEach((el) => {
       const s = Number(el.getAttribute('data-step-panel'));
