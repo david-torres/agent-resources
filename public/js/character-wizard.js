@@ -1119,6 +1119,74 @@ window.CharacterWizard = (function () {
     renderSummary();
   };
 
+  // How many picks of `key` can the user remove? For common items this is
+  // every seeded pick (custom items are removed via removeCustomCommonItem).
+  // For class gear it EXCLUDES the auto-loaded free base slots (the first
+  // FREE_BASE_GEAR_COUNT entries of state.gear) — those are free and
+  // class-defining, so they aren't deselectable from the shop.
+  const removablePicks = (key) => {
+    if (key.indexOf('common:') === 0) {
+      const cname = key.slice('common:'.length);
+      let n = 0;
+      if (Array.isArray(state.commonItems)) {
+        state.commonItems.forEach((it) => { if (it && it.name === cname && !it.custom) n++; });
+      }
+      return n;
+    }
+    if (key.indexOf('class:') === 0) {
+      const rest = key.slice('class:'.length);
+      const colonAt = rest.indexOf(':');
+      if (colonAt < 0) return 0;
+      const gname = rest.slice(colonAt + 1);
+      let n = 0;
+      if (Array.isArray(state.gear)) {
+        state.gear.forEach((g, idx) => {
+          if (idx >= FREE_BASE_GEAR_COUNT && g && g.kind === 'class' && g.name === gname) n++;
+        });
+      }
+      return n;
+    }
+    return 0;
+  };
+
+  // Remove one pick of `key` (the most recent removable one), freeing its
+  // Merx. No-op if nothing removable — in particular, free base gear is never
+  // dropped here. Mirrors pickShopItem so the budget/Next gating recomputes.
+  const unpickShopItem = (key) => {
+    if (key.indexOf('common:') === 0) {
+      const cname = key.slice('common:'.length);
+      if (!Array.isArray(state.commonItems)) return;
+      for (let i = state.commonItems.length - 1; i >= 0; i--) {
+        const it = state.commonItems[i];
+        if (it && it.name === cname && !it.custom) { state.commonItems.splice(i, 1); break; }
+      }
+    } else if (key.indexOf('class:') === 0) {
+      if (!Array.isArray(state.gear)) return;
+      const rest = key.slice('class:'.length);
+      const colonAt = rest.indexOf(':');
+      if (colonAt < 0) return;
+      const gname = rest.slice(colonAt + 1);
+      // Stop at FREE_BASE_GEAR_COUNT so the free base slots stay put.
+      for (let i = state.gear.length - 1; i >= FREE_BASE_GEAR_COUNT; i--) {
+        const g = state.gear[i];
+        if (g && g.kind === 'class' && g.name === gname) { state.gear.splice(i, 1); break; }
+      }
+    }
+    renderGearStep();
+    renderSummary();
+  };
+
+  // Remove a user-typed custom common item by its index in state.commonItems.
+  const removeCustomCommonItem = (idx) => {
+    if (!Array.isArray(state.commonItems)) return;
+    if (!(idx >= 0) || idx >= state.commonItems.length) return;
+    const it = state.commonItems[idx];
+    if (!it || !it.custom) return;
+    state.commonItems.splice(idx, 1);
+    renderGearStep();
+    renderSummary();
+  };
+
   // Add a user-typed "make your own" common item. Trims input, rejects
   // empty/overlong names, and gates on the merx budget just like the
   // pre-seeded common items.
@@ -1136,10 +1204,11 @@ window.CharacterWizard = (function () {
     renderSummary();
   };
 
-  // Active tab in the shop ('common' | 'class'). Persisted on state so a
+  // Active tab in the shop ('class' | 'common'). Persisted on state so a
   // re-render (e.g., after a class change) keeps the user's tab choice.
+  // Class Gear is the default tab when the user hasn't picked one yet.
   const activeShopTab = () => {
-    return state.shopTab === 'class' ? 'class' : 'common';
+    return state.shopTab === 'common' ? 'common' : 'class';
   };
 
   const renderGearStep = () => {
@@ -1181,18 +1250,20 @@ window.CharacterWizard = (function () {
       budget = getMerxBudget();
       spent = computeMerxSpent();
       const remaining = budget === Infinity ? Infinity : budget - spent;
-      if (filtered.length === 0) {
-        spendList.innerHTML = '<p class="has-text-grey">No items in this tab.</p>';
-      } else {
-        spendList.innerHTML = filtered.map((it) => {
+      let cardsHtml = filtered.map((it) => {
           const picked = countPicks(it.key);
           const canAfford = remaining === Infinity || remaining >= it.cost;
           const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
-          const status = picked
+          const removable = removablePicks(it.key);
+          const removeCtl = removable
+            ? ' <a class="gear-remove has-text-danger ml-2" data-shop-remove="' + esc(it.key) + '">Remove</a>'
+            : '';
+          const status = (picked
             ? '<span class="tag is-success is-light">Picked ×' + picked + '</span>'
             : (canAfford
                 ? '<span class="has-text-grey">Click to add</span>'
-                : '<span class="has-text-grey">Not enough Merx</span>');
+                : '<span class="has-text-grey">Not enough Merx</span>'))
+            + removeCtl;
           // On class-gear cards, badge the subtype (Base / Elective) so the
           // user knows which items are free on the left and which are paid.
           let subtypeTag = '';
@@ -1213,8 +1284,27 @@ window.CharacterWizard = (function () {
             +     '<div class="is-size-7">' + status + '</div>'
             +   '</div>'
             + '</div>';
+      }).join('');
+      // Custom "make your own" common items aren't in the shop pool, so render
+      // them here (Common Items tab only) as already-picked, removable cards.
+      if (tab === 'common' && Array.isArray(state.commonItems)) {
+        cardsHtml += state.commonItems.map((it, idx) => {
+          if (!it || !it.custom) return '';
+          return ''
+            + '<div class="card mb-2 gear-shop-item is-picked">'
+            +   '<div class="card-content p-3">'
+            +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
+            +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
+            +       '<span class="tag is-warning is-light">' + COMMON_ITEM_COST + ' Merx</span>'
+            +     '</div>'
+            +     '<div class="mb-1"><span class="tag is-link is-light mr-1">Custom</span></div>'
+            +     '<div class="is-size-7"><span class="tag is-success is-light">Picked</span>'
+            +       ' <a class="gear-remove has-text-danger ml-2" data-custom-remove="' + idx + '">Remove</a></div>'
+            +   '</div>'
+            + '</div>';
         }).join('');
       }
+      spendList.innerHTML = cardsHtml || '<p class="has-text-grey">No items in this tab.</p>';
     }
 
     // ----- Shop tab state + counts -----
@@ -1364,6 +1454,21 @@ window.CharacterWizard = (function () {
   // container so re-renders don't need to re-bind.
   if (spendList) {
     spendList.addEventListener('click', (e) => {
+      // Remove controls are handled first and intentionally bypass the
+      // is-disabled guard below: deselecting is how the user frees Merx when
+      // they're at budget and want to pick something else instead.
+      const removeBtn = e.target.closest('[data-shop-remove]');
+      if (removeBtn) {
+        e.preventDefault();
+        unpickShopItem(removeBtn.getAttribute('data-shop-remove'));
+        return;
+      }
+      const customRemoveBtn = e.target.closest('[data-custom-remove]');
+      if (customRemoveBtn) {
+        e.preventDefault();
+        removeCustomCommonItem(parseInt(customRemoveBtn.getAttribute('data-custom-remove'), 10));
+        return;
+      }
       const card = e.target.closest('[data-shop-key]');
       if (!card || card.classList.contains('is-disabled')) return;
       pickShopItem(card.getAttribute('data-shop-key'));
