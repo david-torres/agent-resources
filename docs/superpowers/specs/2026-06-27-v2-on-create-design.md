@@ -132,10 +132,12 @@ case the data model already rules out.
    newAbilities)` in `util/ability-perks.js`, sibling to the existing
    `remapPerkAbilityIds`.
 
-7. **Strip v2-only fields for a v1 class.** Add the `v2OnlyFields` strip
-   (`['quirks', 'accessories', 'ability_perks']`) that `updateCharacter` already
-   has (`models/character.js:284-290`) to `createCharacter`, so hidden-but-
-   submitted v2 fields on a v1 character are ignored rather than written.
+7. **v2-only field strip for a v1 class — already present.** `createCharacter`
+   already strips `['quirks', 'accessories', 'ability_perks']` when the linked
+   class is not v2 (`models/character.js`, top of `createCharacter`; covered by
+   the existing test "createCharacter drops v2-only fields when linked class is
+   v1"). The "preserve hidden" approach relies on this existing behavior — no new
+   code needed. Listed here only to confirm the hidden-field case is handled.
 
 ### Data flow (create, v2 class)
 
