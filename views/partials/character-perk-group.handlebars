@@ -1,0 +1,13 @@
+<div class="box perk-group" data-ability-id="{{linkValue}}">
+  <h4 class="title is-5">{{capitalize abilityName}}</h4>
+  <div class="columns is-multiline" id="perks-list-{{domKey}}">
+    {{#each (perksForAbility abilityPerks linkValue) }}
+      {{> character-ability-perk perk=this abilityId=../linkValue position=this.position siblingPerks=(perksForAbility ../abilityPerks ../linkValue) }}
+    {{/each}}
+  </div>
+  <button type="button" class="button is-primary is-small"
+          hx-get="/characters/ability-perk?ability_id={{encodeURIComponentH linkValue}}&position={{nextPerkPosition abilityPerks linkValue}}"
+          hx-target="#perks-list-{{domKey}}" hx-swap="beforeend">
+    Add Perk
+  </button>
+</div>
