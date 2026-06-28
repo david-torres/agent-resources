@@ -206,10 +206,14 @@
           <div class="wizard-stat-name">{{capitalize this}}</div>
           <div class="wizard-stat-boxes">
             {{#range 0 (lookup ../character this)}}
-            <div class="wizard-stat-box is-class" title="{{capitalize ../this}}: point"></div>
+            <div class="wizard-stat-box is-class" title="{{capitalize ../this}}: point">
+              <i class="fa-regular fa-square-plus" aria-hidden="true"></i>
+            </div>
             {{/range}}
             {{#range (lookup ../character this) 5}}
-            <div class="wizard-stat-box is-locked" title="{{capitalize ../this}}: locked"></div>
+            <div class="wizard-stat-box is-locked" title="{{capitalize ../this}}: locked">
+              <i class="fa-regular fa-square-plus" aria-hidden="true"></i>
+            </div>
             {{/range}}
           </div>
         </div>

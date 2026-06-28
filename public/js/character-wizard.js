@@ -850,7 +850,7 @@ window.CharacterWizard = (function () {
           title = 'Above the per-stat maximum at this level';
         }
         const clickAttr = clickable ? ' data-clickable="1"' : '';
-        boxes += '<div class="wizard-stat-box ' + cls + '" data-stat="' + stat + '" data-slot="' + i + '" title="' + title + '"' + clickAttr + '></div>';
+        boxes += '<div class="wizard-stat-box ' + cls + '" data-stat="' + stat + '" data-slot="' + i + '" title="' + title + '"' + clickAttr + '><i class="fa-regular fa-square-plus" aria-hidden="true"></i></div>';
       }
       let labels = '';
       if (cp || pp || up) {

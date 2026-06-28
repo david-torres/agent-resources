@@ -6,12 +6,13 @@
 :root {
   color-scheme: light;
 
-  /* Character wizard stat-box gray ramp (see .wizard-stat-box states). */
-  --wizard-stat-class: #1a1a1a;
+  /* Character wizard stat icon gray ramp (see .wizard-stat-box states). */
+  --wizard-stat-class: #6b6b6b;
   --wizard-stat-user: #595959;
   --wizard-stat-user-edge: #404040;
   --wizard-stat-empty: #f0f0f0;
   --wizard-stat-empty-hover: #e0e0e0;
+  --wizard-stat-locked: #d2d2d2;
 
   /* Elevation scale — shared drop-shadow tokens. Prefer these over ad-hoc
      box-shadow recipes so raised surfaces stay visually consistent.
@@ -1194,12 +1195,13 @@ a.dropdown-item:hover {
    - .wizard-stat-grid is a 4×3 grid (12 stats). Each cell is one stat.
    - .wizard-stat-row stacks the stat's name, boxes, and labels vertically
      so the cell reads top-to-bottom inside the grid.
-   - .wizard-stat-box represents a single point slot. The four visual
+   - .wizard-stat-box represents a single point slot. The square-plus icon
+     carries the point state. The four visual
      states match the spec:
-       .is-class       filled black (class/personality assigned, not clickable)
-       .is-user        dark gray    (user assigned, click to remove)
-       .is-assignable  light gray w/ dark border (click to add)
-       .is-locked      dashed border (above the per-stat max, not clickable) */
+       .is-class       medium gray icon (class/personality assigned, not clickable)
+       .is-user        dark gray icon (user assigned, click to remove)
+       .is-assignable  outlined gray icon (click to add)
+       .is-locked      outlined muted icon (above the per-stat max, not clickable) */
 .wizard-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1238,11 +1240,16 @@ a.dropdown-item:hover {
 .wizard-stat-box {
   width: 1.4rem;
   height: 1.4rem;
-  border: 2.5px solid var(--bulma-border, #1a1a1a);
-  border-radius: 3px;
-  background: var(--wizard-stat-empty);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--wizard-stat-empty);
   cursor: default;
-  transition: transform 80ms ease, background 80ms ease, border-color 80ms ease;
+  line-height: 1;
+  transition: transform 80ms ease, color 80ms ease;
+}
+.wizard-stat-box .fa-square-plus {
+  font-size: 1.35rem;
 }
 /* Touch devices: the 1.4rem pips are far too small to tap reliably. Adjacent
    pips can't each be a full 44px without overlapping their neighbours, so we
@@ -1258,30 +1265,26 @@ a.dropdown-item:hover {
   }
 }
 .wizard-stat-box.is-class {
-  background: var(--wizard-stat-class);
-  border-color: var(--wizard-stat-class);
+  color: var(--wizard-stat-class);
   cursor: default;
 }
 .wizard-stat-box.is-user {
-  background: var(--wizard-stat-user);
-  border-color: var(--wizard-stat-user-edge);
+  color: var(--wizard-stat-user);
   cursor: pointer;
 }
-.wizard-stat-box.is-user:hover { background: var(--wizard-stat-user-edge); }
+.wizard-stat-box.is-user:hover { color: var(--wizard-stat-user-edge); }
 .wizard-stat-box.is-assignable {
-  background: var(--wizard-stat-empty);
-  border-color: var(--wizard-stat-user);
+  color: var(--wizard-stat-user);
   cursor: pointer;
 }
 .wizard-stat-box.is-assignable:hover {
-  background: var(--wizard-stat-empty-hover);
+  color: var(--wizard-stat-user-edge);
   transform: translateY(-1px);
 }
 .wizard-stat-box.is-locked {
-  background: transparent;
-  border: 2.5px dashed var(--bulma-border, #1a1a1a);
+  color: var(--wizard-stat-locked);
   cursor: not-allowed;
-  opacity: 0.5;
+  opacity: 0.8;
 }
 /* Coming-soon / disabled mode buttons in the character-new selector. */
 .is-disabled-mode {
