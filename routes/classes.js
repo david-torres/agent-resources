@@ -407,7 +407,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         if (!unlocked) {
             return res.render('class-view-teaser', {
                 profile,
-                title: 'View Class',
+                title: `${classData.name} - View Class`,
                 class: classData,
                 activeNav: 'classes',
                 breadcrumbs: [
@@ -448,7 +448,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
     res.render('class-view', {
         profile,
-        title: 'View Class',
+        title: `${classData.name} - View Class`,
         class: classData,
         unlocked,
         ownerProfile,
