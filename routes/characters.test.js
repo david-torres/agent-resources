@@ -186,3 +186,15 @@ test('GET /characters/ability-perk-group without ability param returns 400', asy
 
   expect(res.status).toBe(400);
 });
+
+test('GET /characters/ability-perk-group without key param falls back domKey to ability name', async () => {
+  const res = await fetch(
+    `${baseUrl}/characters/ability-perk-group?ability=Strike`,
+    { headers: { Accept: 'text/html' } }
+  );
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('id="perks-list-Strike"');
+  expect(body).toContain('data-ability-id="Strike"');
+});
