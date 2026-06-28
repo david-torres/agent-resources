@@ -49,8 +49,17 @@ function remapPerkAbilityIdsByName(perks, newAbilities) {
   const result = [];
   for (const perk of perks) {
     const ref = perk.class_ability_id;
-    if (idSet.has(ref)) { result.push({ ...perk }); continue; }
-    if (nameToId.has(ref)) { result.push({ ...perk, class_ability_id: nameToId.get(ref) }); continue; }
+
+    if (idSet.has(ref)) {
+      result.push({ ...perk });
+      continue;
+    }
+
+    if (nameToId.has(ref)) {
+      result.push({ ...perk, class_ability_id: nameToId.get(ref) });
+      continue;
+    }
+
     // no matching ability row — drop
   }
   return result;
