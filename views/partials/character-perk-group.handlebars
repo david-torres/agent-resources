@@ -1,3 +1,12 @@
+{{!--
+  Per-ability perk group. Two identifiers, deliberately separate:
+    linkValue – ability identifier baked into perk data + HTMX URLs
+                (DB row id on the edit path; ability NAME on the create path)
+    domKey    – DOM-safe token for element ids / hx-target (must be valid in a
+                CSS selector; equals the ability id on the edit/server path)
+  abilityName – heading text. abilityPerks – full ability_perks list (filtered
+  here by linkValue).
+--}}
 <div class="box perk-group" data-ability-id="{{linkValue}}">
   <h4 class="title is-5">{{capitalize abilityName}}</h4>
   <div class="columns is-multiline" id="perks-list-{{domKey}}">

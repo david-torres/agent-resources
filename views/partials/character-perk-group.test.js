@@ -16,6 +16,8 @@ function render(context) {
 }
 
 test('perk group uses linkValue for data-ability-id and the Add Perk request', () => {
+  // linkValue and domKey are deliberately different here to verify each is
+  // wired to the right attributes (linkValue -> data/URL, domKey -> element ids).
   const html = render({
     linkValue: 'Quick Strike',
     domKey: 'g0',
@@ -39,4 +41,5 @@ test('perk group renders existing perks for the ability (edit/server path keyed 
     ]
   });
   expect(html).toContain('value="Deal +1"');
+  expect(html).toContain('value="ability-1"');
 });
