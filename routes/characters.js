@@ -944,6 +944,19 @@ router.get('/ability-perk', authOptional, (req, res) => {
   });
 });
 
+router.get('/ability-perk-group', authOptional, (req, res) => {
+  const ability = (req.query.ability || '').toString().trim();
+  const key = (req.query.key || '').toString().trim();
+  if (!ability) return sendError(req, res, null, { status: 400, message: 'ability required' });
+  res.render('partials/character-perk-group', {
+    layout: false,
+    linkValue: ability,
+    domKey: key || ability,
+    abilityName: ability,
+    abilityPerks: []
+  });
+});
+
 router.get('/version-fields', authOptional, async (req, res) => {
   const classId = req.query.class_id;
   let effectiveVersion = 'v1';
