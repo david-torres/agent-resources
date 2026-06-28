@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { remapPerkAbilityIds } = require('./ability-perks');
+const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('./ability-perks');
 
 const ability = (id, name, class_id = 'class-1') => ({ id, name, class_id });
 const perk = (class_ability_id, text, position, compounds_with = null) => ({
@@ -108,5 +108,54 @@ describe('remapPerkAbilityIds', () => {
     expect(perks).toEqual(perksSnapshot);
     expect(previous).toEqual(previousSnapshot);
     expect(next).toEqual(nextSnapshot);
+  });
+});
+
+describe('remapPerkAbilityIdsByName', () => {
+  const ab = (id, name) => ({ id, name, class_id: 'c1' });
+  const pk = (class_ability_id, text, position = 0) => ({
+    class_ability_id, text, position, compounds_with: null
+  });
+
+  test('maps a perk whose class_ability_id is an ability NAME to the new row id', () => {
+    const next = [ab('row-1', 'Strike'), ab('row-2', 'Guard')];
+    const perks = [pk('Strike', 'Deal +1 damage', 0), pk('Guard', 'Block first hit', 1)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([
+      pk('row-1', 'Deal +1 damage', 0),
+      pk('row-2', 'Block first hit', 1)
+    ]);
+  });
+
+  test('keeps a perk that already references a valid new row id', () => {
+    const next = [ab('row-1', 'Strike')];
+    const perks = [pk('row-1', 'Already linked', 0)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([pk('row-1', 'Already linked', 0)]);
+  });
+
+  test('drops perks whose ability name has no matching row', () => {
+    const next = [ab('row-1', 'Strike')];
+    const perks = [pk('Strike', 'kept', 0), pk('Ghost', 'dropped', 1)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([pk('row-1', 'kept', 0)]);
+  });
+
+  test('preserves text, position, and compounds_with while remapping', () => {
+    const next = [ab('row-1', 'Strike')];
+    const perks = [{ class_ability_id: 'Strike', text: 'Compound', position: 3, compounds_with: 'position-2' }];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([
+      { class_ability_id: 'row-1', text: 'Compound', position: 3, compounds_with: 'position-2' }
+    ]);
+  });
+
+  test('returns [] for non-array perks and does not mutate inputs', () => {
+    expect(remapPerkAbilityIdsByName(null, [])).toEqual([]);
+    const next = [ab('row-1', 'Strike')];
+    const perks = [pk('Strike', 'x', 0)];
+    const snapshot = JSON.parse(JSON.stringify(perks));
+    remapPerkAbilityIdsByName(perks, next);
+    expect(perks).toEqual(snapshot);
   });
 });
