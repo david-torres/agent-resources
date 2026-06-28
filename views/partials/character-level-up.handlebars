@@ -1,0 +1,113 @@
+<div id="levelUpModal" class="modal" data-clear-on-close="false">
+  <div class="modal-background" hx-on:click="App.closeModal('#levelUpModal')"></div>
+  <div class="modal-card is-double">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Level Up &mdash; {{character.name}}</p>
+      <button type="button" class="delete" aria-label="close" hx-on:click="App.closeModal('#levelUpModal')"></button>
+    </header>
+    <section class="modal-card-body">
+      <p class="has-text-grey is-size-7 mb-3">
+        Current level <strong>{{character.level}}</strong>.
+        Promoting to level <strong>{{add character.level 1}}</strong> requires
+        <strong>{{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}}</strong>
+        more successful missions ({{character.completed_missions}} / {{getTotalV2MissionsNeeded (add character.level 1)}}).
+        {{#if (gt (subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions) 0)}}
+        Add them below, then save.
+        {{else}}
+        You can backfill missions here if needed.
+        {{/if}}
+      </p>
+
+      {{#if (gt (subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions) 0)}}
+      <h4 class="title is-5 mt-4">Missing missions</h4>
+      <p class="has-text-grey is-size-7 mb-2">
+        Each filled text box becomes a new mission row attached to this character.
+      </p>
+      <div id="levelUpMissingMissions">
+        {{!--
+          Server pre-renders a count; the JS keeps the number of input rows
+          in sync if the user adds/removes them. We start with one extra
+          empty box so the user can always add more.
+        --}}
+      </div>
+      <div class="field mt-3">
+        <label class="checkbox">
+          <input type="checkbox" id="levelUpConduitCredit">
+          Spend a Conduit Credit instead (does not create mission rows)
+        </label>
+      </div>
+      {{/if}}
+
+      <h4 class="title is-5 mt-4">Stats</h4>
+      <p class="has-text-grey is-size-7 mb-2">
+        Adjust points if your level-up grants new allocation. Total: <strong id="levelUpTotal">0</strong>.
+      </p>
+      <div class="wizard-stat-grid" id="levelUpStatGrid">
+        {{#each statList}}
+        <div class="wizard-stat-row" data-stat="{{this}}">
+          <label class="wizard-stat-name" for="level-up-{{this}}">{{capitalize this}}</label>
+          <div class="wizard-stat-boxes">
+            <input
+              class="input is-small level-up-stat"
+              id="level-up-{{this}}"
+              name="{{this}}"
+              type="number"
+              min="0"
+              max="20"
+              step="1"
+              value="{{lookup ../character this}}"
+              data-stat="{{this}}"
+            >
+          </div>
+        </div>
+        {{/each}}
+      </div>
+
+      <h4 class="title is-5 mt-5">Abilities</h4>
+      <p class="has-text-grey is-size-7 mb-2">
+        Add a perk to any ability you have. A new perk can compound with an
+        existing perk or another perk you add here.
+      </p>
+      <div id="levelUpAbilities">
+        {{#each character.abilities}}
+        <div class="box mb-2 level-up-ability" data-ability-id="{{this.id}}">
+          <div class="is-flex is-justify-content-space-between is-align-items-center mb-2">
+            <strong>{{this.name}}</strong>
+            <button type="button" class="button is-small is-link is-light level-up-add-perk">
+              <span class="icon"><i class="fas fa-plus"></i></span>
+              <span>Add perk</span>
+            </button>
+          </div>
+          {{#with (perksForAbility ../character.ability_perks this.id) as |perks|}}
+          {{#if perks.length}}
+          <div class="level-up-existing-perks content is-small mb-2">
+            <ol>
+              {{#each perks}}
+              <li class="level-up-existing-perk" data-perk-id="{{this.id}}" data-position="{{this.position}}">
+                <span class="level-up-existing-perk-text">{{this.text}}</span>
+                {{#if this.compounds_with}}<span class="tag is-info is-light ml-1">compounding</span>{{/if}}
+              </li>
+              {{/each}}
+            </ol>
+          </div>
+          {{/if}}
+          {{/with}}
+          <div class="level-up-perks"></div>
+        </div>
+        {{/each}}
+        {{#unless character.abilities.length}}
+        <p class="has-text-grey">No abilities on this character yet.</p>
+        {{/unless}}
+      </div>
+
+      <div id="levelUpError" class="notification is-danger is-light is-hidden mt-3"></div>
+    </section>
+    <footer class="modal-card-foot is-justify-content-flex-end">
+      <button type="button" class="button" hx-on:click="App.closeModal('#levelUpModal')">Cancel</button>
+      <button type="button" class="button is-primary" id="levelUpSaveBtn">
+        <span class="icon"><i class="fas fa-arrow-up"></i></span>
+        <span>Level Up</span>
+      </button>
+    </footer>
+  </div>
+</div>

@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { remapPerkAbilityIds } = require('./ability-perks');
+const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('./ability-perks');
 
 const ability = (id, name, class_id = 'class-1') => ({ id, name, class_id });
 const perk = (class_ability_id, text, position, compounds_with = null) => ({
@@ -108,5 +108,55 @@ describe('remapPerkAbilityIds', () => {
     expect(perks).toEqual(perksSnapshot);
     expect(previous).toEqual(previousSnapshot);
     expect(next).toEqual(nextSnapshot);
+  });
+});
+
+describe('remapPerkAbilityIdsByName', () => {
+  test('maps a perk whose class_ability_id is an ability NAME to the new row id', () => {
+    const next = [ability('row-1', 'Strike'), ability('row-2', 'Guard')];
+    const perks = [perk('Strike', 'Deal +1 damage', 0), perk('Guard', 'Block first hit', 1)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([
+      perk('row-1', 'Deal +1 damage', 0),
+      perk('row-2', 'Block first hit', 1)
+    ]);
+  });
+
+  test('keeps a perk that already references a valid new row id', () => {
+    const next = [ability('row-1', 'Strike')];
+    const perks = [perk('row-1', 'Already linked', 0)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([perk('row-1', 'Already linked', 0)]);
+  });
+
+  test('drops perks whose ability name has no matching row', () => {
+    const next = [ability('row-1', 'Strike')];
+    const perks = [perk('Strike', 'kept', 0), perk('Ghost', 'dropped', 1)];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([perk('row-1', 'kept', 0)]);
+  });
+
+  test('preserves text, position, and compounds_with while remapping', () => {
+    const next = [ability('row-1', 'Strike')];
+    const perks = [perk('Strike', 'Compound', 3, 'position-2')];
+
+    expect(remapPerkAbilityIdsByName(perks, next)).toEqual([
+      perk('row-1', 'Compound', 3, 'position-2')
+    ]);
+  });
+
+  test('treats null/undefined newAbilities as empty (drops all perks)', () => {
+    const perks = [perk('Strike', 'x', 0)];
+    expect(remapPerkAbilityIdsByName(perks, null)).toEqual([]);
+    expect(remapPerkAbilityIdsByName(perks, undefined)).toEqual([]);
+  });
+
+  test('returns [] for non-array perks and does not mutate inputs', () => {
+    expect(remapPerkAbilityIdsByName(null, [])).toEqual([]);
+    const next = [ability('row-1', 'Strike')];
+    const perks = [perk('Strike', 'x', 0)];
+    const snapshot = JSON.parse(JSON.stringify(perks));
+    remapPerkAbilityIdsByName(perks, next);
+    expect(perks).toEqual(snapshot);
   });
 });

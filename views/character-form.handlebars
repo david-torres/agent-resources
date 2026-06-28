@@ -25,64 +25,64 @@
     <div class="control">
       <div class="select">
         <select name="class_id" id="char-class-id" required
-                hx-get="/characters/version-fields"
+                {{#unless isNew}}hx-get="/characters/version-fields"
                 hx-trigger="change"
                 hx-target="#v2-fields-container"
                 hx-swap="outerHTML"
-                hx-include="this">
+                hx-include="this"{{/unless}}>
           {{#if adventV1Classes.length}}
           <option disabled>Advent v1 Classes</option>
           {{#each adventV1Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if adventV2Classes.length}}
           <option disabled>Advent v2 Classes</option>
           {{#each adventV2Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if aspirantPreviewV1Classes.length}}
           <option disabled>Aspirant Preview v1 Classes</option>
           {{#each aspirantPreviewV1Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if aspirantPreviewV2Classes.length}}
           <option disabled>Aspirant Preview v2 Classes</option>
           {{#each aspirantPreviewV2Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAdventV1Classes.length}}
           <option disabled>Player Created · Advent v1</option>
           {{#each playerCreatedAdventV1Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAdventV2Classes.length}}
           <option disabled>Player Created · Advent v2</option>
           {{#each playerCreatedAdventV2Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAspirantV1Classes.length}}
           <option disabled>Player Created · Aspirant v1</option>
           {{#each playerCreatedAspirantV1Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAspirantV2Classes.length}}
           <option disabled>Player Created · Aspirant v2</option>
           {{#each playerCreatedAspirantV2Classes}}
-          <option value="{{this.id}}" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
         </select>
@@ -250,38 +250,56 @@
       Class Abilities</button>
   </div>
 
-  {{#if (eq effectiveVersion 'v2')}}
-    {{> character-v2-fields character=character}}
-    {{> character-v1-perks-legacy character=character}}
+  {{#if isNew}}
+    {{!-- Create: render both sets; character-form-version.js shows the set
+          matching the selected class and preserves hidden values. The server
+          strips the non-matching version's fields on save. --}}
+    <div data-version-block="v2" hidden>
+      {{> character-v2-fields character=character}}
+    </div>
+
+    <hr />
+
+    <div class="field" data-version-block="v1">
+      <label class="label" for="char-perks">Ability Perks</label>
+      <div class="control">
+        <textarea class="textarea" name="perks" id="char-perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
+      </div>
+    </div>
   {{else}}
-    <div id="v2-fields-container"></div>
-  {{/if}}
+    {{#if (eq effectiveVersion 'v2')}}
+      {{> character-v2-fields character=character}}
+      {{> character-v1-perks-legacy character=character}}
+    {{else}}
+      <div id="v2-fields-container"></div>
+    {{/if}}
 
-  <hr />
+    <hr />
 
-  {{#if (eq effectiveVersion 'v1')}}
-  <div class="field">
-    <label class="label" for="char-perks">Ability Perks</label>
-    <div class="control">
-      <textarea class="textarea" name="perks" id="char-perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
+    {{#if (eq effectiveVersion 'v1')}}
+    <div class="field">
+      <label class="label" for="char-perks">Ability Perks</label>
+      <div class="control">
+        <textarea class="textarea" name="perks" id="char-perks" placeholder="Ability Perks" data-toast-editor>{{character.perks}}</textarea>
+      </div>
     </div>
-  </div>
-  {{/if}}
+    {{/if}}
 
-  {{#if (and (eq effectiveVersion 'v1') character.additional_gear)}}
-  <hr />
+    {{#if (and (eq effectiveVersion 'v1') character.additional_gear)}}
+    <hr />
 
-  <div class="field">
-    <label class="label">
-      Additional Gear
-      <span class="tag is-warning is-light ml-2">Deprecated</span>
-    </label>
-    <p class="help mb-2">This field is deprecated. Please use Common Items above instead.</p>
-    <div class="control">
-      <textarea class="textarea" name="additional_gear"
-        placeholder="Additional Gear" data-toast-editor>{{character.additional_gear}}</textarea>
+    <div class="field">
+      <label class="label">
+        Additional Gear
+        <span class="tag is-warning is-light ml-2">Deprecated</span>
+      </label>
+      <p class="help mb-2">This field is deprecated. Please use Common Items above instead.</p>
+      <div class="control">
+        <textarea class="textarea" name="additional_gear"
+          placeholder="Additional Gear" data-toast-editor>{{character.additional_gear}}</textarea>
+      </div>
     </div>
-  </div>
+    {{/if}}
   {{/if}}
 
   <div class="field">
@@ -428,3 +446,7 @@
 </div>
 {{/unless}}
 {{/unless}}
+
+{{#if isNew}}
+<script src="/js/character-form-version.js" defer></script>
+{{/if}}

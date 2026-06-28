@@ -28,6 +28,18 @@
       role="img"
       aria-label="{{character.name}}"
     ></div>
+    {{else if characterClass.image_url}}
+    <div
+      class="image-crop-render"
+      data-cropped-image
+      data-image-src="{{characterClass.image_url}}"
+      data-crop-x="{{characterClass.image_crop.x}}"
+      data-crop-y="{{characterClass.image_crop.y}}"
+      data-crop-width="{{characterClass.image_crop.width}}"
+      data-crop-height="{{characterClass.image_crop.height}}"
+      role="img"
+      aria-label="{{character.name}} ({{characterClass.name}})"
+    ></div>
     {{else}}
     <div class="notification is-info">No image available</div>
     {{/if}}
@@ -137,15 +149,19 @@
     {{#if (eq character.creator_id profile.id)}}
     <div class="field is-grouped is-pulled-right">
       <div class="control">
-        <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
+        <div class="buttons has-addons mb-0">
+          <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
+          <button type="button" class="button is-link is-light" id="levelUpBtn" data-completed-missions="{{character.completed_missions}}">
+            <span class="icon"><i class="fas fa-arrow-up"></i></span>
+            <span>Level Up</span>
+          </button>
+        </div>
       </div>
       <div class="control">
         <div class="dropdown is-right" id="export-dropdown">
           <div class="dropdown-trigger">
-            <button class="button is-info is-outlined" aria-haspopup="true" aria-controls="export-menu" onclick="document.getElementById('export-dropdown').classList.toggle('is-active')">
-              <span class="icon"><i class="fas fa-download"></i></span>
-              <span>Export</span>
-              <span class="icon is-small"><i class="fas fa-angle-down"></i></span>
+            <button class="button is-white" aria-haspopup="true" aria-controls="export-menu" onclick="document.getElementById('export-dropdown').classList.toggle('is-active')" title="Export">
+              <span class="icon"><i class="fas fa-ellipsis-vertical"></i></span>
             </button>
           </div>
           <div class="dropdown-menu" id="export-menu" role="menu">
@@ -155,7 +171,7 @@
                 <span>Markdown (.md)</span>
               </a>
               <a href="/characters/{{character.id}}/export?format=json" class="dropdown-item">
-                <span class="icon"><i class="fas fa-code"></i></span>
+                <span class="icon"><i class="fas fa-file-code"></i></span>
                 <span>JSON (.json)</span>
               </a>
             </div>
@@ -168,18 +184,43 @@
   </div>
 
   <div class="column is-two-thirds">
-    <div class="box">
-      <h3 class="title is-4">Stats</h3>
-      <div class="columns is-multiline">
+    <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}">
+      <div class="level is-mobile mb-3">
+        <div class="level-left">
+          <h3 class="title is-4 mb-0">Stats</h3>
+        </div>
+        {{#if profile}}
+        {{#if (eq character.creator_id profile.id)}}
+        <div class="level-right">
+          <button type="button" class="button is-small is-link is-light" id="statsUnlockBtn">
+            <span class="icon"><i class="fas fa-pen"></i></span>
+            <span>Edit</span>
+          </button>
+        </div>
+        {{/if}}
+        {{/if}}
+      </div>
+      <div id="statsReadOnly" class="wizard-stat-grid">
         {{#each statList}}
-        <div class="column is-one-third">
-          <p><strong>{{capitalize this}}:</strong>
+        <div class="wizard-stat-row" data-stat="{{this}}" data-value="{{lookup ../character this}}">
+          <div class="wizard-stat-name">{{capitalize this}}</div>
+          <div class="wizard-stat-boxes">
             {{#range 0 (lookup ../character this)}}
-            +
+            <div class="wizard-stat-box is-class" title="{{capitalize ../this}}: point">
+              <i class="fa-regular fa-square-plus" aria-hidden="true"></i>
+            </div>
             {{/range}}
-          </p>
+            {{#range (lookup ../character this) 5}}
+            <div class="wizard-stat-box is-locked" title="{{capitalize ../this}}: locked">
+              <i class="fa-regular fa-square-plus" aria-hidden="true"></i>
+            </div>
+            {{/range}}
+          </div>
         </div>
         {{/each}}
+      </div>
+      <div id="statsEditor" hidden>
+        {{> character-stats-editor}}
       </div>
     </div>
 
@@ -360,3 +401,9 @@
 
   </div>
 </div>
+
+{{> character-level-up}}
+
+<script src="/js/character-common.js" defer></script>
+<script src="/js/character-stats.js" defer></script>
+<script src="/js/character-level-up.js" defer></script>

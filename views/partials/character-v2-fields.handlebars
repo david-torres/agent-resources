@@ -35,24 +35,11 @@
   <div class="block">
     <label class="label">Ability Perks</label>
     <p class="help mb-2">Each perk is at most 25 words; max five per ability. Use the "Compounds with" picker to stack a perk onto another perk for the same ability.</p>
-    {{#if character.abilities}}
+    <div id="perk-groups">
       {{#each character.abilities}}
-        <div class="box perk-group" data-ability-id="{{this.id}}">
-          <h4 class="title is-5">{{capitalize this.name}}</h4>
-          <div class="columns is-multiline" id="perks-list-{{this.id}}">
-            {{#each (perksForAbility ../character.ability_perks this.id) }}
-              {{> character-ability-perk perk=this abilityId=../this.id position=this.position siblingPerks=(perksForAbility ../../character.ability_perks ../this.id) }}
-            {{/each}}
-          </div>
-          <button type="button" class="button is-primary is-small"
-                  hx-get="/characters/ability-perk?ability_id={{this.id}}&position={{nextPerkPosition ../character.ability_perks this.id}}"
-                  hx-target="#perks-list-{{this.id}}" hx-swap="beforeend">
-            Add Perk
-          </button>
-        </div>
+        {{> character-perk-group linkValue=this.id domKey=this.id abilityName=this.name abilityPerks=../character.ability_perks}}
       {{/each}}
-    {{else}}
-      <p class="has-text-grey">Add at least one Class Ability above before authoring perks.</p>
-    {{/if}}
+    </div>
+    <p id="perk-groups-empty" class="has-text-grey"{{#if character.abilities.length}} hidden{{/if}}>Add at least one Class Ability above before authoring perks.</p>
   </div>
 </div>

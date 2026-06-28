@@ -256,6 +256,82 @@ test('createCharacter preserves v2 fields when linked class is v2', async () => 
   delete require.cache[require.resolve('./character')];
 });
 
+test('createCharacter strips v1-only fields (perks, additional_gear) when class is v2', async () => {
+  mock.module('./_base', () => ({
+    supabase: fakeAdminV2,
+    supabaseAdmin: fakeAdminV2,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeAdminV2
+  }));
+  delete require.cache[require.resolve('./character')];
+  const { createCharacter } = require('./character');
+
+  const payload = {
+    name: 'V2', class_id: 'class-v2', class: 'Thane-v2', level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    perks: 'leftover v1 free text',
+    additional_gear: 'leftover v1 gear'
+  };
+  const { error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeFalsy();
+  expect(payload.perks).toBeUndefined();
+  expect(payload.additional_gear).toBeUndefined();
+
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
+test('createCharacter keeps v1 free-text perks when class is v1', async () => {
+  const { createCharacter } = require('./character');
+  const payload = {
+    name: 'V1', class_id: 'class-1', class: 'Soldier', level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    perks: 'kept v1 free text'
+  };
+  const { error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeFalsy();
+  expect(payload.perks).toBe('kept v1 free text');
+});
+
+test('createCharacter remaps create-form perks (referenced by ability name) without error', async () => {
+  mock.module('./_base', () => ({
+    supabase: fakeAdminV2,
+    supabaseAdmin: fakeAdminV2,
+    anonKey: 'test-anon-key',
+    createUserClient: () => fakeAdminV2
+  }));
+  delete require.cache[require.resolve('./character')];
+  const { createCharacter } = require('./character');
+
+  // No `abilities` key: classAbilities is undefined so setCharacterAbilities is
+  // skipped and newAbilityRows stays null. remapPerkAbilityIdsByName is still
+  // invoked with (abilityPerks, []) — the perk is dropped because no new rows
+  // matched its name-reference, which is the correct behavior. This exercises
+  // the remap call path without requiring the mock to back the class catalog.
+  const payload = {
+    name: 'V2', class_id: 'class-v2', class: 'Thane-v2', level: 1,
+    vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
+    sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
+    completed_missions: 0, commissary_reward: 0,
+    ability_perks: [{ class_ability_id: 'Strike', text: 'Deal extra damage', position: 0 }]
+  };
+  const { error } = await createCharacter(payload, { id: 'profile-1' });
+  expect(error).toBeFalsy();
+
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+});
+
 test('createCharacter rejects v2 perks that violate validation', async () => {
   mock.module('./_base', () => ({
     supabase: fakeAdminV2,

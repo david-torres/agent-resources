@@ -1,0 +1,37 @@
+<form id="characterStatsForm" class="block" autocomplete="off">
+  <p class="has-text-grey is-size-7 mb-3">
+    Edit the point values for each stat. Total: <strong id="statsTotalSum">0</strong>.
+  </p>
+  <div class="wizard-stat-grid">
+    {{#each statList}}
+    <div class="wizard-stat-row" data-stat="{{this}}">
+      <label class="wizard-stat-name" for="stat-input-{{this}}">{{capitalize this}}</label>
+      <div class="wizard-stat-boxes">
+        <input
+          class="input is-small stats-input"
+          id="stat-input-{{this}}"
+          name="{{this}}"
+          type="number"
+          min="0"
+          max="20"
+          step="1"
+          value="{{lookup ../character this}}"
+          data-stat="{{this}}"
+        >
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control">
+      <button type="button" class="button" id="statsCancelBtn">Cancel</button>
+    </p>
+    <p class="control">
+      <button type="submit" class="button is-primary" id="statsSaveBtn">
+        <span class="icon"><i class="fas fa-save"></i></span>
+        <span>Save stats</span>
+      </button>
+    </p>
+  </div>
+  <div id="statsEditorError" class="notification is-danger is-light is-hidden mt-3"></div>
+</form>
