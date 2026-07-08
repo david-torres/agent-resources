@@ -1,3 +1,11 @@
+-- Baseline schema for a fresh database.
+--
+-- This file replaces the old repo-root `schema.sql` (removed 2026-07-05).
+-- Going forward, the canonical schema is reconstructed by applying every
+-- file in `supabase/migrations/` in filename order; do not maintain a
+-- separate `schema.sql` mirror. New changes belong in a new timestamped
+-- migration next to this one.
+--
 -- Extensions and shared types must exist before any table that references them.
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 

@@ -5,7 +5,7 @@ import pg from "pg";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-const envText = await readFile(join(__dirname, "..", ".env.jm"), "utf8");
+const envText = await readFile(join(__dirname, "..", ".env"), "utf8");
 const env = Object.fromEntries(
   envText
     .split("\n")
@@ -24,11 +24,16 @@ const env = Object.fromEntries(
 const host = env.SUPABASE_URL;
 const password = env.SUPABASE_DB_PASS;
 if (!host || !password) {
-  console.error("Missing SUPABASE_URL or SUPABASE_DB_PASS in .env.jm");
+  console.error("Missing SUPABASE_URL or SUPABASE_DB_PASS in .env");
   process.exit(1);
 }
 
-const projectRef = host.replace(/^db\./, "").replace(/\.supabase\.co$/, "");
+const projectRef = (() => {
+  let u = host.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
+  u = u.replace(/^db\./, "");
+  u = u.replace(/\.supabase\.co.*$/, "");
+  return u;
+})();
 const client = new pg.Client({
   host: "aws-0-us-east-1.pooler.supabase.com",
   port: 6543,

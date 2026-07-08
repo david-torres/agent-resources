@@ -11,7 +11,7 @@ const versionOf = (f) => f.split("_")[0];
 
 const parts = [];
 parts.push(`-- Supabase migration bundle (paste into the Supabase SQL editor)`);
-parts.push(`-- Target project: iqqdsoiyevwbetozmwal (from .env.jm)`);
+parts.push(`-- Target project: iqqdsoiyevwbetozmwal (from .env)`);
 parts.push(`-- Generated: ${new Date().toISOString()}`);
 parts.push(`-- Migration count: ${files.length}`);
 parts.push(``);

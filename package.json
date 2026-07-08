@@ -7,6 +7,7 @@
     "start": "bun run index.js",
     "dev": "bun --watch index.js",
     "test": "bun test",
+    "setup": "bun run scripts/setup.mjs",
     "seed:classes": "bun run util/seed-classes.js",
     "seed:admin": "bun run util/seed-admin.js",
     "db:backup": "sh scripts/db-backup.sh"
