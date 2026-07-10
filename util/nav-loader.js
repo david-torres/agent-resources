@@ -1,4 +1,4 @@
-const { getNavItems } = require('./supabase');
+const { getNavItems } = require('../models/nav');
 
 /**
  * Populate res.locals.navItems from the current user/profile context.
