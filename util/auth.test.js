@@ -1,6 +1,8 @@
 const { test, expect, mock, afterAll } = require('bun:test');
 
 const realBase = require('../models/_base');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
 
 const fakeAnon = { __name: 'anon', auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
 const fakeAdmin = { __name: 'admin' };
@@ -13,8 +15,10 @@ mock.module('../models/_base', () => ({
   createUserClient: fakeCreateUserClient
 }));
 
-mock.module('./supabase', () => ({
+mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => token === 'valid-jwt' ? { id: 'u1' } : false,
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'p1', user_id: 'u1' })
 }));
 mock.module('./system-message', () => ({ getSystemMessage: () => null }));
@@ -30,6 +34,8 @@ const { isAuthenticated, authOptional, isAgentAuthenticated } = require('./auth'
 
 afterAll(() => {
   mock.module('../models/_base', () => realBase);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
   delete require.cache[require.resolve('./auth')];
 });
 

@@ -22,7 +22,8 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
 const realBase = require('../models/_base');
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
 const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
@@ -57,9 +58,11 @@ mock.module('../models/_base', () => ({
   anonKey: 'test-anon-key',
 }));
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'p1', user_id: 'u1', role: 'admin' }),
 }));
 
@@ -95,7 +98,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await stopHttpServer(server);
   mock.module('../models/_base', () => realBase);
-  mock.module('../util/supabase', () => realSupabase);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
   mock.module('../models/class', () => realClass);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
