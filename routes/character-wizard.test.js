@@ -25,9 +25,6 @@ const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
 const realCharacter = require('../models/character');
-const realMission = require('../models/mission');
-const realClass = require('../models/class');
-const realProfile = require('../models/profile');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -71,9 +68,6 @@ mock.module('../models/character', () => ({
     error: null,
   }),
 }));
-mock.module('../models/mission', () => ({}));
-mock.module('../models/class', () => ({}));
-mock.module('../models/profile', () => ({}));
 
 mock.module('../models/offscreen-mission', () => ({
   listOffscreenMissions: async () => ({ data: [], error: null }),
@@ -114,9 +108,6 @@ afterAll(async () => {
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
   mock.module('../models/character', () => realCharacter);
-  mock.module('../models/mission', () => realMission);
-  mock.module('../models/class', () => realClass);
-  mock.module('../models/profile', () => realProfile);
   delete require.cache[require.resolve('./characters')];
 });
 
