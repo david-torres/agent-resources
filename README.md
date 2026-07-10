@@ -248,11 +248,33 @@ To start the application in production mode:
 bun run start
 ```
 
-To run the test suite:
+### Tests
+
+This project uses Bun for its test runner and module-mocking API. Run the
+default isolated, database-free unit suite with:
 
 ```sh
-bun test
+bun run test
 ```
+
+Route HTTP tests are a separate tier because they bind a local ephemeral port:
+
+```sh
+bun run test:http
+```
+
+The two database integration suites are intentionally excluded. To run them,
+start local Supabase and reset it with the repository migrations, configure
+your `.env` with the local credentials from `supabase status`, then run:
+
+```sh
+supabase start
+supabase db reset
+bun run test:integration
+```
+
+`test:integration` rejects a non-local `SUPABASE_URL`, so it cannot write to a
+cloud project by accident.
 
 ## Agent Tokens
 

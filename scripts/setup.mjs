@@ -4,7 +4,6 @@ import { readFile, copyFile, readdir } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
-import pg from "pg";
 import readline from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 
@@ -132,7 +131,10 @@ async function installDeps() {
   ok("dependencies installed");
 }
 
-function makeClient() {
+async function makeClient() {
+  // Keep the dry-run path dependency-free: it must not require an installed
+  // driver merely to describe the work it would do.
+  const { default: pg } = await import("pg");
   const raw = process.env.SUPABASE_URL;
   const password = process.env.SUPABASE_DB_PASS;
   const projectRef = extractProjectRef(raw);
@@ -252,11 +254,6 @@ async function applyMigrations(client) {
       appliedCount++;
     } catch (e) {
       await client.query("rollback");
-      if (/already exists/i.test(e.message)) {
-        warn(`migration ${f} — already exists, marking applied`);
-        await recordApplied(client, version, f);
-        continue;
-      }
       fail(`migration ${f} — ${e.message}`);
     }
   }
@@ -333,7 +330,8 @@ function printSummary() {
   console.log("Next steps:");
   console.log("  bun run dev          # start the app in dev mode");
   console.log("  bun run start        # start in production mode");
-  console.log("  bun test             # run the test suite");
+  console.log("  bun test             # run isolated unit tests");
+  console.log("  bun run test:integration  # run local-Supabase integration tests");
   console.log("");
   if (!withAdmin) {
     console.log("Optional seeds (re-run with flags):");
@@ -347,10 +345,15 @@ async function main() {
   console.log("\x1b[1mAgent Resources — first-time setup\x1b[0m");
   console.log("");
   await ensureBun();
+  if (dryRun) {
+    log('dry-run: would verify .env, install dependencies if needed, then apply pending cloud migrations and nav seed.');
+    log('dry-run does not read or write the database, create .env, install packages, or run optional seeds.');
+    return;
+  }
   await ensureEnv();
   await installDeps();
 
-  const { client } = makeClient();
+  const { client } = await makeClient();
   try {
     await connect(client);
     await ensureTracking(client);
@@ -363,11 +366,7 @@ async function main() {
   await maybeSeedAdmin();
   await maybeSeedClasses();
 
-  if (dryRun) {
-    log("dry-run complete — no changes were made");
-  } else {
-    printSummary();
-  }
+  printSummary();
 }
 
 main().catch((e) => {
