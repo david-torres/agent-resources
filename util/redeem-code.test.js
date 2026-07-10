@@ -1,17 +1,21 @@
 const { mock, test, expect, afterAll } = require('bun:test');
 
-const realSupabase = require('./supabase');
+const realClass = require('../models/class');
+const realRules = require('../models/rules');
 
 let classResult;
 let pdfResult;
 const classCalls = [];
 const pdfCalls = [];
 
-mock.module('./supabase', () => ({
+mock.module('../models/class', () => ({
     redeemUnlockCode: async (code, userId) => {
         classCalls.push({ code, userId });
         return classResult;
-    },
+    }
+}));
+
+mock.module('../models/rules', () => ({
     redeemRulesPdfUnlockCode: async (code, userId) => {
         pdfCalls.push({ code, userId });
         return pdfResult;
@@ -22,7 +26,8 @@ delete require.cache[require.resolve('./redeem-code')];
 const { redeemAnyCode } = require('./redeem-code');
 
 afterAll(() => {
-    mock.module('./supabase', () => realSupabase);
+    mock.module('../models/class', () => realClass);
+    mock.module('../models/rules', () => realRules);
     delete require.cache[require.resolve('./redeem-code')];
 });
 
