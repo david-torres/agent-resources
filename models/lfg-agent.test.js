@@ -2,6 +2,7 @@
 // Integration tests for agent-scoped LFG model wrappers.
 // Requires local Supabase to be running (http://127.0.0.1:54321).
 const { describe, test, expect, beforeEach, afterEach } = require('bun:test');
+const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
 
 const {
@@ -23,28 +24,28 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 
 async function createAuthUser(email) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ email, password: 'test-password-123', email_confirm: true })
-  });
-  const json = await res.json();
-  if (!json.id) throw new Error(`createAuthUser failed: ${JSON.stringify(json)}`);
-  return json.id; // auth user UUID
+  const db = new Client({ connectionString: process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' });
+  await db.connect();
+  const { rows } = await db.query(
+    `insert into auth.users (id, aud, role, email, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+     values (gen_random_uuid(), 'authenticated', 'authenticated', $1, now(), now(), now(), '{}'::jsonb, '{}'::jsonb) returning id`,
+    [email]
+  );
+  await db.end();
+  return rows[0].id;
 }
 
 async function deleteAuthUser(userId) {
-  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`
-    }
-  });
+  const db = new Client({ connectionString: process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' });
+  await db.connect();
+  try {
+    await db.query('delete from auth.users where id = $1', [userId]);
+  } catch (error) {
+    // Some legacy fixtures intentionally leave their profile cleanup to the
+    // next local reset; match the old best-effort admin-delete behavior.
+    if (error.code !== '23503') throw error;
+  }
+  await db.end();
 }
 
 async function createProfile(authUserId, name) {
