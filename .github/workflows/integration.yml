@@ -1,6 +1,27 @@
 name: Local Supabase integration
 
 on:
+  pull_request:
+    paths:
+      - 'supabase/**'
+      - 'models/**'
+      - 'services/**'
+      - 'routes/**'
+      - 'util/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'bun.lock'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - 'models/**'
+      - 'services/**'
+      - 'routes/**'
+      - 'util/**'
+      - 'scripts/**'
+      - 'package.json'
+      - 'bun.lock'
   workflow_dispatch:
 
 jobs:
@@ -12,6 +33,7 @@ jobs:
       - uses: supabase/setup-cli@v1
       - run: bun install --frozen-lockfile
       - run: supabase start
+      - run: supabase db reset
       - run: |
           eval "$(supabase status -o env)"
           SUPABASE_URL="$API_URL" \

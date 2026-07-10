@@ -44,9 +44,23 @@ if (mode === 'integration') {
   }
 }
 
+// Unit and HTTP tests must be runnable from a clean checkout. A few legacy
+// modules construct their Supabase clients at import time even when the test
+// exercises only pure functions, so provide inert placeholder credentials to
+// child test processes. Integration tests intentionally use only the caller's
+// local-Supabase credentials.
+const testEnv = mode === 'integration'
+  ? process.env
+  : {
+      ...process.env,
+      SUPABASE_URL: process.env.SUPABASE_URL || 'https://test.invalid',
+      SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key',
+      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY || 'test-secret-key'
+    };
+
 // Run one file per Bun process. Several older tests install process-global
 // module mocks; isolation keeps unit tests deterministic and DB-free.
 for (const file of files) {
-  const result = spawnSync('bun', ['test', file], { cwd: root, stdio: 'inherit', env: process.env });
+  const result = spawnSync('bun', ['test', file], { cwd: root, stdio: 'inherit', env: testEnv });
   if (result.status !== 0) process.exit(result.status ?? 1);
 }

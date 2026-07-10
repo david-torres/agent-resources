@@ -97,21 +97,21 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./classes')];
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use('/classes', require('./classes'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  if (server) server.close();
+afterAll(async () => {
+  await stopHttpServer(server);
   mock.module('../models/_base', () => realBase);
   mock.module('../util/supabase', () => realSupabase);
   mock.module('../util/system-message', () => realSystemMessage);

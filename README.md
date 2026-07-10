@@ -75,13 +75,9 @@ Prerequisites: [Docker](https://docs.docker.com/get-docker/) and the
 install supabase/tap/supabase`, or `npm i -D supabase`, or the install
 script).
 
-1. Initialize the local workspace. This adds `supabase/config.toml` next to
-   the existing `supabase/migrations/` and `supabase/seed.sql`:
-   ```sh
-   supabase init
-   ```
-
-2. Start the local stack (Postgres, GoTrue, PostgREST, etc.):
+1. Start the local stack (Postgres, GoTrue, PostgREST, etc.). The repository
+   includes `supabase/config.toml`, migrations, and seed data, so no separate
+   initialization step is needed:
    ```sh
    supabase start
    ```
@@ -89,7 +85,7 @@ script).
    finishes, copy the printed `API URL`, `anon key`, and `service_role key`
    — you'll need them in a moment.
 
-3. Create a `.env` from the template. The local stack uses fixed defaults
+2. Create a `.env` from the template. The local stack uses fixed defaults
    — the DB password is always `postgres`:
    ```sh
    cp .env.example .env
@@ -101,7 +97,7 @@ script).
    - `SUPABASE_SECRET_KEY=<service_role key from `supabase status`>`
    - `SUPABASE_DB_PASS=postgres`
 
-4. Apply migrations and seeds via the Supabase CLI. (The bundled `bun run
+3. Apply migrations and seeds via the Supabase CLI. (The bundled `bun run
    setup` script targets the Supabase cloud pooler and won't work against a
    local stack — `supabase db reset` is the local equivalent: it runs every
    file in `supabase/migrations/` plus `supabase/seed.sql`):
@@ -109,7 +105,7 @@ script).
    supabase db reset
    ```
 
-5. Start the app:
+4. Start the app:
    ```sh
    bun run dev
    ```
