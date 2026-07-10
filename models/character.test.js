@@ -212,11 +212,9 @@ test('createCharacter drops v2-only fields when linked class is v1', async () =>
   const { data, error } = await createCharacter(payload, { id: 'profile-1' });
   expect(error).toBeFalsy();
   expect(data).toBeTruthy();
-  // The fake admin client always echoes characterRowBase, so we check that
-  // the payload mutation happened: createCharacter should have deleted v2
-  // keys before insert.
-  expect(payload.quirks).toBeUndefined();
-  expect(payload.accessories).toBeUndefined();
+  // Request payloads remain immutable; the persistence copy strips v2 keys.
+  expect(payload.quirks).toHaveLength(1);
+  expect(payload.accessories).toHaveLength(1);
 });
 
 test('createCharacter preserves v2 fields when linked class is v2', async () => {
@@ -276,8 +274,8 @@ test('createCharacter strips v1-only fields (perks, additional_gear) when class 
   };
   const { error } = await createCharacter(payload, { id: 'profile-1' });
   expect(error).toBeFalsy();
-  expect(payload.perks).toBeUndefined();
-  expect(payload.additional_gear).toBeUndefined();
+  expect(payload.perks).toBe('leftover v1 free text');
+  expect(payload.additional_gear).toBe('leftover v1 gear');
 
   mock.module('./_base', () => ({
     supabase: fakeAnon, supabaseAdmin: fakeAdmin,
