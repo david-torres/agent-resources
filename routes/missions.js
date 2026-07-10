@@ -2,38 +2,36 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams, isValidUuid } = require('../util/validate');
 registerUuidParams(router, ['id', 'characterId', 'profileId', 'targetId']);
-const { 
-  getMissions, 
-  getMission, 
-  createMission, 
-  updateMission, 
-  deleteMission, 
-  addCharacterToMission, 
-  removeCharacterFromMission, 
-  getMissionCharacters, 
-  setUnregisteredCharacterNames, 
-  searchPublicMissions, 
-  getRandomPublicMissions, 
-  getClasses,
-  // Editor management
+const {
+  getMissions,
+  getMission,
+  createMission,
+  updateMission,
+  deleteMission,
+  addCharacterToMission,
+  removeCharacterFromMission,
+  getMissionCharacters,
+  setUnregisteredCharacterNames,
+  searchPublicMissions,
+  getRandomPublicMissions,
   getMissionEditors,
   addMissionEditor,
   removeMissionEditor,
   canEditMission,
   isCreator,
   getEditableMissions,
-  // Similar/merge
   searchSimilarMissions,
   mergeMissions,
   previewMergeMissions,
-  // Profile search
-  searchProfiles
-} = require('../util/supabase');
-const { getCharacter, getCharacterAllMissions, getOwnMissions, searchPublicCharacters, listOffscreenMissions } = require('../util/supabase');
+  getOwnMissions
+} = require('../models/mission');
+const { getCharacter, getCharacterAllMissions, searchPublicCharacters } = require('../models/character');
+const { getClasses } = require('../models/class');
+const { searchProfiles } = require('../models/profile');
+const { listOffscreenMissions } = require('../models/offscreen-mission');
 const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassList, classAbilityList } = require('../util/enclave-consts');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
-const supabase = require('../util/supabase');
 const { processMissionImport } = require('../util/mission-import');
 
 router.get('/search', authOptional, async (req, res) => {
