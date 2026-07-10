@@ -1,12 +1,19 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
-const { sanitizeUrlFields } = require('../util/url');
-const { escapeLikePattern, validateAbilityPerks } = require('../util/validate');
+const { escapeLikePattern } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../util/reconcile');
 const { listOffscreenMissions } = require('./offscreen-mission');
+const {
+  cloneInput,
+  normalizeCharacterInput,
+  normalizeGearItems,
+  normalizeAbilityItems,
+  normalizeAbilityPerks
+} = require('../services/character/input');
+const { CharacterService } = require('../services/character/service');
 
 // Resolve the rules version a character should be rendered/validated against.
 // Inherits from the linked class; falls back to 'v1' when no class is linked
@@ -19,6 +26,32 @@ const effectiveRulesVersion = async (classId, client = supabase) => {
   } catch (_) {
     return 'v1';
   }
+};
+
+// This remains the database-facing part of class preparation. The pure input
+// module receives the resulting rules version and never needs Supabase.
+const resolveCharacterClassReference = async (input) => {
+  const data = cloneInput(input);
+  if (!data.class_id && data.class) {
+    try {
+      let lookup = await getClasses({ name: data.class });
+      if (!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0) {
+        lookup = await getClasses({ name: data.class, is_public: true });
+      }
+      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) data.class_id = lookup.data[0].id;
+    } catch (_) {
+      // Class lookup is intentionally non-fatal for the existing create/edit flow.
+    }
+  }
+  if (data.class_id && !data.class) {
+    try {
+      const { data: cls } = await getClass(data.class_id);
+      if (cls && cls.name) data.class = cls.name;
+    } catch (_) {
+      // Keep the submitted reference when a catalog lookup is unavailable.
+    }
+  }
+  return data;
 };
 
 const findUpgradeTargetsFor = async (classId, client = supabase) => {
@@ -120,114 +153,18 @@ const getCharacter = async (id, client = supabase) => {
   return { data, error };
 }
 
-const createCharacter = async (characterReq, profile) => {
-  characterReq.creator_id = profile.id;
-
-  const v2OnlyFields = ['quirks', 'accessories', 'ability_perks'];
-  const v1OnlyFields = ['perks', 'additional_gear'];
+const createCharacterPersistenceFlow = async (characterReq, profile) => {
+  // Preserve the historical ordering: create determines the version before a
+  // class-name lookup. All mutations below apply only to this local copy.
   const linkedVersion = await effectiveRulesVersion(characterReq.class_id);
-  if (linkedVersion !== 'v2') {
-    for (const k of v2OnlyFields) delete characterReq[k];
-  } else {
-    for (const k of v1OnlyFields) delete characterReq[k];
-  }
-
-  // Ensure class_id is populated from the class name when missing
-  if (!characterReq.class_id && characterReq.class) {
-    try {
-      let lookup = await getClasses({ name: characterReq.class });
-      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
-        lookup = await getClasses({ name: characterReq.class, is_public: true });
-      }
-      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
-        characterReq.class_id = lookup.data[0].id;
-      }
-    } catch (_) {
-      // Non-fatal: if lookup fails, proceed without blocking character creation
-    }
-  }
-
-  // Ensure class name is populated from class_id when missing
-  if (characterReq.class_id && !characterReq.class) {
-    try {
-      const { data: cls } = await getClass(characterReq.class_id);
-      if (cls && cls.name) {
-        characterReq.class = cls.name;
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  // handle personality traits
-  const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
-  ['trait0', 'trait1', 'trait2'].forEach(trait => delete characterReq[trait]);
-  
-  // Extract v2 ability_perks before insert; we persist them after the row exists.
-  const abilityPerks = characterReq.ability_perks;
-  delete characterReq.ability_perks;
-
-  if (linkedVersion === 'v2') {
-    const v = validateAbilityPerks(normalizeAbilityPerks(abilityPerks));
-    if (!v.ok) {
-      return { data: null, error: v.errors.join(' ') };
-    }
-  }
-
-  // handle class gear
-  const classGear = characterReq.gear;
-  delete characterReq.gear;
-
-  // handle class abilities
-  const classAbilities = characterReq.abilities;
-  delete characterReq.abilities;
-
-  // handle common items - normalize to array of non-empty strings
-  if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items)
-      ? characterReq.common_items
-      : [characterReq.common_items];
-    characterReq.common_items = items
-      .map(item => (typeof item === 'string' ? item.trim() : ''))
-      .filter(item => item.length > 0);
-  } else {
-    characterReq.common_items = [];
-  }
-
-  // handle is_public
-  if (characterReq.is_public == 'on') {
-    characterReq.is_public = true;
-  } else {
-    characterReq.is_public = false;
-  }
-
-  // handle hide_from_search
-  if (characterReq.hide_from_search == 'on') {
-    characterReq.hide_from_search = true;
-  } else {
-    characterReq.hide_from_search = false;
-  }
-
-  // handle creator_mode (wizard mode label). Reject anything outside the
-  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
-    characterReq.creator_mode = null;
-  } else if (!allowedModes.includes(characterReq.creator_mode)) {
-    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
-  }
-
-  // normalize v2 JSONB fields before insert
-  if (linkedVersion === 'v2') {
-    characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
-    characterReq.accessories = normalizeNamedJsonbList(characterReq.accessories);
-  }
-
-  // sanitize URL fields before insert
-  sanitizeUrlFields(characterReq, ['image_url']);
+  const resolvedInput = await resolveCharacterClassReference(characterReq);
+  const normalized = normalizeCharacterInput(resolvedInput, { rulesVersion: linkedVersion, creatorId: profile.id });
+  if (normalized.error) return { data: null, error: normalized.error };
+  const { data: characterInput, childData } = normalized;
+  const { traits: traitFields, abilityPerks, classGear, classAbilities } = childData;
 
   // create character (authz: creator_id is set server-side to profile.id above)
-  const { data, error } = await supabaseAdmin.from('characters').insert(characterReq).select();
+  const { data, error } = await supabaseAdmin.from('characters').insert(characterInput).select();
   if (error) {
     console.error(error);
     return { data, error };
@@ -281,7 +218,7 @@ const createCharacter = async (characterReq, profile) => {
   return { data: character, error };
 }
 
-const updateCharacter = async (id, characterReq, profile) => {
+const updateCharacterPersistenceFlow = async (id, characterReq, profile) => {
   // Use admin to read for the ownership probe: the anon client can't see
   // private rows under RLS, which would 404 a user trying to edit their own
   // private character (PGRST116). Authz is enforced by the creator_id check
@@ -290,119 +227,39 @@ const updateCharacter = async (id, characterReq, profile) => {
   if (characterError) return { data: null, error: characterError };
   if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
 
-  const v2OnlyFields = ['quirks', 'accessories', 'ability_perks'];
   // Pre-normalization strip: remove v2-only fields early if the submitted class_id
   // is already non-v2. linkedVersion is recomputed below after class_id is finalized.
   let linkedVersion = await effectiveRulesVersion(characterReq.class_id);
+  let preparedInput = cloneInput(characterReq);
   if (linkedVersion !== 'v2') {
-    for (const k of v2OnlyFields) delete characterReq[k];
+    for (const k of ['quirks', 'accessories', 'ability_perks']) delete preparedInput[k];
   }
-
-  // Ensure class_id is populated from the class name when missing or when class changed
-  if (!characterReq.class_id && characterReq.class) {
-    try {
-      let lookup = await getClasses({ name: characterReq.class });
-      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
-        lookup = await getClasses({ name: characterReq.class, is_public: true });
-      }
-      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
-        characterReq.class_id = lookup.data[0].id;
-      }
-    } catch (_) {
-      // Non-fatal: if lookup fails, proceed with remaining updates
-    }
-  }
-
-  // Ensure class name is populated from class_id when missing
-  if (characterReq.class_id && !characterReq.class) {
-    try {
-      const { data: cls } = await getClass(characterReq.class_id);
-      if (cls && cls.name) {
-        characterReq.class = cls.name;
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
+  preparedInput = await resolveCharacterClassReference(preparedInput);
 
   // Recompute linkedVersion now that class_id is fully resolved — the name→id
   // lookup above can change class_id, which changes the effective rules version.
-  linkedVersion = await effectiveRulesVersion(characterReq.class_id);
-
-  // handle personality traits
-  const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
-  ['trait0', 'trait1', 'trait2'].forEach(trait => delete characterReq[trait]);
+  linkedVersion = await effectiveRulesVersion(preparedInput.class_id);
+  const normalized = normalizeCharacterInput(preparedInput, {
+    rulesVersion: linkedVersion,
+    normalizeAutoCalculate: true
+  });
+  if (normalized.error) return { data: null, error: normalized.error };
+  const { data: characterInput, childData } = normalized;
+  const { traits: traitFields, abilityPerks, classGear, classAbilities } = childData;
   delete characterData.traits;
-
-  // Extract v2 ability_perks before update; we persist them after the row exists.
-  const abilityPerks = characterReq.ability_perks;
-  delete characterReq.ability_perks;
-
-  if (linkedVersion === 'v2') {
-    const v = validateAbilityPerks(normalizeAbilityPerks(abilityPerks));
-    if (!v.ok) {
-      return { data: null, error: v.errors.join(' ') };
-    }
-  }
-
-  // handle class gear
-  const classGear = characterReq.gear;
-  delete characterReq.gear;
   delete characterData.gear;
-
-  // handle class abilities
-  const classAbilities = characterReq.abilities;
   // Snapshot existing ability rows: setCharacterAbilities replaces them with
   // fresh UUIDs, but submitted ability_perks reference the old row ids (the
   // form bakes them into hidden inputs at render time). We remap old→new by
   // name+class_id below before persisting perks.
   const previousAbilities = Array.isArray(characterData.abilities) ? characterData.abilities : [];
-  delete characterReq.abilities;
   delete characterData.abilities;
-
-  // handle common items - normalize to array of non-empty strings
-  if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items)
-      ? characterReq.common_items
-      : [characterReq.common_items];
-    characterReq.common_items = items
-      .map(item => (typeof item === 'string' ? item.trim() : ''))
-      .filter(item => item.length > 0);
-  } else {
-    characterReq.common_items = [];
-  }
-
-  // handle is_public
-  if (characterReq.is_public == 'on') {
-    characterReq.is_public = true;
-  } else {
-    characterReq.is_public = false;
-  }
-
-  // handle hide_from_search
-  if (characterReq.hide_from_search == 'on') {
-    characterReq.hide_from_search = true;
-  } else {
-    characterReq.hide_from_search = false;
-  }
-
-  // handle creator_mode (wizard mode label). Reject anything outside the
-  // allowed set; treat empty/missing as NULL.
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
-    characterReq.creator_mode = null;
-  } else if (!allowedModes.includes(characterReq.creator_mode)) {
-    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
-  }
-
-  // handle auto_calculate
-  characterReq.auto_calculate = characterReq.auto_calculate === 'on' || characterReq.auto_calculate === true;
 
   // Auto-calculate: when enabled, recompute level/completed_missions/commissary_reward
   // from the submitted in-flight payload (gear, common_items, class_id) and the
   // character's mission history. Server is authoritative — submitted values for
   // these three fields are ignored when the flag is on.
-  if (characterReq.auto_calculate) {
+  if (characterInput.auto_calculate) {
     // Resolve gear strings ("ClassName::GearName") to objects with class_id so
     // on-class/off-class classification matches the persisted shape.
     const submittedGear = Array.isArray(classGear) ? classGear : (classGear ? [classGear] : []);
@@ -438,31 +295,22 @@ const updateCharacter = async (id, characterReq, profile) => {
 
     const derived = deriveCharacterTotals({
       character: {
-        class_id: characterReq.class_id,
+        class_id: characterInput.class_id,
         gear: resolvedGear,
-        common_items: characterReq.common_items
+        common_items: characterInput.common_items
       },
       realMissions: realMissions || [],
       offscreenMissions: offscreenMissions || [],
       rulesVersion: linkedVersion
     });
 
-    characterReq.level = derived.level;
-    characterReq.completed_missions = derived.completed_missions;
-    characterReq.commissary_reward = derived.commissary_reward;
+    characterInput.level = derived.level;
+    characterInput.completed_missions = derived.completed_missions;
+    characterInput.commissary_reward = derived.commissary_reward;
   }
-
-  // normalize v2 JSONB fields before update
-  if (linkedVersion === 'v2') {
-    characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
-    characterReq.accessories = normalizeNamedJsonbList(characterReq.accessories);
-  }
-
-  // sanitize URL fields before update
-  sanitizeUrlFields(characterReq, ['image_url']);
 
   // update character (authz: creator_id check above + filter below)
-  const { data, error } = await supabaseAdmin.from('characters').update(characterReq).eq('id', id).eq('creator_id', profile.id).select();
+  const { data, error } = await supabaseAdmin.from('characters').update(characterInput).eq('id', id).eq('creator_id', profile.id).select();
   if (error) {
     console.error(error);
     return { data, error };
@@ -635,59 +483,6 @@ const getCharacterGear = async (id, client = supabase) => {
   return { data: mergedGear, error: null };
 }
 
-const normalizeNamedJsonbList = (input) => {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        return trimmed ? { name: trimmed } : null;
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const name = item.name.trim();
-        if (!name) return null;
-        const out = { name };
-        if (typeof item.description === 'string' && item.description.trim()) {
-          out.description = item.description.trim();
-        }
-        return out;
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
-const normalizeGearItems = (gear) => {
-  if (!Array.isArray(gear)) {
-    return [];
-  }
-  return gear
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (!trimmed) return null;
-        // Handle "ClassName::GearName" format from searchable selects
-        if (trimmed.includes('::')) {
-          const [, gearName] = trimmed.split('::');
-          return gearName ? { name: gearName.trim() } : null;
-        }
-        return { name: trimmed };
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const trimmed = item.name.trim();
-        if (!trimmed) return null;
-        return {
-          ...item,
-          name: trimmed
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
 const setCharacterGear = async (id, gear) => {
   const normalizedGear = normalizeGearItems(gear);
 
@@ -777,56 +572,6 @@ const getCharacterAbilityPerks = async (id) => {
     .order('position', { ascending: true });
   if (error) return { data: null, error };
   return { data: Array.isArray(data) ? data : [], error: null };
-};
-
-const normalizeAbilityItems = (abilities) => {
-  if (!Array.isArray(abilities)) {
-    return [];
-  }
-  return abilities
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (!trimmed) return null;
-        // Handle "ClassName::AbilityName" format from searchable selects
-        if (trimmed.includes('::')) {
-          const [, abilityName] = trimmed.split('::');
-          return abilityName ? { name: abilityName.trim() } : null;
-        }
-        return { name: trimmed };
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const trimmed = item.name.trim();
-        if (!trimmed) return null;
-        return {
-          ...item,
-          name: trimmed
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
-const normalizeAbilityPerks = (perks) => {
-  if (!Array.isArray(perks)) return [];
-  return perks
-    .map((p, i) => {
-      if (!p || typeof p !== 'object') return null;
-      const text = typeof p.text === 'string' ? p.text.trim() : '';
-      const classAbilityId = p.class_ability_id || null;
-      if (!text || !classAbilityId) return null;
-      const position = Number.isFinite(Number(p.position)) ? Number(p.position) : i;
-      const compoundsWith = p.compounds_with_id || p.compounds_with || null;
-      return {
-        class_ability_id: classAbilityId,
-        text,
-        position,
-        compounds_with: compoundsWith
-      };
-    })
-    .filter(Boolean);
 };
 
 const setCharacterPerks = async (characterId, perks) => {
@@ -1267,6 +1012,18 @@ const getCharacterForAgent = async (id, actor = {}) => {
   );
   return { data: serialized, error: null };
 };
+
+// Compatibility adapter: routes and importers continue using this model's
+// public functions while all character writes now cross the service boundary.
+// The adapter can be replaced by an RPC-backed implementation without changing
+// those callers or the service contract.
+const characterService = new CharacterService({
+  createCharacter: createCharacterPersistenceFlow,
+  updateCharacter: updateCharacterPersistenceFlow
+});
+
+const createCharacter = (input, actor) => characterService.createCharacter(input, actor);
+const updateCharacter = (id, input, actor) => characterService.updateCharacter(id, input, actor);
 
 module.exports = {
   getOwnCharacters,
