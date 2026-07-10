@@ -1,7 +1,7 @@
 const { supabase, supabaseAdmin } = require('./_base');
-const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern } = require('../util/validate');
 const { recalcMilestoneBadgesSafely, getMissionProfileIds } = require('./badge');
+const { MissionService } = require('../services/mission/service');
 
 const getMissions = async () => {
   const { data, error } = await supabase
@@ -96,94 +96,14 @@ const getOwnMissions = async (profile, client = supabase) => {
   return { data: transformedData, error };
 }
 
-const createMission = async (missionData, profile) => {
-  missionData.creator_id = profile.id;
-  sanitizeUrlFields(missionData, ['media_url']);
-  const { data, error } = await supabaseAdmin.from('missions').insert(missionData).select();
-  if (!error && missionData.host_id) {
-    await recalcMilestoneBadgesSafely([missionData.host_id]);
-  }
-  return { data, error };
-};
-
-const updateMission = async (id, missionData, profile) => {
-  // Check if profile can edit this mission (creator, host, or editor)
-  const canEdit = await canEditMission(id, profile);
-  if (!canEdit) {
-    return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
-  }
-
-  // Capture the current host before the write: a host swap must recalc the
-  // outgoing host's badges too (counts only ever ADD badges; this just keeps
-  // both profiles' award rows up to date). Like every query in this module,
-  // this read returns { data, error } rather than throwing on a query error,
-  // so it is safe to await unguarded ahead of the mutation.
-  const { data: existing } = await supabaseAdmin
-    .from('missions')
-    .select('host_id')
-    .eq('id', id)
-    .maybeSingle();
-
-  sanitizeUrlFields(missionData, ['media_url']);
-
-  const { data, error } = await supabaseAdmin
-    .from('missions')
-    .update(missionData)
-    .eq('id', id)
-    .select();
-  if (!error) {
-    await recalcMilestoneBadgesSafely([existing?.host_id, missionData.host_id]);
-  }
-  return { data, error };
-};
-
-const deleteMission = async (id, profile) => {
-  // Affected profiles must be captured BEFORE the rows disappear.
-  const affected = await getMissionProfileIds(id);
-  const { data, error } = await supabaseAdmin
-    .from('missions')
-    .delete()
-    .eq('id', id)
-    .eq('creator_id', profile.id);
-  if (!error) {
-    await recalcMilestoneBadgesSafely(affected);
-  }
-  return { data, error };
-};
-
-const recalcCharacterCreator = async (characterId) => {
-  // Resolves to { data, error } (never throws on a query error), so an
-  // unguarded await here cannot break the calling mutation's return contract.
-  const { data: character } = await supabaseAdmin
-    .from('characters')
-    .select('creator_id')
-    .eq('id', characterId)
-    .maybeSingle();
-  await recalcMilestoneBadgesSafely([character?.creator_id]);
-};
-
-const addCharacterToMission = async (missionId, characterId) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_characters')
-    .upsert({ mission_id: missionId, character_id: characterId })
-    .select();
-  if (!error) {
-    await recalcCharacterCreator(characterId);
-  }
-  return { data, error };
-};
-
-const removeCharacterFromMission = async (missionId, characterId) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_characters')
-    .delete()
-    .eq('mission_id', missionId)
-    .eq('character_id', characterId);
-  if (!error) {
-    await recalcCharacterCreator(characterId);
-  }
-  return { data, error };
-};
+// Compatibility functions are deliberately kept at the model boundary for
+// routes and imports; their write decisions live in services/mission.
+let missionService;
+const createMission = async (missionData, profile) => missionService.createMission(missionData, profile);
+const updateMission = async (id, missionData, profile) => missionService.updateMission(id, missionData, profile);
+const deleteMission = async (id, profile) => missionService.deleteMission(id, profile);
+const addCharacterToMission = async (missionId, characterId) => missionService.addCharacter(missionId, characterId);
+const removeCharacterFromMission = async (missionId, characterId) => missionService.removeCharacter(missionId, characterId);
 
 const getMissionCharacters = async (missionId, client = supabase) => {
   const { data, error } = await client
@@ -721,35 +641,8 @@ const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3
  * - Adds editors from secondary to primary
  * - Deletes secondary mission
  */
-const mergeMissions = async (primaryId, secondaryId, profile) => {
-  const [canPrimary, canSecondary] = await Promise.all([
-    canEditMission(primaryId, profile),
-    canEditMission(secondaryId, profile)
-  ]);
-  if (!canPrimary || !canSecondary) {
-    return { data: null, error: 'You must be able to edit both missions to merge them' };
-  }
-
-  // Capture BEFORE the merge: the secondary mission's rows are deleted by the RPC.
-  const affected = [
-    ...(await getMissionProfileIds(primaryId)),
-    ...(await getMissionProfileIds(secondaryId))
-  ];
-
-  const { error } = await supabaseAdmin.rpc('merge_missions', {
-    primary_id: primaryId,
-    secondary_id: secondaryId,
-    actor_profile_id: profile.id
-  });
-  if (error) {
-    console.error('merge_missions RPC failed:', error);
-    return { data: null, error };
-  }
-
-  await recalcMilestoneBadgesSafely(affected);
-
-  return await getMission(primaryId);
-};
+const mergeMissions = async (primaryId, secondaryId, profile) =>
+  missionService.mergeMissions(primaryId, secondaryId, profile);
 
 /**
  * Preview what a merge would look like without actually performing it
@@ -808,6 +701,30 @@ const previewMergeMissions = async (primaryId, secondaryId) => {
     return { data: null, error };
   }
 };
+
+// Initial Supabase adapter. It intentionally contains only persistence and
+// lookup details; authorization, input handling, sequencing, and badge
+// decisions are testable in MissionService.
+missionService = new MissionService({
+  canEdit: canEditMission,
+  getHost: id => supabaseAdmin.from('missions').select('host_id').eq('id', id).maybeSingle(),
+  createMissionRow: data => supabaseAdmin.from('missions').insert(data).select(),
+  updateMissionRow: (id, data) => supabaseAdmin.from('missions').update(data).eq('id', id).select(),
+  deleteMissionRow: (id, creatorId) => supabaseAdmin
+    .from('missions').delete().eq('id', id).eq('creator_id', creatorId),
+  getMissionProfileIds,
+  getCharacterCreator: id => supabaseAdmin
+    .from('characters').select('creator_id').eq('id', id).maybeSingle(),
+  upsertMissionCharacter: (missionId, characterId) => supabaseAdmin
+    .from('mission_characters').upsert({ mission_id: missionId, character_id: characterId }).select(),
+  deleteMissionCharacter: (missionId, characterId) => supabaseAdmin
+    .from('mission_characters').delete().eq('mission_id', missionId).eq('character_id', characterId),
+  mergeMissions: (primaryId, secondaryId, actorId) => supabaseAdmin.rpc('merge_missions', {
+    primary_id: primaryId, secondary_id: secondaryId, actor_profile_id: actorId
+  }),
+  getMission,
+  recalcBadges: recalcMilestoneBadgesSafely
+});
 
 module.exports = {
   getMissions,
