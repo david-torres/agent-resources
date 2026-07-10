@@ -1,7 +1,7 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const crypto = require('crypto');
-const { sanitizeUrlFields } = require('../util/url');
 const { computeVersionFamily, expandIdsToFamilies } = require('../util/class-family');
+const { ClassService } = require('../services/class/service');
 
 const applyClassFilters = (query, filters = {}) => {
     if (filters.name) {
@@ -160,50 +160,11 @@ const getClass = async (id, client = supabase) => {
     return { data, error };
 };
 
-const createClass = async (classData) => {
-    // // pack jsonb fields: abilities and gear
-    // classData.abilities = JSON.stringify(classData.abilities);
-    // classData.gear = JSON.stringify(classData.gear);
-
-    sanitizeUrlFields(classData, ['image_url']);
-
-    // authz: route sets created_by and restricts is_player_created/status for non-admins
-    const { data, error } = await supabaseAdmin
-        .from('classes')
-        .insert([classData])
-        .select()
-        .single();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error };
-};
-
-const updateClass = async (id, updates) => {
-    // pack jsonb fields: abilities and gear
-    // console.log('updateClass before', updates);
-    // updates.abilities = JSON.stringify(updates.abilities);
-    // updates.gear = JSON.stringify(updates.gear);
-    // console.log('updateClass after', updates);
-
-    sanitizeUrlFields(updates, ['image_url']);
-
-    // authz: caller route must verify requester is owner (created_by) or admin
-    const { data, error } = await supabaseAdmin
-        .from('classes')
-        .update(updates)
-        .eq('id', id)
-        .select()
-        .single();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error };
-};
+// Route-facing compatibility functions. The service owns input preparation and
+// write orchestration while this model remains the Supabase adapter.
+let classService;
+const createClass = async (classData) => classService.createClass(classData);
+const updateClass = async (id, updates) => classService.updateClass(id, updates);
 
 const duplicateClass = async (baseId, newVersion, newEdition = null) => {
     const params = {
@@ -223,28 +184,8 @@ const duplicateClass = async (baseId, newVersion, newEdition = null) => {
     return { data, error };
 };
 
-const saveClassPdfMetadata = async (classId, storagePath) => {
-    if (!classId) {
-        return { data: null, error: new Error('Missing class id') };
-    }
-    const updates = {
-        pdf_storage_path: storagePath || null,
-        pdf_updated_at: storagePath ? new Date().toISOString() : null
-    };
-    // authz: called only from createClass/updateClass routes which gate access
-    const { data, error } = await supabaseAdmin
-        .from('classes')
-        .update(updates)
-        .eq('id', classId)
-        .select()
-        .single();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
-};
+const saveClassPdfMetadata = async (classId, storagePath) =>
+    classService.savePdfMetadata(classId, storagePath);
 
 const getUnlockedClasses = async (userId) => {
     const now = new Date().toISOString();
@@ -489,19 +430,7 @@ const getVersionHistory = async (classId) => {
     return { data, error };
 };
 
-const deleteClass = async (id) => {
-    // authz: caller route must verify requester is owner (created_by) or admin
-    const { error } = await supabaseAdmin
-        .from('classes')
-        .delete()
-        .eq('id', id);
-
-    if (error) {
-        console.error(error);
-        return { error };
-    }
-    return { error: null };
-};
+const deleteClass = async (id) => classService.deleteClass(id);
 
 // Build lookup maps from gear/ability name -> class_id and description
 const buildClassContentLookupMaps = async () => {
@@ -552,6 +481,32 @@ const buildClassContentLookupMaps = async () => {
       throw error;
     }
 };
+
+const withClassWriteResult = async (query) => {
+    const { data, error } = await query;
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error: null };
+};
+
+classService = new ClassService({
+    createClassRow: data => withClassWriteResult(
+        supabaseAdmin.from('classes').insert([data]).select().single()
+    ),
+    updateClassRow: (id, data) => withClassWriteResult(
+        supabaseAdmin.from('classes').update(data).eq('id', id).select().single()
+    ),
+    deleteClassRow: async id => {
+        const { error } = await supabaseAdmin.from('classes').delete().eq('id', id);
+        if (error) console.error(error);
+        return { error: error || null };
+    },
+    savePdfMetadataRow: (id, data) => withClassWriteResult(
+        supabaseAdmin.from('classes').update(data).eq('id', id).select().single()
+    )
+});
 
 module.exports = {
     getClasses,
