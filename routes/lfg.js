@@ -3,7 +3,6 @@ const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id', 'requestId']);
 const {
-    getOwnCharacters,
     getLfgPosts,
     getLfgPostsByCreator,
     getLfgPostsByOthers,
@@ -17,8 +16,9 @@ const {
     getLfgJoinRequestForUserAndPost,
     updateJoinRequest,
     deleteJoinRequest,
-    syncConduitHostId,
-} = require('../util/supabase');
+    syncConduitHostId
+} = require('../models/lfg');
+const { getOwnCharacters } = require('../models/character');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { statList } = require('../util/enclave-consts');
