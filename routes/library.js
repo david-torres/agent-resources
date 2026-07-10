@@ -17,14 +17,10 @@ const {
     deleteRulesPdfUnlock,
     createRulesPdfUnlockCodes,
     listRulesPdfUnlockCodes,
-    storeRulesPdf,
-    deletePdfObject,
-    getSignedPdfUrl,
-    canViewRulesPdf,
-    RULES_PDF_BUCKET,
-    getProfileByNameAdmin,
-    getProfileByIdAdmin
-} = require('../util/supabase');
+    canViewRulesPdf
+} = require('../models/rules');
+const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
+const { getProfileByNameAdmin, getProfileByIdAdmin } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
