@@ -10,6 +10,7 @@
     "test:unit": "bun scripts/run-tests.mjs unit",
     "test:http": "bun scripts/run-tests.mjs http",
     "test:integration": "bun scripts/run-tests.mjs integration",
+    "check": "bun scripts/check.mjs",
     "setup": "bun run scripts/setup.mjs",
     "seed:classes": "bun run util/seed-classes.js",
     "seed:admin": "bun run util/seed-admin.js",
