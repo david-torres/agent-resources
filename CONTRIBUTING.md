@@ -5,9 +5,10 @@
 Use Bun for the application and test commands. Install dependencies with
 `bun install`, copy `.env.dist` to `.env`, then run `bun run setup`.
 
-Run `bun run check` and `bun run test` before opening a pull request. HTTP tests are separate:
-`bun run test:http`. Database integration tests require a local Supabase stack
-and are opt-in: `supabase start` followed by `bun run test:integration`.
+Run `bun run check`, `bun run test`, and `bun run test:http` before opening a
+pull request. Database integration tests require a local Supabase stack:
+`supabase start`, `supabase db reset`, then `bun run test:integration`.
+The integration workflow runs automatically when database-facing code changes.
 
 ## Change checklist
 

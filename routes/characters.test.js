@@ -99,11 +99,12 @@ const {
   substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
 } = require('../util/handlebars');
 const { renderMarkdown } = require('../util/markdown');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./characters')];
 
   const app = express();
@@ -150,12 +151,11 @@ beforeAll(() => {
   });
 
   app.use('/characters', require('./characters'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  if (server) server.close();
+afterAll(async () => {
+  await stopHttpServer(server);
   mock.module('../models/_base', () => realBase);
   mock.module('../util/supabase', () => realSupabase);
   mock.module('../util/system-message', () => realSystemMessage);
