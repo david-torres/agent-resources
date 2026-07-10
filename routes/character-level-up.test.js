@@ -26,6 +26,10 @@ const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+const realCharacter = require('../models/character');
+const realMission = require('../models/mission');
+const realClass = require('../models/class');
+const realProfile = require('../models/profile');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -108,6 +112,9 @@ mock.module('../util/supabase', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
+}));
+
+mock.module('../models/character', () => ({
   // Consumed by the route under test:
   getCharacter: async () => ({
     data: {
@@ -123,15 +130,20 @@ mock.module('../util/supabase', () => ({
     },
     error: null,
   }),
-  createMission: async () => ({ data: [{ id: 'mission-1' }], error: null }),
-  addCharacterToMission: async () => ({ data: [{}], error: null }),
-  getClass: async () => ({ data: { id: 'c1', rules_version: 'v1' }, error: null }),
   // After backfilling 2 success missions, derivation reads them back:
   getCharacterRealMissionsForDerivation: async () => ({
     data: [{ outcome: 'success' }, { outcome: 'success' }],
     error: null,
   }),
 }));
+mock.module('../models/mission', () => ({
+  createMission: async () => ({ data: [{ id: 'mission-1' }], error: null }),
+  addCharacterToMission: async () => ({ data: [{}], error: null }),
+}));
+mock.module('../models/class', () => ({
+  getClass: async () => ({ data: { id: 'c1', rules_version: 'v1' }, error: null }),
+}));
+mock.module('../models/profile', () => ({}));
 
 mock.module('../models/offscreen-mission', () => ({
   listOffscreenMissions: async () => ({ data: [], error: null }),
@@ -170,6 +182,10 @@ afterAll(async () => {
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
+  mock.module('../models/character', () => realCharacter);
+  mock.module('../models/mission', () => realMission);
+  mock.module('../models/class', () => realClass);
+  mock.module('../models/profile', () => realProfile);
 });
 
 beforeEach(() => {

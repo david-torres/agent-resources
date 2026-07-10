@@ -20,6 +20,10 @@ const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+const realCharacter = require('../models/character');
+const realMission = require('../models/mission');
+const realClass = require('../models/class');
+const realProfile = require('../models/profile');
 
 // Minimal no-op PostgREST-shaped fake — the ability-perk-group handler only
 // checks query params and calls res.render, so an empty store is sufficient.
@@ -51,25 +55,6 @@ mock.module('../util/supabase', () => ({
   // Consumed by the real authOptional middleware:
   getUserFromToken: async () => false,
   getProfile: async () => null,
-  // Named exports routes/characters.js destructures at module load — stubbed
-  // so the require doesn't throw. None are reached on this endpoint.
-  getOwnCharacters: async () => ({ data: null, error: null }),
-  getCharacter: async () => ({ data: null, error: null }),
-  createCharacter: async () => ({ data: null, error: null }),
-  updateCharacter: async () => ({ data: null, error: null }),
-  deleteCharacter: async () => ({ data: null, error: null }),
-  markCharacterDeceased: async () => ({ data: null, error: null }),
-  getCharacterRecentMissions: async () => ({ data: null, error: null }),
-  searchPublicCharacters: async () => ({ data: null, error: null }),
-  getRandomPublicCharacters: async () => ({ data: null, error: null }),
-  getMission: async () => ({ data: null, error: null }),
-  getClasses: async () => ({ data: null, error: null }),
-  getClass: async () => ({ data: null, error: null }),
-  getLfgPost: async () => ({ data: null, error: null }),
-  getProfileById: async () => ({ data: null, error: null }),
-  getCharacterRealMissionsForDerivation: async () => ({ data: null, error: null }),
-  createMission: async () => ({ data: null, error: null }),
-  addCharacterToMission: async () => ({ data: null, error: null }),
 }));
 
 mock.module('../models/offscreen-mission', () => ({
@@ -87,6 +72,10 @@ mock.module('../util/nav-loader', () => ({
   populateNavItems: async () => {},
   loadNavItems: (req, res, next) => next(),
 }));
+mock.module('../models/character', () => ({}));
+mock.module('../models/mission', () => ({}));
+mock.module('../models/class', () => ({}));
+mock.module('../models/profile', () => ({}));
 
 const express = require('express');
 const exphbs = require('express-handlebars');
@@ -162,6 +151,10 @@ afterAll(async () => {
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
+  mock.module('../models/character', () => realCharacter);
+  mock.module('../models/mission', () => realMission);
+  mock.module('../models/class', () => realClass);
+  mock.module('../models/profile', () => realProfile);
   delete require.cache[require.resolve('./characters')];
 });
 

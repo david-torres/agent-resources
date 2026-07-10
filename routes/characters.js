@@ -2,7 +2,22 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
-const { getOwnCharacters, getCharacter, createCharacter, updateCharacter, deleteCharacter, markCharacterDeceased, getCharacterRecentMissions, searchPublicCharacters, getRandomPublicCharacters, getMission, getClasses, getClass, getLfgPost, getProfileById, getCharacterRealMissionsForDerivation, createMission, addCharacterToMission } = require('../util/supabase');
+const {
+  getOwnCharacters,
+  getCharacter,
+  createCharacter,
+  updateCharacter,
+  deleteCharacter,
+  markCharacterDeceased,
+  getCharacterRecentMissions,
+  searchPublicCharacters,
+  getRandomPublicCharacters,
+  getCharacterRealMissionsForDerivation
+} = require('../models/character');
+const { getMission, createMission, addCharacterToMission } = require('../models/mission');
+const { getClasses, getClass } = require('../models/class');
+const { getLfgPost } = require('../models/lfg');
+const { getProfileById } = require('../models/profile');
 const { supabaseAdmin } = require('../models/_base');
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
