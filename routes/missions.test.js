@@ -18,6 +18,8 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
 const realSupabase = require('../util/supabase');
+const realMission = require('../models/mission');
+const realCharacter = require('../models/character');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -30,10 +32,14 @@ mock.module('../util/supabase', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
   getProfile: async () => ({ id: 'attacker-profile', user_id: 'u1' }),
+}));
+mock.module('../models/mission', () => ({
   // Consumed by the routes under test:
   canEditMission: async () => canEditResult,
   addCharacterToMission: async () => { calls.add++; return { error: null }; },
   removeCharacterFromMission: async () => { calls.remove++; return { error: null }; },
+}));
+mock.module('../models/character', () => ({
   // Force the post-mutation render path to bail via sendError (JSON), so the
   // authorized-case assertions don't need a Handlebars view engine.
   getCharacter: async () => ({ data: null, error: { message: 'stop before render' } }),
@@ -61,6 +67,8 @@ beforeAll(async () => {
 afterAll(async () => {
   await stopHttpServer(server);
   mock.module('../util/supabase', () => realSupabase);
+  mock.module('../models/mission', () => realMission);
+  mock.module('../models/character', () => realCharacter);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
