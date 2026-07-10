@@ -14,7 +14,7 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY
   || process.env.SUPABASE_SERVICE_ROLE_KEY
   || 'test-secret-key';
 
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -26,9 +26,8 @@ const calls = { grant: [], revoke: [] };
 let grantResult = { data: { slug: 'enclave-day-1' }, error: null };
 let revokeResult = { data: { slug: 'enclave-day-1' }, error: null };
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
-  getProfile: async () => ({ id: 'p-admin', user_id: 'u1', role: profileRole })
 }));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
@@ -45,6 +44,7 @@ mock.module('../models/badge', () => ({
   revokeBadge: async (args) => { calls.revoke.push(args); return revokeResult; }
 }));
 mock.module('../models/profile', () => ({
+  getProfile: async () => ({ id: 'p-admin', user_id: 'u1', role: profileRole }),
   getProfileByIdAdmin: async (id) => ({ data: { id, name: 'Someone', user_id: 'u2' }, error: null }),
   searchProfilesAdmin: async () => ({ data: [], error: null })
 }));
@@ -65,7 +65,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopHttpServer(server);
-  mock.module('../util/supabase', () => realSupabase);
+  mock.module('../models/auth', () => realAuth);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);

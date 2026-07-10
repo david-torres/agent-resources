@@ -1,5 +1,6 @@
 const { supabase, supabaseAdmin, createUserClient } = require('../models/_base');
-const { getUserFromToken, getProfile } = require('./supabase');
+const { getUserFromToken } = require('../models/auth');
+const { getProfile } = require('../models/profile');
 const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
