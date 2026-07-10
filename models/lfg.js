@@ -1,6 +1,7 @@
 const { supabase, supabaseAdmin } = require('./_base');
 const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
+const { LfgService } = require('../services/lfg/service');
 moment.tz.setDefault('UTC');
 
 const fetchProfileById = async (profileId, client = supabase) => {
@@ -140,91 +141,12 @@ const getLfgPost = async (id, client = supabase) => {
   return { data: post, error };
 }
 
-// Reconcile the creator's own role on their post from form intent (host checkbox / character select).
-// host_id is never written directly — joinLfgPost inserts an approved conduit request, and
-// syncConduitHostId mirrors that onto lfg_posts.host_id. An absent role intent (neither field)
-// means "leave my existing role alone" so metadata-only edits don't clobber roles.
-const reconcileCreatorRole = async (postId, profileId, { hostFlag, characterId }) => {
-  const desired = hostFlag
-    ? { type: 'conduit', character: null }
-    : (characterId ? { type: 'player', character: characterId } : null);
-  if (!desired) return { error: null };
-
-  const { data: existingRequest } = await getLfgJoinRequestForUserAndPost(profileId, postId, supabaseAdmin);
-  const matches = existingRequest
-    && existingRequest.join_type === desired.type
-    && existingRequest.character_id === desired.character;
-  if (matches) return { error: null };
-
-  if (existingRequest) {
-    const { error: delErr } = await deleteJoinRequest(existingRequest.id);
-    if (delErr) return { error: delErr };
-  }
-  const { error: joinErr } = await joinLfgPost(postId, profileId, desired.type, desired.character, supabaseAdmin);
-  if (joinErr) return { error: joinErr };
-  return { error: null };
-};
-
-const createLfgPost = async (postReq, profile) => {
-  postReq.creator_id = profile.id;
-
-  const characterId = postReq.character || null;
-  delete postReq.character;
-  const hostFlag = postReq.host_id === 'on';
-  delete postReq.host_id;
-
-  postReq.is_public = postReq.is_public === true || postReq.is_public === 'on';
-  postReq.date = moment.tz(postReq.date, profile.timezone).utc();
-
-  // authz: creator_id is set server-side to profile.id above
-  const { data: postRows, error } = await supabaseAdmin
-    .from('lfg_posts')
-    .insert(postReq)
-    .select();
-
-  if (error || !postRows || postRows.length === 0) {
-    return { data: null, error: error || 'Failed to create LFG post' };
-  }
-  const post = postRows[0];
-
-  const { error: roleErr } = await reconcileCreatorRole(post.id, profile.id, { hostFlag, characterId });
-  if (roleErr) return { data: null, error: roleErr };
-
-  return { data: post, error: null };
-}
-
-const updateLfgPost = async (id, postReq, profile) => {
-  const { data: post, error: postError } = await getLfgPost(id, supabaseAdmin);
-  if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
-  if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
-
-  const characterId = postReq.character || null;
-  delete postReq.character;
-  const hostFlag = postReq.host_id === 'on';
-  delete postReq.host_id;
-
-  const { error: roleErr } = await reconcileCreatorRole(id, profile.id, { hostFlag, characterId });
-  if (roleErr) return { data: null, error: roleErr };
-
-  delete postReq.creator_name;
-  delete postReq.host_name;
-  delete postReq.join_requests;
-
-  postReq.is_public = postReq.is_public === true || postReq.is_public === 'on';
-  postReq.date = moment.tz(postReq.date, profile.timezone).utc();
-
-  // authz: creator_id check above + filter below
-  const { data, error } = await supabaseAdmin
-    .from('lfg_posts')
-    .update(postReq)
-    .eq('id', id)
-    .eq('creator_id', profile.id)
-    .select();
-
-  if (error) return { data: null, error };
-  if (!data || data.length === 0) return { data: null, error: 'Update returned no rows' };
-  return { data: data[0], error: null };
-}
+// The service instance is constructed after the low-level helpers below. The
+// compatibility functions remain the route-facing API while write decisions
+// live in services/lfg.
+let lfgService;
+const createLfgPost = async (postReq, profile) => lfgService.createPost(postReq, profile);
+const updateLfgPost = async (id, postReq, profile) => lfgService.updatePost(id, postReq, profile);
 
 const deleteLfgPost = async (id, profile) => {
   const { data: post, error: postError } = await getLfgPost(id, supabaseAdmin);
@@ -363,6 +285,19 @@ const deleteJoinRequest = async (requestId) => {
   if (!error && existing?.lfg_post_id) await syncConduitHostId(existing.lfg_post_id);
   return { data, error };
 }
+
+// Initial Supabase adapter for the LFG service. Keeping this thin makes the
+// service independently testable and leaves existing model exports intact.
+lfgService = new LfgService({
+  getPost: id => getLfgPost(id, supabaseAdmin),
+  createPost: data => supabaseAdmin.from('lfg_posts').insert(data).select(),
+  updatePost: (id, creatorId, data) => supabaseAdmin
+    .from('lfg_posts').update(data).eq('id', id).eq('creator_id', creatorId).select(),
+  getCreatorRequest: (profileId, postId) => getLfgJoinRequestForUserAndPost(profileId, postId, supabaseAdmin),
+  deleteJoinRequest,
+  joinPost: (postId, profileId, joinType, characterId) =>
+    joinLfgPost(postId, profileId, joinType, characterId, supabaseAdmin)
+});
 
 const getLfgJoinedPosts = async (profileId, client = supabase) => {
   const { data, error } = await client
