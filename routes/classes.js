@@ -6,7 +6,6 @@ registerUuidParams(router, ['id']);
 const {
     getClasses,
     getClass,
-    getRulesPdf,
     createClass,
     updateClass,
     duplicateClass,
@@ -18,14 +17,12 @@ const {
     listUnlockCodes,
     redeemUnlockCode,
     deleteClass,
-    getProfileById,
     saveClassPdfMetadata,
-    storeClassPdf,
-    getSignedPdfUrl,
-    canViewClassPdf,
-    deletePdfObject,
-    CLASS_PDF_BUCKET
-} = require('../util/supabase');
+    canViewClassPdf
+} = require('../models/class');
+const { getRulesPdf } = require('../models/rules');
+const { storeClassPdf, getSignedPdfUrl, deletePdfObject, CLASS_PDF_BUCKET } = require('../models/pdf');
+const { getProfileById } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processClassImport } = require('../util/class-import');
