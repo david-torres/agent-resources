@@ -81,7 +81,7 @@ const normalizeGear = (gear, limit = 6) => {
     .slice(0, limit);
 };
 
-async function processClassImport(inputText, profile) {
+async function processClassImport(inputText, actor) {
   const text = assertNonEmptyImportText(inputText, 'class writeup');
   const prompt = `Parse the following class writeup into the JSON schema described below. Focus on creating a PCC (player-created class) entry.
 
@@ -107,10 +107,9 @@ JSON output:`;
       rules_edition: parsed.rules_edition || "advent",
       rules_version: parsed.rules_version || "v1",
       is_player_created: true,
-      created_by: profile?.id,
     };
 
-    if (!classData.created_by) {
+    if (!actor?.profileId) {
       throw new Error("Missing profile id for PCC creation");
     }
 
@@ -122,7 +121,7 @@ JSON output:`;
       throw new Error("At least one gear item is required to import a PCC");
     }
 
-    const { data: createdClass, error } = await createClass(classData);
+    const { data: createdClass, error } = await createClass(actor, classData);
     if (error) throw new Error(error.message);
     return createdClass;
   } catch (error) {

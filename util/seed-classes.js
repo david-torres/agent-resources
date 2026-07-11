@@ -1,6 +1,7 @@
 require('./env');
 const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
+const { SYSTEM_ACTOR } = require('./actor');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread } = require('./enclave-consts');
 
 // Initialize Supabase client
@@ -71,7 +72,7 @@ async function seedClasses() {
         // Insert classes
         for (const classData of classesWithAdmin) {
             try {
-                await ClassModel.createClass(classData);
+                await ClassModel.createClass(SYSTEM_ACTOR, classData);
                 console.log(`Successfully seeded class: ${classData.name}`);
             } catch (error) {
                 console.error(`Failed to seed class ${classData.name}:`, error.message);
