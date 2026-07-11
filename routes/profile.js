@@ -11,6 +11,8 @@ const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../mode
 const { getProfileBadges } = require('../models/badge');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
@@ -95,8 +97,9 @@ router.get('/view/:name', authOptional, async (req, res) => {
   });
 });
 
-router.put('/', isAuthenticated, async (req, res) => {
+router.put('/', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
+  const actor = actorFromLocals(res.locals);
   const { email, password, name, bio, image_url, is_public, timezone, conduit_briefing } = req.body;
   const image_crop = parseImageCrop(req.body.image_crop);
   const profile = {
@@ -108,32 +111,34 @@ router.put('/', isAuthenticated, async (req, res) => {
     timezone,
     conduit_briefing
   }
-  const { data, error } = await updateUser(user.id, email, password, profile);
+  const { data, error } = await updateUser(actor, user.id, email, password, profile);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/profile').send();
   }
-});
+}));
 
-router.post('/discord/sync', isAuthenticated, async (req, res) => {
+router.post('/discord/sync', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
+  const actor = actorFromLocals(res.locals);
   const { discord_id, discord_email } = req.body;
-  const { error } = await setDiscordId(user.id, discord_id, discord_email);
+  const { error } = await setDiscordId(actor, user.id, discord_id, discord_email);
   if (error) {
     return sendError(req, res, error);
   }
   return res.status(204).send();
-});
+}));
 
-router.post('/discord/clear', isAuthenticated, async (req, res) => {
+router.post('/discord/clear', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
-  const { error } = await setDiscordId(user.id, null, null);
+  const actor = actorFromLocals(res.locals);
+  const { error } = await setDiscordId(actor, user.id, null, null);
   if (error) {
     return sendError(req, res, error);
   }
   return res.status(204).send();
-});
+}));
 
 router.get('/agent-tokens', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
