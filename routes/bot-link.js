@@ -3,6 +3,7 @@ const express = require('express');
 const router = express.Router();
 const { isAuthenticated } = require('../util/auth');
 const { createAgentToken } = require('../models/agent-token');
+const { actorFromLocals } = require('../util/actor');
 const {
   normalizeLinkCode,
   getPendingLinkByCode,
@@ -41,11 +42,8 @@ router.post('/confirm', express.urlencoded({ extended: false }), isAuthenticated
   }
 
   const tokenName = `Discord bot (${pending.discord_user_id})`;
-  const { data: tokenRow, error: tokenError } = await createAgentToken({
-    userId: res.locals.user.id,
-    profileId: res.locals.profile.id,
-    name: tokenName
-  });
+  const actor = actorFromLocals(res.locals);
+  const { data: tokenRow, error: tokenError } = await createAgentToken(actor, { name: tokenName });
   if (tokenError || !tokenRow) {
     return res.render('bot-link', { title: 'Link Discord bot', error: 'Could not create a token. Try again.' });
   }
