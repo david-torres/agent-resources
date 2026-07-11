@@ -11,6 +11,7 @@ const integrationFiles = new Set([
 ]);
 const httpFiles = new Set([
   'routes/badges.test.js',
+  'routes/bot-link-confirm.test.js',
   'routes/character-level-up.test.js',
   'routes/character-wizard.test.js',
   'routes/characters.test.js',

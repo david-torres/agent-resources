@@ -1,136 +1,45 @@
-const crypto = require('crypto');
-const { supabaseAdmin } = require('./_base');
+const { BotLinkService, ...botLinkConstants } = require('../services/bot-link/service');
+const botLinkRepository = require('../services/bot-link/repository');
+const { createAgentToken } = require('./agent-token');
 
-const LINK_CODE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const LINK_CODE_LENGTH = 8;
-const LINK_CODE_TTL_MS = 10 * 60 * 1000;
-const LINK_CODE_MAX_PENDING_PER_DISCORD_ID = 3;
-const LINK_CODE_RATE_WINDOW_MS = 10 * 60 * 1000;
-const LINK_ROW_CLEANUP_AGE_MS = 60 * 60 * 1000;
+const {
+  LINK_CODE_TTL_MS,
+  LINK_CODE_MAX_PENDING_PER_DISCORD_ID,
+  LINK_CODE_RATE_WINDOW_MS,
+  LINK_ROW_CLEANUP_AGE_MS,
+  generateLinkCode,
+  formatLinkCode,
+  normalizeLinkCode,
+  isValidDiscordUserId
+} = botLinkConstants;
 
-const generateLinkCode = () => {
-  const bytes = crypto.randomBytes(LINK_CODE_LENGTH);
-  let out = '';
-  for (let i = 0; i < LINK_CODE_LENGTH; i++) {
-    out += LINK_CODE_ALPHABET[bytes[i] % LINK_CODE_ALPHABET.length];
-  }
-  return out;
-};
+const botLinkService = new BotLinkService(botLinkRepository, createAgentToken);
 
-const formatLinkCode = (code) => {
-  if (typeof code !== 'string' || !/^[A-Z0-9]{8}$/.test(code)) {
-    throw new Error('Invalid link code');
-  }
-  return `${code.slice(0, 4)}-${code.slice(4)}`;
-};
+// Route-facing compatibility functions. The service enforces bot-link's
+// possession-based protocol for the PUBLIC capabilities and the
+// authenticated attach policy for confirmLink; this model remains the thin
+// caller so existing route imports keep working unchanged.
 
-const normalizeLinkCode = (value) => {
-  if (typeof value !== 'string') return null;
-  const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-  if (!/^[A-Z0-9]{8}$/.test(cleaned)) return null;
-  return cleaned;
-};
+// System write (no policy) — periodic cleanup of abandoned rows.
+const cleanupStaleLinks = async () => botLinkService.cleanupStaleLinks();
 
-const isValidDiscordUserId = (value) =>
-  typeof value === 'string' && /^[0-9]{1,32}$/.test(value);
+// PUBLIC — rate-limited per discord_user_id, enforced by botLinkService.
+const createPendingLink = async (discordUserId) => botLinkService.startLink({ discordUserId });
 
-const nowIso = () => new Date().toISOString();
-const plusMsIso = (ms) => new Date(Date.now() + ms).toISOString();
-const minusMsIso = (ms) => new Date(Date.now() - ms).toISOString();
+// Plain read — no policy (used by the authenticated confirm route to render
+// link state before it decides whether to attach a token).
+const getPendingLinkByCode = async (code) => botLinkRepository.fetchPendingByCode(code);
 
-const cleanupStaleLinks = async () => {
-  await supabaseAdmin
-    .from('pending_bot_links')
-    .delete()
-    .lt('created_at', minusMsIso(LINK_ROW_CLEANUP_AGE_MS));
-};
+// authz: canAttachToken (self actor, or system), enforced by botLinkService.
+const attachTokenToPendingLink = async ({ code, agentTokenId }) =>
+  botLinkRepository.attachToken({ code, agentTokenId });
 
-const countRecentPendingForDiscordId = async (discordUserId) => {
-  const since = minusMsIso(LINK_CODE_RATE_WINDOW_MS);
-  const { count, error } = await supabaseAdmin
-    .from('pending_bot_links')
-    .select('code', { count: 'exact', head: true })
-    .eq('discord_user_id', discordUserId)
-    .gte('created_at', since)
-    .is('consumed_at', null);
-  if (error) return { count: 0, error };
-  return { count: count || 0, error: null };
-};
-
-const createPendingLink = async (discordUserId) => {
-  if (!isValidDiscordUserId(discordUserId)) {
-    return { data: null, error: new Error('Invalid discord_user_id') };
-  }
-
-  await cleanupStaleLinks();
-
-  const { count, error: countError } = await countRecentPendingForDiscordId(discordUserId);
-  if (countError) return { data: null, error: countError };
-  if (count >= LINK_CODE_MAX_PENDING_PER_DISCORD_ID) {
-    return { data: null, error: new Error('Too many pending codes') };
-  }
-
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const code = generateLinkCode();
-    const expiresAt = plusMsIso(LINK_CODE_TTL_MS);
-    const { data, error } = await supabaseAdmin
-      .from('pending_bot_links')
-      .insert({
-        code,
-        discord_user_id: discordUserId,
-        expires_at: expiresAt
-      })
-      .select('code, discord_user_id, expires_at')
-      .single();
-    if (!error) return { data, error: null };
-    if (error.code !== '23505') return { data: null, error };
-  }
-  return { data: null, error: new Error('Could not allocate unique link code') };
-};
-
-const getPendingLinkByCode = async (code) => {
-  const { data, error } = await supabaseAdmin
-    .from('pending_bot_links')
-    .select('code, discord_user_id, agent_token_id, created_at, expires_at, consumed_at')
-    .eq('code', code)
-    .maybeSingle();
-  return { data: data || null, error };
-};
-
-const attachTokenToPendingLink = async ({ code, agentTokenId }) => {
-  const { data, error } = await supabaseAdmin
-    .from('pending_bot_links')
-    .update({ agent_token_id: agentTokenId })
-    .eq('code', code)
-    .is('consumed_at', null)
-    .gt('expires_at', nowIso())
-    .is('agent_token_id', null)
-    .select('code')
-    .single();
-  return { data, error };
-};
-
-const consumePendingLink = async ({ code, discordUserId }) => {
-  const { data: row, error } = await getPendingLinkByCode(code);
-  if (error && error.code !== 'PGRST116') return { data: null, error };
-  if (!row) return { data: null, error: 'not_found' };
-  if (row.consumed_at) return { data: null, error: 'expired' };
-  if (new Date(row.expires_at).getTime() < Date.now()) {
-    return { data: null, error: 'expired' };
-  }
-  if (row.discord_user_id !== discordUserId) return { data: null, error: 'mismatch' };
-  if (!row.agent_token_id) return { data: null, error: 'pending' };
-
-  const { data: consumed, error: consumeError } = await supabaseAdmin
-    .from('pending_bot_links')
-    .update({ consumed_at: nowIso() })
-    .eq('code', code)
-    .is('consumed_at', null)
-    .select('code, agent_token_id')
-    .single();
-  if (consumeError || !consumed) return { data: null, error: 'expired' };
-  return { data: { agentTokenId: consumed.agent_token_id }, error: null };
-};
+// PUBLIC/possession — enforced by botLinkService via policy.canClaimByPossession.
+// Note: on success this also discloses-and-purges the one-time raw token
+// stash (see botLinkService.claimLink); the original model-level function
+// only returned { agentTokenId }, so this adds a `rawToken` field to a
+// successful result rather than removing anything existing callers rely on.
+const consumePendingLink = async ({ code, discordUserId }) => botLinkService.claimLink({ code, discordUserId });
 
 module.exports = {
   LINK_CODE_TTL_MS,
