@@ -7,6 +7,7 @@ const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, class
 const { processMissionImport } = require('./mission-import');
 const { addCharacterToMission } = require('../models/mission');
 const { assertNonEmptyImportText } = require('./validate');
+const { actorFromProfile } = require('./actor');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -145,7 +146,7 @@ JSON output:`;
               // Try to add the character to the mission
               // The mission import might not have matched the character name correctly
               // since it was just created, so we'll add it explicitly
-              await addCharacterToMission(mission.id, importedCharacter.id);
+              await addCharacterToMission(actorFromProfile(profile), mission.id, importedCharacter.id);
             }
           }
           

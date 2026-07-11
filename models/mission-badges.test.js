@@ -90,15 +90,18 @@ beforeEach(() => {
   state.tables = {};
 });
 
-const PROFILE = { id: 'p-creator' };
+// Actor shape consumed by the service layer (see util/actor.js). p-creator
+// is used throughout so the authorization gate (creator/host/editor/admin/
+// system) added in the ar-ezes mission refactor passes for these mutations.
+const ACTOR = { profileId: 'p-creator', role: 'user' };
 
 test('createMission recalcs the host', async () => {
-  await mission.createMission({ name: 'M', date: '2026-06-06', host_id: 'p-host' }, PROFILE);
+  await mission.createMission(ACTOR, { name: 'M', date: '2026-06-06', host_id: 'p-host' });
   expect(recalcCalls).toEqual([['p-host']]);
 });
 
 test('createMission without a host does not recalc', async () => {
-  await mission.createMission({ name: 'M', date: '2026-06-06' }, PROFILE);
+  await mission.createMission(ACTOR, { name: 'M', date: '2026-06-06' });
   expect(recalcCalls).toEqual([]);
 });
 
@@ -106,26 +109,33 @@ test('updateMission recalcs old and new host', async () => {
   state.tables = {
     missions: [{ id: 'm1', creator_id: 'p-creator', host_id: 'p-old-host' }]
   };
-  await mission.updateMission('m1', { host_id: 'p-new-host' }, PROFILE);
+  await mission.updateMission(ACTOR, 'm1', { host_id: 'p-new-host' });
   expect(recalcCalls).toEqual([['p-old-host', 'p-new-host']]);
 });
 
 test('deleteMission recalcs profiles captured before the delete', async () => {
   missionProfileIds = { m1: ['p-host', 'p-a'] };
   state.tables = { missions: [{ id: 'm1', creator_id: 'p-creator' }] };
-  await mission.deleteMission('m1', PROFILE);
+  await mission.deleteMission(ACTOR, 'm1');
   expect(recalcCalls).toEqual([['p-host', 'p-a']]);
 });
 
 test("addCharacterToMission recalcs the character's creator", async () => {
-  state.tables = { characters: [{ id: 'c1', creator_id: 'p-owner' }] };
-  await mission.addCharacterToMission('m1', 'c1');
+  state.tables = {
+    // canEditMission (now enforced by the service) must find the mission.
+    missions: [{ id: 'm1', creator_id: 'p-creator', host_id: null }],
+    characters: [{ id: 'c1', creator_id: 'p-owner' }]
+  };
+  await mission.addCharacterToMission(ACTOR, 'm1', 'c1');
   expect(recalcCalls).toEqual([['p-owner']]);
 });
 
 test("removeCharacterFromMission recalcs the character's creator", async () => {
-  state.tables = { characters: [{ id: 'c1', creator_id: 'p-owner' }] };
-  await mission.removeCharacterFromMission('m1', 'c1');
+  state.tables = {
+    missions: [{ id: 'm1', creator_id: 'p-creator', host_id: null }],
+    characters: [{ id: 'c1', creator_id: 'p-owner' }]
+  };
+  await mission.removeCharacterFromMission(ACTOR, 'm1', 'c1');
   expect(recalcCalls).toEqual([['p-owner']]);
 });
 
@@ -139,6 +149,6 @@ test('mergeMissions recalcs profiles from both missions captured before the merg
     ],
     mission_editors: []
   };
-  await mission.mergeMissions('m-primary', 'm-secondary', PROFILE);
+  await mission.mergeMissions(ACTOR, 'm-primary', 'm-secondary');
   expect(recalcCalls).toEqual([['p-a', 'p-b', 'p-b', 'p-c']]); // recalcSafely dedupes internally
 });
