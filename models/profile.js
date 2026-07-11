@@ -1,6 +1,8 @@
-const { supabase, supabaseAdmin } = require('./_base');
-const { sanitizeUrlFields } = require('../util/url');
+const { supabase } = require('./_base');
 const { escapeLikePattern } = require('../util/validate');
+const { SYSTEM_ACTOR } = require('../util/actor');
+const { ProfileService } = require('../services/profile/service');
+const profileRepository = require('../services/profile/repository');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
@@ -16,18 +18,20 @@ const STARTER_CLASS_IDS = [
 ];
 const STARTER_UNLOCK_DAYS = 30;
 
+const profileService = new ProfileService(profileRepository);
+
 const getProfile = async (user) => {
   if (!user) {
     throw new Error('User not found');
   }
 
   // authz: self-read; user.id comes from the verified auth session (see util/auth.js isAuthenticated)
-  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('user_id', user.id).single();
+  const { data, error } = await profileRepository.fetchOwnProfile(user.id);
 
   if (error) {
     if (PROFILE_NOT_FOUND_ERROR === error.code) {
       if (user.confirmed_at) {
-        const { data, error } = await createProfile(user.id);
+        const { data, error } = await provisionProfile(SYSTEM_ACTOR, user);
         if (error) {
           console.error(error);
           return false;
@@ -42,11 +46,7 @@ const getProfile = async (user) => {
 
   // Profile exists - check if user has any class unlocks, grant starter unlocks if missing
   if (data && user.confirmed_at) {
-    const { data: unlockData, error: unlockError } = await supabaseAdmin
-      .from('class_unlocks')
-      .select('class_id')
-      .eq('user_id', user.id)
-      .limit(1);
+    const { data: unlockData, error: unlockError } = await profileRepository.fetchStarterUnlockRows(user.id);
 
     // If no unlocks exist, grant starter unlocks (handles existing profiles created before feature)
     if (!unlockError && (!unlockData || unlockData.length === 0)) {
@@ -68,31 +68,26 @@ const getProfileByName = async (name) => {
 }
 
 // Admin variants bypass RLS — only call from routes already gated by requireAdmin.
-const getProfileByIdAdmin = async (id) => {
-  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('id', id).single();
-  return { data, error };
-}
+const getProfileByIdAdmin = async (id) => profileRepository.fetchProfileByIdAdmin(id);
 
-const getProfileByNameAdmin = async (name) => {
-  const { data, error } = await supabaseAdmin.from('profiles').select('*').eq('name', name).single();
-  return { data, error };
-}
+const getProfileByNameAdmin = async (name) => profileRepository.fetchProfileByNameAdmin(name);
 
-const createProfile = async (user_id) => {
-  // authz: self-write; user_id comes from the verified auth session via getProfile(user)
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .insert({ user_id, name: `Agent #${user_id}`, role: 'user' })
-    .select();
+// Self-provisioning on first sign-in: inserts the profile row and grants the
+// starter (trial) unlocks. `actor` gates the service's self-authz check;
+// `user` is the just-verified auth user (only .id is used for the insert).
+const provisionProfile = async (actor, user) => {
+  const { data, error } = await profileService.createProfileForUser(actor, user);
 
   if (!error && data && data.length > 0) {
-    // Grant starter unlocks (30-day trial) for new accounts
     const profile = data[0];
-    await grantStarterUnlocks(user_id, profile.id);
+    await grantStarterUnlocks(user.id, profile.id);
   }
 
   return { data, error };
 }
+
+// Not route-triggered; kept for API compatibility with existing callers.
+const createProfile = async (user_id) => provisionProfile(SYSTEM_ACTOR, { id: user_id });
 
 const grantStarterUnlocks = async (userId, profileId) => {
   const expiresAt = new Date();
@@ -123,32 +118,13 @@ const grantStarterUnlocks = async (userId, profileId) => {
   }
 }
 
-const updateUser = async (userId, email, password, profile) => {
-  if (password === '') password = null;
-  const attrs = {};
-  if (email) attrs.email = email;
-  if (password) attrs.password = password;
+// authz: self-write, enforced by profileService (throws AuthorizationError on
+// denial); userId is the authenticated caller (res.locals.user.id).
+const updateUser = async (actor, userId, email, password, profile) => profileService.updateUser(actor, userId, email, password, profile);
 
-  // authz: self-write; userId is the authenticated caller (res.locals.user.id from isAuthenticated)
-  if (attrs.email || attrs.password) {
-    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, attrs);
-    if (error) return { data: null, error };
-  }
-
-  sanitizeUrlFields(profile, ['image_url']);
-  const { data: profileData, error: profileError } = await supabaseAdmin.from('profiles').update(profile).eq('user_id', userId);
-  return { data: profileData, error: profileError };
-}
-
-const setDiscordId = async (user_id, discord_id, discord_email = null) => {
-  // authz: self-write; user_id is the authenticated caller's auth user id (passed from route res.locals.user.id)
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .update({ discord_id, discord_email })
-    .eq('user_id', user_id)
-    .select();
-  return { data, error };
-}
+// authz: self-write, enforced by profileService; user_id is the authenticated
+// caller's auth user id (passed from route res.locals.user.id).
+const setDiscordId = async (actor, user_id, discord_id, discord_email = null) => profileService.setDiscordId(actor, user_id, discord_id, discord_email);
 
 /**
  * Search for profiles by name (for adding editors, etc.)
@@ -176,13 +152,7 @@ const searchProfilesAdmin = async (query, limit = 10) => {
     return { data: [], error: null };
   }
 
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id, name, image_url')
-    .ilike('name', `%${escapeLikePattern(query.trim())}%`)
-    .limit(limit);
-
-  return { data, error };
+  return profileRepository.searchProfilesAdmin(`%${escapeLikePattern(query.trim())}%`, limit);
 }
 
 const getProfileConduitCredits = async ({ profileId, supabase: client = supabase }) => {

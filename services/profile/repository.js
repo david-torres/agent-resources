@@ -1,0 +1,51 @@
+const { supabaseAdmin } = require('../../models/_base');
+
+// The only consumer of supabaseAdmin for the profile domain. Holds every
+// privileged (service-role) query verbatim; models/profile.js keeps the
+// surrounding logic (starter-unlock granting via RPC, input sanitization).
+const withResult = async (query) => {
+  const { data, error } = await query;
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error: null };
+};
+
+module.exports = {
+  // Reads
+  fetchOwnProfile: (userId) => withResult(
+    supabaseAdmin.from('profiles').select('*').eq('user_id', userId).single()
+  ),
+  fetchStarterUnlockRows: (userId) => withResult(
+    supabaseAdmin.from('class_unlocks').select('class_id').eq('user_id', userId).limit(1)
+  ),
+  // Admin variants bypass RLS — only call from routes already gated by requireAdmin.
+  fetchProfileByIdAdmin: (id) => withResult(
+    supabaseAdmin.from('profiles').select('*').eq('id', id).single()
+  ),
+  fetchProfileByNameAdmin: (name) => withResult(
+    supabaseAdmin.from('profiles').select('*').eq('name', name).single()
+  ),
+  searchProfilesAdmin: (likePattern, limit = 10) => withResult(
+    supabaseAdmin.from('profiles').select('id, name, image_url').ilike('name', likePattern).limit(limit)
+  ),
+
+  // Writes
+  insertProfile: (row) => withResult(
+    supabaseAdmin.from('profiles').insert(row).select()
+  ),
+  updateAuthUser: async (userId, attrs) => {
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, attrs);
+    if (error) console.error(error);
+    return { error: error || null };
+  },
+  updateProfileByUserId: async (userId, fields) => {
+    const { data, error } = await supabaseAdmin.from('profiles').update(fields).eq('user_id', userId);
+    if (error) console.error(error);
+    return { data, error: error || null };
+  },
+  updateDiscord: (userId, discordId, discordEmail) => withResult(
+    supabaseAdmin.from('profiles').update({ discord_id: discordId, discord_email: discordEmail }).eq('user_id', userId).select()
+  )
+};
