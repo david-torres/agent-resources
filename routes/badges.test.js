@@ -40,8 +40,8 @@ mock.module('../models/badge', () => ({
   // doesn't need a Handlebars view engine.
   getBadgeCatalog: async () => ({ data: null, error: new Error('catalog unavailable') }),
   listProfileBadges: async () => ({ data: [], error: null }),
-  grantBadge: async (args) => { calls.grant.push(args); return grantResult; },
-  revokeBadge: async (args) => { calls.revoke.push(args); return revokeResult; }
+  grantBadge: async (actor, args) => { calls.grant.push({ actor, ...args }); return grantResult; },
+  revokeBadge: async (actor, args) => { calls.revoke.push({ actor, ...args }); return revokeResult; }
 }));
 mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'p-admin', user_id: 'u1', role: profileRole }),
@@ -124,7 +124,12 @@ test('POST /badges/grant calls grantBadge with the admin as granter and redirect
   });
   expect(res.status).toBe(302);
   expect(res.headers.get('location')).toBe('/badges/manage?profile_id=p2');
-  expect(calls.grant).toEqual([{ profileId: 'p2', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' }]);
+  expect(calls.grant).toEqual([{
+    actor: { userId: 'u1', profileId: 'p-admin', role: 'admin' },
+    profileId: 'p2',
+    badgeSlug: 'enclave-day-1',
+    grantedById: 'p-admin'
+  }]);
 });
 
 test('POST /badges/grant surfaces milestone rejection as 400', async () => {
@@ -161,5 +166,9 @@ test('POST /badges/revoke calls revokeBadge and redirects', async () => {
     body: JSON.stringify({ profile_id: 'p2', badge_slug: 'enclave-day-1' })
   });
   expect(res.status).toBe(302);
-  expect(calls.revoke).toEqual([{ profileId: 'p2', badgeSlug: 'enclave-day-1' }]);
+  expect(calls.revoke).toEqual([{
+    actor: { userId: 'u1', profileId: 'p-admin', role: 'admin' },
+    profileId: 'p2',
+    badgeSlug: 'enclave-day-1'
+  }]);
 });

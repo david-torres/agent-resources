@@ -1,29 +1,21 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { BadgeService } = require('../services/badge/service');
+const badgeRepository = require('../services/badge/repository');
 
-const BADGES_BUCKET = process.env.SUPABASE_BADGES_BUCKET || 'badges';
+const { BADGES_BUCKET } = badgeRepository;
 
 const MILESTONE_TRACKS = ['newcomer', 'veteran_player', 'veteran_conduit'];
 
-// Counters deliberately use supabaseAdmin: private missions count toward
-// badges, and the shared anon client (no JWT) would be RLS-filtered.
-const getMissionCounters = async (profileId) => {
-  const { data: playedRows, error: playedError } = await supabaseAdmin
-    .from('mission_characters')
-    .select('mission_id, characters!inner(creator_id)')
-    .eq('characters.creator_id', profileId);
-  if (playedError) {
-    console.error(playedError);
-    return { data: null, error: playedError };
-  }
+const badgeService = new BadgeService(badgeRepository);
 
-  const { data: hostedRows, error: hostedError } = await supabaseAdmin
-    .from('missions')
-    .select('id')
-    .eq('host_id', profileId);
-  if (hostedError) {
-    console.error(hostedError);
-    return { data: null, error: hostedError };
-  }
+// Counters deliberately route through the repository's privileged client:
+// private missions count toward badges, and the shared anon client (no JWT)
+// would be RLS-filtered.
+const getMissionCounters = async (profileId) => {
+  const { data: playedRows, error: playedError } = await badgeRepository.countMissionsPlayed(profileId);
+  if (playedError) return { data: null, error: playedError };
+
+  const { data: hostedRows, error: hostedError } = await badgeRepository.countMissionsHosted(profileId);
+  if (hostedError) return { data: null, error: hostedError };
 
   const playedIds = new Set((playedRows || []).map(r => r.mission_id));
   const hostedIds = new Set((hostedRows || []).map(r => r.id));
@@ -50,19 +42,16 @@ const counterForTrack = (counters, track) => {
 // original awarded_at (and any granted_by) on re-runs — backfill and live
 // hooks share this single code path so retroactive and ongoing awards
 // cannot drift.
+//
+// System-by-construction: no user authorization exists for milestone
+// recalc (it is milestone-only, insert-only), so this never routes through
+// badgeService — it calls the repository directly, mirroring services/rules.
 const recalculateMilestoneBadges = async (profileId) => {
   const { data: counters, error: countersError } = await getMissionCounters(profileId);
   if (countersError) return { data: null, error: countersError };
 
-  const { data: catalog, error: catalogError } = await supabaseAdmin
-    .from('badges')
-    .select('id, track, threshold')
-    .eq('category', 'milestone')
-    .eq('is_active', true);
-  if (catalogError) {
-    console.error(catalogError);
-    return { data: null, error: catalogError };
-  }
+  const { data: catalog, error: catalogError } = await badgeRepository.fetchActiveMilestoneBadges();
+  if (catalogError) return { data: null, error: catalogError };
 
   const earned = (catalog || []).filter(b =>
     b.track && Number.isFinite(b.threshold) && b.threshold <= counterForTrack(counters, b.track)
@@ -72,13 +61,8 @@ const recalculateMilestoneBadges = async (profileId) => {
   }
 
   const rows = earned.map(b => ({ profile_id: profileId, badge_id: b.id }));
-  const { error: upsertError } = await supabaseAdmin
-    .from('profile_badges')
-    .upsert(rows, { onConflict: 'profile_id,badge_id', ignoreDuplicates: true });
-  if (upsertError) {
-    console.error(upsertError);
-    return { data: null, error: upsertError };
-  }
+  const { error: upsertError } = await badgeRepository.upsertProfileBadges(rows);
+  if (upsertError) return { data: null, error: upsertError };
   return { data: { awarded: earned.length, counters }, error: null };
 };
 
@@ -102,8 +86,8 @@ const getMissionProfileIds = async (missionId) => {
   if (!missionId) return [];
   try {
     const [{ data: mission }, { data: rows }] = await Promise.all([
-      supabaseAdmin.from('missions').select('host_id').eq('id', missionId).maybeSingle(),
-      supabaseAdmin.from('mission_characters').select('character:characters(creator_id)').eq('mission_id', missionId)
+      badgeRepository.fetchMissionHostId(missionId),
+      badgeRepository.fetchMissionCharacterCreators(missionId)
     ]);
     const ids = (rows || []).map(r => r.character?.creator_id);
     if (mission?.host_id) ids.push(mission.host_id);
@@ -114,8 +98,7 @@ const getMissionProfileIds = async (missionId) => {
   }
 };
 
-const badgeImageUrl = (imagePath) =>
-  supabaseAdmin.storage.from(BADGES_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+const badgeImageUrl = (imagePath) => badgeRepository.publicBadgeImageUrl(imagePath);
 
 const TRACK_LABELS = {
   newcomer: 'Newcomer',
@@ -126,15 +109,8 @@ const TRACK_LABELS = {
 // Every active badge a profile holds, flat (admin manage page; also the
 // basis for the public display shelf).
 const listProfileBadges = async (profileId) => {
-  const { data: rows, error } = await supabaseAdmin
-    .from('profile_badges')
-    .select('awarded_at, granted_by, badge:badges(id, slug, name, description, category, track, rank, threshold, image_path, is_active)')
-    .eq('profile_id', profileId)
-    .order('awarded_at', { ascending: true });
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
+  const { data: rows, error } = await badgeRepository.listProfileBadgeRows(profileId);
+  if (error) return { data: null, error };
   const held = (rows || [])
     .filter(r => r.badge && r.badge.is_active)
     .map(r => ({
@@ -179,14 +155,8 @@ const getProfileBadges = async (profileId, { includeProgress = false } = {}) => 
     return { data: { display }, error: null };
   }
 
-  const { data: catalog, error: catalogError } = await supabaseAdmin
-    .from('badges')
-    .select('track, threshold, name')
-    .eq('category', 'milestone')
-    .eq('is_active', true)
-    .order('threshold', { ascending: true });
+  const { data: catalog, error: catalogError } = await badgeRepository.fetchActiveMilestoneBadges();
   if (catalogError) {
-    console.error(catalogError);
     return { data: { display }, error: null };
   }
 
@@ -211,75 +181,21 @@ const getProfileBadges = async (profileId, { includeProgress = false } = {}) => 
 };
 
 const getBadgeCatalog = async () => {
-  const { data, error } = await supabaseAdmin
-    .from('badges')
-    .select('*')
-    .eq('is_active', true)
-    .order('category', { ascending: true })
-    .order('track', { ascending: true })
-    .order('rank', { ascending: true })
-    .order('name', { ascending: true });
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
+  const { data, error } = await badgeRepository.fetchBadgeCatalog();
+  if (error) return { data: null, error };
   return { data: (data || []).map(b => ({ ...b, image_url: badgeImageUrl(b.image_path) })), error: null };
 };
 
-// Admin operations. Milestone badges are automatic-only: enforced here (the
-// authoritative gate), not just in the routes.
-const findGrantableBadge = async (badgeSlug) => {
-  const { data: badgeRow, error } = await supabaseAdmin
-    .from('badges')
-    .select('id, slug, category, is_active')
-    .eq('slug', badgeSlug)
-    .maybeSingle();
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
-  if (!badgeRow || !badgeRow.is_active) {
-    return { data: null, error: new Error('Badge not found') };
-  }
-  if (badgeRow.category === 'milestone') {
-    return { data: null, error: new Error('Milestone badges are awarded automatically and cannot be granted or revoked') };
-  }
-  return { data: badgeRow, error: null };
-};
+// authz: admin-only (badgeService enforces via canGrantBadge; throws
+// AuthorizationError on denial). The milestone-category/inactive guard is
+// the authoritative gate, enforced inside the service, not just the routes.
+const grantBadge = async (actor, { profileId, badgeSlug, grantedById }) =>
+  badgeService.grantBadge(actor, { profileId, badgeSlug, grantedById });
 
-const grantBadge = async ({ profileId, badgeSlug, grantedById }) => {
-  const { data: badgeRow, error } = await findGrantableBadge(badgeSlug);
-  if (error) return { data: null, error };
-
-  const { error: upsertError } = await supabaseAdmin
-    .from('profile_badges')
-    .upsert(
-      { profile_id: profileId, badge_id: badgeRow.id, granted_by: grantedById || null },
-      { onConflict: 'profile_id,badge_id', ignoreDuplicates: true }
-    );
-  if (upsertError) {
-    console.error(upsertError);
-    return { data: null, error: upsertError };
-  }
-  return { data: { slug: badgeRow.slug }, error: null };
-};
-
-// Revoking a badge the profile doesn't hold deletes 0 rows — no-op success.
-const revokeBadge = async ({ profileId, badgeSlug }) => {
-  const { data: badgeRow, error } = await findGrantableBadge(badgeSlug);
-  if (error) return { data: null, error };
-
-  const { error: deleteError } = await supabaseAdmin
-    .from('profile_badges')
-    .delete()
-    .eq('profile_id', profileId)
-    .eq('badge_id', badgeRow.id);
-  if (deleteError) {
-    console.error(deleteError);
-    return { data: null, error: deleteError };
-  }
-  return { data: { slug: badgeRow.slug }, error: null };
-};
+// authz: admin-only (badgeService enforces via canRevokeBadge). Revoking a
+// badge the profile doesn't hold deletes 0 rows — no-op success.
+const revokeBadge = async (actor, { profileId, badgeSlug }) =>
+  badgeService.revokeBadge(actor, { profileId, badgeSlug });
 
 module.exports = {
   BADGES_BUCKET,

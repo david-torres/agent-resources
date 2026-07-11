@@ -296,9 +296,12 @@ const GRANT_CATALOG = [
   { id: 'b-off', slug: 'retired', category: 'event', is_active: false }
 ];
 
+const ADMIN_ACTOR = { profileId: 'p-admin', role: 'admin' };
+const USER_ACTOR = { profileId: 'p-user', role: 'user' };
+
 test('grantBadge upserts an award with granted_by', async () => {
   state.tables = { badges: GRANT_CATALOG };
-  const { error } = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' });
+  const { error } = await badge.grantBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' });
   expect(error).toBeNull();
   const upsert = state.upserts.find(u => u.table === 'profile_badges');
   expect(upsert.payload).toEqual({ profile_id: 'p1', badge_id: 'b-ed1', granted_by: 'p-admin' });
@@ -307,28 +310,40 @@ test('grantBadge upserts an award with granted_by', async () => {
 
 test('grantBadge rejects milestone badges', async () => {
   state.tables = { badges: GRANT_CATALOG };
-  const { error } = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'newcomer-1', grantedById: 'p-admin' });
+  const { error } = await badge.grantBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'newcomer-1', grantedById: 'p-admin' });
   expect(error?.message).toMatch(/milestone/i);
   expect(state.upserts.length).toBe(0);
 });
 
 test('grantBadge rejects unknown and inactive badges', async () => {
   state.tables = { badges: GRANT_CATALOG };
-  const missing = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'nope', grantedById: 'p-admin' });
+  const missing = await badge.grantBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'nope', grantedById: 'p-admin' });
   expect(missing.error?.message).toMatch(/not found/i);
-  const inactive = await badge.grantBadge({ profileId: 'p1', badgeSlug: 'retired', grantedById: 'p-admin' });
+  const inactive = await badge.grantBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'retired', grantedById: 'p-admin' });
   expect(inactive.error?.message).toMatch(/not found/i);
+  expect(state.upserts.length).toBe(0);
+});
+
+test('grantBadge throws AuthorizationError for a non-admin actor, never reaching the repository', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  await expect(badge.grantBadge(USER_ACTOR, { profileId: 'p1', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' })).rejects.toThrow();
   expect(state.upserts.length).toBe(0);
 });
 
 test('revokeBadge deletes the award row and rejects milestones', async () => {
   state.tables = { badges: GRANT_CATALOG };
-  const ok = await badge.revokeBadge({ profileId: 'p1', badgeSlug: 'enclave-day-1' });
+  const ok = await badge.revokeBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'enclave-day-1' });
   expect(ok.error).toBeNull();
   expect(state.deletes.length).toBe(1);
   expect(state.deletes[0].table).toBe('profile_badges');
 
-  const milestone = await badge.revokeBadge({ profileId: 'p1', badgeSlug: 'newcomer-1' });
+  const milestone = await badge.revokeBadge(ADMIN_ACTOR, { profileId: 'p1', badgeSlug: 'newcomer-1' });
   expect(milestone.error?.message).toMatch(/milestone/i);
   expect(state.deletes.length).toBe(1); // unchanged
+});
+
+test('revokeBadge throws AuthorizationError for a non-admin actor, never reaching the repository', async () => {
+  state.tables = { badges: GRANT_CATALOG };
+  await expect(badge.revokeBadge(USER_ACTOR, { profileId: 'p1', badgeSlug: 'enclave-day-1' })).rejects.toThrow();
+  expect(state.deletes.length).toBe(0);
 });
