@@ -68,7 +68,7 @@ mock.module('../models/profile', () => ({
 
 mock.module('../models/class', () => ({
   // The route under test — capture the payload and return a created class.
-  createClass: async (payload) => {
+  createClass: async (actor, payload) => {
     capturedCreate = payload;
     return { data: { id: 'new-class-id', name: payload.name }, error: null };
   },

@@ -1,33 +1,9 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { supabase } = require('./_base');
 const crypto = require('crypto');
 const { computeVersionFamily, expandIdsToFamilies } = require('../util/class-family');
+const { applyClassFilters } = require('../util/class-filters');
 const { ClassService } = require('../services/class/service');
-
-const applyClassFilters = (query, filters = {}) => {
-    if (filters.name) {
-        query = query.eq('name', filters.name);
-    }
-    if (filters.is_public !== undefined) {
-        query = query.eq('is_public', filters.is_public);
-    }
-    if (filters.created_by) {
-        query = query.eq('created_by', filters.created_by);
-    }
-    if (filters.rules_edition) {
-        query = query.eq('rules_edition', filters.rules_edition);
-    }
-    if (filters.rules_version) {
-        query = query.eq('rules_version', filters.rules_version);
-    }
-    if (filters.status) {
-        query = query.eq('status', filters.status);
-    }
-    if (filters.is_player_created !== undefined) {
-        query = query.eq('is_player_created', filters.is_player_created);
-    }
-
-    return query.order('name', { ascending: true });
-};
+const classRepository = require('../services/class/repository');
 
 const getClasses = async (filters = {}, client = supabase) => {
     const query = applyClassFilters(
@@ -45,7 +21,11 @@ const getClasses = async (filters = {}, client = supabase) => {
     return { data, error };
 };
 
-const createUnlockCodes = async ({ classId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
+// Route-facing compatibility function. The service enforces the
+// mint-unlock-codes policy (admin/system only); this model builds the
+// code rows (the non-privileged logic) and delegates the privileged
+// insert to the service/repository.
+const createUnlockCodes = async (actor, { classId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
     const inserts = Array.from({ length: amount }, () => ({
         code: crypto.randomBytes(12).toString('base64url'),
         class_id: classId,
@@ -54,17 +34,7 @@ const createUnlockCodes = async ({ classId, createdByProfileId, expiresAt = null
         max_uses: maxUses
     }));
 
-    // authz: callers (admin-only route) gate access; createdByProfileId is set server-side
-    const { data, error } = await supabaseAdmin
-        .from('class_unlock_codes')
-        .insert(inserts)
-        .select();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
+    return classService.mintUnlockCodes(actor, inserts);
 };
 
 const listUnlockCodes = async (classId, client = supabase) => {
@@ -91,24 +61,10 @@ const redeemUnlockCode = async (code, userId) => {
     return { data, error: null };
 };
 
-// Lean projection of all classes for version-family resolution. Admin client
-// so private forks don't break chain links. Returns null on any failure so
-// callers can degrade to exact-id behavior.
-const fetchClassFamilyRows = async () => {
-    try {
-        const { data, error } = await supabaseAdmin
-            .from('classes')
-            .select('id, base_class_id, rules_edition');
-        if (error || !Array.isArray(data)) {
-            if (error) console.error(error);
-            return null;
-        }
-        return data;
-    } catch (e) {
-        console.error(e);
-        return null;
-    }
-};
+// Lean projection of all classes for version-family resolution. Admin
+// client so private forks don't break chain links. Returns null on any
+// failure so callers can degrade to exact-id behavior.
+const fetchClassFamilyRows = () => classRepository.fetchClassFamilyRows();
 
 // Resolve the same-edition version family of a class (see util/class-family).
 // Falls back to a singleton set on error: unlock checks degrade to exact-id.
@@ -127,16 +83,13 @@ const isClassUnlocked = async (userId, classId) => {
     const familyIds = await getVersionFamilyIds(classId);
 
     const now = new Date().toISOString();
-    const { data, error } = await supabaseAdmin
-        .from('class_unlocks')
-        .select('class_id, expires_at')
-        .eq('user_id', userId)
-        .in('class_id', [...familyIds])
-        .or(`expires_at.is.null,expires_at.gt.${now}`)
-        .limit(1);
+    const { data, error } = await classRepository.activeUnlockRows({
+        userId,
+        classIds: [...familyIds],
+        nowIso: now
+    });
 
     if (error) {
-        console.error(error);
         return { data: false, error };
     }
     return { data: Array.isArray(data) && data.length > 0, error: null };
@@ -148,7 +101,7 @@ const getClass = async (id, client = supabase) => {
         .select('*')
         .eq('id', id)
         .single();
-    
+
     // // unpack jsonb fields: abilities and gear
     // data.abilities = JSON.parse(data.abilities);
     // data.gear = JSON.parse(data.gear);
@@ -160,11 +113,12 @@ const getClass = async (id, client = supabase) => {
     return { data, error };
 };
 
-// Route-facing compatibility functions. The service owns input preparation and
-// write orchestration while this model remains the Supabase adapter.
+// Route-facing compatibility functions. The service owns input preparation,
+// authorization, and write orchestration; this model remains the thin
+// caller that threads the actor through.
 let classService;
-const createClass = async (classData) => classService.createClass(classData);
-const updateClass = async (id, updates) => classService.updateClass(id, updates);
+const createClass = async (actor, classData) => classService.createClass(actor, classData);
+const updateClass = async (actor, id, updates) => classService.updateClass(actor, id, updates);
 
 const duplicateClass = async (baseId, newVersion, newEdition = null) => {
     const params = {
@@ -184,24 +138,19 @@ const duplicateClass = async (baseId, newVersion, newEdition = null) => {
     return { data, error };
 };
 
-const saveClassPdfMetadata = async (classId, storagePath) =>
-    classService.savePdfMetadata(classId, storagePath);
+const saveClassPdfMetadata = async (actor, classId, storagePath) =>
+    classService.savePdfMetadata(actor, classId, storagePath);
 
 const getUnlockedClasses = async (userId) => {
     const now = new Date().toISOString();
-    const { data, error } = await supabaseAdmin
-        .from('class_unlocks')
-        .select('class:classes(*), expires_at')
-        .eq('user_id', userId)
-        .or(`expires_at.is.null,expires_at.gt.${now}`);
+    const { data, error } = await classRepository.unlockedClassRows({ userId, nowIso: now });
 
     if (error) {
-        console.error(error);
         return { data: null, error };
     }
-    return { 
+    return {
         data: data.map(entry => entry.class),
-        error 
+        error: null
     };
 };
 
@@ -211,14 +160,9 @@ const getUnlockedClassIdsForUser = async (userId) => {
     }
 
     const now = new Date().toISOString();
-    const { data, error } = await supabaseAdmin
-        .from('class_unlocks')
-        .select('class_id')
-        .eq('user_id', userId)
-        .or(`expires_at.is.null,expires_at.gt.${now}`);
+    const { data, error } = await classRepository.unlockedClassIdRows({ userId, nowIso: now });
 
     if (error) {
-        console.error(error);
         return { data: null, error };
     }
 
@@ -308,23 +252,8 @@ const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new 
 };
 
 const listClassesForAgent = async (filters = {}, actor = {}) => {
-    let query = supabaseAdmin
-        .from('classes')
-        .select('*');
-
-    query = applyClassFilters(query, filters);
-
-    if (actor.role !== 'admin') {
-        if (actor.profileId) {
-            query = query.or(`is_public.eq.true,created_by.eq.${actor.profileId}`);
-        } else {
-            query = query.eq('is_public', true);
-        }
-    }
-
-    const { data, error } = await query;
+    const { data, error } = await classRepository.fetchClassesForAgentAdmin(filters, actor);
     if (error) {
-        console.error(error);
         return { data: null, error };
     }
 
@@ -342,14 +271,9 @@ const listClassesForAgent = async (filters = {}, actor = {}) => {
 };
 
 const getClassForAgent = async (id, actor = {}) => {
-    const { data: classData, error } = await supabaseAdmin
-        .from('classes')
-        .select('*')
-        .eq('id', id)
-        .single();
+    const { data: classData, error } = await classRepository.fetchClassByIdAdmin(id);
 
     if (error) {
-        console.error(error);
         return { data: null, error };
     }
 
@@ -403,17 +327,12 @@ const unlockClass = async (userId, classId, expiresAt = null) => {
     }
 
     // authz: caller route verifies eligibility before calling (e.g. /unlock/self, redeem code)
-    const { data, error } = await supabaseAdmin
-        .from('class_unlocks')
-        .insert([payload])
-        .select()
-        .single();
+    const { data, error } = await classRepository.insertUnlock(payload);
 
     if (error) {
-        console.error(error);
         return { data: null, error };
     }
-    return { data, error };
+    return { data, error: null };
 };
 
 const getVersionHistory = async (classId) => {
@@ -430,7 +349,7 @@ const getVersionHistory = async (classId) => {
     return { data, error };
 };
 
-const deleteClass = async (id) => classService.deleteClass(id);
+const deleteClass = async (actor, id) => classService.deleteClass(actor, id);
 
 // Build lookup maps from gear/ability name -> class_id and description
 const buildClassContentLookupMaps = async () => {
@@ -440,17 +359,17 @@ const buildClassContentLookupMaps = async () => {
         getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
         getClasses({ is_public: true, is_player_created: true })
       ]);
-  
+
       const advent = Array.isArray(adventRes?.data) ? adventRes.data : [];
       const aspirant = Array.isArray(aspirantRes?.data) ? aspirantRes.data : [];
       const pcc = Array.isArray(pccRes?.data) ? pccRes.data : [];
-  
+
       const allClasses = [...advent, ...aspirant, ...pcc];
       const gearNameToClassId = new Map();
       const abilityNameToClassId = new Map();
       const gearNameToDescription = new Map();
       const abilityNameToDescription = new Map();
-  
+
       for (const cls of allClasses) {
         if (Array.isArray(cls?.gear)) {
           for (const g of cls.gear) {
@@ -475,38 +394,14 @@ const buildClassContentLookupMaps = async () => {
           }
         }
       }
-  
+
       return { gearNameToClassId, abilityNameToClassId, gearNameToDescription, abilityNameToDescription };
     } catch (error) {
       throw error;
     }
 };
 
-const withClassWriteResult = async (query) => {
-    const { data, error } = await query;
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
-};
-
-classService = new ClassService({
-    createClassRow: data => withClassWriteResult(
-        supabaseAdmin.from('classes').insert([data]).select().single()
-    ),
-    updateClassRow: (id, data) => withClassWriteResult(
-        supabaseAdmin.from('classes').update(data).eq('id', id).select().single()
-    ),
-    deleteClassRow: async id => {
-        const { error } = await supabaseAdmin.from('classes').delete().eq('id', id);
-        if (error) console.error(error);
-        return { error: error || null };
-    },
-    savePdfMetadataRow: (id, data) => withClassWriteResult(
-        supabaseAdmin.from('classes').update(data).eq('id', id).select().single()
-    )
-});
+classService = new ClassService(classRepository);
 
 module.exports = {
     getClasses,

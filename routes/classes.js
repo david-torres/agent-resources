@@ -25,6 +25,8 @@ const { storeClassPdf, getSignedPdfUrl, deletePdfObject, CLASS_PDF_BUCKET } = re
 const { getProfileById } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
@@ -169,10 +171,9 @@ router.get('/import', isAuthenticated, (req, res) => {
 });
 
 router.post('/import', isAuthenticated, async (req, res) => {
-    const { profile } = res.locals;
     const { inputText } = req.body;
     try {
-        const importedClass = await processClassImport(inputText, profile);
+        const importedClass = await processClassImport(inputText, actorFromLocals(res.locals));
         const classData = Array.isArray(importedClass) ? importedClass[0] : importedClass;
         return res.header('HX-Location', `/classes/${classData.id}/${encodeURIComponent(classData.name)}`).send();
     } catch (error) {
@@ -514,12 +515,13 @@ router.post('/:id/unlock/self', isAuthenticated, async (req, res) => {
 });
 
 // Admin: generate unlock code for a class
-router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+router.post('/:id/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { expires_at, max_uses, amount } = req.body;
     const createdByProfileId = res.locals.profile.id;
     const count = parseInt(amount, 10) || 1;
-    const { data, error } = await createUnlockCodes({ classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1, amount: count });
+    const actor = actorFromLocals(res.locals);
+    const { data, error } = await createUnlockCodes(actor, { classId: id, createdByProfileId, expiresAt: expires_at || null, maxUses: max_uses || 1, amount: count });
     if (error) return sendError(req, res, error);
 
     if (count > 1) {
@@ -539,7 +541,7 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
         max_uses: code.max_uses,
         expires_at: code.expires_at
     });
-});
+}));
 
 // Admin: list unlock codes for a class
 router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
@@ -567,13 +569,14 @@ router.post('/redeem', isAuthenticated, async (req, res) => {
     }
 });
 
-router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
+router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async (req, res) => {
     const { profile } = res.locals;
     const profileId = profile?.id;
     if (!profileId) {
         return sendError(req, res, null, { status: 500, message: 'Missing profile id' });
     }
-    
+    const actor = actorFromLocals(res.locals);
+
     // Process abilities and gear arrays
     const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
     const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
@@ -622,9 +625,6 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         req.body.status = ['alpha', 'beta'].includes(req.body.status) ? req.body.status : 'alpha';
     }
 
-    // Always set created_by to the current profile
-    req.body.created_by = profileId;
-
     const image_crop = parseImageCrop(req.body.image_crop);
     if (image_crop !== undefined) {
         req.body.image_crop = image_crop;
@@ -632,7 +632,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
 
     req.body.stat_spread = parseStatSpread(req.body);
 
-    const { data: classData, error } = await createClass(req.body);
+    const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
         return sendError(req, res, error);
     }
@@ -642,30 +642,25 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), async (req, res) =
         if (storageError) {
             return sendError(req, res, storageError, { status: 500, message: 'Failed to store class PDF' });
         }
-        const { error: metaError } = await saveClassPdfMetadata(classData.id, storageInfo.path);
+        const { error: metaError } = await saveClassPdfMetadata(actor, classData.id, storageInfo.path);
         if (metaError) {
             return sendError(req, res, metaError, { status: 500, message: 'Failed to update class PDF metadata' });
         }
     }
 
     return res.header('HX-Location', `/classes/${classData.id}/${encodeURIComponent(classData.name)}`).send();
-});
+}));
 
-router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res) => {
+router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { profile } = res.locals;
+    const actor = actorFromLocals(res.locals);
 
     const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
         return sendError(req, res, fetchError, { status: 404, title: 'Not found', message: 'Class not found' });
     }
 
-    // Authz: only the class creator or an admin may update
-    const isAdminCaller = profile?.role === 'admin';
-    const isOwner = !!profile?.id && profile.id === existingClass.created_by;
-    if (!isAdminCaller && !isOwner) {
-        return sendError(req, res, null, { status: 403, title: 'No access', message: 'Not authorized' });
-    }
+    // Authz (owner-or-admin) is enforced by the service via classService.updateClass.
 
     const image_crop = parseImageCrop(req.body.image_crop);
     if (image_crop !== undefined) {
@@ -725,7 +720,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
 
     req.body.stat_spread = parseStatSpread(req.body);
 
-    const { data: classData, error } = await updateClass(id, req.body);
+    const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {
         return sendError(req, res, error);
     }
@@ -735,39 +730,33 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), async (req, res)
         if (storageError) {
             return sendError(req, res, storageError, { status: 500, message: 'Failed to store class PDF' });
         }
-        const { error: metaError } = await saveClassPdfMetadata(id, storageInfo.path);
+        const { error: metaError } = await saveClassPdfMetadata(actor, id, storageInfo.path);
         if (metaError) {
             return sendError(req, res, metaError, { status: 500, message: 'Failed to update class PDF metadata' });
         }
     } else if (removePdf && existingClass.pdf_storage_path) {
         await deletePdfObject({ bucket: CLASS_PDF_BUCKET, path: existingClass.pdf_storage_path });
-        await saveClassPdfMetadata(id, null);
+        await saveClassPdfMetadata(actor, id, null);
     }
 
     return res.header('HX-Location', `/classes/${id}/${encodeURIComponent(classData.name)}`).send();
-});
+}));
 
-// Delete a class (owner or admin)
-router.delete('/:id', isAuthenticated, async (req, res) => {
+// Delete a class (owner or admin; enforced by the service via classService.deleteClass)
+router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { profile } = res.locals;
+    const actor = actorFromLocals(res.locals);
 
     const { data: existingClass, error: fetchError } = await getClass(id, res.locals.supabase);
     if (fetchError || !existingClass) {
         return sendError(req, res, fetchError, { status: 404, message: 'Class not found' });
     }
 
-    const isAdminCaller = profile?.role === 'admin';
-    const isOwner = !!profile?.id && profile.id === existingClass.created_by;
-    if (!isAdminCaller && !isOwner) {
-        return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
-    }
-
-    const { error } = await deleteClass(id);
+    const { error } = await deleteClass(actor, id);
     if (error) {
         return sendError(req, res, error);
     }
     return res.status(204).send();
-});
+}));
 
 module.exports = router;
