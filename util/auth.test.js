@@ -3,6 +3,10 @@ const { test, expect, mock, afterAll } = require('bun:test');
 const realBase = require('../models/_base');
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
+const realSystemMessage = require('./system-message');
+const realLfg = require('../models/lfg');
+const realAgentToken = require('../models/agent-token');
+const realNavLoader = require('./nav-loader');
 
 const fakeAnon = { __name: 'anon', auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
 const fakeAdmin = { __name: 'admin' };
@@ -36,6 +40,10 @@ afterAll(() => {
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
+  mock.module('./system-message', () => realSystemMessage);
+  mock.module('../models/lfg', () => realLfg);
+  mock.module('../models/agent-token', () => realAgentToken);
+  mock.module('./nav-loader', () => realNavLoader);
   delete require.cache[require.resolve('./auth')];
 });
 
