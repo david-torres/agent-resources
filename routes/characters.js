@@ -17,6 +17,7 @@ const {
   findUpgradeTargetsFor
 } = require('../models/character');
 const { getMission, createMission, addCharacterToMission } = require('../models/mission');
+const { SYSTEM_ACTOR } = require('../util/actor');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getLfgPost } = require('../models/lfg');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
@@ -112,17 +113,23 @@ const updateOwnedCharacterFields = async ({ characterId, profileId, fields }) =>
   return { data, error: null };
 };
 
+// Internal, non-user-triggered mission creation (the level-up backfill flow
+// synthesizes a mission for missions the character logged before the app
+// tracked them). Uses SYSTEM_ACTOR — not the acting profile — so the new
+// addCharacter authorization gate can't reject this internal link; creator_id
+// is still set explicitly so the mission shows up under the user's own missions.
 const createBackfillMissionForCharacter = async ({ characterId, name, profile }) => {
-  const { data: missionRows, error: missionError } = await createMission({
+  const { data: missionRows, error: missionError } = await createMission(SYSTEM_ACTOR, {
     name,
     date: new Date().toISOString(),
     outcome: 'success',
-    is_public: false
-  }, profile);
+    is_public: false,
+    creator_id: profile.id
+  });
   if (missionError) return { error: missionError };
   const mission = Array.isArray(missionRows) ? missionRows[0] : missionRows;
   if (!mission) return { error: { status: 400, message: 'Mission creation returned no rows' } };
-  const { error: linkError } = await addCharacterToMission(mission.id, characterId);
+  const { error: linkError } = await addCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
   return { error: linkError || null };
 };
 

@@ -4,6 +4,7 @@ const { completion } = require("zod-gpt");
 const { createMission, addCharacterToMission, updateMission } = require('../models/mission');
 const { getOwnCharacters, searchPublicCharacters } = require('../models/character');
 const { assertNonEmptyImportText } = require('./validate');
+const { actorFromProfile } = require('./actor');
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -152,6 +153,7 @@ const findCharacterMatch = async (name, ownCharactersCache) => {
 };
 
 async function processMissionImport(inputText, profile, client) {
+  const actor = actorFromProfile(profile);
   const text = assertNonEmptyImportText(inputText, 'mission log');
   const prompt = `Parse the following mission log and try to structure the data following the provided JSON schema info.
 
@@ -177,7 +179,7 @@ JSON output:`;
       unregistered_character_names: []
     };
 
-    const { data: created, error } = await createMission(missionData, profile);
+    const { data: created, error } = await createMission(actor, missionData);
     if (error) throw new Error(error.message);
 
     const mission = Array.isArray(created) ? created[0] : created;
@@ -193,7 +195,7 @@ JSON output:`;
       const { match, ambiguous } = await findCharacterMatch(name, ownList);
       if (match && match.id) {
         if (!addedIds.has(match.id)) {
-          const { error: addErr } = await addCharacterToMission(mission.id, match.id);
+          const { error: addErr } = await addCharacterToMission(actor, mission.id, match.id);
           if (addErr) {
             unresolved.push(name);
             continue;
@@ -211,7 +213,7 @@ JSON output:`;
 
     if (unresolved.length > 0) {
       const unregisteredNames = dedupe(unresolved);
-      const { error: updateError } = await updateMission(mission.id, { unregistered_character_names: unregisteredNames }, profile);
+      const { error: updateError } = await updateMission(actor, mission.id, { unregistered_character_names: unregisteredNames });
       if (!updateError) {
         mission.unregistered_character_names = unregisteredNames;
       }

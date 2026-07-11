@@ -10,7 +10,15 @@ const actorFromLocals = (locals = {}) => ({
 // (badge recalculation, backfill, denormalization). Never built from input.
 const SYSTEM_ACTOR = Object.freeze({ userId: null, profileId: null, role: 'system' });
 
+// Some call sites (import utilities) receive a bare `profile` row rather than
+// `res.locals`; this builds the same actor shape from that row.
+const actorFromProfile = (profile) => ({
+  userId: (profile && profile.user_id) || null,
+  profileId: (profile && profile.id) || null,
+  role: (profile && profile.role) || null,
+});
+
 const isAdmin = (actor) => !!actor && actor.role === 'admin';
 const isSystem = (actor) => !!actor && actor.role === 'system';
 
-module.exports = { actorFromLocals, SYSTEM_ACTOR, isAdmin, isSystem };
+module.exports = { actorFromLocals, actorFromProfile, SYSTEM_ACTOR, isAdmin, isSystem };

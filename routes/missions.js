@@ -33,6 +33,8 @@ const { statList, adventClassList, aspirantPreviewClassList, playerCreatedClassL
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processMissionImport } = require('../util/mission-import');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -164,10 +166,10 @@ router.post('/import', isAuthenticated, async (req, res) => {
   }
 });
 
-router.post('/', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { characters, ...missionData } = req.body;
-  
+
   // Normalize host_id: empty string means no linked profile
   if (!missionData.host_id) {
     missionData.host_id = null;
@@ -184,16 +186,16 @@ router.post('/', isAuthenticated, async (req, res) => {
   } else {
     missionDate = new Date().toISOString();
   }
-  
+
   // Use form outcome or default to 'pending'
   const outcome = missionData.outcome || 'pending';
-  
+
   // Create the mission
-  const { data: missionRes, error: missionError } = await createMission({
+  const { data: missionRes, error: missionError } = await createMission(actor, {
     ...missionData,
     date: missionDate,
     outcome: outcome
-  }, profile);
+  });
 
   if (missionError) {
     return sendError(req, res, missionError);
@@ -207,7 +209,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   // Add characters to the mission
   if (characters && characters.length > 0) {
     for (const characterId of characters) {
-      const { error: characterError } = await addCharacterToMission(mission.id, characterId);
+      const { error: characterError } = await addCharacterToMission(actor, mission.id, characterId);
       if (characterError) {
         return sendError(req, res, characterError);
       }
@@ -215,7 +217,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   }
 
   return res.header('HX-Location', `/missions/${mission.id}/edit`).send();
-});
+}));
 
 // ============================================
 // Similar Missions / Deduplication Endpoints
@@ -296,8 +298,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   });
 });
 
-router.put('/:id', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.put('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   let { characters, unregistered_character_names, ...missionData } = req.body;
 
   delete missionData.q;
@@ -326,7 +328,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   missionData.unregistered_character_names = unregisteredNames.filter(n => n && n.trim().length > 0);
   
   // Update the mission
-  const { data, error } = await updateMission(req.params.id, missionData, profile);
+  const { data, error } = await updateMission(actor, req.params.id, missionData);
   if (error) {
     return sendError(req, res, error);
   }
@@ -339,7 +341,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   // Remove characters that are no longer in the mission
   for (const id of currentIds) {
     if (!newIds.includes(id)) {
-      const { error: removeError } = await removeCharacterFromMission(req.params.id, id);
+      const { error: removeError } = await removeCharacterFromMission(actor, req.params.id, id);
       if (removeError) {
         return sendError(req, res, removeError);
       }
@@ -349,7 +351,7 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   // Add new characters
   for (const id of newIds) {
     if (!currentIds.includes(id)) {
-      const { error: addError } = await addCharacterToMission(req.params.id, id);
+      const { error: addError } = await addCharacterToMission(actor, req.params.id, id);
       if (addError) {
         return sendError(req, res, addError);
       }
@@ -357,26 +359,27 @@ router.put('/:id', isAuthenticated, async (req, res) => {
   }
 
   return res.header('HX-Location', `/missions/${req.params.id}`).send();
-});
+}));
 
-router.delete('/:id', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
-  const { error } = await deleteMission(req.params.id, profile);
+router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { error } = await deleteMission(actor, req.params.id);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/missions').send();
   }
-});
+}));
 
-router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) => {
+router.post('/:id/characters/:characterId', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const actor = actorFromLocals(res.locals);
   const { id, characterId } = req.params;
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
     return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
-  const { error } = await addCharacterToMission(id, characterId);
+  const { error } = await addCharacterToMission(actor, id, characterId);
   if (error) {
     return sendError(req, res, error);
   }
@@ -389,7 +392,7 @@ router.post('/:id/characters/:characterId', isAuthenticated, async (req, res) =>
     mission: { id },
     character: { id: character.id, name: character.name },
   });
-});
+}));
 
 // Search characters (JSON, for link UI)
 router.get('/:id/search-characters', isAuthenticated, async (req, res) => {
@@ -406,8 +409,9 @@ router.get('/:id/search-characters', isAuthenticated, async (req, res) => {
 
 // Link an unregistered character name to a real character
 // Adds the character to the mission and removes the unregistered name
-router.post('/:id/link-character', isAuthenticated, async (req, res) => {
+router.post('/:id/link-character', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
   const { character_id, unregistered_name } = req.body;
 
@@ -421,7 +425,7 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
   }
 
   // Add character to mission
-  const { error: addError } = await addCharacterToMission(id, character_id);
+  const { error: addError } = await addCharacterToMission(actor, id, character_id);
   if (addError) {
     return sendError(req, res, addError);
   }
@@ -431,7 +435,7 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
   if (mission) {
     const names = (mission.unregistered_character_names || [])
       .filter(n => n !== unregistered_name);
-    await setUnregisteredCharacterNames(id, names, profile);
+    await setUnregisteredCharacterNames(actor, id, names);
   }
 
   const { data: character, error: characterError } = await getCharacter(character_id, res.locals.supabase);
@@ -443,21 +447,22 @@ router.post('/:id/link-character', isAuthenticated, async (req, res) => {
     mission: { id },
     character: { id: character.id, name: character.name },
   });
-});
+}));
 
-router.delete('/:id/characters/:characterId', isAuthenticated, async (req, res) => {
+router.delete('/:id/characters/:characterId', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const actor = actorFromLocals(res.locals);
   const { id, characterId } = req.params;
   const canEdit = await canEditMission(id, profile);
   if (!canEdit) {
     return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
-  const { error } = await removeCharacterFromMission(id, characterId);
+  const { error } = await removeCharacterFromMission(actor, id, characterId);
   if (error) {
     return sendError(req, res, error);
   }
   return res.send('');
-});
+}));
 
 router.get('/character/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -532,8 +537,9 @@ router.get('/:id/editors', isAuthenticated, async (req, res) => {
 });
 
 // Add an editor to a mission
-router.post('/:id/editors', isAuthenticated, async (req, res) => {
+router.post('/:id/editors', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
   const { profile_id } = req.body;
 
@@ -546,12 +552,6 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
     return sendError(req, res, null, { status: 400, message: 'Invalid profile ID format' });
   }
 
-  // Check if user can edit this mission
-  const canEdit = await canEditMission(id, profile);
-  if (!canEdit) {
-    return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
-  }
-
   // Prevent adding creator or host as editor (redundant)
   const { data: mission, error: missionError } = await getMission(id, res.locals.supabase);
   if (missionError) {
@@ -561,7 +561,8 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
     return sendError(req, res, null, { status: 400, message: 'Creator and host are already editors by default' });
   }
 
-  const { error } = await addMissionEditor(id, profile_id, profile.id);
+  // Managing editors is creator-only — enforced by the service (addMissionEditor).
+  const { error } = await addMissionEditor(actor, id, profile_id);
   if (error) {
     return sendError(req, res, error);
   }
@@ -574,20 +575,15 @@ router.post('/:id/editors', isAuthenticated, async (req, res) => {
     missionId: id,
     canRemoveEditors: await isCreator(id, profile)
   });
-});
+}));
 
 // Remove an editor from a mission
-router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.delete('/:id/editors/:profileId', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id, profileId } = req.params;
 
-  // Only creator can remove editors
-  const creator = await isCreator(id, profile);
-  if (!creator) {
-    return sendError(req, res, null, { status: 403, title: 'No access', message: 'Only the mission creator can remove editors' });
-  }
-
-  const { error } = await removeMissionEditor(id, profileId);
+  // Managing editors is creator-only — enforced by the service (removeMissionEditor).
+  const { error } = await removeMissionEditor(actor, id, profileId);
   if (error) {
     return sendError(req, res, error);
   }
@@ -600,7 +596,7 @@ router.delete('/:id/editors/:profileId', isAuthenticated, async (req, res) => {
     missionId: id,
     canRemoveEditors: true
   });
-});
+}));
 
 // ============================================
 // Mission Merge Endpoints
@@ -638,16 +634,16 @@ router.get('/:id/merge/:targetId/preview', isAuthenticated, async (req, res) => 
 });
 
 // Execute a merge
-router.post('/:id/merge/:targetId', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/merge/:targetId', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id, targetId } = req.params;
 
-  const { data: mergedMission, error } = await mergeMissions(id, targetId, profile);
+  const { data: mergedMission, error } = await mergeMissions(actor, id, targetId);
   if (error) {
     return sendError(req, res, error);
   }
 
   return res.header('HX-Location', `/missions/${mergedMission.id}`).send();
-});
+}));
 
 module.exports = router;
