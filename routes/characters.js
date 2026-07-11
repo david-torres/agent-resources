@@ -12,20 +12,19 @@ const {
   getCharacterRecentMissions,
   searchPublicCharacters,
   getRandomPublicCharacters,
-  getCharacterRealMissionsForDerivation
+  getCharacterRealMissionsForDerivation,
+  upgradeCharacterClass,
+  findUpgradeTargetsFor
 } = require('../models/character');
 const { getMission, createMission, addCharacterToMission } = require('../models/mission');
-const { getClasses, getClass } = require('../models/class');
+const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getLfgPost } = require('../models/lfg');
-const { getProfileById } = require('../models/profile');
+const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { supabaseAdmin } = require('../models/_base');
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
-const { getUnlockedClassIdsForUser } = require('../models/class');
 const { filterClassListsByIds } = require('../util/class-filter');
-const { upgradeCharacterClass, findUpgradeTargetsFor } = require('../models/character');
 const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission, removeOffscreenMission, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
-const { getProfileConduitCredits } = require('../models/profile');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { renderMarkdown } = require('../util/markdown');
