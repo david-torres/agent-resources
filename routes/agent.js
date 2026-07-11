@@ -18,6 +18,8 @@ const {
 } = require('../models/bot-link');
 const { supabaseAdmin } = require('../models/_base');
 const { revokeAgentToken } = require('../models/agent-token');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 const {
   listPostsForAgent,
   getPostForAgent,
@@ -173,16 +175,13 @@ router.get('/characters/:id', async (req, res) => {
   return res.json({ character: data });
 });
 
-router.delete('/tokens/me', async (req, res) => {
-  const { data, error } = await revokeAgentToken({
-    tokenId: res.locals.agentToken.id,
-    userId: res.locals.user.id,
-    profileId: res.locals.profile.id
-  });
+router.delete('/tokens/me', asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { data, error } = await revokeAgentToken(actor, { tokenId: res.locals.agentToken.id });
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Token not found or already revoked' });
   return res.json({ revoked: true });
-});
+}));
 
 const validatePostBody = (body, { isEdit = false } = {}) => {
   if (!body || typeof body !== 'object') {
