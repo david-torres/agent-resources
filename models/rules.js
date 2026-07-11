@@ -1,5 +1,9 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { supabase } = require('./_base');
 const crypto = require('crypto');
+const { RulesService } = require('../services/rules/service');
+const rulesRepository = require('../services/rules/repository');
+
+const rulesService = new RulesService(rulesRepository);
 
 const getRulesPdfs = async ({ includeInactive = false } = {}) => {
     let query = supabase
@@ -62,26 +66,7 @@ const updateRulesPdf = async (id, updates) => {
 
 // Admin-only: embedded profile/granter joins require bypassing RLS so
 // non-public grantee profiles still resolve in the manage UI.
-const listRulesPdfUnlocks = async (rulesPdfId) => {
-    const { data, error } = await supabaseAdmin
-        .from('rules_pdf_unlocks')
-        .select(`
-            user_id,
-            profile_id,
-            granted_by,
-            unlocked_at,
-            expires_at,
-            profile:profiles!rules_pdf_unlocks_profile_id_fkey(id, name),
-            granter:profiles!rules_pdf_unlocks_granted_by_fkey(id, name)
-        `)
-        .eq('rules_pdf_id', rulesPdfId)
-        .order('unlocked_at', { ascending: false });
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
-};
+const listRulesPdfUnlocks = (rulesPdfId) => rulesRepository.listUnlockGrantsAdmin(rulesPdfId);
 
 const upsertRulesPdfUnlock = async ({ userId, profileId, rulesPdfId, expiresAt, grantedBy }) => {
     const payload = {
@@ -130,7 +115,11 @@ const listRulesPdfUnlocksForUser = async (userId) => {
     return { data, error: null };
 };
 
-const createRulesPdfUnlockCodes = async ({ rulesPdfId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
+// Route-facing compatibility function. The service enforces the
+// mint-unlock-codes policy (admin/system only); this model builds the
+// code rows (the non-privileged logic) and delegates the privileged
+// insert to the service/repository.
+const createRulesPdfUnlockCodes = async (actor, { rulesPdfId, createdByProfileId, expiresAt = null, maxUses = 1, amount = 1 }) => {
     const inserts = Array.from({ length: amount }, () => ({
         code: crypto.randomBytes(12).toString('base64url'),
         rules_pdf_id: rulesPdfId,
@@ -139,17 +128,7 @@ const createRulesPdfUnlockCodes = async ({ rulesPdfId, createdByProfileId, expir
         max_uses: maxUses
     }));
 
-    // authz: callers (admin-only route) gate access; createdByProfileId is set server-side
-    const { data, error } = await supabaseAdmin
-        .from('rules_pdf_unlock_codes')
-        .insert(inserts)
-        .select();
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
+    return rulesService.mintUnlockCodes(actor, inserts);
 };
 
 const listRulesPdfUnlockCodes = async (rulesPdfId, client = supabase) => {
@@ -182,10 +161,7 @@ const redeemRulesPdfUnlockCode = async (code, userId) => {
 // failure so access checks degrade to current behavior.
 const getRulesPdfFamilyIds = async (rulesPdf) => {
     try {
-        const { data, error } = await supabaseAdmin
-            .from('rules_pdfs')
-            .select('id')
-            .eq('title', rulesPdf.title);
+        const { data, error } = await rulesRepository.fetchPdfFamilyIdsByTitle(rulesPdf.title);
         if (error || !Array.isArray(data) || data.length === 0) {
             if (error) console.error(error);
             return [rulesPdf.id];
@@ -216,14 +192,7 @@ const canViewRulesPdf = async (userContext = {}, rulesPdf) => {
     // Admin read mirrors isClassUnlocked: the shared anon client carries no
     // JWT, so RLS would hide the user's own unlock rows.
     const familyIds = await getRulesPdfFamilyIds(rulesPdf);
-    const now = new Date().toISOString();
-    const { data, error } = await supabaseAdmin
-        .from('rules_pdf_unlocks')
-        .select('rules_pdf_id, expires_at')
-        .eq('user_id', userId)
-        .in('rules_pdf_id', familyIds)
-        .or(`expires_at.is.null,expires_at.gt.${now}`)
-        .limit(1);
+    const { data, error } = await rulesRepository.fetchActiveUnlockForUser({ userId, familyIds });
 
     if (error) {
         console.error(error);
