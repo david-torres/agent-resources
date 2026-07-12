@@ -1,5 +1,7 @@
 node_modules/
 .env
+.env.*
+!.env.dist
 .vscode/
 supabase/.temp/
 supabase/.branches/
@@ -7,3 +9,9 @@ supabase/.branches/
 .cursor/
 .DS_Store
 backups/
+*.log
+logs/
+bun.lockb
+dist/
+coverage/
+.bun/

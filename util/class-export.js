@@ -75,6 +75,14 @@ const exportToMarkdown = (classData) => {
     lines.push(classData.description.trim());
     lines.push('');
   }
+
+  // Tips
+  if (classData.tips && classData.tips.trim()) {
+    lines.push('## 💡 Tips');
+    lines.push('');
+    lines.push(classData.tips.trim());
+    lines.push('');
+  }
   
   // Gear
   if (classData.gear && classData.gear.length > 0) {
@@ -162,6 +170,7 @@ const exportToJson = (classData) => {
     ),
     image_url: classData.image_url || null,
     image_crop: classData.image_crop || null,
+    tips: classData.tips || '',
   };
   
   return JSON.stringify(exportData, null, 2);

@@ -281,6 +281,34 @@ const playerCreatedClassList = [
   'Raubritter',
 ];
 
+// Stat spreads applied by util/seed-classes.js. Sum is the number of
+// pre-assigned stat points the class grants at level 1; the wizard adds
+// personality-trait #3 on top and lets the user distribute the remainder.
+// Player-created classes (not listed here) default to no pre-assignment.
+// Stat spreads parsed from each class's seeded description (the "Class Stats:
+// ++ X / + Y" line near the top of the class view). All add up to 3 total
+// pluses; most are 2+1, a few are three singles. Player-created classes not
+// listed here default to no pre-assignment.
+const classStatSpread = {
+  Beastmaster: { vitality: 1, sensory: 1, skill: 1 },
+  Berserker:   { might: 2, resilience: 1 },
+  Bogatyr:     { vitality: 1, might: 1, luck: 1 },
+  Freerunner:  { vigor: 2, reflex: 1 },
+  Gunslinger:  { skill: 2, sensory: 1 },
+  Greybeard:   { vitality: 1, will: 1, intelligence: 1 },
+  Illusionist: { sensory: 2, arcane: 1 },
+  Infiltrator: { reflex: 2, intelligence: 1 },
+  Librarian:   { intelligence: 2, spirit: 1 },
+  Lithomancer: { resilience: 2, arcane: 1 },
+  Raubritter:  { vitality: 1, resilience: 1, vigor: 1 },
+  Samaritan:   { vitality: 2, spirit: 1 },
+  Thane:       { resilience: 2, spirit: 1 },
+  Thunderbird: { arcane: 2, vigor: 1 },
+  Vessel:      { spirit: 2, will: 1 },
+  Wanderer:    { luck: 2, vitality: 1 },
+  Witchhunter: { will: 2, sensory: 1 }
+};
+
 const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];
 const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6];
 
@@ -294,6 +322,25 @@ const MERX_PER_MISSION_SUCCESS = 1;
 // On-class gear beyond this count costs merx like any other purchase.
 const STARTING_ON_CLASS_GEAR_ALLOTMENT = 4;
 
+// Common items available to every character during the wizard's gear step.
+// Each entry has a name and a short markdown description. The wizard offers
+// these on the right-hand "spend your 2 merx" list at 1 merx each. This is
+// test/placeholder data — the full catalogue will move to a database table.
+const commonItemList = [
+  { name: 'Bedroll',         description: 'A simple roll of canvas and wool. Lets you sleep rough without worrying about rain or biting insects.' },
+  { name: 'Rations (3 days)', description: 'Dried meat, hardtack, and salt. Enough to keep one person moving for three days of hard travel.' },
+  { name: 'Flint & Steel',   description: 'Reliable fire-starting kit. Strikes in damp conditions where a match would fail.' },
+  { name: 'Rope, 50 ft',     description: 'Hemp rope, strong enough to bear a loaded pack or a struggling climber.' },
+  { name: 'Lantern & Oil',   description: 'A hooded tin lantern and a small flask of oil. Burns for about six hours per fill.' },
+  { name: 'Healing Salve',   description: 'A pot of herbal salve. When applied to a wound, it soothes pain and keeps infection at bay.' },
+  { name: 'Manacles',        description: 'Iron wrist restraints with a simple lock. Useful for escorting prisoners back to civilization.' },
+  { name: 'Spyglass',        description: 'A collapsible brass telescope. Lets you make out details at several times normal sight distance.' },
+  { name: 'Waterskin',       description: 'A stitched leather skin, treated on the inside to keep water from spoiling for a few days.' },
+  { name: 'Chalk',           description: 'A fistful of white chalk. Handy for marking safe paths, leaving signals, or sketching quick maps.' },
+  { name: 'Hooded Cloak',    description: 'A long, hooded cloak in muted colors. Passable as a traveler, ranger, or pilgrim.' },
+  { name: 'Lockpicks',       description: 'A set of fine metal picks, well-oiled. Quality is good enough for everyday locks; vaults are another matter.' }
+];
+
 module.exports = {
   statList,
   personalityMap,
@@ -302,8 +349,10 @@ module.exports = {
   playerCreatedClassList,
   classGearList,
   classAbilityList,
+  classStatSpread,
   v1LevelingSequence,
   v2LevelingSequence,
   MERX_PER_MISSION_SUCCESS,
-  STARTING_ON_CLASS_GEAR_ALLOTMENT
+  STARTING_ON_CLASS_GEAR_ALLOTMENT,
+  commonItemList
 };

@@ -1,12 +1,12 @@
-require('dotenv').config();
+require('./env');
 const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
-const { adventClassList, aspirantPreviewClassList, playerCreatedClassList } = require('./enclave-consts');
+const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread } = require('./enclave-consts');
 
 // Initialize Supabase client
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
+    process.env.SUPABASE_SECRET_KEY
 );
 
 // build a list of classes from the consts
@@ -19,6 +19,7 @@ const hardcodedClasses = [
         is_player_created: false,
         rules_edition: 'advent',
         rules_version: 'v1',
+        stat_spread: classStatSpread[cls] || {},
         created_by: null
     })),
     ...aspirantPreviewClassList.map(cls => ({
@@ -29,6 +30,7 @@ const hardcodedClasses = [
         is_player_created: false,
         rules_edition: 'advent',
         rules_version: 'v1',
+        stat_spread: classStatSpread[cls] || {},
         created_by: null
     })),
     ...playerCreatedClassList.map(cls => ({
@@ -39,6 +41,7 @@ const hardcodedClasses = [
         is_player_created: true,
         rules_edition: 'advent',
         rules_version: 'v1',
+        stat_spread: classStatSpread[cls] || {},
         created_by: null
     }))
 ];

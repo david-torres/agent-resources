@@ -15,7 +15,7 @@
           <option value="">(no compound)</option>
           {{#each siblingPerks}}
             {{#unless (eq this.position ../position)}}
-            <option value="position-{{this.position}}" {{#if (eq (or ../perk.compounds_with '') (concat 'position-' this.position))}}selected{{/if}}>
+            <option value="position-{{this.position}}" {{#if (eq ../perk.compounds_with (concat 'position-' this.position))}}selected{{/if}}>
               Compounds with #{{add this.position 1}}: {{this.text}}
             </option>
             {{/unless}}

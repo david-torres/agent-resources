@@ -4,7 +4,7 @@ const { sanitizeUrlFields } = require('../util/url');
 const { escapeLikePattern, validateAbilityPerks } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
-const { remapPerkAbilityIds } = require('../util/ability-perks');
+const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../util/reconcile');
 const { listOffscreenMissions } = require('./offscreen-mission');
 
@@ -124,9 +124,12 @@ const createCharacter = async (characterReq, profile) => {
   characterReq.creator_id = profile.id;
 
   const v2OnlyFields = ['quirks', 'accessories', 'ability_perks'];
+  const v1OnlyFields = ['perks', 'additional_gear'];
   const linkedVersion = await effectiveRulesVersion(characterReq.class_id);
   if (linkedVersion !== 'v2') {
     for (const k of v2OnlyFields) delete characterReq[k];
+  } else {
+    for (const k of v1OnlyFields) delete characterReq[k];
   }
 
   // Ensure class_id is populated from the class name when missing
@@ -205,6 +208,15 @@ const createCharacter = async (characterReq, profile) => {
     characterReq.hide_from_search = false;
   }
 
+  // handle creator_mode (wizard mode label). Reject anything outside the
+  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
+    characterReq.creator_mode = null;
+  } else if (!allowedModes.includes(characterReq.creator_mode)) {
+    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
+  }
+
   // normalize v2 JSONB fields before insert
   if (linkedVersion === 'v2') {
     characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
@@ -245,16 +257,22 @@ const createCharacter = async (characterReq, profile) => {
   }
 
   // set class abilities
+  let newAbilityRows = null;
   if (classAbilities) {
     const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
     if (abilitiesSetError) {
       console.error(abilitiesSetError);
       return { data: null, error: abilitiesSetError };
     }
+    newAbilityRows = abilitiesSet;
   }
 
   if (linkedVersion === 'v2') {
-    const { error: perksError } = await setCharacterPerks(character.id, abilityPerks);
+    // The create form references each perk's ability by NAME (no row ids exist
+    // until the abilities are inserted just above). Remap name -> new row id;
+    // perks whose ability isn't present are dropped.
+    const perksToSave = remapPerkAbilityIdsByName(abilityPerks, newAbilityRows || []);
+    const { error: perksError } = await setCharacterPerks(character.id, perksToSave);
     if (perksError) {
       return { data: null, error: perksError };
     }
@@ -366,6 +384,15 @@ const updateCharacter = async (id, characterReq, profile) => {
     characterReq.hide_from_search = true;
   } else {
     characterReq.hide_from_search = false;
+  }
+
+  // handle creator_mode (wizard mode label). Reject anything outside the
+  // allowed set; treat empty/missing as NULL.
+  const allowedModes = ['advent', 'aspiring', 'aspirant'];
+  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
+    characterReq.creator_mode = null;
+  } else if (!allowedModes.includes(characterReq.creator_mode)) {
+    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
   }
 
   // handle auto_calculate

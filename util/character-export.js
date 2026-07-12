@@ -150,9 +150,9 @@ const exportToMarkdown = (character, options = {}) => {
     lines.push('');
   }
   
-  // Class Gear
+  // Signature Items
   if (character.gear && character.gear.length > 0) {
-    lines.push('## 🎒 Class Gear');
+    lines.push('## 🎒 Signature Items');
     lines.push('');
     for (const item of character.gear) {
       const name = typeof item === 'string' ? item : item.name;

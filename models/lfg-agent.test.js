@@ -19,7 +19,7 @@ const {
 
 // ─── Seeding helpers ──────────────────────────────────────────────────────────
 
-const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 
 async function createAuthUser(email) {

@@ -44,6 +44,14 @@
             </form>
           </div>
           {{/if}}
+          {{#if profile}}
+          <div class="buttons is-centered mt-3">
+            <a href="/characters/wizard?mode=advent&class={{class.id}}&fresh=1" class="button is-primary is-small">
+              <span class="icon"><i class="fas fa-hat-wizard"></i></span>
+              <span>Create a character with this class</span>
+            </a>
+          </div>
+          {{/if}}
         </div>
       </div>
     </div>

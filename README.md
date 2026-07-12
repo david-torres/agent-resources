@@ -43,8 +43,8 @@ Then:
 ## Database Setup
 
 This project uses [Supabase](https://supabase.com/) (hosted Postgres) for
-storage and auth. Point `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
-`SUPABASE_SERVICE_ROLE_KEY` in `.env` at your Supabase project before applying
+storage and auth. Point `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
+`SUPABASE_SECRET_KEY` in `.env` at your Supabase project before applying
 any SQL.
 
 ### 1. Apply the base schema
@@ -123,7 +123,7 @@ Long-lived personal access tokens can be created per user for agent integrations
 - `GET /api/agent/classes` returns the class list visible to that user.
 - `GET /api/agent/classes/:id` returns full details or teaser-only details based on the same release/unlock rules as the web app.
 
-Server-side agent routes should use `SUPABASE_SERVICE_ROLE_KEY` so token-authenticated requests can evaluate ownership and unlock state without a Supabase browser session.
+Server-side agent routes should use `SUPABASE_SECRET_KEY` so token-authenticated requests can evaluate ownership and unlock state without a Supabase browser session.
 
 ## Dependencies
 

@@ -1,11 +1,10 @@
-require('dotenv').config();
+require('./env');
 const { createClient } = require('@supabase/supabase-js');
 
-// Initialize Supabase client with service role key to bypass RLS
-// Use SUPABASE_SERVICE_ROLE_KEY if available, otherwise fall back to SUPABASE_KEY
+// Initialize Supabase client with secret key to bypass RLS
 const supabase = createClient(
     process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY
+    process.env.SUPABASE_SECRET_KEY
 );
 
 /**
