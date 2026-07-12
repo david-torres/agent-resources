@@ -6,7 +6,7 @@ games, and more!
 ## Table of Contents
 
 - [Installation](#installation)
-- [Database Setup](#database-setup)
+  - [Database Setup](#database-setup)
 - [Usage](#usage)
 - [Dependencies](#dependencies)
 - [Enclave](#enclave)
@@ -24,61 +24,121 @@ curl -fsSL https://bun.sh/install | bash
 Then:
 
 1. Clone the repository:
+
    ```sh
    git clone https://github.com/david-torres/agent-resources.git
    cd agent-resources
    ```
 
 2. Install the dependencies:
+
    ```sh
    bun install
    ```
 
-3. Create a `.env` file based on `.env.dist` and fill in the required
-   environment variables (Supabase credentials, OpenAI API key, and optional
-   system message settings).
+3. Make a copy of the `.env.example` file and fill in the values.
+[Database Setup](#database-setup) will help you fill in the Supabase values.
+
+   ```sh
+   cp .env.example .env
+   ```
 
 4. Set up the database — see [Database Setup](#database-setup) below.
 
-## Database Setup
+### Database Setup
 
 This project uses [Supabase](https://supabase.com/) (hosted Postgres) for
 storage and auth. Point `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and
 `SUPABASE_SERVICE_ROLE_KEY` in `.env` at your Supabase project before applying
 any SQL.
 
-### 1. Apply the base schema
+#### 1. Create a Supabase project
+
+To create a Superbase project for development, you can either deploy locally
+or deploy to a new project on the Superbase Platform. Since using a hosted
+Superbase project does not require Docker, this guild will walk you through
+that. You can find a guide for local deploment
+[here](https://supabase.com/docs/guides/local-development) if you prefer local
+development.
+
+1. Go to <https://www.supabase.com>
+2. Create a new project. The free tier is enough for development and testing.
+3. Copy the `anon` and `service_role` keys into `.env`. You'll find them under
+project Settings > API Keys > Legacy anon, service_role API keys.
+
+#### 2. Apply the base schema
 
 `schema.sql` at the repo root contains the full baseline schema (profiles,
-characters, classes, missions, conduits, pages, etc.). Apply it once against
-a fresh database:
+characters, classes, missions, conduits, pages, etc.). Apply the schema by
+either:
 
-- In the Supabase dashboard: open the SQL editor, paste the contents of
-  `schema.sql`, and run it.
-- Or via `psql`:
+   1. Open the SQL editor for your project in the Superbase dashboard, paste
+      the contents of `schema.sql`, and run it.
+   2. Or via `psql`:
+
   ```sh
   psql "$SUPABASE_DB_URL" -f schema.sql
   ```
 
-### 2. Apply incremental migrations
+#### 3. Apply incremental migrations
 
 Migrations in `supabase/migrations/` are applied in filename order on top of
 the baseline schema. Run each one you haven't already applied against your
-database (dashboard SQL editor or `psql -f`).
+database. You can apply these changes in the dashboard SQL editor
+or from the command line using Supabase's CLI.
+
+```sh
+# Install the Supabase CLI
+brew install supabase/tap/supabase
+
+# Log in and connect to Supabase
+supabase login
+
+# Navigate to the root directory of this repository.
+cd $AGENT_RESOURCES_REPO_ROOT
+
+# Link your project. Get project-ref from your Supabase dashboard URL:
+# https://supabase.com/dashboard/project/{project-ref}
+supabase link --project-ref $SUPABASE_PROJECT_ID
+
+supabase db push
+```
 
 The two top-level files `migration_nav_items.sql` and `seed_nav_items.sql`
 set up the dynamic navigation table and seed its default entries — run the
 migration first, then the seed.
 
-### 3. (Optional) Seed class data
+TODO: these migrations may not be necessary anymore. Check to see if they
+can be removed.
+
+```sh
+cd $AGENT_RESOURCES_REPO_ROOT
+supabase db push ./migration_nav_items.sql
+supabase db push ./seed_nav_items.sql
+```
+
+#### 4. (Optional) Seed class data
 
 To (re)load class definitions from the seed util:
 
 ```sh
+# If you haven't populated an admin user, populate one now:
+bun run seed:admin
+
+# Seed classes
 bun run seed:classes
 ```
 
-### Backups
+#### 5. (Optional) Check schema and tables
+
+You can see a visual representation of the database schema on the Supabase
+dashboard for your project under Database > Schema Visualizser.
+
+You can check the rows of your table from the Supabase dashboard for your
+project under Table Editor. If you ran `seed:admin` and `seed:classes` above,
+you should see them in your database.
+
+#### Backups
 
 `scripts/db-backup.sh` runs `pg_dump` against the configured Supabase pooler
 and writes a compressed dump to `backups/`. It reads `SUPABASE_DB_PASS` from
@@ -142,7 +202,6 @@ New to the Enclave? Watch the video:
 [![Watch the video](https://img.youtube.com/vi/aBVeIi6s6rE/0.jpg)](https://www.youtube.com/watch?v=aBVeIi6s6rE)
 
 [Learn more about the Enclave](https://www.kickstarter.com/projects/757240159/enclave-a-tableless-roleplaying-game)
-
 
 ## License
 
