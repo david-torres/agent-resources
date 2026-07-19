@@ -3,11 +3,16 @@ const {
   normalizeCharacterInput,
   normalizeGearItems,
   normalizeAbilityItems,
-  normalizeAbilityPerks
+  normalizeAbilityPerks,
+  parseInteger,
+  normalizeStatsPayload
 } = require('./input');
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
+const { validateAbilityPerks } = require('../../util/validate');
+const { AuthorizationError } = require('../../util/errors');
+const { canMutateCharacter } = require('./policy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 
@@ -23,8 +28,48 @@ const REQUIRED_ADAPTER_METHODS = [
   'deleteChildRows',
   'getClassContentLookupMaps',
   'getRealMissions',
-  'listOffscreenMissions'
+  'listOffscreenMissions',
+  // Mutation capabilities (delete/markDeceased/upgradeClass/updateStats/levelUp).
+  'fetchCharacterOwnership',
+  'deleteCharacter',
+  'setDeceased',
+  'updateClass',
+  'updateOwnedFields',
+  'getClassRulesVersion',
+  'fetchAllowedAbilityIds',
+  'fetchExistingPerks',
+  'insertPerks',
+  'updatePerkLinks',
+  'createBackfillMission',
+  'getAvailableHostedMissions',
+  'createOffscreenMissionRow',
+  'findUpgradeTargets'
 ];
+
+// Loads the full character row (admin-privileged; includes traits/gear/
+// abilities/ability_perks) and throws unless the actor may mutate it.
+// Mirrors services/mission/service.js#requireEditable.
+const requireOwnedCharacter = async (adapter, actor, id) => {
+  const { data: character, error } = await adapter.getCharacter(id);
+  if (error) throw error;
+  if (!character) throw new AuthorizationError('Character not found', { reason: 'not_found' });
+  if (!canMutateCharacter(actor, character)) {
+    throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
+  }
+  return character;
+};
+
+// Leaner ownership probe (id/creator_id/class_id only) — used by upgradeClass,
+// matching the pre-refactor inline admin select.
+const requireOwnedCharacterLean = async (adapter, actor, id) => {
+  const { data: character, error } = await adapter.fetchCharacterOwnership(id);
+  if (error) throw error;
+  if (!character) throw new AuthorizationError('Character not found', { reason: 'not_found' });
+  if (!canMutateCharacter(actor, character)) {
+    throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
+  }
+  return character;
+};
 
 const resolveSubmittedGear = (gear, gearNameToClassId) => {
   const submitted = Array.isArray(gear) ? gear : (gear ? [gear] : []);
@@ -103,7 +148,9 @@ class CharacterService {
   async updateCharacter(id, input, actor) {
     const existing = await this.adapter.getCharacter(id);
     if (existing.error) return { data: null, error: existing.error };
-    if (existing.data.creator_id != actor.id) return { data: null, error: 'Unauthorized' };
+    if (existing.data.creator_id != actor.id) {
+      throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
+    }
 
     let rulesVersion = await this.adapter.getRulesVersion(input.class_id);
     let prepared = cloneInput(input);
@@ -308,6 +355,285 @@ class CharacterService {
       if (result.error) return result;
     }
     return current;
+  }
+
+  // --- Policy-gated mutation capabilities (formerly inline route helpers
+  // in routes/characters.js). Each loads ownership via the repository,
+  // THROWS an AuthorizationError unless canMutateCharacter, then mutates.
+  // Everything past the ownership gate keeps returning { data, error }
+  // (string or { status, message } shaped) exactly as the routes did, so
+  // callers keep using their existing error-rendering (sendError/
+  // sendRouteError) for business-rule failures — only the authorization
+  // gate itself is new-to-throw.
+
+  async deleteCharacter(actor, id) {
+    const character = await requireOwnedCharacter(this.adapter, actor, id);
+    return this.adapter.deleteCharacter({ id, creatorId: character.creator_id });
+  }
+
+  async markDeceased(actor, id, confirmName) {
+    const character = await requireOwnedCharacter(this.adapter, actor, id);
+    if (!confirmName || String(confirmName).trim() !== character.name) {
+      return {
+        data: null,
+        error: { status: 400, message: 'Character name does not match. Please type the exact name to confirm.' }
+      };
+    }
+    if (character.is_deceased) return { data: null, error: 'Character is already deceased' };
+
+    const { data, error } = await this.adapter.setDeceased({ id, creatorId: character.creator_id });
+    if (error) return { data: null, error };
+    if (!data || data.length === 0) return { data: null, error: 'Character update returned no rows' };
+    return { data: data[0], error: null };
+  }
+
+  async upgradeClass(actor, id, targetClassId, client) {
+    const character = await requireOwnedCharacterLean(this.adapter, actor, id);
+    if (!targetClassId) return { data: null, error: 'Missing target class id' };
+
+    const candidates = await this.adapter.findUpgradeTargets(character.class_id, client);
+    const target = (candidates || []).find(c => c.id === targetClassId);
+    if (!target) return { data: null, error: 'Target class is not a valid upgrade for this character' };
+
+    const { data, error } = await this.adapter.updateClass({
+      id, creatorId: character.creator_id, classId: target.id, className: target.name
+    });
+    if (error) return { data: null, error };
+    if (!data || data.length === 0) return { data: null, error: 'Character upgrade returned no rows' };
+    return { data: data[0], error: null };
+  }
+
+  async updateStats(actor, id, rawFields) {
+    const character = await requireOwnedCharacter(this.adapter, actor, id);
+    const stats = normalizeStatsPayload(rawFields || {});
+    const { data, error } = await this.adapter.updateOwnedFields({
+      id, creatorId: character.creator_id, fields: stats
+    });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: { status: 404, message: 'Character update returned no rows' } };
+    return {
+      data: {
+        id: data.id,
+        name: data.name || character.name,
+        stats: Object.fromEntries(Object.keys(stats).map(stat => [stat, data[stat] ?? stats[stat]]))
+      },
+      error: null
+    };
+  }
+
+  async levelUp(actor, id, body = {}) {
+    const character = await requireOwnedCharacter(this.adapter, actor, id);
+
+    const currentLevel = Math.max(1, parseInteger(character.level, 1));
+    const requestedLevel = Math.max(currentLevel + 1, Math.min(20, parseInteger(body.level, currentLevel + 1)));
+    const currentCompleted = Math.max(0, parseInteger(character.completed_missions, 0));
+    const requestedCompleted = Math.max(currentCompleted, parseInteger(body.completed_missions, currentCompleted));
+    const missionNames = Array.isArray(body.mission_names)
+      ? body.mission_names.map(v => String(v || '').trim()).filter(Boolean)
+      : [];
+    const useConduitCredit = body.use_conduit_credit === true || body.use_conduit_credit === 'true' || body.use_conduit_credit === 'on';
+    const creditCount = useConduitCredit ? Math.max(0, requestedCompleted - currentCompleted - missionNames.length) : 0;
+
+    if (!useConduitCredit && requestedCompleted > currentCompleted + missionNames.length) {
+      return {
+        data: null,
+        error: { status: 400, message: 'Provide mission names for each missing mission, or spend Conduit Credits.' }
+      };
+    }
+
+    let creditSources = [];
+    if (creditCount > 0) {
+      const { data: availableHostedMissions, error: availableError } = await this.adapter.getAvailableHostedMissions(actor.profileId);
+      if (availableError) return { data: null, error: availableError };
+      creditSources = (availableHostedMissions || []).slice(0, creditCount);
+      if (creditSources.length < creditCount) {
+        return { data: null, error: { status: 400, message: 'Not enough Conduit Credits available.' } };
+      }
+    }
+
+    for (const name of missionNames) {
+      const { error } = await this.adapter.createBackfillMission({ characterId: id, name, profileId: actor.profileId });
+      if (error) return { data: null, error };
+    }
+
+    for (let i = 0; i < creditSources.length; i++) {
+      const src = creditSources[i];
+      const sourceDate = typeof src.date === 'string'
+        ? src.date.slice(0, 10)
+        : new Date(src.date).toISOString().slice(0, 10);
+      const { error } = await this.adapter.createOffscreenMissionRow({
+        characterId: id,
+        profileId: actor.profileId,
+        payload: {
+          name: `Conduit Credit: Level ${requestedLevel}`,
+          summary: 'Spent through the level-up modal.',
+          merx_gained: 0,
+          source_mission_id: src.id,
+          source_mission_name: src.name || `Hosted mission ${i + 1}`,
+          source_mission_date: sourceDate
+        }
+      });
+      if (error) return { data: null, error };
+    }
+
+    // Re-derive level / completed_missions / commissary_reward from the rows
+    // we just created (real success missions and offscreen credits) so the
+    // stored counters match what every derive-path computes — see
+    // deriveCharacterTotals. Writing raw requested values here would leave
+    // commissary_reward stale (each backfilled success mission is worth
+    // MERX_PER_MISSION_SUCCESS that never landed in the column).
+    const [missionsRes, offscreenRes] = await Promise.all([
+      this.adapter.getRealMissions(id),
+      this.adapter.listOffscreenMissions(id)
+    ]);
+    if (missionsRes.error || offscreenRes.error) {
+      return { data: null, error: missionsRes.error || offscreenRes.error };
+    }
+
+    const rulesVersionResult = character.class_id
+      ? await this.adapter.getClassRulesVersion(character.class_id)
+      : { data: 'v1' };
+    const rulesVersion = rulesVersionResult.data || 'v1';
+
+    const derived = deriveCharacterTotals({
+      character,
+      realMissions: missionsRes.data || [],
+      offscreenMissions: offscreenRes.data || [],
+      rulesVersion
+    });
+
+    const stats = normalizeStatsPayload(body.stats || body);
+    const fields = {
+      ...stats,
+      level: derived.level,
+      completed_missions: derived.completed_missions,
+      commissary_reward: derived.commissary_reward
+    };
+    const { data, error } = await this.adapter.updateOwnedFields({ id, creatorId: character.creator_id, fields });
+    if (error) return { data: null, error };
+
+    const { error: perksError } = await this.appendPerks(id, Array.isArray(body.ability_perks) ? body.ability_perks : []);
+    if (perksError) return { data: null, error: perksError };
+
+    return {
+      data: {
+        id: data.id,
+        name: data.name || character.name,
+        level: data.level,
+        completed_missions: data.completed_missions,
+        commissary_reward: data.commissary_reward
+      },
+      error: null
+    };
+  }
+
+  // Appends newly-submitted ability perks (level-up modal) to a character's
+  // existing perk set, resolving `compounds_with` links either to an existing
+  // perk (by id) or to another perk inserted in the same batch (`new:<ref>`).
+  // Moved verbatim from routes/characters.js#appendCharacterPerks.
+  async appendPerks(characterId, submittedPerks) {
+    if (!Array.isArray(submittedPerks) || submittedPerks.length === 0) {
+      return { error: null };
+    }
+
+    const { data: abilities, error: abilityError } = await this.adapter.fetchAllowedAbilityIds(characterId);
+    if (abilityError) return { error: abilityError };
+    const allowedAbilityIds = new Set((abilities || []).map(a => a.id));
+
+    const { data: existing, error: existingError } = await this.adapter.fetchExistingPerks(characterId);
+    if (existingError) return { error: existingError };
+
+    const existingCounts = new Map();
+    // id -> ability, so a new perk may only compound with an existing perk on
+    // the SAME ability (mirrors resolveCompoundLinks in the full edit-form path).
+    const abilityByExistingPerkId = new Map();
+    const existingForValidation = (existing || []).map(p => {
+      const pos = parseInteger(p.position, 0);
+      existingCounts.set(p.class_ability_id, Math.max(existingCounts.get(p.class_ability_id) ?? -1, pos));
+      abilityByExistingPerkId.set(p.id, p.class_ability_id);
+      return { class_ability_id: p.class_ability_id, text: p.text, position: pos };
+    });
+
+    // Build insert rows. `meta` runs parallel to `rows`, carrying each new
+    // perk's client `ref` and its requested compound link so we can resolve
+    // links after the rows (and their ids) exist.
+    const rows = [];
+    const meta = [];
+    for (const p of submittedPerks) {
+      if (!p || typeof p !== 'object') continue;
+      const classAbilityId = p.class_ability_id;
+      const text = typeof p.text === 'string' ? p.text.trim() : '';
+      if (!classAbilityId || !allowedAbilityIds.has(classAbilityId) || !text) continue;
+      const nextPosition = (existingCounts.get(classAbilityId) ?? -1) + 1;
+      existingCounts.set(classAbilityId, nextPosition);
+      rows.push({
+        character_id: characterId,
+        class_ability_id: classAbilityId,
+        text,
+        position: nextPosition
+      });
+      meta.push({
+        ref: typeof p.ref === 'string' ? p.ref : null,
+        compoundsWith: p.compounds_with == null ? null : String(p.compounds_with)
+      });
+    }
+
+    if (rows.length === 0) return { error: null };
+
+    const validation = validateAbilityPerks(existingForValidation.concat(rows));
+    if (!validation.ok) {
+      return { error: { status: 400, message: validation.errors.join(' ') } };
+    }
+
+    const { error: insertError } = await this.adapter.insertPerks(rows);
+    if (insertError) return { error: insertError };
+
+    // Re-read the rows to recover server-assigned ids. We match by
+    // (class_ability_id, position) — each new perk got a unique position
+    // above — rather than relying on insert-return ordering.
+    const { data: current, error: selError } = await this.adapter.fetchExistingPerks(characterId);
+    if (selError) return { error: selError };
+    const idByKey = new Map((current || []).map(r => [`${r.class_ability_id}:${parseInteger(r.position, 0)}`, r.id]));
+    const keyOf = (row) => `${row.class_ability_id}:${row.position}`;
+
+    // ref -> { id, class_ability_id } for perks inserted in this batch.
+    const insertedByRef = new Map();
+    for (let i = 0; i < rows.length; i++) {
+      if (!meta[i].ref) continue;
+      insertedByRef.set(meta[i].ref, { id: idByKey.get(keyOf(rows[i])), class_ability_id: rows[i].class_ability_id });
+    }
+
+    // Resolve each new perk's compound link. A link is either `new:<ref>`
+    // (another perk inserted in this batch) or an existing perk UUID. The
+    // target must be on the same ability and not the perk itself; anything
+    // else resolves to null.
+    const linkUpdates = [];
+    for (let i = 0; i < rows.length; i++) {
+      const link = meta[i].compoundsWith;
+      if (!link) continue;
+      const rowId = idByKey.get(keyOf(rows[i]));
+      if (!rowId) continue;
+
+      let target = null;
+      if (link.startsWith('new:')) {
+        const ref = link.slice('new:'.length);
+        const cand = insertedByRef.get(ref);
+        if (cand) target = { id: cand.id, class_ability_id: cand.class_ability_id };
+      } else if (abilityByExistingPerkId.has(link)) {
+        target = { id: link, class_ability_id: abilityByExistingPerkId.get(link) };
+      }
+
+      if (target && target.id && target.id !== rowId && target.class_ability_id === rows[i].class_ability_id) {
+        linkUpdates.push({ id: rowId, compounds_with: target.id });
+      }
+    }
+
+    if (linkUpdates.length > 0) {
+      const { error: linkError } = await this.adapter.updatePerkLinks(linkUpdates);
+      if (linkError) return { error: linkError };
+    }
+
+    return { error: null };
   }
 }
 

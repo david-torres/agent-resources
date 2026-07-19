@@ -1,5 +1,6 @@
 const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
+const { statList } = require('../../util/enclave-consts');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -118,11 +119,29 @@ const normalizeCharacterInput = (input, context = {}) => {
   return { data, childData, error: null };
 };
 
+// Shared by the stats/level-up capabilities (PATCH /:id/stats, POST
+// /:id/level-up) for parsing raw HTTP request-body values.
+const parseInteger = (value, fallback = 0) => {
+  const n = parseInt(value, 10);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+const normalizeStatsPayload = (body = {}) => {
+  const out = {};
+  for (const stat of statList) {
+    const n = parseInteger(body[stat], 0);
+    out[stat] = Math.max(0, Math.min(20, n));
+  }
+  return out;
+};
+
 module.exports = {
   cloneInput,
   normalizeCharacterInput,
   normalizeNamedJsonbList,
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,
-  normalizeAbilityPerks
+  normalizeAbilityPerks,
+  parseInteger,
+  normalizeStatsPayload
 };
