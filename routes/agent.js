@@ -52,6 +52,11 @@ const parseBooleanFilter = (value) => {
   return undefined;
 };
 
+// Used for class/character agent reads. Unlike lfg's buildAgentActor
+// (models/lfg.js), this deliberately preserves the profile's REAL role
+// (e.g. 'admin') rather than stripping it: it preserves the pre-refactor
+// resolveClassAgentAccess visibility contract, where an admin's agent token
+// gets the same admin-wide read visibility an admin's session would.
 const getActorContext = (res) => ({
   userId: res.locals.user?.id || null,
   profileId: res.locals.profile?.id || null,
