@@ -129,8 +129,19 @@ const createBackfillMissionForCharacter = async ({ characterId, name, profile })
   if (missionError) return { error: missionError };
   const mission = Array.isArray(missionRows) ? missionRows[0] : missionRows;
   if (!mission) return { error: { status: 400, message: 'Mission creation returned no rows' } };
-  const { error: linkError } = await addCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
-  return { error: linkError || null };
+  // addCharacterToMission can now THROW (MissionService.addCharacter calls
+  // requireEditable, which throws on a repo error re-reading the mission's
+  // permission row, or on a not-found). SYSTEM_ACTOR always passes the
+  // authorization check itself, so those are the only two throw paths left
+  // reachable here. This route isn't wrapped in asyncHandler, so an
+  // uncaught throw would become an unhandled rejection and hang the
+  // request instead of hitting the existing { error } response path below.
+  try {
+    const { error: linkError } = await addCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
+    return { error: linkError || null };
+  } catch (error) {
+    return { error };
+  }
 };
 
 const appendCharacterPerks = async ({ characterId, submittedPerks }) => {

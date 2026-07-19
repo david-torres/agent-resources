@@ -30,6 +30,7 @@ const realOffscreen = require('../models/offscreen-mission');
 const realCharacter = require('../models/character');
 const realMission = require('../models/mission');
 const realClass = require('../models/class');
+const { AuthorizationError } = require('../util/errors');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -138,9 +139,14 @@ mock.module('../models/character', () => ({
     error: null,
   }),
 }));
+// Mutable so a single test can force addCharacterToMission to THROW (as the
+// real MissionService.addCharacter now does on a denied/not-found mission via
+// requireEditable) without affecting the other tests in this file, which all
+// share this one mock.module registration.
+let addCharacterToMissionImpl = async () => ({ data: [{}], error: null });
 mock.module('../models/mission', () => ({
   createMission: async () => ({ data: [{ id: 'mission-1' }], error: null }),
-  addCharacterToMission: async () => ({ data: [{}], error: null }),
+  addCharacterToMission: async (...args) => addCharacterToMissionImpl(...args),
 }));
 mock.module('../models/class', () => ({
   getClass: async () => ({ data: { id: 'c1', rules_version: 'v1' }, error: null }),
@@ -191,6 +197,7 @@ afterAll(async () => {
 
 beforeEach(() => {
   insertSeq = 0;
+  addCharacterToMissionImpl = async () => ({ data: [{}], error: null });
   adminTables.characters = [{
     id: CHAR_ID,
     creator_id: PROFILE_ID,
@@ -227,6 +234,48 @@ test('level-up backfilling real missions updates stored commissary_reward', asyn
   // Two success missions at MERX_PER_MISSION_SUCCESS (1) each, no spend → 2.
   expect(stored.commissary_reward).toBe(2);
   expect(stored.completed_missions).toBe(2);
+});
+
+test('level-up backfill returns a graceful error (not a hang) when addCharacterToMission throws', async () => {
+  // As of the mission service seam, MissionService.addCharacter throws
+  // (AuthorizationError or a raw repo error) instead of returning
+  // { error }. The level-up route isn't wrapped in asyncHandler, so an
+  // uncaught throw here previously turned into an unhandled promise
+  // rejection and the request never got a response. Race the request
+  // against a short timeout to prove it resolves instead of hanging.
+  addCharacterToMissionImpl = async () => {
+    throw new AuthorizationError('Mission not found', { reason: 'not_found' });
+  };
+
+  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('request hung')), 2000));
+
+  const res = await Promise.race([
+    fetch(`${baseUrl}/characters/${CHAR_ID}/level-up`, {
+      method: 'POST',
+      headers: {
+        'authorization': 'Bearer valid-jwt',
+        'content-type': 'application/json',
+        'accept': 'application/json',
+      },
+      body: JSON.stringify({
+        level: 2,
+        completed_missions: 1,
+        mission_names: ['Op Charlie'],
+        use_conduit_credit: false,
+        stats: {},
+      }),
+    }),
+    timeout,
+  ]);
+
+  expect(res.status).toBe(403);
+  const body = await res.json();
+  expect(body.error).toBeTruthy();
+
+  // The character row must be untouched — the backfill failed before the
+  // route ever reached the update at the end of the handler.
+  const stored = adminTables.characters.find(c => c.id === CHAR_ID);
+  expect(stored.completed_missions).toBe(0);
 });
 
 test('level-up resolves compounds_with links for newly-added perks', async () => {
