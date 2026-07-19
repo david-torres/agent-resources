@@ -1,6 +1,6 @@
 ---
 id: ar-ezes
-status: open
+status: closed
 deps: []
 links: []
 created: 2026-07-10T21:28:57Z
