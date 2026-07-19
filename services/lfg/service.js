@@ -162,11 +162,15 @@ class LfgService {
         : await this.repo.getCharacterForJoin(characterId);
       if (characterError) return { data: null, error: characterError };
       if (!canJoinAsCharacter(actor, character)) {
+        // Ownership is checked before deceased status, matching the
+        // pre-refactor joinLfgPost ordering: a non-owned, deceased character
+        // must still surface the ownership message, not the deceased one.
+        const ownsCharacter = !!character && actor?.profileId === character.creator_id;
         return {
           data: null,
-          error: character && character.is_deceased
-            ? 'Deceased characters cannot join games'
-            : 'You can only join with your own character'
+          error: !ownsCharacter
+            ? 'You can only join with your own character'
+            : 'Deceased characters cannot join games'
         };
       }
     }

@@ -211,6 +211,15 @@ test('join rejects a deceased character', async () => {
   expect(result.error).toBe('Deceased characters cannot join games');
 });
 
+test('join reports the ownership message (not the deceased message) when a character is both not-owned and deceased', async () => {
+  const repo = makeRepo();
+  repo.getCharacterForJoin = async () => ({ data: { id: 'char-1', creator_id: 'someone-else', is_deceased: true }, error: null });
+  const service = new LfgService(repo);
+  const result = await service.join(CREATOR, { postId: 'post-1', joinType: 'player', characterId: 'char-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toBe('You can only join with your own character');
+});
+
 test('join auto-approves when the joiner is the post creator', async () => {
   const repo = makeRepo();
   const service = new LfgService(repo);

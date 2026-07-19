@@ -3,7 +3,6 @@ const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 const { LfgService } = require('../services/lfg/service');
 const lfgRepository = require('../services/lfg/repository');
-const { actorFromProfile } = require('../util/actor');
 const { AuthorizationError } = require('../util/errors');
 moment.tz.setDefault('UTC');
 
@@ -149,7 +148,9 @@ const getLfgPost = async (id, client = supabase) => {
 // repository (services/lfg/repository.js) is the only lfg consumer of the
 // service-role client. The compatibility functions below remain the
 // route-facing API; mutations take `actor` (built by the caller via
-// actorFromLocals/actorFromProfile, optionally extended with `timezone`).
+// actorFromLocals/buildAgentActor, optionally extended with `timezone`).
+// The agent surface always uses the role-stripped buildAgentActor (no
+// role-based bypass), consistent across all six agent capabilities.
 // Denials throw AuthorizationError.
 const lfgService = new LfgService(lfgRepository);
 
@@ -280,7 +281,7 @@ const getPostForAgent = async ({ agentProfileId, postId }) => {
 
 const createForAgent = async ({ agentProfile, body }) => {
   try {
-    const actor = { ...actorFromProfile(agentProfile), timezone: agentProfile.timezone };
+    const actor = { ...buildAgentActor(agentProfile.id), timezone: agentProfile.timezone };
     const { data, error } = await createLfgPost(actor, body);
     if (error) return { data: null, error };
     return getPostForAgent({ agentProfileId: agentProfile.id, postId: data.id });
@@ -291,7 +292,7 @@ const createForAgent = async ({ agentProfile, body }) => {
 
 const updateForAgent = async ({ agentProfile, postId, body }) => {
   try {
-    const actor = { ...actorFromProfile(agentProfile), timezone: agentProfile.timezone };
+    const actor = { ...buildAgentActor(agentProfile.id), timezone: agentProfile.timezone };
     const { data, error } = await updateLfgPost(actor, postId, body);
     if (error) return { data: null, error };
     return getPostForAgent({ agentProfileId: agentProfile.id, postId });
