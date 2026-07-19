@@ -1,7 +1,10 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { supabase } = require('./_base');
 const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 const { LfgService } = require('../services/lfg/service');
+const lfgRepository = require('../services/lfg/repository');
+const { actorFromProfile } = require('../util/actor');
+const { AuthorizationError } = require('../util/errors');
 moment.tz.setDefault('UTC');
 
 const fetchProfileById = async (profileId, client = supabase) => {
@@ -141,68 +144,41 @@ const getLfgPost = async (id, client = supabase) => {
   return { data: post, error };
 }
 
-// The service instance is constructed after the low-level helpers below. The
-// compatibility functions remain the route-facing API while write decisions
-// live in services/lfg.
-let lfgService;
-const createLfgPost = async (postReq, profile) => lfgService.createPost(postReq, profile);
-const updateLfgPost = async (id, postReq, profile) => lfgService.updatePost(id, postReq, profile);
+// The service instance owns every write decision (authorization, role
+// reconciliation, join-request moderation) independently of Supabase; the
+// repository (services/lfg/repository.js) is the only lfg consumer of the
+// service-role client. The compatibility functions below remain the
+// route-facing API; mutations take `actor` (built by the caller via
+// actorFromLocals/actorFromProfile, optionally extended with `timezone`).
+// Denials throw AuthorizationError.
+const lfgService = new LfgService(lfgRepository);
 
-const deleteLfgPost = async (id, profile) => {
-  const { data: post, error: postError } = await getLfgPost(id, supabaseAdmin);
-  if (postError || !post) return { data: null, error: postError || 'LFG post not found' };
-  if (post.creator_id !== profile.id) return { data: null, error: 'Unauthorized' };
-
-  // authz: creator_id check above + filter below
-  const { data, error } = await supabaseAdmin.from('lfg_posts').delete().eq('id', id).eq('creator_id', profile.id);
-  return { data, error };
-}
-
-const joinLfgPost = async (postId, profileId, joinType, characterId = null, client = supabase) => {
-  if (joinType == 'player' && !characterId) return { data: null, error: 'Character is required for player join' };
-  if (joinType == 'player') {
-    const { data: character, error: characterError } = await client.from('characters').select('*').eq('id', characterId).single();
-    if (characterError) return { data: null, error: characterError };
-    if (character.creator_id !== profileId) return { data: null, error: 'You can only join with your own character' };
-    if (character.is_deceased) return { data: null, error: 'Deceased characters cannot join games' };
+// Converts a thrown AuthorizationError (or any other thrown error) into the
+// same {status, code, message} shape the agent-scoped wrappers have always
+// returned, so agent routes/tests never observe an unhandled rejection.
+const toAgentError = (err) => {
+  if (err instanceof AuthorizationError) {
+    return { status: err.status, code: err.reason || 'forbidden', message: err.message };
   }
-  if (joinType == 'conduit') characterId = null;
-
-  if (joinType === 'conduit') {
-    const { data: approvedConduit } = await supabaseAdmin
-      .from('lfg_join_requests')
-      .select('id')
-      .eq('lfg_post_id', postId)
-      .eq('join_type', 'conduit')
-      .eq('status', 'approved')
-      .limit(1);
-    if (approvedConduit && approvedConduit.length > 0) {
-      return { data: null, error: 'Conduit slot is already filled' };
-    }
+  if (err && typeof err === 'object' && err.status) {
+    return { status: err.status, code: err.code, message: err.message };
   }
+  return { status: 500, code: 'internal_error', message: (err && err.message) || 'Unexpected error' };
+};
 
-  // Auto-approve when the joiner is the post's creator — they're picking a role for their own post.
-  const { data: postRow } = await supabaseAdmin
-    .from('lfg_posts')
-    .select('creator_id')
-    .eq('id', postId)
-    .maybeSingle();
-  const status = postRow?.creator_id === profileId ? 'approved' : 'pending';
+const buildAgentActor = (profileId) => ({ profileId, role: null });
 
-  const joinRequest = {
-    lfg_post_id: postId,
-    profile_id: profileId,
-    join_type: joinType,
-    character_id: characterId,
-    status
-  };
+const createLfgPost = async (actor, postReq) => lfgService.createPost(actor, postReq, { timezone: actor?.timezone });
+const updateLfgPost = async (actor, id, postReq) => lfgService.updatePost(actor, id, postReq, { timezone: actor?.timezone });
+const deleteLfgPost = async (actor, id) => lfgService.deletePost(actor, id);
 
-  // authz: profile_id comes from authenticated session; character ownership verified above for player joins.
-  const { data, error } = await supabaseAdmin.from('lfg_join_requests').insert(joinRequest).select();
-  if (error) return { data, error };
-  if (status === 'approved' && joinType === 'conduit') await syncConduitHostId(postId);
-  return { data, error };
-}
+// Preserves the exact positional signature relied on by routes/lfg.js (which
+// passes the caller's own RLS-scoped `client` for the character-ownership
+// read) and by models/lfg.test.js / models/lfg-agent.test.js. `profileId` is
+// intentionally a bare id here, not an actor object; internally this builds
+// the lightweight actor the policy layer needs.
+const joinLfgPost = async (postId, profileId, joinType, characterId = null, client = supabase) =>
+  lfgService.join(buildAgentActor(profileId), { postId, joinType, characterId, client });
 
 const getLfgJoinRequests = async (postId, client = supabase) => {
   const { data, error } = await client
@@ -230,74 +206,17 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId, client = supab
 // host_id is treated as a denormalized cache of "who is the approved conduit", needed by
 // RLS policies (schema.sql) and by the character-view helper (routes/characters.js).
 // All conduit state changes go through lfg_join_requests; this helper mirrors the result.
-const syncConduitHostId = async (postId) => {
-  const { data: approved } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('profile_id')
-    .eq('lfg_post_id', postId)
-    .eq('join_type', 'conduit')
-    .eq('status', 'approved')
-    .maybeSingle();
-  const newHostId = approved?.profile_id || null;
-  const { error } = await supabaseAdmin
-    .from('lfg_posts')
-    .update({ host_id: newHostId })
-    .eq('id', postId);
-  return { error };
-};
+// Internal denormalization only — no policy check applies (see LfgService.syncConduitHostId).
+const syncConduitHostId = (postId) => lfgService.syncConduitHostId(postId);
 
-const updateJoinRequest = async (requestId, status, postId = null) => {
-  // authz: caller scopes by postId when mutating cross-user requests;
-  // internal callers (createLfgPost/updateLfgPost auto-approve) pass null because they just inserted the request.
-  let query = supabaseAdmin
-    .from('lfg_join_requests')
-    .update({ status })
-    .eq('id', requestId);
-  if (postId) query = query.eq('lfg_post_id', postId);
-  const { data, error } = await query;
-  if (error) return { data, error };
+// Approve/reject a join request. Previously caller-enforced (routes/models
+// checked host-ness before calling); the capability now verifies it itself.
+const updateJoinRequest = async (actor, requestId, status, postId = null) =>
+  lfgService.updateJoinRequest(actor, { requestId, status, postId });
 
-  let resolvedPostId = postId;
-  if (!resolvedPostId) {
-    const { data: row } = await supabaseAdmin
-      .from('lfg_join_requests')
-      .select('lfg_post_id')
-      .eq('id', requestId)
-      .maybeSingle();
-    resolvedPostId = row?.lfg_post_id;
-  }
-  if (resolvedPostId) await syncConduitHostId(resolvedPostId);
-  return { data, error };
-}
-
-const deleteJoinRequest = async (requestId) => {
-  // authz: caller (routes/lfg.js DELETE /:id/join) scopes requestId to the authenticated profile;
-  // also called internally by createLfgPost/updateLfgPost (creator-gated) to clear prior requests.
-  const { data: existing } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('lfg_post_id')
-    .eq('id', requestId)
-    .maybeSingle();
-  const { data, error } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .delete()
-    .eq('id', requestId);
-  if (!error && existing?.lfg_post_id) await syncConduitHostId(existing.lfg_post_id);
-  return { data, error };
-}
-
-// Initial Supabase adapter for the LFG service. Keeping this thin makes the
-// service independently testable and leaves existing model exports intact.
-lfgService = new LfgService({
-  getPost: id => getLfgPost(id, supabaseAdmin),
-  createPost: data => supabaseAdmin.from('lfg_posts').insert(data).select(),
-  updatePost: (id, creatorId, data) => supabaseAdmin
-    .from('lfg_posts').update(data).eq('id', id).eq('creator_id', creatorId).select(),
-  getCreatorRequest: (profileId, postId) => getLfgJoinRequestForUserAndPost(profileId, postId, supabaseAdmin),
-  deleteJoinRequest,
-  joinPost: (postId, profileId, joinType, characterId) =>
-    joinLfgPost(postId, profileId, joinType, characterId, supabaseAdmin)
-});
+// Withdraw/remove a join request (self-leave, or host moderation). Previously
+// caller-enforced; the capability now verifies ownership/moderation itself.
+const deleteJoinRequest = async (actor, requestId) => lfgService.leave(actor, requestId);
 
 const getLfgJoinedPosts = async (profileId, client = supabase) => {
   const { data, error } = await client
@@ -326,6 +245,7 @@ const getLfgJoinedPosts = async (profileId, client = supabase) => {
   return { data: joinedPosts, error: null };
 }
 
+// Not admin: called by util/auth.js with the request's own RLS client.
 const getPendingJoinRequestCount = async (profileId, client = supabase) => {
   const { count, error } = await client
     .from('lfg_join_requests')
@@ -336,347 +256,100 @@ const getPendingJoinRequestCount = async (profileId, client = supabase) => {
 }
 
 // ─── Agent-scoped LFG wrappers ────────────────────────────────────────────────
-
-const closeLfgPost = async (id, profile) => {
-  // I1: Distinguish not-found vs not-host by probing existence first.
-  const { data: existing, error: fetchErr } = await supabaseAdmin
-    .from('lfg_posts')
-    .select('id, creator_id')
-    .eq('id', id)
-    .maybeSingle();
-  if (fetchErr) return { data: null, error: fetchErr };
-  if (!existing) return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
-  if (existing.creator_id !== profile.id) {
-    return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can close this post' } };
-  }
-  const { data, error } = await supabaseAdmin
-    .from('lfg_posts')
-    .update({ status: 'closed', updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('creator_id', profile.id)
-    .select()
-    .maybeSingle();
-  if (error) return { data: null, error };
-  if (!data) return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can close this post' } };
-  return { data, error: null };
-};
-
-const serializePostForAgent = (post, { agentProfileId, includePending }) => {
-  const host = post.creator || post.host || {};
-  const roster = (post.join_requests || [])
-    .filter((r) => r.status === 'approved' && r.join_type === 'player')
-    .map((r) => ({
-      character_id: r.character_id,
-      name: r.character?.name || null,
-      class_name: r.character?.class || null,
-      level: r.character?.level || null,
-      profile_id: r.profile_id,
-      profile_display_name: r.profile?.name || null
-    }));
-  const conduit = (post.join_requests || []).find(
-    (r) => r.status === 'approved' && r.join_type === 'conduit'
-  );
-  const myRequest = (post.join_requests || []).find(
-    (r) => r.profile_id === agentProfileId && r.status !== 'rejected'
-  );
-  const base = {
-    id: post.id,
-    title: post.title,
-    description: post.description,
-    date: post.date,
-    host: { id: host.id, display_name: host.name },
-    max_characters: post.max_characters,
-    is_public: post.is_public,
-    status: post.status,
-    player_count: roster.length,
-    has_conduit: !!conduit,
-    roster,
-    conduit: conduit
-      ? { profile_id: conduit.profile_id, display_name: conduit.profile?.name || null }
-      : null,
-    my_request: myRequest
-      ? { id: myRequest.id, join_type: myRequest.join_type, status: myRequest.status }
-      : null
-  };
-  if (includePending && host.id === agentProfileId) {
-    base.pending_requests = (post.join_requests || [])
-      .filter((r) => r.status === 'pending')
-      .map((r) => ({
-        id: r.id,
-        profile_id: r.profile_id,
-        profile_display_name: r.profile?.name || null,
-        join_type: r.join_type,
-        character: r.character
-          ? { id: r.character.id, name: r.character.name, class_name: r.character.class, level: r.character.level }
-          : null
-      }));
-  }
-  return base;
-};
-
-// I3: Shared helper to rename lfg_join_requests -> join_requests on result rows.
-const normalizeJoinRequests = (rows) => {
-  for (const row of rows) {
-    row.join_requests = row.lfg_join_requests || [];
-    delete row.lfg_join_requests;
-  }
-  return rows;
-};
-
-// Internal: fetch lfg_posts with full joins, filtered by arbitrary column equality + optional status
-const AGENT_POST_SELECT = '*, creator:creator_id(id,name), lfg_join_requests(*, profile:profile_id(id,name), character:character_id(*))';
-
-const getPostsWithRequestsBy = async (filters, { status, dateFrom } = {}) => {
-  let query = supabaseAdmin
-    .from('lfg_posts')
-    .select(AGENT_POST_SELECT);
-  for (const [key, value] of Object.entries(filters)) {
-    query = query.eq(key, value);
-  }
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-  if (dateFrom) {
-    query = query.gte('date', dateFrom);
-  }
-  const { data, error } = await query;
-  if (data) normalizeJoinRequests(data);
-  return { data, error };
-};
-
-// Internal: fetch lfg_posts where the given profile has a non-rejected join request
-const getPostsByJoiner = async (profileId, { status } = {}) => {
-  const { data: requests, error: reqError } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('lfg_post_id')
-    .eq('profile_id', profileId)
-    .neq('status', 'rejected');
-  if (reqError) return { data: null, error: reqError };
-  const ids = (requests || []).map((r) => r.lfg_post_id);
-  if (ids.length === 0) return { data: [], error: null };
-
-  let query = supabaseAdmin
-    .from('lfg_posts')
-    .select(AGENT_POST_SELECT)
-    .in('id', ids);
-  if (status && status !== 'all') {
-    query = query.eq('status', status);
-  }
-  const { data, error } = await query;
-  if (data) normalizeJoinRequests(data);
-  return { data, error };
-};
+// Every wrapper here keeps its historical {data, error} contract (never
+// throws): the underlying service capabilities may throw AuthorizationError
+// on a policy denial, so each wrapper catches and translates via
+// toAgentError, preserving the exact status/code combinations the agent
+// routes and models/lfg-agent.test.js depend on.
 
 const listPostsForAgent = async ({ agentProfileId, scope = 'public', status = 'open' }) => {
-  let rows;
-  let error;
-  if (scope === 'mine') {
-    ({ data: rows, error } = await getPostsWithRequestsBy(
-      { creator_id: agentProfileId },
-      { status }
-    ));
-  } else if (scope === 'joined') {
-    ({ data: rows, error } = await getPostsByJoiner(agentProfileId, { status }));
-  } else {
-    const cutoff = new Date();
-    cutoff.setUTCHours(0, 0, 0, 0);
-    cutoff.setUTCDate(cutoff.getUTCDate() - 14);
-    ({ data: rows, error } = await getPostsWithRequestsBy(
-      { is_public: true },
-      { status, dateFrom: cutoff.toISOString() }
-    ));
+  try {
+    return await lfgService.listForAgent(buildAgentActor(agentProfileId), { scope, status });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-  if (error) return { data: null, error };
-  const projected = (rows || []).map((p) => {
-    const full = serializePostForAgent(p, { agentProfileId, includePending: false });
-    return {
-      id: full.id,
-      title: full.title,
-      date: full.date,
-      host: full.host,
-      max_characters: full.max_characters,
-      is_public: full.is_public,
-      status: full.status,
-      player_count: full.player_count,
-      has_conduit: full.has_conduit,
-      my_request_status: full.my_request?.status || null
-    };
-  });
-  return { data: projected, error: null };
 };
 
 const getPostForAgent = async ({ agentProfileId, postId }) => {
-  const { data: raw, error } = await supabaseAdmin
-    .from('lfg_posts')
-    .select(AGENT_POST_SELECT)
-    .eq('id', postId)
-    .maybeSingle();
-  if (error) return { data: null, error };
-  if (!raw) return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
-  // Normalize lfg_join_requests -> join_requests
-  raw.join_requests = raw.lfg_join_requests || [];
-  delete raw.lfg_join_requests;
-  return {
-    data: serializePostForAgent(raw, { agentProfileId, includePending: true }),
-    error: null
-  };
+  try {
+    return await lfgService.getForAgent(buildAgentActor(agentProfileId), { postId });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
+  }
 };
 
 const createForAgent = async ({ agentProfile, body }) => {
-  const { data, error } = await createLfgPost(body, agentProfile);
-  if (error) return { data: null, error };
-  return getPostForAgent({ agentProfileId: agentProfile.id, postId: data.id });
+  try {
+    const actor = { ...actorFromProfile(agentProfile), timezone: agentProfile.timezone };
+    const { data, error } = await createLfgPost(actor, body);
+    if (error) return { data: null, error };
+    return getPostForAgent({ agentProfileId: agentProfile.id, postId: data.id });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
+  }
 };
 
 const updateForAgent = async ({ agentProfile, postId, body }) => {
-  const { data, error } = await updateLfgPost(postId, body, agentProfile);
-  if (error) {
-    // C2: updateLfgPost returns string errors, not Supabase objects.
-    const msg = typeof error === 'string' ? error : (error.message || '');
-    if (/not found/i.test(msg)) {
-      return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
-    }
-    if (/unauthori[sz]ed/i.test(msg)) {
-      return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can edit this post' } };
-    }
-    return { data: null, error: { status: 500, code: 'update_failed', message: msg || 'Update failed' } };
+  try {
+    const actor = { ...actorFromProfile(agentProfile), timezone: agentProfile.timezone };
+    const { data, error } = await updateLfgPost(actor, postId, body);
+    if (error) return { data: null, error };
+    return getPostForAgent({ agentProfileId: agentProfile.id, postId });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-  return getPostForAgent({ agentProfileId: agentProfile.id, postId });
 };
 
 const closeForAgent = async ({ agentProfileId, postId }) => {
-  const profile = { id: agentProfileId };
-  const { data, error } = await closeLfgPost(postId, profile);
-  if (error) return { data: null, error };
-  return getPostForAgent({ agentProfileId, postId: data.id });
+  try {
+    const { data, error } = await lfgService.closePost(buildAgentActor(agentProfileId), postId);
+    if (error) return { data: null, error };
+    return getPostForAgent({ agentProfileId, postId: data.id });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
+  }
 };
 
 const deleteForAgent = async ({ agentProfile, postId }) => {
-  const { error } = await deleteLfgPost(postId, agentProfile);
-  if (error) {
-    // C2: deleteLfgPost returns string errors, not Supabase objects.
-    const msg = typeof error === 'string' ? error : (error.message || '');
-    if (/not found/i.test(msg)) {
-      return { data: null, error: { status: 404, code: 'not_found', message: 'Post not found' } };
-    }
-    if (/unauthori[sz]ed/i.test(msg)) {
-      return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can delete this post' } };
-    }
-    return { data: null, error: { status: 500, code: 'delete_failed', message: msg || 'Delete failed' } };
+  try {
+    const { error } = await lfgService.deletePost(buildAgentActor(agentProfile.id), postId);
+    if (error) return { data: null, error };
+    return { data: { deleted: true }, error: null };
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-  return { data: { deleted: true }, error: null };
 };
 
 const joinForAgent = async ({ agentProfileId, postId, joinType, characterId }) => {
-  if (joinType === 'player') {
-    if (!characterId) {
-      return { data: null, error: { status: 400, code: 'character_required', message: 'Player joins require a character' } };
-    }
-    const { data: character, error: charErr } = await supabaseAdmin
-      .from('characters')
-      .select('id, creator_id, is_deceased')
-      .eq('id', characterId)
-      .maybeSingle();
-    if (charErr) return { data: null, error: charErr };
-    if (!character || character.creator_id !== agentProfileId || character.is_deceased) {
-      return { data: null, error: { status: 400, code: 'character_ineligible', message: 'Character is deceased or not yours' } };
-    }
+  try {
+    return await lfgService.joinForAgent(buildAgentActor(agentProfileId), { postId, joinType, characterId });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-
-  const { data: existing, error: existingErr } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('id, status')
-    .eq('lfg_post_id', postId)
-    .eq('profile_id', agentProfileId)
-    .maybeSingle();
-  if (existingErr) return { data: null, error: existingErr };
-  if (existing && existing.status !== 'rejected') {
-    return { data: null, error: { status: 409, code: 'duplicate_request', message: 'You already have a request on this post' } };
-  }
-
-  if (joinType === 'conduit') {
-    const { data: conduitRequests, error: conduitErr } = await supabaseAdmin
-      .from('lfg_join_requests')
-      .select('id')
-      .eq('lfg_post_id', postId)
-      .eq('status', 'approved')
-      .eq('join_type', 'conduit')
-      .limit(1);
-    if (conduitErr) return { data: null, error: conduitErr };
-    if (conduitRequests && conduitRequests.length > 0) {
-      return { data: null, error: { status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' } };
-    }
-  }
-
-  const { data: request, error } = await joinLfgPost(postId, agentProfileId, joinType, characterId || null);
-  if (error) return { data: null, error };
-  const { data: post } = await getPostForAgent({ agentProfileId, postId });
-  return { data: { request, post }, error: null };
 };
 
 const leaveForAgent = async ({ agentProfileId, postId }) => {
-  const { data: existing, error: probeErr } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('id, status')
-    .eq('lfg_post_id', postId)
-    .eq('profile_id', agentProfileId)
-    .maybeSingle();
-  if (probeErr) return { data: null, error: probeErr };
-  if (!existing) {
-    // I2: propagate errors from getPostForAgent
-    const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
-    if (postErr) return { data: null, error: postErr };
-    return { data: { deleted: false, post }, error: null };
+  try {
+    return await lfgService.leaveForAgent(buildAgentActor(agentProfileId), { postId });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-  const { error } = await deleteJoinRequest(existing.id);
-  if (error) return { data: null, error };
-  // I2: propagate errors from getPostForAgent
-  const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId });
-  if (postErr) return { data: null, error: postErr };
-  return { data: { deleted: true, post }, error: null };
 };
 
 const updateRequestForAgent = async ({ agentProfileId, requestId, status }) => {
-  if (status !== 'approved' && status !== 'rejected') {
-    return { data: null, error: { status: 400, code: 'invalid_status', message: 'status must be approved or rejected' } };
+  try {
+    return await lfgService.updateRequestForAgent(buildAgentActor(agentProfileId), { requestId, status });
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
   }
-  const { data: req, error: probeErr } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('id, lfg_post_id, post:lfg_post_id(creator_id)')
-    .eq('id', requestId)
-    .maybeSingle();
-  if (probeErr) return { data: null, error: probeErr };
-  if (!req) return { data: null, error: { status: 404, code: 'not_found', message: 'Request not found' } };
-  if (req.post?.creator_id !== agentProfileId) {
-    return { data: null, error: { status: 403, code: 'not_host', message: 'Only the host can update requests on this post' } };
-  }
-  // C1: updateJoinRequest does not .select(), so data is always null on success.
-  // Re-fetch the updated request row directly instead of relying on the update return value.
-  const { error: updateErr } = await updateJoinRequest(requestId, status, req.lfg_post_id);
-  if (updateErr) return { data: null, error: updateErr };
-  const { data: updatedRequest, error: fetchErr } = await supabaseAdmin
-    .from('lfg_join_requests')
-    .select('id, lfg_post_id, profile_id, character_id, join_type, status')
-    .eq('id', requestId)
-    .single();
-  if (fetchErr) return { data: null, error: fetchErr };
-  const { data: post, error: postErr } = await getPostForAgent({ agentProfileId, postId: req.lfg_post_id });
-  if (postErr) return { data: null, error: postErr };
-  return { data: { request: updatedRequest, post }, error: null };
 };
 
 const listEligibleCharactersForAgent = async ({ agentProfileId }) => {
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .select('id, name, class, level')
-    .eq('creator_id', agentProfileId)
-    .eq('is_deceased', false)
-    .order('name', { ascending: true });
-  if (error) return { data: null, error };
-  return {
-    data: (data || []).map((c) => ({ id: c.id, name: c.name, class_name: c.class, level: c.level })),
-    error: null
-  };
+  try {
+    return await lfgService.listEligibleCharactersForAgent(buildAgentActor(agentProfileId));
+  } catch (err) {
+    return { data: null, error: toAgentError(err) };
+  }
 };
 
 module.exports = {
