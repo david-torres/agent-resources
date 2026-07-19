@@ -85,9 +85,9 @@ test('authOptional with a token attaches the user-scoped client', async () => {
   expect(res.locals.supabase.__name).toBe('user');
 });
 
-test('isAgentAuthenticated attaches the admin client', async () => {
+test('isAgentAuthenticated attaches the anon client (agent reads go through *ForAgent repositories, not res.locals.supabase)', async () => {
   const req = makeReq({ 'x-agent-token': 'aat_stub' });
   const res = makeRes();
   await isAgentAuthenticated(req, res, () => {});
-  expect(res.locals.supabase.__name).toBe('admin');
+  expect(res.locals.supabase.__name).toBe('anon');
 });
