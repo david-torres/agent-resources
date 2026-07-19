@@ -528,6 +528,33 @@ describe('closeForAgent', () => {
   });
 });
 
+// ─── updateForAgent (agent surface must not grant an admin-role bypass) ──────
+
+describe('updateForAgent', () => {
+  test('an admin-role agent profile acting on another profile\'s post is blocked, same as delete/close', async () => {
+    const adminAuthId = await createAuthUser(`lfg-test-admin-${Date.now()}@test.invalid`);
+    const adminProfile = await createProfile(adminAuthId, 'Admin Agent');
+    await supabaseAdmin.from('profiles').update({ role: 'admin' }).eq('id', adminProfile.id);
+    try {
+      const { data, error } = await updateForAgent({
+        agentProfile: { ...adminProfile, role: 'admin' },
+        postId: openPost.id,
+        body: { title: 'Hijacked title' }
+      });
+      expect(data).toBeNull();
+      expect(error.status).toBe(403);
+      expect(error.code).toBe('not_host');
+
+      const { data: row } = await supabaseAdmin
+        .from('lfg_posts').select('title').eq('id', openPost.id).single();
+      expect(row.title).not.toBe('Hijacked title');
+    } finally {
+      await supabaseAdmin.from('profiles').delete().eq('id', adminProfile.id);
+      await deleteAuthUser(adminAuthId);
+    }
+  });
+});
+
 // ─── updateRequestForAgent ────────────────────────────────────────────────────
 
 describe('updateRequestForAgent', () => {
