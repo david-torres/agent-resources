@@ -4,6 +4,12 @@
 const { describe, test, expect, beforeEach, afterEach } = require('bun:test');
 const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
+const { actorFromProfile } = require('../util/actor');
+
+// createLfgPost/updateLfgPost now take an actor (built by the caller via
+// actorFromLocals/actorFromProfile) rather than a bare profile row, extended
+// with `timezone` since normalizeLfgInput needs it for date conversion.
+const actorFor = (profile) => ({ ...actorFromProfile(profile), timezone: profile.timezone });
 
 const {
   listPostsForAgent,
@@ -368,13 +374,13 @@ describe('self-join auto-approve', () => {
 describe('createLfgPost host-flag flow', () => {
   test('host_id=on creates+approves a conduit join_request and syncs host_id', async () => {
     const { createLfgPost } = require('./lfg');
-    const { data: post, error } = await createLfgPost({
+    const { data: post, error } = await createLfgPost(actorFor(hostProfile), {
       title: 'Host-flag post',
       description: 'test',
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4,
       host_id: 'on'
-    }, hostProfile);
+    });
     expect(error).toBeNull();
     expect(post).toBeTruthy();
     try {
@@ -398,12 +404,12 @@ describe('createLfgPost host-flag flow', () => {
 
   test('no host_id flag leaves post with no conduit', async () => {
     const { createLfgPost } = require('./lfg');
-    const { data: post, error } = await createLfgPost({
+    const { data: post, error } = await createLfgPost(actorFor(hostProfile), {
       title: 'No-host post',
       description: 'test',
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4
-    }, hostProfile);
+    });
     expect(error).toBeNull();
     try {
       const { data: row } = await supabaseAdmin
@@ -427,13 +433,13 @@ describe('updateLfgPost role reconciliation', () => {
 
   test('setting host_id=on when not yet conduit creates+approves the conduit request', async () => {
     const { updateLfgPost } = require('./lfg');
-    const { error } = await updateLfgPost(openPost.id, {
+    const { error } = await updateLfgPost(actorFor(hostProfile), openPost.id, {
       title: openPost.title,
       description: openPost.description,
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4,
       host_id: 'on'
-    }, hostProfile);
+    });
     expect(error).toBeNull();
 
     const { data: req } = await supabaseAdmin
@@ -456,13 +462,13 @@ describe('updateLfgPost role reconciliation', () => {
     await supabaseAdmin.from('lfg_posts').update({ host_id: hostProfile.id }).eq('id', openPost.id);
 
     const { updateLfgPost } = require('./lfg');
-    const { error } = await updateLfgPost(openPost.id, {
+    const { error } = await updateLfgPost(actorFor(hostProfile), openPost.id, {
       title: 'Edited title',
       description: openPost.description,
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4
       // note: no host_id field at all
-    }, hostProfile);
+    });
     expect(error).toBeNull();
 
     const { data: req } = await supabaseAdmin

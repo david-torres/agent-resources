@@ -22,6 +22,8 @@ const { getOwnCharacters } = require('../models/character');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { statList } = require('../util/enclave-consts');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -76,15 +78,16 @@ router.get('/new', isAuthenticated, async (req, res) => {
   res.render('partials/lfg-form', { layout: false, isNew: true, profile, characters });
 });
 
-router.post('/', isAuthenticated, async (req, res) => {
+router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
-  const { data, error } = await createLfgPost(req.body, profile);
+  const actor = { ...actorFromLocals(res.locals), timezone: profile.timezone };
+  const { data, error } = await createLfgPost(actor, req.body);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/lfg').send();
   }
-});
+}));
 
 router.get('/:id', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -137,25 +140,26 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   }
 });
 
-router.put('/:id', isAuthenticated, async (req, res) => {
+router.put('/:id', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
-  const { data, error } = await updateLfgPost(req.params.id, req.body, profile);
+  const actor = { ...actorFromLocals(res.locals), timezone: profile.timezone };
+  const { data, error } = await updateLfgPost(actor, req.params.id, req.body);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', `/lfg`).send();
   }
-});
+}));
 
-router.delete('/:id', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
-  const { data, error } = await deleteLfgPost(req.params.id, profile);
+router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { data, error } = await deleteLfgPost(actor, req.params.id);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/lfg').send();
   }
-});
+}));
 
 router.get('/:id/join', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -199,7 +203,7 @@ router.get('/:id/requests', isAuthenticated, async (req, res) => {
   }
 });
 
-router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
+router.put('/:id/requests/:requestId', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { data: post, error: postError } = await getLfgPost(req.params.id, res.locals.supabase);
 
@@ -210,21 +214,23 @@ router.put('/:id/requests/:requestId', isAuthenticated, async (req, res) => {
     return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
   }
 
+  const actor = actorFromLocals(res.locals);
   const { status } = req.body;
-  const { data, error } = await updateJoinRequest(req.params.requestId, status, req.params.id);
+  const { data, error } = await updateJoinRequest(actor, req.params.requestId, status, req.params.id);
   if (error) {
     return sendError(req, res, error);
   } else {
     res.send('Request updated successfully');
   }
-});
+}));
 
-router.delete('/:id/join', isAuthenticated, async (req, res) => {
+router.delete('/:id/join', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const actor = actorFromLocals(res.locals);
 
   const { data: request } = await getLfgJoinRequestForUserAndPost(profile.id, req.params.id, res.locals.supabase);
   if (request) {
-    const { error } = await deleteJoinRequest(request.id);
+    const { error } = await deleteJoinRequest(actor, request.id);
     if (error) {
       return sendError(req, res, error, { message: 'Failed to unjoin' });
     }
@@ -240,7 +246,7 @@ router.delete('/:id/join', isAuthenticated, async (req, res) => {
     return res.header('HX-Location', `/lfg`).send();
   }
   return sendError(req, res, null, { status: 400, message: 'No join request found' });
-});
+}));
 
 router.get('/events/all', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
