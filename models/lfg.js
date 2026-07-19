@@ -167,6 +167,11 @@ const toAgentError = (err) => {
   return { status: 500, code: 'internal_error', message: (err && err.message) || 'Unexpected error' };
 };
 
+// role is intentionally always null here (never the profile's real role):
+// the lfg agent surface authorizes purely on ownership/host checks, with no
+// admin bypass. This is a deliberate divergence from the class/character
+// agent-read actor (routes/agent.js getActorContext), which preserves the
+// real role to honor that domain's per-role read-visibility contract.
 const buildAgentActor = (profileId) => ({ profileId, role: null });
 
 const createLfgPost = async (actor, postReq) => lfgService.createPost(actor, postReq, { timezone: actor?.timezone });

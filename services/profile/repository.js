@@ -12,9 +12,21 @@ const withResult = async (query) => {
   return { data, error: null };
 };
 
+// Like withResult, but silent on PGRST116 (row-not-found): fetchOwnProfile hits
+// this on every first sign-in (models/profile.js getProfile provisions a new
+// profile in that branch), so logging it is expected-noise, not an error.
+const withResultQuiet404 = async (query) => {
+  const { data, error } = await query;
+  if (error) {
+    if (error.code !== 'PGRST116') console.error(error);
+    return { data: null, error };
+  }
+  return { data, error: null };
+};
+
 module.exports = {
   // Reads
-  fetchOwnProfile: (userId) => withResult(
+  fetchOwnProfile: (userId) => withResultQuiet404(
     supabaseAdmin.from('profiles').select('*').eq('user_id', userId).single()
   ),
   fetchStarterUnlockRows: (userId) => withResult(
