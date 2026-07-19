@@ -8,10 +8,13 @@
 // some other auto_calculate save re-derived it. The route must re-derive all of
 // level/completed_missions/commissary_reward from the resulting rows.
 //
-// We run the REAL isAuthenticated middleware and the REAL route handler against
-// a mocked data layer (mirroring routes/missions.test.js), with an in-memory
-// `_base` fake (mirroring models/character-update.test.js) so the route's
-// supabaseAdmin-backed character update writes to an inspectable store.
+// We run the REAL isAuthenticated middleware and the REAL route handler, the
+// REAL models/character.js, and the REAL CharacterService (services/character/
+// service.js) — the only fake at this level is services/character/repository,
+// which this file replaces with a small in-memory fake standing in for
+// supabaseAdmin. This keeps the level-up orchestration (backfill missions,
+// credit spend, re-derivation, perk-append) under real regression coverage
+// while avoiding a join-capable Postgres fake.
 const { test, expect, mock, beforeAll, afterAll, beforeEach } = require('bun:test');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
@@ -27,85 +30,19 @@ const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
-const realCharacter = require('../models/character');
 const realMission = require('../models/mission');
 const realClass = require('../models/class');
+const realCharacterRepository = require('../services/character/repository');
 const { AuthorizationError } = require('../util/errors');
+const { SYSTEM_ACTOR } = require('../util/actor');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
 
-// Monotonic id source for the in-memory fake's inserts (models gen_random_uuid).
-let insertSeq = 0;
-
-// In-memory admin store holding the character row the route updates. Kept as a
-// stable reference (the _base mock closes over it at require time); beforeEach
-// mutates `.characters` rather than reassigning so the closure stays valid.
-const adminTables = { characters: [] };
-
-// Minimal chainable PostgREST-shaped fake (subset of character-update.test.js's
-// makeClient) — enough for update().eq().eq().select().single() and reads.
-const makeClient = (tables) => ({
-  from(table) {
-    const filters = [];
-    let writeKind = null;
-    let writePayload = null;
-    const applyFilters = (rows) => rows.filter(r => filters.every(([col, val]) => r[col] === val));
-    const settleRead = () => ({ data: applyFilters(tables[table] ?? []), error: null });
-    const settleWrite = () => {
-      const all = tables[table] ?? [];
-      if (writeKind === 'update') {
-        const updated = [];
-        tables[table] = all.map(r => {
-          if (filters.every(([c, v]) => r[c] === v)) {
-            const next = { ...r, ...writePayload };
-            updated.push(next);
-            return next;
-          }
-          return r;
-        });
-        return { data: updated, error: null };
-      }
-      if (writeKind === 'insert') {
-        const raw = Array.isArray(writePayload) ? writePayload : [writePayload];
-        // Model gen_random_uuid(): rows without an id get a generated one.
-        const rows = raw.map(r => (r && r.id == null ? { ...r, id: `gen-${++insertSeq}` } : r));
-        tables[table] = [...all, ...rows];
-        return { data: rows, error: null };
-      }
-      return settleRead();
-    };
-    const settle = () => (writeKind ? settleWrite() : settleRead());
-    const chain = {
-      select() { return chain; },
-      eq(col, val) { filters.push([col, val]); return chain; },
-      order() { return chain; },
-      limit() { return chain; },
-      update(payload) { writeKind = 'update'; writePayload = payload; return chain; },
-      insert(payload) { writeKind = 'insert'; writePayload = payload; return chain; },
-      single() {
-        const { data } = settle();
-        const rows = Array.isArray(data) ? data : (data == null ? [] : [data]);
-        if (rows.length !== 1) {
-          return Promise.resolve({ data: null, error: { code: 'PGRST116', message: 'no/multiple rows' } });
-        }
-        return Promise.resolve({ data: rows[0], error: null });
-      },
-      maybeSingle() {
-        const { data } = settle();
-        const row = Array.isArray(data) ? (data[0] ?? null) : data;
-        return Promise.resolve({ data: row, error: null });
-      },
-      then(onF, onR) { return Promise.resolve(settle()).then(onF, onR); }
-    };
-    return chain;
-  }
-});
-
 mock.module('../models/_base', () => ({
-  supabase: makeClient({}),
-  supabaseAdmin: makeClient(adminTables),
-  createUserClient: () => makeClient({}),
+  supabase: { from: () => { throw new Error('unexpected supabase call in level-up test'); } },
+  supabaseAdmin: { from: () => { throw new Error('unexpected supabaseAdmin call in level-up test'); } },
+  createUserClient: () => ({}),
   anonKey: 'test-anon-key',
 }));
 
@@ -117,28 +54,6 @@ mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
 }));
 
-mock.module('../models/character', () => ({
-  // Consumed by the route under test:
-  getCharacter: async () => ({
-    data: {
-      id: CHAR_ID,
-      creator_id: PROFILE_ID,
-      name: 'Tango',
-      level: 1,
-      completed_missions: 0,
-      commissary_reward: 0,
-      class_id: 'c1',
-      gear: [],
-      common_items: [],
-    },
-    error: null,
-  }),
-  // After backfilling 2 success missions, derivation reads them back:
-  getCharacterRealMissionsForDerivation: async () => ({
-    data: [{ outcome: 'success' }, { outcome: 'success' }],
-    error: null,
-  }),
-}));
 // Mutable so a single test can force addCharacterToMission to THROW (as the
 // real MissionService.addCharacter now does on a denied/not-found mission via
 // requireEditable) without affecting the other tests in this file, which all
@@ -148,8 +63,92 @@ mock.module('../models/mission', () => ({
   createMission: async () => ({ data: [{ id: 'mission-1' }], error: null }),
   addCharacterToMission: async (...args) => addCharacterToMissionImpl(...args),
 }));
+// Re-require AFTER the mock.module registration above so this file's own
+// direct calls (inside the repository fake below) resolve to the fakes too.
+const { createMission: fakeCreateMission, addCharacterToMission: fakeAddCharacterToMission } = require('../models/mission');
+
 mock.module('../models/class', () => ({
   getClass: async () => ({ data: { id: 'c1', rules_version: 'v1' }, error: null }),
+  getClasses: async () => ({ data: [], error: null }),
+  // Not exercised by the level-up flow, but models/character.js composes it
+  // into the CharacterService adapter unconditionally at module load time.
+  buildClassContentLookupMaps: async () => ({
+    gearNameToClassId: new Map(),
+    gearNameToDescription: new Map(),
+    abilityNameToClassId: new Map(),
+    abilityNameToDescription: new Map()
+  }),
+}));
+
+// In-memory state the repository fake below operates on directly (plain JS,
+// no Postgres/PostgREST chain needed at this boundary) — reset in beforeEach.
+let characterRow;
+let classAbilities;
+let characterPerks;
+let backfilledMissions;
+let perkIdSeq;
+
+mock.module('../services/character/repository', () => ({
+  getCharacter: async () => ({ data: { ...characterRow }, error: null }),
+  fetchCharacterOwnership: async () => ({ data: { ...characterRow }, error: null }),
+  updateOwnedFields: async ({ fields }) => {
+    Object.assign(characterRow, fields);
+    return { data: { ...characterRow }, error: null };
+  },
+  deleteCharacter: async () => ({ data: null, error: null }),
+  setDeceased: async () => ({ data: [{ ...characterRow, is_deceased: true }], error: null }),
+  updateClass: async () => ({ data: [{ ...characterRow }], error: null }),
+  getRealMissions: async () => ({ data: [...backfilledMissions], error: null }),
+  listOffscreenMissions: async () => ({ data: [], error: null }),
+  getClassRulesVersion: async () => ({ data: 'v1', error: null }),
+  fetchAllowedAbilityIds: async () => ({ data: classAbilities.map(a => ({ id: a.id })), error: null }),
+  fetchExistingPerks: async () => ({ data: characterPerks.map(p => ({ ...p })), error: null }),
+  insertPerks: async (rows) => {
+    for (const row of rows) {
+      characterPerks.push({ id: `perk-${++perkIdSeq}`, compounds_with: null, ...row });
+    }
+    return { error: null };
+  },
+  updatePerkLinks: async (updates) => {
+    for (const u of updates) {
+      const perk = characterPerks.find(p => p.id === u.id);
+      if (perk) perk.compounds_with = u.compounds_with;
+    }
+    return { error: null };
+  },
+  // Mirrors services/character/repository.js#createBackfillMission, using
+  // this file's (possibly test-overridden) mission mocks — preserves the
+  // throw-regression coverage below.
+  createBackfillMission: async ({ characterId, name, profileId }) => {
+    const { data: missionRows, error: missionError } = await fakeCreateMission(SYSTEM_ACTOR, {
+      name,
+      date: new Date().toISOString(),
+      outcome: 'success',
+      is_public: false,
+      creator_id: profileId
+    });
+    if (missionError) return { error: missionError };
+    const mission = Array.isArray(missionRows) ? missionRows[0] : missionRows;
+    if (!mission) return { error: { status: 400, message: 'Mission creation returned no rows' } };
+    try {
+      const { error: linkError } = await fakeAddCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
+      if (linkError) return { error: linkError };
+      backfilledMissions.push({ outcome: 'success' });
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
+  },
+  getAvailableHostedMissions: async () => ({ data: [], error: null }),
+  createOffscreenMissionRow: async () => ({ data: {}, error: null }),
+  // Unused by the level-up flow but required by CharacterService's adapter
+  // validation / other CharacterService capabilities.
+  createCharacterRow: async () => ({ data: [{}], error: null }),
+  updateCharacterRow: async () => ({ data: [{}], error: null }),
+  getChildRows: async () => ({ data: [], error: null }),
+  insertChildRows: async () => ({ data: true, error: null }),
+  updateChildRow: async () => ({ data: true, error: null }),
+  deleteChildRows: async () => ({ data: true, error: null })
 }));
 
 mock.module('../models/offscreen-mission', () => ({
@@ -175,6 +174,7 @@ let baseUrl;
 
 beforeAll(async () => {
   delete require.cache[require.resolve('./characters')];
+  delete require.cache[require.resolve('../models/character')];
   const app = express();
   app.use(express.json());
   app.use('/characters', require('./characters'));
@@ -190,15 +190,17 @@ afterAll(async () => {
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
-  mock.module('../models/character', () => realCharacter);
   mock.module('../models/mission', () => realMission);
   mock.module('../models/class', () => realClass);
+  mock.module('../services/character/repository', () => realCharacterRepository);
+  delete require.cache[require.resolve('./characters')];
+  delete require.cache[require.resolve('../models/character')];
 });
 
 beforeEach(() => {
-  insertSeq = 0;
   addCharacterToMissionImpl = async () => ({ data: [{}], error: null });
-  adminTables.characters = [{
+  perkIdSeq = 0;
+  characterRow = {
     id: CHAR_ID,
     creator_id: PROFILE_ID,
     name: 'Tango',
@@ -206,9 +208,10 @@ beforeEach(() => {
     completed_missions: 0,
     commissary_reward: 0,
     class_id: 'c1',
-  }];
-  adminTables.class_abilities = [{ id: 'ab1', character_id: CHAR_ID, class_id: 'c1', name: 'Blink' }];
-  adminTables.character_perks = [];
+  };
+  classAbilities = [{ id: 'ab1', character_id: CHAR_ID, class_id: 'c1', name: 'Blink' }];
+  characterPerks = [];
+  backfilledMissions = [];
 });
 
 test('level-up backfilling real missions updates stored commissary_reward', async () => {
@@ -230,19 +233,17 @@ test('level-up backfilling real missions updates stored commissary_reward', asyn
 
   expect(res.status).toBe(200);
 
-  const stored = adminTables.characters.find(c => c.id === CHAR_ID);
   // Two success missions at MERX_PER_MISSION_SUCCESS (1) each, no spend → 2.
-  expect(stored.commissary_reward).toBe(2);
-  expect(stored.completed_missions).toBe(2);
+  expect(characterRow.commissary_reward).toBe(2);
+  expect(characterRow.completed_missions).toBe(2);
 });
 
 test('level-up backfill returns a graceful error (not a hang) when addCharacterToMission throws', async () => {
   // As of the mission service seam, MissionService.addCharacter throws
   // (AuthorizationError or a raw repo error) instead of returning
-  // { error }. The level-up route isn't wrapped in asyncHandler, so an
-  // uncaught throw here previously turned into an unhandled promise
-  // rejection and the request never got a response. Race the request
-  // against a short timeout to prove it resolves instead of hanging.
+  // { error }. The level-up route/service isn't shielded from that any other
+  // way than the repository's own try/catch, so this proves it resolves
+  // gracefully instead of hanging on an unhandled rejection.
   addCharacterToMissionImpl = async () => {
     throw new AuthorizationError('Mission not found', { reason: 'not_found' });
   };
@@ -273,14 +274,13 @@ test('level-up backfill returns a graceful error (not a hang) when addCharacterT
   expect(body.error).toBeTruthy();
 
   // The character row must be untouched — the backfill failed before the
-  // route ever reached the update at the end of the handler.
-  const stored = adminTables.characters.find(c => c.id === CHAR_ID);
-  expect(stored.completed_missions).toBe(0);
+  // route/service ever reached the update at the end of the handler.
+  expect(characterRow.completed_missions).toBe(0);
 });
 
 test('level-up resolves compounds_with links for newly-added perks', async () => {
   // An existing perk the new perks can compound with.
-  adminTables.character_perks = [
+  characterPerks = [
     { id: 'perk-existing', character_id: CHAR_ID, class_ability_id: 'ab1', text: 'Base perk', position: 0, compounds_with: null },
   ];
 
@@ -306,10 +306,9 @@ test('level-up resolves compounds_with links for newly-added perks', async () =>
 
   expect(res.status).toBe(200);
 
-  const perks = adminTables.character_perks.filter(p => p.character_id === CHAR_ID);
-  const base = perks.find(p => p.text === 'Base perk');
-  const a = perks.find(p => p.text === 'Compounds with base');
-  const b = perks.find(p => p.text === 'Chains off A');
+  const base = characterPerks.find(p => p.text === 'Base perk');
+  const a = characterPerks.find(p => p.text === 'Compounds with base');
+  const b = characterPerks.find(p => p.text === 'Chains off A');
 
   expect(a).toBeTruthy();
   expect(b).toBeTruthy();

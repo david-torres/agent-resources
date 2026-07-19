@@ -133,12 +133,14 @@ mock.module('./_base', () => ({
 // loaded it with the real `_base`. Bust the cache so this require re-executes
 // `character.js` with the mocked `_base` in place.
 delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 const { getCharacter, getCharacterForAgent } = require('./character');
 
 afterAll(() => {
   mock.module('./_base', () => realBase);
   // Restore the real character.js for any later test file that loads it.
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('getCharacter returns traits/gear/abilities even when anon client is RLS-blocked', async () => {
@@ -225,6 +227,7 @@ test('createCharacter preserves v2 fields when linked class is v2', async () => 
     createUserClient: () => fakeAdminV2
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { createCharacter } = require('./character');
 
   const payload = {
@@ -252,6 +255,7 @@ test('createCharacter preserves v2 fields when linked class is v2', async () => 
     createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('createCharacter strips v1-only fields (perks, additional_gear) when class is v2', async () => {
@@ -262,6 +266,7 @@ test('createCharacter strips v1-only fields (perks, additional_gear) when class 
     createUserClient: () => fakeAdminV2
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { createCharacter } = require('./character');
 
   const payload = {
@@ -282,6 +287,7 @@ test('createCharacter strips v1-only fields (perks, additional_gear) when class 
     anonKey: 'test-anon-key', createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('createCharacter keeps v1 free-text perks when class is v1', async () => {
@@ -306,6 +312,7 @@ test('createCharacter remaps create-form perks (referenced by ability name) with
     createUserClient: () => fakeAdminV2
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { createCharacter } = require('./character');
 
   // No `abilities` key: classAbilities is undefined so setCharacterAbilities is
@@ -328,6 +335,7 @@ test('createCharacter remaps create-form perks (referenced by ability name) with
     anonKey: 'test-anon-key', createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('createCharacter rejects v2 perks that violate validation', async () => {
@@ -338,6 +346,7 @@ test('createCharacter rejects v2 perks that violate validation', async () => {
     createUserClient: () => fakeAdminV2
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { createCharacter } = require('./character');
 
   const longText = Array.from({ length: 26 }, (_, i) => `w${i}`).join(' ');
@@ -357,6 +366,7 @@ test('createCharacter rejects v2 perks that violate validation', async () => {
     anonKey: 'test-anon-key', createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('getCharacter attaches ability_perks for v2 characters', async () => {
@@ -385,6 +395,7 @@ test('getCharacter attaches ability_perks for v2 characters', async () => {
     };
   });
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { getCharacter } = require('./character');
   const { data, error } = await getCharacter('char-uuid-1');
   expect(error).toBeFalsy();
@@ -398,6 +409,7 @@ test('getCharacter attaches ability_perks for v2 characters', async () => {
     anonKey: 'test-anon-key', createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('getCharacter rewrites compounds_with UUIDs into position-N sentinels', async () => {
@@ -427,6 +439,7 @@ test('getCharacter rewrites compounds_with UUIDs into position-N sentinels', asy
     };
   });
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
   const { getCharacter } = require('./character');
   const { data } = await getCharacter('char-uuid-1');
   const perks = data.ability_perks;
@@ -441,6 +454,7 @@ test('getCharacter rewrites compounds_with UUIDs into position-N sentinels', asy
     anonKey: 'test-anon-key', createUserClient: () => fakeAnon
   }));
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 test('serializeCharacterForAgent omits v2 fields on v1 characters', () => {

@@ -12,16 +12,18 @@ const {
   getCharacterRecentMissions,
   searchPublicCharacters,
   getRandomPublicCharacters,
-  getCharacterRealMissionsForDerivation,
   upgradeCharacterClass,
+  updateCharacterStats,
+  levelUpCharacter,
   findUpgradeTargetsFor
 } = require('../models/character');
-const { getMission, createMission, addCharacterToMission } = require('../models/mission');
-const { SYSTEM_ACTOR } = require('../util/actor');
+const characterRepository = require('../services/character/repository');
+const { getMission } = require('../models/mission');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getLfgPost } = require('../models/lfg');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
-const { supabaseAdmin } = require('../models/_base');
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -32,7 +34,6 @@ const { renderMarkdown } = require('../util/markdown');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
-const { validateAbilityPerks } = require('../util/validate');
 
 const asArray = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
 
@@ -74,194 +75,17 @@ const parseInteger = (value, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
-const normalizeStatsPayload = (body = {}) => {
-  const out = {};
-  for (const stat of statList) {
-    const n = parseInteger(body[stat], 0);
-    out[stat] = Math.max(0, Math.min(20, n));
-  }
-  return out;
-};
-
-const getOwnedCharacterForMutation = async ({ characterId, profile }) => {
-  const { data: character, error } = await getCharacter(characterId, supabaseAdmin);
-  if (error) return { character: null, error };
-  if (!character) return { character: null, error: { status: 404, message: 'Character not found' } };
-  if (character.creator_id !== profile.id) {
-    return { character: null, error: { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND } };
-  }
-  return { character, error: null };
-};
-
+// Renders a service-returned { status, title, message }-shaped error (or a
+// plain Error/string) with the appropriate status — the equivalent of
+// passing a pre-classified shape through as sendError's `opts`. Kept at the
+// route layer (not an admin site) for the stats/level-up capabilities' business-
+// rule errors (insufficient credits, name mismatch, perk validation, ...);
+// the ownership/authorization gate itself throws and is handled by asyncHandler.
 const sendRouteError = (req, res, error) => {
   if (error && (error.status != null || error.title)) {
     return sendError(req, res, null, error);
   }
   return sendError(req, res, error);
-};
-
-const updateOwnedCharacterFields = async ({ characterId, profileId, fields }) => {
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .update(fields)
-    .eq('id', characterId)
-    .eq('creator_id', profileId)
-    .select()
-    .single();
-  if (error) return { data: null, error };
-  if (!data) return { data: null, error: { status: 404, message: 'Character update returned no rows' } };
-  return { data, error: null };
-};
-
-// Internal, non-user-triggered mission creation (the level-up backfill flow
-// synthesizes a mission for missions the character logged before the app
-// tracked them). Uses SYSTEM_ACTOR — not the acting profile — so the new
-// addCharacter authorization gate can't reject this internal link; creator_id
-// is still set explicitly so the mission shows up under the user's own missions.
-const createBackfillMissionForCharacter = async ({ characterId, name, profile }) => {
-  const { data: missionRows, error: missionError } = await createMission(SYSTEM_ACTOR, {
-    name,
-    date: new Date().toISOString(),
-    outcome: 'success',
-    is_public: false,
-    creator_id: profile.id
-  });
-  if (missionError) return { error: missionError };
-  const mission = Array.isArray(missionRows) ? missionRows[0] : missionRows;
-  if (!mission) return { error: { status: 400, message: 'Mission creation returned no rows' } };
-  // addCharacterToMission can now THROW (MissionService.addCharacter calls
-  // requireEditable, which throws on a repo error re-reading the mission's
-  // permission row, or on a not-found). SYSTEM_ACTOR always passes the
-  // authorization check itself, so those are the only two throw paths left
-  // reachable here. This route isn't wrapped in asyncHandler, so an
-  // uncaught throw would become an unhandled rejection and hang the
-  // request instead of hitting the existing { error } response path below.
-  try {
-    const { error: linkError } = await addCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
-    return { error: linkError || null };
-  } catch (error) {
-    return { error };
-  }
-};
-
-const appendCharacterPerks = async ({ characterId, submittedPerks }) => {
-  if (!Array.isArray(submittedPerks) || submittedPerks.length === 0) {
-    return { error: null };
-  }
-
-  const { data: abilities, error: abilityError } = await supabaseAdmin
-    .from('class_abilities')
-    .select('id')
-    .eq('character_id', characterId);
-  if (abilityError) return { error: abilityError };
-  const allowedAbilityIds = new Set((abilities || []).map(a => a.id));
-
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('character_perks')
-    .select('id, class_ability_id, text, position')
-    .eq('character_id', characterId);
-  if (existingError) return { error: existingError };
-
-  const existingCounts = new Map();
-  // id -> ability, so a new perk may only compound with an existing perk on the
-  // SAME ability (mirrors resolveCompoundLinks in the full edit-form path).
-  const abilityByExistingPerkId = new Map();
-  const existingForValidation = (existing || []).map(p => {
-    const pos = parseInteger(p.position, 0);
-    existingCounts.set(p.class_ability_id, Math.max(existingCounts.get(p.class_ability_id) ?? -1, pos));
-    abilityByExistingPerkId.set(p.id, p.class_ability_id);
-    return {
-      class_ability_id: p.class_ability_id,
-      text: p.text,
-      position: pos
-    };
-  });
-
-  // Build insert rows. `meta` runs parallel to `rows`, carrying each new perk's
-  // client `ref` and its requested compound link so we can resolve links after
-  // the rows (and their ids) exist.
-  const rows = [];
-  const meta = [];
-  for (const p of submittedPerks) {
-    if (!p || typeof p !== 'object') continue;
-    const classAbilityId = p.class_ability_id;
-    const text = typeof p.text === 'string' ? p.text.trim() : '';
-    if (!classAbilityId || !allowedAbilityIds.has(classAbilityId) || !text) continue;
-    const nextPosition = (existingCounts.get(classAbilityId) ?? -1) + 1;
-    existingCounts.set(classAbilityId, nextPosition);
-    rows.push({
-      character_id: characterId,
-      class_ability_id: classAbilityId,
-      text,
-      position: nextPosition
-    });
-    meta.push({
-      ref: typeof p.ref === 'string' ? p.ref : null,
-      compoundsWith: p.compounds_with == null ? null : String(p.compounds_with)
-    });
-  }
-
-  if (rows.length === 0) return { error: null };
-
-  const validation = validateAbilityPerks(existingForValidation.concat(rows));
-  if (!validation.ok) {
-    return { error: { status: 400, message: validation.errors.join(' ') } };
-  }
-
-  const { error } = await supabaseAdmin.from('character_perks').insert(rows);
-  if (error) return { error };
-
-  // Re-read the rows to recover server-assigned ids. We match by
-  // (class_ability_id, position) — each new perk got a unique position above —
-  // rather than relying on insert-return ordering.
-  const { data: current, error: selError } = await supabaseAdmin
-    .from('character_perks')
-    .select('id, class_ability_id, position')
-    .eq('character_id', characterId);
-  if (selError) return { error: selError };
-  const idByKey = new Map((current || []).map(r => [`${r.class_ability_id}:${parseInteger(r.position, 0)}`, r.id]));
-  const keyOf = (row) => `${row.class_ability_id}:${row.position}`;
-
-  // ref -> { id, class_ability_id } for perks inserted in this batch.
-  const insertedByRef = new Map();
-  for (let i = 0; i < rows.length; i++) {
-    if (!meta[i].ref) continue;
-    insertedByRef.set(meta[i].ref, { id: idByKey.get(keyOf(rows[i])), class_ability_id: rows[i].class_ability_id });
-  }
-
-  // Resolve each new perk's compound link. A link is either `new:<ref>` (another
-  // perk inserted in this batch) or an existing perk UUID. The target must be on
-  // the same ability and not the perk itself; anything else resolves to null.
-  const linkUpdates = [];
-  for (let i = 0; i < rows.length; i++) {
-    const link = meta[i].compoundsWith;
-    if (!link) continue;
-    const rowId = idByKey.get(keyOf(rows[i]));
-    if (!rowId) continue;
-
-    let target = null;
-    if (link.startsWith('new:')) {
-      const ref = link.slice('new:'.length);
-      const cand = insertedByRef.get(ref);
-      if (cand) target = { id: cand.id, class_ability_id: cand.class_ability_id };
-    } else if (abilityByExistingPerkId.has(link)) {
-      target = { id: link, class_ability_id: abilityByExistingPerkId.get(link) };
-    }
-
-    if (target && target.id && target.id !== rowId && target.class_ability_id === rows[i].class_ability_id) {
-      linkUpdates.push({ id: rowId, compounds_with: target.id });
-    }
-  }
-
-  for (const u of linkUpdates) {
-    const { error: updError } = await supabaseAdmin
-      .from('character_perks')
-      .update({ compounds_with: u.compounds_with })
-      .eq('id', u.id);
-    if (updError) return { error: updError };
-  }
-
-  return { error: null };
 };
 
 // Helper to filter class lists/lookup maps by user's unlocked classes
@@ -629,8 +453,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     }
 
     const [missionsRes, offscreenRes] = await Promise.all([
-      getCharacterRealMissionsForDerivation(id, supabaseAdmin),
-      listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
+      characterRepository.getRealMissions(id),
+      characterRepository.listOffscreenMissions(id)
     ]);
     const derived = deriveCharacterTotals({
       character,
@@ -695,8 +519,8 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   let derived = { completed_missions: 0, commissary_reward: 0, level: 1 };
   if (on) {
     const [missionsRes, offscreenRes] = await Promise.all([
-      getCharacterRealMissionsForDerivation(id, supabaseAdmin),
-      listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
+      characterRepository.getRealMissions(id),
+      characterRepository.listOffscreenMissions(id)
     ]);
     if (missionsRes.error || offscreenRes.error) {
       return sendError(req, res, null, { status: 503, message: 'Failed to load mission data' });
@@ -1309,155 +1133,34 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
   }
 });
 
-router.patch('/:id/stats', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.patch('/:id/stats', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
-  const { character, error: charError } = await getOwnedCharacterForMutation({ characterId: id, profile });
-  if (charError) return sendRouteError(req, res, charError);
 
-  const stats = normalizeStatsPayload(req.body || {});
-  const { data, error } = await updateOwnedCharacterFields({
-    characterId: id,
-    profileId: profile.id,
-    fields: stats
-  });
-  if (error) return sendError(req, res, error);
-  return res.status(200).json({
-    character: {
-      id: data.id,
-      name: data.name || character.name,
-      stats: Object.fromEntries(statList.map(stat => [stat, data[stat] ?? stats[stat]]))
-    }
-  });
-});
+  // updateStats throws AuthorizationError (caught by asyncHandler) when the
+  // actor may not mutate this character; everything else it returns as
+  // { data, error } for sendRouteError to render (matching the pre-service
+  // behavior of getOwnedCharacterForMutation/updateOwnedCharacterFields).
+  const { data, error } = await updateCharacterStats(actor, id, req.body || {});
+  if (error) return sendRouteError(req, res, error);
+  return res.status(200).json({ character: data });
+}));
 
-router.post('/:id/level-up', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/level-up', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
-  const body = req.body || {};
-  const { character, error: charError } = await getOwnedCharacterForMutation({ characterId: id, profile });
-  if (charError) return sendRouteError(req, res, charError);
 
-  const currentLevel = Math.max(1, parseInteger(character.level, 1));
-  const requestedLevel = Math.max(currentLevel + 1, Math.min(20, parseInteger(body.level, currentLevel + 1)));
-  const currentCompleted = Math.max(0, parseInteger(character.completed_missions, 0));
-  const requestedCompleted = Math.max(currentCompleted, parseInteger(body.completed_missions, currentCompleted));
-  const missionNames = Array.isArray(body.mission_names)
-    ? body.mission_names.map(v => String(v || '').trim()).filter(Boolean)
-    : [];
-  const useConduitCredit = body.use_conduit_credit === true || body.use_conduit_credit === 'true' || body.use_conduit_credit === 'on';
-  const creditCount = useConduitCredit ? Math.max(0, requestedCompleted - currentCompleted - missionNames.length) : 0;
+  // levelUp throws AuthorizationError (caught by asyncHandler) for the
+  // ownership gate; every other failure (missing mission names, insufficient
+  // Conduit Credits, backfill-mission errors, perk validation) is returned
+  // as { data, error } exactly as the pre-service route did, so
+  // sendRouteError keeps rendering their specific status/message.
+  const { data, error } = await levelUpCharacter(actor, id, req.body || {});
+  if (error) return sendRouteError(req, res, error);
+  return res.status(200).json({ character: data });
+}));
 
-  if (!useConduitCredit && requestedCompleted > currentCompleted + missionNames.length) {
-    return sendError(req, res, null, {
-      status: 400,
-      message: 'Provide mission names for each missing mission, or spend Conduit Credits.'
-    });
-  }
-
-  let creditSources = [];
-  if (creditCount > 0) {
-    const { data: availableHostedMissions, error: availableError } = await getAvailableHostedMissionsForPicker({
-      profileId: profile.id,
-      supabase: supabaseAdmin
-    });
-    if (availableError) return sendError(req, res, availableError);
-    creditSources = (availableHostedMissions || []).slice(0, creditCount);
-    if (creditSources.length < creditCount) {
-      return sendError(req, res, null, {
-        status: 400,
-        message: 'Not enough Conduit Credits available.'
-      });
-    }
-  }
-
-  for (const name of missionNames) {
-    const { error } = await createBackfillMissionForCharacter({ characterId: id, name, profile });
-    if (error) return sendRouteError(req, res, error);
-  }
-
-  for (let i = 0; i < creditSources.length; i++) {
-    const src = creditSources[i];
-    const sourceDate = typeof src.date === 'string'
-      ? src.date.slice(0, 10)
-      : new Date(src.date).toISOString().slice(0, 10);
-    const { error } = await createOffscreenMission({
-      characterId: id,
-      profileId: profile.id,
-      payload: {
-        name: `Conduit Credit: Level ${requestedLevel}`,
-        summary: 'Spent through the level-up modal.',
-        merx_gained: 0,
-        source_mission_id: src.id,
-        source_mission_name: src.name || `Hosted mission ${i + 1}`,
-        source_mission_date: sourceDate
-      },
-      supabase: supabaseAdmin
-    });
-    if (error) return sendRouteError(req, res, error);
-  }
-
-  // Re-derive level / completed_missions / commissary_reward from the rows we
-  // just created (real success missions and offscreen credits) so the stored
-  // counters match what every derive-path computes. The character detail page
-  // renders the stored commissary_reward directly, so writing raw requested
-  // values here left it stale — each backfilled success mission is worth
-  // MERX_PER_MISSION_SUCCESS that never landed in the column.
-  const [missionsRes, offscreenRes] = await Promise.all([
-    getCharacterRealMissionsForDerivation(id, supabaseAdmin),
-    listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
-  ]);
-  if (missionsRes.error || offscreenRes.error) {
-    return sendError(req, res, missionsRes.error || offscreenRes.error);
-  }
-
-  let rulesVersion = 'v1';
-  if (character.class_id) {
-    try {
-      const { data: cls } = await getClass(character.class_id, supabaseAdmin);
-      if (cls && cls.rules_version === 'v2') rulesVersion = 'v2';
-    } catch (_) { /* default to v1 */ }
-  }
-
-  const derived = deriveCharacterTotals({
-    character,
-    realMissions: missionsRes.data || [],
-    offscreenMissions: offscreenRes.data || [],
-    rulesVersion
-  });
-
-  const stats = normalizeStatsPayload(body.stats || body);
-  const fields = {
-    ...stats,
-    level: derived.level,
-    completed_missions: derived.completed_missions,
-    commissary_reward: derived.commissary_reward
-  };
-  const { data, error } = await updateOwnedCharacterFields({
-    characterId: id,
-    profileId: profile.id,
-    fields
-  });
-  if (error) return sendError(req, res, error);
-
-  const { error: perksError } = await appendCharacterPerks({
-    characterId: id,
-    submittedPerks: Array.isArray(body.ability_perks) ? body.ability_perks : []
-  });
-  if (perksError) return sendRouteError(req, res, perksError);
-
-  return res.status(200).json({
-    character: {
-      id: data.id,
-      name: data.name || character.name,
-      level: data.level,
-      completed_missions: data.completed_missions,
-      commissary_reward: data.commissary_reward
-    }
-  });
-});
-
-router.put('/:id/:name?', isAuthenticated, async (req, res) => {
+router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const image_crop = parseImageCrop(req.body.image_crop);
@@ -1476,57 +1179,52 @@ router.put('/:id/:name?', isAuthenticated, async (req, res) => {
   delete req.body.quirk_description;
   delete req.body.accessory_name;
   delete req.body.accessory_description;
+  // updateCharacter throws AuthorizationError (caught by asyncHandler) when
+  // the actor doesn't own the character; other failures are still returned.
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
   }
-});
+}));
 
-router.delete('/:id/:name?', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.delete('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
-  const { error } = await deleteCharacter(id, profile);
+  const { error } = await deleteCharacter(actor, id);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/characters').send();
   }
-});
+}));
 
-router.post('/:id/upgrade', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/upgrade', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
   const { target_class_id } = req.body;
-  const { data, error } = await upgradeCharacterClass(id, target_class_id, profile, res.locals.supabase);
+  const { data, error } = await upgradeCharacterClass(actor, id, target_class_id, res.locals.supabase);
   if (error) return sendError(req, res, error);
   return res.header('HX-Location', `/characters/${id}/edit`).send();
-});
+}));
 
-router.post('/:id/deceased', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/deceased', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id } = req.params;
   const { confirmName } = req.body;
 
-  // Get the character to verify ownership and name
-  const { data: character, error: getError } = await getCharacter(id, res.locals.supabase);
-  if (getError) {
-    return sendError(req, res, getError);
-  }
-
-  // Verify the confirmation name matches
-  if (!confirmName || confirmName.trim() !== character.name) {
-    return sendError(req, res, null, { status: 400, message: 'Character name does not match. Please type the exact name to confirm.' });
-  }
-
-  // Mark as deceased
-  const { data, error } = await markCharacterDeceased(id, profile);
+  // markCharacterDeceased throws AuthorizationError (caught by asyncHandler)
+  // when the actor doesn't own the character; the confirm-name mismatch and
+  // already-deceased checks are still returned as { data, error } (the
+  // service loads the character once, admin-privileged, and reuses it for
+  // both the ownership gate and the name check).
+  const { data, error } = await markCharacterDeceased(actor, id, confirmName);
   if (error) {
-    return sendError(req, res, error);
+    return sendRouteError(req, res, error);
   }
 
   return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
-});
+}));
 
 module.exports = router;
