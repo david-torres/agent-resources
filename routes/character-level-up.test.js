@@ -148,7 +148,16 @@ mock.module('../services/character/repository', () => ({
   getChildRows: async () => ({ data: [], error: null }),
   insertChildRows: async () => ({ data: true, error: null }),
   updateChildRow: async () => ({ data: true, error: null }),
-  deleteChildRows: async () => ({ data: true, error: null })
+  deleteChildRows: async () => ({ data: true, error: null }),
+  // Unused by the level-up flow but required by CharacterService's adapter
+  // validation (createOffscreenMission/updateOffscreenMission/
+  // deleteOffscreenMission capabilities).
+  getOffscreenMissionRow: async () => ({ data: null, error: null }),
+  getSourceMissionForCredit: async () => ({ data: null, error: null }),
+  getConduitCredits: async () => ({ data: null, error: null }),
+  insertOffscreenMission: async () => ({ data: null, error: null }),
+  updateOffscreenMissionRow: async () => ({ data: null, error: null }),
+  deleteOffscreenMissionRow: async () => ({ data: null, error: null })
 }));
 
 mock.module('../models/offscreen-mission', () => ({
