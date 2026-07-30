@@ -18,6 +18,7 @@ const {
   findUpgradeTargetsFor
 } = require('../models/character');
 const characterRepository = require('../services/character/repository');
+const { normalizeWizardPayload } = require('../services/character/input');
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
@@ -68,11 +69,6 @@ const collectNamed = (body, nameKey, descKey) => {
     out.push(desc ? { name, description: desc } : { name });
   }
   return out;
-};
-
-const parseInteger = (value, fallback = 0) => {
-  const n = parseInt(value, 10);
-  return Number.isFinite(n) ? n : fallback;
 };
 
 // Renders a service-returned { status, title, message }-shaped error (or a
@@ -342,51 +338,12 @@ router.post('/wizard', isAuthenticated, async (req, res) => {
     return sendError(req, res, null, { status: 400, message: 'Invalid wizard payload.' });
   }
 
-  const trimmedName = (body.name || '').toString().trim();
-  if (!trimmedName) {
-    return sendError(req, res, null, { status: 400, message: 'Character name is required.' });
-  }
-  if (trimmedName.length > 120) {
-    return sendError(req, res, null, { status: 400, message: 'Character name is too long (max 120 characters).' });
+  const { data: normalized, error: wizardError } = normalizeWizardPayload(body);
+  if (wizardError) {
+    return sendError(req, res, null, { status: 400, message: wizardError });
   }
 
-  // Whitelist creator_mode to the same set the wizard exposes in its mode
-  // selector. createCharacter will re-validate and reject anything else.
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (body.creator_mode != null && body.creator_mode !== '' && !allowedModes.includes(body.creator_mode)) {
-    return sendError(req, res, null, { status: 400, message: `Invalid mode: ${body.creator_mode}` });
-  }
-
-  // Coerce stat values to integers; the model passes them straight through
-  // to the characters row. Unknown stat keys (shouldn't happen, but the
-  // wizard is client-built) are silently dropped.
-  const knownStats = new Set(statList);
-  for (const k of Object.keys(body)) {
-    if (knownStats.has(k)) body[k] = parseInteger(body[k], 0);
-  }
-
-  // Coerce level / completed_missions / visibility booleans to defensible
-  // shapes. The form-input handlers in createCharacter also do this for
-  // is_public / hide_from_search, but doing it here keeps the DB write from
-  // seeing "on" as a string and stops an out-of-range number from
-  // contaminating the row.
-  if (body.level != null) {
-    body.level = Math.max(1, Math.min(20, parseInteger(body.level, 1)));
-  }
-  if (body.completed_missions != null) {
-    body.completed_missions = Math.max(0, parseInteger(body.completed_missions, 0));
-  }
-  // The wizard's UI has no commissary_reward field; the column is NOT NULL,
-  // so default to 0 unless auto_calculate-derived downstream overrides it.
-  body.commissary_reward = Math.max(0, parseInteger(body.commissary_reward, 0));
-  body.name = trimmedName;
-  body.is_public = body.is_public === false ? false : true;
-  body.hide_from_search = !!body.hide_from_search;
-
-  // The 12 stat ints stay on `body` as normal columns: createCharacter only
-  // pulls out the keys it owns (trait0/1/2, gear, abilities, ability_perks,
-  // common_items) before insert, so the stats pass straight through.
-  const { data, error } = await createCharacter(body, profile);
+  const { data, error } = await createCharacter(normalized, profile);
   if (error) {
     // createCharacter returns string errors for some validation paths
     // (e.g. invalid creator_mode, v2 ability-perk validation). Wrap those
