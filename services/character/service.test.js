@@ -84,8 +84,7 @@ const makeAdapter = (calls, overrides = {}) => ({
   getClassRulesVersion: async () => ok('v1'),
   fetchAllowedAbilityIds: async () => ok([]),
   fetchExistingPerks: async () => ok([]),
-  insertPerks: async () => ({ error: null }),
-  updatePerkLinks: async () => ({ error: null }),
+  levelUpAtomic: async ({ fields }) => ok({ id: 'character-1', name: 'Owned Hero', ...fields }),
   createBackfillMission: async () => ({ error: null }),
   getAvailableHostedMissions: async () => ok([]),
   createOffscreenMissionRow: async () => ok({}),
@@ -307,6 +306,38 @@ test('CharacterService.levelUp surfaces a backfill mission error without throwin
 
   expect(result.data).toBeNull();
   expect(result.error).toBeInstanceOf(AuthorizationError);
+});
+
+test('levelUp persists via a single levelUpAtomic call (not updateOwnedFields + insertPerks)', async () => {
+  const calls = [];
+  const adapter = {
+    ...minimalRequiredAdapter(),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 1, completed_missions: 0, commissary_reward: 0, abilities: [] }),
+    getRealMissions: async () => ok([]),
+    listOffscreenMissions: async () => ok([]),
+    getClassRulesVersion: async () => ok('v2'),
+    fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
+    fetchExistingPerks: async () => ok([]),
+    levelUpAtomic: async (args) => { calls.push(args); return ok({ id: 'character-1', name: 'Hero', level: 2, completed_missions: 0, commissary_reward: 0 }); },
+    updateOwnedFields: async () => { throw new Error('updateOwnedFields must not be called by levelUp'); },
+  };
+  const svc = new CharacterService(adapter);
+  const { data, error } = await svc.levelUp(CREATOR, 'character-1', {
+    level: 2,
+    ability_perks: [{ class_ability_id: 'ab-1', text: 'New perk', ref: 'r1' }]
+  });
+  expect(error).toBeNull();
+  expect(data.level).toBe(2);
+  expect(calls).toHaveLength(1);
+  expect(calls[0].characterId).toBe('character-1');
+  expect(calls[0].creatorId).toBe('profile-1');
+  expect(calls[0].perks[0]).toMatchObject({ class_ability_id: 'ab-1', text: 'New perk', position: 0 });
+});
+
+test('levelUp still refuses a non-owner with AuthorizationError', async () => {
+  const svc = new CharacterService({ ...minimalRequiredAdapter(),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', abilities: [] }) });
+  await expect(svc.levelUp(STRANGER, 'character-1', {})).rejects.toBeInstanceOf(AuthorizationError);
 });
 
 // --- Offscreen-mission capabilities ----------------------------------

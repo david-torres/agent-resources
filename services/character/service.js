@@ -38,8 +38,7 @@ const REQUIRED_ADAPTER_METHODS = [
   'getClassRulesVersion',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
-  'insertPerks',
-  'updatePerkLinks',
+  'levelUpAtomic',
   'createBackfillMission',
   'getAvailableHostedMissions',
   'createOffscreenMissionRow',
@@ -516,11 +515,17 @@ class CharacterService {
       completed_missions: derived.completed_missions,
       commissary_reward: derived.commissary_reward
     };
-    const { data, error } = await this.adapter.updateOwnedFields({ id, creatorId: character.creator_id, fields });
-    if (error) return { data: null, error };
+    const { data: perkRows, error: perkBuildError } = await this.buildPerkRows(id, Array.isArray(body.ability_perks) ? body.ability_perks : []);
+    if (perkBuildError) return { data: null, error: perkBuildError };
 
-    const { error: perksError } = await this.appendPerks(id, Array.isArray(body.ability_perks) ? body.ability_perks : []);
-    if (perksError) return { data: null, error: perksError };
+    const { data, error } = await this.adapter.levelUpAtomic({
+      characterId: id,
+      creatorId: character.creator_id,
+      fields,
+      perks: perkRows
+    });
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: { status: 404, message: 'Character update returned no rows' } };
 
     return {
       data: {
@@ -534,21 +539,26 @@ class CharacterService {
     };
   }
 
-  // Appends newly-submitted ability perks (level-up modal) to a character's
-  // existing perk set, resolving `compounds_with` links either to an existing
-  // perk (by id) or to another perk inserted in the same batch (`new:<ref>`).
-  // Moved verbatim from routes/characters.js#appendCharacterPerks.
-  async appendPerks(characterId, submittedPerks) {
+  // Builds the ordered perk-row payload for a level-up (level-up modal),
+  // WITHOUT writing — the terminal insert + link-resolution happens atomically
+  // inside level_up_character_atomic (see repository.js#levelUpAtomic). Keeps
+  // the original allowed-ability filter, per-ability position offsets, and
+  // validation from the former perk-append path, but encodes each `compounds_with`
+  // link the way the RPC's resolver expects: `position-<n>` for a target in
+  // this same batch on the SAME ability, an existing-perk UUID (same ability)
+  // to keep, or null. Returns { data: rows, error } where each row is
+  // { class_ability_id, text, position, compounds_with }.
+  async buildPerkRows(characterId, submittedPerks) {
     if (!Array.isArray(submittedPerks) || submittedPerks.length === 0) {
-      return { error: null };
+      return { data: [], error: null };
     }
 
     const { data: abilities, error: abilityError } = await this.adapter.fetchAllowedAbilityIds(characterId);
-    if (abilityError) return { error: abilityError };
+    if (abilityError) return { data: null, error: abilityError };
     const allowedAbilityIds = new Set((abilities || []).map(a => a.id));
 
     const { data: existing, error: existingError } = await this.adapter.fetchExistingPerks(characterId);
-    if (existingError) return { error: existingError };
+    if (existingError) return { data: null, error: existingError };
 
     const existingCounts = new Map();
     // id -> ability, so a new perk may only compound with an existing perk on
@@ -561,9 +571,9 @@ class CharacterService {
       return { class_ability_id: p.class_ability_id, text: p.text, position: pos };
     });
 
-    // Build insert rows. `meta` runs parallel to `rows`, carrying each new
-    // perk's client `ref` and its requested compound link so we can resolve
-    // links after the rows (and their ids) exist.
+    // Build the perk rows. `meta` runs parallel to `rows`, carrying each new
+    // perk's client `ref` and its requested compound link so we can translate
+    // links to the RPC's encoding once every batch position is assigned.
     const rows = [];
     const meta = [];
     for (const p of submittedPerks) {
@@ -574,10 +584,10 @@ class CharacterService {
       const nextPosition = (existingCounts.get(classAbilityId) ?? -1) + 1;
       existingCounts.set(classAbilityId, nextPosition);
       rows.push({
-        character_id: characterId,
         class_ability_id: classAbilityId,
         text,
-        position: nextPosition
+        position: nextPosition,
+        compounds_with: null
       });
       meta.push({
         ref: typeof p.ref === 'string' ? p.ref : null,
@@ -585,62 +595,40 @@ class CharacterService {
       });
     }
 
-    if (rows.length === 0) return { error: null };
+    if (rows.length === 0) return { data: [], error: null };
 
     const validation = validateAbilityPerks(existingForValidation.concat(rows));
     if (!validation.ok) {
-      return { error: { status: 400, message: validation.errors.join(' ') } };
+      return { data: null, error: { status: 400, message: validation.errors.join(' ') } };
     }
 
-    const { error: insertError } = await this.adapter.insertPerks(rows);
-    if (insertError) return { error: insertError };
-
-    // Re-read the rows to recover server-assigned ids. We match by
-    // (class_ability_id, position) — each new perk got a unique position
-    // above — rather than relying on insert-return ordering.
-    const { data: current, error: selError } = await this.adapter.fetchExistingPerks(characterId);
-    if (selError) return { error: selError };
-    const idByKey = new Map((current || []).map(r => [`${r.class_ability_id}:${parseInteger(r.position, 0)}`, r.id]));
-    const keyOf = (row) => `${row.class_ability_id}:${row.position}`;
-
-    // ref -> { id, class_ability_id } for perks inserted in this batch.
-    const insertedByRef = new Map();
+    // ref -> { position, class_ability_id } for perks in this batch, so a
+    // `new:<ref>` link resolves to the target's assigned position.
+    const rowByRef = new Map();
     for (let i = 0; i < rows.length; i++) {
       if (!meta[i].ref) continue;
-      insertedByRef.set(meta[i].ref, { id: idByKey.get(keyOf(rows[i])), class_ability_id: rows[i].class_ability_id });
+      rowByRef.set(meta[i].ref, { position: rows[i].position, class_ability_id: rows[i].class_ability_id });
     }
 
-    // Resolve each new perk's compound link. A link is either `new:<ref>`
-    // (another perk inserted in this batch) or an existing perk UUID. The
-    // target must be on the same ability and not the perk itself; anything
-    // else resolves to null.
-    const linkUpdates = [];
+    // Translate each new perk's compound link into the RPC's encoding: a
+    // `new:<ref>` link → `position-<n>` of the target row (only when the target
+    // is in this batch on the SAME ability); an existing-perk UUID on the same
+    // ability → keep the UUID; anything else → null.
     for (let i = 0; i < rows.length; i++) {
       const link = meta[i].compoundsWith;
       if (!link) continue;
-      const rowId = idByKey.get(keyOf(rows[i]));
-      if (!rowId) continue;
 
-      let target = null;
       if (link.startsWith('new:')) {
-        const ref = link.slice('new:'.length);
-        const cand = insertedByRef.get(ref);
-        if (cand) target = { id: cand.id, class_ability_id: cand.class_ability_id };
-      } else if (abilityByExistingPerkId.has(link)) {
-        target = { id: link, class_ability_id: abilityByExistingPerkId.get(link) };
-      }
-
-      if (target && target.id && target.id !== rowId && target.class_ability_id === rows[i].class_ability_id) {
-        linkUpdates.push({ id: rowId, compounds_with: target.id });
+        const target = rowByRef.get(link.slice('new:'.length));
+        if (target && target.class_ability_id === rows[i].class_ability_id && target.position !== rows[i].position) {
+          rows[i].compounds_with = `position-${target.position}`;
+        }
+      } else if (abilityByExistingPerkId.get(link) === rows[i].class_ability_id) {
+        rows[i].compounds_with = link;
       }
     }
 
-    if (linkUpdates.length > 0) {
-      const { error: linkError } = await this.adapter.updatePerkLinks(linkUpdates);
-      if (linkError) return { error: linkError };
-    }
-
-    return { error: null };
+    return { data: rows, error: null };
   }
 
   // --- Offscreen-mission capabilities ----------------------------------

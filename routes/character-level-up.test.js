@@ -103,18 +103,40 @@ mock.module('../services/character/repository', () => ({
   getClassRulesVersion: async () => ({ data: 'v1', error: null }),
   fetchAllowedAbilityIds: async () => ({ data: classAbilities.map(a => ({ id: a.id })), error: null }),
   fetchExistingPerks: async () => ({ data: characterPerks.map(p => ({ ...p })), error: null }),
-  insertPerks: async (rows) => {
-    for (const row of rows) {
-      characterPerks.push({ id: `perk-${++perkIdSeq}`, compounds_with: null, ...row });
+  // In-memory stand-in for the level_up_character_atomic RPC: applies the
+  // owned-field update, inserts the new perk rows, then resolves each perk's
+  // compound link exactly as the SQL does — a 'position-<n>' link targets a
+  // same-ability perk by position; a bare UUID targets a same-ability existing
+  // perk by id; anything else stays null.
+  levelUpAtomic: async ({ fields, perks }) => {
+    Object.assign(characterRow, fields);
+    if (Array.isArray(perks)) {
+      for (const row of perks) {
+        characterPerks.push({
+          id: `perk-${++perkIdSeq}`,
+          character_id: CHAR_ID,
+          class_ability_id: row.class_ability_id,
+          text: row.text,
+          position: row.position,
+          compounds_with: null
+        });
+      }
+      for (const row of perks) {
+        if (row.compounds_with == null) continue;
+        const source = characterPerks.find(p => p.class_ability_id === row.class_ability_id && p.position === row.position);
+        if (!source) continue;
+        const link = String(row.compounds_with);
+        let target = null;
+        if (link.startsWith('position-')) {
+          const pos = Number(link.slice('position-'.length));
+          target = characterPerks.find(p => p.class_ability_id === row.class_ability_id && p.position === pos);
+        } else {
+          target = characterPerks.find(p => p.id === link && p.class_ability_id === row.class_ability_id);
+        }
+        if (target && target.id !== source.id) source.compounds_with = target.id;
+      }
     }
-    return { error: null };
-  },
-  updatePerkLinks: async (updates) => {
-    for (const u of updates) {
-      const perk = characterPerks.find(p => p.id === u.id);
-      if (perk) perk.compounds_with = u.compounds_with;
-    }
-    return { error: null };
+    return { data: { ...characterRow }, error: null };
   },
   // Mirrors services/character/repository.js#createBackfillMission, using
   // this file's (possibly test-overridden) mission mocks — preserves the
