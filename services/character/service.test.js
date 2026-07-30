@@ -336,7 +336,12 @@ test('createOffscreenMission refuses a non-owner with AuthorizationError', async
 
 test('createOffscreenMission requires name and summary', async () => {
   const svc = new CharacterService(offscreenAdapter());
-  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', { name: '', summary: '' });
+  // Supply a valid freeform source so this isolates the name/summary check —
+  // resolveOffscreenSource runs first (route parity), so a request missing
+  // both would surface the source error instead.
+  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', {
+    name: '', summary: '', source_mission_name_other: 'Freeform', source_mission_date_other: '2026-02-02'
+  });
   expect(error).toEqual({ status: 400, message: 'Name and summary are required.' });
 });
 
@@ -370,6 +375,12 @@ test('createOffscreenMission inserts on the happy path', async () => {
   });
   expect(error).toBeNull();
   expect(calls[0].characterId).toBe('character-1');
+});
+
+test('updateOffscreenMission refuses a non-owner with AuthorizationError', async () => {
+  const svc = new CharacterService(offscreenAdapter());
+  await expect(svc.updateOffscreenMission(STRANGER, 'character-1', 'om-1', { name: 'n', summary: 's' }))
+    .rejects.toBeInstanceOf(AuthorizationError);
 });
 
 test('updateOffscreenMission 404s when the row belongs to another character', async () => {
