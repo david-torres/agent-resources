@@ -135,6 +135,34 @@ const normalizeStatsPayload = (body = {}) => {
   return out;
 };
 
+const normalizeWizardPayload = (rawBody) => {
+  const body = cloneInput(rawBody);
+
+  const trimmedName = (body.name || '').toString().trim();
+  if (!trimmedName) return { data: null, error: 'Character name is required.' };
+  if (trimmedName.length > 120) {
+    return { data: null, error: 'Character name is too long (max 120 characters).' };
+  }
+
+  if (body.creator_mode != null && body.creator_mode !== '' && !CREATOR_MODES.includes(body.creator_mode)) {
+    return { data: null, error: `Invalid mode: ${body.creator_mode}` };
+  }
+
+  const knownStats = new Set(statList);
+  for (const k of Object.keys(body)) {
+    if (knownStats.has(k)) body[k] = parseInteger(body[k], 0);
+  }
+
+  if (body.level != null) body.level = Math.max(1, Math.min(20, parseInteger(body.level, 1)));
+  if (body.completed_missions != null) body.completed_missions = Math.max(0, parseInteger(body.completed_missions, 0));
+  body.commissary_reward = Math.max(0, parseInteger(body.commissary_reward, 0));
+  body.name = trimmedName;
+  body.is_public = body.is_public === false ? false : true;
+  body.hide_from_search = !!body.hide_from_search;
+
+  return { data: body, error: null };
+};
+
 module.exports = {
   cloneInput,
   normalizeCharacterInput,
@@ -143,5 +171,6 @@ module.exports = {
   normalizeAbilityItems: normalizeClassItems,
   normalizeAbilityPerks,
   parseInteger,
-  normalizeStatsPayload
+  normalizeStatsPayload,
+  normalizeWizardPayload
 };

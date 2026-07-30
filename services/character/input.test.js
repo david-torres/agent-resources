@@ -55,3 +55,46 @@ test('normalizes update booleans and missing list fields deterministically', () 
   });
   expect(result.data).toMatchObject({ auto_calculate: true, common_items: [], is_public: false, hide_from_search: false, image_url: null });
 });
+
+const { normalizeWizardPayload } = require('./input');
+
+test('normalizeWizardPayload rejects a missing name', () => {
+  const { data, error } = normalizeWizardPayload({ name: '   ' });
+  expect(data).toBeNull();
+  expect(error).toBe('Character name is required.');
+});
+
+test('normalizeWizardPayload rejects an over-long name', () => {
+  const { error } = normalizeWizardPayload({ name: 'x'.repeat(121) });
+  expect(error).toBe('Character name is too long (max 120 characters).');
+});
+
+test('normalizeWizardPayload rejects an unknown creator_mode', () => {
+  const { error } = normalizeWizardPayload({ name: 'Hero', creator_mode: 'bogus' });
+  expect(error).toBe('Invalid mode: bogus');
+});
+
+test('normalizeWizardPayload coerces stats, clamps level/missions, defaults reward and booleans', () => {
+  const { data, error } = normalizeWizardPayload({
+    name: '  Hero  ',
+    might: '7',
+    level: '99',
+    completed_missions: '-3',
+    is_public: false,
+    hide_from_search: true
+  });
+  expect(error).toBeNull();
+  expect(data.name).toBe('Hero');
+  expect(data.might).toBe(7);
+  expect(data.level).toBe(20);
+  expect(data.completed_missions).toBe(0);
+  expect(data.commissary_reward).toBe(0);
+  expect(data.is_public).toBe(false);
+  expect(data.hide_from_search).toBe(true);
+});
+
+test('normalizeWizardPayload defaults is_public to true when unset', () => {
+  const { data } = normalizeWizardPayload({ name: 'Hero' });
+  expect(data.is_public).toBe(true);
+  expect(data.hide_from_search).toBe(false);
+});
