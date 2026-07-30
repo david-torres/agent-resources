@@ -50,13 +50,20 @@ isolation value), add `createOffscreenMission`/`updateOffscreenMission`/
 with reads/writes in `character/repository.js` and authorization reusing the
 existing `canMutateCharacter` policy predicate.
 
-**Level-up atomicity: compute in JS, persist in one RPC.** Keep the derivation
-and credit-sourcing workflow in `service.js#levelUp` (business logic stays
-testable in JS), but hand the fully-computed payload to a new
-`level_up_character_atomic(payload jsonb)` Postgres RPC that performs every write
-— missions, offscreen rows, owned fields, perks, perk-links — in a single
-transaction. This mirrors the existing `save_character_atomic` pattern rather
-than porting business logic into plpgsql.
+**Level-up atomicity: compute in JS, persist terminal writes in one RPC.** Keep
+the derivation and credit-sourcing workflow in `service.js#levelUp` (business
+logic stays testable in JS). The backfill-mission and offscreen-credit creation
+stay **sequential and upstream** — they are cross-domain (mission service +
+offscreen model, each with its own RPC) and cannot join a single Postgres
+function without re-implementing them in plpgsql (rejected). They are additive
+and re-derivable: their rows represent real events, and the stored counters are
+re-derived from them, so a later failure self-heals on the next save. The
+*terminal* persistence — owned-field counters + perk insert + perk-link update —
+moves into a new `level_up_character_atomic` RPC that runs as one transaction.
+This is exactly where the flagged partial-state risk lives ("missions created
+but perks not linked"): after the change, if the terminal step aborts, no perks
+are half-written and counters heal on next save. Mirrors the existing
+`save_character_atomic` pattern rather than porting business logic into plpgsql.
 
 ## Scope — the four extractions
 
@@ -65,7 +72,7 @@ than porting business logic into plpgsql.
 | 1 | Wizard validation/coercion | `routes/characters.js:345-384` | `services/character/input.js` (extend `normalizeCharacterInput`/`normalizeStatsPayload`); handler delegates to existing `createCharacter` |
 | 2 | `collectAbilityPerks`/`collectNamed` reshaping | `routes/characters.js:40-71` (used 744-755, 1170-1181) | `services/character/input.js` (extend `normalizeAbilityPerks`); create/update handlers pass raw body to the service |
 | 3 | Offscreen-mission authz + validation + workflow | `routes/characters.js:576, 667, 715` (+157-178, 582-603) | `CharacterService.{create,update,delete}OffscreenMission`; repo methods; reuse `canMutateCharacter`; `asyncHandler`-wrapped handlers |
-| 4 | Non-atomic level-up | `services/character/service.js:424-528` | new `level_up_character_atomic` RPC (migration) + `repository.js#levelUpAtomic`; JS computes payload, one transactional call |
+| 4 | Non-atomic level-up (terminal writes) | `services/character/service.js:424-528` | new `level_up_character_atomic` RPC (migration) + `repository.js#levelUpAtomic` wrapping owned-fields + perk insert + perk-links in one transaction; backfill/offscreen stay sequential upstream (cross-domain, re-derivable) |
 
 ## Layered shape (unchanged from ar-ezes)
 
