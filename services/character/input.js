@@ -163,6 +163,57 @@ const normalizeWizardPayload = (rawBody) => {
   return { data: body, error: null };
 };
 
+const asArray = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
+
+const collectAbilityPerksFromForm = (body) => {
+  const ids = asArray(body.ability_perk_class_ability_id);
+  const texts = asArray(body.ability_perk_text);
+  const pos = asArray(body.ability_perk_position);
+  const cw = asArray(body.ability_perk_compounds_with);
+  const n = Math.max(ids.length, texts.length, pos.length, cw.length);
+  const perks = [];
+  for (let i = 0; i < n; i++) {
+    const id = ids[i];
+    const text = texts[i];
+    if (!id || !text) continue;
+    perks.push({
+      class_ability_id: id,
+      text: String(text),
+      position: Number(pos[i]) || i,
+      compounds_with: cw[i] || null
+    });
+  }
+  return perks;
+};
+
+const collectNamedFromForm = (body, nameKey, descKey) => {
+  const names = asArray(body[nameKey]);
+  const descs = asArray(body[descKey]);
+  const out = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = (names[i] || '').toString().trim();
+    if (!name) continue;
+    const desc = (descs[i] || '').toString().trim();
+    out.push(desc ? { name, description: desc } : { name });
+  }
+  return out;
+};
+
+const FORM_ARRAY_KEYS = [
+  'ability_perk_class_ability_id', 'ability_perk_text', 'ability_perk_position',
+  'ability_perk_compounds_with', 'quirk_name', 'quirk_description',
+  'accessory_name', 'accessory_description'
+];
+
+const collectCharacterFormArrays = (body) => {
+  const out = { ...body };
+  out.ability_perks = collectAbilityPerksFromForm(body);
+  out.quirks = collectNamedFromForm(body, 'quirk_name', 'quirk_description');
+  out.accessories = collectNamedFromForm(body, 'accessory_name', 'accessory_description');
+  for (const key of FORM_ARRAY_KEYS) delete out[key];
+  return out;
+};
+
 module.exports = {
   cloneInput,
   normalizeCharacterInput,
@@ -172,5 +223,6 @@ module.exports = {
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,
-  normalizeWizardPayload
+  normalizeWizardPayload,
+  collectCharacterFormArrays
 };

@@ -98,3 +98,36 @@ test('normalizeWizardPayload defaults is_public to true when unset', () => {
   expect(data.is_public).toBe(true);
   expect(data.hide_from_search).toBe(false);
 });
+
+const { collectCharacterFormArrays } = require('./input');
+
+test('collectCharacterFormArrays assembles perks/quirks/accessories and strips raw keys', () => {
+  const out = collectCharacterFormArrays({
+    name: 'Hero',
+    ability_perk_class_ability_id: ['a1', 'a2'],
+    ability_perk_text: ['first', ''],          // blank text row is dropped
+    ability_perk_position: ['0', '1'],
+    ability_perk_compounds_with: ['', 'new:x'],
+    quirk_name: ['Brave', '  '],               // blank name dropped
+    quirk_description: ['bold', ''],
+    accessory_name: ['Ring'],
+    accessory_description: ['']
+  });
+  expect(out.name).toBe('Hero');
+  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'first', position: 0, compounds_with: null }]);
+  expect(out.quirks).toEqual([{ name: 'Brave', description: 'bold' }]);
+  expect(out.accessories).toEqual([{ name: 'Ring' }]);
+  expect(out.ability_perk_class_ability_id).toBeUndefined();
+  expect(out.quirk_name).toBeUndefined();
+  expect(out.accessory_description).toBeUndefined();
+});
+
+test('collectCharacterFormArrays tolerates single (non-array) form values', () => {
+  const out = collectCharacterFormArrays({
+    ability_perk_class_ability_id: 'a1',
+    ability_perk_text: 'solo',
+    ability_perk_position: '3',
+    ability_perk_compounds_with: ''
+  });
+  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'solo', position: 3, compounds_with: null }]);
+});

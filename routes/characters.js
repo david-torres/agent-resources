@@ -18,7 +18,7 @@ const {
   findUpgradeTargetsFor
 } = require('../models/character');
 const characterRepository = require('../services/character/repository');
-const { normalizeWizardPayload } = require('../services/character/input');
+const { normalizeWizardPayload, collectCharacterFormArrays } = require('../services/character/input');
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
@@ -36,40 +36,6 @@ const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
 
-const asArray = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
-
-const collectAbilityPerks = (body) => {
-  const ids   = asArray(body.ability_perk_class_ability_id);
-  const texts = asArray(body.ability_perk_text);
-  const pos   = asArray(body.ability_perk_position);
-  const cw    = asArray(body.ability_perk_compounds_with);
-  const n = Math.max(ids.length, texts.length, pos.length, cw.length);
-  const perks = [];
-  for (let i = 0; i < n; i++) {
-    const id = ids[i]; const text = texts[i];
-    if (!id || !text) continue;
-    perks.push({
-      class_ability_id: id,
-      text: String(text),
-      position: Number(pos[i]) || i,
-      compounds_with: cw[i] || null
-    });
-  }
-  return perks;
-};
-
-const collectNamed = (body, nameKey, descKey) => {
-  const names = asArray(body[nameKey]);
-  const descs = asArray(body[descKey]);
-  const out = [];
-  for (let i = 0; i < names.length; i++) {
-    const name = (names[i] || '').toString().trim();
-    if (!name) continue;
-    const desc = (descs[i] || '').toString().trim();
-    out.push(desc ? { name, description: desc } : { name });
-  }
-  return out;
-};
 
 // Renders a service-returned { status, title, message }-shaped error (or a
 // plain Error/string) with the appropriate status — the equivalent of
@@ -698,18 +664,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   if (image_crop !== undefined) {
     req.body.image_crop = image_crop;
   }
-  req.body.ability_perks = collectAbilityPerks(req.body);
-  req.body.quirks = collectNamed(req.body, 'quirk_name', 'quirk_description');
-  req.body.accessories = collectNamed(req.body, 'accessory_name', 'accessory_description');
-  // Strip the parallel arrays so they don't reach Supabase as unknown columns.
-  delete req.body.ability_perk_class_ability_id;
-  delete req.body.ability_perk_text;
-  delete req.body.ability_perk_position;
-  delete req.body.ability_perk_compounds_with;
-  delete req.body.quirk_name;
-  delete req.body.quirk_description;
-  delete req.body.accessory_name;
-  delete req.body.accessory_description;
+  req.body = collectCharacterFormArrays(req.body);
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
     return sendError(req, res, error);
@@ -1124,18 +1079,7 @@ router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
   if (image_crop !== undefined) {
     req.body.image_crop = image_crop;
   }
-  req.body.ability_perks = collectAbilityPerks(req.body);
-  req.body.quirks = collectNamed(req.body, 'quirk_name', 'quirk_description');
-  req.body.accessories = collectNamed(req.body, 'accessory_name', 'accessory_description');
-  // Strip the parallel arrays so they don't reach Supabase as unknown columns.
-  delete req.body.ability_perk_class_ability_id;
-  delete req.body.ability_perk_text;
-  delete req.body.ability_perk_position;
-  delete req.body.ability_perk_compounds_with;
-  delete req.body.quirk_name;
-  delete req.body.quirk_description;
-  delete req.body.accessory_name;
-  delete req.body.accessory_description;
+  req.body = collectCharacterFormArrays(req.body);
   // updateCharacter throws AuthorizationError (caught by asyncHandler) when
   // the actor doesn't own the character; other failures are still returned.
   const { data, error } = await updateCharacter(id, req.body, profile);
