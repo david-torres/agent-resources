@@ -671,11 +671,12 @@ class CharacterService {
   async createOffscreenMission(actor, characterId, body) {
     await requireOwnedCharacter(this.adapter, actor, characterId);
 
+    const src = await this.resolveOffscreenSource(actor, body);
+    if (src.error) return { data: null, error: { status: 400, message: src.error } };
+
     if (!body.name || !body.summary) {
       return { data: null, error: { status: 400, message: 'Name and summary are required.' } };
     }
-    const src = await this.resolveOffscreenSource(actor, body);
-    if (src.error) return { data: null, error: { status: 400, message: src.error } };
 
     if (src.source_mission_id) {
       const { data: credits } = await this.adapter.getConduitCredits(actor.profileId);
