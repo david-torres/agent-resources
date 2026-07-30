@@ -8,6 +8,11 @@ const CREATOR = { profileId: 'profile-1', role: null };
 const STRANGER = { profileId: 'someone-else', role: null };
 const ADMIN = { profileId: 'admin-profile', role: 'admin' };
 
+// Minimal adapter satisfying every REQUIRED_ADAPTER_METHODS entry, so
+// `new CharacterService(...)` passes constructor validation. Individual
+// tests override the methods they actually exercise.
+const minimalRequiredAdapter = () => makeAdapter([]);
+
 const OWNED_CHARACTER = {
   id: 'character-1',
   creator_id: 'profile-1',
@@ -85,6 +90,13 @@ const makeAdapter = (calls, overrides = {}) => ({
   getAvailableHostedMissions: async () => ok([]),
   createOffscreenMissionRow: async () => ok({}),
   findUpgradeTargets: async () => ([{ id: 'target-class', name: 'Upgraded Class' }]),
+  // Offscreen-mission capability defaults (create/update/deleteOffscreenMission).
+  getOffscreenMissionRow: async () => ok(null),
+  getSourceMissionForCredit: async () => ok(null),
+  getConduitCredits: async () => ok(null),
+  insertOffscreenMission: async () => ({ error: null }),
+  updateOffscreenMissionRow: async () => ({ error: null }),
+  deleteOffscreenMissionRow: async () => ({ error: null }),
   ...overrides
 });
 
@@ -295,4 +307,81 @@ test('CharacterService.levelUp surfaces a backfill mission error without throwin
 
   expect(result.data).toBeNull();
   expect(result.error).toBeInstanceOf(AuthorizationError);
+});
+
+// --- Offscreen-mission capabilities ----------------------------------
+
+const offscreenAdapter = (overrides = {}) => ({
+  // Baseline first so the specific offscreen stubs below (and per-test
+  // `overrides`) take precedence — object-spread/property order means a
+  // later same-named key wins, and minimalRequiredAdapter() also defines
+  // generic versions of the six offscreen methods (for constructor
+  // validation elsewhere), so it must not be spread after them here.
+  ...minimalRequiredAdapter(),
+  getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', name: 'Hero', abilities: [] }),
+  getOffscreenMissionRow: async () => ok({ id: 'om-1', character_id: 'character-1' }),
+  getSourceMissionForCredit: async () => ok({ id: 'm-1', name: 'Raid', date: '2026-01-01', host_id: 'profile-1' }),
+  getConduitCredits: async () => ok({ balance: 3 }),
+  insertOffscreenMission: async () => ({ error: null }),
+  updateOffscreenMissionRow: async () => ({ error: null }),
+  deleteOffscreenMissionRow: async () => ({ error: null }),
+  ...overrides
+});
+
+test('createOffscreenMission refuses a non-owner with AuthorizationError', async () => {
+  const svc = new CharacterService(offscreenAdapter());
+  await expect(svc.createOffscreenMission(STRANGER, 'character-1', { name: 'x', summary: 'y' }))
+    .rejects.toBeInstanceOf(AuthorizationError);
+});
+
+test('createOffscreenMission requires name and summary', async () => {
+  const svc = new CharacterService(offscreenAdapter());
+  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', { name: '', summary: '' });
+  expect(error).toEqual({ status: 400, message: 'Name and summary are required.' });
+});
+
+test('createOffscreenMission rejects a source mission the actor does not host', async () => {
+  const svc = new CharacterService(offscreenAdapter({
+    getSourceMissionForCredit: async () => ok({ id: 'm-1', name: 'Raid', date: '2026-01-01', host_id: 'someone-else' })
+  }));
+  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', {
+    name: 'n', summary: 's', source_mission_id: 'm-1'
+  });
+  expect(error.status).toBe(400);
+});
+
+test('createOffscreenMission gates a hosted source on the credit balance', async () => {
+  const svc = new CharacterService(offscreenAdapter({
+    getConduitCredits: async () => ok({ balance: 0 })
+  }));
+  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', {
+    name: 'n', summary: 's', source_mission_id: 'm-1'
+  });
+  expect(error).toEqual({ status: 400, message: 'No Conduit Credits available.' });
+});
+
+test('createOffscreenMission inserts on the happy path', async () => {
+  const calls = [];
+  const svc = new CharacterService(offscreenAdapter({
+    insertOffscreenMission: async (args) => { calls.push(args); return { error: null }; }
+  }));
+  const { error } = await svc.createOffscreenMission(CREATOR, 'character-1', {
+    name: 'n', summary: 's', source_mission_name_other: 'Freeform', source_mission_date_other: '2026-02-02'
+  });
+  expect(error).toBeNull();
+  expect(calls[0].characterId).toBe('character-1');
+});
+
+test('updateOffscreenMission 404s when the row belongs to another character', async () => {
+  const svc = new CharacterService(offscreenAdapter({
+    getOffscreenMissionRow: async () => ok({ id: 'om-1', character_id: 'other-char' })
+  }));
+  const { error } = await svc.updateOffscreenMission(CREATOR, 'character-1', 'om-1', { name: 'n', summary: 's' });
+  expect(error.status).toBe(404);
+});
+
+test('deleteOffscreenMission refuses a non-owner with AuthorizationError', async () => {
+  const svc = new CharacterService(offscreenAdapter());
+  await expect(svc.deleteOffscreenMission(STRANGER, 'character-1', 'om-1'))
+    .rejects.toBeInstanceOf(AuthorizationError);
 });
