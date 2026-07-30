@@ -418,6 +418,9 @@ const markCharacterDeceased = (actor, id, confirmName) => characterService.markD
 const upgradeCharacterClass = (actor, id, targetClassId, client) => characterService.upgradeClass(actor, id, targetClassId, client);
 const updateCharacterStats = (actor, id, fields) => characterService.updateStats(actor, id, fields);
 const levelUpCharacter = (actor, id, body) => characterService.levelUp(actor, id, body);
+const createCharacterOffscreenMission = (actor, characterId, body) => characterService.createOffscreenMission(actor, characterId, body);
+const updateCharacterOffscreenMission = (actor, characterId, omId, body) => characterService.updateOffscreenMission(actor, characterId, omId, body);
+const deleteCharacterOffscreenMission = (actor, characterId, omId) => characterService.deleteOffscreenMission(actor, characterId, omId);
 
 module.exports = {
   getOwnCharacters,
@@ -430,6 +433,9 @@ module.exports = {
   upgradeCharacterClass,
   updateCharacterStats,
   levelUpCharacter,
+  createCharacterOffscreenMission,
+  updateCharacterOffscreenMission,
+  deleteCharacterOffscreenMission,
   findUpgradeTargetsFor,
   getCharacterRecentMissions,
   getCharacterAllMissions,

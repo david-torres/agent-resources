@@ -15,6 +15,9 @@ const {
   upgradeCharacterClass,
   updateCharacterStats,
   levelUpCharacter,
+  createCharacterOffscreenMission,
+  updateCharacterOffscreenMission,
+  deleteCharacterOffscreenMission,
   findUpgradeTargetsFor
 } = require('../models/character');
 const characterRepository = require('../services/character/repository');
@@ -28,7 +31,7 @@ const { getProfileById, getProfileConduitCredits } = require('../models/profile'
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { filterClassListsByIds } = require('../util/class-filter');
-const { createOffscreenMission, getOffscreenMissionById, updateOffscreenMission, removeOffscreenMission, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
+const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { renderMarkdown } = require('../util/markdown');
@@ -114,29 +117,6 @@ const filterClassDataForUser = async (user) => {
   const { advent: filteredPCCAdventV2, aspirant: filteredPCCAspirantV2 } = splitByEdition(filteredPCCv2);
 
   return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities };
-};
-
-const resolveOffscreenSource = async ({ body, profileId, supabaseClient }) => {
-  if (body.source_mission_id && body.source_mission_id !== '__other__') {
-    const { data: srcMission, error: srcErr } = await getMission(body.source_mission_id, supabaseClient);
-    if (srcErr || !srcMission) return { error: 'Source mission not found.' };
-    if (srcMission.host_id !== profileId) return { error: 'Only the host of a mission can use it as a credit source.' };
-    return {
-      source_mission_id: srcMission.id,
-      source_mission_name: srcMission.name,
-      source_mission_date: typeof srcMission.date === 'string'
-        ? srcMission.date.slice(0, 10)
-        : new Date(srcMission.date).toISOString().slice(0, 10)
-    };
-  }
-  const name = (body.source_mission_name_other || '').trim();
-  const date = (body.source_mission_date_other || '').trim();
-  if (!name || !date) return { error: 'Source mission name and date are required.' };
-  return {
-    source_mission_id: null,
-    source_mission_name: name,
-    source_mission_date: date
-  };
 };
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -496,58 +476,13 @@ router.get('/:id/offscreen-missions/new', isAuthenticated, async (req, res) => {
   });
 });
 
-router.post('/:id/offscreen-missions', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/offscreen-missions', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id: characterId } = req.params;
-
-  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return sendError(req, res, charError);
-  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
-
-  const src = await resolveOffscreenSource({
-    body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
-  });
-  if (src.error) return sendError(req, res, null, { status: 400, message: src.error });
-
-  if (!req.body.name || !req.body.summary) {
-    return sendError(req, res, null, { status: 400, message: 'Name and summary are required.' });
-  }
-
-  // If the user picked a hosted mission as the source, gate on the profile's balance.
-  // Free-text sources bypass the gate.
-  if (src.source_mission_id) {
-    const { data: credits } = await getProfileConduitCredits({
-      profileId: profile.id,
-      supabase: res.locals.supabase
-    });
-    if (!credits || credits.balance <= 0) {
-      return sendError(req, res, null, { status: 400, message: 'No Conduit Credits available.' });
-    }
-  }
-
-  const { error } = await createOffscreenMission({
-    characterId,
-    profileId: profile.id,
-    payload: {
-      name: req.body.name,
-      summary: req.body.summary,
-      merx_gained: req.body.merx_gained,
-      source_mission_id: src.source_mission_id,
-      source_mission_name: src.source_mission_name,
-      source_mission_date: src.source_mission_date
-    },
-    supabase: res.locals.supabase
-  });
-
-  if (error) {
-    if (error.code === '23505' || error.message === 'duplicate_source_mission') {
-      return sendError(req, res, error, { status: 400, message: 'That mission has already funded a credit.' });
-    }
-    return sendError(req, res, error);
-  }
-
-  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
-});
+  const { error } = await createCharacterOffscreenMission(actor, characterId, req.body);
+  if (error) return sendRouteError(req, res, error);
+  return res.redirect(`/characters/${characterId}`);
+}));
 
 router.get('/:id/offscreen-missions/:omId/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -587,76 +522,21 @@ router.get('/:id/offscreen-missions/:omId/edit', isAuthenticated, async (req, re
   });
 });
 
-router.post('/:id/offscreen-missions/:omId', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/offscreen-missions/:omId', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id: characterId, omId } = req.params;
+  const { error } = await updateCharacterOffscreenMission(actor, characterId, omId, req.body);
+  if (error) return sendRouteError(req, res, error);
+  return res.redirect(`/characters/${characterId}`);
+}));
 
-  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return sendError(req, res, charError);
-  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
-
-  const { data: existing, error: omError } = await getOffscreenMissionById({
-    id: omId,
-    supabase: res.locals.supabase
-  });
-  if (omError) return sendError(req, res, omError);
-  if (!existing || existing.character_id !== characterId) {
-    return sendError(req, res, null, { status: 404, message: 'Not found' });
-  }
-
-  if (!req.body.name || !req.body.summary) {
-    return sendError(req, res, null, { status: 400, message: 'Name and summary are required.' });
-  }
-
-  const src = await resolveOffscreenSource({
-    body: req.body, profileId: profile.id, supabaseClient: res.locals.supabase
-  });
-  if (src.error) return sendError(req, res, null, { status: 400, message: src.error });
-
-  const { error } = await updateOffscreenMission({
-    id: omId,
-    payload: {
-      name: req.body.name,
-      summary: req.body.summary,
-      merx_gained: req.body.merx_gained,
-      source_mission_id: src.source_mission_id,
-      source_mission_name: src.source_mission_name,
-      source_mission_date: src.source_mission_date
-    },
-    supabase: res.locals.supabase
-  });
-  if (error) {
-    if (error.code === '23505' || error.message === 'duplicate_source_mission') {
-      return sendError(req, res, error, { status: 400, message: 'That mission has already funded a credit.' });
-    }
-    return sendError(req, res, error);
-  }
-
-  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
-});
-
-router.post('/:id/offscreen-missions/:omId/delete', isAuthenticated, async (req, res) => {
-  const { profile } = res.locals;
+router.post('/:id/offscreen-missions/:omId/delete', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const { id: characterId, omId } = req.params;
-
-  const { data: character, error: charError } = await getCharacter(characterId, res.locals.supabase);
-  if (charError) return sendError(req, res, charError);
-  if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
-
-  const { data: existing, error: omError } = await getOffscreenMissionById({
-    id: omId,
-    supabase: res.locals.supabase
-  });
-  if (omError) return sendError(req, res, omError);
-  if (!existing || existing.character_id !== characterId) {
-    return sendError(req, res, null, { status: 404, message: 'Not found' });
-  }
-
-  const { error } = await removeOffscreenMission({ id: omId, supabase: res.locals.supabase });
-  if (error) return sendError(req, res, error);
-
-  return res.redirect(`/characters/${characterId}/${encodeURIComponent(character.name)}`);
-});
+  const { error } = await deleteCharacterOffscreenMission(actor, characterId, omId);
+  if (error) return sendRouteError(req, res, error);
+  return res.redirect(`/characters/${characterId}`);
+}));
 
 router.post('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
