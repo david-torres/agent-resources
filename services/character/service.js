@@ -43,7 +43,14 @@ const REQUIRED_ADAPTER_METHODS = [
   'createBackfillMission',
   'getAvailableHostedMissions',
   'createOffscreenMissionRow',
-  'findUpgradeTargets'
+  'findUpgradeTargets',
+  // Offscreen-mission capabilities (create/update/deleteOffscreenMission).
+  'getOffscreenMissionRow',
+  'getSourceMissionForCredit',
+  'getConduitCredits',
+  'insertOffscreenMission',
+  'updateOffscreenMissionRow',
+  'deleteOffscreenMissionRow'
 ];
 
 // Loads the full character row (admin-privileged; includes traits/gear/
@@ -634,6 +641,115 @@ class CharacterService {
     }
 
     return { error: null };
+  }
+
+  // --- Offscreen-mission capabilities ----------------------------------
+  // Resolves the credit source for a create/update payload: either an
+  // existing hosted mission (validated as actor-hosted) or a freeform
+  // name/date pair. Pure over adapter reads; returns { error } on failure.
+  async resolveOffscreenSource(actor, body) {
+    if (body.source_mission_id && body.source_mission_id !== '__other__') {
+      const { data: srcMission, error } = await this.adapter.getSourceMissionForCredit(body.source_mission_id);
+      if (error || !srcMission) return { error: 'Source mission not found.' };
+      if (srcMission.host_id !== actor.profileId) {
+        return { error: 'Only the host of a mission can use it as a credit source.' };
+      }
+      return {
+        source_mission_id: srcMission.id,
+        source_mission_name: srcMission.name,
+        source_mission_date: typeof srcMission.date === 'string'
+          ? srcMission.date.slice(0, 10)
+          : new Date(srcMission.date).toISOString().slice(0, 10)
+      };
+    }
+    const name = (body.source_mission_name_other || '').trim();
+    const date = (body.source_mission_date_other || '').trim();
+    if (!name || !date) return { error: 'Source mission name and date are required.' };
+    return { source_mission_id: null, source_mission_name: name, source_mission_date: date };
+  }
+
+  async createOffscreenMission(actor, characterId, body) {
+    await requireOwnedCharacter(this.adapter, actor, characterId);
+
+    if (!body.name || !body.summary) {
+      return { data: null, error: { status: 400, message: 'Name and summary are required.' } };
+    }
+    const src = await this.resolveOffscreenSource(actor, body);
+    if (src.error) return { data: null, error: { status: 400, message: src.error } };
+
+    if (src.source_mission_id) {
+      const { data: credits } = await this.adapter.getConduitCredits(actor.profileId);
+      if (!credits || credits.balance <= 0) {
+        return { data: null, error: { status: 400, message: 'No Conduit Credits available.' } };
+      }
+    }
+
+    const { error } = await this.adapter.insertOffscreenMission({
+      characterId,
+      profileId: actor.profileId,
+      payload: {
+        name: body.name,
+        summary: body.summary,
+        merx_gained: body.merx_gained,
+        source_mission_id: src.source_mission_id,
+        source_mission_name: src.source_mission_name,
+        source_mission_date: src.source_mission_date
+      }
+    });
+    if (error) {
+      if (error.code === '23505' || error.message === 'duplicate_source_mission') {
+        return { data: null, error: { status: 400, message: 'That mission has already funded a credit.' } };
+      }
+      return { data: null, error };
+    }
+    return { data: { characterId }, error: null };
+  }
+
+  async updateOffscreenMission(actor, characterId, omId, body) {
+    await requireOwnedCharacter(this.adapter, actor, characterId);
+
+    const { data: existing, error: omError } = await this.adapter.getOffscreenMissionRow(omId);
+    if (omError) return { data: null, error: omError };
+    if (!existing || existing.character_id !== characterId) {
+      return { data: null, error: { status: 404, message: 'Not found' } };
+    }
+    if (!body.name || !body.summary) {
+      return { data: null, error: { status: 400, message: 'Name and summary are required.' } };
+    }
+    const src = await this.resolveOffscreenSource(actor, body);
+    if (src.error) return { data: null, error: { status: 400, message: src.error } };
+
+    const { error } = await this.adapter.updateOffscreenMissionRow({
+      id: omId,
+      payload: {
+        name: body.name,
+        summary: body.summary,
+        merx_gained: body.merx_gained,
+        source_mission_id: src.source_mission_id,
+        source_mission_name: src.source_mission_name,
+        source_mission_date: src.source_mission_date
+      }
+    });
+    if (error) {
+      if (error.code === '23505' || error.message === 'duplicate_source_mission') {
+        return { data: null, error: { status: 400, message: 'That mission has already funded a credit.' } };
+      }
+      return { data: null, error };
+    }
+    return { data: { characterId }, error: null };
+  }
+
+  async deleteOffscreenMission(actor, characterId, omId) {
+    await requireOwnedCharacter(this.adapter, actor, characterId);
+
+    const { data: existing, error: omError } = await this.adapter.getOffscreenMissionRow(omId);
+    if (omError) return { data: null, error: omError };
+    if (!existing || existing.character_id !== characterId) {
+      return { data: null, error: { status: 404, message: 'Not found' } };
+    }
+    const { error } = await this.adapter.deleteOffscreenMissionRow(omId);
+    if (error) return { data: null, error };
+    return { data: { characterId }, error: null };
   }
 }
 

@@ -2,8 +2,12 @@ const { supabase, supabaseAdmin } = require('../../models/_base');
 const {
   listOffscreenMissions: listOffscreenMissionsForCharacter,
   createOffscreenMission,
+  updateOffscreenMission,
+  removeOffscreenMission,
+  getOffscreenMissionById,
   getAvailableHostedMissionsForPicker
 } = require('../../models/offscreen-mission');
+const { getProfileConduitCredits } = require('../../models/profile');
 const { createMission, addCharacterToMission } = require('../../models/mission');
 const { SYSTEM_ACTOR } = require('../../util/actor');
 const { escapeLikePattern } = require('../../util/validate');
@@ -400,5 +404,25 @@ module.exports = {
   getAvailableHostedMissions: (profileId) => getAvailableHostedMissionsForPicker({ profileId, supabase: supabaseAdmin }),
   createOffscreenMissionRow: ({ characterId, profileId, payload }) => createOffscreenMission({
     characterId, profileId, payload, supabase: supabaseAdmin
-  })
+  }),
+
+  // Offscreen-mission capability primitives (CharacterService#create/update/
+  // deleteOffscreenMission). Distinct from createOffscreenMissionRow above
+  // (used internally by the level-up credit-spend flow) — these back the
+  // user-facing offscreen-mission CRUD capabilities.
+  getOffscreenMissionRow: (id) => getOffscreenMissionById({ id, supabase: supabaseAdmin }),
+  getSourceMissionForCredit: async (missionId) => {
+    const { data, error } = await supabaseAdmin
+      .from('missions')
+      .select('id, name, date, host_id')
+      .eq('id', missionId)
+      .maybeSingle();
+    return { data, error };
+  },
+  getConduitCredits: (profileId) => getProfileConduitCredits({ profileId, supabase: supabaseAdmin }),
+  insertOffscreenMission: ({ characterId, profileId, payload }) => createOffscreenMission({
+    characterId, profileId, payload, supabase: supabaseAdmin
+  }),
+  updateOffscreenMissionRow: ({ id, payload }) => updateOffscreenMission({ id, payload, supabase: supabaseAdmin }),
+  deleteOffscreenMissionRow: (id) => removeOffscreenMission({ id, supabase: supabaseAdmin })
 };
