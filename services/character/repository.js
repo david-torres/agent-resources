@@ -266,6 +266,21 @@ module.exports = {
       return { data, error };
     }
   } : {}),
+  // level-up's terminal write. Unlike saveCharacterAtomic (which has a
+  // non-atomic fallback in the service and is therefore optional/guarded),
+  // levelUp has NO fallback path — the RPC is a hard dependency — so this is
+  // exported unconditionally and listed in REQUIRED_ADAPTER_METHODS. Callers
+  // always run against a real supabase client (rpc present); the only no-rpc
+  // context is fake-client unit tests that never invoke levelUp.
+  levelUpAtomic: async ({ characterId, creatorId, fields, perks }) => {
+    const { data, error } = await supabaseAdmin.rpc('level_up_character_atomic', {
+      p_character_id: characterId,
+      p_creator_id: creatorId,
+      p_fields: fields,
+      p_perks: perks
+    });
+    return { data, error };
+  },
   getChildRows: (table, characterId) => supabaseAdmin
     .from(table)
     .select('*')
@@ -347,7 +362,9 @@ module.exports = {
   },
   getClassRulesVersion,
 
-  // Perk-append primitives (level-up flow).
+  // Perk-build reads (level-up flow) — CharacterService#buildPerkRows uses
+  // these to filter to allowed abilities and compute per-ability position
+  // offsets; the terminal perk write happens inside level_up_character_atomic.
   fetchAllowedAbilityIds: async (characterId) => {
     const { data, error } = await supabaseAdmin.from('class_abilities').select('id').eq('character_id', characterId);
     return { data, error };
@@ -358,17 +375,6 @@ module.exports = {
       .select('id, class_ability_id, text, position')
       .eq('character_id', characterId);
     return { data, error };
-  },
-  insertPerks: async (rows) => {
-    const { error } = await supabaseAdmin.from('character_perks').insert(rows);
-    return { error };
-  },
-  updatePerkLinks: async (updates) => {
-    for (const u of updates) {
-      const { error } = await supabaseAdmin.from('character_perks').update({ compounds_with: u.compounds_with }).eq('id', u.id);
-      if (error) return { error };
-    }
-    return { error: null };
   },
 
   // Level-up backfill/credit-spend writes — internal, non-user-triggered

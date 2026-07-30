@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 const root = new URL('..', import.meta.url).pathname;
 const integrationFiles = new Set([
   'models/character-atomic.integration.test.js',
+  'models/character-level-up.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js'
 ]);
