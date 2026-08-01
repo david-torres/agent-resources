@@ -29,6 +29,15 @@ const setupAlpine = async () => {
   });
   for (const key of GLOBAL_KEYS) globalThis[key] = dom.window[key];
 
+  // jsdom performs no layout, so offsetWidth/offsetHeight are always 0 for
+  // every element, with no exceptions. Alpine's @click.outside (and anything
+  // else that consults element dimensions to infer visibility) treats a
+  // zero-sized element as hidden and skips handling it — under jsdom that
+  // would be true unconditionally, so outside-click would never fire for
+  // any component. Stub non-zero values so elements report as laid out.
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 100 });
+  Object.defineProperty(dom.window.HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 40 });
+
   alpine = (await import('alpinejs')).default;
   globalThis.Alpine = alpine;
   alpine.start();
