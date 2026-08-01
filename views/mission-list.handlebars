@@ -5,6 +5,15 @@
   <a href="/missions/import" class="button is-link is-light">Import Mission Log</a>
 </div>
 
+<div id="mission-filter-root"
+     x-data="{ name: '', character: '', conduit: '', outcome: '',
+               match(row) {
+                 const d = row.dataset;
+                 return (!this.name || (d.name || '').toLowerCase().includes(this.name.toLowerCase()))
+                   && (!this.character || (d.characters || '').toLowerCase().includes(this.character.toLowerCase()))
+                   && (!this.conduit || (d.conduit || '').toLowerCase().includes(this.conduit.toLowerCase()))
+                   && (!this.outcome || d.outcome === this.outcome);
+               } }">
 {{#if missions.length}}
 <div class="box mb-4" id="mission-filters">
   <div class="columns is-multiline is-variable is-3">
@@ -12,7 +21,7 @@
       <div class="field">
         <label class="label is-small">Mission name</label>
         <div class="control has-icons-left">
-          <input class="input" type="text" id="filterName" placeholder="Mission name...">
+          <input class="input" type="text" id="filterName" placeholder="Mission name..." x-model.debounce.150ms="name">
           <span class="icon is-left"><i class="fas fa-search"></i></span>
         </div>
       </div>
@@ -21,7 +30,7 @@
       <div class="field">
         <label class="label is-small">Character</label>
         <div class="control has-icons-left">
-          <input class="input" type="text" id="filterCharacter" placeholder="Character name...">
+          <input class="input" type="text" id="filterCharacter" placeholder="Character name..." x-model.debounce.150ms="character">
           <span class="icon is-left"><i class="fas fa-user"></i></span>
         </div>
       </div>
@@ -30,7 +39,7 @@
       <div class="field">
         <label class="label is-small">Conduit</label>
         <div class="control has-icons-left">
-          <input class="input" type="text" id="filterConduit" placeholder="Conduit name...">
+          <input class="input" type="text" id="filterConduit" placeholder="Conduit name..." x-model.debounce.150ms="conduit">
           <span class="icon is-left"><i class="fas fa-hat-wizard"></i></span>
         </div>
       </div>
@@ -40,7 +49,7 @@
         <label class="label is-small">Outcome</label>
         <div class="control">
           <div class="select is-fullwidth">
-            <select id="filterOutcome">
+            <select id="filterOutcome" x-model="outcome">
               <option value="">All</option>
               <option value="pending">Pending</option>
               <option value="success">Success</option>
@@ -69,7 +78,7 @@
     <tbody>
       {{#each missions}}
       {{#or this.is_public (eq ../profile.id this.creator_id)}}
-      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}{{#each this.unregistered_character_names}}{{this}} {{/each}}" data-conduit="{{this.host_name}}">
+      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}{{#each this.unregistered_character_names}}{{this}} {{/each}}" data-conduit="{{this.host_name}}" x-show="match($el)">
         <td>
           {{this.name}}
           {{#if this.media_url}}
@@ -147,7 +156,7 @@
     </thead>
     <tbody>
       {{#each editableMissions}}
-      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}" data-conduit="{{this.host_name}}">
+      <tr class="mission-row" data-name="{{this.name}}" data-outcome="{{this.outcome}}" data-characters="{{#each this.characters}}{{this.name}} {{/each}}" data-conduit="{{this.host_name}}" x-show="match($el)">
         <td>
           {{this.name}}
           {{#if this.media_url}}
@@ -186,40 +195,4 @@
 </div>
 {{/if}}
 
-<script>
-(function() {
-  var nameInput = document.getElementById('filterName');
-  var charInput = document.getElementById('filterCharacter');
-  var conduitInput = document.getElementById('filterConduit');
-  var outcomeSelect = document.getElementById('filterOutcome');
-  if (!nameInput) return;
-
-  var timer;
-  function filterRows() {
-    var name = nameInput.value.toLowerCase();
-    var char = charInput.value.toLowerCase();
-    var conduit = conduitInput.value.toLowerCase();
-    var outcome = outcomeSelect.value;
-    var rows = document.querySelectorAll('.mission-row');
-
-    rows.forEach(function(row) {
-      var match = true;
-      if (name && row.dataset.name.toLowerCase().indexOf(name) === -1) match = false;
-      if (char && row.dataset.characters.toLowerCase().indexOf(char) === -1) match = false;
-      if (conduit && (row.dataset.conduit || '').toLowerCase().indexOf(conduit) === -1) match = false;
-      if (outcome && row.dataset.outcome !== outcome) match = false;
-      row.style.display = match ? '' : 'none';
-    });
-  }
-
-  function debounced() {
-    clearTimeout(timer);
-    timer = setTimeout(filterRows, 150);
-  }
-
-  nameInput.addEventListener('input', debounced);
-  charInput.addEventListener('input', debounced);
-  conduitInput.addEventListener('input', debounced);
-  outcomeSelect.addEventListener('change', filterRows);
-})();
-</script>
+</div>
