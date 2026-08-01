@@ -412,7 +412,8 @@
       <p class="modal-card-title">Mark Character as Deceased</p>
       <button class="delete" aria-label="close" onclick="document.getElementById('deceased-modal').classList.remove('is-active')"></button>
     </header>
-    <form hx-post="/characters/{{character.id}}/deceased" hx-indicator="#deceased-submit">
+    <form hx-post="/characters/{{character.id}}/deceased" hx-indicator="#deceased-submit"
+          x-data="{ typed: '', required: {{json character.name}} }">
       <section class="modal-card-body">
         <div class="notification is-danger is-light">
           <p><strong>Warning:</strong> This action is <strong>permanent</strong> and cannot be undone.</p>
@@ -421,14 +422,13 @@
         <div class="field">
           <label class="label">To confirm, type the character's name: <strong>{{character.name}}</strong></label>
           <div class="control">
-            <input 
-              class="input" 
-              type="text" 
-              name="confirmName" 
+            <input
+              class="input"
+              type="text"
+              name="confirmName"
               placeholder="Type character name to confirm"
               autocomplete="off"
-              data-confirm-name="{{character.name}}"
-              oninput="document.getElementById('deceased-submit').disabled = (this.value !== this.dataset.confirmName)"
+              x-model="typed"
               required
             >
           </div>
@@ -436,7 +436,7 @@
       </section>
       <footer class="modal-card-foot">
         <button type="button" class="button" onclick="document.getElementById('deceased-modal').classList.remove('is-active')">Cancel</button>
-        <button id="deceased-submit" type="submit" class="button is-dark" disabled>
+        <button id="deceased-submit" type="submit" class="button is-dark" :disabled="typed !== required">
           <span class="icon"><i class="fas fa-skull"></i></span>
           <span>Confirm Death</span>
         </button>
