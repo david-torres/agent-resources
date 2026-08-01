@@ -43,3 +43,13 @@ test('Alpine loads last among ALL deferred scripts so registrations run before A
     ).toBeLessThan(alpineIndex);
   }
 });
+
+test('htmx settle runs synchronously so it cannot clobber Alpine', () => {
+  const meta = head().match(/<meta name="htmx-config" content='([^']+)'/);
+  expect(meta).not.toBeNull();
+  const config = JSON.parse(meta[1]);
+  // Non-zero settle lets htmx overwrite class/style that x-show and
+  // :class wrote on the intervening microtask. See the spec.
+  expect(config.defaultSettleDelay).toBe(0);
+  expect(config.includeIndicatorStyles).toBe(false);
+});
