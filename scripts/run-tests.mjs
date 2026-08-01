@@ -27,7 +27,7 @@ const testFiles = (dir) => readdirSync(join(root, dir), { withFileTypes: true })
     ? testFiles(`${dir}/${entry.name}`)
     : entry.name.endsWith('.test.js') ? [`${dir}/${entry.name}`] : []);
 
-const allFiles = ['models', 'routes', 'services', 'util', 'views'].flatMap(testFiles).sort();
+const allFiles = ['models', 'routes', 'services', 'test', 'util', 'views'].flatMap(testFiles).sort();
 const files = mode === 'integration'
   ? allFiles.filter(file => integrationFiles.has(file))
   : mode === 'http'
