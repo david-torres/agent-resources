@@ -42,6 +42,19 @@
   Assert both what the markup now has **and** that the replaced inline mechanism is gone. This is cheap and is what actually protects the conversion.
 - **A commit message must never claim verification that was not performed.** Several tasks below carry a manual browser check that an automated implementer cannot run. If you did not personally observe a result, do not write that it was observed — say the check remains outstanding and why. This applies to the suggested commit messages in this plan too: they are drafts, not text to paste unread. If a draft asserts something you did not do, change it. A commit message is permanent, and a false claim here misleads whoever later audits whether this branch was ever validated in a real browser.
 - Report the test counts you actually observed on a real run, not figures copied from an earlier task or from this plan.
+- **Use `settle()`, not `tick()`, before asserting on `x-show` visibility.** Alpine's `x-transition` module installs `_x_toggleAndCascadeWithTransitions` on `Element.prototype` unconditionally, and `x-show` routes every post-mount toggle through `requestAnimationFrame` when `document.visibilityState === 'visible'` — which jsdom reports. A microtask flush therefore never observes the change. Only the synchronous paint at mount is unaffected.
+
+  Verified behavior after a click, with `await tick()` alone:
+
+  | binding | observed? |
+  |---|---|
+  | `x-show` reveal | **no** — still `display: none` |
+  | `x-show` hide | **no** — still the previous value |
+  | `:class`, `x-text`, `:disabled` | yes |
+
+  **This is a false-pass trap, not just a flake.** A test that clicks and then asserts `style.display === 'none'` after only `tick()` passes because the toggle has not run yet — not because the logic is right. It would keep passing if the handler were deleted entirely.
+
+  `test/helpers/alpine-dom.js` exports `settle()` for this: it awaits a tick, two real animation frames, then a tick. Use `settle()` after any trigger whose effect you will read as `x-show` visibility; `tick()` remains correct for everything else.
 - **Seed Alpine state with `{{json x}}`, never `{{{json x}}}`.** The triple-stache emits JSON unescaped. `JSON.stringify` wraps strings in double quotes and does not escape apostrophes, so the raw output breaks out of *either* attribute quoting style: a double-quoted attribute dies on the JSON's own quotes, and a single-quoted attribute dies on the first apostrophe in the data (`Hero's strike`, `doesn't`). The attribute then terminates mid-value, Alpine fails to parse the component, and every directive on it silently stops working — for exactly the ordinary text people type.
 
   The double-stache HTML-escapes the JSON, and the browser decodes it back to a valid JS literal before Alpine evaluates:
@@ -1407,11 +1420,13 @@ The largest Phase 2 item. All 108 lines of `public/js/character-stats.js` become
 
 - [ ] **Step 1: Write the failing test**
 
-Create `views/partials/character-stats-editor.test.js`:
+Create `views/partials/character-stats-editor.test.js`.
+
+**These tests read `x-show` visibility, so they must `await settle()` — not `await tick()` — after every trigger.** See the Global Constraints: `x-show` defers through `requestAnimationFrame`, so a `tick()`-only assertion of `display: none` passes because the toggle has not run yet, and would keep passing if `edit()` were deleted. Substitute `settle()` for `tick()` in every assertion below that reads `style.display`.
 
 ```js
 const { test, expect, beforeAll } = require('bun:test');
-const { setupAlpine, render, tick } = require('../../test/helpers/alpine-dom');
+const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
 const STATS = { vitality: 3, might: 2, resilience: 1 };
 
@@ -1697,11 +1712,13 @@ Record the exact `data-*` attributes each row carries and which are substring vs
 
 - [ ] **Step 2: Write the failing test**
 
-Create `views/mission-list.test.js`:
+Create `views/mission-list.test.js`.
+
+**Every assertion in this file reads `x-show` visibility on the rows, so each trigger must be followed by `await settle()` — not `await tick()`.** See the Global Constraints: `x-show` defers through `requestAnimationFrame`. A `tick()`-only test here is especially dangerous — the filter's whole job is hiding rows, so an assertion that a row is `display: none` would pass on a completely broken filter that never ran.
 
 ```js
 const { test, expect, beforeAll } = require('bun:test');
-const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
+const { setupAlpine, render, tick, settle } = require('../test/helpers/alpine-dom');
 
 beforeAll(async () => { await setupAlpine(); });
 
