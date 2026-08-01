@@ -108,6 +108,14 @@ document.addEventListener('alpine:init', () => {
       return this.dir === 1 ? '▲' : '▼';
     },
 
+    // Dims inactive indicators so the active column's ▲/▼ stands out --
+    // the old inline script did this by toggling has-text-grey-light via
+    // classList on click. Kept next to indicator() since both derive from
+    // the same key/dir state.
+    indicatorClass(key) {
+      return this.key === key ? '' : 'has-text-grey-light';
+    },
+
     sortBy(key, type) {
       this.dir = this.key === key ? -this.dir : 1;
       this.key = key;
