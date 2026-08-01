@@ -1,4 +1,5 @@
-<form method="POST" action="{{formAction}}">
+<form method="POST" action="{{formAction}}" x-data="{ sourceId: '' }"
+      x-init="sourceId = document.getElementById('om-source-select').value">
   <div class="field">
     <label class="label" for="om-name">Offscreen Mission Name</label>
     <div class="control">
@@ -28,8 +29,7 @@
     <label class="label">Source Mission</label>
     <div class="control">
       <div class="select is-fullwidth">
-        <select name="source_mission_id" id="om-source-select"
-                onchange="document.getElementById('om-source-other').style.display = this.value === '__other__' ? 'block' : 'none';">
+        <select name="source_mission_id" id="om-source-select" x-model="sourceId">
           {{#each availableHostedMissions}}
           <option value="{{this.id}}"
                   data-name="{{this.name}}"
@@ -52,8 +52,7 @@
     {{/if}}
   </div>
 
-  <div id="om-source-other"
-       style="display: {{#unless offscreenMission.source_mission_id}}{{#if offscreenMission}}block{{else}}none{{/if}}{{/unless}};">
+  <div id="om-source-other" x-show="sourceId === '__other__'" x-cloak>
     <div class="field">
       <label class="label" for="om-source-name">Source Mission Name</label>
       <div class="control">
