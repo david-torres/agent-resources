@@ -86,4 +86,59 @@ document.addEventListener('alpine:init', () => {
       });
     }
   }));
+
+  // Click-to-sort table. Replaces the inline script in
+  // views/character-list.handlebars.
+  Alpine.data('sortableTable', () => ({
+    key: null,
+    dir: 1,
+
+    // `$el` inside a method binds to the element that INVOKED it — here the
+    // clicked <th>, not the table. Querying 'thead th' from a <th> returns
+    // nothing, colIndex resolves to -1, and sorting silently does nothing.
+    // Capture the root in init(), where `$el` IS the x-data element.
+    root: null,
+
+    init() {
+      this.root = this.$el;
+    },
+
+    indicator(key) {
+      if (this.key !== key) return '⇅';
+      return this.dir === 1 ? '▲' : '▼';
+    },
+
+    sortBy(key, type) {
+      this.dir = this.key === key ? -this.dir : 1;
+      this.key = key;
+
+      // Each sortable <th> carries data-sort-key; its position in the
+      // header row is the cell index to read in every body row.
+      const columns = Array.from(this.root.querySelectorAll('thead th'));
+      const colIndex = columns.findIndex((th) => th.dataset.sortKey === key);
+      if (colIndex === -1) return;
+
+      const body = this.root.querySelector('tbody');
+      const rows = Array.from(body.querySelectorAll('tr'));
+
+      const valueOf = (row) => {
+        const cell = row.children[colIndex];
+        if (!cell) return '';
+        return cell.dataset.sortValue !== undefined
+          ? cell.dataset.sortValue
+          : cell.textContent.trim();
+      };
+
+      rows.sort((a, b) => {
+        const av = valueOf(a);
+        const bv = valueOf(b);
+        if (type === 'number') {
+          return ((parseFloat(av) || 0) - (parseFloat(bv) || 0)) * this.dir;
+        }
+        return av.localeCompare(bv) * this.dir;
+      });
+
+      rows.forEach((row) => body.appendChild(row));
+    }
+  }));
 });
