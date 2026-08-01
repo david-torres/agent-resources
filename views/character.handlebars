@@ -188,7 +188,8 @@
   </div>
 
   <div class="column is-two-thirds">
-    <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}">
+    <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}"
+         x-data="characterStats({{json character.id}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{lookup ../character this}}{{/each}} })">
       <div class="level is-mobile mb-3">
         <div class="level-left">
           <h3 class="title is-4 mb-0">Stats</h3>
@@ -196,7 +197,7 @@
         {{#if profile}}
         {{#if (eq character.creator_id profile.id)}}
         <div class="level-right">
-          <button type="button" class="button is-small is-link is-light" id="statsUnlockBtn">
+          <button type="button" class="button is-small is-link is-light" id="statsUnlockBtn" x-show="!editing" @click="edit()">
             <span class="icon"><i class="fas fa-pen"></i></span>
             <span>Edit</span>
           </button>
@@ -204,7 +205,7 @@
         {{/if}}
         {{/if}}
       </div>
-      <div id="statsReadOnly" class="wizard-stat-grid">
+      <div id="statsReadOnly" class="wizard-stat-grid" x-show="!editing">
         {{#each statList}}
         <div class="wizard-stat-row" data-stat="{{this}}" data-value="{{lookup ../character this}}">
           <div class="wizard-stat-name">{{capitalize this}}</div>
@@ -223,7 +224,7 @@
         </div>
         {{/each}}
       </div>
-      <div id="statsEditor" hidden>
+      <div id="statsEditor" x-show="editing" x-cloak>
         {{> character-stats-editor}}
       </div>
     </div>
@@ -409,5 +410,4 @@
 {{> character-level-up}}
 
 <script src="/js/character-common.js" defer></script>
-<script src="/js/character-stats.js" defer></script>
 <script src="/js/character-level-up.js" defer></script>

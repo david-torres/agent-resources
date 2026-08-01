@@ -1,6 +1,6 @@
-<form id="characterStatsForm" class="block" autocomplete="off">
+<form id="characterStatsForm" class="block" autocomplete="off" @submit.prevent="save()">
   <p class="has-text-grey is-size-7 mb-3">
-    Edit the point values for each stat. Total: <strong id="statsTotalSum">0</strong>.
+    Edit the point values for each stat. Total: <strong id="statsTotalSum" x-text="total">0</strong>.
   </p>
   <div class="wizard-stat-grid">
     {{#each statList}}
@@ -17,6 +17,7 @@
           step="1"
           value="{{lookup ../character this}}"
           data-stat="{{this}}"
+          x-model.number="stats.{{this}}"
         >
       </div>
     </div>
@@ -24,14 +25,14 @@
   </div>
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control">
-      <button type="button" class="button" id="statsCancelBtn">Cancel</button>
+      <button type="button" class="button" id="statsCancelBtn" @click="cancel()">Cancel</button>
     </p>
     <p class="control">
-      <button type="submit" class="button is-primary" id="statsSaveBtn">
+      <button type="submit" class="button is-primary" id="statsSaveBtn" :disabled="saving" :class="saving && 'is-loading'">
         <span class="icon"><i class="fas fa-save"></i></span>
         <span>Save stats</span>
       </button>
     </p>
   </div>
-  <div id="statsEditorError" class="notification is-danger is-light is-hidden mt-3"></div>
+  <div id="statsEditorError" class="notification is-danger is-light mt-3" x-show="error" x-text="error"></div>
 </form>
