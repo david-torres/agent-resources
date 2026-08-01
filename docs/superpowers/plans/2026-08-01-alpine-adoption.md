@@ -40,6 +40,8 @@
   ```
 
   Assert both what the markup now has **and** that the replaced inline mechanism is gone. This is cheap and is what actually protects the conversion.
+- **A commit message must never claim verification that was not performed.** Several tasks below carry a manual browser check that an automated implementer cannot run. If you did not personally observe a result, do not write that it was observed — say the check remains outstanding and why. This applies to the suggested commit messages in this plan too: they are drafts, not text to paste unread. If a draft asserts something you did not do, change it. A commit message is permanent, and a false claim here misleads whoever later audits whether this branch was ever validated in a real browser.
+- Report the test counts you actually observed on a real run, not figures copied from an earlier task or from this plan.
 - Commit messages end with: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 
 ## File Structure
@@ -620,8 +622,12 @@ visibly wrong until its state changes.
 
 At delay 0 doSettle() runs synchronously in the swap task, before
 Alpine's mutation microtask, so Alpine initializes against final
-attributes. Verified manually against #navbar-menu, which persists
-across every boosted navigation.
+attributes.
+
+Not verifiable by automated test: the harness has no htmx, so the
+swap-then-settle race only exists in a real browser. The manual check
+against #navbar-menu — which persists across every boosted navigation —
+remains outstanding.
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 EOF
