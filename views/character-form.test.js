@@ -6,10 +6,13 @@ const source = () => fs.readFileSync(
   path.join(__dirname, 'character-form.handlebars'), 'utf8'
 );
 
-test('deceased modal opens through App.openModal, not raw classList', () => {
+test('deceased modal opens through the modal Alpine component, not App.openModal', () => {
   const html = source();
-  expect(html).toContain("App.openModal('#deceased-modal')");
-  expect(html).not.toContain("getElementById('deceased-modal').classList.add");
+  expect(html).toContain("$dispatch('open-modal', 'deceased')");
+  expect(html).toContain("x-data=\"modal('deceased')\"");
+  expect(html).not.toContain('App.openModal');
+  expect(html).not.toContain('App.closeModal');
+  expect(html).not.toContain("getElementById('deceased-modal')");
 });
 
 const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
