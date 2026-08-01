@@ -40,6 +40,6 @@ test('perk group renders existing perks for the ability (edit/server path keyed 
       { class_ability_id: 'ability-1', text: 'Deal +1', position: 0, compounds_with: null }
     ]
   });
-  expect(html).toContain('value="Deal +1"');
+  expect(html).toContain('>Deal +1</textarea>');
   expect(html).toContain('value="ability-1"');
 });
