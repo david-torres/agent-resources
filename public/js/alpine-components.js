@@ -19,6 +19,17 @@ document.addEventListener('alpine:init', () => {
     saving: false,
     error: '',
     stats: Object.assign({}, initialStats),
+    root: null,
+
+    init() {
+      // Capture the x-data root here, not inside edit(). $el is bound to
+      // whichever element invoked the current method — inside edit() that
+      // is the Edit <button> itself (called via @click="edit()"), which has
+      // no .stats-input descendants, so querySelector off $el there always
+      // returns null and focus silently never moves. init() runs with $el
+      // bound to the x-data root, which does contain the inputs.
+      this.root = this.$el;
+    },
 
     get total() {
       return Object.values(this.stats)
@@ -29,7 +40,7 @@ document.addEventListener('alpine:init', () => {
       this.error = '';
       this.editing = true;
       this.$nextTick(() => {
-        const first = this.$el.querySelector('.stats-input');
+        const first = this.root.querySelector('.stats-input');
         if (first) first.focus();
       });
     },
