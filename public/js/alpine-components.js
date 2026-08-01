@@ -140,6 +140,28 @@ document.addEventListener('alpine:init', () => {
     }
   }));
 
+  // Bulma modal shell. Replaces App.openModal / App.closeModal.
+  //
+  // Listens on the window so code outside Alpine can drive it:
+  //   window.dispatchEvent(new CustomEvent('open-modal', { detail: 'levelUp' }))
+  // That is how public/js/character-level-up.js opens its modal without
+  // being rewritten.
+  Alpine.data('modal', (name) => ({
+    show: false,
+
+    open(which) {
+      if (which !== name) return;
+      this.show = true;
+      document.body.classList.add('modal-open');
+    },
+
+    close() {
+      if (!this.show) return;
+      this.show = false;
+      document.body.classList.remove('modal-open');
+    }
+  }));
+
   // Click-to-sort table. Replaces the inline script in
   // views/character-list.handlebars.
   Alpine.data('sortableTable', () => ({
