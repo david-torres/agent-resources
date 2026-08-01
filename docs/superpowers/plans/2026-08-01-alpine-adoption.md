@@ -2154,13 +2154,26 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
 and above the `alpine:init` listener, at file scope:
 
 ```js
-// Matches the slug rule the page editor used inline: lowercase, strip
-// anything that is not a word character or space, collapse runs of
-// spaces and dashes, trim leading/trailing dashes.
+// Character-for-character the slug rule the page editor used inline.
+//
+// Note `_` is deliberately NOT collapsed: `\w` includes it, so the strip
+// step leaves it, and the collapse steps only target whitespace and
+// dashes. `foo_bar` stays `foo_bar`. Do not "tidy" this into
+// `[\s_-]+` — that changes real slugs, and because the on-load
+// derivation compares `initialSlug === slugify(initialTitle)`, it would
+// silently flip the auto/manual flag for every existing page whose title
+// contains an underscore, so its slug would stop following the title
+// with no signal. Underscores are valid in URLs; there is nothing to fix.
+//
+// The `(value || '')` guard is the one addition: the inline script always
+// read a string off `title.value`, but this component is seeded from
+// server data that may be null on a new page.
 const slugify = (value) => (value || '')
   .toLowerCase()
+  .trim()
   .replace(/[^\w\s-]/g, '')
-  .replace(/[\s_-]+/g, '-')
+  .replace(/\s+/g, '-')
+  .replace(/-+/g, '-')
   .replace(/^-+|-+$/g, '');
 ```
 
