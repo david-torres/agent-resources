@@ -3,7 +3,7 @@
   <input type="hidden" name="ability_perk_position[]" value="{{position}}">
   <div class="field has-addons">
     <div class="control is-expanded">
-      <div x-data='{ text: {{{json perk.text}}} || "" }'>
+      <div x-data="{ text: {{json perk.text}} || '' }">
         <textarea class="textarea perk-text" name="ability_perk_text[]"
                    placeholder="Perk text (≤25 words)" x-model="text"
                    maxlength="500" required>{{perk.text}}</textarea>

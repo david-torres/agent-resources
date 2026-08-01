@@ -110,3 +110,34 @@ test('character-ability-perk template uses Alpine for word count', () => {
   // Verify textarea content has the perk text
   expect(html).toContain('>Sample perk text</textarea>');
 });
+
+test('character-ability-perk Alpine expression handles apostrophes and special chars', async () => {
+  await setupAlpine();
+  const html = renderPartial({
+    abilityId: 'ability-1',
+    position: 0,
+    perk: { text: "Hero's strike", compounds_with: '' },
+    siblingPerks: []
+  });
+
+  // Verify x-data is properly HTML-escaped so it's valid even with apostrophes
+  expect(html).toContain('&quot;Hero&#x27;s strike&quot;');
+
+  // Mount the partial through jsdom to verify Alpine can parse the x-data
+  // without errors and the word count computes correctly
+  await render(html);
+
+  // Verify Alpine parsed successfully and word count is correct (2 words)
+  const countSpan = document.querySelector('.word-count');
+  expect(countSpan.textContent).toBe('2');
+
+  // Verify textarea content is correct (browser decodes HTML entities)
+  const ta = document.querySelector('textarea');
+  expect(ta.value).toBe("Hero's strike");
+
+  // Verify x-model binding works: change textarea and count updates
+  ta.value = "Hero's counterattack strike";
+  ta.dispatchEvent(new window.Event('input', { bubbles: true }));
+  await tick();
+  expect(countSpan.textContent).toBe('3');
+});
