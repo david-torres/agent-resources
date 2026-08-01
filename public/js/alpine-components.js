@@ -146,7 +146,13 @@ document.addEventListener('alpine:init', () => {
   //   window.dispatchEvent(new CustomEvent('open-modal', { detail: 'levelUp' }))
   // That is how public/js/character-level-up.js opens its modal without
   // being rewritten.
-  Alpine.data('modal', (name) => ({
+  //
+  // Factored out (not registered directly) so `clearingModal` below can
+  // build on the exact same open/close guards instead of reimplementing
+  // them -- the name-scoping check and the "already closed, don't double
+  // -unlock the body" guard would otherwise have to be kept in sync by hand
+  // in two places.
+  const modalBase = (name) => ({
     show: false,
 
     open(which) {
@@ -165,6 +171,34 @@ document.addEventListener('alpine:init', () => {
       if (!this.show) return;
       this.show = false;
       document.body.classList.remove('modal-open');
+    }
+  });
+
+  Alpine.data('modal', modalBase);
+
+  // A modal that also blanks a result target when it actually closes --
+  // e.g. the class-view unlock-code modal, which must not show a
+  // previously-generated code on reopen. Replaces the
+  // data-clear-on-close/data-clear-target attribute contract that only
+  // App.closeModal used to honour.
+  //
+  // Built on modalBase so name-scoping and the double-close guard aren't
+  // reimplemented here. closeAndClear() captures `wasOpen` before
+  // delegating to close(which) so the clear only fires when THIS call
+  // actually transitioned the modal from open to closed:
+  //   - a real close (background/delete/footer/Escape) -> clears
+  //   - Escape while a DIFFERENT modal is open (this one already closed)
+  //     -> wasOpen is false -> no spurious clear
+  //   - a close-modal broadcast for a different name while this one is
+  //     open -> close(which) returns early on the name mismatch, show
+  //     stays true -> skips the clear along with the close
+  Alpine.data('clearingModal', (name) => ({
+    ...modalBase(name),
+
+    closeAndClear(which) {
+      const wasOpen = this.show;
+      this.close(which);
+      if (wasOpen && !this.show && this.$refs.result) this.$refs.result.innerHTML = '';
     }
   }));
 
