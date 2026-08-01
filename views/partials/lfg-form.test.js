@@ -1,9 +1,28 @@
 const { test, expect, beforeAll } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
+const Handlebars = require('handlebars');
+const handlebarsHelpers = require('handlebars-helpers')();
+const customHelpers = require('../../util/handlebars');
 const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
 beforeAll(async () => { await setupAlpine(); });
+
+// Compiles the real offscreen-mission-form.handlebars with the app's actual
+// helper set. The shared harness's renderPartial() uses a bare Handlebars
+// instance with no helpers registered, which throws "Missing helper" on
+// this template (it uses eq, date, and others). Mirrors the pattern in
+// character-ability-perk.test.js.
+const renderOffscreenForm = (context) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(handlebarsHelpers);
+  hb.registerHelper(customHelpers);
+  const src = fs.readFileSync(
+    path.join(__dirname, 'offscreen-mission-form.handlebars'),
+    'utf8'
+  );
+  return hb.compile(src)(context);
+};
 
 // x-show's post-mount toggles are deferred to a real animation frame (not a
 // microtask) by Alpine's own transition-cascade hook — see settle()'s doc
@@ -150,6 +169,98 @@ test('real offscreen-mission-form.handlebars reveals the other field only for __
   expect(html).toContain("x-show=\"sourceId === '__other__'\"");
   expect(html).toContain('x-cloak');
   expect(html).not.toContain('onchange');
+
+  // The seed reads the select's own scoped $refs value, not a document-wide
+  // getElementById lookup — refactor-safe (no id-string duplication) and
+  // safe if this partial is ever rendered twice on one page.
+  expect(html).toContain('x-ref="sourceSelect"');
+  expect(html).toContain('x-init="sourceId = $refs.sourceSelect.value"');
+  expect(html).not.toContain('getElementById');
+});
+
+// --- Behavioral coverage for the x-init seed, mounting the real template
+// with real Handlebars helpers for all three data shapes it needs to
+// distinguish. Unlike the synthetic x-data="{ choice: 'a' }" test above,
+// these exercise the actual $refs-based DOM read this partial relies on.
+test('real offscreen-mission-form: new form starts with the other fields hidden', async () => {
+  const html = renderOffscreenForm({
+    formAction: '/characters/c1/offscreen-missions',
+    character: { id: 'c1' },
+    mode: 'new',
+    availableHostedMissions: [
+      { id: 'm1', name: 'Mission One', date: '2024-01-01' }
+    ],
+    offscreenMission: undefined
+  });
+  await render(html);
+  await settle();
+
+  // No option is explicitly selected in this shape, so the browser's own
+  // default (first option in DOM order) wins — a real hosted mission, not
+  // '__other__'. The seed reflects that real state rather than a
+  // placeholder empty string.
+  expect(document.getElementById('om-source-select').value).toBe('m1');
+  expect(document.getElementById('om-source-other').style.display).toBe('none');
+});
+
+test('real offscreen-mission-form: editing a mission linked to a real source keeps the other fields hidden and preserves the selected option', async () => {
+  // This is the human-approved behavior change from the initial pass: the
+  // old style="display: ;" CSS quirk rendered these fields *visible* here
+  // (an invalid declaration falling back to the div's default display).
+  // This assertion is the whole point of this test.
+  const html = renderOffscreenForm({
+    formAction: '/characters/c1/offscreen-missions/om1',
+    character: { id: 'c1' },
+    mode: 'edit',
+    availableHostedMissions: [
+      { id: 'm1', name: 'Mission One', date: '2024-01-01' },
+      { id: 'm2', name: 'Mission Two', date: '2024-02-02' }
+    ],
+    offscreenMission: {
+      id: 'om1',
+      character_id: 'c1',
+      name: 'Old mission',
+      summary: 'A summary',
+      merx_gained: 5,
+      source_mission_id: 'm2',
+      source_mission_name: null,
+      source_mission_date: null
+    }
+  });
+  await render(html);
+  await settle();
+
+  // The regression an unscoped/faked seed would cause: the select must
+  // still show the actually-linked mission, not '__other__'.
+  expect(document.getElementById('om-source-select').value).toBe('m2');
+  expect(document.getElementById('om-source-other').style.display).toBe('none');
+});
+
+test('real offscreen-mission-form: editing an "other" mission reveals the other fields with the select on __other__', async () => {
+  const html = renderOffscreenForm({
+    formAction: '/characters/c1/offscreen-missions/om2',
+    character: { id: 'c1' },
+    mode: 'edit',
+    availableHostedMissions: [
+      { id: 'm1', name: 'Mission One', date: '2024-01-01' }
+    ],
+    offscreenMission: {
+      id: 'om2',
+      character_id: 'c1',
+      name: 'Foo',
+      summary: 'bar',
+      merx_gained: 3,
+      source_mission_id: null,
+      source_mission_name: 'Homebrew mission',
+      source_mission_date: '2024-03-03'
+    }
+  });
+  await render(html);
+  await settle();
+
+  expect(document.getElementById('om-source-select').value).toBe('__other__');
+  expect(document.getElementById('om-source-other').style.display).not.toBe('none');
+  expect(document.getElementById('om-source-name').value).toBe('Homebrew mission');
 });
 
 test('real lfg-post.handlebars converts the calendar toggle and the per-participant toggle', () => {
@@ -164,6 +275,12 @@ test('real lfg-post.handlebars converts the calendar toggle and the per-particip
   expect(html).toContain('x-data="{ open: false }"');
   expect(html).toContain('x-show="open"');
   expect(html).toContain('@click="open = !open"');
+
+  // Both elements that start hidden (calendar-buttons and the per-row
+  // details) must carry x-cloak so they can't flash visible before Alpine
+  // boots. calendar-buttons-show starts visible, so it correctly has none.
+  const cloakMatches = html.match(/x-cloak/g) || [];
+  expect(cloakMatches.length).toBe(2);
 
   // Old inline handlers for these two mechanisms are gone.
   expect(html).not.toContain("htmx.toggleClass(htmx.find('#calendar-buttons')");
