@@ -21,7 +21,9 @@
 - `public/js/app.js:843-867` (the `htmx:afterSwap` re-init hub for tooltips, TomSelect, croppers, ToastUI) **stays**. Every task must leave it working.
 - Never convert the tippy tooltip source divs. They use `.is-hidden` and look like toggles but are tooltip **content**; converting them breaks tooltips.
 - Out of scope entirely: `public/js/character-wizard.js`, `public/js/character-level-up.js` (except one `dispatchEvent` line), `public/js/pdf-viewer.js`, all 19 `hx-confirm` sites, the 11 `App.signIn`-family auth handlers, TomSelect, `hx-disabled-elt`.
-- Every task ends green: `bun test` passes and `bun run check` passes.
+- Every task ends green: **`bun run test:unit`** passes and `bun run check` passes. These two are the gate.
+
+  Do **not** use raw `bun test` as the gate. It sweeps in the `http` and `integration` test files, which require a live local Supabase and fail without one (~58 failures on a clean checkout) — noise that has nothing to do with your change. `bun run test:unit` filters those out and spawns one Bun process per file (`scripts/run-tests.mjs:66-69`), which is also why each test file gets a fresh Alpine singleton. Raw `bun test <one-file>` is fine for iterating on a single focused test.
 - **Every conversion task must assert against the real template, not only against hand-written markup.** The behavior tests in this plan mount a markup string that mirrors the template — that verifies Alpine's semantics but would still pass if the real `.handlebars` file had a typo in its `x-data`. So each conversion task additionally asserts that the real template source contains the directives it is supposed to have, in the style of Task 2's test:
 
   ```js
