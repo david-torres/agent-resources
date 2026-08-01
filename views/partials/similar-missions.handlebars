@@ -9,7 +9,7 @@
         <li class="similar-mission-item">
           <div class="similar-mission-info">
             <a href="/missions/{{id}}" target="_blank" class="similar-mission-name">{{name}}</a>
-            <span class="similar-mission-date">{{formatDate date}}</span>
+            <span class="similar-mission-date">{{#if ../profile}}{{date_tz date "MMM D, YYYY" ../profile.timezone}}{{else}}{{date date "MMM D, YYYY"}}{{/if}}</span>
             {{#if creator_name}}
               <span class="similar-mission-creator">by {{creator_name}}</span>
             {{/if}}
