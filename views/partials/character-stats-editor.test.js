@@ -48,6 +48,14 @@ test('Edit reveals the editor and hides the read-only grid', async () => {
   expect(document.getElementById('readonly').style.display).toBe('none');
 });
 
+test('Edit moves focus to the first stats input', async () => {
+  await mount(STATS);
+  document.getElementById('edit').click();
+  await settle();
+  const first = document.querySelector('.stats-input');
+  expect(document.activeElement).toBe(first);
+});
+
 test('total sums the seeded stats', async () => {
   await mount(STATS);
   expect(document.getElementById('statsTotalSum').textContent).toBe('6');
@@ -133,13 +141,19 @@ test('save surfaces a server error and re-enables the button', async () => {
   globalThis.fetch = async () => ({ ok: false, status: 403, text: async () => 'Forbidden' });
 
   document.getElementById('edit').click();
-  await tick();
+  await settle();
+  // Before the failed save, the error box must actually be hidden, not
+  // merely empty of text -- x-text and x-show are independent bindings,
+  // so a broken or dropped x-show would leave this element visible (with
+  // no text) the whole time and a text-only assertion would never notice.
+  expect(document.getElementById('err').style.display).toBe('none');
+
   document.getElementById('editor').dispatchEvent(
     new window.Event('submit', { bubbles: true, cancelable: true })
   );
-  await tick();
-  await tick();
+  await settle();
 
+  expect(document.getElementById('err').style.display).not.toBe('none');
   expect(document.getElementById('err').textContent).toContain('Forbidden');
   expect(document.getElementById('save').disabled).toBe(false);
 });
