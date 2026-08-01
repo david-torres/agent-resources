@@ -105,7 +105,19 @@ script).
    supabase db reset
    ```
 
-4. Start the app:
+4. Seed the local app data (admin user, classes, and badges). `db reset`
+   only loads `nav_items`; this one idempotent command fills in the rest in
+   the right order and is safe to re-run (each step is skipped when its table
+   is already populated):
+   ```sh
+   bun run seed:local
+   ```
+   It seeds a `dummy@testing.com` / `dummypassword` admin, the class
+   definitions, and the badge catalog. Badge art is pulled from the public
+   prod storage bucket on first run (no credentials needed); override the
+   source with `BADGE_ART_SOURCE_URL`.
+
+5. Start the app:
    ```sh
    bun run dev
    ```
@@ -195,19 +207,26 @@ script. **It does not apply `supabase/seed.sql`** (the CLI reserves seed
 files for `supabase db reset`); for nav items seeding either run `bun run
 setup` once or apply `supabase/seed.sql` manually.
 
-### (Optional) Seed class data
+### Seeding app data (admin, classes, badges)
 
-To (re)load class definitions from the seed util:
+For a local stack, `bun run seed:local` seeds everything `supabase db reset`
+doesn't — an admin user, class definitions, and the badge catalog — in
+dependency order and idempotently. It's the recommended one-command path.
+
+The individual seeds can also be run directly:
 
 ```sh
-# If you haven't populated an admin user, populate one now:
-bun run seed:admin
-
-# Seed classes
-bun run seed:classes
+bun run seed:admin      # dummy@testing.com / dummypassword admin (dev only)
+bun run seed:classes    # class definitions — requires an admin profile first
+bun run fetch:badges    # download badge art from the public prod bucket
+bun run seed:badges     # upload art to the badges bucket + upsert catalog rows
 ```
 
-#### 5. (Optional) Check schema and tables
+`seed:classes` sets each class's `created_by` to the admin profile, so
+`seed:admin` (or an existing admin) must run first. `seed:badges` reads art
+from `public/img/badges/`, which `fetch:badges` populates.
+
+### Checking the schema and tables
 
 You can see a visual representation of the database schema on the Supabase
 dashboard for your project under Database > Schema Visualizser.
@@ -216,7 +235,7 @@ You can check the rows of your table from the Supabase dashboard for your
 project under Table Editor. If you ran `seed:admin` and `seed:classes` above,
 you should see them in your database.
 
-#### Backups
+### Backups
 
 `scripts/db-backup.sh` runs `pg_dump` against the configured Supabase pooler
 and writes a compressed dump to `backups/`. It reads `SUPABASE_DB_PASS` from
