@@ -114,20 +114,6 @@
             </button>
             <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
           </div>
-          <!-- History Modal -->
-          <div id="historyModal-{{this.id}}" class="modal" data-clear-on-close="true" data-clear-target="#history-{{this.id}}">
-            <div class="modal-background" hx-on:click="App.closeModal('#historyModal-{{this.id}}')"></div>
-            <div class="modal-card">
-              <header class="modal-card-head">
-                <p class="modal-card-title">Version History - {{this.name}}</p>
-                <button class="delete" aria-label="close" hx-on:click="App.closeModal('#historyModal-{{this.id}}')"></button>
-              </header>
-              <section class="modal-card-body" id="history-{{this.id}}"></section>
-              <footer class="modal-card-foot">
-                <button class="button" hx-on:click="App.closeModal('#historyModal-{{this.id}}')">Close</button>
-              </footer>
-            </div>
-          </div>
           <!-- Duplicate Modal -->
           <div id="duplicateModal-{{this.id}}" class="modal">
             <div class="modal-background" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')"></div>
