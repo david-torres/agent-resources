@@ -22,6 +22,22 @@
 - Never convert the tippy tooltip source divs. They use `.is-hidden` and look like toggles but are tooltip **content**; converting them breaks tooltips.
 - Out of scope entirely: `public/js/character-wizard.js`, `public/js/character-level-up.js` (except one `dispatchEvent` line), `public/js/pdf-viewer.js`, all 19 `hx-confirm` sites, the 11 `App.signIn`-family auth handlers, TomSelect, `hx-disabled-elt`.
 - Every task ends green: `bun test` passes and `bun run check` passes.
+- **Every conversion task must assert against the real template, not only against hand-written markup.** The behavior tests in this plan mount a markup string that mirrors the template — that verifies Alpine's semantics but would still pass if the real `.handlebars` file had a typo in its `x-data`. So each conversion task additionally asserts that the real template source contains the directives it is supposed to have, in the style of Task 2's test:
+
+  ```js
+  const fs = require('fs');
+  const path = require('path');
+  const source = () => fs.readFileSync(path.join(__dirname, '<template>.handlebars'), 'utf8');
+
+  test('<template> markup carries the Alpine directives', () => {
+    const src = source();
+    expect(src).toContain('x-data="…"');       // the exact expression the task specifies
+    expect(src).toContain('@click="…"');
+    expect(src).not.toContain('onclick=');      // the mechanism it replaced
+  });
+  ```
+
+  Assert both what the markup now has **and** that the replaced inline mechanism is gone. This is cheap and is what actually protects the conversion.
 - Commit messages end with: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 
 ## File Structure
@@ -688,13 +704,25 @@ test('Escape closes it', async () => {
   await render(DROPDOWN);
   document.getElementById('trigger').click();
   await tick();
-  window.dispatchEvent(new CustomEvent('keydown'));
-  document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   window.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   await tick();
   expect(document.getElementById('export-dropdown').classList.contains('is-active')).toBe(false);
 });
+
+test('both export dropdowns really carry the directives', () => {
+  const fs = require('fs');
+  const path = require('path');
+  for (const file of ['character.handlebars', 'class-view.handlebars']) {
+    const src = fs.readFileSync(path.join(__dirname, file), 'utf8');
+    expect(src).toContain('@click="open = !open"');
+    expect(src).toContain("@click.outside=\"open = false\"");
+    expect(src).toContain(':aria-expanded="open"');
+    expect(src).not.toContain("export-dropdown').classList.toggle");
+  }
+});
 ```
+
+`@keydown.escape.window` listens on the window, so one correctly-keyed `KeyboardEvent` dispatched at the window is the whole test — do not shotgun several event types hoping one lands.
 
 - [ ] **Step 2: Run it and watch it fail**
 
@@ -1443,9 +1471,14 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
     captured = { url, options };
     return { ok: true, json: async () => ({ character: {} }) };
   };
-  // window.location.reload is a no-op stub so the test can assert the request.
+  // Stub navigation at the jsdom boundary rather than adding a test seam to
+  // the component. jsdom's real reload() only logs "Not implemented".
   let reloaded = false;
-  globalThis.__reload = () => { reloaded = true; };
+  Object.defineProperty(window, 'location', {
+    value: { reload: () => { reloaded = true; } },
+    writable: true,
+    configurable: true
+  });
 
   document.getElementById('edit').click();
   await tick();
@@ -1552,7 +1585,7 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
             throw new Error(text || ('HTTP ' + res.status));
           });
         }
-        (globalThis.__reload || (() => window.location.reload()))();
+        window.location.reload();
       }).catch((err) => {
         this.error = 'Save failed: ' + ((err && err.message) || 'Unknown error');
       }).finally(() => {
@@ -1872,18 +1905,11 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
       this.dir = this.key === key ? -this.dir : 1;
       this.key = key;
 
-      const index = Array.from(this.$el.querySelectorAll('thead th'))
-        .findIndex((th) => th.textContent.trim().startsWith(
-          th.textContent.trim().split(/\s+/)[0]
-        ) && th === this.$el.querySelector(`thead th:nth-child(${
-          Array.from(this.$el.querySelectorAll('thead th')).indexOf(th) + 1
-        })`));
-
+      // Each sortable <th> carries data-sort-key; its position in the
+      // header row is the cell index to read in every body row.
       const columns = Array.from(this.$el.querySelectorAll('thead th'));
-      const col = columns.findIndex((th) => th.contains(
-        th.querySelector('.sort-indicator')
-      ) && th.getAttribute('data-sort-key') === key);
-      const colIndex = col > -1 ? col : columns.indexOf(this.$event.currentTarget);
+      const colIndex = columns.findIndex((th) => th.dataset.sortKey === key);
+      if (colIndex === -1) return;
 
       const body = this.$el.querySelector('tbody');
       const rows = Array.from(body.querySelectorAll('tr'));
@@ -1910,14 +1936,7 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
   }));
 ```
 
-Simplify the column-index derivation to the straightforward form — add `data-sort-key` to each `<th>` in the markup and resolve the index with:
-
-```js
-      const columns = Array.from(this.$el.querySelectorAll('thead th'));
-      const colIndex = columns.findIndex((th) => th.dataset.sortKey === key);
-```
-
-Use that version; it replaces the two tangled `findIndex` blocks above.
+This depends on every sortable `<th>` carrying a `data-sort-key` attribute, which Step 5 adds. The component and the markup must land in the same commit — without the attribute, `colIndex` is `-1` and `sortBy` returns without sorting.
 
 - [ ] **Step 5: Convert the markup**
 
@@ -2709,7 +2728,9 @@ Convert the two `app.js` timer items first. They are the smallest, they establis
 
 **Gap found and closed:** the spec lists the stats-editor save button's `is-loading`/`disabled` states as part of the conversion; Task 12's component covers them via `saving` and the test asserts the button re-enables after a failure.
 
-**Placeholder scan:** no TBDs, no "add error handling", no "similar to Task N". Every code step carries real code. Task 14's registration originally contained a tangled column-index derivation; Step 4 now states plainly which version to use and why.
+**Placeholder scan:** no TBDs, no "add error handling", no "similar to Task N". Every code step carries real code.
+
+**Pre-flight amendments (commit `6f97704`):** a cold re-scan before execution found and fixed four defects — tests that only exercised hand-written markup (now paired with real-template assertions, see Global Constraints), a dead code block in Task 14, a test seam in Task 12's production code, and a shotgunned event dispatch in Task 6.
 
 **Type consistency:** `setupAlpine` / `render` / `renderPartial` / `tick` are defined in Task 3 and used with those exact names in Tasks 6, 7, 9-19. `Alpine.data('modal', (name) => …)` with `show` / `open(which)` / `close()` is defined in Task 16 and consumed identically in 17, 18, 19. `Alpine.data('characterStats', (characterId, initialStats) => …)` matches its test mount in Task 12. The `open-modal` / `close-modal` event names and their `detail` string payload are consistent across Tasks 16-19.
 
