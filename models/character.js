@@ -95,7 +95,9 @@ const getPublicCharactersByCreator = async (creatorId) => {
 const getCharacter = async (id, client = supabase) => {
   const { data, error } = await client.from('characters').select('*').eq('id', id).single();
   if (error) {
-    console.error(error);
+    // PGRST116 is an expected "0 rows" not-found (mapped to 404 by util/http-error.js),
+    // so don't log it; any other error code is unexpected and still logged.
+    if (error.code !== 'PGRST116') console.error(error);
     return { data: null, error };
   }
 

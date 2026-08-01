@@ -457,6 +457,39 @@ delete require.cache[require.resolve('../services/character/repository')];
 delete require.cache[require.resolve('../services/character/repository')];
 });
 
+test('getCharacter does not log console.error when the characters read returns a PGRST116 not-found', async () => {
+  // Inline client whose primary `characters` read resolves to Supabase's
+  // "0 rows" not-found error (PGRST116). This is an EXPECTED not-found that
+  // util/http-error.js maps to a clean 404, so getCharacter must NOT dump it
+  // into the logs — but must still surface the error so callers produce 404.
+  const notFoundError = { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' };
+  const notFoundClient = {
+    from() {
+      const chain = {
+        select() { return chain; },
+        eq() { return chain; },
+        single() { return Promise.resolve({ data: null, error: notFoundError }); }
+      };
+      return chain;
+    }
+  };
+
+  const realConsoleError = console.error;
+  const errorSpy = mock(() => {});
+  console.error = errorSpy;
+  try {
+    const { getCharacter } = require('./character');
+    const { data, error } = await getCharacter('missing-id', notFoundClient);
+
+    expect(errorSpy).not.toHaveBeenCalled();
+    expect(data).toBeNull();
+    expect(error).toBe(notFoundError);
+    expect(error.code).toBe('PGRST116');
+  } finally {
+    console.error = realConsoleError;
+  }
+});
+
 test('serializeCharacterForAgent omits v2 fields on v1 characters', () => {
   const { serializeCharacterForAgent } = require('./character');
   const row = {
