@@ -5,6 +5,17 @@ import readline from "node:readline";
 import { stdin as input, stdout as output } from "node:process";
 
 function confirmIsDevEnv() {
+  // Non-interactive callers (CI, the setup/seed orchestrators, or a piped
+  // stdin) can't answer a prompt — auto-confirm instead of hanging.
+  const autoYes =
+    process.env.CI ||
+    process.argv.includes("--yes") ||
+    process.argv.includes("-y") ||
+    !process.stdin.isTTY;
+  if (autoYes) {
+    return Promise.resolve(true);
+  }
+
   const rl = readline.createInterface({
     input,
     output,

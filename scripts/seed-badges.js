@@ -170,7 +170,11 @@ async function main() {
   console.log(`\nDone: ${catalog.length} catalog rows, ${EXTRA_UPLOADS.length} extra assets.`);
 }
 
-main().catch((e) => {
-  console.error(e);
-  process.exit(1);
-});
+module.exports = { catalog, EXTRA_UPLOADS, ART_DIR, BUCKET };
+
+if (require.main === module) {
+  main().catch((e) => {
+    console.error(e);
+    process.exit(1);
+  });
+}
