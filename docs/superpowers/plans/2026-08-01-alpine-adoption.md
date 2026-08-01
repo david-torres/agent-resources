@@ -2252,7 +2252,7 @@ beforeAll(async () => {
 const MODAL = `
   <div id="m" class="modal" x-data="modal('demo')" :class="show && 'is-active'"
        @open-modal.window="open($event.detail)"
-       @close-modal.window="close()"
+       @close-modal.window="close($event.detail)"
        @keydown.escape.window="close()">
     <div class="modal-background" id="bg" @click="close()"></div>
     <button class="delete" id="x" @click="close()"></button>
@@ -2334,7 +2334,13 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
       document.body.classList.add('modal-open');
     },
 
-    close() {
+    // `which` mirrors open()'s filter so a broadcast `close-modal` cannot
+    // close a modal it wasn't aimed at. An absent argument means "close
+    // me", so in-modal controls keep calling a bare close(). Without this,
+    // safety rests on the unenforced convention that only one modal is
+    // ever open — true today only because Bulma's overlay is full-screen.
+    close(which) {
+      if (which !== undefined && which !== name) return;
       if (!this.show) return;
       this.show = false;
       document.body.classList.remove('modal-open');
@@ -2358,7 +2364,7 @@ Convert the modal element (line 408) and its three close sites (409, 413, 438):
 <div id="deceased-modal" class="modal" x-data="modal('deceased')"
      :class="show && 'is-active'"
      @open-modal.window="open($event.detail)"
-     @close-modal.window="close()"
+     @close-modal.window="close($event.detail)"
      @keydown.escape.window="close()">
   <div class="modal-background" @click="close()"></div>
 ```
@@ -2434,7 +2440,7 @@ test('closing the unlock-code modal clears its result target', async () => {
     <div id="unlockCodeModal" class="modal"
          x-data="modal('unlockCode')" :class="show && 'is-active'"
          @open-modal.window="open($event.detail)"
-         @close-modal.window="close()">
+         @close-modal.window="close($event.detail)">
       <div class="modal-background" id="bg"
            @click="close(); $refs.result && ($refs.result.innerHTML = '')"></div>
       <div id="codeResult" x-ref="result">GENERATED-CODE</div>
@@ -2646,7 +2652,7 @@ test('a dispatched open-modal event opens the level-up modal', async () => {
     <div id="levelUpModal" class="modal" x-data="modal('levelUp')"
          :class="show && 'is-active'"
          @open-modal.window="open($event.detail)"
-         @close-modal.window="close()"></div>
+         @close-modal.window="close($event.detail)"></div>
   `);
   window.dispatchEvent(new window.CustomEvent('open-modal', { detail: 'levelUp' }));
   await tick();
@@ -2667,7 +2673,7 @@ In `views/partials/character-level-up.handlebars`, add the component to line 1 a
 <div id="levelUpModal" class="modal" x-data="modal('levelUp')"
      :class="show && 'is-active'"
      @open-modal.window="open($event.detail)"
-     @close-modal.window="close()"
+     @close-modal.window="close($event.detail)"
      @keydown.escape.window="close()">
   <div class="modal-background" @click="close()"></div>
 ```
