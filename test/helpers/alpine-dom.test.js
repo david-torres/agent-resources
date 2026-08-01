@@ -34,3 +34,19 @@ test('Alpine tears down components whose nodes are removed', async () => {
   await render('<p>replaced</p>');
   expect(el._x_marker).toBeUndefined();
 });
+
+// jsdom performs no layout, so offsetWidth/offsetHeight are 0 for every
+// element unless setupAlpine() stubs them. Without that stub, Alpine's
+// @click.outside sees a zero-sized element and treats it as hidden,
+// skipping the handler entirely — so this regression guard would fail
+// if the shim were ever removed from the shared harness.
+test('offsetWidth/offsetHeight shim lets @click.outside actually fire', async () => {
+  await render(`
+    <div id="box" x-data="{ open: true }" :class="open && 'is-open'" @click.outside="open = false"></div>
+    <a href="#" id="sibling">elsewhere</a>
+  `);
+  expect(document.getElementById('box').classList.contains('is-open')).toBe(true);
+  document.getElementById('sibling').click();
+  await tick();
+  expect(document.getElementById('box').classList.contains('is-open')).toBe(false);
+});

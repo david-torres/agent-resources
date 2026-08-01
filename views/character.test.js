@@ -1,16 +1,7 @@
 const { test, expect, beforeAll } = require('bun:test');
 const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
 
-beforeAll(async () => {
-  await setupAlpine();
-  // jsdom has no layout engine, so offsetWidth/offsetHeight are always 0.
-  // Alpine's @click.outside bails early when both are < 1 (its way of
-  // skipping outside-click handling for elements hidden via display:none),
-  // which would make every outside-click test fail here regardless of
-  // markup. Stub non-zero values so Alpine treats elements as visible.
-  Object.defineProperty(HTMLElement.prototype, 'offsetWidth', { configurable: true, value: 100 });
-  Object.defineProperty(HTMLElement.prototype, 'offsetHeight', { configurable: true, value: 40 });
-});
+beforeAll(async () => { await setupAlpine(); });
 
 const DROPDOWN = `
   <div class="dropdown is-right" id="export-dropdown"
