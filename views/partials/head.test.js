@@ -19,9 +19,27 @@ test('the Alpine script carries an SRI hash', () => {
   expect(tag).toContain('defer');
 });
 
-test('Alpine loads last so registrations run before Alpine.start()', () => {
+test('Alpine loads last among ALL deferred scripts so registrations run before Alpine.start()', () => {
   const src = head();
-  expect(src.indexOf('/js/alpine-components.js')).toBeGreaterThan(-1);
-  expect(src.indexOf('/js/alpine-components.js'))
-    .toBeLessThan(src.indexOf('alpinejs@'));
+
+  const otherDeferredScripts = {
+    'htmx': 'htmx.org@2.0.8',
+    'supabase-js': '@supabase/supabase-js@2',
+    '/js/app.js': '/js/app.js',
+    '/js/alpine-components.js': '/js/alpine-components.js'
+  };
+
+  const alpineIndex = src.indexOf('alpinejs@');
+  expect(alpineIndex).toBeGreaterThan(-1);
+
+  for (const [name, needle] of Object.entries(otherDeferredScripts)) {
+    const index = src.indexOf(needle);
+    expect(index, `${name} script must be found in head.handlebars`).toBeGreaterThan(-1);
+    expect(
+      index,
+      `${name} (found at index ${index}) must load before Alpine (at index ${alpineIndex}) — ` +
+      `Alpine.start() fires in a microtask right after its own tag, before any later ` +
+      `deferred script, so ${name} would end up after Alpine and never get processed in time.`
+    ).toBeLessThan(alpineIndex);
+  }
 });
