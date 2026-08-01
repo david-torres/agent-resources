@@ -3,11 +3,12 @@
   <input type="hidden" name="ability_perk_position[]" value="{{position}}">
   <div class="field has-addons">
     <div class="control is-expanded">
-      <input class="input perk-text" type="text" name="ability_perk_text[]"
-             placeholder="Perk text (≤25 words)" value="{{perk.text}}"
-             maxlength="500" required
-             oninput="this.nextElementSibling.querySelector('.word-count').textContent = (this.value.trim() ? this.value.trim().split(/\s+/).length : 0) + ' / 25 words';">
-      <p class="help"><span class="word-count">{{wordCount perk.text}} / 25 words</span></p>
+      <div x-data='{ text: {{{json perk.text}}} || "" }'>
+        <textarea class="textarea perk-text" name="ability_perk_text[]"
+                   placeholder="Perk text (≤25 words)" x-model="text"
+                   maxlength="500" required>{{perk.text}}</textarea>
+        <p class="help"><span class="word-count" x-text="text.trim() ? text.trim().split(/\s+/).length : 0">{{wordCount perk.text}}</span> / 25 words</p>
+      </div>
     </div>
     <div class="control ml-2">
       <div class="select">
