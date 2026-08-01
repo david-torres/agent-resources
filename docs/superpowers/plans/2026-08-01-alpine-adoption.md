@@ -42,6 +42,17 @@
   Assert both what the markup now has **and** that the replaced inline mechanism is gone. This is cheap and is what actually protects the conversion.
 - **A commit message must never claim verification that was not performed.** Several tasks below carry a manual browser check that an automated implementer cannot run. If you did not personally observe a result, do not write that it was observed — say the check remains outstanding and why. This applies to the suggested commit messages in this plan too: they are drafts, not text to paste unread. If a draft asserts something you did not do, change it. A commit message is permanent, and a false claim here misleads whoever later audits whether this branch was ever validated in a real browser.
 - Report the test counts you actually observed on a real run, not figures copied from an earlier task or from this plan.
+- **Seed Alpine state with `{{json x}}`, never `{{{json x}}}`.** The triple-stache emits JSON unescaped. `JSON.stringify` wraps strings in double quotes and does not escape apostrophes, so the raw output breaks out of *either* attribute quoting style: a double-quoted attribute dies on the JSON's own quotes, and a single-quoted attribute dies on the first apostrophe in the data (`Hero's strike`, `doesn't`). The attribute then terminates mid-value, Alpine fails to parse the component, and every directive on it silently stops working — for exactly the ordinary text people type.
+
+  The double-stache HTML-escapes the JSON, and the browser decodes it back to a valid JS literal before Alpine evaluates:
+
+  ```handlebars
+  <div x-data="{ text: {{json perk.text}} || '' }">
+  ```
+
+  renders as `x-data="{ text: &quot;Hero&#x27;s strike&quot; || '' }"` and reaches Alpine as `{ text: "Hero's strike" || '' }`.
+
+  **Test this with adversarial data, not clean fixtures.** A fixture like `'Sample perk text'` passes on broken markup. Use text containing an apostrophe, a double quote, and an angle bracket, and assert by mounting the rendered partial through `renderPartial` so the check proves Alpine actually parsed the expression — not merely that the characters look plausible.
 - Commit messages end with: `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 
 ## File Structure
@@ -1065,7 +1076,7 @@ Expected: the two new tests FAIL; the existing ones still pass.
 Wrap the textarea and its count span in an `x-data` seeded from the server value, replacing the `oninput` at line 9:
 
 ```handlebars
-<div x-data="{ text: {{{json perk.text}}} || '' }">
+<div x-data="{ text: {{json perk.text}} || '' }">
   <textarea class="textarea" name="perk_text[]" x-model="text"></textarea>
   <p class="help">
     <span class="word-count" x-text="text.trim() ? text.trim().split(/\s+/).length : 0">{{wordCount perk.text}}</span> words
@@ -1177,7 +1188,7 @@ Put the state on the `<form>` at line 415 so both the input and the footer butto
 
 ```handlebars
     <form hx-post="/characters/{{character.id}}/deceased" hx-indicator="#deceased-submit"
-          x-data="{ typed: '', required: {{{json character.name}}} }">
+          x-data="{ typed: '', required: {{json character.name}} }">
 ```
 
 Replace the input (lines 424-433):
@@ -1209,7 +1220,7 @@ Expected: PASS.
 
 - [ ] **Step 5: Verify in a browser**
 
-Open the deceased modal on a character with an apostrophe or accent in its name if one exists (this is why `{{{json ...}}}` is used rather than a quoted attribute). Typing the exact name enables the button; anything else disables it; submitting still posts.
+Open the deceased modal on a character whose name contains an apostrophe, a double quote, or an accent if one exists — this is the case the `{{json ...}}` escaping exists for. Typing the exact name enables the button; anything else disables it; submitting still posts.
 
 - [ ] **Step 6: Commit**
 
@@ -1609,7 +1620,7 @@ In `views/character.handlebars`, put the component on `#statsBox` (line 187), se
 
 ```handlebars
     <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}"
-         x-data="characterStats({{{json character.id}}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{lookup ../character this}}{{/each}} })">
+         x-data="characterStats({{json character.id}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{lookup ../character this}}{{/each}} })">
 ```
 
 Change the Edit button (line 195) to `x-show="!editing"` + `@click="edit()"`, the read-only grid (line 203) to `x-show="!editing"`, and the editor wrapper (line 222) from `hidden` to `x-show="editing" x-cloak`.
@@ -2104,7 +2115,7 @@ const slugify = (value) => (value || '')
 
 - [ ] **Step 5: Convert the markup**
 
-Put `x-data="pageSlug({{{json page.title}}}, {{{json page.slug}}})"` on the form, bind the title input with `x-model="title" @input="onTitle()"`, bind the slug input with `x-model="slug" @input="auto = false"`, and delete the script at 87-129. Keep both inputs' `name` attributes so the form still posts.
+Put `x-data="pageSlug({{json page.title}}, {{json page.slug}})"` on the form, bind the title input with `x-model="title" @input="onTitle()"`, bind the slug input with `x-model="slug" @input="auto = false"`, and delete the script at 87-129. Keep both inputs' `name` attributes so the form still posts.
 
 - [ ] **Step 6: Run the tests**
 
