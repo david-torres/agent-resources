@@ -866,28 +866,15 @@ const App = (function (document, supabase, htmx) {
         }, 150);
       });
 
-      // Global keydown handler for closing modals on Escape
+      // Global keydown handler for closing modals on Escape.
+      // Dropdowns handle their own Escape via @keydown.escape.window.
       document.addEventListener('keydown', function(event) {
         if (event.key === 'Escape') {
           const activeModal = document.querySelector('.modal.is-active');
           if (activeModal) {
             App.closeModal('#' + activeModal.id);
           }
-          // Also close any open dropdowns
-          document.querySelectorAll('.dropdown.is-active').forEach(function(dropdown) {
-            dropdown.classList.remove('is-active');
-          });
         }
-      });
-
-      // Global click handler for closing dropdowns when clicking outside
-      document.addEventListener('click', function(event) {
-        const dropdowns = document.querySelectorAll('.dropdown.is-active');
-        dropdowns.forEach(function(dropdown) {
-          if (!dropdown.contains(event.target)) {
-            dropdown.classList.remove('is-active');
-          }
-        });
       });
 
       // Delegated handler: copy a deep link to a section anchor to the clipboard.
