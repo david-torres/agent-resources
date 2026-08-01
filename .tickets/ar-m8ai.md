@@ -1,6 +1,6 @@
 ---
 id: ar-m8ai
-status: in_progress
+status: closed
 deps: [ar-ezes]
 links: []
 created: 2026-07-10T21:28:57Z
