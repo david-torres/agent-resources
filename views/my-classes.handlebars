@@ -109,18 +109,22 @@
           <div class="buttons are-small is-right">
             <a class="button is-warning" href="/classes/{{this.id}}/edit">Edit</a>
             <button type="button" class="button is-info"
-                    hx-on:click="App.openModal('#duplicateModal-{{this.id}}')">
+                    @click="$dispatch('open-modal', 'duplicate-{{this.id}}')">
               Duplicate…
             </button>
             <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
           </div>
           <!-- Duplicate Modal -->
-          <div id="duplicateModal-{{this.id}}" class="modal">
-            <div class="modal-background" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')"></div>
+          <div id="duplicateModal-{{this.id}}" class="modal" x-data="modal('duplicate-{{this.id}}')"
+               :class="show && 'is-active'"
+               @open-modal.window="open($event.detail)"
+               @close-modal.window="close($event.detail)"
+               @keydown.escape.window="close()">
+            <div class="modal-background" @click="close()"></div>
             <div class="modal-card">
               <header class="modal-card-head">
                 <p class="modal-card-title">Duplicate {{this.name}}</p>
-                <button type="button" class="delete" aria-label="close" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')"></button>
+                <button type="button" class="delete" aria-label="close" @click="close()"></button>
               </header>
               <form hx-post="/classes/{{this.id}}/duplicate" hx-swap="none">
                 <section class="modal-card-body">
@@ -149,7 +153,7 @@
                   </div>
                 </section>
                 <footer class="modal-card-foot">
-                  <button type="button" class="button" hx-on:click="App.closeModal('#duplicateModal-{{this.id}}')">Cancel</button>
+                  <button type="button" class="button" @click="close()">Cancel</button>
                   <button type="submit" class="button is-info">Duplicate</button>
                 </footer>
               </form>
