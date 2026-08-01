@@ -408,7 +408,7 @@
 <div id="deceased-modal" class="modal" x-data="modal('deceased')"
      :class="show && 'is-active'"
      @open-modal.window="open($event.detail)"
-     @close-modal.window="close()"
+     @close-modal.window="close($event.detail)"
      @keydown.escape.window="close()">
   <div class="modal-background" @click="close()"></div>
   <div class="modal-card">
