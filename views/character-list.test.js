@@ -19,10 +19,10 @@ const TABLE = `
     <thead>
       <tr>
         <th id="h-name" data-sort-key="name" @click="sortBy('name', 'text')">
-          Name <span class="sort-indicator" x-text="indicator('name')"></span>
+          Name <span class="sort-indicator" :class="indicatorClass('name')" x-text="indicator('name')"></span>
         </th>
         <th id="h-level" data-sort-key="level" @click="sortBy('level', 'number')">
-          Level <span class="sort-indicator" x-text="indicator('level')"></span>
+          Level <span class="sort-indicator" :class="indicatorClass('level')" x-text="indicator('level')"></span>
         </th>
       </tr>
     </thead>
@@ -90,6 +90,26 @@ test('switching the active column resets the new column to ascending and the old
   expect(order()).toEqual(['r-a', 'r-c', 'r-b']);
 });
 
+test('the active column indicator is not dimmed; inactive ones are', async () => {
+  await render(TABLE);
+  document.getElementById('h-name').click();
+  await tick();
+  const [nameIndicator, levelIndicator] = document.querySelectorAll('.sort-indicator');
+  expect(nameIndicator.classList.contains('has-text-grey-light')).toBe(false);
+  expect(levelIndicator.classList.contains('has-text-grey-light')).toBe(true);
+});
+
+test('dimming flips to the newly active column when a different header is sorted', async () => {
+  await render(TABLE);
+  document.getElementById('h-name').click();
+  await tick();
+  document.getElementById('h-level').click();
+  await tick();
+  const [nameIndicator, levelIndicator] = document.querySelectorAll('.sort-indicator');
+  expect(nameIndicator.classList.contains('has-text-grey-light')).toBe(true);
+  expect(levelIndicator.classList.contains('has-text-grey-light')).toBe(false);
+});
+
 // --- Assertions against the real template ---
 
 test('the real template puts x-data on the table element', () => {
@@ -105,12 +125,20 @@ test('the real template gives every sortable th a data-sort-key and @click bindi
   expect(src).toMatch(/<th data-sort-key="edition"[^>]*@click="sortBy\('edition', 'string'\)"/);
 });
 
-test('the real template gives every sortable th an indicator span', () => {
+test('the real template gives every sortable th an indicator span bound to indicator() and indicatorClass()', () => {
   const src = source();
-  expect(src).toMatch(/<span class="sort-indicator" x-text="indicator\('name'\)"><\/span>/);
-  expect(src).toMatch(/<span class="sort-indicator" x-text="indicator\('class'\)"><\/span>/);
-  expect(src).toMatch(/<span class="sort-indicator" x-text="indicator\('level'\)"><\/span>/);
-  expect(src).toMatch(/<span class="sort-indicator" x-text="indicator\('edition'\)"><\/span>/);
+  for (const key of ['name', 'class', 'level', 'edition']) {
+    expect(src).toMatch(new RegExp(
+      `<span class="sort-indicator" :class="indicatorClass\\('${key}'\\)" x-text="indicator\\('${key}'\\)"></span>`
+    ));
+  }
+});
+
+test('the real template gives sortable headers a pointer-cursor affordance via CSS, not inline JS', () => {
+  const cssPath = path.join(__dirname, '..', 'public', 'css', 'styles.css');
+  const css = fs.readFileSync(cssPath, 'utf8');
+  expect(css).toMatch(/\[data-sort-key\]\s*\{[^}]*cursor:\s*pointer/);
+  expect(css).toMatch(/\[data-sort-key\]\s*\{[^}]*user-select:\s*none/);
 });
 
 test('the real template preserves data-sort-value on every sortable cell', () => {

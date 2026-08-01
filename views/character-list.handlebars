@@ -11,16 +11,16 @@
     <thead>
       <tr>
         <th data-sort-key="name" @click="sortBy('name', 'string')">
-          Name <span class="sort-indicator" x-text="indicator('name')"></span>
+          Name <span class="sort-indicator" :class="indicatorClass('name')" x-text="indicator('name')"></span>
         </th>
         <th data-sort-key="class" @click="sortBy('class', 'string')">
-          Class <span class="sort-indicator" x-text="indicator('class')"></span>
+          Class <span class="sort-indicator" :class="indicatorClass('class')" x-text="indicator('class')"></span>
         </th>
         <th data-sort-key="level" @click="sortBy('level', 'number')">
-          Level <span class="sort-indicator" x-text="indicator('level')"></span>
+          Level <span class="sort-indicator" :class="indicatorClass('level')" x-text="indicator('level')"></span>
         </th>
         <th data-sort-key="edition" @click="sortBy('edition', 'string')">
-          Edition <span class="sort-indicator" x-text="indicator('edition')"></span>
+          Edition <span class="sort-indicator" :class="indicatorClass('edition')" x-text="indicator('edition')"></span>
         </th>
         <th>Actions</th>
       </tr>
