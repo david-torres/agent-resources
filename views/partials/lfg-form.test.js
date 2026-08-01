@@ -1,29 +1,15 @@
 const { test, expect, beforeAll } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
-const { setupAlpine, render, tick } = require('../../test/helpers/alpine-dom');
+const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
 beforeAll(async () => { await setupAlpine(); });
 
-// Alpine 3.15's x-show directive is intercepted, on every toggle after the
-// element's first (synchronous) paint, by a global hook that x-transition
-// installs unconditionally on Element.prototype
-// (_x_toggleAndCascadeWithTransitions) — even when no x-transition is used.
-// That hook defers the actual style.display write to
-// `document.visibilityState === 'visible' ? requestAnimationFrame : setTimeout`.
-// jsdom reports "visible", so a plain microtask (tick()/Alpine.nextTick())
-// never observes it: only the very first paint is synchronous. Confirmed by
-// direct instrumentation of node_modules/alpinejs/dist/module.cjs.js during
-// investigation (reverted; not part of this change). Real browsers hit the
-// same one-frame defer — invisible to users, but tests asserting
-// style.display after a *second or later* x-show toggle must wait a real
-// animation frame, not just a microtask.
-const settle = async () => {
-  await tick();
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  await new Promise((resolve) => requestAnimationFrame(resolve));
-  await tick();
-};
+// x-show's post-mount toggles are deferred to a real animation frame (not a
+// microtask) by Alpine's own transition-cascade hook — see settle()'s doc
+// comment in test/helpers/alpine-dom.js for the full mechanism. Every
+// assertion below that follows a click/change on an x-show-bound element
+// uses settle() rather than tick() for that reason.
 
 test('checkbox reveals the character select', async () => {
   await render(`

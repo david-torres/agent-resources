@@ -1,5 +1,5 @@
 const { test, expect, beforeAll } = require('bun:test');
-const { setupAlpine, render, tick } = require('./alpine-dom');
+const { setupAlpine, render, tick, settle } = require('./alpine-dom');
 
 beforeAll(async () => { await setupAlpine(); });
 
@@ -49,4 +49,32 @@ test('offsetWidth/offsetHeight shim lets @click.outside actually fire', async ()
   document.getElementById('sibling').click();
   await tick();
   expect(document.getElementById('box').classList.contains('is-open')).toBe(false);
+});
+
+// x-transition installs Element.prototype._x_toggleAndCascadeWithTransitions
+// unconditionally, so x-show routes every post-mount toggle through
+// requestAnimationFrame (jsdom reports visibilityState "visible") even
+// with no x-transition in use. tick() only flushes microtasks and never
+// observes that write. This pins the actual behavior — not just that
+// settle() "works", but that tick() alone is genuinely insufficient — so a
+// regression (e.g. settle() silently degrading to a tick()-only wait)
+// would fail this test rather than pass for the wrong reason.
+test('x-show toggle is not visible after tick() alone, but is after settle()', async () => {
+  await render(`
+    <div x-data="{ open: false }">
+      <button id="btn" @click="open = !open"></button>
+      <div id="panel" x-show="open"></div>
+    </div>
+  `);
+  const panel = document.getElementById('panel');
+  expect(panel.style.display).toBe('none');
+
+  document.getElementById('btn').click();
+  await tick();
+  // The toggle has not run yet: still hidden. Asserting "not.toBe('none')"
+  // here would currently fail — that's the point of this guard.
+  expect(panel.style.display).toBe('none');
+
+  await settle();
+  expect(panel.style.display).not.toBe('none');
 });

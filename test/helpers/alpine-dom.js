@@ -49,6 +49,34 @@ const setupAlpine = async () => {
 // after a trigger returns stale values. Always await this.
 const tick = async () => { await alpine.nextTick(); };
 
+// x-show is NOT covered by tick() alone. Alpine's x-transition module
+// installs `Element.prototype._x_toggleAndCascadeWithTransitions`
+// unconditionally at import time — every element gets it, not just ones
+// using x-transition. x-show's directive checks for that method and, when
+// present (always, once Alpine has booted), routes every toggle after the
+// initial synchronous mount-time paint through
+// `document.visibilityState === 'visible' ? requestAnimationFrame : setTimeout`.
+// jsdom reports visibilityState as "visible", so the very first toggle a
+// test triggers — reveal or hide — is deferred to a real animation frame,
+// not a microtask. tick() (Alpine.nextTick()) only flushes microtasks, so
+// it never observes this write.
+//
+// This is a false-pass hazard, not just a false-fail one: a test that
+// clicks and then asserts `style.display === 'none'` after only tick()
+// will PASS for the wrong reason — the element is still hidden because
+// the toggle hasn't run yet, not because the hide logic is correct. A
+// reveal assertion has the same hazard in the other direction. Always use
+// settle() (not tick()) after any interaction that flips an x-show-bound
+// value, before asserting on style.display. tick() remains correct and
+// sufficient for :class, x-text, :disabled, and any other binding that
+// doesn't route through x-show's transition-cascade hook.
+const settle = async () => {
+  await tick();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await tick();
+};
+
 // Replace the body and let Alpine's MutationObserver initialize it. This
 // is also how we simulate an hx-boost body swap.
 const render = async (html) => {
@@ -66,4 +94,4 @@ const renderPartial = async (name, context) => {
   return render(Handlebars.compile(src)(context));
 };
 
-module.exports = { setupAlpine, tick, render, renderPartial };
+module.exports = { setupAlpine, tick, settle, render, renderPartial };
