@@ -9,7 +9,6 @@
 //   nav_items  -> supabase/seed.sql            (if empty)
 //   admin      -> seed:admin                   (if no admin profile)
 //   classes    -> seed:classes                 (needs admin; if empty)
-//   rules_pdfs -> seed:rules                    (needs admin; if empty)
 //   badges     -> fetch-badge-art + seed-badges (if empty)
 //
 // Usage: bun run seed:local [--force]
@@ -120,14 +119,6 @@ async function main() {
       run("seeding classes", ["bun", "run", "seed:classes"]);
     }
 
-    // rules PDFs — needs admin (created_by); the starter rules-PDF unlock
-    // grant references this row's id, so it must exist before profiles do.
-    if ((await count("rules_pdfs")) > 0) {
-      skip("rules_pdfs already seeded");
-    } else {
-      run("seeding rules PDFs", ["bun", "run", "seed:rules"]);
-    }
-
     // badges — fetch source art (from public prod bucket) then seed.
     if ((await count("badges")) > 0) {
       skip("badges already seeded");
@@ -138,7 +129,7 @@ async function main() {
 
     console.log("");
     ok("local seeding complete");
-    for (const t of ["nav_items", "classes", "rules_pdfs", "badges", "profiles"]) {
+    for (const t of ["nav_items", "classes", "badges", "profiles"]) {
       console.log(`      ${t.padEnd(12)} ${await count(t)} rows`);
     }
   } finally {
