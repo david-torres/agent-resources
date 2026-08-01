@@ -1,5 +1,5 @@
 <form method="POST" action="{{formAction}}" x-data="{ sourceId: '' }"
-      x-init="sourceId = document.getElementById('om-source-select').value">
+      x-init="sourceId = $refs.sourceSelect.value">
   <div class="field">
     <label class="label" for="om-name">Offscreen Mission Name</label>
     <div class="control">
@@ -29,7 +29,7 @@
     <label class="label">Source Mission</label>
     <div class="control">
       <div class="select is-fullwidth">
-        <select name="source_mission_id" id="om-source-select" x-model="sourceId">
+        <select name="source_mission_id" id="om-source-select" x-ref="sourceSelect" x-model="sourceId">
           {{#each availableHostedMissions}}
           <option value="{{this.id}}"
                   data-name="{{this.name}}"
@@ -39,7 +39,7 @@
           </option>
           {{/each}}
           <option value="__other__"
-                  {{#unless ../offscreenMission.source_mission_id}}{{#if ../offscreenMission}}selected{{/if}}{{/unless}}>
+                  {{#unless offscreenMission.source_mission_id}}{{#if offscreenMission}}selected{{/if}}{{/unless}}>
             Other / not in the system
           </option>
         </select>
