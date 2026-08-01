@@ -42,6 +42,17 @@
   Assert both what the markup now has **and** that the replaced inline mechanism is gone. This is cheap and is what actually protects the conversion.
 - **A commit message must never claim verification that was not performed.** Several tasks below carry a manual browser check that an automated implementer cannot run. If you did not personally observe a result, do not write that it was observed — say the check remains outstanding and why. This applies to the suggested commit messages in this plan too: they are drafts, not text to paste unread. If a draft asserts something you did not do, change it. A commit message is permanent, and a false claim here misleads whoever later audits whether this branch was ever validated in a real browser.
 - Report the test counts you actually observed on a real run, not figures copied from an earlier task or from this plan.
+- **Inside an `Alpine.data()` method, `$el` is the element that invoked the method — not the component root.** A method called from `@click` on a button gets the *button*; called from a `<th>`, it gets the `<th>`. Querying downward from there finds nothing, and the failure is **silent** — no error, the feature just doesn't happen. Capture the root once in `init()`, where `$el` is guaranteed to be the `x-data` element:
+
+  ```js
+  root: null,
+  init() { this.root = this.$el },
+  someMethod() { this.root.querySelector('…') }
+  ```
+
+  `$el` used directly in an *attribute expression* on an element (e.g. `x-show="match($el)"` on a row) is a different thing and is correct — there `$el` is that element, which is what you want.
+
+  **Any test for such a method must assert the DOM effect** (`document.activeElement`, row order, etc.), not merely that the method ran. Two of these shipped or nearly shipped in this branch because the tests only checked state.
 - **Use `settle()`, not `tick()`, before asserting on `x-show` visibility.** Alpine's `x-transition` module installs `_x_toggleAndCascadeWithTransitions` on `Element.prototype` unconditionally, and `x-show` routes every post-mount toggle through `requestAnimationFrame` when `document.visibilityState === 'visible'` — which jsdom reports. A microtask flush therefore never observes the change. Only the synchronous paint at mount is unaffected.
 
   Verified behavior after a click, with `await tick()` alone:
@@ -1581,11 +1592,20 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
         .reduce((sum, value) => sum + (parseInt(value, 10) || 0), 0);
     },
 
+    // `$el` inside a method binds to the element that INVOKED it — here the
+    // Edit button, which has no descendants. Capture the component root in
+    // init(), where `$el` is guaranteed to be the x-data element.
+    root: null,
+
+    init() {
+      this.root = this.$el;
+    },
+
     edit() {
       this.error = '';
       this.editing = true;
       this.$nextTick(() => {
-        const first = this.$el.querySelector('.stats-input');
+        const first = this.root.querySelector('.stats-input');
         if (first) first.focus();
       });
     },
@@ -1936,6 +1956,16 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
     key: null,
     dir: 1,
 
+    // `$el` inside a method binds to the element that INVOKED it — here the
+    // clicked <th>, not the table. Querying 'thead th' from a <th> returns
+    // nothing, colIndex resolves to -1, and sorting silently does nothing.
+    // Capture the root in init(), where `$el` IS the x-data element.
+    root: null,
+
+    init() {
+      this.root = this.$el;
+    },
+
     indicator(key) {
       if (this.key !== key) return '⇅';
       return this.dir === 1 ? '▲' : '▼';
@@ -1947,11 +1977,11 @@ Add to `public/js/alpine-components.js` inside the `alpine:init` listener:
 
       // Each sortable <th> carries data-sort-key; its position in the
       // header row is the cell index to read in every body row.
-      const columns = Array.from(this.$el.querySelectorAll('thead th'));
+      const columns = Array.from(this.root.querySelectorAll('thead th'));
       const colIndex = columns.findIndex((th) => th.dataset.sortKey === key);
       if (colIndex === -1) return;
 
-      const body = this.$el.querySelector('tbody');
+      const body = this.root.querySelector('tbody');
       const rows = Array.from(body.querySelectorAll('tr'));
 
       const valueOf = (row) => {
