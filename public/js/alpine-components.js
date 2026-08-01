@@ -155,7 +155,13 @@ document.addEventListener('alpine:init', () => {
       document.body.classList.add('modal-open');
     },
 
-    close() {
+    // which mirrors open()'s parameter but stays optional: every in-modal
+    // @click="close()" call omits it and means "close me". The window
+    // listener passes $event.detail explicitly so a close-modal broadcast
+    // for a DIFFERENT modal's name doesn't close (or clear the body lock
+    // for) this one.
+    close(which) {
+      if (which !== undefined && which !== name) return;
       if (!this.show) return;
       this.show = false;
       document.body.classList.remove('modal-open');
