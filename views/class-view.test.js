@@ -28,12 +28,23 @@ test('class-view no longer carries the data-clear-on-close contract', () => {
   expect(SRC).not.toContain('data-clear-target');
 });
 
-test('class-view wires up both modals through the shared modal() component', () => {
+test('class-view wires up both modals through the shared modal components', () => {
   expect(SRC).toContain("modal('duplicate')");
-  expect(SRC).toContain("modal('unlockCode')");
+  expect(SRC).toContain("clearingModal('unlockCode')");
   expect(SRC).toContain("$dispatch('open-modal', 'duplicate')");
   expect(SRC).toContain("$dispatch('open-modal', 'unlockCode')");
   expect(SRC).toContain('x-ref="result"');
+});
+
+// Pins the template to the registered component: the clearing logic must
+// live in public/js/alpine-components.js, not be re-implemented inline in
+// the handlebars attribute. A template that inlines its own closeAndClear
+// body would pass every behavioral test below against ITS OWN copy of the
+// logic while the real component silently diverges or breaks -- see the
+// class-view.test.js history for exactly this failure mode.
+test('class-view does not inline the clearing logic itself', () => {
+  expect(SRC).not.toContain('wasOpen');
+  expect(SRC).not.toContain('$refs.result.innerHTML');
 });
 
 // Mirrors the real duplicate-modal markup closely enough to exercise the
@@ -50,21 +61,19 @@ const DUPLICATE_MODAL = `
   </div>
 `;
 
-// Mirrors the real unlock-code-modal markup: the closeAndClear() wrapper is
-// the single place that decides "did this close actually happen" before
-// touching the DOM, so every close route -- background, delete, footer
-// Close, and Escape -- shares one implementation instead of repeating the
-// $refs expression four times.
+// Mirrors the real unlock-code-modal markup exactly: x-data references the
+// REGISTERED clearingModal('unlockCode') component (see
+// public/js/alpine-components.js), not an inline re-implementation of its
+// body. This is deliberate -- an earlier version of this fixture inlined
+// the whole closeAndClear() object via `{ ...modal('unlockCode'),
+// closeAndClear(which) {...} }`, which meant every test below verified the
+// FIXTURE's private copy of the clearing logic, not the component the
+// template actually ships. Mutating (or deleting) the real component had
+// zero effect on these tests. Referencing the registered component by name
+// is what makes mutating public/js/alpine-components.js actually break
+// this suite.
 const UNLOCK_MODAL = `
-  <div id="unlockCodeModal" class="modal"
-       x-data="{
-         ...modal('unlockCode'),
-         closeAndClear(which) {
-           const wasOpen = this.show;
-           this.close(which);
-           if (wasOpen && !this.show && this.$refs.result) this.$refs.result.innerHTML = '';
-         }
-       }"
+  <div id="unlockCodeModal" class="modal" x-data="clearingModal('unlockCode')"
        :class="show && 'is-active'"
        @open-modal.window="open($event.detail)"
        @close-modal.window="closeAndClear($event.detail)"

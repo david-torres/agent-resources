@@ -259,15 +259,7 @@
   </div>
 </div>
 <!-- Unlock Code Modal -->
-<div id="unlockCodeModal" class="modal"
-     x-data="{
-       ...modal('unlockCode'),
-       closeAndClear(which) {
-         const wasOpen = this.show;
-         this.close(which);
-         if (wasOpen && !this.show && this.$refs.result) this.$refs.result.innerHTML = '';
-       }
-     }"
+<div id="unlockCodeModal" class="modal" x-data="clearingModal('unlockCode')"
      :class="show && 'is-active'"
      @open-modal.window="open($event.detail)"
      @close-modal.window="closeAndClear($event.detail)"
