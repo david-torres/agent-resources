@@ -238,6 +238,7 @@ router.get('/similar', isAuthenticated, async (req, res) => {
 
   res.render('partials/similar-missions', {
     layout: false,
+    profile: res.locals.profile,
     missions
   });
 });
