@@ -1431,7 +1431,7 @@ const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine
 const STATS = { vitality: 3, might: 2, resilience: 1 };
 
 const mount = (stats) => render(`
-  <div x-data="characterStats('char-1', ${JSON.stringify(stats)})">
+  <div x-data='characterStats("char-1", ${JSON.stringify(stats)})'>
     <button id="edit" x-show="!editing" @click="edit()"></button>
     <div id="readonly" x-show="!editing"></div>
     <form id="editor" x-show="editing" @submit.prevent="save()">
@@ -1508,6 +1508,10 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
   // Stub navigation at the jsdom boundary rather than adding a test seam to
   // the component. jsdom's real reload() only logs "Not implemented".
   let reloaded = false;
+  // NOTE: `window.location` is non-configurable in this repo's jsdom, so a
+  // plain defineProperty throws. If it does, proxy `window` for the duration
+  // of this one test and restore it in a `finally` — never add a seam to the
+  // component itself.
   Object.defineProperty(window, 'location', {
     value: { reload: () => { reloaded = true; } },
     writable: true,
@@ -1754,7 +1758,7 @@ test('name filter matches case-insensitively on a substring', async () => {
   const input = document.getElementById('filterName');
   input.value = 'harb';
   input.dispatchEvent(new window.Event('input', { bubbles: true }));
-  await tick();
+  await settle();
   expect(document.getElementById('r1').style.display).not.toBe('none');
   expect(document.getElementById('r2').style.display).toBe('none');
 });
@@ -1764,7 +1768,7 @@ test('outcome filter matches exactly', async () => {
   const select = document.getElementById('filterOutcome');
   select.value = 'success';
   select.dispatchEvent(new window.Event('change', { bubbles: true }));
-  await tick();
+  await settle();
   expect(document.getElementById('r1').style.display).not.toBe('none');
   expect(document.getElementById('r2').style.display).toBe('none');
 });
@@ -1777,7 +1781,7 @@ test('filters combine', async () => {
   const select = document.getElementById('filterOutcome');
   select.value = 'success';
   select.dispatchEvent(new window.Event('change', { bubbles: true }));
-  await tick();
+  await settle();
   expect(document.getElementById('r1').style.display).toBe('none');
   expect(document.getElementById('r2').style.display).toBe('none');
 });
