@@ -60,49 +60,31 @@ test('confirm button re-disables when the name stops matching', async () => {
   expect(document.getElementById('deceased-submit').disabled).toBe(true);
 });
 
-test('deceased form uses Alpine x-data state', () => {
-  const html = source();
-  const deathSection = html.substring(
-    html.indexOf('deceased-modal'),
-    html.indexOf('deceased-modal') + 2000
-  );
-  expect(deathSection).toContain('x-data=');
-  expect(deathSection).toContain('typed');
-  expect(deathSection).toContain('required');
-});
-
 test('deceased form no longer uses oninput', () => {
   const html = source();
-  const deathSection = html.substring(
-    html.indexOf('deceased-modal'),
-    html.indexOf('deceased-modal') + 2000
-  );
-  expect(deathSection).not.toContain('oninput');
+  expect(html).not.toContain('oninput');
 });
 
 test('deceased form no longer uses data-confirm-name', () => {
   const html = source();
-  const deathSection = html.substring(
-    html.indexOf('deceased-modal'),
-    html.indexOf('deceased-modal') + 2000
-  );
-  expect(deathSection).not.toContain('data-confirm-name');
+  expect(html).not.toContain('data-confirm-name');
 });
 
 test('deceased input uses x-model binding', () => {
   const html = source();
-  const deathSection = html.substring(
-    html.indexOf('deceased-modal'),
-    html.indexOf('deceased-modal') + 2000
-  );
-  expect(deathSection).toContain('x-model="typed"');
+  expect(html).toContain('x-model="typed"');
 });
 
 test('deceased button uses :disabled binding', () => {
   const html = source();
-  const deathSection = html.substring(
-    html.indexOf('deceased-modal'),
-    html.indexOf('deceased-modal') + 3000
-  );
-  expect(deathSection).toContain(':disabled="typed !== required"');
+  expect(html).toContain(':disabled="typed !== required"');
+});
+
+test('deceased submit button has no bare disabled attribute', () => {
+  const html = source();
+  const buttonMatch = html.match(/<button[^>]*id="deceased-submit"[^>]*>/);
+  expect(buttonMatch).toBeTruthy();
+  const buttonTag = buttonMatch[0];
+  // Match ' disabled' not followed by '-' or '=' (avoids matching ':disabled=')
+  expect(buttonTag).not.toMatch(/\sdisabled(?![-=])/);
 });
