@@ -866,17 +866,6 @@ const App = (function (document, supabase, htmx) {
         }, 150);
       });
 
-      // Global keydown handler for closing modals on Escape.
-      // Dropdowns handle their own Escape via @keydown.escape.window.
-      document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-          const activeModal = document.querySelector('.modal.is-active');
-          if (activeModal) {
-            App.closeModal('#' + activeModal.id);
-          }
-        }
-      });
-
       // Delegated handler: copy a deep link to a section anchor to the clipboard.
       // Survives htmx hx-boost swaps because it is bound once to the document.
       document.addEventListener('click', function(event) {
@@ -1247,35 +1236,6 @@ const App = (function (document, supabase, htmx) {
   };
 
   // UI helpers
-  const openModal = (selector) => {
-    const modal = htmx.find(selector);
-    if (!modal) return;
-    if (!modal.classList.contains('is-active')) {
-      htmx.toggleClass(modal, 'is-active');
-    }
-    if (!document.body.classList.contains('modal-open')) {
-      htmx.toggleClass(document.body, 'modal-open');
-    }
-  };
-
-  const closeModal = (selector) => {
-    const modal = htmx.find(selector);
-    if (!modal) return;
-    if (modal.classList.contains('is-active')) {
-      htmx.toggleClass(modal, 'is-active');
-    }
-    if (document.body.classList.contains('modal-open')) {
-      htmx.toggleClass(document.body, 'modal-open');
-    }
-    // If modal requests clearing target on close
-    const clearOnClose = modal.getAttribute('data-clear-on-close') === 'true';
-    const clearTarget = modal.getAttribute('data-clear-target');
-    if (clearOnClose && clearTarget) {
-      const el = htmx.find(clearTarget);
-      if (el) el.innerHTML = '';
-    }
-  };
-
   const copyToClipboard = async (text, evt) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -1357,8 +1317,6 @@ const App = (function (document, supabase, htmx) {
     signUpWithDiscord,
     linkDiscord,
     unlinkDiscord,
-    openModal,
-    closeModal,
     copyToClipboard
   };
 })(document, supabase, htmx);
