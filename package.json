@@ -14,6 +14,7 @@
     "setup": "bun run scripts/setup.mjs",
     "seed:local": "bun run scripts/seed-local.mjs",
     "seed:classes": "bun run util/seed-classes.js",
+    "seed:rules": "bun run util/seed-rules-pdfs.js",
     "seed:admin": "bun run util/seed-admin.js",
     "seed:badges": "bun run scripts/seed-badges.js",
     "fetch:badges": "bun run scripts/fetch-badge-art.js",
