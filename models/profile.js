@@ -3,19 +3,12 @@ const { escapeLikePattern } = require('../util/validate');
 const { SYSTEM_ACTOR } = require('../util/actor');
 const { ProfileService } = require('../services/profile/service');
 const profileRepository = require('../services/profile/repository');
+const { STARTER_RULES_PDF_ID, STARTER_CLASS_UNLOCKS } = require('../util/starter-content');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
 // Starter content IDs - Advent v1 rules and base 6 classes
-const STARTER_RULES_PDF_ID = 'a10948ac-5f78-481f-9e53-c582b59926cd'; // Enclave: Advent v1
-const STARTER_CLASS_IDS = [
-  'b6ce893b-8207-4f89-abfc-a02ae0e9b65d', // Gunslinger
-  '018fcdba-39cf-4cc8-8f4d-92e2023719cf', // Illusionist
-  'f0de4397-5e71-4ed6-a16a-26dc72c46801', // Librarian
-  'aa0f9690-37a6-4784-9119-1b2117f798a7', // Thane
-  'a605940b-f27f-45d8-af76-abda848b3e12', // Thunderbird
-  'ebd55f52-9768-400a-94d6-392cd07e2b24', // Wanderer
-];
+const STARTER_CLASS_IDS = Object.values(STARTER_CLASS_UNLOCKS);
 const STARTER_UNLOCK_DAYS = 30;
 
 const profileService = new ProfileService(profileRepository);
