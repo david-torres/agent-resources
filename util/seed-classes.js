@@ -2,7 +2,7 @@ require('./env');
 const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
 const { SYSTEM_ACTOR } = require('./actor');
-const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread } = require('./enclave-consts');
+const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread, classGearList, classAbilityList } = require('./enclave-consts');
 const { STARTER_CLASS_UNLOCKS } = require('./starter-content');
 
 // Initialize Supabase client
@@ -63,6 +63,8 @@ const buildRow = (cls, is_player_created) => {
         rules_edition: 'advent',
         rules_version: 'v1',
         stat_spread: classStatSpread[cls] || {},
+        gear: (classGearList[cls] || []).map(name => ({ name, description: '' })),
+        abilities: (classAbilityList[cls] || []).map(name => ({ name, description: '' })),
         created_by: null
     };
     if (Object.prototype.hasOwnProperty.call(STARTER_CLASS_UNLOCKS, cls)) {
