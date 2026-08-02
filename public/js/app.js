@@ -702,7 +702,25 @@ const App = (function (document, supabase, htmx) {
       })();
       // initialize supabase client
       supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
-      supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
+      // This subscription handles only the LIVE auth events. supabase-js
+      // also emits INITIAL_SESSION to every subscriber once it finishes
+      // initializing (onAuthStateChange fires an async IIFE ->
+      // _emitInitialSession -> callback('INITIAL_SESSION', session)), and
+      // start() below already dispatches that event itself from an explicit
+      // getSession(). Handling it in both places ran the whole INITIAL_SESSION
+      // branch twice per page load -- two _syncDiscordToProfile() round-trips
+      // and two redirectTo() body swaps of the entire page.
+      //
+      // start() owns INITIAL_SESSION rather than this subscription because
+      // its session comes from a getSession() we await directly, so the
+      // event is dispatched exactly once with a known session, independent
+      // of when supabase's own emit happens to win the lock. Do not drop
+      // the guard and rely on the emit instead: that couples the whole
+      // authed-page bootstrap to supabase-js internals.
+      supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION') return;
+        return _handleAuthStateChange(event, session);
+      });
 
       // add auth token to htmx requests
       // Bound to `document`, not `document.body`: redirectTo() replaces the
