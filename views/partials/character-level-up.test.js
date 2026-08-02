@@ -60,7 +60,13 @@ test('app.js no longer has the global modal Escape handler', () => {
 
 test('the htmx:afterSwap re-init hub is untouched', () => {
   const src = read('../../public/js/app.js');
-  expect(src).toContain("document.body.addEventListener('htmx:afterSwap'");
+  // Asserts the hub still exists and is still wired to htmx:afterSwap -- the
+  // original intent was to guard against this handler being deleted during
+  // the modal-to-Alpine conversion. It deliberately does NOT pin which node
+  // it's bound to (document vs document.body): that binding target is free
+  // to change (e.g. ar-h6rt moved it to `document` so it survives the
+  // redirectTo() body swap) without this test failing.
+  expect(src).toMatch(/document(?:\.body)?\.addEventListener\('htmx:afterSwap'/);
   expect(src).toContain('_initTooltips(targetEl || document)');
   expect(src).toContain('_initSearchableSelects(targetEl || document)');
   expect(src).toContain('_initImageCroppers(targetEl || document)');
