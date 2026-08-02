@@ -272,3 +272,89 @@ test('staying on the same page through the deferred-refresh window still trigger
   expect(ajaxCalls.length).toBe(1);
   expect(ajaxCalls[0][1]).toBe('/nav/manage');
 });
+
+// ar-h6rt (third and root defect): redirectTo() calls
+// `htmx.ajax('GET', url, { target: 'body', swap: 'outerHTML', headers })`.
+// A real htmx `outerHTML` swap on `target: 'body'` replaces the <body>
+// element itself, not its contents. App.init binds most of its listeners --
+// including the one at ~line 704 that adds the Authorization/Refresh-Token
+// headers to every htmx request -- to `document.body`, so replacing that
+// element destroys them. Every htmx request issued after the first
+// auth-driven redirect goes out unauthenticated.
+//
+// Reuses loadAppAndTriggerInitialSession's setup, but replaces the htmxStub
+// so `ajax()` performs the real DOM consequence of that swap: it detaches
+// the current <body> and puts a brand new, listener-free <body> element in
+// its place (a fresh node cannot carry over addEventListener registrations
+// made against the old one -- that is the whole mechanism of the bug).
+async function loadAppAndTriggerInitialSessionThenSwapBody(url) {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', { url });
+  const { window } = dom;
+
+  globalThis.window = window;
+  globalThis.document = window.document;
+  globalThis.localStorage = window.localStorage;
+  globalThis.history = window.history;
+
+  if (window.document.readyState === 'loading') {
+    await new Promise((resolve) => window.document.addEventListener('DOMContentLoaded', resolve, { once: true }));
+  }
+
+  const session = { access_token: 'tok-1', refresh_token: 'refresh-1' };
+  const supabaseStub = {
+    createClient: () => ({
+      auth: {
+        onAuthStateChange: () => {},
+        getUser: async () => ({ data: null, error: 'no-user' }),
+        getSession: async () => ({ data: { session } })
+      }
+    })
+  };
+
+  const bodyBeforeSwap = window.document.body;
+  let resolveAjaxCalled;
+  const ajaxCalled = new Promise((resolve) => { resolveAjaxCalled = resolve; });
+  const htmxStub = {
+    ajax: (...args) => {
+      // The real DOM consequence of `swap: 'outerHTML'` on `target: 'body'`:
+      // the current <body> element is detached and a brand new one takes
+      // its place, taking every listener bound to the old node with it.
+      const freshBody = window.document.createElement('body');
+      window.document.body.replaceWith(freshBody);
+      resolveAjaxCalled();
+    }
+  };
+
+  const loadModule = new Function('document', 'supabase', 'htmx', `${APP_SOURCE}\nreturn App;`);
+  const App = loadModule(window.document, supabaseStub, htmxStub);
+
+  App.init('https://test.invalid', 'test-publishable-key');
+  await ajaxCalled;
+
+  return { window, bodyBeforeSwap };
+}
+
+test('the Authorization header still gets added to htmx requests after redirectTo swaps the body', async () => {
+  const { window, bodyBeforeSwap } = await loadAppAndTriggerInitialSessionThenSwapBody(
+    'http://localhost/auth/check?r=%2Fnav%2Fmanage'
+  );
+
+  // Guard against a vacuous test: the swap must have actually replaced the
+  // body element, not merely been invoked. If this assertion ever fails, the
+  // test below is no longer exercising anything real.
+  expect(window.document.body).not.toBe(bodyBeforeSwap);
+
+  const headers = {};
+  // bubbles: true is deliberate, not incidental: htmx's own triggerEvent
+  // helper constructs every htmx:* event with bubbles: true, so a
+  // document-level listener in the (default) bubble phase always sees it in
+  // production. Dropping this back to the CustomEvent default of
+  // bubbles: false would silently stop exercising the real bug and could
+  // reintroduce a capture-phase-vs-bubble-phase mismatch between this and
+  // the other htmx:configRequest listener.
+  const configRequestEvent = new window.CustomEvent('htmx:configRequest', { detail: { headers }, bubbles: true });
+  window.document.body.dispatchEvent(configRequestEvent);
+
+  expect(headers['Authorization']).toBe('Bearer tok-1');
+  expect(headers['Refresh-Token']).toBe('refresh-1');
+});

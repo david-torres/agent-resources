@@ -664,7 +664,11 @@ const App = (function (document, supabase, htmx) {
 
   // Handle form submissions - sync editors before submit
   const _setupFormSync = () => {
-    document.body.addEventListener('submit', function(event) {
+    // Bound to `document`, not `document.body`: redirectTo() replaces the
+    // <body> element on every authed page load (outerHTML swap), which
+    // destroys any listener bound directly to that node. `document` itself
+    // is never replaced, so listeners survive.
+    document.addEventListener('submit', function(event) {
       const form = event.target;
       if (form && form.tagName === 'FORM') {
         _syncToastUIEditorsToTextareas(form);
@@ -672,7 +676,7 @@ const App = (function (document, supabase, htmx) {
     }, true); // Use capture phase to run before HTMX
 
     // Also sync before HTMX requests
-    document.body.addEventListener('htmx:configRequest', function(event) {
+    document.addEventListener('htmx:configRequest', function(event) {
       const form = event.detail.elt;
       if (form && form.tagName === 'FORM') {
         _syncToastUIEditorsToTextareas(form);
@@ -701,7 +705,11 @@ const App = (function (document, supabase, htmx) {
       supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
 
       // add auth token to htmx requests
-      document.body.addEventListener("htmx:configRequest", function (event) {
+      // Bound to `document`, not `document.body`: redirectTo() replaces the
+      // <body> element on every authed page load (outerHTML swap), which
+      // destroys any listener bound directly to that node. `document` itself
+      // is never replaced, so listeners survive.
+      document.addEventListener("htmx:configRequest", function (event) {
         const authToken = _getAuthToken();
         const refreshToken = _getRefreshToken();
         if (authToken && refreshToken) {
@@ -711,7 +719,7 @@ const App = (function (document, supabase, htmx) {
       });
 
       // handle htmx errors
-      document.body.addEventListener("htmx:responseError", function (event) {
+      document.addEventListener("htmx:responseError", function (event) {
         _displayError(_extractErrorMessage(event.detail.xhr.response));
       });
 
@@ -723,7 +731,7 @@ const App = (function (document, supabase, htmx) {
       });
 
       // Add handler for htmx:afterSettle
-      document.body.addEventListener('htmx:afterSettle', function(event) {
+      document.addEventListener('htmx:afterSettle', function(event) {
         const xhr = event.detail && event.detail.xhr;
         if (!xhr) return;
         const authOptional = xhr.getResponseHeader('X-Auth-Optional') === 'true';
@@ -840,7 +848,11 @@ const App = (function (document, supabase, htmx) {
         form.dataset.navFormInit = 'true';
       };
 
-      document.body.addEventListener('htmx:afterSwap', function(evt) {
+      // Bound to `document`, not `document.body`: redirectTo() replaces the
+      // <body> element on every authed page load (outerHTML swap), which
+      // destroys any listener bound directly to that node. `document` itself
+      // is never replaced, so listeners survive.
+      document.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
         const targetEl = evt.detail && evt.detail.target;
         if (targetEl && targetEl.id === 'characterSearchResults') {
