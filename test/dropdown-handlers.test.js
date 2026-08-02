@@ -2,7 +2,16 @@
 // handler and the dropdown half of the Escape handler were deleted from
 // public/js/app.js because every `.dropdown` is now a self-sufficient Alpine
 // component (@click.outside / @keydown.escape.window). The modal half of the
-// Escape handler must survive untouched until Task 19 replaces it.
+// Escape handler survived untouched until Task 19, which converted the last
+// modal (#levelUpModal) to the shared Alpine `modal` component. Every modal
+// now declares its own `@keydown.escape.window="close()"` (see
+// public/js/alpine-components.js and views/partials/character-level-up.handlebars),
+// so the global handler this file used to guard is gone by design, along
+// with App.openModal/App.closeModal themselves. The contiguity-guard test
+// that used to live here (`the modal Escape handler still closes
+// .modal.is-active, as one contiguous block`) is retired as part of that
+// same Task 19 change — it existed specifically to stop someone deleting
+// that handler by accident, and Task 19 is the change legitimately doing so.
 const { test, expect } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
@@ -17,24 +26,4 @@ test('no .dropdown.is-active query remains anywhere in app.js', () => {
   // loop inside the Escape handler: if this string is absent from the whole
   // file, neither of those blocks can exist in any form.
   expect(source).not.toContain('dropdown.is-active');
-});
-
-test('the modal Escape handler still closes .modal.is-active, as one contiguous block', () => {
-  // This is the guard against a future edit (or this task itself) deleting
-  // the modal half of the Escape handler along with the dropdown half.
-  //
-  // Deliberately a single regex spanning all four facts with bounded gaps,
-  // not four separate `expect` calls. Separate calls only prove each
-  // fragment exists *somewhere* in the file — they would still pass if the
-  // real handler were deleted and any one fragment happened to survive
-  // elsewhere (e.g. a different keydown listener, or App.closeModal invoked
-  // from a click handler). Requiring contiguity is what makes this a
-  // guarantee that the handler itself, not just its vocabulary, is intact.
-  //
-  // If this stops matching, the modal-Escape handler has been removed or
-  // restructured beyond recognition — that is load-bearing behavior, not
-  // an incidental refactor, and should not be waved through silently.
-  expect(source).toMatch(
-    /addEventListener\('keydown'[\s\S]{0,200}Escape'[\s\S]{0,200}\.modal\.is-active[\s\S]{0,200}App\.closeModal/
-  );
 });
