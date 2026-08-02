@@ -996,6 +996,14 @@ const App = (function (document, supabase, htmx) {
           const current = window.location.pathname + window.location.search;
           // Use a small delay to ensure any editors are initialized first, then redirect
           setTimeout(() => {
+            // A boosted navigation can move the user to a different page
+            // during this delay without a real page load, leaving this timer
+            // pending. Re-read the location and bail if it no longer matches
+            // what we captured, so we don't drag the user back to a page
+            // they already left. Do not simplify this to an unconditional
+            // redirectTo(current).
+            const now = window.location.pathname + window.location.search;
+            if (now !== current) return;
             redirectTo(current);
           }, 100);
         }
