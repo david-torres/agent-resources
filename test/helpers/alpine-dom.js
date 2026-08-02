@@ -5,9 +5,6 @@
 // findClosest does `el.parentNode instanceof ShadowRoot` during start(),
 // and its absence throws a ReferenceError that kills startup. Alpine must
 // also be imported after those globals exist.
-const fs = require('fs');
-const path = require('path');
-const Handlebars = require('handlebars');
 const { JSDOM } = require('jsdom');
 
 const GLOBAL_KEYS = [
@@ -85,13 +82,4 @@ const render = async (html) => {
   return document.body;
 };
 
-// Compile a Handlebars partial from views/partials and mount it.
-const renderPartial = async (name, context) => {
-  const src = fs.readFileSync(
-    path.join(__dirname, '..', '..', 'views', 'partials', `${name}.handlebars`),
-    'utf8'
-  );
-  return render(Handlebars.compile(src)(context));
-};
-
-module.exports = { setupAlpine, tick, settle, render, renderPartial };
+module.exports = { setupAlpine, tick, settle, render };

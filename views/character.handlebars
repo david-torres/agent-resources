@@ -189,7 +189,7 @@
 
   <div class="column is-two-thirds">
     <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}"
-         x-data="characterStats({{json character.id}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{lookup ../character this}}{{/each}} })">
+         x-data="characterStats({{json character.id}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{json (lookup ../character this)}}{{/each}} })">
       <div class="level is-mobile mb-3">
         <div class="level-left">
           <h3 class="title is-4 mb-0">Stats</h3>

@@ -18,7 +18,7 @@
         <div class="field">
           <label class="label" for="title">Title <span class="has-text-danger">*</span></label>
           <div class="control">
-            <input class="input" type="text" name="title" id="title" x-model="title" @input="onTitle()" placeholder="Page Title" required>
+            <input class="input" type="text" name="title" id="title" value="{{page.title}}" x-model="title" @input="onTitle()" placeholder="Page Title" required>
           </div>
         </div>
       </div>
@@ -26,7 +26,7 @@
         <div class="field">
           <label class="label" for="slug">Slug</label>
           <div class="control">
-            <input class="input" type="text" name="slug" id="slug" x-model="slug" @input="auto = false" placeholder="url-friendly-slug">
+            <input class="input" type="text" name="slug" id="slug" value="{{page.slug}}" x-model="slug" @input="auto = false" placeholder="url-friendly-slug">
           </div>
           <p class="help">Leave empty to auto-generate from title. Must be unique.</p>
         </div>

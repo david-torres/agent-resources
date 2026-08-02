@@ -1,6 +1,9 @@
 const { test, expect, beforeAll } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
+const Handlebars = require('handlebars');
+const customHelpers = require('../../util/handlebars');
+const { statList } = require('../../util/enclave-consts');
 const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
 const STATS = { vitality: 3, might: 2, resilience: 1 };
@@ -193,4 +196,76 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
 
   expect(src).not.toContain('character-stats.js');
   expect(src).not.toContain('CharacterStats');
+});
+
+// --- ar-7v3k fix wave, Fix 3 --------------------------------------------
+//
+// The x-data seed above only asserted its *prefix*
+// (`x-data="characterStats({{json character.id}}`), which never exercised
+// the per-stat loop building the rest of the object literal. That loop
+// used `{{lookup ../character this}}` for each stat's value with no
+// wrapping helper: Handlebars renders a null/undefined stat as an empty
+// string, so a missing stat emits e.g. `luck:  })` -- invalid JS. Alpine
+// throws evaluating that expression, and the WHOLE characterStats
+// component fails to initialize (not just that one stat): Edit does
+// nothing and #statsEditor stays permanently hidden behind x-cloak. The DB
+// declares every stat column NOT NULL, so this is latent, not live -- one
+// nullable column away from a total feature outage.
+//
+// This extracts the REAL x-data expression straight off #statsBox in
+// character.handlebars (still containing its Handlebars syntax) and
+// compiles it with the app's real helpers, mirroring the technique in
+// views/mission-list.test.js's extractRootXData -- mounting the actual
+// expression, not a hand-copied stand-in, so a regression in the real
+// template is what makes this fail.
+const CHARACTER_SRC = fs.readFileSync(
+  path.join(__dirname, '..', 'character.handlebars'),
+  'utf8'
+);
+
+const extractStatsXData = () => {
+  const marker = 'id="statsBox"';
+  const idx = CHARACTER_SRC.indexOf(marker);
+  if (idx === -1) throw new Error('#statsBox not found in character.handlebars');
+  const attrStart = CHARACTER_SRC.indexOf('x-data="', idx) + 'x-data="'.length;
+  const attrEnd = CHARACTER_SRC.indexOf('"', attrStart);
+  return CHARACTER_SRC.slice(attrStart, attrEnd);
+};
+
+const mountRealStatsSeed = (character) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(customHelpers);
+  const template = hb.compile(`
+    <div id="stats-root" x-data="${extractStatsXData()}">
+      <strong id="statsTotalSum" x-text="total"></strong>
+    </div>
+  `);
+  return render(template({ character, statList }));
+};
+
+const ELEVEN_STATS = {
+  vitality: 3, might: 2, resilience: 1, spirit: 0, arcane: 4,
+  will: 2, sensory: 1, reflex: 3, vigor: 2, skill: 1, intelligence: 0
+};
+
+test('the real #statsBox x-data seed mounts and totals correctly with well-formed stats', async () => {
+  await mountRealStatsSeed({ id: 'char-well-formed', ...ELEVEN_STATS, luck: 5 });
+  await tick();
+  expect(document.getElementById('statsTotalSum').textContent).toBe('24');
+});
+
+test('the real #statsBox x-data seed survives a null stat instead of throwing a SyntaxError', async () => {
+  await mountRealStatsSeed({ id: 'char-null-luck', ...ELEVEN_STATS, luck: null });
+  await tick();
+  // luck coerces to 0 in characterStats' `total` getter, same as any other
+  // nullable-in-practice value -- the point of this test is that the
+  // component initializes AT ALL, not a specific null-handling rule.
+  expect(document.getElementById('statsTotalSum').textContent).toBe('19');
+});
+
+test('the real #statsBox x-data seed survives a missing (undefined) stat', async () => {
+  const { luck, ...withoutLuck } = { id: 'char-missing-luck', ...ELEVEN_STATS, luck: 0 };
+  await mountRealStatsSeed(withoutLuck);
+  await tick();
+  expect(document.getElementById('statsTotalSum').textContent).toBe('19');
 });
