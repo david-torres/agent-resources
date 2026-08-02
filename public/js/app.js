@@ -928,6 +928,15 @@ const App = (function (document, supabase, htmx) {
     start();
   }
 
+  // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
+  // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
+  // values so a crafted ?r= cannot redirect the user off-site. Stricter than
+  // the server-side isSameOriginPath check (which loosely accepts
+  // "/\evil.com") -- do not relax this to match it.
+  function _isSafeInAppPath(url) {
+    return !!url && url[0] === '/' && url[1] !== '/' && url[1] !== '\\';
+  }
+
   function redirectTo(url) {
     const token = _getAuthToken();
     const refresh = _getRefreshToken();
@@ -936,6 +945,16 @@ const App = (function (document, supabase, htmx) {
       headers['Authorization'] = `Bearer ${token}`;
       headers['Refresh-Token'] = refresh;
     }
+    // Update the address bar synchronously, before the swap settles, so it
+    // never diverges from what's rendered. Use replaceState (never
+    // pushState) so Back can't land on /auth/check and re-trigger the
+    // bounce. This must not be deferred into the ajax completion callback:
+    // if the swap fails, an already-updated URL means a reload retries the
+    // intended target, whereas deferring the write would leave the user
+    // stuck at /auth/check -- exactly the trap being fixed.
+    if (_isSafeInAppPath(url)) {
+      history.replaceState(null, '', url);
+    }
     // Use swap: 'outerHTML' to ensure proper body replacement
     htmx.ajax('GET', url, { target: 'body', swap: 'outerHTML', headers });
   }
@@ -943,11 +962,7 @@ const App = (function (document, supabase, htmx) {
   function getRedirectUrl() {
     const url = new URL(window.location.href);
     const r = url.searchParams.get('r');
-    // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
-    // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
-    // values so a crafted ?r= cannot redirect the user off-site. Mirrors the
-    // server-side isSameOriginPath check.
-    if (!r || r[0] !== '/' || r[1] === '/' || r[1] === '\\') {
+    if (!_isSafeInAppPath(r)) {
       return null;
     }
     return r;
