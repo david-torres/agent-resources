@@ -36,6 +36,33 @@ test('class-view wires up both modals through the shared modal components', () =
   expect(SRC).toContain('x-ref="result"');
 });
 
+// ar-7v3k fix wave, Fix 4: the test above (and the DUPLICATE_MODAL /
+// UNLOCK_MODAL fixtures used by the behavioral tests below) only pinned
+// component names, dispatches, and x-ref -- never the real template's
+// `:class`/`@open-modal.window`/`@close-modal.window`/
+// `@keydown.escape.window` bindings themselves. Deleting
+// `:class="show && 'is-active'"` from either real modal in
+// class-view.handlebars left every test in this file green (proven by
+// deleting each and re-running before writing this test): the modal would
+// open in JS state but never actually become visible. Brings this up to
+// the standard set by views/partials/character-level-up.test.js:36-45.
+test('the real duplicate modal carries all four modal bindings', () => {
+  const duplicateChunk = SRC.slice(SRC.indexOf('id="duplicateModal-'), SRC.indexOf('id="unlockCodeModal"'));
+  expect(duplicateChunk).toContain("x-data=\"modal('duplicate')\"");
+  expect(duplicateChunk).toContain(":class=\"show && 'is-active'\"");
+  expect(duplicateChunk).toContain('@open-modal.window="open($event.detail)"');
+  expect(duplicateChunk).toContain('@close-modal.window="close($event.detail)"');
+  expect(duplicateChunk).toContain('@keydown.escape.window="close()"');
+});
+
+test('the real unlock-code modal carries all four modal bindings', () => {
+  const unlockChunk = SRC.slice(SRC.indexOf('id="unlockCodeModal"'));
+  expect(unlockChunk).toContain(":class=\"show && 'is-active'\"");
+  expect(unlockChunk).toContain('@open-modal.window="open($event.detail)"');
+  expect(unlockChunk).toContain('@close-modal.window="closeAndClear($event.detail)"');
+  expect(unlockChunk).toContain('@keydown.escape.window="closeAndClear()"');
+});
+
 // Pins the template to the registered component: the clearing logic must
 // live in public/js/alpine-components.js, not be re-implemented inline in
 // the handlebars attribute. A template that inlines its own closeAndClear
