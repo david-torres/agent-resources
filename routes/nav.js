@@ -66,7 +66,13 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
     return res.render('nav-manage', {
         profile,
         title: 'Manage Navigation',
-        navItems: rootItems,
+        // Deliberately NOT `navItems`: util/nav-loader puts the decorated
+        // navbar items on res.locals under that name, and render-locals
+        // shadow res.locals. Reusing the key swapped the layout's navbar
+        // for these raw getAllNavItems() rows, which carry `url` but no
+        // computed `href` -- rendering every navbar link as href="" and
+        // trapping the user on this page. See ar-h6rt.
+        items: rootItems,
         activeNav: null,
         breadcrumbs: [
             { label: 'Manage Navigation', href: '/nav/manage' }
