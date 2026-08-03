@@ -18,7 +18,8 @@ const httpFiles = new Set([
   'routes/character-wizard.test.js',
   'routes/characters.test.js',
   'routes/classes-stat-spread.test.js',
-  'routes/missions.test.js'
+  'routes/missions.test.js',
+  'routes/nav-manage-navbar.test.js'
 ]);
 const mode = process.argv[2] || 'unit';
 
