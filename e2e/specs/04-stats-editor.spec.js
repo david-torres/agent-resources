@@ -15,12 +15,16 @@ test.beforeAll(async () => {
   db = await connect();
   const profile = await profileForEmail(db, ADMIN_EMAIL);
   const classRow = await seedClass(prefix);
-  // is_public: true -- createCharacter defaults is_public to false
+  // is_public: 'on' -- createCharacter defaults is_public to false
   // (services/character/input.js normalizeCharacterInput: `data.is_public =
   // data.is_public === 'on'`), so without this the non-owner test's character
-  // 404s for the player rather than rendering with no Edit button. Fixture
-  // correction, not a product change.
-  character = await seedCharacter(prefix, profile, classRow, { is_public: true });
+  // 404s for the player rather than rendering with no Edit button. The
+  // literal string 'on' is required, not a JS boolean: normalizeCharacterInput
+  // mirrors the real HTML form contract (checkbox fields post as the string
+  // 'on' or are absent), so passing `true` here silently coerces to `false`
+  // (`true === 'on'` is false) -- confirmed by services/character/input.test.js
+  // using the same 'on' string. Fixture correction, not a product change.
+  character = await seedCharacter(prefix, profile, classRow, { is_public: 'on' });
 });
 
 test.afterAll(async () => {
@@ -56,9 +60,14 @@ test.describe('as the owner', () => {
     await expect(page.locator('#statsReadOnly')).toBeHidden();
 
     // The old imperative code focused the first input on reveal; the Alpine
-    // edit() must still do it or keyboard users land nowhere.
-    const focusedName = await page.evaluate(() => document.activeElement?.getAttribute('name'));
-    expect(focusedName).toBeTruthy();
+    // edit() must still do it or keyboard users land nowhere. `vitality` is
+    // asserted by name, not just "some input is focused": edit() focuses
+    // this.root.querySelector('.stats-input'), the first .stats-input in DOM
+    // order, and util/enclave-consts.js's statList (the array both
+    // #statsReadOnly and #statsEditor iterate via {{#each statList}}, per
+    // routes/characters.js) literally starts with 'vitality'. A truthy-only
+    // assertion would still pass if focus landed on the wrong stat.
+    await expect(page.locator('#statsEditor input[name="vitality"]')).toBeFocused();
   });
 
   test('the live total tracks edits', async ({ page }) => {
@@ -102,6 +111,15 @@ test.describe('as a non-owner', () => {
 
   test('sees no Edit button', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
+
+    // Positive precondition first: prove the player actually landed on this
+    // character's page (not a 404/redirect that would also leave zero
+    // #statsUnlockBtn matches, passing vacuously) before asserting the Edit
+    // button is absent. #statsBox carries data-character-name from the real
+    // character row (views/character.handlebars:191), so this ties the
+    // assertion to the specific seeded character, not just "a" character page.
+    await expect(page.locator('#statsBox')).toHaveAttribute('data-character-name', character.name);
+
     await expect(page.locator('#statsUnlockBtn')).toHaveCount(0);
   });
 });
