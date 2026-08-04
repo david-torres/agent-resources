@@ -35,6 +35,7 @@
 | `e2e/fixtures/db.js` (create) | `pg` connection, prefix generator, profile lookup, cleanup-by-prefix |
 | `e2e/fixtures/character.js` (create) | Seed characters, abilities, perks, offscreen missions |
 | `e2e/fixtures/class.js` (create) | Seed classes |
+| `e2e/fixtures/mission.js` (create) | Seed missions (offscreen-mission link sources) |
 | `e2e/specs/*.spec.js` (create) | One file per checklist item |
 | `package.json` (modify) | `test:e2e` script, `@playwright/test` devDependency |
 | `.gitignore` (modify) | `e2e/.auth/`, `e2e/report/` |
@@ -409,6 +410,8 @@ git commit -m "test: sign both e2e identities in through the real auth form (ar-
   - `cleanupByPrefix(db, prefix) -> Promise<void>`
 - Produces, from `e2e/fixtures/class.js`:
   - `seedClass(prefix, { name?, rulesVersion?, isPublic?, abilities?, gear? }) -> Promise<classRow>`
+- Produces, from `e2e/fixtures/mission.js`:
+  - `seedMission(prefix, creatorProfileId, { name?, date?, isPublic? }) -> Promise<missionRow>`
 - Produces, from `e2e/fixtures/character.js`:
   - `seedCharacter(prefix, profile, classRow, overrides?) -> Promise<characterRow>`
   - `seedPerk(characterId, classAbilityId, text, position?) -> Promise<perkRow>`
@@ -472,6 +475,15 @@ const cleanupByPrefix = async (db, prefix) => {
     await db.query('delete from characters where id = any($1::uuid[])', [characterIds]);
   }
 
+  // After characters: offscreen_missions reference source_mission_id, and they
+  // were deleted above with their character.
+  const { rows: missions } = await db.query('select id from missions where name like $1', [like]);
+  const missionIds = missions.map((r) => r.id);
+  if (missionIds.length) {
+    await db.query('delete from mission_characters where mission_id = any($1::uuid[])', [missionIds]);
+    await db.query('delete from missions where id = any($1::uuid[])', [missionIds]);
+  }
+
   const { rows: classes } = await db.query('select id from classes where name like $1', [like]);
   const classIds = classes.map((r) => r.id);
   if (classIds.length) {
@@ -479,7 +491,13 @@ const cleanupByPrefix = async (db, prefix) => {
     await db.query('delete from classes where id = any($1::uuid[])', [classIds]);
   }
 
-  await db.query('delete from lfg_posts where title like $1', [like]);
+  const { rows: posts } = await db.query('select id from lfg_posts where title like $1', [like]);
+  const postIds = posts.map((r) => r.id);
+  if (postIds.length) {
+    await db.query('delete from lfg_join_requests where lfg_post_id = any($1::uuid[])', [postIds]);
+    await db.query('delete from lfg_posts where id = any($1::uuid[])', [postIds]);
+  }
+
   await db.query('delete from pages where title like $1', [like]);
 };
 
@@ -509,6 +527,39 @@ const seedClass = async (prefix, {
 };
 
 module.exports = { seedClass };
+```
+
+- [ ] **Step 2b: Create `e2e/fixtures/mission.js`**
+
+Specs never depend on whatever missions happen to exist locally — they seed
+their own, so coverage is unconditional on a fresh checkout.
+
+```js
+require('../../util/env');
+const { supabaseAdmin } = require('../../models/_base');
+
+const seedMission = async (prefix, creatorProfileId, {
+  name = `${prefix}-mission`,
+  date = '2026-01-15T18:00:00Z',
+  isPublic = true
+} = {}) => {
+  const { data, error } = await supabaseAdmin
+    .from('missions')
+    .insert({
+      name,
+      date,
+      is_public: isPublic,
+      creator_id: creatorProfileId,
+      summary: 'Fixture mission',
+      statement: 'Fixture statement'
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+module.exports = { seedMission };
 ```
 
 - [ ] **Step 3: Create `e2e/fixtures/character.js`**
@@ -1698,6 +1749,7 @@ const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass } = require('../fixtures/class');
 const { seedCharacter, seedOffscreenMission } = require('../fixtures/character');
+const { seedMission } = require('../fixtures/mission');
 const { ADMIN_EMAIL, ADMIN_STATE } = require('../global-setup');
 
 test.use({ storageState: ADMIN_STATE });
@@ -1706,7 +1758,7 @@ const prefix = newPrefix('offscreen');
 let db;
 let character;
 let offscreen;
-let hasLinkedSource = false;
+let mission;
 
 test.beforeAll(async () => {
   db = await connect();
@@ -1714,14 +1766,13 @@ test.beforeAll(async () => {
   const classRow = await seedClass(prefix);
   character = await seedCharacter(prefix, profile, classRow);
 
-  // A linked source mission, if one exists to link to. Without any mission in
-  // the database the "linked" case is untestable — record that as a skip
-  // rather than silently testing the unlinked path instead.
-  const { rows: missions } = await db.query('select id from missions limit 1');
-  hasLinkedSource = !!missions[0];
+  // Seed the source mission rather than borrowing whatever happens to be in
+  // the local database: the linked case is the whole point of this spec, so it
+  // must never silently degrade to the unlinked one.
+  mission = await seedMission(prefix, profile.id);
   offscreen = await seedOffscreenMission(character.id, profile.id, {
     name: `${prefix}-offscreen`,
-    sourceMissionId: missions[0]?.id || null
+    sourceMissionId: mission.id
   });
 });
 
@@ -1731,15 +1782,13 @@ test.afterAll(async () => {
 });
 
 test('editing a linked offscreen mission starts with the other fields hidden', async ({ page }) => {
-  test.skip(!hasLinkedSource, 'no mission in the database to link as an offscreen source');
   await page.goto(`/characters/${character.id}/offscreen-missions/${offscreen.id}/edit`);
 
   await expect(page.locator('#om-source-other')).toBeHidden();
 
-  // The select must still show the linked mission, not fall back to blank.
-  const select = page.locator('select').first();
-  await expect(select).not.toHaveValue('__other__');
-  await expect(select).not.toHaveValue('');
+  // The select must still show the linked mission itself — not blank, and not
+  // the __other__ sentinel.
+  await expect(page.locator('select').first()).toHaveValue(mission.id);
 });
 
 test('choosing "Other" reveals the other fields', async ({ page }) => {
@@ -1760,7 +1809,8 @@ test('a new offscreen mission starts with the other fields hidden', async ({ pag
 - [ ] **Step 3: Run it**
 
 Run: `bun run test:e2e e2e/specs/12-offscreen-mission.spec.js`
-Expected: 3 passed, or a skip if the local database has no missions.
+Expected: 3 passed. There are no conditional skips — the spec seeds its own
+source mission, so it either genuinely passes or genuinely fails.
 
 If the first test fails because the select is blank, that confirms the Step 1
 suspicion: `sourceId` never receives the server's `currentSourceId`. **Record it,
@@ -1914,29 +1964,45 @@ form.
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { supabaseAdmin } = require('../../models/_base');
-const { ADMIN_EMAIL, ADMIN_STATE } = require('../global-setup');
-
-test.use({ storageState: ADMIN_STATE });
+const { ADMIN_EMAIL, ADMIN_STATE, PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
 
 const prefix = newPrefix('lfg');
 let db;
-let hostedPost;
+let hostedPost;   // admin is creator AND host — exercises the create form
+let openPost;     // no host — the player can join it, and conduit is enabled
 
-test.beforeAll(async () => {
-  db = await connect();
-  const profile = await profileForEmail(db, ADMIN_EMAIL);
-
+const insertPost = async (title, creatorId, hostId) => {
   const { data, error } = await supabaseAdmin.from('lfg_posts').insert({
-    title: `${prefix}-hosted-post`,
+    title,
     description: 'Fixture LFG post',
     date: '2027-01-01T18:00:00Z',
-    creator_id: profile.id,
-    host_id: profile.id,          // the viewer IS the host
+    creator_id: creatorId,
+    host_id: hostId,
     max_characters: 4,
     is_public: true
   }).select().single();
   if (error) throw error;
-  hostedPost = data;
+  return data;
+};
+
+test.beforeAll(async () => {
+  db = await connect();
+  const admin = await profileForEmail(db, ADMIN_EMAIL);
+  const player = await profileForEmail(db, PLAYER_EMAIL);
+
+  hostedPost = await insertPost(`${prefix}-hosted-post`, admin.id, admin.id);
+  openPost = await insertPost(`${prefix}-open-post`, admin.id, null);
+
+  // A pending request so the host's join-requests panel has something to
+  // lazy-load. Without it the panel could render empty and the test would
+  // pass without proving the fetch happened.
+  const { error } = await supabaseAdmin.from('lfg_join_requests').insert({
+    lfg_post_id: hostedPost.id,
+    profile_id: player.id,
+    join_type: 'conduit',
+    status: 'pending'
+  });
+  if (error) throw error;
 });
 
 test.afterAll(async () => {
@@ -1944,50 +2010,58 @@ test.afterAll(async () => {
   await db.end();
 });
 
-test('the create form starts hosting, hiding the character picker', async ({ page }) => {
-  await page.goto(`/lfg/${hostedPost.id}/edit`);
+test.describe('as the host', () => {
+  test.use({ storageState: ADMIN_STATE });
 
-  const form = page.locator('form:has(input[name="host_id"])');
-  const hosting = form.locator('input[type="checkbox"][name="host_id"]');
-  const picker = form.locator('#character-select');
+  test('the create form starts hosting, hiding the character picker', async ({ page }) => {
+    await page.goto(`/lfg/${hostedPost.id}/edit`);
 
-  await expect(hosting).toBeChecked();
-  await expect(picker).toBeHidden();
+    const form = page.locator('form:has(input[name="host_id"])');
+    const hosting = form.locator('input[type="checkbox"][name="host_id"]');
+    const picker = form.locator('#character-select');
 
-  await hosting.uncheck();
-  await expect(picker).toBeVisible();
+    await expect(hosting).toBeChecked();
+    await expect(picker).toBeHidden();
 
-  await hosting.check();
-  await expect(picker).toBeHidden();
+    await hosting.uncheck();
+    await expect(picker).toBeVisible();
+
+    await hosting.check();
+    await expect(picker).toBeHidden();
+  });
+
+  test('join requests lazy-load on demand', async ({ page }) => {
+    await page.goto(`/lfg/${hostedPost.id}`);
+
+    const toggle = page.locator('[hx-get*="join-request"]').first();
+    await expect(toggle).toBeVisible();
+    await toggle.click();
+
+    // The seeded pending request must appear, proving the fetch really ran.
+    await expect(page.locator('body')).toContainText(/E2E Player/i);
+  });
 });
 
-test('the join form radios toggle the character picker', async ({ page }) => {
-  await page.goto(`/lfg/${hostedPost.id}`);
+test.describe('as a joining player', () => {
+  test.use({ storageState: PLAYER_STATE });
 
-  const form = page.locator('form:has(#join-player-opt)');
-  test.skip(await form.count() === 0, 'no join form on this post for the current viewer');
+  test('the join form radios toggle the character picker', async ({ page }) => {
+    // openPost has no host, so the conduit option is enabled.
+    await page.goto(`/lfg/${openPost.id}`);
 
-  const picker = form.locator('#character-select');
-  await expect(picker).toBeVisible();
+    const form = page.locator('form:has(#join-player-opt)');
+    const picker = form.locator('#character-select');
+    await expect(picker).toBeVisible();
 
-  const conduit = form.locator('input[type="radio"][value="conduit"]');
-  test.skip(await conduit.isDisabled(), 'conduit option disabled because the post has a host');
+    const conduit = form.locator('input[type="radio"][value="conduit"]');
+    await expect(conduit).toBeEnabled();
 
-  await conduit.check();
-  await expect(picker).toBeHidden();
+    await conduit.check();
+    await expect(picker).toBeHidden();
 
-  await form.locator('#join-player-opt').check();
-  await expect(picker).toBeVisible();
-});
-
-test('join requests still lazy-load on demand', async ({ page }) => {
-  await page.goto(`/lfg/${hostedPost.id}`);
-
-  const toggle = page.locator('[hx-get*="join-requests"]').first();
-  test.skip(await toggle.count() === 0, 'no join-requests toggle rendered');
-
-  await toggle.click();
-  await expect(page.locator('#join-requests, [id*="join-request"]').first()).toBeVisible();
+    await form.locator('#join-player-opt').check();
+    await expect(picker).toBeVisible();
+  });
 });
 ```
 
@@ -2002,10 +2076,13 @@ Correct `/lfg/:id` and `/lfg/:id/edit` if they differ.
 - [ ] **Step 3: Run it**
 
 Run: `bun run test:e2e e2e/specs/14-lfg-controls.spec.js`
-Expected: 3 passed, or skips where the fixture post does not present that form.
+Expected: 3 passed. There are no conditional skips: the fixtures seed both a
+hosted post and an unhosted one, plus a pending join request, so every branch
+the spec needs actually exists.
 
-Skips are acceptable here and must be listed in the findings report as
-**uncovered**, not as passing.
+If the join form does not render for the player on `openPost`, check whether the
+route requires the viewer to own a character. If so, seed one for the player in
+`beforeAll` — a fixture correction, not a product change.
 
 - [ ] **Step 4: Commit**
 
@@ -2347,3 +2424,10 @@ file and line.
 **Deliberate deviation from red-green-refactor:** these are characterization
 tests, expected green on first run. The TDD cycle does not apply, and the
 "do not fix production code" rule in Global Constraints is what replaces it.
+
+**No conditional skips.** An earlier draft let Tasks 13 and 15 call
+`test.skip()` when the local database lacked a mission or a joinable LFG post.
+A spec that can pass without asserting reads as coverage that does not exist,
+so both tasks now seed exactly the rows they need — a source mission, an
+unhosted post, and a pending join request. Every spec in the suite either
+genuinely passes or genuinely fails.
