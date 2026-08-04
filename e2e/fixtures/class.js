@@ -16,6 +16,14 @@ const seedClass = async (prefix, {
   name = `${prefix}-class`,
   rulesVersion = 'v1',
   isPublic = true,
+  // Matches the column's own DB default (baseline_schema.sql:129) so
+  // existing callers that don't pass `status` see no behavior change --
+  // this is just making the previously-implicit default explicit. Some
+  // class-view.handlebars UI (e.g. the "Generate Unlock Code" trigger,
+  // wrapped in `{{#unless (or (eq class.status 'beta') (eq class.status
+  // 'alpha'))}}` at line 31) is hidden for alpha/beta classes, so a spec
+  // that needs that control visible must override this to 'release'.
+  status = 'alpha',
   // Prefixed, not the bare literal "E2E Ability" -- see fixtures/character.js's
   // seedCharacter comment: class_id resolution for a submitted ability is
   // keyed by ability name ALONE, globally across the whole catalog, so an
@@ -29,7 +37,7 @@ const seedClass = async (prefix, {
 } = {}) => {
   const { data, error } = await supabaseAdmin
     .from('classes')
-    .insert({ name, rules_version: rulesVersion, is_public: isPublic, gear, abilities })
+    .insert({ name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities })
     .select()
     .single();
   if (error) throw error;
