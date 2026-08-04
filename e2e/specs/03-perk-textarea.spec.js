@@ -7,9 +7,26 @@
 // is on rules v2 (routes/characters.js:353, views/character-form.handlebars:270),
 // so the fixture class must be seeded with rulesVersion: 'v2' or the field
 // never appears.
+//
+// This spec exists to test the perk round-trip ONLY, so it deliberately
+// avoids two unrelated, separately-tracked defects rather than tripping over
+// them here (see docs/.../task-4-report.md "Fix round 1" for the full
+// writeup and e2e/specs/03b-class-reassignment.spec.js for the regression
+// test on the second one):
+//   1. A single-ability class's "Class Abilities" <select> option never
+//      gets marked `selected` (a Handlebars context-depth quirk in
+//      character-class-abilities.handlebars, only triggered by exactly one
+//      ability in an optgroup) -- avoided by fixtures/class.js's default of
+//      >= 2 abilities.
+//   2. The edit form's Class <select> only offers classes the editing user
+//      has unlocked, with no fallback injection for the character's own
+//      current class -- avoided by unlocking the fixture class for the
+//      admin before editing.
+// Skipping either avoidance reproduces validation-blocked or
+// class-reassignment failures that have nothing to do with the perk field.
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
-const { seedClass } = require('../fixtures/class');
+const { seedClass, unlockClassForProfile } = require('../fixtures/class');
 const { seedCharacter, seedPerk, abilityIdFor } = require('../fixtures/character');
 const { ADMIN_EMAIL, ADMIN_STATE } = require('../global-setup');
 
@@ -23,6 +40,7 @@ test.beforeAll(async () => {
   db = await connect();
   const profile = await profileForEmail(db, ADMIN_EMAIL);
   const classRow = await seedClass(prefix, { rulesVersion: 'v2' });
+  await unlockClassForProfile(profile, classRow);
   character = await seedCharacter(prefix, profile, classRow);
   await seedPerk(character.id, await abilityIdFor(character.id), 'original perk text');
 });
@@ -61,7 +79,13 @@ test('saving persists perk text, including newlines', async ({ page }) => {
   // form on the same page uses hx-post, so this stays unambiguous.
   await page.locator('form[hx-put] button[type="submit"]').first().click();
 
-  await page.waitForURL(/\/characters\//);
+  // Not /\/characters\// -- the edit page itself (/characters/{id}/edit)
+  // already matches that pattern, so waitForURL could resolve immediately,
+  // before the save's PUT/redirect actually happens, and race the assertion
+  // below against a request still in flight. Wait specifically for
+  // navigation AWAY from /edit (to the character detail page HX-Location
+  // sends on success).
+  await page.waitForURL((url) => !url.pathname.endsWith('/edit'));
 
   const { rows } = await db.query(
     'select text from character_perks where character_id = $1', [character.id]
