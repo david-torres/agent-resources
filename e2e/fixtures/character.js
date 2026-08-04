@@ -12,6 +12,17 @@ const BASE_STATS = {
 
 // Goes through the real model seam rather than raw inserts so fixtures cannot
 // drift from what the app itself writes.
+//
+// The ability name is prefixed (matching fixtures/class.js's default
+// abilities), not the bare literal "E2E Ability" fixtures used to share:
+// server-side class_id resolution for a submitted ability
+// (services/character/service.js reconcileAbilities ->
+// getClassContentLookupMaps().abilityNameToClassId) is keyed by ability NAME
+// ONLY, globally across every class in the catalog. Under fullyParallel
+// execution multiple specs' fixture classes can exist at once; an unprefixed
+// name collides across them and a save can silently resolve to a different
+// worker's class_id. Keep this prefixed unless classRow.abilities was
+// overridden with its own (also-prefixed) names.
 const seedCharacter = async (prefix, profile, classRow, overrides = {}) => {
   const input = {
     ...BASE_STATS,
@@ -20,7 +31,7 @@ const seedCharacter = async (prefix, profile, classRow, overrides = {}) => {
     class_id: classRow.id,
     trait0: 'Brave',
     gear: [],
-    abilities: [{ name: 'E2E Ability', class_id: classRow.id }],
+    abilities: [{ name: `${prefix} E2E Ability`, class_id: classRow.id }],
     ...overrides
   };
   const { data, error } = await createCharacter(input, profile);

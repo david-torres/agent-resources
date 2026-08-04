@@ -55,6 +55,17 @@ const cleanupByPrefix = async (db, prefix) => {
   const classIds = classes.map((r) => r.id);
   if (classIds.length) {
     await db.query('delete from class_unlock_codes where class_id = any($1::uuid[])', [classIds]);
+    // class_unlocks.class_id has no ON DELETE action, so a fixture-granted
+    // unlock (see fixtures/class.js#unlockClassForProfile) would otherwise
+    // block the class delete below with a foreign-key violation.
+    await db.query('delete from class_unlocks where class_id = any($1::uuid[])', [classIds]);
+    // Deleted by class_id (not just the character_id pass above): a
+    // character belonging to a DIFFERENT (possibly non-prefixed) run can end
+    // up with a class_abilities row pointing at one of our classes -- e.g.
+    // the silent class-reassignment defect this suite regression-tests in
+    // 03b-class-reassignment.spec.js. Without this, that stray row blocks
+    // the class delete below with the same foreign-key violation.
+    await db.query('delete from class_abilities where class_id = any($1::uuid[])', [classIds]);
     await db.query('delete from classes where id = any($1::uuid[])', [classIds]);
   }
 
