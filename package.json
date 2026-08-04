@@ -10,6 +10,8 @@
     "test:unit": "bun scripts/run-tests.mjs unit",
     "test:http": "bun scripts/run-tests.mjs http",
     "test:integration": "bun scripts/run-tests.mjs integration",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
     "check": "bun scripts/check.mjs",
     "setup": "bun run scripts/setup.mjs",
     "seed:local": "bun run scripts/seed-local.mjs",
@@ -36,6 +38,7 @@
     "zod-gpt": "^0.16.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "alpinejs": "3.15.12",
     "jsdom": "^30.0.1",
     "nodemon": "^3.1.7",
