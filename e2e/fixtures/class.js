@@ -24,6 +24,14 @@ const seedClass = async (prefix, {
   // 'alpha'))}}` at line 31) is hidden for alpha/beta classes, so a spec
   // that needs that control visible must override this to 'release'.
   status = 'alpha',
+  // profiles.id of the owner. routes/classes.js's GET /my filters
+  // `getClasses({ created_by: profile?.id, ... })` with a strict `.eq`
+  // (util/class-filters.js), so a class seeded without this is invisible on
+  // My Classes for every profile, including the seeding admin. Left
+  // optional (default null, matching the column's own nullable FK) so
+  // existing callers that only ever hit /classes or /classes/:id (which
+  // don't filter by owner) see no behavior change.
+  createdBy = null,
   // Prefixed, not the bare literal "E2E Ability" -- see fixtures/character.js's
   // seedCharacter comment: class_id resolution for a submitted ability is
   // keyed by ability name ALONE, globally across the whole catalog, so an
@@ -37,7 +45,7 @@ const seedClass = async (prefix, {
 } = {}) => {
   const { data, error } = await supabaseAdmin
     .from('classes')
-    .insert({ name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities })
+    .insert({ name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities, created_by: createdBy })
     .select()
     .single();
   if (error) throw error;
