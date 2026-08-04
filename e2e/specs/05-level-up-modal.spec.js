@@ -68,8 +68,15 @@ for (const [name, close] of [
   });
 }
 
-test('completing a level-up persists the new level', async ({ page }) => {
-  const before = character.level;
+test('completing a level-up persists the new level and the edited stat', async ({ page }) => {
+  // Read from the DB, not the seeded JS object: safe today since this is
+  // the only test in the file that mutates the row, but reading the source
+  // of truth instead of a stale in-memory snapshot means it stays correct
+  // if that ever stops being true (e.g. under CI's multi-worker config).
+  const { rows: beforeRows } = await db.query(
+    'select level, might from characters where id = $1', [character.id]
+  );
+  const before = beforeRows[0];
 
   await page.goto(`/characters/${character.id}`);
   await page.locator('#levelUpBtn').click();
@@ -91,18 +98,38 @@ test('completing a level-up persists the new level', async ({ page }) => {
   // missionsForLevel(2) = 2 empty "missing mission" rows
   // (character-level-up.js:203-211 / character-common.js's
   // v2LevelingSequence). Filling both clears the real gate; the stat edit
-  // below just proves stat changes ride along in the same save.
-  await page.locator('#levelUpModal input[name="might"]').fill('2');
+  // below is asserted directly below, not just assumed to "ride along" --
+  // level alone would pass even if stats were dropped entirely, since level
+  // is derived server-side from mission rows
+  // (services/character/service.js:491-514), not from the modal's stat
+  // inputs.
+  const editedMight = before.might + 1;
+  await page.locator('#levelUpModal input[name="might"]').fill(String(editedMight));
   const missionInputs = page.locator('#levelUpMissingMissions .level-up-mission');
   await expect(missionInputs).toHaveCount(2);
   await missionInputs.nth(0).fill(`${prefix}-mission-1`);
   await missionInputs.nth(1).fill(`${prefix}-mission-2`);
 
-  await page.locator('#levelUpSaveBtn').click();
+  // Wait for the save's window.location.reload() (character-level-up.js:301)
+  // to actually land before moving on. Without this the test can finish (and
+  // afterAll's delete can run) while the reload's GET /characters/:id is
+  // still in flight, logging a harmless but noisy PGRST116 "0 rows" error
+  // server-side.
+  await Promise.all([
+    page.waitForEvent('load'),
+    page.locator('#levelUpSaveBtn').click()
+  ]);
 
-  await expect(page.locator('#levelUpError')).toBeHidden();
+  // NOTE: no assertion on #levelUpError here. It ships with the `is-hidden`
+  // class, so checking it immediately resolves true at t=0 regardless of
+  // whether the save actually succeeds -- confirmed by mutation testing: a
+  // forced 400 response still left this assertion green. The DB poll below
+  // is the only assertion in this test that can actually fail on a broken
+  // save.
   await expect.poll(async () => {
-    const { rows } = await db.query('select level from characters where id = $1', [character.id]);
-    return rows[0].level;
-  }, { timeout: 15_000 }).toBe(before + 1);
+    const { rows } = await db.query(
+      'select level, might from characters where id = $1', [character.id]
+    );
+    return rows[0];
+  }, { timeout: 15_000 }).toEqual({ level: before.level + 1, might: editedMight });
 });
