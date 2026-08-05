@@ -265,22 +265,23 @@ bun run start
 
 ### Tests
 
-This project uses Bun for its test runner and module-mocking API. Run the
-default isolated, database-free unit suite with:
+This project uses Bun for its test runner and module-mocking API, and Playwright
+for the browser tier. There are four tiers:
 
-```sh
-bun run test
-```
+| Command | Tier | Requires |
+| --- | --- | --- |
+| `bun run test` | Unit (jsdom, no DB) | nothing |
+| `bun run test:http` | HTTP (Express + mocked models) | nothing |
+| `bun run test:integration` | Integration (real Supabase, no browser) | `supabase start` |
+| `bun run test:e2e` | End-to-end (Chromium) | `supabase start` + `bun run seed:local` |
 
-Route HTTP tests are a separate tier because they bind a local ephemeral port:
+`bun run test` is the default isolated, database-free suite. Route HTTP tests are
+a separate tier because they bind a local ephemeral port.
 
-```sh
-bun run test:http
-```
-
-The two database integration suites are intentionally excluded. To run them,
-start local Supabase and reset it with the repository migrations, configure
-your `.env` with the local credentials from `supabase status`, then run:
+The two database integration suites are intentionally excluded from the default
+run. To run them, start local Supabase and reset it with the repository
+migrations, configure your `.env` with the local credentials from
+`supabase status`, then run:
 
 ```sh
 supabase start
@@ -290,6 +291,36 @@ bun run test:integration
 
 `test:integration` rejects a non-local `SUPABASE_URL`, so it cannot write to a
 cloud project by accident.
+
+#### End-to-end browser tests
+
+The E2E tier drives a real Chromium against a real server and a real database.
+It covers behavior the other three tiers structurally cannot reach: htmx swaps,
+Alpine's settle phase, boosted navigation, and the back button.
+
+```sh
+supabase start
+bun run seed:local
+bun run test:e2e
+```
+
+It boots its own server on port 3100, so it runs alongside `bun run dev`. It
+applies the same non-local `SUPABASE_URL` guard as the integration tier, seeds
+and deletes its own rows under an `e2e-` prefix, and **never resets your
+database**.
+
+Open the report for a failed run with:
+
+```sh
+bunx playwright show-report e2e/report/html
+```
+
+> **The suite currently fails by design.** Nine tests are deliberate
+> characterizations of defects found on this branch and are expected to be red;
+> `bun run test:e2e` therefore exits non-zero even when nothing is wrong. See
+> [`docs/superpowers/reports/2026-08-03-e2e-findings.md`](docs/superpowers/reports/2026-08-03-e2e-findings.md)
+> for what each one records and which are refactor regressions rather than
+> pre-existing bugs.
 
 ## Agent Tokens
 
