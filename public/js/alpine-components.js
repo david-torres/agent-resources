@@ -152,13 +152,40 @@ document.addEventListener('alpine:init', () => {
   // them -- the name-scoping check and the "already closed, don't double
   // -unlock the body" guard would otherwise have to be kept in sync by hand
   // in two places.
+  //
+  // `body.modal-open` is a DOCUMENT-level class owned by a COMPONENT-level
+  // lifetime, and a page can hold several modals at once (class-view ships
+  // two, my-classes renders one per row). A bare add/remove pair gets both
+  // ends of that wrong: an hx-boost swap tears an open modal out of the DOM
+  // without ever calling close(), so the class outlives the modal and rides
+  // along to a page that has none -- while a teardown that dropped the class
+  // unconditionally would unlock the body out from under a sibling modal that
+  // is still open. So the class is DERIVED from one shared count of modals
+  // that are currently open, and every transition (open, close, teardown)
+  // goes through that count.
+  //
+  // This is about not leaking stale state, not about restoring a scroll lock:
+  // `body.modal-open { overflow: hidden }` never reaches the viewport, because
+  // Bulma's minireset leaves <html> computing to `overflow: hidden scroll` and
+  // overflow only falls through to <body> when <html>'s own is `visible`. The
+  // lock has never worked in this app; fixing that is a separate decision.
+  let openModals = 0;
+
+  const syncBodyLock = () => {
+    document.body.classList.toggle('modal-open', openModals > 0);
+  };
+
   const modalBase = (name) => ({
     show: false,
 
     open(which) {
       if (which !== name) return;
+      // Already open: re-opening must not count a second time, or the body
+      // would stay locked after the one close() that follows.
+      if (this.show) return;
       this.show = true;
-      document.body.classList.add('modal-open');
+      openModals += 1;
+      syncBodyLock();
     },
 
     // which mirrors open()'s parameter but stays optional: every in-modal
@@ -170,7 +197,18 @@ document.addEventListener('alpine:init', () => {
       if (which !== undefined && which !== name) return;
       if (!this.show) return;
       this.show = false;
-      document.body.classList.remove('modal-open');
+      openModals -= 1;
+      syncBodyLock();
+    },
+
+    // Alpine calls destroy() when the component's element leaves the DOM --
+    // which is exactly what an hx-boost swap does to every modal on the page.
+    // Delegating to close() (rather than stripping the class outright) gives
+    // back only THIS modal's share of the count, so a sibling modal that is
+    // still open keeps the body locked, and the guards above make a teardown
+    // of an already-closed modal a no-op.
+    destroy() {
+      this.close();
     }
   });
 

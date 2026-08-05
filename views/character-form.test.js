@@ -17,7 +17,7 @@ test('deceased modal opens through the modal Alpine component, not App.openModal
 
 // ar-7v3k fix wave, Fix 4: the test above only pinned x-data and the
 // $dispatch call -- not the bindings that actually make the modal Alpine
-// component work. Deleting `:class="show && 'is-active'"` from the
+// component work. Deleting `:class="{ 'is-active': show }"` from the
 // template left every test in this file green (proven by deleting it and
 // re-running before writing this test): the modal would open in JS state
 // but never gain the `is-active` class, so it stays invisible. Brings
@@ -26,7 +26,9 @@ test('deceased modal opens through the modal Alpine component, not App.openModal
 // bindings on the real template.
 test('deceased-modal carries all four modal bindings on the real template', () => {
   const html = source();
-  expect(html).toContain(":class=\"show && 'is-active'\"");
+  // Object form, deliberately -- the string form cannot remove a frozen
+  // `is-active` (see public/js/alpine-components.js).
+  expect(html).toContain(":class=\"{ 'is-active': show }\"");
   expect(html).toContain('@open-modal.window="open($event.detail)"');
   expect(html).toContain('@close-modal.window="close($event.detail)"');
   expect(html).toContain('@keydown.escape.window="close()"');

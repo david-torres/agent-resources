@@ -28,7 +28,12 @@
       <button type="button" class="button" id="statsCancelBtn" @click="cancel()">Cancel</button>
     </p>
     <p class="control">
-      <button type="submit" class="button is-primary" id="statsSaveBtn" :disabled="saving" :class="saving && 'is-loading'">
+      {{!-- Object form for the same reason as every other :class in these views:
+           the string form can only add a class, never remove one it did not
+           add, so a frozen `is-loading` would stick. This button is not an
+           overlay and no test exercises it, so this one is consistency rather
+           than a measured defect. See public/js/alpine-components.js. --}}
+      <button type="submit" class="button is-primary" id="statsSaveBtn" :disabled="saving" :class="{ 'is-loading': saving }">
         <span class="icon"><i class="fas fa-save"></i></span>
         <span>Save stats</span>
       </button>

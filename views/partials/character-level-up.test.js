@@ -92,7 +92,7 @@ test('no template calls App.openModal or App.closeModal', () => {
 test('a dispatched open-modal event for levelUp opens the level-up modal', async () => {
   await render(`
     <div id="levelUpModal" class="modal" x-data="modal('levelUp')"
-         :class="show && 'is-active'"
+         :class="{ 'is-active': show }"
          @open-modal.window="open($event.detail)"
          @close-modal.window="close($event.detail)"
          @keydown.escape.window="close()">
@@ -108,7 +108,7 @@ test('a dispatched open-modal event for levelUp opens the level-up modal', async
 test('an open-modal event for a different name does not open the level-up modal', async () => {
   await render(`
     <div id="levelUpModal" class="modal" x-data="modal('levelUp')"
-         :class="show && 'is-active'"
+         :class="{ 'is-active': show }"
          @open-modal.window="open($event.detail)"
          @close-modal.window="close($event.detail)"
          @keydown.escape.window="close()"></div>

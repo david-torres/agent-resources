@@ -31,9 +31,14 @@
   {{#unless (or (eq class.status 'beta') (eq class.status 'alpha'))}}
   <button class="button is-info" @click="$dispatch('open-modal', 'unlockCode')">Generate Unlock Code</button>
   {{/unless}}
+  {{!-- Object form is load-bearing here and on the two modals below: the string
+       form (`open && 'is-active'`) cannot clear an `is-active` that htmx froze
+       into its history snapshot, because Alpine only removes classes it added
+       itself, so the element restores stuck open -- and a stuck modal overlay
+       swallows every click on the page. See public/js/alpine-components.js. --}}
   <div class="dropdown is-right" id="export-dropdown"
        x-data="{ open: false }"
-       :class="open && 'is-active'"
+       :class="{ 'is-active': open }"
        @click.outside="open = false"
        @keydown.escape.window="open = false">
     <div class="dropdown-trigger">
@@ -215,7 +220,7 @@
 {{#or (eq profile.role 'admin') (eq profile.id class.creator_id)}}
 <!-- Duplicate Modal -->
 <div id="duplicateModal-{{class.id}}" class="modal" x-data="modal('duplicate')"
-     :class="show && 'is-active'"
+     :class="{ 'is-active': show }"
      @open-modal.window="open($event.detail)"
      @close-modal.window="close($event.detail)"
      @keydown.escape.window="close()">
@@ -260,7 +265,7 @@
 </div>
 <!-- Unlock Code Modal -->
 <div id="unlockCodeModal" class="modal" x-data="clearingModal('unlockCode')"
-     :class="show && 'is-active'"
+     :class="{ 'is-active': show }"
      @open-modal.window="open($event.detail)"
      @close-modal.window="closeAndClear($event.detail)"
      @keydown.escape.window="closeAndClear()">

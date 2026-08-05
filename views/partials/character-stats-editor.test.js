@@ -191,7 +191,9 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
   expect(src).toContain('@submit.prevent="save()"');
   expect(src).toContain('@click="cancel()"');
   expect(src).toContain(':disabled="saving"');
-  expect(src).toContain(":class=\"saving && 'is-loading'\"");
+  // Object form, matching every other :class in these views: the string form
+  // can only add a class, never remove one Alpine did not add itself.
+  expect(src).toContain(":class=\"{ 'is-loading': saving }\"");
   expect(src).toContain('x-show="error" x-text="error"');
 
   expect(src).not.toContain('character-stats.js');

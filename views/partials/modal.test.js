@@ -17,7 +17,7 @@ beforeEach(() => {
 });
 
 const MODAL = `
-  <div id="m" class="modal" x-data="modal('demo')" :class="show && 'is-active'"
+  <div id="m" class="modal" x-data="modal('demo')" :class="{ 'is-active': show }"
        @open-modal.window="open($event.detail)"
        @close-modal.window="close($event.detail)"
        @keydown.escape.window="close()">
@@ -42,11 +42,11 @@ const TRIGGER_AND_MODAL = `
 // window -- this is the exact shape of Task 18's per-row modals inside an
 // {{#each}}.
 const TWO_MODALS = `
-  <div id="a" class="modal" x-data="modal('alpha')" :class="show && 'is-active'"
+  <div id="a" class="modal" x-data="modal('alpha')" :class="{ 'is-active': show }"
        @open-modal.window="open($event.detail)"
        @close-modal.window="close($event.detail)"
        @keydown.escape.window="close()"></div>
-  <div id="b" class="modal" x-data="modal('beta')" :class="show && 'is-active'"
+  <div id="b" class="modal" x-data="modal('beta')" :class="{ 'is-active': show }"
        @open-modal.window="open($event.detail)"
        @close-modal.window="close($event.detail)"
        @keydown.escape.window="close()"></div>
@@ -166,4 +166,43 @@ test('a close-modal event scoped to a different name does not close the open mod
 
   expect(document.getElementById('a').classList.contains('is-active')).toBe(true);
   expect(document.body.classList.contains('modal-open')).toBe(true);
+});
+
+// ar-7v3k Fix 1: `body.modal-open` is a document-level class with a
+// component-level lifetime. An hx-boost swap replaces body.innerHTML and never
+// calls close(), and `<body>`'s own class attribute is not part of the swap --
+// so before modalBase grew a destroy(), an open modal's lock followed the user
+// to the next page, which had no modal left to clear it. render() replaces the
+// body exactly the way a boosted swap does.
+test('tearing down an open modal releases the body lock', async () => {
+  await render(MODAL);
+  window.dispatchEvent(new window.CustomEvent('open-modal', { detail: 'demo' }));
+  await tick();
+  expect(document.body.classList.contains('modal-open')).toBe(true);
+
+  await render('<p>a page with no modal on it</p>');
+  expect(document.body.classList.contains('modal-open')).toBe(false);
+});
+
+// ...and the reason destroy() delegates to close() instead of just stripping
+// the class: a page can hold several modals at once (class-view ships two,
+// my-classes renders one per row). Removing one of them -- an inner htmx swap,
+// an x-if going false -- must not unlock the body while another is still open.
+test('tearing down one modal does not release a still-open modal\'s body lock', async () => {
+  await render(TWO_MODALS);
+  window.dispatchEvent(new window.CustomEvent('open-modal', { detail: 'alpha' }));
+  window.dispatchEvent(new window.CustomEvent('open-modal', { detail: 'beta' }));
+  await tick();
+  expect(document.body.classList.contains('modal-open')).toBe(true);
+
+  document.getElementById('b').remove();
+  await tick();
+
+  expect(document.getElementById('a').classList.contains('is-active')).toBe(true);
+  expect(document.body.classList.contains('modal-open')).toBe(true);
+
+  // ...and the last one leaving does release it.
+  document.getElementById('a').remove();
+  await tick();
+  expect(document.body.classList.contains('modal-open')).toBe(false);
 });

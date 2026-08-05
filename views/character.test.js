@@ -6,7 +6,7 @@ beforeAll(async () => { await setupAlpine(); });
 const DROPDOWN = `
   <div class="dropdown is-right" id="export-dropdown"
        x-data="{ open: false }"
-       :class="open && 'is-active'"
+       :class="{ 'is-active': open }"
        @click.outside="open = false"
        @keydown.escape.window="open = false">
     <div class="dropdown-trigger">
