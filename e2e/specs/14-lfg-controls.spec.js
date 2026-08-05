@@ -9,15 +9,45 @@
 //
 // THE THREE VACUITY TRAPS THIS FILE IS BUILT AROUND:
 //
-//   1. `toBeHidden()` ON AN x-cloak ELEMENT PROVES NOTHING ON ITS OWN.
+//   1. `toBeHidden()` ON THE CREATE FORM'S PICKER PROVES NOTHING ON ITS OWN,
+//      AND `alpineInitialised` -- NOT THE x-cloak INVERSION -- IS WHAT CLOSES
+//      IT. Read this before deleting either assertion; the first version of
+//      this header got the mechanism backwards and a reviewer caught it.
+//
 //      `[x-cloak] { display: none !important }` (public/css/styles.css:1336)
-//      hides the create form's picker BEFORE Alpine initialises, so a bare
-//      `toBeHidden()` passes with x-show deleted, with Alpine dead, or with the
-//      Alpine script tag removed. Closed the way Task 13 established: the
-//      `#character-select:not([x-cloak])` inversion (Alpine strips the
-//      attribute on init) plus `'hosting' in Alpine.$data(form)` for liveness --
-//      never `!!Alpine.$data(el)`, which is a truthy Proxy for ANY element
-//      (Task 10). See e2e/specs/12-offscreen-mission.spec.js.
+//      hides the picker until Alpine initialises. Two different ways of
+//      breaking Alpine therefore produce a passing `toBeHidden()`, and they are
+//      NOT caught by the same assertion. Measured, on Alpine 3.15.12:
+//
+//        mutation                     x-cloak   what hides it        caught by
+//        ---------------------------  --------  -------------------  ------------------
+//        delete `x-data` (M5)         STRIPPED  x-show's inline      alpineInitialised
+//                                               style="display:none" ONLY
+//        delete the Alpine <script>   survives  the [x-cloak] CSS    both
+//
+//      The M5 row is the surprising one and the reason this note exists. Alpine
+//      walks and initialises the tree whether or not an `x-data` root is
+//      present: it strips `x-cloak` (`document.querySelectorAll('[x-cloak]')`
+//      -> 0), evaluates `x-show="!hosting"`, throws
+//      `ReferenceError: hosting is not defined`, treats the result as falsy and
+//      writes `style="display: none"` itself. So
+//      `#character-select:not([x-cloak])` PASSES under M5 and catches nothing
+//      there -- verified by test 2's failure point, which is the later
+//      `toBeVisible()`, not the count.
+//
+//      Keep both assertions anyway: the cloak inversion is a fast, specific
+//      diagnostic for "Alpine never loaded at all" and fires before the
+//      non-retrying read. But it is strictly weaker than the liveness check.
+//      `'hosting' in Alpine.$data(form)` is the load-bearing one -- never
+//      `!!Alpine.$data(el)`, which is a truthy Proxy for ANY element (Task 10).
+//      See e2e/specs/12-offscreen-mission.spec.js.
+//
+//      Note also what x-cloak is NOT doing: once Alpine has run, the picker is
+//      hidden by x-show's inline style, not by the CSS rule (measured on the
+//      unmutated app: `picker.style.display === 'none'`). x-cloak matters only
+//      in the pre-init window -- i.e. purely as FOUC protection -- which is why
+//      the only assertion that can see it is the server-markup one at the end
+//      of each create-form test.
 //
 //   2. THE "LAZY LOAD" IS NOT LAZY, AND THE PLAN'S TEST FOR IT WAS VACUOUS
 //      TWICE OVER. The plan asserted `expect(page.locator('body'))
@@ -66,13 +96,28 @@
 //      again on the first Show click (two identical requests). Reported, not
 //      tested -- see trap 2.
 //   C. A viewer who is neither the post's creator/host nor an admin can never
-//      see that a post already has a Conduit: RLS hides both the conduit's
-//      join_request and (for a non-public profile) its profile row, so
-//      applyConduitMeta finds nothing and reports host_id null. They get
-//      "Conduit needed" and an ENABLED Conduit radio on a filled post, and the
-//      submit then fails with "Conduit slot is already filled". This is why the
-//      conduit-disabled test below is viewed as the ADMIN (is_admin() bypasses
-//      the RLS that hides it) rather than as the player.
+//      see that a post already has a Conduit. They get "Conduit needed" and an
+//      ENABLED Conduit radio on a filled post; choosing it and submitting
+//      answers HTTP 500 and puts "Join failed" in #alerts (nothing is written).
+//
+//      THE ROOT CAUSE IS NOT "RLS HIDES IT" -- that was this file's first
+//      diagnosis and it is wrong in a way that matters, because it makes the
+//      fix look like an RLS redesign. `lfg_posts_public_select` is
+//      `USING (is_public = true)`, so the viewer DOES receive the true
+//      `host_id` on the row. models/lfg.js:32-36 then DISCARDS it, substituting
+//      null because the *derived* source (the approved conduit join request) is
+//      invisible to that viewer under `lfg_join_requests_select`. Measured, as
+//      the player, on a post the admin conduits:
+//        raw row via the player's own client -> host_id = <admin profile id>
+//        getLfgPost(playerClient).host_id    -> null
+//      The fix is one branch in applyConduitMeta -- do not clobber a non-null
+//      column with a null derived from an RLS-filtered read.
+//
+//      This is why the conduit-disabled test below is viewed as the ADMIN
+//      (is_admin() is the only thing in this suite that makes the derived
+//      source visible) rather than as the player. It also means check 10 has NO
+//      test that fails while this defect is live: fixing it would go unnoticed
+//      here. Recorded in the ledger as a deliberate coverage gap.
 //
 // Inherited and load-bearing here:
 //   - public/js/app.js:970-989 replaces the whole <body> via an outerHTML htmx
@@ -101,6 +146,16 @@ let hostedPost;
 // form's `hosting: false` branch, the player's join form (Conduit selectable),
 // and the green control for the history-restore pair -- it renders no
 // hx-history="false", so its snapshot IS cached.
+//
+// SHARED-FIXTURE COUPLING, deliberate but load-bearing: the control test's
+// preconditions (`partyMembers: 0`, `hxHistoryFalseCount: 0`) hold only because
+// nothing that touches this post ever CREATES an approved, character-bearing
+// join request. The join-form test opens the form and toggles radios but never
+// submits, which is what keeps that true. If you ever make that test actually
+// join and get approved, this post grows a party member, starts rendering
+// hx-history="false", and the green control silently becomes a second copy of
+// the red test -- passing preconditions, failing for the defect. Give it its
+// own post instead.
 let unhostedPost;
 // the PLAYER is creator and conduit, so the admin sees a filled conduit slot.
 let conduitPost;
@@ -285,9 +340,9 @@ test.describe('the create/edit form, as the post\'s creator', () => {
     // The FOUC half, which the live DOM structurally cannot see.
     const html = await serverMarkup(page, `/lfg/${hostedPost.id}/edit`);
     expect(html, 'the server must seed Alpine from the rendered post, not hardcode a default')
-      .toContain('x-data="{ hosting: true }"');
+      .toMatch(/x-data="\{\s*hosting:\s*true\s*\}"/);
     expect(html, 'the picker must be rendered cloaked, or it flashes open before Alpine boots')
-      .toMatch(/<div class="field" id="character-select"[^>]*\sx-cloak[\s>]/);
+      .toMatch(/<div[^>]*\sid="character-select"[^>]*\sx-cloak[\s>]/);
   });
 
   test('a post with no conduit starts not-hosting, with the character picker shown', async ({ page }) => {
@@ -324,8 +379,8 @@ test.describe('the create/edit form, as the post\'s creator', () => {
     // conditional on the initial state, which would reintroduce the flash for
     // exactly the case that needs it.
     const html = await serverMarkup(page, `/lfg/${unhostedPost.id}/edit`);
-    expect(html).toContain('x-data="{ hosting: false }"');
-    expect(html).toMatch(/<div class="field" id="character-select"[^>]*\sx-cloak[\s>]/);
+    expect(html).toMatch(/x-data="\{\s*hosting:\s*false\s*\}"/);
+    expect(html).toMatch(/<div[^>]*\sid="character-select"[^>]*\sx-cloak[\s>]/);
   });
 });
 
@@ -461,8 +516,8 @@ test.describe('the join form, as someone who has not joined', () => {
     // compare against 'conduit' -- and the picker flashes open on every load
     // before Alpine hides it, which no live-DOM assertion can see.
     const html = await serverMarkup(page, `/lfg/${unhostedPost.id}/join`);
-    expect(html).toContain(`x-data="{ joinType: 'player' }"`);
-    expect(html).toContain(`<div class="field" id="character-select" x-show="joinType === 'player'">`);
+    expect(html).toMatch(/x-data="\{\s*joinType:\s*'player'\s*\}"/);
+    expect(html).toMatch(/<div[^>]*\sid="character-select"[^>]*\sx-show="joinType === 'player'"/);
   });
 });
 
@@ -524,6 +579,17 @@ test.describe('the join form on a post whose conduit slot is filled', () => {
 // predates this branch (37efac4, "Conduit unlock"); 3a09932 changed only the
 // sibling `hx-on:click` into `@click` and left both history attributes byte for
 // byte. Verified with `git show 3a09932 -- views/lfg-post.handlebars`.
+//
+// AND THEY HAVE NEVER DONE ANYTHING ELSE. An earlier version of this note said
+// they became inert at 3a09932, when the button turned into a plain Alpine
+// @click. Wrong: they were inert FROM BIRTH. `git show 37efac4 --
+// views/lfg-post.handlebars` shows the button shipped in that same commit with
+// `hx-history="false" hx-push-url="false" hx-on:click="htmx.toggleClass(...)"`,
+// and the `hx-get` those attributes would have modified was ALREADY commented
+// out ({{!-- hx-get=... --}}) in the pre-37efac4 markup. An hx-on:click is an
+// inline event handler, not a request. So in the whole life of these two
+// attributes, suppressing this page's history snapshot is the only effect
+// either has ever had -- which is what makes deleting them a safe one-line fix.
 // ---------------------------------------------------------------------------
 
 // Installed immediately before goBack(). Everything hangs off document/window,
@@ -628,19 +694,26 @@ test.describe('the back button after leaving an LFG post', () => {
   // correct. Measured: bodyLength 16326 -> 7156, nav "GAME INFO SOCIAL
   // LOGIN/SIGNUP", `htmx:historyCacheMiss` on the way in.
   //
-  // It is the first deterministic reproduction of the CRITICAL cache-miss
-  // defect Task 11 recorded (task-11-report.md, "the cache-miss path renders a
-  // permanently blank page"): the same mechanism, reached here with no cache
-  // eviction and no configuration change, just by viewing a post with a party.
+  // It is the same CRITICAL cache-miss defect Task 11 recorded
+  // (task-11-report.md, "the cache-miss path renders a permanently blank
+  // page"), which that task's reviewer had already reproduced by ordinary
+  // browsing past htmx's 10-entry cache limit (task-11-review.md:170,288) --
+  // so this is NOT the first reproduction, and an earlier version of this note
+  // wrongly claimed it was. What is new: it needs no cache eviction, no
+  // configuration change and no mutation, just a post with a party member; and
+  // it is the first one encoded as a standing test rather than a measurement.
   //
   // TWO INDEPENDENT FIXES WOULD TURN THIS GREEN, and both are correct:
   //   - drop hx-history="false" (and hx-push-url="false") from the Details
-  //     button at views/lfg-post.handlebars:90-91. It is a leftover from when
-  //     that button was an hx-on:click toggle; it is now a plain Alpine
-  //     @click that issues no htmx request at all, so neither attribute can
-  //     have any effect other than this one.
+  //     button at views/lfg-post.handlebars:90-91. Neither has ever modified a
+  //     request -- see the "inert from birth" note above the describe block --
+  //     so suppressing this snapshot is their only effect. Verified: mutation
+  //     M10 turns this whole spec 7/7 green.
   //   - make htmx's history-restore fetch carry the app's Authorization header
-  //     (the general fix for Task 11's defect, which reaches every route).
+  //     (the general fix for Task 11's defect). This is the one that matters:
+  //     eviction and blocked storage reach the same cache miss with no
+  //     hx-history attribute anywhere, so deleting the attributes fixes this
+  //     page only. File both.
   // -------------------------------------------------------------------------
   test('a post with an approved party member comes back signed in', async ({ page }) => {
     const state = await leaveAndReturn(page, partyPost);
