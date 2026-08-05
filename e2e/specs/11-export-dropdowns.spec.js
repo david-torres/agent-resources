@@ -29,9 +29,28 @@
 // MEASURED ANSWER: it is systemic, and it is WORSE at the modal. See the block
 // comments above the three red tests at the bottom of this file.
 //
+// REGRESSION vs PRE-EXISTING, because "is there a defect" and "did the refactor
+// cause it" are different questions and the second is the one that decides what
+// to revisit. Each red test states its own verdict against the deleted code; the
+// summary:
+//
+//   dropdown stuck open after Back  -> REFACTOR REGRESSION (in recoverability)
+//   modal stuck + undismissable     -> REFACTOR REGRESSION (the "no way out" is new)
+//   body.modal-open leaking forward -> PRE-EXISTING, and harmless (dead CSS)
+//   export links never download     -> PRE-EXISTING, never worked since 5855b7f
+//   no focus trap behind modals     -> PRE-EXISTING
+//
+// The two regressions share one root cause and one fix: the
+// `:class="<expr> && 'is-active'"` idiom, replaced by the object form
+// `:class="{ 'is-active': <expr> }"`. The pre-refactor handlers were DOM-driven
+// and unconditional (`classList.remove` / `toggle` on whatever was in the DOM),
+// so they removed classes they had not added and a stuck element healed on the
+// first ordinary interaction. Alpine's setClassesFromString cannot.
+//
 // No viewport override here, unlike specs 09/10: nothing in this file depends on
 // Bulma's 1024px navbar breakpoint. The dropdown and the modal render and behave
 // identically at every width.
+const fs = require('node:fs');
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass } = require('../fixtures/class');
@@ -469,6 +488,24 @@ test('the character page comes back from the back button with a closed, live dro
 // alive-but-powerless a11y symptom Task 11 recorded on the navbar burger. Any
 // subsequent navigation clears it.
 //
+// REGRESSION CALL: **REFACTOR REGRESSION**, in recoverability rather than in
+// symptom. The old markup (efa7622^) froze `is-active` into the snapshot too --
+// its trigger was
+// `onclick="document.getElementById('export-dropdown').classList.toggle('is-active')"` --
+// but the two document-level handlers deleted by f8931dc were DOM-driven and
+// unconditional:
+//
+//   document.querySelectorAll('.dropdown.is-active')
+//           .forEach(d => d.classList.remove('is-active'))
+//
+// on outside click and on Escape. They removed a class they had not added, so a
+// restored stuck dropdown healed on the first Escape, the first click anywhere
+// outside it, or one click on its own trigger. Alpine's setClassesFromString
+// cannot. The refactor converted a benign, self-clearing frozen class into a
+// permanently stuck one. Verified against the deleted code at f8931dc, not
+// reasoned. Severity: Important -- 100% reproducible, user-visible, unclearable
+// in place, escapable by any subsequent navigation, costs no data.
+//
 // RECOMMENDED FIX (a production change, deliberately NOT applied -- this branch
 // reports defects, it does not fix them):
 //
@@ -549,23 +586,50 @@ test('going back after using an export link restores a closed dropdown', async (
 // ---------------------------------------------------------------------------
 // EXPECTED TO FAIL (2 of 3). Same standing as the test above.
 //
-// THE ANSWER TO PART 2, HALF TWO -- and it is worse than a frozen class, and
-// needs no history snapshot at all.
+// THE ANSWER TO PART 2, HALF TWO. Read the severity note below before quoting
+// this one: the leak is real, the harm is not.
+//
+// REGRESSION CALL: **PRE-EXISTING**, not caused by the Alpine conversion. A
+// reconstruction of the pre-refactor modal shell (App.openModal/closeModal,
+// which did the same `body.classList.add/remove('modal-open')`) produces a
+// byte-identical reading after the same hop. The refactor neither caused nor
+// fixed this.
 //
 // public/js/alpine-components.js's modalBase adds `modal-open` to
-// document.body on open and removes it on close, and
-// public/css/styles.css:253-255 gives `body.modal-open { overflow: hidden; }`.
-// The class is a DOCUMENT-level side effect owned by a COMPONENT-level lifetime,
-// and nothing releases it when the component is destroyed. htmx's boosted swap
-// replaces body.innerHTML; `<body>`'s own class attribute is not part of the
-// swap (cleanInnerHtmlForHistory, dist 3238, snapshots innerHTML), so
-// `modal-open` outlives the component that set it.
+// document.body on open and removes it on close. The class is a DOCUMENT-level
+// side effect owned by a COMPONENT-level lifetime, and nothing releases it when
+// the component is destroyed. htmx's boosted swap replaces body.innerHTML;
+// `<body>`'s own class attribute is not part of the swap
+// (cleanInnerHtmlForHistory, dist 3238, snapshots innerHTML), so `modal-open`
+// outlives the component that set it.
 //
 // Measured after one boosted hop with the level-up modal open:
 //   { url: "/", bodyClass: "modal-open", overflow: "hidden", anyActiveModal: false }
-// A page with no modal on it, that the user cannot scroll, with nothing on
-// screen to explain why. Only a full page load (or opening and properly closing
-// another modal) clears it.
+// i.e. a stale `modal-open` on a page that has no modal. Only a full page load
+// (or opening and properly closing another modal) clears it.
+//
+// WHAT THIS DOES *NOT* CAUSE, corrected against measurement after an earlier
+// version of this comment claimed it did: the page is still scrollable.
+// `public/css/styles.css:253-255` gives `body.modal-open { overflow: hidden }`,
+// but that rule is DEAD CSS in this app. Overflow propagates to the viewport
+// from `<html>`, and only falls through to `<body>` when `<html>`'s own overflow
+// is `visible`; Bulma 1.0.4's minireset sets `html { overflow-x: hidden;
+// overflow-y: scroll }` (computed: "hidden scroll") on every page. Measured with
+// real wheel events at 800x400 on `/` (scrollHeight 1163):
+//
+//   no class                                   -> wheel 3000 -> scrollY 763
+//   body.modal-open applied                    -> wheel 3000 -> scrollY 763  (NOT locked)
+//   ...plus `html { overflow: visible }` forced -> wheel 3000 -> scrollY 0    (locked)
+//
+// (`window.scrollBy` is useless as a probe here: programmatic scrolling works
+// through `overflow: hidden` regardless. Only a real wheel event discriminates.)
+// So the leaked class has NO OBSERVABLE EFFECT -- and, as a separate
+// pre-existing finding, the modal scroll lock has never worked in this app at
+// all, not even while a modal is legitimately open. The assertion below reads
+// `document.body`'s computed overflow, which detects whether the CLASS is
+// applied, not whether scrolling is actually locked; do not read it as the
+// latter. Severity: MINOR. Do not repeat the "a page the user cannot scroll"
+// framing an earlier draft of this file used.
 //
 // IS THIS REACHABLE? Yes, without a mouse trick. A Bulma modal here has no focus
 // trap and the page behind it is neither `inert` nor `aria-hidden`, so every
@@ -582,7 +646,7 @@ test('going back after using an export link restores a closed dropdown', async (
 // the lock from "is any .modal.is-active on the page" rather than from a
 // counter-free add/remove pair. Deliberately NOT applied here.
 // ---------------------------------------------------------------------------
-test('navigating away from an open modal releases the body scroll lock', async ({ page }) => {
+test('navigating away from an open modal clears the body modal-open class', async ({ page }) => {
   await openPage(page, urlFor(CHARACTER_PAGE));
 
   const modal = page.locator('#levelUpModal');
@@ -618,7 +682,11 @@ test('navigating away from an open modal releases the body scroll lock', async (
     'expected a boosted body swap; a full page load rebuilds <body> and would clear the lock for trivial reasons'
   ).toBe(true);
 
-  // THE defect: the scroll lock followed the user to a page that has no modal.
+  // THE defect: the modal's `modal-open` class followed the user to a page that
+  // has no modal. `overflow` here is document.body's COMPUTED overflow, i.e. a
+  // second reading of "the class is applied" -- it is NOT evidence that the
+  // viewport is locked, because it never propagates past Bulma's
+  // `html { overflow-y: scroll }`. See the dead-CSS measurement above.
   const landed = await page.evaluate(() => ({
     path: location.pathname,
     bodyClass: document.body.className,
@@ -628,7 +696,8 @@ test('navigating away from an open modal releases the body scroll lock', async (
   expect(landed, `state after leaving an open modal: ${JSON.stringify(landed)}`).toMatchObject({
     path: '/',
     // Positive precondition: the modal really is gone from the new page, so
-    // "still locked" cannot be explained away as "the modal is still open".
+    // "the class is still there" cannot be explained away as "the modal is
+    // still open".
     activeModals: 0,
     overflow: 'visible'
   });
@@ -653,13 +722,29 @@ test('navigating away from an open modal releases the body scroll lock', async (
 //   { cls: "modal is-active", display: "flex", alpineShow: FALSE,
 //     bodyClass: "modal-open", overflow: "hidden" }
 //
+// REGRESSION CALL: **REFACTOR REGRESSION** -- and this is the one to escalate.
+// The frozen class itself is pre-existing (the old markup froze `is-active` into
+// the snapshot too), but the "no way out" is entirely new. Before the Alpine
+// conversion (f1c738c), the global Escape handler in public/js/app.js read the
+// DOM -- `document.querySelector('.modal.is-active')` -> `App.closeModal(...)`,
+// whose body was `if (modal.classList.contains('is-active')) toggleClass(...)`
+// plus the same unconditional read for `body.modal-open` -- so ONE ESCAPE
+// KEYPRESS fully healed a restored stuck modal, `modal-open` included. Alpine's
+// setClassesFromString can only remove classes Alpine itself added, and
+// modalBase.close() additionally early-returns on `if (!this.show) return;`.
+// The refactor turned a benign, self-clearing frozen class into a permanently
+// stuck one. Verified against the deleted code at f1c738c^, not reasoned.
+//
 // A stuck-open MODAL is materially worse than a stuck-open navbar or dropdown,
-// and this is the part worth escalating:
+// and this is the part worth escalating -- for the CLICK-BLOCKING, not for the
+// scroll lock, which does not exist (see the dead-CSS measurement above):
 //
 //   - `.modal` is a full-viewport fixed overlay. Measured with
 //     document.elementFromPoint at the bottom centre of the restored page:
 //     `DIV.modal-background`. The overlay swallows every click on the page.
-//   - The body scroll lock is still on, so the page cannot be scrolled either.
+//   - The stale `modal-open` rides along, but changes nothing the user can
+//     perceive: the page still scrolls. Recorded per frame below only because
+//     it is the second half of the state a fix has to clean up.
 //   - NOTHING dismisses it. Escape and a background click both route through
 //     modalBase.close(), which starts `if (!this.show) return;` -- and `show` is
 //     already false, because Alpine re-initialised it that way. Measured: after
@@ -673,23 +758,24 @@ test('navigating away from an open modal releases the body scroll lock', async (
 //
 // So a signed-in user who opens Level Up, tabs to a link, presses Enter, and
 // then presses Back lands on a correct-looking URL with an opaque overlay over
-// the whole viewport, no scrolling, and no way out except a reload or another
-// navigation. Both underlying causes are already described above; the `:class`
-// half is fixed by `:class="{ 'is-active': show }"` at
+// the whole viewport, unable to click anything, and with no way out except a
+// reload or a blind navigation. Both underlying causes are already described
+// above; the `:class` half is fixed by `:class="{ 'is-active': show }"` at
 // views/partials/character-level-up.handlebars:2 (and at the four other modal
 // sites carrying the same form), the lock half by giving the lock a
 // component-independent lifetime.
 //
 // BOTH halves are needed, measured separately rather than assumed. The `:class`
-// fix alone takes framesPaintedOpen from 6 to 0 and leaves framesBodyLocked at
-// 5 -- this test stays red, correctly, on a page that no longer shows a phantom
-// modal but still cannot be scrolled. Adding
+// fix alone takes framesPaintedOpen to 0 and leaves framesBodyLocked non-zero
+// (5 in my run, 7 in the reviewer's -- it is a frame count, so do not read a
+// different number as a discrepancy): this test stays red, correctly, on a page
+// that no longer shows a phantom modal but still carries the stale class. Adding
 // `destroy() { document.body.classList.remove('modal-open') }` to modalBase in
 // public/js/alpine-components.js on top of it turns this test AND the
 // scroll-lock test above green. Applied and reverted; no production change
 // ships from this task.
 // ---------------------------------------------------------------------------
-test('going back after leaving an open modal restores a dismissed, unlocked page', async ({ page }) => {
+test('going back after leaving an open modal restores a dismissable page', async ({ page }) => {
   await openPage(page, urlFor(CHARACTER_PAGE));
 
   const modal = page.locator('#levelUpModal');
@@ -769,6 +855,15 @@ test('going back after leaving an open modal restores a dismissed, unlocked page
 // the page body. Asserted once rather than once per template, to keep one red
 // test per defect.
 //
+// REGRESSION CALL: **PRE-EXISTING**, and it has never worked. `hx-boost="true"`
+// on <body> dates to the initial commit (89f58ff); the export feature landed at
+// 5855b7f; `git log -S'export?format=markdown'` over views/character.handlebars
+// shows two touches only (the feature and the Alpine conversion), and neither
+// `download` nor `hx-boost="false"` ever appears. Nothing about this is a
+// regression from the Alpine refactor -- but it is a shipped feature that is
+// 100% non-functional on both pages and all four links, which makes it the
+// highest-value product finding in this file.
+//
 // THE OBVIOUS FIX DOES NOT WORK, and that is the more useful half of this
 // finding. `hx-boost="false"` on the export anchors was applied and measured:
 // htmx correctly stops boosting them (internal `boosted: false`), the browser
@@ -781,10 +876,32 @@ test('going back after leaving an open modal restores a dismissed, unlocked page
 //   -> app.js start() -> redirectTo() re-issues it as an XHR *with* the header
 //   -> and swaps the response into <body>
 //
-// i.e. exactly the same raw markdown in the page, by a longer road. Every
-// header-authenticated endpoint in this app is structurally un-downloadable:
-// browsers only download from navigations (or `<a download>` same-origin
-// fetches), and neither can produce that header.
+// i.e. exactly the same raw markdown in the page, by a longer road. That chain
+// is not specific to the boosted anchor: DIRECT URL ENTRY -- address bar,
+// "open in a new tab", middle-click, "save link as" -- is the same plain
+// navigation and bounces the same way, so there is no user-side workaround.
+// Every header-authenticated endpoint in this app is structurally
+// un-downloadable: browsers only download from navigations (or from a
+// same-origin `<a download>` / blob URL), and none of those can produce that
+// header.
+//
+// WHY THIS TEST ASSERTS THE DOWNLOADED BYTES, NOT JUST THE EVENT. An earlier
+// version asserted only `downloadStarted: true` + `pageIntact: true`, and an
+// adversarial review found the mutation that satisfies both while shipping a
+// WORSE bug: `hx-boost="false" download` on the anchors makes a download fire,
+// and what lands on disk is
+//
+//   { download: "check.html", url: ".../auth/check?r=...", size: 6666,
+//     head: "<!DOCTYPE html>..." }
+//
+// -- the 6666-byte SIGN-IN PAGE, saved as the user's export. That is the exact
+// failure mode this file already diagnoses one level down in the "both export
+// links resolve" test (a 200 that is really the login page), reproduced one
+// level up in this test's own assertions. A red test that a plausible fix turns
+// green while making the product worse is the most dangerous kind, so the
+// artefact itself is now asserted: filename, size, and content tied to this
+// character by name. Re-verified: under that same mutation this test now stays
+// RED, on `bodyIsMarkdownExport` and `filenameIsMarkdown`.
 //
 // RECOMMENDED FIX (architectural, deliberately NOT applied here). Either:
 //   (a) fetch the export from the Alpine component with the auth header and
@@ -795,9 +912,9 @@ test('going back after leaving an open modal restores a dismissed, unlocked page
 //   (b) make the export routes accept the session cookie / a short-lived
 //       signed token in the query string, so a plain navigation authenticates,
 //       and then `hx-boost="false"` becomes sufficient.
-// A template-only change is not enough, and this test is deliberately written
-// against the user-visible outcome ("a file arrives, the page stays put")
-// rather than against either mechanism.
+// A template-only change is not enough. Note the assertions below deliberately
+// do NOT pin the download's URL: under (a) it is a `blob:` URL and under (b) it
+// is the export path, and both are correct fixes.
 // ---------------------------------------------------------------------------
 test('clicking an export link downloads the file instead of replacing the page', async ({ page }) => {
   await openPage(page, urlFor(CHARACTER_PAGE));
@@ -809,9 +926,35 @@ test('clicking an export link downloads the file instead of replacing the page',
   // Armed before the click: a download that is going to happen at all happens
   // within a few hundred ms, so the 5s budget only ever costs anything on the
   // failing (current) path.
-  const downloadStarted = page.waitForEvent('download', { timeout: 5_000 }).then(() => true, () => false);
+  const downloadPromise = page.waitForEvent('download', { timeout: 5_000 }).then((d) => d, () => null);
   await exportLink.click();
-  const started = await downloadStarted;
+  const download = await downloadPromise;
+
+  // The ARTEFACT, not just the event -- see the false-green note above. Read off
+  // disk rather than from the response, because what matters is what the user
+  // ends up with. All fields stay defined when no download fired, so the failure
+  // message is diagnostic rather than a null dereference.
+  let artefact = {
+    downloadStarted: false, filename: null, downloadUrl: null,
+    bytes: 0, savedStart: null, filenameIsMarkdown: false,
+    bodyIsMarkdownExport: false, bodyMentionsCharacter: false
+  };
+  if (download) {
+    const savedPath = await download.path();
+    const saved = savedPath ? await fs.promises.readFile(savedPath, 'utf8') : '';
+    artefact = {
+      downloadStarted: true,
+      filename: download.suggestedFilename(),
+      downloadUrl: download.url(),
+      bytes: saved.length,
+      savedStart: saved.trimStart().slice(0, 60),
+      filenameIsMarkdown: /\.md$/i.test(download.suggestedFilename()),
+      // The two content checks that the sign-in page cannot satisfy: it starts
+      // with `<!DOCTYPE html>`, and it does not contain this character's name.
+      bodyIsMarkdownExport: saved.trimStart().startsWith('#'),
+      bodyMentionsCharacter: saved.includes(character.name)
+    };
+  }
 
   const after = await page.evaluate(() => ({
     path: location.pathname,
@@ -820,10 +963,16 @@ test('clicking an export link downloads the file instead of replacing the page',
   }));
 
   expect(
-    { downloadStarted: started, ...after },
-    `state after clicking the Markdown export link: ${JSON.stringify(after)}`
+    { ...artefact, ...after },
+    `state after clicking the Markdown export link: ${JSON.stringify({ ...artefact, ...after })}`
   ).toMatchObject({
     downloadStarted: true,
+    // ...and it is THIS character's markdown export, not whatever the server
+    // happened to answer with. A fix that downloads the login page satisfies
+    // `downloadStarted` alone; it satisfies none of these three.
+    filenameIsMarkdown: true,
+    bodyIsMarkdownExport: true,
+    bodyMentionsCharacter: true,
     // A download leaves the page it was triggered from untouched. Both halves
     // are asserted because either one alone could be satisfied the wrong way:
     // a page that merely failed to navigate is not a download, and a download
@@ -831,4 +980,5 @@ test('clicking an export link downloads the file instead of replacing the page',
     pageIntact: true,
     path: `/characters/${character.id}`
   });
+  expect(artefact.bytes).toBeGreaterThan(0);
 });
