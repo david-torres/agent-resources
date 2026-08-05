@@ -1,5 +1,13 @@
 const { supabase } = require('./_base');
 
+// Every query here takes the caller's client. `pages` has RLS on both halves:
+// the write policies require is_admin(), and the SELECT policies gate drafts and
+// access_level='admin'/'authenticated' rows the same way. The anon singleton
+// carries no user JWT, so bound to it an admin's UPDATE/DELETE match zero rows
+// and their drafts are simply invisible. `res.locals.supabase` (util/auth.js)
+// carries the caller's token — anon for signed-out visitors, so the default
+// keeps public reads working for callers with no request context.
+
 /**
  * Generate a URL-friendly slug from a title
  */
@@ -17,8 +25,8 @@ const generateSlug = (title) => {
 /**
  * Check if a slug is unique (excluding a specific page ID if provided)
  */
-const isSlugUnique = async (slug, excludeId = null) => {
-    let query = supabase
+const isSlugUnique = async (slug, excludeId = null, client = supabase) => {
+    let query = client
         .from('pages')
         .select('id')
         .eq('slug', slug)
@@ -39,8 +47,8 @@ const isSlugUnique = async (slug, excludeId = null) => {
 /**
  * Get all pages with optional filters
  */
-const getPages = async (filters = {}) => {
-    let query = supabase
+const getPages = async (filters = {}, client = supabase) => {
+    let query = client
         .from('pages')
         .select('*')
         .order('created_at', { ascending: false });
@@ -64,8 +72,8 @@ const getPages = async (filters = {}) => {
 /**
  * Get a single page by slug
  */
-const getPageBySlug = async (slug) => {
-    const { data, error } = await supabase
+const getPageBySlug = async (slug, client = supabase) => {
+    const { data, error } = await client
         .from('pages')
         .select('*')
         .eq('slug', slug)
@@ -80,8 +88,8 @@ const getPageBySlug = async (slug) => {
 /**
  * Get a single page by ID
  */
-const getPage = async (id) => {
-    const { data, error } = await supabase
+const getPage = async (id, client = supabase) => {
+    const { data, error } = await client
         .from('pages')
         .select('*')
         .eq('id', id)
@@ -96,7 +104,7 @@ const getPage = async (id) => {
 /**
  * Create a new page
  */
-const createPage = async (payload) => {
+const createPage = async (payload, client = supabase) => {
     // Generate slug if not provided
     if (!payload.slug && payload.title) {
         payload.slug = generateSlug(payload.title);
@@ -104,7 +112,7 @@ const createPage = async (payload) => {
 
     // Check slug uniqueness
     if (payload.slug) {
-        const { isUnique, error: slugError } = await isSlugUnique(payload.slug);
+        const { isUnique, error: slugError } = await isSlugUnique(payload.slug, null, client);
         if (slugError) {
             return { data: null, error: slugError };
         }
@@ -116,7 +124,7 @@ const createPage = async (payload) => {
         }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
         .from('pages')
         .insert(payload)
         .select()
@@ -131,7 +139,7 @@ const createPage = async (payload) => {
 /**
  * Update an existing page
  */
-const updatePage = async (id, updates) => {
+const updatePage = async (id, updates, client = supabase) => {
     // Generate slug if title changed and slug not provided
     if (updates.title && !updates.slug) {
         updates.slug = generateSlug(updates.title);
@@ -139,7 +147,7 @@ const updatePage = async (id, updates) => {
 
     // Check slug uniqueness if slug is being changed
     if (updates.slug) {
-        const { isUnique, error: slugError } = await isSlugUnique(updates.slug, id);
+        const { isUnique, error: slugError } = await isSlugUnique(updates.slug, id, client);
         if (slugError) {
             return { data: null, error: slugError };
         }
@@ -151,7 +159,7 @@ const updatePage = async (id, updates) => {
         }
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
         .from('pages')
         .update(updates)
         .eq('id', id)
@@ -167,8 +175,8 @@ const updatePage = async (id, updates) => {
 /**
  * Delete a page
  */
-const deletePage = async (id) => {
-    const { error } = await supabase
+const deletePage = async (id, client = supabase) => {
+    const { error } = await client
         .from('pages')
         .delete()
         .eq('id', id);

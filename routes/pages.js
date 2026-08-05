@@ -28,7 +28,7 @@ const normalizeBoolean = (value, fallback = false) => {
 router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
 
-    const { data: pages, error } = await getPages();
+    const { data: pages, error } = await getPages({}, res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to load pages' });
     }
@@ -78,7 +78,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
         created_by: profile?.id || null
     };
 
-    const { data: page, error } = await createPage(payload);
+    const { data: page, error } = await createPage(payload, res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to create page' });
     }
@@ -91,7 +91,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
 
-    const { data: page, error } = await getPage(id);
+    const { data: page, error } = await getPage(id, res.locals.supabase);
     if (error || !page) {
         return sendError(req, res, error, { status: 404, message: 'Page not found' });
     }
@@ -113,7 +113,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
     const { title, slug, content, access_level, is_published } = req.body;
 
-    const { data: existingPage, error: loadError } = await getPage(id);
+    const { data: existingPage, error: loadError } = await getPage(id, res.locals.supabase);
     if (loadError || !existingPage) {
         return sendError(req, res, loadError, { status: 404, message: 'Page not found' });
     }
@@ -126,7 +126,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         is_published: normalizeBoolean(is_published, existingPage.is_published)
     };
 
-    const { error } = await updatePage(id, updates);
+    const { error } = await updatePage(id, updates, res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to update page' });
     }
@@ -138,7 +138,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 router.delete('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
 
-    const { error } = await deletePage(id);
+    const { error } = await deletePage(id, res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to delete page' });
     }
@@ -160,7 +160,7 @@ router.get('/:slug', authOptional, async (req, res) => {
     if (isValidUuid(slug)) {
         // If it's a UUID, try to find by ID first (for backwards compatibility)
         // But this shouldn't normally happen since slugs shouldn't be UUIDs
-        const { data: pageById, error: idError } = await getPage(slug);
+        const { data: pageById, error: idError } = await getPage(slug, res.locals.supabase);
         if (!idError && pageById) {
             // Redirect to slug-based URL if page exists
             return res.redirect(`/pages/${pageById.slug}`);
@@ -168,7 +168,7 @@ router.get('/:slug', authOptional, async (req, res) => {
         // If not found by ID, continue to try as slug
     }
 
-    const { data: page, error } = await getPageBySlug(slug);
+    const { data: page, error } = await getPageBySlug(slug, res.locals.supabase);
     if (error || !page) {
         return sendError(req, res, error, { status: 404, message: 'Page not found' });
     }

@@ -85,7 +85,7 @@ router.get('/new', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
 
     // Get pages for dropdown
-    const { data: pages } = await getPages();
+    const { data: pages } = await getPages({}, res.locals.supabase);
     
     // Get dropdown parents
     const { data: dropdownParents } = await getDropdownParents();
@@ -141,7 +141,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
     if (error) {
         const status = error.message && error.message.includes('required') ? 400 : 500;
         if (status === 400) {
-            const { data: pages } = await getPages();
+            const { data: pages } = await getPages({}, res.locals.supabase);
             const { data: dropdownParents } = await getDropdownParents();
             return res.status(400).render('nav-form', {
                 profile,
@@ -185,7 +185,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
     }
 
     // Get pages for dropdown
-    const { data: pages } = await getPages();
+    const { data: pages } = await getPages({}, res.locals.supabase);
     
     // Get dropdown parents (exclude self to prevent circular references)
     const { data: allDropdownParents } = await getDropdownParents();
@@ -242,7 +242,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 
     if (resolvedType === 'page' && !updates.page_id) {
         const { profile } = res.locals;
-        const { data: pages } = await getPages();
+        const { data: pages } = await getPages({}, res.locals.supabase);
         const { data: allDropdownParents } = await getDropdownParents();
         const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
         return res.status(400).render('nav-form', {
@@ -265,7 +265,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         const status = error.message && error.message.includes('required') ? 400 : 500;
         if (status === 400) {
             const { profile } = res.locals;
-            const { data: pages } = await getPages();
+            const { data: pages } = await getPages({}, res.locals.supabase);
             const { data: allDropdownParents } = await getDropdownParents();
             const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
             return res.status(400).render('nav-form', {
