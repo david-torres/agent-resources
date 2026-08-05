@@ -7,6 +7,12 @@ const { test, expect } = require('@playwright/test');
 test('home page boots with Alpine and htmx initialised', async ({ page }) => {
   const consoleErrors = [];
   page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  // `console` alone does NOT cover uncaught exceptions or unhandled promise
+  // rejections -- Playwright surfaces those only via `pageerror`. Without this
+  // listener a genuine app crash that never calls console.error() would leave
+  // consoleErrors empty and this test green, which is the opposite of what its
+  // name promises.
+  page.on('pageerror', (err) => { consoleErrors.push(`pageerror: ${err.message}`); });
 
   await page.goto('/');
   await expect(page).toHaveTitle(/Agent Resources/);
@@ -23,12 +29,21 @@ test('home page boots with Alpine and htmx initialised', async ({ page }) => {
   //
   // Two assertions replace it. The positive one first: the home page's only
   // Alpine root (the navbar, views/partials/nav.handlebars:1) really was
-  // adopted. Alpine 3 hangs `_x_dataStack` off every x-data element it takes
-  // ownership of and nothing else can put it there, so this fails if Alpine
-  // loads but never initialises the DOM -- which `typeof window.Alpine` above
-  // cannot distinguish.
+  // adopted, which `typeof window.Alpine` above cannot distinguish -- Alpine
+  // can load fine and still never initialise the DOM.
+  //
+  // Uses the documented `Alpine.$data()` rather than the `_x_dataStack`
+  // internal. Note the trap: `!!Alpine.$data(el)` is ALWAYS truthy, even for an
+  // element with no x-data ancestor at all, because closestDataStack falls back
+  // to [] and mergeProxies([]) still returns a Proxy. Truthiness would be
+  // vacuous; presence of the key the navbar's own x-data declares is the real
+  // initialisation test.
   await expect
-    .poll(() => page.evaluate(() => !!document.querySelector('nav[x-data]')?._x_dataStack))
+    .poll(() => page.evaluate(() => {
+      const nav = document.querySelector('nav[x-data]');
+      if (!nav || !window.Alpine) return false;
+      return 'open' in window.Alpine.$data(nav);
+    }))
     .toBe(true);
 
   // Only now is the negative one meaningful: nothing anywhere is still cloaked.

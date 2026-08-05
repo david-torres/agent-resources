@@ -93,67 +93,130 @@ test('the navbar menu arrives closed after a boosted navigation', async ({ page 
   // trivial reasons -- passing the assertion below while proving nothing about
   // the settle race. A window-scoped sentinel survives a swap and dies on a
   // reload, so this is what makes the rest of the test load-bearing.
-  await page.evaluate(() => { window.__preNav = true; });
+  // THE instrument this whole spec exists for. It records, from inside the
+  // page, what the browser actually PAINTED on every animation frame after the
+  // swap -- it does not sample once and hope to land inside the bad window.
+  //
+  // Why a paint recorder and not a snapshot. Read htmx 2.0.8's swap() (line
+  // 2016 of the unminified dist):
+  //
+  //     if (swapSpec.settleDelay > 0) { setTimeout(doSettle, settleDelay) }
+  //     else                          { doSettle() }
+  //
+  // At the shipped `defaultSettleDelay: 0` doSettle runs SYNCHRONOUSLY, in the
+  // same task as the swap, so the bad state cannot survive to a paint. At any
+  // value above 0 it becomes a setTimeout macrotask and the browser is free to
+  // render the intermediate state. "Did a frame ever render with the menu
+  // open" is therefore the exact discriminator between the two configs -- and
+  // it is also the precise definition of the user-visible defect.
+  //
+  // The bad state itself (htmx insertNodesBefore -> handleAttributes, line
+  // 1558): for any id present in both documents -- #navbar-menu and
+  // #navbar-burger qualify on every boosted nav -- htmx clones the OLD node's
+  // attributes onto the new one and pushes restoring the new ones onto
+  // settleInfo.tasks. Alpine cannot undo that: bindClasses is
+  // additive-with-undo, so `open && 'is-active'` -> false ->
+  // setClassesFromString(el, '') removes nothing, because Alpine only ever
+  // removes classes it added itself. An is-active planted by htmx is invisible
+  // to it, and the menu sits open on screen while Alpine insists open === false.
+  //
+  // A single non-retrying snapshot (what this used to be) races the CDP
+  // round-trip against the settle window and is a coin flip at small delays --
+  // measured at 50-95% detection at htmx's own default of 20ms. The first
+  // animation frame after a swap lands within one frame interval (~16.7ms at
+  // 60Hz), which is inside any settle window >= one frame, so this form is
+  // deterministic where the flash is perceptible at all. See the report for
+  // the honest sensitivity boundary.
+  await page.evaluate(() => {
+    window.__preNav = true; // sentinel: survives a body swap, dies on a reload
+    const probe = { swapObserved: false, frames: [] };
+    window.__navProbe = probe;
+
+    const sampleFrame = () => {
+      const menu = document.querySelector('#navbar-menu');
+      const burger = document.querySelector('#navbar-burger');
+      const nav = menu && menu.closest('[x-data]');
+      let alpineInitialised = false;
+      let alpineOpen = null;
+      try {
+        // NOT `!!Alpine.$data(nav)`: $data falls back to mergeProxies([]) and
+        // hands back a truthy Proxy for ANY element, even one with no x-data
+        // ancestor, so truthiness alone would be vacuous. Presence of the key
+        // the navbar's own x-data declares is the real initialisation test.
+        const data = nav && window.Alpine ? window.Alpine.$data(nav) : null;
+        alpineInitialised = !!data && 'open' in data;
+        alpineOpen = alpineInitialised ? data.open : null;
+      } catch (_) { /* Alpine absent -> stays false, which fails below */ }
+      return {
+        t: Math.round(performance.now()),
+        menuIsActive: !!menu && menu.classList.contains('is-active'),
+        burgerIsActive: !!burger && burger.classList.contains('is-active'),
+        display: menu ? getComputedStyle(menu).display : null,
+        alpineInitialised,
+        alpineOpen
+      };
+    };
+
+    // Frames are only meaningful after the swap -- before it the menu is open
+    // because this test just opened it. Both the listener and the probe hang
+    // off objects a boosted swap does not replace (document, window).
+    document.addEventListener('htmx:afterSwap', () => {
+      probe.swapObserved = true;
+      const tick = () => {
+        if (probe.frames.length >= 12) return; // ~200ms of frames is plenty
+        probe.frames.push(sampleFrame());
+        requestAnimationFrame(tick);
+      };
+      requestAnimationFrame(tick);
+    }, { once: true });
+  });
+
   await link.click();
   await page.waitForURL((url) => url.pathname === '/profile');
 
-  // THE assertion this whole spec exists for, and it MUST be a single
-  // non-retrying snapshot taken before any web-first assertion runs.
-  //
-  // The settle race is transient: it lasts exactly `defaultSettleDelay` ms and
-  // then htmx itself clears it. `await expect(menu).not.toHaveClass(...)` is a
-  // retrying assertion with a 10 s budget (playwright.config.js:32), so it
-  // polls straight past a 300 ms flash and reports "closed" -- it can only
-  // prove the navbar ENDS UP closed, never that it ARRIVES closed, which is
-  // the claim in this test's name. Verified: at defaultSettleDelay 300 the
-  // retrying form passes while the menu is demonstrably `display: block` on
-  // arrival; the snapshot below fails.
-  //
-  // The mechanism it catches (htmx 2.0.8 insertNodesBefore -> handleAttributes):
-  // for any id present in both documents -- #navbar-menu and #navbar-burger
-  // qualify on every boosted nav -- htmx clones the OLD node's attributes onto
-  // the new one and queues restoring the new ones as a settle task. Alpine
-  // cannot undo that: `bindClasses` is additive-with-undo, so `open &&
-  // 'is-active'` -> false -> setClassesFromString(el, '') removes nothing,
-  // because Alpine only ever removes classes it added itself. An is-active
-  // planted by htmx is invisible to it, and the menu is open on screen with
-  // Alpine sitting there insisting `open === false`.
-  const arrival = await page.evaluate(() => {
-    const menu = document.querySelector('#navbar-menu');
-    const burger = document.querySelector('#navbar-burger');
-    const root = menu && menu.closest('[x-data]');
-    return {
-      swapped: window.__preNav === true, // survived => body swap, not a reload
-      menuPresent: !!menu,
-      menuHasIsActive: !!menu && menu.classList.contains('is-active'),
-      burgerHasIsActive: !!burger && burger.classList.contains('is-active'),
-      menuDisplay: menu ? getComputedStyle(menu).display : null,
-      // Diagnostics only, deliberately NOT asserted: Alpine initialises via a
-      // MutationObserver, so at this exact instant it may not have adopted the
-      // swapped-in nav yet and either value would be legitimately racy. They
-      // ride along so a failure prints "open: false but display: block" --
-      // the signature that distinguishes the settle race from Alpine simply
-      // being open. The retrying liveness check below is what proves the
-      // component is alive.
-      alpineInitialised: !!(root && root._x_dataStack),
-      alpineOpen: root && root._x_dataStack ? root._x_dataStack[0].open : null
-    };
-  });
+  // Checked first and on its own so the hx-boost-removal failure mode reports
+  // as "full page load", not as a confusing timeout on the probe below (a real
+  // navigation destroys window.__navProbe along with the document).
+  expect(
+    await page.evaluate(() => window.__preNav === true),
+    'expected a boosted body swap; a full page load would tear down Alpine and make every assertion below trivial'
+  ).toBe(true);
 
-  // toMatchObject, not five separate expects, so one failure reports every
-  // field at once. Its diff prints only the compared keys, so the diagnostics
-  // ride in via the custom message instead.
-  expect(arrival, `navbar on arrival: ${JSON.stringify(arrival)}`).toMatchObject({
-    swapped: true,
-    menuPresent: true, // positive precondition -- a blank swap must not pass
-    menuHasIsActive: false,
-    burgerHasIsActive: false,
-    menuDisplay: 'none' // Bulma shows .navbar-menu only when .is-active here
+  await page.waitForFunction(
+    () => window.__navProbe && window.__navProbe.frames.length >= 3,
+    null,
+    { timeout: 10_000 }
+  );
+  const probe = await page.evaluate(() => window.__navProbe);
+
+  const summary = {
+    swapObserved: probe.swapObserved,
+    framesSampled: probe.frames.length,
+    // The defect: a frame the browser rendered with the menu on screen.
+    framesPaintedOpen: probe.frames
+      .filter((f) => f.menuIsActive || f.burgerIsActive || f.display !== 'none').length,
+    // Positive precondition, per frame. Without it a regression that stopped
+    // Alpine adopting the swapped-in nav would sail through the line above:
+    // Bulma hides .navbar-menu without .is-active anyway, so a DEAD navbar
+    // paints identically to a correctly-closed one. 149/149 observed runs had
+    // this true, so it is signal, not noise.
+    framesWithoutAlpine: probe.frames.filter((f) => !f.alpineInitialised).length,
+    // Alpine's own state must agree it is closed. Disagreement here would be a
+    // different bug (component state surviving a swap) worth failing on.
+    framesAlpineOpen: probe.frames.filter((f) => f.alpineOpen === true).length
+  };
+
+  expect(summary.framesSampled).toBeGreaterThanOrEqual(3);
+  expect(summary, `navbar paint probe: ${JSON.stringify(probe)}`).toMatchObject({
+    swapObserved: true,
+    framesPaintedOpen: 0,
+    framesWithoutAlpine: 0,
+    framesAlpineOpen: 0
   });
 
   // Steady state, after the settle has had every chance to fire. Weaker than
-  // the snapshot (see above) but it catches a LATE re-open the snapshot would
-  // miss, so both are kept.
+  // the probe (it is a retrying assertion, so it cannot see a transient) but it
+  // catches a LATE re-open the 12-frame window would miss, so both are kept.
   const newBurger = page.locator('#navbar-burger');
   await expect(newBurger).toBeVisible();
   await expect(page.locator('#navbar-menu')).not.toHaveClass(/is-active/);
@@ -182,6 +245,7 @@ test('a hidden x-show element stays hidden across a boosted body swap', async ({
 
   const link = page.locator(`a[href^="/characters/${character.id}/"]`).first();
   await expect(link).toBeVisible();
+  const href = await link.getAttribute('href');
 
   await page.evaluate(() => { window.__preNav = true; });
 
@@ -192,8 +256,16 @@ test('a hidden x-show element stays hidden across a boosted body swap', async ({
   // DOM-level assertion in this test passing while reintroducing a real FOUC
   // (the editor renders expanded until Alpine boots). Asserting the attribute
   // is present in the markup and absent from the live DOM pins both halves.
+  // Matched on the exact pathname, not `.includes('/characters/<id>')`:
+  // routes/characters.js also serves /:id/edit, /:id/export,
+  // /:id/auto-calc-fields and /:id/offscreen-missions/... , all of which
+  // contain that substring. None is requested during this flow today, so the
+  // loose form was not a live flake -- this is insurance against a future
+  // second request sharing the fragment. Decoded before comparing because the
+  // request URL percent-encodes the name segment while the href attribute does
+  // not (identical for the fixture's alphanumeric name, but not in general).
   const swapResponse = page.waitForResponse(
-    (r) => r.url().includes(`/characters/${character.id}`) && r.status() === 200
+    (r) => decodeURIComponent(new URL(r.url()).pathname) === href && r.status() === 200
   );
   await link.click();
   const html = await (await swapResponse).text();
