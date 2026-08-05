@@ -43,29 +43,66 @@
 //      this file replaces would have passed -- green, and reporting that the
 //      slug is stable, on an app where saving a page is impossible.
 //
-// ** PRE-EXISTING PRODUCT DEFECT: THE ADMIN PAGES EDITOR CANNOT WRITE AT ALL **
+// ** PRE-EXISTING PRODUCT DEFECT: THE PAGES CMS ONLY WORKS FOR PUBLISHED,
+//    PUBLIC PAGES -- READ AND WRITE ALIKE **
 //
-// models/pages.js:1 binds every query to the ANON Supabase client
-// (`const { supabase } = require('./_base')`), and never accepts a client
-// argument. `pages` has RLS enabled with "Only admins can update pages"
-// USING (is_admin()) (supabase/migrations/20240101000000_baseline_schema.sql:1530).
-// The anon key carries no user JWT, so is_admin() is false and:
+// models/pages.js:1 binds EVERY query -- reads included -- to the ANON Supabase
+// client (`const { supabase } = require('./_base')`), and no function accepts a
+// client argument. `pages` has RLS enabled (migrations/20240101000000_baseline_schema.sql:1495-1538);
+// the anon key carries no user JWT, so `is_admin()` is false and
+// `auth.role() = 'authenticated'` never holds.
+//
+// READS (the wider half). getPages():43 and getPage():84 see only rows matching
+// "Public pages are viewable by everyone" -- is_published = true AND
+// access_level = 'public'. Measured as a signed-in admin:
+//     fixture              /pages/manage   GET /pages/:id/edit   GET /pages/:slug
+//     published + public   listed          200                   200
+//     unpublished draft    NOT listed      404                   404
+//     access_level=admin   NOT listed      404                   404
+// So `is_published = false` and `access_level = 'admin'` are WHOLLY
+// NON-FUNCTIONAL features: an admin cannot list, open, edit or even view such a
+// page. canViewPage():185 -- which exists precisely to let admins through -- is
+// dead code for them, because the row never loads for it to judge.
+//
+// WRITES. Same client, same reason:
 //   - UPDATE matches 0 rows -> .select().single() returns PGRST116 ->
-//     classifyError maps it to 404 -> "Failed to update page" in #alerts.
-//   - INSERT is rejected outright with 42501 -> POST /pages answers 403
-//     (measured directly: an admin-token form POST to /pages returns 403 "No
-//     access" and creates nothing).
-//   - DELETE matches 0 rows and reports NO error, so routes/pages.js:146
-//     answers 204 and the page stays in the database. Measured: the row is
-//     still present after a 204.
-// The RLS policies are not the problem -- re-running the same UPDATE and DELETE
-// through createUserClient(adminAccessToken) succeeds (measured: 1 row each).
-// routes/pages.js already has that client sitting in `res.locals.supabase` and
-// never passes it down; models/pages.js has no parameter to receive it.
-// PRE-EXISTING, NOT A REFACTOR REGRESSION: models/pages.js has exactly one
-// commit in its history, bf10fc9 "Pages (#99)" (2026-02-05), and line 1 has
-// read `const { supabase } = require('./_base')` since that commit. This branch
-// never touched the file. The admin Pages editor has never been able to save.
+//     classifyError maps it to 404 -> POST /pages/:id answers 404 and a visible
+//     "Failed to update page" lands in #alerts. Fails LOUDLY.
+//   - INSERT is rejected outright with 42501 -> POST /pages answers 403 "No
+//     access" and creates nothing (measured with an admin-token form POST).
+//     Fails LOUDLY.
+//   - DELETE matches 0 rows and reports NO error, so routes/pages.js:146 answers
+//     204 with the row still in the database. Fails SILENTLY -- and note what
+//     that does NOT mean: htmx 2.0.8 does not swap on a 204, so the manage-page
+//     row is not removed and nothing on screen claims success. Measured:
+//     {DELETE 204, row still visible, 0 error notifications, #alerts "", DB row
+//     survives, still present after reload}. The button is inert. The real
+//     defect is the 204 itself -- any non-htmx consumer (agent API, script,
+//     future SPA) correctly reads it as "deleted".
+//
+// The RLS policies are NOT the problem: the same UPDATE and DELETE through
+// createUserClient(adminAccessToken) succeed (1 row each, measured), and the
+// Task 14 reviewer threaded `res.locals.supabase` through models/pages.js and
+// its call sites temporarily and got UPDATE -> 302 with the row really changing,
+// INSERT -> 1 row, DELETE -> row really gone. routes/pages.js already holds that
+// client in `res.locals.supabase` (util/auth.js:57) and never passes it down.
+// DO NOT "fix" this by swapping in supabaseAdmin: that is the service-role key,
+// it bypasses RLS entirely, and it contradicts this branch's own fcb331e
+// ("supabaseAdmin now only in _base + repositories").
+//
+// PRE-EXISTING, NOT A REFACTOR REGRESSION: bf10fc9 "Pages (#99)" (2026-02-05)
+// adds CREATE TABLE pages, ENABLE ROW LEVEL SECURITY, all four write policies
+// AND models/pages.js with `const { supabase } = require('./_base')` on line 1,
+// in the SAME commit -- there is no window in which this ever worked. The
+// deleted inline script was purely client-side slug bookkeeping and the form was
+// already `method="post" action="/pages/{{page.id}}"` before the refactor.
+//
+// NOT COVERED BY A TEST HERE, deliberately: the read half is a Pages-CMS defect,
+// not a slug defect, and check 8 is about slug stability. It is recorded in the
+// task report and the ledger instead of adding a second permanently-red test to
+// a suite that already carries seven. It is why every fixture in this file is
+// seeded published + public -- anything else 404s on the edit form and this spec
+// could not run at all.
 //
 // Consequently the round-trip test below is DELIBERATELY RED, in the same way
 // as 03b-class-reassignment.spec.js and the reds in 10/11. It is split from the
@@ -104,16 +141,14 @@ test.use({ storageState: ADMIN_STATE });
 
 const prefix = newPrefix('page');
 
-// TWO fixture rows, not one, and deliberately so. playwright.config.js sets
-// fullyParallel: true, so the tests in this file run concurrently in separate
-// workers. The save test MUTATES its row's title; if every test shared one row,
-// the read-only tests' "the editor loads with the seeded title" preconditions
-// would race it and flake for reasons that have nothing to do with the code
-// under test.
-// THREE rows, one per mutating concern. The two submit tests get a row each
-// even though neither can change anything today: the moment the model-layer
-// defect above is fixed they both start writing, and sharing a row would make
-// them race each other's preconditions. A landmine left for whoever fixes it.
+// THREE fixture rows, one per mutating concern, and deliberately so.
+// playwright.config.js sets fullyParallel: true, so the tests in this file run
+// concurrently in separate workers. The two submit tests get a row each even
+// though neither can change anything today: the moment the model-layer defect
+// above is fixed they both start writing, and a shared row would make them race
+// each other's "the editor loads with the seeded title" preconditions and flake
+// for reasons that have nothing to do with the code under test. A landmine
+// defused ahead of whoever fixes it. The four read-only tests share the third.
 const READ_TITLE = `${prefix}-read-title`;
 const READ_SLUG = `${prefix}-read-handwritten-slug`;
 const POST_TITLE = `${prefix}-post-title`;
@@ -301,6 +336,11 @@ test('editing the title of an existing page does not move its slug', async ({ pa
   // (a $watch, a nextTick, a debounce) would sail past them. This is the only
   // honest way to test "and it stays that way" -- a retrying assertion cannot,
   // because its first poll already passes.
+  //
+  // MUTATION-PROVEN, not merely argued (M8): give onTitle() an unconditional
+  // `setTimeout(() => { this.slug = slugify(this.title) }, 250)`, and the
+  // immediate read above PASSES while this one fails, reporting the slug already
+  // rewritten to the new title. Delete these four lines and that mutation ships.
   await page.waitForTimeout(300);
   const settled = await readSlugState(page);
   expect(settled, `state 300ms after the title edit: ${JSON.stringify(settled)}`).toMatchObject({
@@ -395,6 +435,13 @@ test('clearing the slug re-arms auto-fill and it keeps following every later key
   // `this.auto = true`, keystroke two sees auto === false and slug === 'r'
   // (non-empty), the guard closes, and the slug is frozen at 'r' forever while
   // the title marches on.
+  //
+  // DEMONSTRATED, not asserted (M5c). The plan's draft wrote this test as
+  // `slug.fill(''); title.fill('Re Armed Title'); expect(slug).toHaveValue('re-armed-title')`.
+  // Run that shape with `this.auto = true` deleted and it PASSES -- one input
+  // event never reaches the second keystroke, so the freeze is invisible and the
+  // final value is right by accident. Measured: FINAL SLUG "re-armed-title",
+  // green. pressSequentially is what makes this test able to fail.
   await titleInput.pressSequentially('e Armed Title');
   await settleTitle(page, 'Re Armed Title');
 
