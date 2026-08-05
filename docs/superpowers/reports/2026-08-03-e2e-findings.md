@@ -1,10 +1,13 @@
 # E2E Browser Tier — Findings
 
 **Run date:** 2026-08-05
-**Branch:** `e2e-browser-tier` (HEAD `020cc69`)
+**Branch:** `e2e-browser-tier` (measured at HEAD `020cc69`)
 **Command:** `bun run test:e2e`
 **Result:** **71 passed, 9 failed, 0 skipped** (80 tests, 17 spec files, 38.8s)
-**Tree state:** `git diff --stat HEAD` empty before and after the run — no
+**Confirmed:** re-run after this report was revised — **71 passed, 9 failed**,
+the same nine names, 37.0s. No spec or production file changed between the two
+runs, so the numbers are reproducible rather than a single observation.
+**Tree state:** `git diff --stat HEAD` empty before and after both runs — no
 production file was modified by this tier at any point.
 
 All nine failures are **deliberate characterization tests**. Each was committed
@@ -15,20 +18,19 @@ is named in the findings below. There are no unexpected failures.
 
 ## 1. Verdict — did the refactor break anything?
 
-**Mostly no.** The suite found **19 distinct defects**. **Two are refactor
-regressions; seventeen are pre-existing** — bugs the Alpine adoption (`ar-7v3k`)
+**Mostly no.** The suite found **20 distinct defects**. **Two are refactor
+regressions; eighteen are pre-existing** — bugs the Alpine adoption (`ar-7v3k`)
 and the auth-redirect fixes (`ar-h6rt`) neither caused nor fixed.
 
-One of the two regressions (finding 4) shows up at **three sites** and has **one
-one-line fix**; the other (finding 16) is a wrong rationale copy-pasted into four
-code comments. Counted by affected site rather than by root cause, that is **4
-regressions against 17 pre-existing defects**. **No regression loses data, and
-none is a security defect.**
+The two regressions are **finding 4** — one root cause, the Alpine string-form
+`:class` idiom, appearing at **nine template sites** and fixed by one mechanical
+change — and **finding 16**, a refuted rationale copied into three code comments.
+**No regression loses data, and none is a security defect.**
 
-| | Findings | Affected sites | Worst severity |
-| --- | --- | --- | --- |
-| **Refactor regressions** | **2** | 4 | Important |
-| **Pre-existing** | **17** | 17 | Critical (data loss) |
+| | Findings | Worst severity |
+| --- | --- | --- |
+| **Refactor regressions** | **2** (finding 4, at 9 sites; finding 16, at 3 comments) | Important |
+| **Pre-existing** | **18** | Critical (data loss) |
 
 The regression is real but narrow, and it is a *regression in recoverability,
 not in symptom*. The Alpine idiom `:class="open && 'is-active'"` cannot remove a
@@ -66,7 +68,7 @@ sites), then the rest.
 | 10 LFG controls | `14-lfg-controls.spec.js` | 6/7 | **PASS for the form controls.** The 1 red is finding 7, pre-existing |
 | 11 Export dropdowns | `11-export-dropdowns.spec.js` | 7/11 | **MIXED** — 4 red: 2 regressions (findings 4b, 4c), 2 pre-existing (findings 5, 12) |
 | 12 Back button | `10-back-button-snapshot.spec.js` | 2/3 | **FAIL** — the 1 red is the navbar half of finding 4, a **refactor regression** |
-| `ar-h6rt` auth redirect | `15-auth-redirect.spec.js` | 15/16 | **PASS for the fix under test.** The 1 red is finding 6, pre-existing and partially mitigated by the branch |
+| `ar-h6rt` auth redirect | `15-auth-redirect.spec.js` | 15/16 | **PASS for the fix under test.** The 1 red is finding 6, pre-existing and partially mitigated by the branch. See also the `redirectTo` interlude after finding 11 — `af2b098` does more than its commit message claims, and `a324968`'s stated rationale is refuted (finding 16) |
 
 Infrastructure specs, all green: `00-smoke` (2), `01-auth-state` (3),
 `02-fixtures` (1). Plus `03b-class-reassignment` (1, deliberately red — finding 1).
@@ -198,7 +200,8 @@ admin.
 | INSERT | rejected `42501` | `POST /pages` → **403** "No access", no row created |
 | DELETE | matches 0 rows, **no error** | `DELETE /pages/:id` → **204** (`routes/pages.js:146`), row survives |
 
-**The read half — the wider damage.** `getPages():43` and `getPage():84` are on
+**The read half — the wider damage.** `getPages()` (`models/pages.js:42`, query
+built at `:43`) and `getPage()` (`:83`, query at `:84`) are on
 the same anon client, so RLS shows only `is_published = true AND
 access_level = 'public'`. Measured as a signed-in admin against three fixtures:
 
@@ -234,11 +237,20 @@ RLS policies are correct.
 
 ---
 
-### Finding 4 — Frozen `is-active` after an htmx history restore: three sites, one idiom, one fix
+### Finding 4 — Frozen `is-active` after an htmx history restore: nine sites, one idiom, one fix
 
 **Severity: IMPORTANT.** **REFACTOR REGRESSION** (in recoverability).
 **Characterized by:** `10-back-button-snapshot.spec.js:418` (navbar),
 `11-export-dropdowns.spec.js:530` (dropdown), `11-export-dropdowns.spec.js:778` (modal)
+
+> **Three sites are characterized by a test; the idiom appears at nine.** The
+> six uncharacterized ones carry the identical construct and the identical fix —
+> they were simply not in the path of a check the suite was asked to cover. **§5A
+> lists all nine; do not treat the three tested sites as the remediation scope.**
+> The sharpest of the untested ones is `views/class-view.handlebars:36`, which is
+> byte-for-byte the same export-dropdown construct as the characterized
+> `views/character.handlebars:163`, with the class page's export anchors *inside*
+> it — i.e. exactly the reachable route this finding identifies below.
 
 **What it is.** Navigate away with a menu, dropdown or modal open; press Back.
 The element comes back **visually open and permanently stuck**. Alpine is fully
@@ -314,8 +326,8 @@ would have cleared a frozen class on the first burger click, exactly as the
 dropdown's trigger did. The regression call is the same; the pre-refactor
 mechanism is not, and a reader should know which evidence backs which site.
 
-**Fix — verified green, not applied.** See §5A. One idiom, three sites, one
-change. Do **not** "fix" this with `hx-history="false"` or `historyCacheSize: 0`:
+**Fix — verified green, not applied.** See §5A. One idiom, nine sites, one
+mechanical change. Do **not** "fix" this with `hx-history="false"` or `historyCacheSize: 0`:
 they make the test green by replacing a stuck menu with a blank page (finding 2)
 or a signed-out render (finding 7).
 
@@ -568,6 +580,40 @@ closing this. Not a regression.
 
 ---
 
+### Interlude — two traps in `redirectTo`, for whoever fixes findings 2, 10 or 11
+
+Neither is a defect, so neither is counted among the twenty. Both are **verified
+mechanisms** that make a plausible-looking edit to `redirectTo` wrong, and all
+three of the findings above send a developer into exactly that function.
+
+**Trap A — `af2b098` is not the no-op it looks like, and its own commit message
+undersells it.** The message implies the `history.replaceState` is what keeps the
+address bar off `/auth/check`. It is not the only thing doing that:
+`util/auth.js:73-79` has sent `HX-Push-Url` on the redirect-to header since
+`89c8d05` (2024-10-12), **gated on `referer !== redirectTo`** — and the shipped
+`replaceState` makes the Referer match, which **suppresses that header as a side
+effect**. Measured A/B:
+
+| | `HX-Push-Url` sent | `history.length` | Back lands on |
+| --- | --- | --- | --- |
+| shipped | none | 2 → 3 | `/` |
+| `replaceState` deleted (M3) | two | 3 → 5 | `/auth/check?r=%2Fnav%2Fmanage` — the trap |
+
+So deleting the `replaceState` does **not** move the address bar off the target;
+it corrupts the **history shape**, one keypress from the bug `af2b098` fixed. What
+that line buys is the history shape, exactly as its comment claims. A spec
+asserting only URL + heading passes with `af2b098` reverted — the Back assertion
+is the only thing that catches it.
+
+**Trap B — `app.js:986`'s `history.replaceState(null, '', url)` wipes htmx's
+`{htmx:true}` popstate marker**, and htmx's `onpopstate` only handles a popstate
+carrying it. It survives **only** because `saveCurrentPageToHistory` re-marks the
+entry on the way out. A reordering here silently breaks all htmx history
+handling — including findings 2 and 7's cache paths. `10-back-button-snapshot.spec.js`
+test 1 asserts `popstateState === '{"htmx":true}'`, so this one trap *is* pinned.
+
+---
+
 ### Finding 12 — `body.modal-open` leaks across navigation, and the modal scroll lock has never worked
 
 **Severity: MINOR.** **PRE-EXISTING** (both halves).
@@ -628,7 +674,7 @@ route reachable, and it is an accessibility defect in its own right.
 **Severity: MINOR.** **PRE-EXISTING.** **Not characterized** (specs work around it).
 
 `app.js` `start()` → `redirectTo()` performs a `<body>` swap on **every** authed
-page load (`app.js:969-989`, comment at `725-729`), rebuilding the Alpine navbar
+page load (`app.js:970-990`, rationale comment at `726-729`), rebuilding the Alpine navbar
 with `open: false`. Any interaction in the window before it lands is silently
 discarded — tap the burger early and the menu closes itself.
 
@@ -675,15 +721,27 @@ consequence of `swap:'outerHTML'` on `target:'body'`", and `:345` then asserts
 `expect(document.body).not.toBe(bodyBeforeSwap)` **as its anti-vacuity guard** —
 an assertion that is false in the shipped app.
 
-The wrong rationale now lives in `public/js/app.js:667-670`, `726-729`, `869-872`
-and `:988`. **The document-bound listeners are still correct practice and should
-stay** — only the stated reason is wrong, and the production symptom
-`a324968` set out to fix remains **undiagnosed**. Correct it in the same change
-that corrects the commit-message attribution: a wrong rationale propagating into
-comments is how it survives review next time.
+The wrong rationale now lives at **three** sites, all added by `a324968`:
+`public/js/app.js:667-670`, `726-729` and `869-872`.
+
+> **Scope correction.** An earlier draft counted a fourth site, `app.js:988`
+> (`// Use swap: 'outerHTML' to ensure proper body replacement`). `git show
+> a324968` adds the rationale at exactly three sites, and `:988` traces to
+> `bf10fc9` (2026-02-05), which predates this branch. That comment is arguably
+> wrong for the same reason, but it is **pre-existing, not a regression.** The
+> regression is three comments.
+
+**The document-bound listeners are still correct practice and should stay** —
+only the stated reason is wrong, and the production symptom `a324968` set out to
+fix remains **undiagnosed**. Correct it in the same change that corrects the
+commit-message attribution: a wrong rationale propagating into comments is how it
+survives review next time.
 
 This does **not** disturb findings 2, 4 or 12 — the body's *contents* are still
-wholly replaced.
+wholly replaced. It **does** bear on **finding 14**, which describes that body
+swap and cites one of these very comments: the swap is real and finding 14 stands,
+but read its cited comment as evidence of *what the code does*, not as a correct
+account of *why*.
 
 **Correction to a related claim:** `a324968` and `43c6120` **are** pinned, at the
 **unit** tier (`test/auth-redirect-history.test.js:358` and `:259`, both verified
@@ -696,9 +754,12 @@ coverage of them", not "they are uncovered".
 
 **Severity: MINOR.** **PRE-EXISTING.** **Not characterized** (worked around in fixtures).
 
-`../../characterAbility` is **correct** for two or more abilities. With exactly
-one, Handlebars' depth-push optimization in `runtime.js` guards with a loose `!=`,
-and `['x'] != 'x'` is false, so no depth frame is pushed and the reference misses.
+**Mechanism.** `views/partials/character-class-abilities.handlebars:9` —
+`{{#if (eq this (lookup ../../characterAbility 'name'))}}selected{{/if}}` inside
+`{{#each this}}` within `{{#each}}`-generated `<optgroup>`s. The `../../` depth is
+**correct** for two or more abilities. With exactly one, Handlebars' depth-push
+optimization in `runtime.js` guards with a loose `!=`, and `['x'] != 'x'` is
+false, so no depth frame is pushed and the reference misses.
 
 > **Do not "fix" this by changing the `../` count** — the implementer's first
 > proposal did, and it would regress every catalogue class. The correct fix is
@@ -722,6 +783,33 @@ gap, adjacent to `ar-p8kq`.
 `/auth/check` renders **no sign-in form**, and its "please Login" link points at
 `/auth` with no `?r=` — so the intended destination is lost. The user must
 navigate to sign-in themselves and then find the page again.
+
+---
+
+### Finding 20 — The same LFG conflict answers 500 on the UI path and 409 on the agent path
+
+**Severity: MINOR.** **PRE-EXISTING.** **Not characterized.**
+
+`services/lfg/service.js:180-184` returns a **bare string** for "conduit slot is
+already filled". `util/http-error.js:23-32` has no branch for a bare string and
+defaults to **500**. The agent path at `services/lfg/service.js:339-345` returns a
+structured **409 `conduit_taken`** for the identical condition.
+
+Through the real browser journey htmx sends `HX-Request`, so `sendError`
+retargets: status **500**, `{"hx-retarget": "#alerts", "hx-reswap": "innerHTML"}`,
+body `<div class="notification is-danger">Join failed</div>`. The user reads "Join
+failed" and nothing is written — so the *user-visible* behavior is acceptable and
+the harm is confined to the status code: a 500 tells every consumer and every
+monitor that the server broke, when the request was simply refused.
+
+Filed separately from finding 9 rather than as a sub-note: different file,
+different fix, and the record twice asked for it as its own item.
+
+> **Measurement note.** This is not what a raw POST reports. The non-HX path
+> returns a 500 HTML error page, and an early characterization guessed
+> "Conduit slot is already filled" — both wrong for the real journey. `HX-Request`
+> changes both the status handling and what the user actually reads, so measure
+> error paths through the UI.
 
 ---
 
@@ -752,25 +840,60 @@ here so a future reader does not re-file them.
 This branch reports defects; it does not change production code. Each fix below
 was applied in a scratch tree, measured, and reverted.
 
-### A. The frozen-class family — one idiom, three sites (finding 4)
+### A. The frozen-class family — one idiom, nine sites (finding 4)
 
-Replace `:class="<expr> && 'is-active'"` with the **object form**:
+Replace `:class="<expr> && 'is-active'"` with the **object form**, at **all nine
+sites**. Only the three marked *tested* are covered by a characterization test;
+the other six carry the identical construct and heal identically.
 
-| File | Change |
-| --- | --- |
-| `views/partials/nav.handlebars:6,14` | `:class="{ 'is-active': open }"` |
-| `views/character.handlebars:163` | `:class="{ 'is-active': open }"` |
-| `views/partials/character-level-up.handlebars:2` | `:class="{ 'is-active': show }"` |
+| File:line | Change | What it is | Tested |
+| --- | --- | --- | --- |
+| `views/partials/nav.handlebars:6` | `:class="{ 'is-active': open }"` | navbar burger | **yes** |
+| `views/partials/nav.handlebars:14` | `:class="{ 'is-active': open }"` | navbar menu | **yes** |
+| `views/character.handlebars:163` | `:class="{ 'is-active': open }"` | character export dropdown | **yes** |
+| `views/partials/character-level-up.handlebars:2` | `:class="{ 'is-active': show }"` | level-up modal | **yes** |
+| `views/class-view.handlebars:36` | `:class="{ 'is-active': open }"` | **class-page export dropdown** | no |
+| `views/class-view.handlebars:218` | `:class="{ 'is-active': show }"` | duplicate modal | no |
+| `views/class-view.handlebars:263` | `:class="{ 'is-active': show }"` | unlock-code modal | no |
+| `views/my-classes.handlebars:119` | `:class="{ 'is-active': show }"` | per-row duplicate modal | no |
+| `views/character-form.handlebars:409` | `:class="{ 'is-active': show }"` | deceased modal | no |
+
+`class-view.handlebars:36` deserves the same priority as the tested dropdown: it
+is byte-for-byte the same construct, `id="export-dropdown"` with
+`@click.outside` and `@keydown.escape.window`, and the class page's export
+anchors sit inside it — the reachable route finding 4 describes.
 
 **Why it works:** Alpine's `setClassesFromObject` **does** remove a falsy class it
 did not add — its `forRemove` branch calls `classList.remove` on any falsy key
 already present. `setClassesFromString` only removes what it added.
 
-> **COMPANION CHANGE — these must travel together.**
-> `views/partials/nav.test.js:59` asserts the literal string
-> `:class="open && 'is-active'"` and **will fail**. (The other four tests in that
-> file still pass.) Hand both over in one change, or the fixer sees a red unit
-> tier and concludes the fix is wrong.
+> **COMPANION CHANGES — the whole remediation must travel together.** Four unit
+> tests assert the **literal old string** against the real templates and will go
+> red as each site is converted:
+>
+> | Test | Guards | Fires when you convert |
+> | --- | --- | --- |
+> | `views/partials/nav.test.js:59` | navbar | `nav.handlebars:6,14` |
+> | `views/class-view.test.js:52` | duplicate modal | `class-view.handlebars:218` |
+> | `views/class-view.test.js:60` | unlock-code modal | `class-view.handlebars:263` |
+> | `views/character-form.test.js:29` | deceased modal | `character-form.handlebars:409` |
+>
+> Only `nav.test.js:59` fires for the three *tested* sites, and the other four
+> tests in that file still pass. The other three fire only once the fix is
+> extended. Verified: `views/character.test.js:64-68` and
+> `views/partials/character-level-up.test.js:36-45` pin the `@` bindings and
+> `:aria-expanded` but **not** `:class`, so those two sites need no test change.
+> Hand the template and test changes over as one change, or the fixer sees a red
+> unit tier and concludes the fix is wrong.
+
+> **A tenth occurrence, same idiom, different class — decide on it separately.**
+> `views/partials/character-stats-editor.handlebars:31` carries
+> `:class="saving && 'is-loading'"` on the stats Save button. Same string-form
+> construct, so the same freezing mechanism applies, but the frozen class is a
+> button spinner rather than an overlay, and **this tier never exercised it** —
+> its impact is unmeasured, not established. Converting it would also fire
+> `views/partials/character-stats-editor.test.js:194`. Listed for completeness of
+> the sweep, not as a finding.
 
 **The modal needs both halves.** Measured:
 - **M8** — object form on `character.handlebars:163` alone turns the **dropdown**
@@ -846,10 +969,21 @@ render** (finding 7). Recorded in the spec's own header. Do not use them.
   *is* why every fixture in spec 13 is seeded published + public — anything else
   404s on the edit form and the spec could not run at all.
 - **Finding 15 is untested** — an htmx-trigger defect, not a form-control one.
-- **Findings 2, 13, 14, 17, 18, 19 have no dedicated test.**
-  Finding 2 is the most significant of these: the `authOptional` symptom is
-  covered (finding 7), but the **protected-route blank page** — the critical
-  variant — has no standing test.
+- **Findings 2, 8, 11, 13, 14, 16, 17, 18, 19 and 20 have no dedicated test**, and
+  neither do the two `redirectTo` traps in the interlude after finding 11 (trap B
+  is pinned, by `10-back-button-snapshot.spec.js` test 1; trap A is not).
+  **This is the authoritative list — every finding not named here is characterized.**
+  Three deserve singling out:
+  - **Finding 2** is the most significant: the `authOptional` symptom is covered
+    (finding 7), but the **protected-route blank page** — the critical variant —
+    has no standing test.
+  - **Finding 11** is the token-exfiltration / script-injection primitive with a
+    one-line fix. Nothing guards it. Do not assume the four control-character
+    tests do — they cover finding 10, and they are tripwires even there.
+  - **Finding 8** is covered only indirectly, through finding 3's spec; nothing
+    asserts the 204 itself.
+- **Six of finding 4's nine sites have no test** (§5A marks which). The
+  remediation scope is larger than the characterized scope.
 
 **Structural limits of this tier:**
 
@@ -880,16 +1014,25 @@ failing set.
 
 | Test | Sightings | Status |
 | --- | --- | --- |
-| `00-smoke.spec.js:37` console-error assertion | 1 in ~80 at `--workers=8` | **RESOLVED.** Chromium's own `"Permissions policy violation: compute-pressure…"`, not app code. Anchored filter applied and verified in **both** directions; 160/160 green at the settings that previously gave 1-in-80 |
+| `00-smoke.spec.js:73` console-error assertion | 1 in ~80 at `--workers=8` | **RESOLVED.** Chromium's own `"Permissions policy violation: compute-pressure…"`, not app code. Anchored filter applied and verified in **both** directions; 160/160 green at the settings that previously gave 1-in-80 |
 | `05-level-up-modal.spec.js` "closes via escape key…" | 1, unexplained | Not reproduced in 24/24 of that spec alone at `--workers=4`, nor in 9 consecutive full-suite runs. **Deliberately not diagnosed from one sighting** |
 | `05-level-up-modal.spec.js:71` "completing a level-up persists…" | 1, cold start | Passed in 4 consecutive full-suite runs after |
 | `07-unlock-code-modal.spec.js:58` "closing via escape key clears the code…" | 1, cold start | Clean for 13 runs after |
 | `03-perk-textarea.spec.js:72` "saving persists perk text…" | 1, 30.8s timeout | Not reproduced in 2 full-suite runs nor 3/3 of that spec alone |
 | One uncaptured 35/1 run (an expected failure passed once) | 1 | Unreproducible in 13 further runs. **Unattributed** |
 
-**The shape worth carrying:** four of the six are on the **first run after a cold
-web-server start**, and three are modal specs. Enough to say something is there;
-**not** enough to name it.
+**The shape worth carrying — stated at the strength the record actually supports.**
+**Two** sightings are explicitly attributed to the **first run after a cold
+web-server start** (`05-level-up-modal.spec.js:71` and
+`07-unlock-code-modal.spec.js:58`), and both are modal specs. A third,
+`03-perk-textarea.spec.js:72`, was the first full-suite run after a heavy
+`--repeat-each` batch — that is **resource contention, not a cold start**, and it
+is a different hypothesis. The `05` escape-key sighting carries no attribution at
+all.
+
+So: a cold-start pattern in **two** sightings, generously three. Enough to say
+something is there; **not** enough to name it — and not enough to send a triager
+looking only at startup.
 
 **One candidate mechanism, not chased.** `03-perk-textarea.spec.js:72` does an
 htmx PUT then `waitForURL(!pathname.endsWith('/edit'))` relying on `HX-Location`.
@@ -942,23 +1085,77 @@ convert them to `test.fail()`, or accept them as-is. Only after that should
 `push: branches: [main]` be added to the workflow, and `ar-7v3k`'s "BLOCKING:
 manual browser verification" section replaced with a reference to this suite.
 
-### One correction to the planned workflow, applied
+### Two corrections to the planned workflow, both applied
 
-The plan's YAML passed only `SUPABASE_SECRET_KEY` to the seed step. **That would
-have failed on a fresh CI database.** `bun run seed:local` invokes
-`bun run seed:admin`, and `util/seed-admin.js:38-41` calls
+The plan's YAML would have failed on **every** CI run, at the seed step, for two
+independent reasons. They are stacked: the first fires before the second is ever
+reached, which is why the second was found first and looked sufficient.
+
+**Correction 1 — the seed guard reads a file that does not exist in CI.**
+`bun run seed:local` calls `assertLocal()` before anything else, and that calls
+`parseEnvUrl()`, which reads **the `.env` file**:
+
+```js
+function parseEnvUrl() {
+  const envPath = join(root, ".env");
+  if (!existsSync(envPath)) return "";   // reads the FILE, not process.env
+  ...
+}
+```
+
+`.env` is gitignored (`.gitignore:2-3`; only `.env.dist` is tracked), so a fresh
+CI checkout has none. `parseEnvUrl()` returns `""`,
+`/127\.0\.0\.1|localhost/.test("")` is false, and `fail()` calls
+`process.exit(1)`. **Inline `SUPABASE_URL="$API_URL"` on the step cannot help —
+the guard never reads the environment.**
+
+Reproduced against the real guard logic with an absent `.env` and the inline
+variables exported: `exit=1`, before a single row is seeded.
+
+**The fix: the workflow writes a `.env` from `supabase status -o env` before
+seeding.** Verified end to end — the step's actual output, run through the real
+guard logic, reports `PASS: target is local (http://127.0.0.1:54321)`, `exit=0`.
+
+> **`--force` was measured and rejected, and the reason matters.** It is the
+> shorter fix and it is wrong. `--force` does not supply a local URL; it disables
+> the check. Measured: with a `.env` pointing at `https://abc.supabase.co`, the
+> guard correctly refuses (`exit=1`) — and `--force` sails straight past it
+> (`exit=0`). That guard is the only thing standing between a mis-wired workflow
+> and `seed:admin` creating the **known-password** dev admin
+> (`dummy@testing.com` / `dummypassword`) in a real project. Writing the file
+> keeps the check live: point this workflow at a cloud project and it still
+> refuses.
+
+**Correction 2 — `seed:admin` reads a variable the plan never passed.**
+The plan's YAML passed only `SUPABASE_SECRET_KEY`. `bun run seed:local` invokes
+`bun run seed:admin` whenever no admin profile exists
+(`scripts/seed-local.mjs:105-113`), and `util/seed-admin.js:38-41` calls
 `createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY)` after its **own**
 `dotenv.config()` — it never loads `util/env.js`, whose alias table maps only
 deprecated → current, not the reverse. With that variable unset, `createClient`
 throws `supabaseKey is required.` (verified directly).
 
 `SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"` is therefore set on the seed step,
-matching what `.github/workflows/integration.yml:42` already does.
+matching `.github/workflows/integration.yml:42`, and the generated `.env` carries
+it too.
 
-`supabase db reset` **is** present in the workflow and is correct: the
-never-reset constraint protects the *developer's local database*, and CI runs a
-fresh ephemeral one. `bunx playwright install --with-deps chromium` is required
-in CI (local installs skip `--with-deps` because it needs sudo).
+> **Why the `integration.yml` comparison could not have caught correction 1.**
+> That workflow never invokes `seed:local` — it goes straight from
+> `supabase db reset` to `bun run test:integration`. Matching it was the right
+> instinct for correction 2 and structurally blind to correction 1. **Copying a
+> working neighbour only transfers the problems the neighbour has.**
+
+§11 "Reproducing this run" is unaffected: a developer's checkout has a `.env`,
+which is exactly why the guard has always passed locally and the gap stayed
+invisible.
+
+**The rest of the workflow is unchanged and sound.** `supabase db reset` is
+correct — the never-reset constraint protects the *developer's local database*,
+and CI runs a fresh ephemeral one. `bunx playwright install --with-deps chromium`
+is required in CI (local installs skip `--with-deps` because it needs sudo).
+`if: failure()` on the artifact upload is right for a suite that fails by design,
+and `CI` is set by GitHub, so `playwright.config.js`'s `retries: 1` and
+`workers: 2` apply as described above.
 
 ---
 
@@ -998,6 +1195,32 @@ trustworthy. They are duplicated as a checklist in `CONTRIBUTING.md`.
    edits.** Use a fresh `E2E_PORT` for anything touching
    `routes/`/`models/`/`services/`/`util/`. Verified: `views/*.handlebars` and
    `public/js/*` **do** appear immediately, so view-layer mutations are unaffected.
+10. **When silencing test noise, prove the filter still fails on a genuine error
+    *and* that its anchor cannot be bypassed.** The `00-smoke` console filter was
+    verified in both directions — an injected `console.error` still fails, an
+    injected uncaught exception still fails via `pageerror`, and a message merely
+    *containing* the benign phrase is still caught, which is what proves the `^`
+    anchor does real work. A filter verified only by "the flake stopped" is
+    indistinguishable from one that disabled the assertion.
+11. **Seed a denormalized column through the seam that maintains it, never the
+    column.** `lfg_posts.host_id` is overwritten on every read from the approved
+    conduit join request. A fixture that inserted it raw read back `null` and
+    would have asserted the opposite of its own stated purpose.
+12. **Measure an error path through the real UI, not a raw POST.** `HX-Request`
+    changes both the status handling and what the user actually reads — two
+    different wrong answers were recorded before the real journey was measured
+    (finding 20).
+13. **A hidden `required` control silently kills the request.** An empty,
+    non-focusable `required` input (ToastUI hides `#content`; the LFG join form
+    hides `select[name=characterId]`) makes Chrome's constraint validation fail,
+    htmx fire `htmx:validation:halted`, and **no request go out at all** — which
+    reads exactly like a broken endpoint.
+14. **Never write scratch probes into `e2e/specs/`.** A stray file in `testDir`
+    runs on the next full pass and corrupts the baseline. Scratch belongs outside
+    the repo.
+15. **Read the runner's own "Running N tests" line; never infer N from the pass
+    count.** A review claim that `bun run test:e2e -- <flag>` drops flags was
+    refuted by doing exactly this.
 
 ---
 
@@ -1019,6 +1242,16 @@ Recorded because they bear on whether the numbers above can be trusted.
   un-reverted production edit would be most likely to survive into a commit.
   **Verify with git, never with prose.** *No such message was received during this
   task.*
+- **A concurrent agent mutated a production file during a measurement window.**
+  During Task 15's fix round, a *different* agent was actively cycling mutations
+  through `public/js/app.js` — `redirectTo`'s `history.replaceState` guard
+  deleted, then a different one-line edit moments later. Task 15 correctly did
+  **not** revert someone else's in-flight work; it staged only its own spec file
+  and re-gated its baseline on a window verified clean across
+  `public/ views/ routes/ models/ services/ util/` **both before and after** the
+  run. This is the incident behind the rule below, and it is why "tree clean" in
+  this effort means *clean of my changes*, verified at both ends, rather than
+  clean once.
 - **A full-suite baseline is only trustworthy if the production tree stayed clean
   for the whole run.** This report's run was gated on `git diff --stat HEAD` being
   empty **both before and after**.
