@@ -86,9 +86,18 @@
               {{/if}}
             </td>
             <td>
+              <!-- No hx-history="false"/hx-push-url="false" here. They were
+                   inert from birth (37efac4: the hx-get they would have
+                   modified was already commented out, and this is now a plain
+                   Alpine toggle that issues no htmx request at all), but
+                   htmx queries [hx-history="false"] DOCUMENT-WIDE before
+                   snapshotting, so their mere presence suppressed the history
+                   snapshot of /lfg/:id itself. Back then missed the cache and
+                   fell through to htmx's unauthenticated restore XHR, which
+                   this authOptional route answers with a full SIGNED-OUT
+                   render (measured: body 16326 -> 7180 bytes, nav showing
+                   LOGIN/SIGNUP). Do not add them back. -->
               <button class="button is-small is-info"
-                hx-history="false"
-                hx-push-url="false"
                 @click="open = !open">
                 Details
               </button>
