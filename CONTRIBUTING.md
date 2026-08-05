@@ -55,6 +55,10 @@ The gotchas below were each learned the expensive way. The findings report's
   header.** This app authenticates by header, so a bare `page.request.get` of a
   protected route follows the redirect and reports a cheerful `200` containing
   the sign-in page. Send the header from `localStorage.authToken` explicitly.
+- **A hidden `required` control silently kills the request.** An empty,
+  non-focusable `required` input makes Chrome's constraint validation fail, htmx
+  fire `htmx:validation:halted`, and no request go out at all — which looks
+  exactly like a broken endpoint. Seed such fields non-empty.
 - **Prove a red test is red *by design*.** Show that a genuine fix turns it
   green, and never gate it on the defect's own marker — that marker is often the
   thing a valid fix removes.

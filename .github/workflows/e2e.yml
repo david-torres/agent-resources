@@ -34,6 +34,28 @@ jobs:
       # Safe here, and only here: CI gets a fresh ephemeral database. The
       # never-reset rule protects a developer's local stack, not this one.
       - run: supabase db reset
+      # REQUIRED before seeding. `bun run seed:local` guards on a local
+      # SUPABASE_URL that it reads from the .env FILE (parseEnvUrl() in
+      # scripts/seed-local.mjs returns "" when the file is absent), never from
+      # the environment --- so inline SUPABASE_URL=... below cannot satisfy it.
+      # .env is gitignored, so a fresh checkout has none and the guard calls
+      # process.exit(1) before anything is seeded.
+      #
+      # Do NOT "fix" this with `--force`. That bypasses the guard entirely, and
+      # the guard is what stops seed:admin creating the known-password dev admin
+      # (dummy@testing.com) against whatever SUPABASE_URL happens to point at.
+      # Writing the file keeps the check honest: if this workflow were ever
+      # wired to a cloud project, the guard would still refuse.
+      - name: Write .env for the local stack
+        run: |
+          eval "$(supabase status -o env)"
+          cat > .env <<EOF
+          SUPABASE_URL=$API_URL
+          SUPABASE_PUBLISHABLE_KEY=$ANON_KEY
+          SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY
+          SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
+          SUPABASE_DB_URL=$DB_URL
+          EOF
       - name: Seed local app data
         run: |
           eval "$(supabase status -o env)"
