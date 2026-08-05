@@ -958,6 +958,43 @@ const App = (function (document, supabase, htmx) {
     start();
   }
 
+  // ---------------------------------------------------------------------
+  // In-flight boosted navigations.
+  //
+  // htmx's boosted links move the page WITHOUT a page load, and they write
+  // window.location only once the swap COMPLETES. So reading the location
+  // cannot see a click whose response is still on the wire -- and that is
+  // precisely the case the deferred post-load refresh below has to avoid
+  // stomping on. htmx marks every boosted request with `detail.boosted` and
+  // fires htmx:beforeRequest while the click is still being handled, which is
+  // the earliest observable "the user is leaving this page" signal there is.
+  //
+  // Pendency is read off the XHR's own readyState rather than tracked with a
+  // matching htmx:afterRequest listener, because a boosted request's element
+  // can be detached by an unrelated body swap before its afterRequest fires,
+  // and an event dispatched on a detached node never reaches `document`. That
+  // would leave a counter stuck above zero and silently disable the refresh
+  // for the life of the page. readyState cannot get stuck.
+  //
+  // Registered at module scope, not inside start(): app.js is a deferred
+  // script, so this runs before DOMContentLoaded -- before htmx processes the
+  // document and before any click is possible. Bound to `document` for the
+  // usual reason: redirectTo() replaces <body> wholesale.
+  let _boostedNavXhrs = [];
+  const _isPendingXhr = (xhr) => !!xhr && xhr.readyState !== XMLHttpRequest.DONE;
+
+  document.addEventListener('htmx:beforeRequest', function (event) {
+    if (!event.detail || !event.detail.boosted) return;
+    // Prune on write as well as on read so this cannot grow unbounded.
+    _boostedNavXhrs = _boostedNavXhrs.filter(_isPendingXhr);
+    _boostedNavXhrs.push(event.detail.xhr);
+  });
+
+  function _boostedNavigationInFlight() {
+    _boostedNavXhrs = _boostedNavXhrs.filter(_isPendingXhr);
+    return _boostedNavXhrs.length > 0;
+  }
+
   // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
   // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
   // values so a crafted ?r= cannot redirect the user off-site. Stricter than
@@ -1028,12 +1065,34 @@ const App = (function (document, supabase, htmx) {
           setTimeout(() => {
             // A boosted navigation can move the user to a different page
             // during this delay without a real page load, leaving this timer
-            // pending. Re-read the location and bail if it no longer matches
-            // what we captured, so we don't drag the user back to a page
-            // they already left. Do not simplify this to an unconditional
-            // redirectTo(current).
+            // pending. Bail if that has happened, so we don't drag the user
+            // back to a page they already left. TWO reads are needed, and
+            // they cover different halves of the same window:
+            //
+            //   - the location, for a boosted navigation that has already
+            //     COMPLETED (43c6120's guard);
+            //   - _boostedNavigationInFlight(), for one that is still on the
+            //     wire. window.location is not written until the swap
+            //     completes, so the location read is blind to a click made
+            //     inside this window whose response has not come back yet --
+            //     and that is the common case, not a corner: 14 of 60 natural
+            //     clicks straight after load, no network shaping at all.
+            //     redirectTo(current) would go out, its response would land
+            //     after the boosted swap, and the user would be left with the
+            //     address bar on the new page and the body on the old one.
+            //
+            // Nothing is lost by bailing. Boosted requests carry the
+            // Authorization header (the htmx:configRequest listener in
+            // start()), so the page the user navigated to is already the
+            // authed render this refresh exists to produce.
+            //
+            // Do not simplify this to an unconditional redirectTo(current) --
+            // and do not simplify it to an unconditional return either: a
+            // plain page load carries no Authorization header, so without
+            // this refresh a signed-in user is left looking at the guest
+            // render of the page they actually loaded.
             const now = window.location.pathname + window.location.search;
-            if (now !== current) return;
+            if (now !== current || _boostedNavigationInFlight()) return;
             redirectTo(current);
           }, 100);
         }
