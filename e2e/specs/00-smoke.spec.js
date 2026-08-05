@@ -15,11 +15,24 @@ test('home page boots with Alpine and htmx initialised', async ({ page }) => {
   await expect.poll(() => page.evaluate(() => typeof window.Alpine)).toBe('object');
   expect(await page.evaluate(() => typeof window.htmx)).toBe('object');
 
-  // Alpine strips x-cloak from every element it initialises.
-  const cloaked = page.locator('[x-cloak]');
-  for (let i = 0; i < await cloaked.count(); i++) {
-    await expect(cloaked.nth(i)).toBeHidden();
-  }
+  // Alpine strips x-cloak from every element it initialises, so on any settled
+  // page `[x-cloak]` matches NOTHING -- confirmed in-browser against Alpine
+  // 3.15.12 (ar-7v3k Task 10 review, Claim C), not just on this page. The loop
+  // that used to stand here therefore iterated an always-empty collection and
+  // asserted nothing at all; it would have passed with Alpine ripped out.
+  //
+  // Two assertions replace it. The positive one first: the home page's only
+  // Alpine root (the navbar, views/partials/nav.handlebars:1) really was
+  // adopted. Alpine 3 hangs `_x_dataStack` off every x-data element it takes
+  // ownership of and nothing else can put it there, so this fails if Alpine
+  // loads but never initialises the DOM -- which `typeof window.Alpine` above
+  // cannot distinguish.
+  await expect
+    .poll(() => page.evaluate(() => !!document.querySelector('nav[x-data]')?._x_dataStack))
+    .toBe(true);
+
+  // Only now is the negative one meaningful: nothing anywhere is still cloaked.
+  await expect(page.locator('[x-cloak]')).toHaveCount(0);
 
   expect(consoleErrors).toEqual([]);
 });
