@@ -22,8 +22,11 @@
 //
 // Viewport 500x900 is load-bearing, not cosmetic: Bulma hides .navbar-burger
 // and unconditionally shows .navbar-menu at >= 1024px, so `is-active` is
-// visually meaningless on a desktop viewport and the burger is unclickable.
-// The defect test 3 characterises is a mobile-only defect for that reason.
+// visually meaningless above that width and the burger is unclickable.
+// The boundary is Bulma's 1024px breakpoint and nothing else, so the defect
+// test 3 characterises reaches ANY viewport under 1024px -- phones (390),
+// tablets (768, confirmed) and any merely-narrowed desktop window alike. It is
+// not a mobile-only defect; calling it one understates the blast radius.
 const { test, expect } = require('@playwright/test');
 const { ADMIN_STATE } = require('../global-setup');
 
@@ -81,6 +84,11 @@ const armBackProbe = () => {
       } catch (_) { /* Alpine absent -> stays false, which fails below */ }
       probe.frames.push({
         t: Math.round(performance.now()),
+        // Recorded separately from the class/display readings so that "the
+        // navbar is not there at all" cannot masquerade as "the navbar is
+        // painted open" -- see summarise().
+        menuPresent: !!menu,
+        burgerPresent: !!burger,
         menuIsActive: !!menu && menu.classList.contains('is-active'),
         burgerIsActive: !!burger && burger.classList.contains('is-active'),
         display: menu ? getComputedStyle(menu).display : null,
@@ -93,16 +101,29 @@ const armBackProbe = () => {
   }, { once: true });
 };
 
-// Reduces the recorded frames to the four numbers the assertions care about.
+// Reduces the recorded frames to the five numbers the assertions care about.
 const summarise = (probe) => ({
   restoreObserved: probe.restoreObserved,
   framesSampled: probe.frames.length,
+  // The navbar has to BE there before "is it open" is even a question. Split
+  // out as its own signal after a review caught the earlier version scoring a
+  // MISSING #navbar-menu as "painted open": `display` reads null when the
+  // element is absent, and `null !== 'none'`. That is a real scenario, not a
+  // hypothetical -- it is exactly what the hx-history="false" mutation
+  // produces (an empty <body>; see the note above test 3) -- and reporting a
+  // blank page as a stuck-open menu is the wrong diagnosis, which is worse
+  // than no diagnosis.
+  framesNavbarMissing: probe.frames.filter((f) => !f.menuPresent || !f.burgerPresent).length,
   // The user-visible defect: a frame the browser rendered with the menu on
   // screen. Bulma gives .navbar-menu `display: none` until `is-active`, so
   // `display !== 'none'` is the paint-level statement of "the menu is visible"
-  // and the class checks are the mechanism-level one.
-  framesPaintedOpen: probe.frames
-    .filter((f) => f.menuIsActive || f.burgerIsActive || f.display !== 'none').length,
+  // and the class checks are the mechanism-level one. Each element's readings
+  // are now gated on that element existing, so this counts only frames that
+  // genuinely painted a navbar open.
+  framesPaintedOpen: probe.frames.filter((f) => (
+    (f.menuPresent && (f.menuIsActive || f.display !== 'none')) ||
+    (f.burgerPresent && f.burgerIsActive)
+  )).length,
   // Positive precondition, per frame. Without it a regression that stopped
   // Alpine adopting restored content would sail past the line above: a DEAD
   // navbar paints identically to a correctly-closed one, because Bulma hides
@@ -295,6 +316,7 @@ test('a page navigated away from with the menu closed comes back closed and live
   expect(summary.framesSampled).toBeGreaterThanOrEqual(3);
   expect(summary, `restored-page paint probe: ${JSON.stringify(probe)}`).toMatchObject({
     restoreObserved: true,
+    framesNavbarMissing: 0,
     framesPaintedOpen: 0,
     framesWithoutAlpine: 0,
     framesAlpineOpen: 0
@@ -318,8 +340,15 @@ test('a page navigated away from with the menu closed comes back closed and live
 // the correct way for it to go green.
 //
 // Repro, by hand, on a phone-width window: open the burger menu, tap a nav
-// link, then tap Back. The menu comes back on screen and NOTHING closes it --
-// not the burger, not clicking away. Only a reload clears it.
+// link, then tap Back. The menu comes back on screen covering 632px of a 900px
+// viewport, opaque and hit-testable, and NOTHING ON THAT PAGE closes it -- the
+// burger toggles Alpine's `open` without moving the class, and Escape does
+// nothing. (Precisely: clicking away does nothing either, but that is not a
+// regression -- views/partials/nav.handlebars has no @click.outside handler,
+// so clicking away never closed this menu. Do not read the list above as
+// "handlers that stopped working".) It is escapable: any subsequent navigation
+// re-renders the navbar closed. "Only a reload clears it" -- an earlier
+// wording here -- is false.
 //
 // Mechanism, confirmed end to end:
 //   1. Alpine writes `is-active` onto #navbar-menu / #navbar-burger when the
@@ -342,24 +371,43 @@ test('a page navigated away from with the menu closed comes back closed and live
 // Alpine is alive (test 2 proves restore does not kill it) and insists the menu
 // is closed while the browser paints it open -- and because Alpine never
 // "added" the class, toggling `open` true/false/true afterwards changes the
-// class not at all. The component is live and completely powerless.
+// class not at all. The component is live and completely powerless. The
+// sharpest single symptom of that: the restored #navbar-burger carries
+// `aria-expanded="false"` while the menu is visibly expanded. Alpine drives the
+// attribute binding correctly on exactly the element whose class binding it
+// cannot touch -- which is also an accessibility defect in its own right.
 //
-// Candidate fixes (for whoever picks this up, all production changes, all out
-// of scope here): drive visibility with x-show / :style instead of a class htmx
-// can freeze, or re-derive the class from Alpine's own state on
-// htmx:historyRestore.
+// RECOMMENDED FIX (a production change, deliberately NOT applied here -- this
+// branch reports defects, it does not fix them; see task-11-report.md):
 //
-// DO NOT reach for hx-history="false" or historyCacheSize: 0. Both make this
-// test pass -- and both are actively worse. Measured: with the snapshot cache
+//   views/partials/nav.handlebars:6,14
+//   -  :class="open && 'is-active'"
+//   +  :class="{ 'is-active': open }"
+//
+// Alpine's setClassesFromObject DOES remove a falsy class it did not add (its
+// forRemove branch calls classList.remove on any falsy key already present),
+// whereas setClassesFromString only ever removes what it added. Verified by an
+// adversarial reviewer, applied and reverted: this spec goes 3/3 GREEN,
+// test 1's cachedRootSnapshotHasAlpineOutput tripwire included -- the snapshot
+// still carries the frozen class, Alpine simply strips it on restore now.
+//
+// DO NOT reach for hx-history="false" or historyCacheSize: 0 instead. Both make
+// this test pass, and both are worse than the defect. With the snapshot cache
 // out of play, Back falls through to htmx's loadHistoryFromServer, whose raw
 // XHR sends `HX-Request: true` (htmx.config.historyRestoreAsHxRequest, default
-// true) and no Authorization header. util/auth.js:41-44 answers that with
-// `200` + an `HX-Redirect` header and an EMPTY body, and loadHistoryFromServer
-// does not process HX-Redirect -- so htmx swaps zero bytes into <body> and the
-// user gets a blank page. Verified twice, once per trigger
-// (hx-history="false" on the layout, and historyCacheSize: 1). See
-// task-11-report.md; that failure is already reachable in production without
-// any code change, via ordinary cache eviction past 10 history entries.
+// true) and no Authorization header. Two distinct symptoms follow, and they are
+// worth keeping apart:
+//   - PROTECTED routes (test 2's back-target, /profile): util/auth.js:41-44
+//     answers that request with `200` + an `HX-Redirect` header and an EMPTY
+//     body; loadHistoryFromServer never processes HX-Redirect, so htmx swaps
+//     zero bytes into <body> and the user gets a permanently BLANK PAGE.
+//   - AUTH-OPTIONAL routes (test 3's own back-target, /): the server answers
+//     with a full page rendered SIGNED OUT -- wrong nav, no user content, no
+//     error. Measured under the hx-history="false" mutation: bodyLen 5203,
+//     signedOut true, menu closed, so test 3 passes for entirely the wrong
+//     reason.
+// See task-11-report.md; the blank page is already reachable in production with
+// no code change at all, via ordinary cache eviction past 10 history entries.
 // ---------------------------------------------------------------------------
 test('going back after a boosted navigation restores a closed, live navbar', async ({ page }) => {
   await page.goto('/');
@@ -391,7 +439,10 @@ test('going back after a boosted navigation restores a closed, live navbar', asy
   // THE defect. framesPaintedOpen is what the user sees; framesAlpineOpen: 0
   // holding at the same time is the signature that distinguishes this from
   // "Alpine restored open state" -- Alpine says closed, the screen says open.
+  // framesNavbarMissing: 0 keeps that reading honest: a restore that produced
+  // no navbar at all must report as its own failure, not as this one.
   expect(summary, `restored-navbar paint probe: ${JSON.stringify(probe)}`).toMatchObject({
+    framesNavbarMissing: 0,
     framesPaintedOpen: 0,
     framesWithoutAlpine: 0,
     framesAlpineOpen: 0
