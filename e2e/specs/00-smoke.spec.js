@@ -4,9 +4,30 @@
 // would make every other spec in this suite fail for the wrong reason.
 const { test, expect } = require('@playwright/test');
 
+// Chromium emits this one itself, from its own permissions-policy machinery,
+// with no involvement from the app or from any resource it loads. It showed up
+// as a 1-in-80 flake under `--repeat-each=40 --workers=8`; the payload was
+// captured verbatim during ar-7v3k Task 10 (an earlier theory blaming the
+// third-party CDN assets in views/partials/head.handlebars was wrong -- those
+// never appear in the message, and vendoring them would not have touched it).
+//
+// Anchored to the start of the string and to this exact browser-generated
+// prefix ON PURPOSE. The value of the assertion below is that it fails on ANY
+// error the page produces; every character removed from this pattern widens the
+// hole. Do not relax it into a substring match, do not add "and similar"
+// entries speculatively, and do not extend it to cover an error the app itself
+// emits -- that would be silencing the signal this test exists to carry.
+// Anything genuinely benign and recurring deserves its own separately
+// justified, equally narrow entry.
+const BENIGN_BROWSER_NOISE = /^Permissions policy violation:/;
+
 test('home page boots with Alpine and htmx initialised', async ({ page }) => {
   const consoleErrors = [];
-  page.on('console', (msg) => { if (msg.type() === 'error') consoleErrors.push(msg.text()); });
+  page.on('console', (msg) => {
+    if (msg.type() !== 'error') return;
+    if (BENIGN_BROWSER_NOISE.test(msg.text())) return;
+    consoleErrors.push(msg.text());
+  });
   // `console` alone does NOT cover uncaught exceptions or unhandled promise
   // rejections -- Playwright surfaces those only via `pageerror`. Without this
   // listener a genuine app crash that never calls console.error() would leave
