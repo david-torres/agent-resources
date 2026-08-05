@@ -41,7 +41,7 @@ test('class-view wires up both modals through the shared modal components', () =
 // component names, dispatches, and x-ref -- never the real template's
 // `:class`/`@open-modal.window`/`@close-modal.window`/
 // `@keydown.escape.window` bindings themselves. Deleting
-// `:class="show && 'is-active'"` from either real modal in
+// `:class="{ 'is-active': show }"` from either real modal in
 // class-view.handlebars left every test in this file green (proven by
 // deleting each and re-running before writing this test): the modal would
 // open in JS state but never actually become visible. Brings this up to
@@ -49,7 +49,9 @@ test('class-view wires up both modals through the shared modal components', () =
 test('the real duplicate modal carries all four modal bindings', () => {
   const duplicateChunk = SRC.slice(SRC.indexOf('id="duplicateModal-'), SRC.indexOf('id="unlockCodeModal"'));
   expect(duplicateChunk).toContain("x-data=\"modal('duplicate')\"");
-  expect(duplicateChunk).toContain(":class=\"show && 'is-active'\"");
+  // Object form, deliberately -- the string form cannot remove a frozen
+  // `is-active` (see public/js/alpine-components.js).
+  expect(duplicateChunk).toContain(":class=\"{ 'is-active': show }\"");
   expect(duplicateChunk).toContain('@open-modal.window="open($event.detail)"');
   expect(duplicateChunk).toContain('@close-modal.window="close($event.detail)"');
   expect(duplicateChunk).toContain('@keydown.escape.window="close()"');
@@ -57,7 +59,7 @@ test('the real duplicate modal carries all four modal bindings', () => {
 
 test('the real unlock-code modal carries all four modal bindings', () => {
   const unlockChunk = SRC.slice(SRC.indexOf('id="unlockCodeModal"'));
-  expect(unlockChunk).toContain(":class=\"show && 'is-active'\"");
+  expect(unlockChunk).toContain(":class=\"{ 'is-active': show }\"");
   expect(unlockChunk).toContain('@open-modal.window="open($event.detail)"');
   expect(unlockChunk).toContain('@close-modal.window="closeAndClear($event.detail)"');
   expect(unlockChunk).toContain('@keydown.escape.window="closeAndClear()"');
@@ -78,7 +80,7 @@ test('class-view does not inline the clearing logic itself', () => {
 // shared shell: name-scoped open/close, Escape, and the body scroll lock.
 const DUPLICATE_MODAL = `
   <div id="duplicateModal-c1" class="modal" x-data="modal('duplicate')"
-       :class="show && 'is-active'"
+       :class="{ 'is-active': show }"
        @open-modal.window="open($event.detail)"
        @close-modal.window="close($event.detail)"
        @keydown.escape.window="close()">
@@ -101,7 +103,7 @@ const DUPLICATE_MODAL = `
 // this suite.
 const UNLOCK_MODAL = `
   <div id="unlockCodeModal" class="modal" x-data="clearingModal('unlockCode')"
-       :class="show && 'is-active'"
+       :class="{ 'is-active': show }"
        @open-modal.window="open($event.detail)"
        @close-modal.window="closeAndClear($event.detail)"
        @keydown.escape.window="closeAndClear()">

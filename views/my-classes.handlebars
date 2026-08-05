@@ -115,8 +115,13 @@
             <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
           </div>
           <!-- Duplicate Modal -->
+          {{!-- Object form is load-bearing: the string form (`show && 'is-active'`)
+               cannot clear an `is-active` that htmx froze into its history
+               snapshot -- Alpine only removes classes it added itself -- so the
+               modal restores stuck open with its overlay swallowing every click
+               on the page. See public/js/alpine-components.js. --}}
           <div id="duplicateModal-{{this.id}}" class="modal" x-data="modal('duplicate-{{this.id}}')"
-               :class="show && 'is-active'"
+               :class="{ 'is-active': show }"
                @open-modal.window="open($event.detail)"
                @close-modal.window="close($event.detail)"
                @keydown.escape.window="close()">

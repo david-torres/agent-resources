@@ -9,10 +9,10 @@ const NAV = `
   <nav class="navbar is-dark" x-data="{ open: false }">
     <div class="navbar-brand">
       <button class="navbar-burger" id="navbar-burger"
-              :class="open && 'is-active'" :aria-expanded="open"
+              :class="{ 'is-active': open }" :aria-expanded="open"
               @click="open = !open"></button>
     </div>
-    <div class="navbar-menu" id="navbar-menu" :class="open && 'is-active'"></div>
+    <div class="navbar-menu" id="navbar-menu" :class="{ 'is-active': open }"></div>
   </nav>
 `;
 
@@ -56,7 +56,11 @@ test('real nav.handlebars has Alpine directives and no hx-on:click on burger', (
 
   // Assert new Alpine directives are present
   expect(content).toContain('x-data="{ open: false }"');
-  expect(content).toContain(':class="open && \'is-active\'"');
+  // Object form, deliberately: the string form (`open && 'is-active'`) cannot
+  // remove an `is-active` that htmx froze into a history snapshot, which left
+  // the restored menu permanently stuck open. Pinned so a "tidy-up" back to the
+  // shorter form is caught here. See public/js/alpine-components.js.
+  expect(content).toContain(':class="{ \'is-active\': open }"');
   expect(content).toContain(':aria-expanded="open"');
   expect(content).toContain('@click="open = !open"');
 
