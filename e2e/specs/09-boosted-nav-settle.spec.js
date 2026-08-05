@@ -149,6 +149,11 @@ test('the navbar menu arrives closed after a boosted navigation', async ({ page 
       } catch (_) { /* Alpine absent -> stays false, which fails below */ }
       return {
         t: Math.round(performance.now()),
+        // Recorded separately from the class/display readings so that "the
+        // navbar is not there at all" cannot masquerade as "the navbar is
+        // painted open" -- see framesNavbarMissing below.
+        menuPresent: !!menu,
+        burgerPresent: !!burger,
         menuIsActive: !!menu && menu.classList.contains('is-active'),
         burgerIsActive: !!burger && burger.classList.contains('is-active'),
         display: menu ? getComputedStyle(menu).display : null,
@@ -192,9 +197,23 @@ test('the navbar menu arrives closed after a boosted navigation', async ({ page 
   const summary = {
     swapObserved: probe.swapObserved,
     framesSampled: probe.frames.length,
-    // The defect: a frame the browser rendered with the menu on screen.
-    framesPaintedOpen: probe.frames
-      .filter((f) => f.menuIsActive || f.burgerIsActive || f.display !== 'none').length,
+    // The navbar has to BE there before "is it open" is even a question.
+    // Split out as its own signal (Task 11 fix round 2) after the earlier
+    // version of this filter was shown to score a MISSING #navbar-menu as
+    // "painted open": getComputedStyle is never reached when the element is
+    // absent, `display` records null, and `null !== 'none'`. A swap that
+    // produced no navbar at all would therefore have been reported as the
+    // settle race -- the wrong diagnosis, which is worse than none. Verified
+    // on the sibling spec (10-back-button-snapshot) against a mutation that
+    // really does empty <body>.
+    framesNavbarMissing: probe.frames.filter((f) => !f.menuPresent || !f.burgerPresent).length,
+    // The defect: a frame the browser rendered with the menu on screen. Each
+    // element's readings are gated on that element existing, so this counts
+    // only frames that genuinely painted a navbar open.
+    framesPaintedOpen: probe.frames.filter((f) => (
+      (f.menuPresent && (f.menuIsActive || f.display !== 'none')) ||
+      (f.burgerPresent && f.burgerIsActive)
+    )).length,
     // Positive precondition, per frame. Without it a regression that stopped
     // Alpine adopting the swapped-in nav would sail through the line above:
     // Bulma hides .navbar-menu without .is-active anyway, so a DEAD navbar
@@ -209,6 +228,7 @@ test('the navbar menu arrives closed after a boosted navigation', async ({ page 
   expect(summary.framesSampled).toBeGreaterThanOrEqual(3);
   expect(summary, `navbar paint probe: ${JSON.stringify(probe)}`).toMatchObject({
     swapObserved: true,
+    framesNavbarMissing: 0,
     framesPaintedOpen: 0,
     framesWithoutAlpine: 0,
     framesAlpineOpen: 0

@@ -391,6 +391,12 @@ test('a page navigated away from with the menu closed comes back closed and live
 // test 1's cachedRootSnapshotHasAlpineOutput tripwire included -- the snapshot
 // still carries the frozen class, Alpine simply strips it on restore now.
 //
+// It needs ONE COMPANION CHANGE, or a correct fix will look wrong to whoever
+// applies it: views/partials/nav.test.js:59 asserts the literal string
+// `:class="open && 'is-active'"` against the template and fails under it (the
+// other 4 tests in that file, jsdom toggle behaviour included, still pass).
+// Change the template and that assertion together.
+//
 // DO NOT reach for hx-history="false" or historyCacheSize: 0 instead. Both make
 // this test pass, and both are worse than the defect. With the snapshot cache
 // out of play, Back falls through to htmx's loadHistoryFromServer, whose raw
