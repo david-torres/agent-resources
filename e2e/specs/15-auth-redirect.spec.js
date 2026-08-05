@@ -54,18 +54,37 @@
 //      heading -- because the defect being fixed is precisely a divergence
 //      between them, and either half alone is satisfiable by the bug.
 //
-// SECURITY FINDING, REPORTED NOT FIXED (see the control-character test at the
-// bottom): _isSafeInAppPath is `url[0] === '/' && url[1] !== '/' && url[1] !==
-// '\\'`, but the URL parser strips ASCII tab/LF/CR *before* parsing. So
-// ?r=/%09/evil.com decodes to "/\t/evil.com", passes the guard, and reaches
-// history.replaceState(), where the browser resolves it to http://evil.com/.
-// Chromium refuses that (cross-origin SecurityError) and the app surfaces the
-// message in #alerts, so nothing navigates off-origin -- the browser's own
-// same-origin check, not the app's guard, is what stops it. Measured:
-// guard says safe = TRUE for /%09/, /%0A/, /%0D/ and /%09\. Consequence today
-// is a broken sign-in, not an open redirect: the throw happens before
-// htmx.ajax, so the user is left signed in but stranded on /auth with an
-// attacker-influenced error string on screen.
+// SECURITY FINDING (Low), REPORTED NOT FIXED (see the control-character test
+// at the bottom): _isSafeInAppPath is `url[0] === '/' && url[1] !== '/' &&
+// url[1] !== '\\'`, but the URL parser strips ASCII tab/LF/CR *before*
+// parsing. So ?r=/%09/evil.com decodes to "/\t/evil.com", passes the guard,
+// and reaches history.replaceState(), where the browser resolves it to
+// http://evil.com/. Measured: guard says safe = TRUE for /%09/, /%0A/, /%0D/
+// and /%09\.
+//
+// TWO INDEPENDENT DEFENSES catch it, neither of them the app's, and this file
+// is pinned by both of them rather than by app code:
+//   - Chromium refuses the cross-origin replaceState (SecurityError, swallowed
+//     by signIn's catch and shown in #alerts);
+//   - htmx 2.0.8 ships `selfRequestsOnly: true` (the htmx-config meta at
+//     head.handlebars:4 does not override it), so htmx.ajax answers every one
+//     of these shapes -- and every guard-REJECTED shape -- with
+//     htmx:invalidPath and issues no request at all. Measured directly, with
+//     an Authorization canary attached: events ["htmx:invalidPath:…"],
+//     off-origin requests [].
+// So the statement order inside redirectTo is NOT the only thing standing
+// between this and an open redirect. Consequence today: a broken sign-in.
+// The user is left signed in but stranded on /auth, with an attacker-chosen
+// hostname rendered as plain text (app.js:101 uses textContent, so no HTML
+// injection). No navigation, no request, no token exposure.
+//
+// SEPARATE LATENT FINDING, same function: redirectTo gates only the
+// replaceState (app.js:985-987). A guard-REJECTED url still falls through to
+// htmx.ajax at :989 with Authorization: Bearer and Refresh-Token attached,
+// and htmx.config.allowScriptTags/allowEval are both true. That -- not the
+// control-character path -- is the token-exfiltration primitive, and it is
+// blocked today solely by selfRequestsOnly. One-line fix:
+// `if (!_isSafeInAppPath(url)) return;`. Not fixed here.
 //
 // Inherited and load-bearing here:
 //   - A retrying assertion cannot test a non-change that is already true.
@@ -221,6 +240,10 @@ test.describe('the address bar after an auth-driven redirect', () => {
     // /auth/check and dragging the user back. Asserting the header on the wire
     // pins the mechanism; asserting the landing pins the symptom.
     //
+    // Isolating mutation: suppress the Authorization/Refresh-Token assignment
+    // in the htmx:configRequest listener (app.js:732-735). That fails this
+    // test and only this test.
+    //
     // NOT ISOLATED BY a324968's OWN MUTATION, and the reason is a finding.
     // That commit's premise is that redirectTo()'s `swap: 'outerHTML'` on body
     // replaces the <body> ELEMENT and so destroys listeners bound to it. Real
@@ -229,8 +252,16 @@ test.describe('the address bar after an auth-driven redirect', () => {
     // this exact flow -- after the bounce and again after this click,
     // window.__origBody === document.body, a data- attribute set before the
     // swap survives it, and a listener bound to document.body still fires
-    // (1 hit, then 2). Reverting this one listener to document.body fails
-    // nothing here, because the header is still attached.
+    // (1 hit, then 2). Reverting the listeners to document.body fails nothing
+    // here (verified for this one and, by the reviewer, for all seven),
+    // because the header is still attached.
+    //
+    // a324968 IS pinned, at the unit tier -- but by a test that manufactures
+    // the refuted premise. test/auth-redirect-history.test.js's htmx stub does
+    // `document.body.replaceWith(freshBody)` under a comment calling that "the
+    // real DOM consequence of swap: 'outerHTML' on target: 'body'", and :345
+    // then asserts `expect(document.body).not.toBe(bodyBeforeSwap)` as its
+    // anti-vacuity guard -- an assertion that is FALSE in the shipped app.
     const [request] = await Promise.all([
       page.waitForRequest((r) => new URL(r.url()).pathname === '/profile' && r.resourceType() === 'xhr'),
       page.locator('a[href="/profile"]').first().click()
@@ -283,21 +314,29 @@ test.describe('the deferred post-load refresh', () => {
   // body on the old one, the exact divergence af2b098 set out to end.
   //
   // Measured with no network shaping at all (natural click straight after
-  // commit): 2 of 6 runs collided. The two route delays below make it
-  // deterministic by putting the boosted request outside the 100 ms window and
-  // the refresh's own request last -- i.e. they emulate an ordinary slow
-  // connection, which is the condition that makes this reachable in
-  // production rather than a localhost curiosity.
+  // commit): it collides on its own, at a rate that swings with machine load
+  // -- 2/6, 3/10 and 2/20 in three of my batches, 5/10 in the reviewer's, i.e.
+  // 12/46 pooled, every collision with boosted=true. So the defect is NOT an
+  // artifact of the two route delays below; the delays only make it
+  // deterministic, by putting the boosted request outside the 100 ms window
+  // and the refresh's own request last -- an ordinary slow connection, which
+  // is the condition that makes this reachable in production rather than a
+  // localhost curiosity.
   //
   // The precondition asserted is that the click was BOOSTED (no document
   // request for /privacy), which every valid fix preserves. It deliberately
   // does not gate on the timer's own marker.
   //
   // Consequences worth stating plainly: deleting 43c6120's guard entirely
-  // changes nothing this file can see -- the collision is identical with and
-  // without it -- while making the timer bail unconditionally turns this test
-  // GREEN and fails the positive control above. So this is red by design and
-  // flips on a genuine fix, not permanently broken.
+  // changes nothing THIS FILE can see -- the shaping deliberately puts the
+  // boosted request outside the 100 ms window, which is exactly the regime the
+  // guard cannot help in -- while making the timer bail unconditionally turns
+  // this test GREEN and fails the positive control above. So this is red by
+  // design and flips on a genuine fix, not permanently broken. 43c6120 is not
+  // uncovered: the unit tier pins it (test/auth-redirect-history.test.js:259,
+  // "a boosted navigation away from the page before the deferred refresh fires
+  // is not undone by a stale redirect", fails with the guard deleted), and the
+  // guard measurably narrows the window rather than doing nothing.
   test('a boosted navigation started inside the deferred-refresh window is not overwritten', async ({ page, baseURL }) => {
     const origin = new URL(baseURL).origin;
     const documents = [];
@@ -424,13 +463,21 @@ test.describe('the open-redirect guard on ?r=', () => {
   // getRedirectUrl returns the value and redirectTo passes it to
   // history.replaceState.
   //
-  // Nothing navigates off-origin today, and that is the whole point of the
-  // two assertions here: they are what every valid fix preserves. What stops
-  // it is Chromium's own same-origin check on replaceState, which throws
-  // before htmx.ajax is reached -- the app's guard contributes nothing on this
-  // path. The user is left signed in but stranded on /auth with the browser's
-  // error text (containing the attacker's host) rendered into #alerts. That
-  // symptom is deliberately NOT asserted: pinning it would freeze the defect.
+  // ** THESE FOUR ARE FORWARD TRIPWIRES, NOT LOAD-BEARING TESTS, AND THAT IS
+  //    THE HONEST DESCRIPTION. ** They pass under every application mutation
+  // tried (M1, M2, M3, M6, M7, M8): what stops these shapes is Chromium's
+  // same-origin check on replaceState and htmx's selfRequestsOnly, i.e. the
+  // browser and a third-party library, not app code. They cannot detect a
+  // regression in _isSafeInAppPath -- the four tests above do that -- but they
+  // will fail loudly the day either external defense is removed (a
+  // selfRequestsOnly:false in the htmx-config meta, an htmx major bump, or a
+  // switch to `location.href = url`), which is exactly when this stops being
+  // a Low-severity finding.
+  //
+  // The assertions are limited to the two invariants every valid fix
+  // preserves. The current symptom -- signed in, stranded on /auth, browser
+  // error text containing the attacker's host in #alerts -- is deliberately
+  // NOT asserted: pinning it would freeze the defect.
   // Reported in .superpowers/sdd/.../task-16-report.md, not fixed.
   for (const bypass of ['/\t/evil.com', '/\n/evil.com', '/\r/evil.com', '/\t\\evil.com']) {
     test(`a control-character ?r= never reaches another origin: ${JSON.stringify(bypass)}`, async ({ page, baseURL }) => {
