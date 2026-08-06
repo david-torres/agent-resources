@@ -22,7 +22,32 @@
       `value` goes through {{json}} rather than being interpolated bare: a
       null stat renders as nothing at all under {{lookup}}, producing
       `statBlocks(, 5, "luck")` -- a SyntaxError that takes the whole
-      component down. --}}
+      component down.
+
+      THE BLOCKS ARE SERVER-RENDERED, NOT `<template x-for>`. This is
+      load-bearing, not a style preference. views/layouts/main.handlebars
+      puts hx-boost="true" on <body>, and htmx snapshots the LIVE DOM into
+      its history cache -- including anything x-for generated. On Back the
+      snapshot is restored WITH those generated spans and Alpine's x-for
+      appends a second full set, so every stat doubles its blocks, the stale
+      half throws "i is not defined" on every binding (`i` lives only in the
+      x-for scope), and clicking one throws instead of setting the stat.
+      Real elements in the served HTML restore as themselves. Keep it that
+      way.
+
+      {{#range}} iterates [start, end), and the statBlocks component's API is
+      1-BASED (block 1 is the first block, and clicking it sets the stat to
+      1). So this iterates 1..max inclusive -- `{{#range 1 (add max 1)}}` --
+      and `{{this}}` IS the 1-based block position everywhere below, with no
+      +1 hiding in an expression. Inside the range block the partial's own
+      params are one frame up, hence `../value` and `../stat`.
+
+      :class uses the OBJECT form. The string form only ever ADDS: Alpine
+      tracks the classes it added itself and can remove only those, so on a
+      restored history snapshot where `is-set` is already in the served
+      markup Alpine would never be able to take it off and the block would
+      be stuck filled. The object form adds and removes by truthiness
+      regardless of who put the class there. --}}
 <div class="stat-blocks" role="radiogroup" aria-label="{{capitalize stat}}"
      data-stat="{{stat}}"
      x-data="statBlocks({{json value}}, {{max}}, {{json stat}})"
@@ -32,14 +57,28 @@
   <input type="hidden" name="{{name}}" :value="value"
          class="stat-blocks-value{{#if inputClass}} {{inputClass}}{{/if}}"
          data-stat="{{stat}}">
-  <template x-for="i in max" :key="i">
-    <span class="wizard-stat-box" role="radio"
-          :class="boxClass(i)"
-          :aria-checked="i === value"
-          :aria-label="`{{capitalize stat}}: ${i}`"
-          :tabindex="tabIndex(i)"
-          @click="set(i)"
-          @mouseenter="preview = i"></span>
-  </template>
-  <span class="stat-blocks-over" x-show="value > max" x-cloak x-text="value"></span>
+  {{#range 1 (add max 1)}}
+  <span class="wizard-stat-box {{#if (gte ../value this)}}is-set{{else}}is-empty{{/if}}"
+        role="radio"
+        aria-label="{{capitalize ../stat}}: {{this}}"
+        :class="boxClass({{this}})"
+        :aria-checked="value === {{this}}"
+        :tabindex="tabIndex({{this}})"
+        @click="set({{this}})"
+        @mouseenter="preview = {{this}}"></span>
+  {{/range}}
+  {{!-- A stat above the block count. The blocks cannot express it -- every
+        one of them reads aria-checked="false" -- so this indicator is the
+        only place the real value exists, and a bare numeral read out as
+        "7" next to twelve other bare numerals tells a screen-reader user
+        nothing. It carries the unit in its own text instead.
+
+        Deliberately NOT done by growing the radiogroup's aria-label: an
+        accessible name that mutates while the user is inside the control is
+        its own bug. Also deliberately not aria-describedby: that needs an
+        id, and the character page renders this partial twice for the same
+        stat (inline editor + level-up modal), so any id derived from `stat`
+        or `name` would be duplicated. --}}
+  <span class="stat-blocks-over" x-show="value > max" x-cloak
+        x-text="value + ' points'"></span>
 </div>

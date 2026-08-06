@@ -113,7 +113,7 @@ test('Cancel restores the original values and exits edit mode', async () => {
   expect(document.getElementById('statsTotalSum').textContent).toBe('6');
 });
 
-test('save PATCHes clamped integers to the stats endpoint', async () => {
+test('save PATCHes the block-set value to the stats endpoint', async () => {
   await mount(STATS);
   let captured = null;
   globalThis.fetch = async (url, options) => {
@@ -158,6 +158,50 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
   expect(captured.options.method).toBe('PATCH');
   expect(JSON.parse(captured.options.body).vitality).toBe(5);
   expect(reloaded).toBe(true);
+});
+
+// The blocks can only ever produce 0..max, so clicking them can never reach
+// save()'s 0-20 clamp or its NaN/negative floor. Those two lines still guard
+// everything the control does NOT produce: a legacy value stored above 20, a
+// negative, or a null column that parseInt turns into NaN. Seed that state
+// directly -- the clamp is unreachable from the UI, which is exactly why a
+// click-driven test cannot pin it. (Deleting both lines leaves every other
+// test in this file green.)
+const submitAndCapturePayload = async () => {
+  let captured = null;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return { ok: true, json: async () => ({ character: {} }) };
+  };
+  // Same jsdom-location workaround as the test above; see its comment.
+  const realWindow = window;
+  const locationStub = { reload: () => {} };
+  globalThis.window = new Proxy(realWindow, {
+    get(target, prop, receiver) {
+      if (prop === 'location') return locationStub;
+      return Reflect.get(target, prop, receiver);
+    }
+  });
+  try {
+    document.getElementById('editor').dispatchEvent(
+      new realWindow.Event('submit', { bubbles: true, cancelable: true })
+    );
+    await tick();
+    await tick();
+  } finally {
+    globalThis.window = realWindow;
+  }
+  return JSON.parse(captured.options.body);
+};
+
+test('save clamps stored values the blocks cannot produce', async () => {
+  await mount({ vitality: 25, might: -3, resilience: 1 });
+  expect(await submitAndCapturePayload()).toEqual({ vitality: 20, might: 0, resilience: 1 });
+});
+
+test('save coerces a null stat to zero rather than PATCHing NaN', async () => {
+  await mount({ vitality: null, might: 2, resilience: 1 });
+  expect(await submitAndCapturePayload()).toEqual({ vitality: 0, might: 2, resilience: 1 });
 });
 
 test('save surfaces a server error and re-enables the button', async () => {
