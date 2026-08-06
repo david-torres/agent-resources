@@ -1317,6 +1317,11 @@ a.dropdown-item:hover {
   border-color: var(--wizard-stat-user-edge);
   cursor: pointer;
 }
+/* A point the hovered click would give BACK. Dimming it (rather than
+   emptying it) keeps the row's shape stable while the pointer moves. */
+.wizard-stat-box.is-preview-off {
+  opacity: 0.4;
+}
 /* Roving tabindex means only one block per stat is in the tab order; that
    block must show where focus is or keyboard users are navigating blind. */
 .stat-blocks [role="radio"]:focus-visible {
