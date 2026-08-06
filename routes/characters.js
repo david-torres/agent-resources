@@ -315,6 +315,47 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
   } else {
     const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
 
+    let characterClass = null;
+    let effectiveVersion = 'v1';
+    if (character.class_id) {
+      try {
+        const { data: cls } = await getClass(character.class_id, res.locals.supabase);
+        if (cls) {
+          characterClass = cls;
+          if (cls.rules_version === 'v2') effectiveVersion = 'v2';
+        }
+      } catch (_) {}
+    }
+
+    // Inject the character's own class into the Class <select> options so the
+    // class it actually has still appears when the user no longer has it
+    // unlocked -- the same fallback the gear and ability pickers get below,
+    // and for the same reason.
+    //
+    // Without it the <select> has no <option> for the character's class, so it
+    // renders showing some OTHER class. That used to be a data-loss bug (the
+    // save obeyed the auto-selected option); class_id is now immutable on
+    // update (services/character/service.js#updateCharacter), so what is left
+    // is a form that lies about what the character is. Injecting the class
+    // makes the template's existing `selected` check match, so the real class
+    // renders and is selected.
+    if (characterClass && ![...filteredAdvent, ...filteredAspirant, ...filteredPCC].some(c => c.id === characterClass.id)) {
+      const isV2 = characterClass.rules_version === 'v2';
+      const isAspirant = characterClass.rules_edition === 'aspirant';
+      if (characterClass.is_player_created) {
+        filteredPCC.push(characterClass);
+        (isAspirant
+          ? (isV2 ? filteredPCCAspirantV2 : filteredPCCAspirantV1)
+          : (isV2 ? filteredPCCAdventV2 : filteredPCCAdventV1)).push(characterClass);
+      } else if (isAspirant) {
+        filteredAspirant.push(characterClass);
+        (isV2 ? filteredAspirantV2 : filteredAspirantV1).push(characterClass);
+      } else {
+        filteredAdvent.push(characterClass);
+        (isV2 ? filteredAdventV2 : filteredAdventV1).push(characterClass);
+      }
+    }
+
     // Inject existing character gear/abilities into dropdown options so
     // items from classes the user no longer has unlocked still appear
     const allFilteredClasses = [...filteredAdvent, ...filteredAspirant, ...filteredPCC];
@@ -341,18 +382,6 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         if (!filteredAbilities[className]) filteredAbilities[className] = [];
         if (!filteredAbilities[className].includes(a.name)) filteredAbilities[className].push(a.name);
       }
-    }
-
-    let characterClass = null;
-    let effectiveVersion = 'v1';
-    if (character.class_id) {
-      try {
-        const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-        if (cls) {
-          characterClass = cls;
-          if (cls.rules_version === 'v2') effectiveVersion = 'v2';
-        }
-      } catch (_) {}
     }
 
     const [missionsRes, offscreenRes] = await Promise.all([
