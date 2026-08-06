@@ -117,3 +117,80 @@ test('an open-modal event for a different name does not open the level-up modal'
   await tick();
   expect(document.getElementById('levelUpModal').classList.contains('is-active')).toBe(false);
 });
+
+// --- stat blocks in the modal --------------------------------------------
+
+const Handlebars = require('handlebars');
+const hbsHelpers = require('handlebars-helpers')();
+const rangeHelper = require('handlebars-helper-range');
+const customHelpers = require('../../util/handlebars');
+
+const renderStatBlocks = (stat, value) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  return hb.compile(read('stat-blocks.handlebars'))({
+    stat, name: stat, value, max: 5, inputClass: 'level-up-stat'
+  });
+};
+
+test('character-level-up.handlebars renders stat blocks, not number inputs', () => {
+  const src = read('character-level-up.handlebars');
+  expect(src).toContain('{{> stat-blocks');
+  expect(src).toContain('inputClass="level-up-stat"');
+  expect(src).not.toContain('type="number"');
+  expect(src).not.toContain('class="input is-small level-up-stat"');
+});
+
+test('the hidden inputs keep the class and data-stat the save payload reads', async () => {
+  await render(`<div id="levelUpStatGrid">${renderStatBlocks('might', 2)}</div>`);
+  await tick();
+  const input = document.querySelector('.level-up-stat');
+  expect(input.getAttribute('data-stat')).toBe('might');
+  expect(input.value).toBe('2');
+});
+
+test('clicking a block updates the value the save payload would read', async () => {
+  await render(`<div id="levelUpStatGrid">${renderStatBlocks('might', 2)}</div>`);
+  await tick();
+  document.querySelectorAll('[role="radio"]')[3].click();
+  await tick();
+  expect(document.querySelector('.level-up-stat').value).toBe('4');
+});
+
+test('character-level-up.js recomputes the total from stat-change, not input', () => {
+  const src = read('../../public/js/character-level-up.js');
+  // A hidden input set programmatically fires no native `input` event, so
+  // the old per-field 'input' listener would leave #levelUpTotal frozen at
+  // its seeded value for the whole session.
+  expect(src).toContain("addEventListener('stat-change', updateStatTotal)");
+  expect(src).not.toContain("el.addEventListener('input', updateStatTotal)");
+});
+
+test('a stat-change bubbling out of the grid drives the live total', async () => {
+  await render(`
+    <div id="levelUpStatGrid">
+      ${renderStatBlocks('might', 2)}
+      ${renderStatBlocks('vitality', 3)}
+    </div>
+    <strong id="levelUpTotal">0</strong>
+  `);
+  await tick();
+
+  // Mirrors the wiring in character-level-up.js:215 exactly: one delegated
+  // listener on the grid, summing every .level-up-stat.
+  const updateStatTotal = () => {
+    const sum = Array.from(document.querySelectorAll('.level-up-stat'))
+      .reduce((s, el) => s + (parseInt(el.value, 10) || 0), 0);
+    document.getElementById('levelUpTotal').textContent = sum;
+  };
+  document.getElementById('levelUpStatGrid')
+    .addEventListener('stat-change', updateStatTotal);
+  updateStatTotal();
+  expect(document.getElementById('levelUpTotal').textContent).toBe('5');
+
+  document.querySelectorAll('[data-stat="might"] [role="radio"]')[4].click();
+  await tick();
+  expect(document.getElementById('levelUpTotal').textContent).toBe('8');
+});

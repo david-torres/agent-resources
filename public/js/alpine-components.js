@@ -233,7 +233,15 @@ document.addEventListener('alpine:init', () => {
       this.value = clamped;
       // Surfaces without Alpine state (the level-up modal) read the hidden
       // input, which fires no native `input` event when set programmatically.
-      this.$dispatch('stat-change', { stat: this.stat, value: this.value });
+      // Deferred to $nextTick: Alpine's own :value effect on that hidden
+      // input hasn't flushed to the DOM yet at the point `value` is
+      // assigned, so a listener that (like the level-up modal's) re-reads
+      // every hidden input synchronously would sum the stale value for
+      // whichever stat just changed -- one interaction behind -- if the
+      // event went out before the DOM write it's reporting.
+      this.$nextTick(() => {
+        this.$dispatch('stat-change', { stat: this.stat, value: this.value });
+      });
     },
 
     focusBlock(n) {
