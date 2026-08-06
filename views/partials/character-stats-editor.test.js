@@ -6,6 +6,26 @@ const customHelpers = require('../../util/handlebars');
 const { statList } = require('../../util/enclave-consts');
 const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
+const hbsHelpers = require('handlebars-helpers')();
+const rangeHelper = require('handlebars-helper-range');
+
+const STAT_BLOCKS_SRC = fs.readFileSync(
+  path.join(__dirname, 'stat-blocks.handlebars'), 'utf8'
+);
+
+// Renders the REAL stat-blocks partial into the fixture rather than a
+// hand-copied stand-in, so a regression in the shipped partial fails here
+// too instead of only in stat-blocks.test.js.
+const statBlocks = (stat, value) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  return hb.compile(STAT_BLOCKS_SRC)({
+    stat, name: stat, value, max: 5, model: `stats.${stat}`
+  });
+};
+
 const STATS = { vitality: 3, might: 2, resilience: 1 };
 
 // The x-data attribute is single-quote delimited (not double) because
@@ -19,9 +39,9 @@ const mount = (stats) => render(`
     <button id="edit" x-show="!editing" @click="edit()"></button>
     <div id="readonly" x-show="!editing"></div>
     <form id="editor" x-show="editing" @submit.prevent="save()">
-      <input class="stats-input" type="number" x-model.number="stats.vitality">
-      <input class="stats-input" type="number" x-model.number="stats.might">
-      <input class="stats-input" type="number" x-model.number="stats.resilience">
+      ${statBlocks('vitality', stats.vitality)}
+      ${statBlocks('might', stats.might)}
+      ${statBlocks('resilience', stats.resilience)}
       <strong id="statsTotalSum" x-text="total"></strong>
       <button id="cancel" type="button" @click="cancel()"></button>
       <button id="save" type="submit" :disabled="saving"></button>
@@ -51,11 +71,16 @@ test('Edit reveals the editor and hides the read-only grid', async () => {
   expect(document.getElementById('readonly').style.display).toBe('none');
 });
 
-test('Edit moves focus to the first stats input', async () => {
+test('Edit moves focus to the first stat block', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await settle();
-  const first = document.querySelector('.stats-input');
+  // Not a truthy-only assertion: statList starts with 'vitality', and both
+  // #statsReadOnly and #statsEditor iterate it, so the first .stat-blocks in
+  // DOM order is vitality's. Focus landing on the wrong stat's control must
+  // fail here, which a bare "something is focused" check would not catch.
+  const first = document.querySelector('.stat-blocks[data-stat="vitality"] [role="radio"][tabindex="0"]');
+  expect(first).not.toBe(null);
   expect(document.activeElement).toBe(first);
 });
 
@@ -64,25 +89,23 @@ test('total sums the seeded stats', async () => {
   expect(document.getElementById('statsTotalSum').textContent).toBe('6');
 });
 
-test('total recomputes as inputs change', async () => {
+test('total recomputes as blocks are clicked', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await tick();
-  const input = document.querySelector('.stats-input');
-  input.value = '10';
-  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  // vitality 3 -> 5, so 3+2+1 = 6 becomes 5+2+1 = 8.
+  document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
   await tick();
-  expect(document.getElementById('statsTotalSum').textContent).toBe('13');
+  expect(document.getElementById('statsTotalSum').textContent).toBe('8');
 });
 
 test('Cancel restores the original values and exits edit mode', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await tick();
-  const input = document.querySelector('.stats-input');
-  input.value = '19';
-  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
   await tick();
+  expect(document.getElementById('statsTotalSum').textContent).toBe('8');
 
   document.getElementById('cancel').click();
   await settle();
@@ -119,9 +142,7 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
   try {
     document.getElementById('edit').click();
     await tick();
-    const input = document.querySelector('.stats-input');
-    input.value = '99';                       // above the 0-20 range
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
     await tick();
 
     document.getElementById('editor').dispatchEvent(
@@ -135,7 +156,7 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
 
   expect(captured.url).toBe('/characters/char-1/stats');
   expect(captured.options.method).toBe('PATCH');
-  expect(JSON.parse(captured.options.body).vitality).toBe(20);
+  expect(JSON.parse(captured.options.body).vitality).toBe(5);
   expect(reloaded).toBe(true);
 });
 
@@ -187,7 +208,8 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
   );
 
   expect(src).toContain('x-text="total"');
-  expect(src).toContain('x-model.number="stats.{{this}}"');
+  expect(src).toContain('{{> stat-blocks');
+  expect(src).toContain('model=(concat "stats." this)');
   expect(src).toContain('@submit.prevent="save()"');
   expect(src).toContain('@click="cancel()"');
   expect(src).toContain(':disabled="saving"');
@@ -196,6 +218,9 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
   expect(src).toContain(":class=\"{ 'is-loading': saving }\"");
   expect(src).toContain('x-show="error" x-text="error"');
 
+  // The number inputs this replaced must be gone, not merely hidden.
+  expect(src).not.toContain('stats-input');
+  expect(src).not.toContain('type="number"');
   expect(src).not.toContain('character-stats.js');
   expect(src).not.toContain('CharacterStats');
 });
