@@ -35,14 +35,17 @@ test.afterAll(async () => {
 test.describe('as the owner', () => {
   test.use({ storageState: ADMIN_STATE });
 
-  // NOTE: `input[name="might"]` is scoped to `#statsEditor` everywhere below.
-  // The character show page also renders the (separate, hidden-by-default)
-  // level-up modal from views/partials/character-level-up.handlebars, whose
-  // stat grid uses the same bare `name="{{this}}"` convention (id
-  // `level-up-might`). An unscoped `input[name="might"]` locator matches both
-  // and Playwright's strict mode throws. This is a test-selector scoping fix,
-  // not a product defect -- the two inputs belong to unrelated features that
-  // both happen to live on the same page.
+  // NOTE: every stat locator below is scoped to `#statsEditor`. The character
+  // show page also renders the (separate, hidden-by-default) level-up modal
+  // from views/partials/character-level-up.handlebars, whose stat grid uses
+  // the same `data-stat` convention. An unscoped locator matches both and
+  // Playwright's strict mode throws. This is test-selector scoping, not a
+  // product defect -- the two controls belong to unrelated features that both
+  // happen to live on the same page.
+  const blocks = (page, stat) =>
+    page.locator(`#statsEditor .stat-blocks[data-stat="${stat}"] [role="radio"]`);
+  const posted = (page, stat) =>
+    page.locator(`#statsEditor input[name="${stat}"]`);
 
   test('the stats box renders with the editor hidden', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
@@ -52,50 +55,59 @@ test.describe('as the owner', () => {
     await expect(page.locator('#statsUnlockBtn')).toBeVisible();
   });
 
-  test('Edit reveals the editor and focuses the first input', async ({ page }) => {
+  test('Edit reveals the editor and focuses the first stat block', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
     await page.locator('#statsUnlockBtn').click();
 
     await expect(page.locator('#statsEditor')).toBeVisible();
     await expect(page.locator('#statsReadOnly')).toBeHidden();
 
-    // The old imperative code focused the first input on reveal; the Alpine
-    // edit() must still do it or keyboard users land nowhere. `vitality` is
-    // asserted by name, not just "some input is focused": edit() focuses
-    // this.root.querySelector('.stats-input'), the first .stats-input in DOM
-    // order, and util/enclave-consts.js's statList (the array both
-    // #statsReadOnly and #statsEditor iterate via {{#each statList}}, per
-    // routes/characters.js) literally starts with 'vitality'. A truthy-only
-    // assertion would still pass if focus landed on the wrong stat.
-    await expect(page.locator('#statsEditor input[name="vitality"]')).toBeFocused();
+    // `vitality` by name, not just "something is focused": edit() takes the
+    // first .stat-blocks in DOM order, and util/enclave-consts.js's statList
+    // (the array both #statsReadOnly and #statsEditor iterate) starts with
+    // 'vitality'. A truthy-only assertion would still pass with focus on the
+    // wrong stat.
+    await expect(
+      page.locator('#statsEditor .stat-blocks[data-stat="vitality"] [role="radio"][tabindex="0"]')
+    ).toBeFocused();
   });
 
-  test('the live total tracks edits', async ({ page }) => {
+  test('the live total tracks block clicks', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
     await page.locator('#statsUnlockBtn').click();
 
     const before = Number(await page.locator('#statsTotalSum').innerText());
-    await page.locator('#statsEditor input[name="might"]').fill('7');
+    await blocks(page, 'might').nth(4).click();   // 5th block -> 5
     await expect
       .poll(async () => Number(await page.locator('#statsTotalSum').innerText()))
-      .toBe(before - 1 + 7); // seeded value is 1
+      .toBe(before - 1 + 5);                      // seeded value is 1
+  });
+
+  test('clicking the block a stat is already on steps it down', async ({ page }) => {
+    await page.goto(`/characters/${character.id}`);
+    await page.locator('#statsUnlockBtn').click();
+
+    await blocks(page, 'might').nth(2).click();   // 3rd block -> 3
+    await expect(posted(page, 'might')).toHaveValue('3');
+    await blocks(page, 'might').nth(2).click();   // same block -> 2
+    await expect(posted(page, 'might')).toHaveValue('2');
   });
 
   test('Cancel restores the original values and hides the editor', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
     await page.locator('#statsUnlockBtn').click();
-    await page.locator('#statsEditor input[name="might"]').fill('9');
+    await blocks(page, 'might').nth(3).click();
     await page.locator('#statsCancelBtn').click();
 
     await expect(page.locator('#statsEditor')).toBeHidden();
     await page.locator('#statsUnlockBtn').click();
-    await expect(page.locator('#statsEditor input[name="might"]')).toHaveValue('1');
+    await expect(posted(page, 'might')).toHaveValue('1');
   });
 
   test('Save persists to the database', async ({ page }) => {
     await page.goto(`/characters/${character.id}`);
     await page.locator('#statsUnlockBtn').click();
-    await page.locator('#statsEditor input[name="might"]').fill('5');
+    await blocks(page, 'might').nth(4).click();   // 5th block -> 5
     await page.locator('#statsSaveBtn').click();
 
     await expect(page.locator('#statsEditor')).toBeHidden();

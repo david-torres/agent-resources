@@ -103,8 +103,13 @@ test('completing a level-up persists the new level and the edited stat', async (
   // is derived server-side from mission rows
   // (services/character/service.js:491-514), not from the modal's stat
   // inputs.
-  const editedMight = before.might + 1;
-  await page.locator('#levelUpModal input[name="might"]').fill(String(editedMight));
+  // The blocks write through a hidden input, so there is nothing to fill;
+  // clicking the Nth block is how a stat reaches N. Capped at the 5-block
+  // row rather than blindly incrementing, so a seeded 5 doesn't ask for a
+  // sixth block that does not exist.
+  const editedMight = before.might >= 5 ? 4 : before.might + 1;
+  await page.locator('#levelUpModal .stat-blocks[data-stat="might"] [role="radio"]')
+    .nth(editedMight - 1).click();
   const missionInputs = page.locator('#levelUpMissingMissions .level-up-mission');
   await expect(missionInputs).toHaveCount(2);
   await missionInputs.nth(0).fill(`${prefix}-mission-1`);
