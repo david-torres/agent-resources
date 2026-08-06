@@ -1,15 +1,33 @@
 // ar-7v3k check 11 -- the export dropdowns on the character and class pages --
 // plus the systemic follow-up to check 12.
 //
+// STATUS. This file was written to CHARACTERIZE four confirmed defects, four of
+// its tests deliberately red. All four defects have since been fixed on this
+// branch, so every test here is green and they are now REGRESSION GUARDS. The
+// long "EXPECTED TO FAIL" blocks below are kept verbatim as the defect record
+// and the reason each assertion is shaped the way it is; read them as history,
+// not as a current prediction. Two consequences of the fixes are recorded here
+// because they change what the file covers:
+//
+//   - The export links no longer navigate (they fetch with the auth header and
+//     download a Blob), so the test at the end of this file now passes AND the
+//     dropdown test below lost its original vehicle. That test was RE-POINTED at
+//     the one exit that can still strand an open dropdown in htmx's snapshot --
+//     the browser's own Forward/Back buttons. Its block comment carries the full
+//     reachability measurement, route by route.
+//   - The `:class` object form is now load-bearing production code at both
+//     dropdown sites and at the modal sites; the templates say so in comments.
+//
 // PART 1 (checks 11). Both global dropdown handlers were deleted from
 // public/js/app.js and replaced with per-dropdown Alpine state, so outside-click
 // and Escape went from document-level behaviour to per-component and are easy to
 // lose. The markup is identical in shape in both templates
-// (views/character.handlebars:161-171, views/class-view.handlebars:34-46):
+// (views/character.handlebars:161-171, views/class-view.handlebars:34-46),
+// shown here in the FIXED form this file's measurements produced:
 //
 //   <div class="dropdown is-right" id="export-dropdown"
-//        x-data="{ open: false }"
-//        :class="open && 'is-active'"
+//        x-data="exportDropdown"
+//        :class="{ 'is-active': open }"
 //        @click.outside="open = false"
 //        @keydown.escape.window="open = false">
 //
@@ -27,18 +45,24 @@
 // task's own export dropdown and the level-up modal.
 //
 // MEASURED ANSWER: it is systemic, and it is WORSE at the modal. See the block
-// comments above the three red tests at the bottom of this file.
+// comments above the three history-restore tests at the bottom of this file.
 //
 // REGRESSION vs PRE-EXISTING, because "is there a defect" and "did the refactor
 // cause it" are different questions and the second is the one that decides what
-// to revisit. Each red test states its own verdict against the deleted code; the
-// summary:
+// to revisit. Each of the four tests states its own verdict against the deleted
+// code; the summary:
 //
-//   dropdown stuck open after Back  -> REFACTOR REGRESSION (in recoverability)
+//   dropdown stuck open on restore  -> REFACTOR REGRESSION (in recoverability)
 //   modal stuck + undismissable     -> REFACTOR REGRESSION (the "no way out" is new)
 //   body.modal-open leaking forward -> PRE-EXISTING, and harmless (dead CSS)
 //   export links never download     -> PRE-EXISTING, never worked since 5855b7f
-//   no focus trap behind modals     -> PRE-EXISTING
+//   no focus trap behind modals     -> PRE-EXISTING, and STILL OPEN: it is the
+//                                      only one of the five not fixed on this
+//                                      branch. The two modal tests below rely on
+//                                      it (they tab out of an open modal), and
+//                                      each asserts that precondition rather
+//                                      than assuming it, so they report honestly
+//                                      if it is ever closed.
 //
 // The two regressions share one root cause and one fix: the
 // `:class="<expr> && 'is-active'"` idiom, replaced by the object form
@@ -454,39 +478,67 @@ test('the character page comes back from the back button with a closed, live dro
 });
 
 // ---------------------------------------------------------------------------
-// EXPECTED TO FAIL (1 of 3). Characterizes a real, confirmed, reproducible
-// product defect -- not a bug in the test. Do not "fix" it by changing
-// production code under this task and do not loosen the assertions. If it starts
-// passing because someone fixed the underlying bug, that is the correct way for
-// it to go green.
-//
 // THE ANSWER TO PART 2, HALF ONE: check 12's frozen-`:class` defect is NOT
 // navbar-specific. It reproduces verbatim on the export dropdown, on both the
 // character and class pages (both measured; only the character page is asserted
-// here, to keep one red test per defect rather than one per template).
+// here, to keep one test per defect rather than one per template).
 //
-// What makes it reachable, given the positive-control test above proves
-// @click.outside protects the ordinary route: the export links live INSIDE
-// #export-dropdown, so clicking one does not fire @click.outside. The dropdown
-// is still open when htmx's saveCurrentPageToHistory (dist line 3251) snapshots
-// body.innerHTML on the way out. Measured cached snapshot:
+// THIS TEST WAS RE-POINTED, and why matters more than what changed. It used to
+// reach the hazard by clicking an export link, because the export anchors live
+// INSIDE #export-dropdown and clicking one therefore never fired
+// @click.outside. That vehicle is gone -- removed by a FIX, not by anything that
+// makes the hazard safe. public/js/alpine-components.js's `exportDropdown`
+// now intercepts those clicks (`@click.prevent="download($el.href)"`), fetches
+// the file with the auth header, hands the browser a Blob, and sets
+// `open = false` on success. So an export click no longer navigates AND no
+// longer leaves the menu open: it can neither create a history snapshot nor put
+// `is-active` in one. The test was re-pointed at a route that still can, rather
+// than deleted, loosened, or left to time out against a precondition a fix had
+// removed.
 //
-//   <div class="dropdown is-right is-active" id="export-dropdown"
+// IS THE HAZARD STILL REACHABLE AT ALL? YES -- measured, not reasoned. Every
+// candidate exit was driven in a real browser and the result read straight out
+// of htmx's own snapshot cache (sessionStorage['htmx-history-cache'], keyed by
+// path), so "was `is-active` frozen?" is answered by the cache itself:
 //
-// Back -> restoreHistory (dist 3342) reinstates that markup verbatim -> Alpine
-// re-initialises with `open: false` -> evaluates `open && 'is-active'` -> false
-// -> setClassesFromString(el, '') -> adds nothing, and the undo pass removes
-// nothing, because Alpine only ever removes classes IT added.
+//   exit taken with the dropdown open        the dropdown class htmx froze
+//   ----------------------------------------------------------------------------
+//   click an export link (the old vehicle)   nothing cached: no navigation
+//                                            happens, and download() closes the
+//                                            menu on success
+//   keyboard Enter on a link OUTSIDE the     "dropdown is-right"  -- CLOSED.
+//   dropdown                                 Alpine's @click.outside DOES see a
+//                                            keyboard activation: Enter on an
+//                                            <a> produces a trusted click event
+//                                            (detail: 0) that reaches the
+//                                            document-level listener. Measured.
+//   full page load away -- typed URL,        nothing cached. htmx saves no
+//   bookmark, reload -- then Back            snapshot on unload; only its own
+//                                            navigations and popstate save one.
+//   some other link inside the dropdown      there is none. The only two
+//                                            anchors in #export-dropdown are
+//                                            the two export links.
+//   FORWARD/BACK ON THE BROWSER'S OWN        "dropdown is-right is-active"
+//   BUTTONS                                     <-- STILL REACHABLE. This test.
 //
-// Repro by hand: open the export dropdown, click "Markdown (.md)", press Back.
-// Observed on every run: `dropdown is-right is-active`, #export-menu
-// `display: block`, Alpine alive with `open: false`. NOTHING on that page
-// closes it -- measured after the restore: Escape does nothing, clicking
-// outside does nothing, and clicking the trigger toggles Alpine's `open`
-// true/false/true while the class never moves. The trigger also reports
-// `aria-expanded="false"` while the menu is visibly expanded, the same
-// alive-but-powerless a11y symptom Task 11 recorded on the navbar burger. Any
-// subsequent navigation clears it.
+// The live row is the one exit that fires no click anywhere, which is exactly
+// why @click.outside cannot protect it: htmx's popstate handler calls
+// restoreHistory(), and restoreHistory's FIRST statement is
+// saveCurrentPageToHistory() (htmx 2.0.8 dist line 3343). The page you are
+// LEAVING is snapshotted by the history navigation itself, with whatever Alpine
+// had painted on it. Ordinary user story, browser chrome only: open your
+// character page, open the export menu, change your mind and press Back, then
+// press Forward to come back.
+//
+// WHAT GOES WRONG WITHOUT THE FIX: htmx's restore (dist 3342) reinstates that
+// markup verbatim -> Alpine re-initialises with `open: false` -> evaluates
+// `open && 'is-active'` -> false -> setClassesFromString(el, '') -> adds
+// nothing, and removes nothing, because Alpine only ever removes classes IT
+// added. The menu is painted open over a component that believes it is closed,
+// the trigger reports `aria-expanded="false"` while the menu is visibly
+// expanded, and NOTHING on that page closes it: Escape, an outside click and
+// the trigger itself are all no-ops (all three measured under the reverted
+// binding). Only a further navigation clears it.
 //
 // REGRESSION CALL: **REFACTOR REGRESSION**, in recoverability rather than in
 // symptom. The old markup (efa7622^) froze `is-active` into the snapshot too --
@@ -501,15 +553,11 @@ test('the character page comes back from the back button with a closed, live dro
 // on outside click and on Escape. They removed a class they had not added, so a
 // restored stuck dropdown healed on the first Escape, the first click anywhere
 // outside it, or one click on its own trigger. Alpine's setClassesFromString
-// cannot. The refactor converted a benign, self-clearing frozen class into a
-// permanently stuck one. Verified against the deleted code at f8931dc, not
-// reasoned. Severity: Important -- 100% reproducible, user-visible, unclearable
-// in place, escapable by any subsequent navigation, costs no data.
+// cannot. Verified against the deleted code at f8931dc, not reasoned.
 //
-// RECOMMENDED FIX (a production change, deliberately NOT applied -- this branch
-// reports defects, it does not fix them):
+// THE FIX THIS TEST NOW GUARDS (applied on this branch):
 //
-//   views/character.handlebars:163  and  views/class-view.handlebars:36
+//   views/character.handlebars  and  views/class-view.handlebars
 //   -  :class="open && 'is-active'"
 //   +  :class="{ 'is-active': open }"
 //
@@ -517,8 +565,25 @@ test('the character page comes back from the back button with a closed, live dro
 // forRemove branch calls classList.remove on any falsy key already present);
 // setClassesFromString only ever removes what it added. Same fix, same reason,
 // as the one recorded in 10-back-button-snapshot.spec.js for
-// views/partials/nav.handlebars:6,14 -- and verified here the same way: applied
-// and reverted, this test goes green.
+// views/partials/nav.handlebars:6,14.
+//
+// Re-verified after the re-pointing, by reverting the object form on
+// views/character.handlebars alone and driving this exact Forward/Back sequence.
+// The snapshot freezes `dropdown is-right is-active` under BOTH bindings -- the
+// freeze is not what the fix prevents; surviving it is. Measured on restore:
+//
+//   binding                       restored class          menu     Alpine.open
+//   ----------------------------------------------------------------------------
+//   :class="{ 'is-active': open }"  "dropdown is-right"     none     false
+//   :class="open && 'is-active'"    "dropdown is-right      block    false
+//                                    is-active"
+//
+// and under the reverted binding nothing on the page recovers it: after Escape
+// still `is-active`/`block`, after an outside click still `is-active`/`block`,
+// and clicking the trigger flips Alpine's `open` to true while the class never
+// moves. This test goes RED there on `framesPaintedOpen` equal to
+// `framesSampled` (3 of 3 in the recorded window) with `framesAlpineOpen: 0` --
+// painted open over a component that says closed -- and green again on restore.
 //
 // DO NOT reach for hx-history="false" or historyCacheSize: 0 instead. Both make
 // this test pass and both are worse than the defect: with the snapshot cache out
@@ -527,43 +592,77 @@ test('the character page comes back from the back button with a closed, live dro
 // page on protected routes and a silently signed-out render on auth-optional
 // ones. See task-11-report.md.
 // ---------------------------------------------------------------------------
-test('going back after using an export link restores a closed dropdown', async ({ page }) => {
+
+// Reads htmx's own snapshot cache for a path and reports the class attribute the
+// export dropdown was frozen with. Runs in-page; sessionStorage survives a
+// boosted swap, so it can be read from whatever page the hop landed on.
+const frozenDropdownClass = (path) => {
+  const cache = JSON.parse(sessionStorage.getItem('htmx-history-cache') || '[]');
+  const entry = cache.find((c) => c.url === path || c.url.startsWith(path));
+  if (!entry) return { cached: false, cachedUrls: cache.map((c) => c.url) };
+  const match = /<div class="([^"]*)" id="export-dropdown"/.exec(entry.content);
+  return {
+    cached: true,
+    dropdownClass: match ? match[1] : '(no #export-dropdown in the snapshot)',
+    frozenOpen: !!match && /is-active/.test(match[1])
+  };
+};
+
+test('forward and back over an open export dropdown restores it closed', async ({ page }) => {
   await openPage(page, urlFor(CHARACTER_PAGE));
+  const charPath = `/characters/${character.id}`;
+
+  // One boosted hop out and straight back in, to build a real htmx history
+  // stack. This is not scene-setting: saveCurrentPageToHistory ends with
+  // `history.replaceState({ htmx: true }, ...)`, and htmx's popstate handler
+  // ignores any entry whose state lacks that flag. Without a prior htmx
+  // navigation the browser's Forward/Back buttons would not route through htmx
+  // at all, and the rest of this test would be measuring nothing.
+  await boostedHopToHome(page);
+  await page.goBack();
+  await page.waitForURL((url) => url.pathname.startsWith(charPath));
 
   const dropdown = page.locator('#export-dropdown');
   await expect(dropdown).not.toHaveClass(/is-active/); // assert the transition, not the end state
   await toggleFor(page).click();
   await expect(dropdown).toHaveClass(/is-active/);
 
-  // Leaving via a link INSIDE the dropdown: the one route @click.outside does
-  // not intercept, and the ordinary way a user leaves this page with the
-  // dropdown open (it is what the dropdown is FOR).
-  await page.evaluate(() => { window.__preNav = true; });
-  const exportLink = page.locator('#export-menu a[href*="format=markdown"]');
-  await expect(exportLink).toBeVisible();
-  await exportLink.click();
-  await page.waitForURL((url) => url.pathname.endsWith('/export'));
-  expect(
-    await page.evaluate(() => window.__preNav === true),
-    'expected a boosted body swap on the way out; a full page load caches no history snapshot'
-  ).toBe(true);
+  // Forward: a browser-chrome navigation. No click event exists anywhere in
+  // this step, which is the whole point -- @click.outside is structurally unable
+  // to intervene, unlike on every link-click exit (see the positive control
+  // above, which is what proves this is a different route and not a duplicate).
+  await page.goForward();
+  await page.waitForURL((url) => url.pathname === '/');
+
+  // Precondition, asserted rather than assumed: the hazard really was created.
+  // Without this the test could pass for the wrong reason -- a restore of a
+  // snapshot that never carried `is-active` proves nothing about Alpine's
+  // ability to remove one. If this line ever fails because `frozenOpen` is
+  // false, the freeze has been prevented upstream (some future close-on-popstate
+  // or snapshot-sanitising change), which is a legitimate fix too -- update this
+  // test to characterize THAT, do not delete the assertions below.
+  const frozen = await page.evaluate(frozenDropdownClass, charPath);
+  expect(frozen, `htmx snapshot for ${charPath}: ${JSON.stringify(frozen)}`).toMatchObject({
+    cached: true,
+    frozenOpen: true
+  });
 
   await page.evaluate(armRestoreProbe, {
     rootSelector: '#export-dropdown', panelSelector: '#export-menu', stateKey: 'open'
   });
   await page.goBack();
-  await page.waitForURL((url) => url.pathname.startsWith(`/characters/${character.id}`));
+  await page.waitForURL((url) => url.pathname.startsWith(charPath));
   await waitForFrames(page);
 
   const probe = await page.evaluate(() => window.__restoreProbe);
   const summary = summarise(probe);
   expect(summary.framesSampled).toBeGreaterThanOrEqual(3); // zero-iteration guard
 
-  // THE defect. framesPaintedOpen is what the user sees; framesAlpineOpen: 0
-  // holding at the same time is the signature that separates this from "Alpine
-  // restored open state" -- Alpine says closed, the screen says open.
-  // framesComponentMissing: 0 keeps that reading honest: a restore that produced
-  // no dropdown at all must report as its own failure, not as this one.
+  // THE defect this guards. framesPaintedOpen is what the user sees;
+  // framesAlpineOpen: 0 holding at the same time is the signature that separates
+  // it from "Alpine restored open state" -- Alpine says closed, the screen says
+  // open. framesComponentMissing: 0 keeps that reading honest: a restore that
+  // produced no dropdown at all must report as its own failure, not as this one.
   expect(summary, `restored-dropdown paint probe: ${JSON.stringify(probe)}`).toMatchObject({
     restoreObserved: true,
     framesComponentMissing: 0,
@@ -571,6 +670,11 @@ test('going back after using an export link restores a closed dropdown', async (
     framesWithoutAlpine: 0,
     framesAlpineOpen: 0
   });
+  // htmx served its own cached snapshot rather than re-fetching from the server.
+  // The cache-MISS path also fires htmx:historyRestore, so the cache hit is the
+  // only discriminator -- and a miss would re-render the page from scratch,
+  // which cannot carry a frozen class and would make everything above vacuous.
+  expect(probe.cacheHitPath).toBe(charPath);
 
   // Steady state, after every settle and microtask has had its chance. Weaker
   // than the probe (a retrying assertion cannot see a transient) but it would
