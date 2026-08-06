@@ -5,21 +5,8 @@
   <div class="wizard-stat-grid">
     {{#each statList}}
     <div class="wizard-stat-row" data-stat="{{this}}">
-      <label class="wizard-stat-name" for="stat-input-{{this}}">{{capitalize this}}</label>
-      <div class="wizard-stat-boxes">
-        <input
-          class="input is-small stats-input"
-          id="stat-input-{{this}}"
-          name="{{this}}"
-          type="number"
-          min="0"
-          max="20"
-          step="1"
-          value="{{lookup ../character this}}"
-          data-stat="{{this}}"
-          x-model.number="stats.{{this}}"
-        >
-      </div>
+      <div class="wizard-stat-name">{{capitalize this}}</div>
+      {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5 model=(concat "stats." this)}}
     </div>
     {{/each}}
   </div>

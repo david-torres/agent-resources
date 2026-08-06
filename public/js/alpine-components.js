@@ -102,9 +102,9 @@ document.addEventListener('alpine:init', () => {
       // Capture the x-data root here, not inside edit(). $el is bound to
       // whichever element invoked the current method — inside edit() that
       // is the Edit <button> itself (called via @click="edit()"), which has
-      // no .stats-input descendants, so querySelector off $el there always
+      // no .stat-blocks descendants, so querySelector off $el there always
       // returns null and focus silently never moves. init() runs with $el
-      // bound to the x-data root, which does contain the inputs.
+      // bound to the x-data root, which does contain the blocks.
       this.root = this.$el;
     },
 
@@ -117,7 +117,14 @@ document.addEventListener('alpine:init', () => {
       this.error = '';
       this.editing = true;
       this.$nextTick(() => {
-        const first = this.root.querySelector('.stats-input');
+        // The blocks use a roving tabindex, so the one tabbable block per
+        // stat is the right landing spot; the fallback covers the tick
+        // before Alpine has evaluated :tabindex on a freshly-revealed
+        // editor. Still scoped to this.root, not $el, for the reason in
+        // init() above: $el inside edit() is the Edit button, which
+        // contains no blocks at all.
+        const first = this.root.querySelector('.stat-blocks [role="radio"][tabindex="0"]')
+          || this.root.querySelector('.stat-blocks [role="radio"]');
         if (first) first.focus();
       });
     },
