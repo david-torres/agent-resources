@@ -340,3 +340,112 @@ test('the real #statsBox x-data seed survives a missing (undefined) stat', async
   await tick();
   expect(document.getElementById('statsTotalSum').textContent).toBe('19');
 });
+
+// --- unify-readonly-grid ------------------------------------------------
+//
+// #statsReadOnly used to hand-roll its own boxes with the WIZARD's
+// vocabulary (.is-class filled / .is-locked dashed), while #statsEditor
+// (revealed by the very same Edit click) used the stat-blocks control's
+// vocabulary (.is-set / .is-empty), and /lfg/:id used a third rendering via
+// stat-blocks-readonly. Same stat, three different looks. This extracts the
+// REAL #statsReadOnly markup out of character.handlebars (still containing
+// its Handlebars syntax, Handlebars source and all) and compiles it with the
+// app's real helpers plus the real stat-blocks-readonly partial -- mirroring
+// extractStatsXData above -- so a regression in the shipped template fails
+// here, not just in a hand-copied stand-in.
+const extractStatsReadOnlyBlock = () => {
+  const startMarker = '<div id="statsReadOnly"';
+  const endMarker = '<div id="statsEditor"';
+  const startIdx = CHARACTER_SRC.indexOf(startMarker);
+  if (startIdx === -1) throw new Error('#statsReadOnly not found in character.handlebars');
+  const endIdx = CHARACTER_SRC.indexOf(endMarker, startIdx);
+  if (endIdx === -1) throw new Error('#statsEditor not found after #statsReadOnly');
+  return CHARACTER_SRC.slice(startIdx, endIdx);
+};
+
+const renderStatsReadOnly = (character) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks-readonly', fs.readFileSync(
+    path.join(__dirname, 'stat-blocks-readonly.handlebars'), 'utf8'
+  ));
+  return hb.compile(extractStatsReadOnlyBlock())({ character, statList });
+};
+
+const count = (html, cls) => (html.match(new RegExp(cls, 'g')) || []).length;
+
+// Isolates one stat's row out of the rendered grid by slicing from its
+// data-stat marker to the next one (or end of string for the last stat).
+// The sliced tail carries a few harmless characters of the next row's own
+// opening tag, but nothing in that prefix can match is-set/is-empty/points,
+// so it never contaminates the count.
+const statRowHtml = (html, stat) => {
+  const start = html.indexOf(`data-stat="${stat}"`);
+  if (start === -1) throw new Error(`data-stat="${stat}" not found in rendered grid`);
+  const nextStart = html.indexOf('data-stat="', start + 1);
+  return html.slice(start, nextStart === -1 ? html.length : nextStart);
+};
+
+const ZERO_STATS = Object.fromEntries(statList.map((stat) => [stat, 0]));
+
+test('the read-only grid uses is-set/is-empty and no longer emits the wizard vocabulary', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  expect(html).toContain('is-set');
+  expect(html).toContain('is-empty');
+  expect(html).not.toContain('is-class');
+  expect(html).not.toContain('is-locked');
+});
+
+test('a stat of 3 renders 3 filled and 2 empty blocks', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(count(row, 'is-set')).toBe(3);
+  expect(count(row, 'is-empty')).toBe(2);
+});
+
+test('a stat of 0 renders an all-empty row', () => {
+  const html = renderStatsReadOnly(ZERO_STATS);
+  const row = statRowHtml(html, 'vitality');
+  expect(count(row, 'is-set')).toBe(0);
+  expect(count(row, 'is-empty')).toBe(5);
+});
+
+test('a stat above 5 caps the row at 5 blocks and surfaces the real number', () => {
+  // Today {{#range 0 7}} renders seven boxes and spills the grid cell.
+  // stat-blocks-readonly caps at max, but a capped row alone would silently
+  // read as "5" for a stat of 7 -- the numeral alongside the row is what
+  // keeps that legible, same as the LFG party-stats caller and the editable
+  // control's "N points" text.
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 7 });
+  const row = statRowHtml(html, 'might');
+  expect(count(row, 'is-set')).toBe(5);
+  expect(count(row, 'is-empty')).toBe(0);
+  expect(row).toContain('7 points');
+});
+
+test('a stat within range shows no overflow numeral', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(row).not.toContain('points');
+});
+
+test('the read-only row keeps data-stat as a live selector hook', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  expect(html).toContain('data-stat="might"');
+});
+
+test('the dead data-value attribute is gone from character.handlebars', () => {
+  expect(CHARACTER_SRC).not.toContain('data-value=');
+});
+
+test('the lost title tooltips are gone from the read-only row', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(row).not.toContain('title=');
+});
+
+test('the #statsReadOnly container line is unchanged by the conversion', () => {
+  expect(CHARACTER_SRC).toContain('id="statsReadOnly" class="wizard-stat-grid" x-show="!editing"');
+});
