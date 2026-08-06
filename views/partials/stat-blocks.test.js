@@ -317,3 +317,65 @@ test('the partial omits the model bindings entirely when no model is passed', ()
   expect(html).not.toMatch(/\sx-model="/);
   expect(html).not.toMatch(/\sx-modelable="/);
 });
+
+// --- the wizard's use of the shared rule ----------------------------------
+//
+// public/js/character-wizard.js is a 1698-line IIFE that returns immediately
+// without a #wizard-data element and touches localStorage, Math.random, and
+// rAF at init, so mounting it under jsdom is its own project. Instead the
+// arithmetic it needs lives in resolveStatTarget and is pinned here with the
+// wizard's own numbers, and a source assertion proves the wizard calls it
+// rather than growing a second copy.
+
+// Mirrors the call the wizard makes: floor is the class + personality
+// points the user may not remove, ceiling is whichever binds first -- the
+// per-stat cap, or what the remaining budget can pay for.
+const wizardTarget = ({ slot, cp, pp, up, remaining, cap }) =>
+  window.StatBlocks.resolveStatTarget({
+    slot,
+    current: cp + pp + up,
+    floor: cp + pp,
+    ceiling: Math.min(cap, cp + pp + up + remaining)
+  }) - cp - pp;
+
+test('wizard: clicking the 4th block assigns the whole jump when the budget covers it', () => {
+  // Level 2+: cap 5. One class point, nothing user-assigned, 4 points left.
+  expect(wizardTarget({ slot: 4, cp: 1, pp: 0, up: 0, remaining: 4, cap: 5 })).toBe(3);
+});
+
+test('wizard: a short budget assigns only what remains', () => {
+  expect(wizardTarget({ slot: 5, cp: 1, pp: 0, up: 0, remaining: 2, cap: 5 })).toBe(2);
+});
+
+test('wizard: the per-stat cap binds before the budget at level 1', () => {
+  // Level 1: cap 3. Clicking the 5th block can only reach 3 total.
+  expect(wizardTarget({ slot: 5, cp: 1, pp: 0, up: 0, remaining: 5, cap: 3 })).toBe(2);
+});
+
+test('wizard: clicking the topmost user-assigned block removes one point', () => {
+  // 1 class + 2 user = 3. Clicking the 3rd block steps down to 2 total.
+  expect(wizardTarget({ slot: 3, cp: 1, pp: 0, up: 2, remaining: 3, cap: 5 })).toBe(1);
+});
+
+test('wizard: a click can never take a stat below its class and personality points', () => {
+  // 1 class + 1 personality + 2 user. Clicking the 1st block floors at 2.
+  expect(wizardTarget({ slot: 1, cp: 1, pp: 1, up: 2, remaining: 2, cap: 5 })).toBe(0);
+});
+
+test('character-wizard.js applies the shared rule instead of its own arithmetic', () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'public', 'js', 'character-wizard.js'), 'utf8'
+  );
+  expect(src).toContain('StatBlocks.resolveStatTarget');
+  // The old one-point-at-a-time branches must be gone, not left beside it.
+  expect(src).not.toContain('state.userStats[stat] = up + 1');
+  expect(src).not.toContain('state.userStats[stat] = up - 1');
+});
+
+test('character-wizard.js wires the hover preview', () => {
+  const src = fs.readFileSync(
+    path.join(__dirname, '..', '..', 'public', 'js', 'character-wizard.js'), 'utf8'
+  );
+  expect(src).toContain("addEventListener('mouseover', onStatBoxHover)");
+  expect(src).toContain("addEventListener('mouseleave', clearStatPreview)");
+});

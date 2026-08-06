@@ -902,7 +902,33 @@ window.CharacterWizard = (function () {
     }
   };
 
-  // Click handler for stat boxes: add or remove a user-assigned point.
+  // Resolve what a click or hover on `slot` (0-based DOM index) should make
+  // this stat's TOTAL. Shared by the click handler and the hover preview so
+  // the preview cannot promise something the click won't deliver.
+  const resolveWizardTotal = (stat, slot) => {
+    const classPts = getClassPoints();
+    const persPts = getPersonalityPoints();
+    const cp = classPts[stat] || 0;
+    const pp = persPts[stat] || 0;
+    const up = state.userStats[stat] || 0;
+    const remaining = Math.max(0, getTotalPoints()
+      - sumPoints(classPts) - sumPoints(persPts) - getUserPointsTotal());
+    return window.StatBlocks.resolveStatTarget({
+      slot: slot + 1,
+      current: cp + pp + up,
+      // Class- and personality-assigned points are the floor: no click can
+      // take the stat below them.
+      floor: cp + pp,
+      // Whichever binds first -- the per-stat cap for this level, or what
+      // the remaining budget can actually pay for.
+      ceiling: Math.min(getMaxAssignable(), cp + pp + up + remaining)
+    });
+  };
+
+  // Click handler for stat boxes. Star-rating semantics, matching the
+  // statBlocks component every other surface uses: clicking the Nth block
+  // sets the stat to N, except that clicking the block you are already on
+  // steps down by one.
   const onStatBoxClick = (e) => {
     const box = e.target.closest('.wizard-stat-box');
     if (!box || !box.hasAttribute('data-clickable')) return;
@@ -912,24 +938,47 @@ window.CharacterWizard = (function () {
     const persPts = getPersonalityPoints();
     const cp = classPts[stat] || 0;
     const pp = persPts[stat] || 0;
-    const up = state.userStats[stat] || 0;
-    const total = cp + pp + up;
-    const remaining = Math.max(0, getTotalPoints() - sumPoints(classPts) - sumPoints(persPts) - getUserPointsTotal());
 
-    if (slot >= cp + pp && slot < total) {
-      // User-assigned box: remove a point.
-      state.userStats[stat] = up - 1;
-      if (state.userStats[stat] <= 0) delete state.userStats[stat];
-    } else if (slot >= total && remaining > 0) {
-      // Assignable box: add a point (if budget remains).
-      state.userStats[stat] = up + 1;
-    } else {
-      return;
-    }
+    const userTarget = Math.max(0, resolveWizardTotal(stat, slot) - cp - pp);
+    if (userTarget === (state.userStats[stat] || 0)) return;
+
+    if (userTarget <= 0) delete state.userStats[stat];
+    else state.userStats[stat] = userTarget;
 
     renderStatGrid();
     updateStatsDisplay();
     renderSummary();
+  };
+
+  // Hover preview. Shows the total a click would produce -- in both
+  // directions, so hovering below the current value previews the drop
+  // rather than pretending nothing would change.
+  const clearStatPreview = () => {
+    if (!statGrid) return;
+    Array.prototype.forEach.call(
+      statGrid.querySelectorAll('.is-preview, .is-preview-off'),
+      (el) => el.classList.remove('is-preview', 'is-preview-off')
+    );
+  };
+
+  const onStatBoxHover = (e) => {
+    const box = e.target.closest && e.target.closest('.wizard-stat-box');
+    clearStatPreview();
+    if (!box || !box.hasAttribute('data-clickable')) return;
+    const stat = box.getAttribute('data-stat');
+    const slot = parseInt(box.getAttribute('data-slot'), 10);
+    const row = box.closest('.wizard-stat-row');
+    if (!row) return;
+    const classPts = getClassPoints();
+    const persPts = getPersonalityPoints();
+    const floor = (classPts[stat] || 0) + (persPts[stat] || 0);
+    const total = resolveWizardTotal(stat, slot);
+
+    Array.prototype.forEach.call(row.querySelectorAll('.wizard-stat-box'), (b, i) => {
+      if (i < floor) return;                          // class/personality: never previewed
+      if (i < total) b.classList.add('is-preview');    // would be filled
+      else if (b.classList.contains('is-user')) b.classList.add('is-preview-off'); // would be given back
+    });
   };
 
   const onTraitChange = (idx) => {
@@ -991,7 +1040,15 @@ window.CharacterWizard = (function () {
   if (trait2Select) trait2Select.addEventListener('change', onTraitChange(1));
   if (trait3Select) trait3Select.addEventListener('change', onTraitChange(2));
   if (levelInput) levelInput.addEventListener('input', onLevelChange);
-  if (statGrid) statGrid.addEventListener('click', onStatBoxClick);
+  if (statGrid) {
+    statGrid.addEventListener('click', onStatBoxClick);
+    // mouseover, not mouseenter: this is delegated to the grid and has to
+    // fire as the pointer crosses between individual boxes, which mouseenter
+    // on the container does not do. mouseleave on the container is still the
+    // right clear signal -- it fires once, when the pointer leaves the grid.
+    statGrid.addEventListener('mouseover', onStatBoxHover);
+    statGrid.addEventListener('mouseleave', clearStatPreview);
+  }
   // "Of which successful" input in the summary aside. Capped at the total
   // mission count for the current level (handled in renderSummaryMeta).
   if (summarySuccessfulInput) {
