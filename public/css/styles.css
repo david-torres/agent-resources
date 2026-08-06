@@ -1312,7 +1312,20 @@ a.dropdown-item:hover {
 .wizard-stat-box.is-empty:hover {
   background: var(--wizard-stat-empty-hover);
 }
-.wizard-stat-box.is-preview {
+/* SPECIFICITY, do not reorder: the wizard's grid keeps .is-assignable /
+   .is-user on a box and LAYERS .is-preview on top, so the block under the
+   pointer matches a :hover rule and this one at the same time. The three
+   :hover rules above are (0,3,0); a bare `.wizard-stat-box.is-preview` is
+   (0,2,0) and loses, which paints the hovered block as empty and previews
+   N-1 filled instead of N -- an off-by-one in the exact gesture the preview
+   exists for. Matching :hover here makes that case (0,3,0) too, and this
+   block sits BELOW the :hover rules so the tie resolves in its favour. Same
+   equal-specificity-plus-source-order mechanism .is-preview already uses to
+   beat `.wizard-stat-box.is-assignable` (0,2,0) at :1272 for the blocks that
+   are NOT under the pointer. Moving this above the :hover rules, or dropping
+   the :hover selector, reintroduces the bug. */
+.wizard-stat-box.is-preview,
+.wizard-stat-box.is-preview:hover {
   background: var(--wizard-stat-preview);
   border-color: var(--wizard-stat-user-edge);
   cursor: pointer;
