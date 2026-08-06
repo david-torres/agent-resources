@@ -1,4 +1,4 @@
-const { test, expect } = require('bun:test');
+const { test, expect, beforeAll } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
 
@@ -35,6 +35,12 @@ test('deceased-modal carries all four modal bindings on the real template', () =
 });
 
 const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
+
+beforeAll(async () => {
+  await setupAlpine();
+  require('../public/js/alpine-components.js');
+  document.dispatchEvent(new window.CustomEvent('alpine:init'));
+});
 
 const CONFIRM = `
   <div x-data="{ typed: '', required: 'Vex Kalloway' }">
@@ -109,4 +115,59 @@ test('deceased submit button has no bare disabled attribute', () => {
   const buttonTag = buttonMatch[0];
   // Match ' disabled' not followed by '-' or '=' (avoids matching ':disabled=')
   expect(buttonTag).not.toMatch(/\sdisabled(?![-=])/);
+});
+
+// --- stat blocks ----------------------------------------------------------
+//
+// This form is a plain native POST -- no fetch, no Alpine state carrying the
+// values -- so the hidden input inside each control is the ONLY thing that
+// makes a stat reach the server. A test that only checked the blocks render
+// would pass on a form that silently posts no stats at all.
+
+const Handlebars = require('handlebars');
+const hbsHelpers = require('handlebars-helpers')();
+const rangeHelper = require('handlebars-helper-range');
+const customHelpers = require('../util/handlebars');
+const { statList } = require('../util/enclave-consts');
+
+const FORM_SRC = fs.readFileSync(path.join(__dirname, 'character-form.handlebars'), 'utf8');
+
+test('character-form renders stat blocks instead of number inputs', () => {
+  expect(FORM_SRC).toContain('{{> stat-blocks stat=this name=this');
+  // The old field had `type="number" name="{{this}}" ... required`.
+  expect(FORM_SRC).not.toMatch(/type="number"\s+name="\{\{this\}\}"/);
+});
+
+test('the stat fields are no longer `required`', () => {
+  // A hidden input always has a value and 0 is a legitimate stat, so a
+  // `required` here could only ever be a false gate.
+  const statsSection = FORM_SRC.slice(
+    FORM_SRC.indexOf('<label class="label">Stats</label>'),
+    FORM_SRC.indexOf('Signature Gear')
+  );
+  expect(statsSection).not.toContain('required');
+});
+
+test('every stat POSTs its own name from a hidden input', async () => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks', fs.readFileSync(
+    path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
+  ));
+
+  const statsSection = FORM_SRC.slice(
+    FORM_SRC.indexOf('<label class="label">Stats</label>'),
+    FORM_SRC.indexOf('Signature Gear')
+  );
+  const character = Object.fromEntries(statList.map((s, i) => [s, i % 6]));
+  await render(hb.compile(statsSection)({ statList, character }));
+  await tick();
+
+  const posted = Array.from(document.querySelectorAll('input[type="hidden"]'))
+    .map((el) => el.name);
+  expect(posted.sort()).toEqual([...statList].sort());
+  expect(document.querySelector('input[name="might"]').value)
+    .toBe(String(character.might));
 });
