@@ -47,21 +47,26 @@ test('a value above the block count can step down but the rule never invents one
 // --- the Alpine component -------------------------------------------------
 //
 // This fixture mirrors views/partials/stat-blocks.handlebars by hand so the
-// component's behaviour is pinned independently of the template. Task 3
-// adds tests that mount the REAL partial, which is what catches the two
+// component's behaviour is pinned independently of the template. The tests
+// further down mount the REAL partial, which is what catches the two
 // drifting apart.
+//
+// The blocks are written out one element each rather than looped by
+// `<template x-for>` for the same reason the partial does not use x-for:
+// hx-boost snapshots the live DOM, so x-for's generated children come back
+// on a Back navigation and x-for appends a second set on top of them. See
+// the history-restore tests at the bottom of this file.
 
 const mount = (value, max) => render(`
   <div class="stat-blocks" role="radiogroup" aria-label="Might"
        x-data="statBlocks(${value}, ${max}, 'might')"
        @mouseleave="preview = null" @keydown="key($event)">
     <input type="hidden" name="might" :value="value" class="stat-blocks-value" data-stat="might">
-    <template x-for="i in max" :key="i">
-      <span class="wizard-stat-box" role="radio"
-            :class="boxClass(i)" :aria-checked="i === value" :tabindex="tabIndex(i)"
-            @click="set(i)" @mouseenter="preview = i"></span>
-    </template>
-    <span class="stat-blocks-over" x-show="value > max" x-text="value"></span>
+    ${Array.from({ length: max }, (_, k) => k + 1).map((i) => `
+    <span class="wizard-stat-box ${i <= value ? 'is-set' : 'is-empty'}" role="radio"
+          :class="boxClass(${i})" :aria-checked="value === ${i}" :tabindex="tabIndex(${i})"
+          @click="set(${i})" @mouseenter="preview = ${i}"></span>`).join('')}
+    <span class="stat-blocks-over" x-show="value > max" x-text="value + ' points'"></span>
   </div>
 `);
 
@@ -187,7 +192,10 @@ test('a value above max fills every block, shows the number, and does not clamp'
   await tick();
   expect(classesOf().every((c) => c === 'is-set')).toBe(true);
   expect(hidden().value).toBe('7');
-  expect(document.querySelector('.stat-blocks-over').textContent).toBe('7');
+  // Carries the unit, not a bare numeral: for a stat above the block count
+  // every block reads aria-checked="false", so this indicator is the only
+  // place a screen-reader user can get the real value.
+  expect(document.querySelector('.stat-blocks-over').textContent).toBe('7 points');
 });
 
 test('an over-max value drops to the clicked block, and cannot grow again', async () => {
@@ -322,54 +330,171 @@ test('the partial omits the model bindings entirely when no model is passed', ()
 //
 // public/js/character-wizard.js is a 1698-line IIFE that returns immediately
 // without a #wizard-data element and touches localStorage, Math.random, and
-// rAF at init, so mounting it under jsdom is its own project. Instead the
-// arithmetic it needs lives in resolveStatTarget and is pinned here with the
-// wizard's own numbers, and a source assertion proves the wizard calls it
-// rather than growing a second copy.
+// rAF at init, so mounting it under jsdom is its own project. So the
+// wizard's side of the rule -- INCLUDING the construction of its arguments,
+// which is where an off-by-one can actually live -- is exported as
+// StatBlocks.resolveWizardTarget and exercised directly here. The wizard
+// only gathers state and calls it.
+//
+// These tests call the real exported function rather than a local rebuild
+// of the wizard's call. A hand-rebuilt copy passes no matter what the
+// wizard actually passes: flipping `slot + 1` to `slot` is invisible to a
+// copy that already takes a 1-based slot, and that one character makes
+// every wizard click assign a point too few.
 
-// Mirrors the call the wizard makes: floor is the class + personality
-// points the user may not remove, ceiling is whichever binds first -- the
-// per-stat cap, or what the remaining budget can pay for.
-const wizardTarget = ({ slot, cp, pp, up, remaining, cap }) =>
-  window.StatBlocks.resolveStatTarget({
-    slot,
-    current: cp + pp + up,
-    floor: cp + pp,
-    ceiling: Math.min(cap, cp + pp + up + remaining)
-  }) - cp - pp;
+// resolveWizardTarget takes the raw 0-based data-slot and returns the new
+// TOTAL. The user portion -- what the wizard stores -- is that minus the
+// class and personality points, which are not the user's to give back.
+const wizardTotal = (args) => window.StatBlocks.resolveWizardTarget(args);
+const wizardUserPoints = (args) => wizardTotal(args) - (args.cp || 0) - (args.pp || 0);
+
+test('wizard: data-slot is 0-based, so the first block means one point, not zero', () => {
+  // This is the conversion the old hand-rebuilt helper could not see.
+  expect(wizardTotal({ slot: 0, cp: 0, pp: 0, up: 0, remaining: 6, cap: 5 })).toBe(1);
+  expect(wizardTotal({ slot: 3, cp: 0, pp: 0, up: 0, remaining: 6, cap: 5 })).toBe(4);
+});
 
 test('wizard: clicking the 4th block assigns the whole jump when the budget covers it', () => {
   // Level 2+: cap 5. One class point, nothing user-assigned, 4 points left.
-  expect(wizardTarget({ slot: 4, cp: 1, pp: 0, up: 0, remaining: 4, cap: 5 })).toBe(3);
+  // The 4th block is data-slot 3.
+  const args = { slot: 3, cp: 1, pp: 0, up: 0, remaining: 4, cap: 5 };
+  expect(wizardTotal(args)).toBe(4);
+  expect(wizardUserPoints(args)).toBe(3);
 });
 
 test('wizard: a short budget assigns only what remains', () => {
-  expect(wizardTarget({ slot: 5, cp: 1, pp: 0, up: 0, remaining: 2, cap: 5 })).toBe(2);
+  const args = { slot: 4, cp: 1, pp: 0, up: 0, remaining: 2, cap: 5 };
+  expect(wizardTotal(args)).toBe(3);
+  expect(wizardUserPoints(args)).toBe(2);
 });
 
 test('wizard: the per-stat cap binds before the budget at level 1', () => {
-  // Level 1: cap 3. Clicking the 5th block can only reach 3 total.
-  expect(wizardTarget({ slot: 5, cp: 1, pp: 0, up: 0, remaining: 5, cap: 3 })).toBe(2);
+  // Level 1: cap 3. Clicking the 5th block (data-slot 4) reaches 3 total.
+  const args = { slot: 4, cp: 1, pp: 0, up: 0, remaining: 5, cap: 3 };
+  expect(wizardTotal(args)).toBe(3);
+  expect(wizardUserPoints(args)).toBe(2);
 });
 
 test('wizard: clicking the topmost user-assigned block removes one point', () => {
-  // 1 class + 2 user = 3. Clicking the 3rd block steps down to 2 total.
-  expect(wizardTarget({ slot: 3, cp: 1, pp: 0, up: 2, remaining: 3, cap: 5 })).toBe(1);
+  // 1 class + 2 user = 3. Clicking the 3rd block (data-slot 2) steps down.
+  const args = { slot: 2, cp: 1, pp: 0, up: 2, remaining: 3, cap: 5 };
+  expect(wizardTotal(args)).toBe(2);
+  expect(wizardUserPoints(args)).toBe(1);
 });
 
 test('wizard: a click can never take a stat below its class and personality points', () => {
-  // 1 class + 1 personality + 2 user. Clicking the 1st block floors at 2.
-  expect(wizardTarget({ slot: 1, cp: 1, pp: 1, up: 2, remaining: 2, cap: 5 })).toBe(0);
+  // 1 class + 1 personality + 2 user. Clicking the 1st block (data-slot 0)
+  // floors at 2.
+  const args = { slot: 0, cp: 1, pp: 1, up: 2, remaining: 2, cap: 5 };
+  expect(wizardTotal(args)).toBe(2);
+  expect(wizardUserPoints(args)).toBe(0);
 });
 
 test('character-wizard.js applies the shared rule instead of its own arithmetic', () => {
   const src = fs.readFileSync(
     path.join(__dirname, '..', '..', 'public', 'js', 'character-wizard.js'), 'utf8'
   );
-  expect(src).toContain('StatBlocks.resolveStatTarget');
+  expect(src).toContain('StatBlocks.resolveWizardTarget');
+  // Rebuilding the arguments in the wizard is what put the slot conversion
+  // and the floor/ceiling on the untested side of the line. It must not
+  // come back.
+  expect(src).not.toContain('slot: slot + 1');
+  expect(src).not.toContain('floor: cp + pp');
   // The old one-point-at-a-time branches must be gone, not left beside it.
   expect(src).not.toContain('state.userStats[stat] = up + 1');
   expect(src).not.toContain('state.userStats[stat] = up - 1');
+});
+
+// --- surviving an hx-boost history restore --------------------------------
+//
+// views/layouts/main.handlebars puts hx-boost="true" on <body> and nothing
+// configures htmx's history cache or hooks htmx:beforeHistorySave, so htmx
+// snapshots the LIVE DOM -- Alpine's output included -- and restores that
+// snapshot verbatim on Back. render() replaces document.body.innerHTML and
+// lets Alpine's MutationObserver re-initialize it, which is exactly the
+// shape of that swap (see the note on render() in test/helpers/alpine-dom).
+//
+// Under `<template x-for>` this was measured at 5 blocks -> 10: the restored
+// snapshot already contains the five spans x-for generated, and x-for
+// appends five more. The stale five throw "i is not defined" on every
+// binding, because `i` exists only in the x-for scope, so clicking one
+// throws instead of setting the stat.
+
+const snapshotAndRestore = async () => {
+  // What htmx caches is the live DOM, not the response body.
+  const snapshot = document.body.innerHTML;
+  await render(snapshot);
+  await tick();
+};
+
+test('a history snapshot round trip does not duplicate the blocks', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 3, max: 5 }));
+  await tick();
+  expect(blocks().length).toBe(5);
+
+  await snapshotAndRestore();
+
+  expect(blocks().length).toBe(5);
+  expect(classesOf()).toEqual(['is-set', 'is-set', 'is-set', 'is-empty', 'is-empty']);
+  expect(blocks().filter((b) => b.getAttribute('tabindex') === '0').length).toBe(1);
+  expect(blocks().map((b) => b.getAttribute('aria-checked')))
+    .toEqual(['false', 'false', 'true', 'false', 'false']);
+});
+
+test('a restored block re-derives its class from the seed rather than keeping the snapshot state', async () => {
+  // The string form of :class can only ADD: Alpine tracks the classes it
+  // added itself and removes only those, so an `is-set` that arrived in the
+  // served markup (which is what a restored snapshot is) could never come
+  // off, and the block would be stuck filled. Raise the value, snapshot the
+  // filled row, restore, and the seed of 3 must win.
+  await render(renderPartial({ stat: 'might', name: 'might', value: 3, max: 5 }));
+  await tick();
+  blocks()[4].click();
+  await tick();
+  expect(classesOf().every((c) => c === 'is-set')).toBe(true);
+
+  await snapshotAndRestore();
+
+  expect(classesOf()).toEqual(['is-set', 'is-set', 'is-set', 'is-empty', 'is-empty']);
+  expect(hidden().value).toBe('3');
+});
+
+test('a restored block is still live, not a stale copy that throws on click', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 2, max: 5 }));
+  await tick();
+
+  await snapshotAndRestore();
+
+  blocks()[3].click();
+  await tick();
+  expect(hidden().value).toBe('4');
+  expect(classesOf()).toEqual(['is-set', 'is-set', 'is-set', 'is-set', 'is-empty']);
+});
+
+test('the partial ships real elements, not an x-for template', () => {
+  // Asserted against the RENDERED output, not the source: Handlebars strips
+  // {{!-- --}} comments, and the partial's comment explains at length why
+  // x-for is not used here, which a source-level substring check would trip
+  // over.
+  const html = renderPartial({ stat: 'might', name: 'might', value: 3, max: 5 });
+  expect(html).not.toContain('<template');
+  expect(html).not.toContain('x-for');
+  expect((html.match(/role="radio"/g) || []).length).toBe(5);
+  // And the class binding is the object form, which is the half of the fix
+  // that is easy to lose in a later edit.
+  expect(html).toContain(':class="boxClass(');
+});
+
+test('boxClass returns an object, not a class string', async () => {
+  // Alpine's string form only removes classes it added itself; the object
+  // form toggles by truthiness whoever added them. Asserted directly as
+  // well as through the restore tests above, because "it returns a string
+  // again" is a one-line regression with a non-obvious symptom.
+  await render(renderPartial({ stat: 'might', name: 'might', value: 2, max: 5 }));
+  await tick();
+  const data = Alpine.$data(document.querySelector('.stat-blocks'));
+  expect(data.boxClass(1)).toEqual({ 'is-preview': false, 'is-set': true, 'is-empty': false });
+  expect(data.boxClass(4)).toEqual({ 'is-preview': false, 'is-set': false, 'is-empty': true });
 });
 
 test('character-wizard.js wires the hover preview', () => {

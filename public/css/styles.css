@@ -1254,7 +1254,14 @@ a.dropdown-item:hover {
     width: 2rem;
     height: 2rem;
   }
-  .wizard-stat-boxes {
+  /* Both containers, not just the wizard's. .stat-blocks is the interactive
+     control that replaced the stat number inputs on the stats editor, the
+     level-up modal, the character form, and the class form; matching only
+     .wizard-stat-boxes here left those four with 0.3rem gaps between 2rem
+     targets -- a smaller tap area than the full-width <input type="number">
+     they replaced. */
+  .wizard-stat-boxes,
+  .stat-blocks {
     gap: 0.5rem;
   }
 }

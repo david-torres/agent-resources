@@ -905,23 +905,25 @@ window.CharacterWizard = (function () {
   // Resolve what a click or hover on `slot` (0-based DOM index) should make
   // this stat's TOTAL. Shared by the click handler and the hover preview so
   // the preview cannot promise something the click won't deliver.
+  //
+  // This function only GATHERS state. The arithmetic -- the 0-based to
+  // 1-based slot conversion, the class+personality floor, and the
+  // cap-vs-budget ceiling -- lives in StatBlocks.resolveWizardTarget, which
+  // has unit tests; this module has none and cannot be mounted under jsdom.
+  // Rebuilding those arguments here would put the one place an off-by-one
+  // can live back on the untested side of the line.
   const resolveWizardTotal = (stat, slot) => {
     const classPts = getClassPoints();
     const persPts = getPersonalityPoints();
-    const cp = classPts[stat] || 0;
-    const pp = persPts[stat] || 0;
-    const up = state.userStats[stat] || 0;
     const remaining = Math.max(0, getTotalPoints()
       - sumPoints(classPts) - sumPoints(persPts) - getUserPointsTotal());
-    return window.StatBlocks.resolveStatTarget({
-      slot: slot + 1,
-      current: cp + pp + up,
-      // Class- and personality-assigned points are the floor: no click can
-      // take the stat below them.
-      floor: cp + pp,
-      // Whichever binds first -- the per-stat cap for this level, or what
-      // the remaining budget can actually pay for.
-      ceiling: Math.min(getMaxAssignable(), cp + pp + up + remaining)
+    return window.StatBlocks.resolveWizardTarget({
+      slot: slot,
+      cp: classPts[stat] || 0,
+      pp: persPts[stat] || 0,
+      up: state.userStats[stat] || 0,
+      remaining: remaining,
+      cap: getMaxAssignable()
     });
   };
 

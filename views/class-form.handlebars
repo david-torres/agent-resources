@@ -101,7 +101,12 @@
     <div class="columns is-multiline is-mobile">
       {{#each statList}}
       <div class="column is-2-tablet is-4-mobile">
-        <label class="label is-small is-capitalized">{{this}}</label>
+        {{!-- A <div>, not a <label>: the stat is now a radiogroup of blocks,
+              not a single labellable control, so a <label> here would have
+              no `for` target and clicking it would move focus nowhere. The
+              group carries its own aria-label. Bulma classes kept as-is --
+              they carry this column's layout. --}}
+        <div class="label is-small is-capitalized">{{this}}</div>
         <div class="control">
           {{> stat-blocks stat=this name=(concat "stat_spread[" this "]") value=(lookup ../class.stat_spread this) max=3}}
         </div>

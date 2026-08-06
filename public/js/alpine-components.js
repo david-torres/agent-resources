@@ -53,7 +53,33 @@ const resolveStatTarget = ({ slot, current, floor = 0, ceiling }) => {
   return Math.max(floor, Math.min(target, ceiling));
 };
 
-window.StatBlocks = { resolveStatTarget };
+// The wizard's half of the same rule. Its grid is imperative and its boxes
+// carry a 0-BASED `data-slot`, and its floor and ceiling are functions of
+// class points, personality points, the per-stat cap, and what is left of
+// the point budget. Building those four arguments is exactly where an
+// off-by-one can hide -- `slot + 1` in particular -- so the construction
+// lives here, next to the rule and inside the tested unit, rather than in
+// public/js/character-wizard.js, which has no unit tests and cannot be
+// mounted under jsdom. character-wizard.js gathers the state; this decides
+// what a click means.
+//
+// Takes the raw 0-based data-slot; returns the stat's new TOTAL (class +
+// personality + user points), which is what the caller subtracts its class
+// and personality points from to get the user portion.
+const resolveWizardTarget = ({ slot, cp = 0, pp = 0, up = 0, remaining = 0, cap }) =>
+  resolveStatTarget({
+    // data-slot is 0-based; resolveStatTarget speaks 1-based positions.
+    slot: slot + 1,
+    current: cp + pp + up,
+    // Class- and personality-assigned points are the floor: no click can
+    // take the stat below them.
+    floor: cp + pp,
+    // Whichever binds first -- the per-stat cap for this level, or what the
+    // remaining budget can actually pay for.
+    ceiling: Math.min(cap, cp + pp + up + remaining)
+  });
+
+window.StatBlocks = { resolveStatTarget, resolveWizardTarget };
 
 document.addEventListener('alpine:init', () => {
   // Title -> slug sync for the page editor. Stops as soon as the slug is
@@ -207,10 +233,21 @@ document.addEventListener('alpine:init', () => {
       });
     },
 
+    // Returns an OBJECT, not a class string, because the partial's blocks
+    // are server-rendered and already carry `is-set`/`is-empty` in the
+    // markup Alpine finds. Alpine's string form only tracks the classes it
+    // added itself and can remove only those, so a served `is-set` could
+    // never be taken off again -- a block restored from an hx-boost history
+    // snapshot would be stuck filled. The object form adds and removes by
+    // truthiness regardless of who put the class there.
     boxClass(i) {
       const shown = this.previewValue;
-      if (shown !== null) return i <= shown ? 'is-preview' : 'is-empty';
-      return i <= this.value ? 'is-set' : 'is-empty';
+      const previewing = shown !== null;
+      return {
+        'is-preview': previewing && i <= shown,
+        'is-set': !previewing && i <= this.value,
+        'is-empty': previewing ? i > shown : i > this.value
+      };
     },
 
     tabIndex(i) {
