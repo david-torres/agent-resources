@@ -112,9 +112,8 @@
                     <div class="columns is-multiline">
                       {{#each ../statList}}
                       <div class="column is-6">
-                        <p><strong>{{capitalize this}}:</strong>
-                          {{#range 0 (lookup ../this.character this)}}+ {{/range}}
-                        </p>
+                        <p class="mb-1"><strong>{{capitalize this}}</strong></p>
+                        {{> stat-blocks-readonly value=(lookup ../this.character this) max=5}}
                       </div>
                       {{/each}}
                     </div>
@@ -178,12 +177,8 @@
     <div class="columns is-multiline">
       {{#each statList}}
       <div class="column is-3">
-        <p><strong>{{capitalize this}}:</strong>
-          {{#range 0 (lookup ../partyStats this)}}
-          +
-          {{/range}}
-          ({{lookup ../partyStats this}})
-        </p>
+        <p class="mb-1"><strong>{{capitalize this}}</strong> ({{lookup ../partyStats this}})</p>
+        {{> stat-blocks-readonly value=(lookup ../partyStats this) max=5}}
       </div>
       {{/each}}
     </div>
