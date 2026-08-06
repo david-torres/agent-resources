@@ -302,4 +302,105 @@ document.addEventListener('alpine:init', () => {
       rows.forEach((row) => body.appendChild(row));
     }
   }));
+
+  // The export dropdown on the character and class pages. Owns the same
+  // `open` state the inline `x-data="{ open: false }"` used to hold, plus the
+  // download itself.
+  //
+  // WHY THE DOWNLOAD CANNOT JUST BE AN <a href> -- do not "simplify" this
+  // component back into attributes; both attribute-only shapes were measured
+  // and both are worse:
+  //
+  //   * Left boosted (hx-boost="true" sits on <body>), the click becomes an
+  //     htmx AJAX GET. That request DOES carry the auth header, so the server
+  //     returns the real file -- and then htmx ignores Content-Disposition:
+  //     attachment and swaps the raw markdown/JSON into <body>. Nothing
+  //     downloads; the page is destroyed instead. That is how this feature
+  //     shipped, and it has never worked.
+  //   * hx-boost="false", with or without a `download` attribute, makes it a
+  //     real navigation. This app authenticates with an
+  //     `Authorization: Bearer` header that JavaScript writes from
+  //     localStorage (public/js/app.js's htmx:configRequest hook, ~:730) --
+  //     the browser never sends it on a navigation. So the request bounces
+  //     through /auth/check and what lands on disk is the ~6.6KB SIGN-IN
+  //     PAGE, saved as the user's export. A download fires, so it looks
+  //     fixed; it is not.
+  //
+  // The only shape that works is to make the request ourselves with the
+  // header, then hand the browser a Blob it is willing to save.
+  // `hx-boost="false"` on the anchors keeps htmx out of it, `@click.prevent`
+  // keeps the browser's own navigation out of it, and a synthetic
+  // `<a download>` over an object URL does the save.
+  Alpine.data('exportDropdown', () => ({
+    open: false,
+    error: '',
+    busy: false,
+
+    // The server already names the file (routes/characters.js:801,
+    // routes/classes.js:379); read that name back rather than reinventing it.
+    // The RFC 5987 `filename*` form is preferred over plain `filename=`
+    // because the latter has non-ASCII stripped out of it on the class route.
+    filenameFrom(disposition, url) {
+      const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition || '');
+      if (encoded) {
+        try {
+          return decodeURIComponent(encoded[1]);
+        } catch (e) {
+          // Malformed percent-encoding: fall through to the plain form.
+        }
+      }
+      const plain = /filename="([^"]+)"/i.exec(disposition || '');
+      if (plain) return plain[1];
+      const format = new URL(url, window.location.origin).searchParams.get('format');
+      return 'export.' + (format === 'markdown' ? 'md' : 'json');
+    },
+
+    download(url) {
+      // Double-clicking a menu item must not start two downloads.
+      if (this.busy) return Promise.resolve();
+      this.busy = true;
+      this.error = '';
+
+      let objectUrl = null;
+      return fetch(url, { headers: CharacterCommon.getAuthHeader() }).then((response) => {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        // `ok` is NOT enough, and this check is the whole difference between a
+        // working export and the bug this component exists to kill. An expired
+        // or missing token does not produce a 401: util/auth.js redirects to
+        // /auth/check, fetch follows that redirect transparently, and the
+        // response is a perfectly `ok` 200 carrying ~6.6KB of sign-in page.
+        // Saving that as the user's export is the exact false-green the
+        // hx-boost="false" download shortcut produces. Every export route sets
+        // Content-Disposition: attachment (routes/characters.js:800,
+        // routes/classes.js:379); the sign-in page never does.
+        const disposition = response.headers.get('Content-Disposition') || '';
+        if (!/attachment/i.test(disposition)) {
+          throw new Error('the server did not return a file (your session may have expired -- try reloading)');
+        }
+        return response.blob().then((blob) => {
+          objectUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = objectUrl;
+          link.download = this.filenameFrom(response.headers.get('Content-Disposition'), url);
+          // Must be in the document for the synthetic click to count as a
+          // user-initiated download in every browser.
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          this.open = false;
+        });
+      }).catch((err) => {
+        // A failed export must not look like a successful one: the menu stays
+        // open with the reason in it rather than closing on nothing at all.
+        this.error = 'Export failed: ' + ((err && err.message) || 'Unknown error');
+      }).finally(() => {
+        // Revoked on a delay, not synchronously after click(): the browser
+        // reads the blob out of the object URL asynchronously, and revoking
+        // straight away can cancel the download it just started. Nothing else
+        // holds a reference, so this is what keeps it from leaking.
+        if (objectUrl) setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+        this.busy = false;
+      });
+    }
+  }));
 });

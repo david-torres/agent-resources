@@ -37,7 +37,7 @@
        itself, so the element restores stuck open -- and a stuck modal overlay
        swallows every click on the page. See public/js/alpine-components.js. --}}
   <div class="dropdown is-right" id="export-dropdown"
-       x-data="{ open: false }"
+       x-data="exportDropdown"
        :class="{ 'is-active': open }"
        @click.outside="open = false"
        @keydown.escape.window="open = false">
@@ -48,16 +48,24 @@
         <span class="icon is-small"><i class="fas fa-angle-down"></i></span>
       </button>
     </div>
+    {{!-- hx-boost="false" AND @click.prevent, both load-bearing: the export
+          routes are authenticated by a header JavaScript writes, so neither an
+          htmx-boosted swap nor a real navigation can download the file. The
+          component fetches it with the header and hands the browser a Blob.
+          See public/js/alpine-components.js. --}}
     <div class="dropdown-menu" id="export-menu" role="menu">
       <div class="dropdown-content">
-        <a href="/classes/{{class.id}}/export?format=markdown" class="dropdown-item">
+        <a href="/classes/{{class.id}}/export?format=markdown" class="dropdown-item"
+           hx-boost="false" @click.prevent="download($el.href)">
           <span class="icon"><i class="fas fa-file-alt"></i></span>
           <span>Markdown (.md)</span>
         </a>
-        <a href="/classes/{{class.id}}/export?format=json" class="dropdown-item">
+        <a href="/classes/{{class.id}}/export?format=json" class="dropdown-item"
+           hx-boost="false" @click.prevent="download($el.href)">
           <span class="icon"><i class="fas fa-code"></i></span>
           <span>JSON (.json)</span>
         </a>
+        <div class="notification is-danger is-light m-2 p-2 is-size-7" x-show="error" x-text="error"></div>
       </div>
     </div>
   </div>
@@ -319,3 +327,9 @@
 
 {{/or}}
 {{/if}}
+
+{{!-- CharacterCommon.getAuthHeader(): the export dropdown above needs the
+     Authorization header to fetch the export itself. alpine-components.js
+     loads from <head> on every page, but this helper module did not load on
+     this one -- character.handlebars pulls it in the same way. --}}
+<script src="/js/character-common.js" defer></script>
