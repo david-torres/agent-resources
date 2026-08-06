@@ -1,0 +1,45 @@
+{{!-- Star-rating stat selector. One control per stat. Replaces the number
+      inputs the stats editor, level-up modal, character form, and class
+      form used to render.
+
+      Params:
+        stat        the stat key ("might"). Accessible name + data-stat.
+        name        the hidden input's name -- what actually POSTs.
+        value       seeded points. null/undefined becomes 0.
+        max         how many blocks render (5 for character stats, 3 for a
+                    class stat spread).
+        model       optional expression ("stats.might"); when present the
+                    control two-way binds into the surrounding x-data.
+        inputClass  optional extra class on the hidden input, for surfaces
+                    that query it by class (the level-up modal).
+
+      The hidden input is what makes this work on native form POSTs: it
+      carries the same `name` the number input it replaced carried, so no
+      route or payload changes. A value ABOVE max is preserved -- every
+      block fills and the real number shows beside them -- and only drops
+      when the user clicks a block. Nothing clamps silently.
+
+      `value` goes through {{json}} rather than being interpolated bare: a
+      null stat renders as nothing at all under {{lookup}}, producing
+      `statBlocks(, 5, "luck")` -- a SyntaxError that takes the whole
+      component down. --}}
+<div class="stat-blocks" role="radiogroup" aria-label="{{capitalize stat}}"
+     data-stat="{{stat}}"
+     x-data="statBlocks({{json value}}, {{max}}, {{json stat}})"
+     {{#if model}}x-modelable="value" x-model="{{model}}"{{/if}}
+     @mouseleave="preview = null"
+     @keydown="key($event)">
+  <input type="hidden" name="{{name}}" :value="value"
+         class="stat-blocks-value{{#if inputClass}} {{inputClass}}{{/if}}"
+         data-stat="{{stat}}">
+  <template x-for="i in max" :key="i">
+    <span class="wizard-stat-box" role="radio"
+          :class="boxClass(i)"
+          :aria-checked="i === value"
+          :aria-label="`{{capitalize stat}}: ${i}`"
+          :tabindex="tabIndex(i)"
+          @click="set(i)"
+          @mouseenter="preview = i"></span>
+  </template>
+  <span class="stat-blocks-over" x-show="value > max" x-cloak x-text="value"></span>
+</div>

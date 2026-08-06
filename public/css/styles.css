@@ -12,6 +12,7 @@
   --wizard-stat-user-edge: #404040;
   --wizard-stat-empty: #f0f0f0;
   --wizard-stat-empty-hover: #e0e0e0;
+  --wizard-stat-preview: #a8a8a8;
 
   /* Elevation scale — shared drop-shadow tokens. Prefer these over ad-hoc
      box-shadow recipes so raised surfaces stay visually consistent.
@@ -1283,6 +1284,53 @@ a.dropdown-item:hover {
   cursor: not-allowed;
   opacity: 0.5;
 }
+/* Interactive stat block control (views/partials/stat-blocks.handlebars).
+   Shares .wizard-stat-box with the wizard's grid so the two read as one
+   control. States:
+     .is-set      a committed point
+     .is-empty    an unfilled slot
+     .is-preview  what a click on the hovered block would produce -- used in
+                  BOTH directions, so hovering below the current value shows
+                  the drop rather than pretending nothing would change */
+.stat-blocks {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+}
+.wizard-stat-box.is-set {
+  background: var(--wizard-stat-user);
+  border-color: var(--wizard-stat-user-edge);
+  cursor: pointer;
+}
+.wizard-stat-box.is-empty {
+  background: var(--wizard-stat-empty);
+  border-color: var(--wizard-stat-user);
+  cursor: pointer;
+}
+.wizard-stat-box.is-empty:hover {
+  background: var(--wizard-stat-empty-hover);
+}
+.wizard-stat-box.is-preview {
+  background: var(--wizard-stat-preview);
+  border-color: var(--wizard-stat-user-edge);
+  cursor: pointer;
+}
+/* Roving tabindex means only one block per stat is in the tab order; that
+   block must show where focus is or keyboard users are navigating blind. */
+.stat-blocks [role="radio"]:focus-visible {
+  outline: 2px solid var(--bulma-link, #2e63b8);
+  outline-offset: 2px;
+}
+/* The numeral shown beside a full row when a stat exceeds its block count. */
+.stat-blocks-over {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--bulma-text, #4a4a4a);
+  margin-left: 0.15rem;
+}
+.stat-blocks.is-readonly .wizard-stat-box { cursor: default; }
 /* Coming-soon / disabled mode buttons in the character-new selector. */
 .is-disabled-mode {
   opacity: 0.55;

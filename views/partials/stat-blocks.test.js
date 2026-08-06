@@ -232,3 +232,88 @@ test('a keypress that changes nothing dispatches nothing', async () => {
   expect(count).toBe(0);
   expect(hidden().value).toBe('5');
 });
+
+// --- the real partial -----------------------------------------------------
+//
+// Everything above mounts a hand-written fixture. These compile the actual
+// template with the app's real helper set and mount THAT, so the fixture
+// and the shipped partial cannot quietly drift apart.
+
+const fs = require('fs');
+const path = require('path');
+const Handlebars = require('handlebars');
+const hbsHelpers = require('handlebars-helpers')();
+const rangeHelper = require('handlebars-helper-range');
+const customHelpers = require('../../util/handlebars');
+
+const PARTIAL_SRC = fs.readFileSync(path.join(__dirname, 'stat-blocks.handlebars'), 'utf8');
+
+const renderPartial = (context) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  return hb.compile(PARTIAL_SRC)(context);
+};
+
+test('the partial renders a labelled radiogroup with a POSTable hidden input', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 3, max: 5 }));
+  await tick();
+  const group = document.querySelector('.stat-blocks');
+  expect(group.getAttribute('role')).toBe('radiogroup');
+  expect(group.getAttribute('aria-label')).toBe('Might');
+  expect(document.querySelector('input[type="hidden"]').name).toBe('might');
+  expect(document.querySelectorAll('[role="radio"]').length).toBe(5);
+});
+
+test('the real partial mounts and clicks through to the right value', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 1, max: 5 }));
+  await tick();
+  document.querySelectorAll('[role="radio"]')[3].click();
+  await tick();
+  expect(document.querySelector('input[type="hidden"]').value).toBe('4');
+});
+
+test('a null value seeds zero rather than breaking the x-data expression', async () => {
+  // {{json v}} emits `null` for a missing stat; a bare {{lookup}} would emit
+  // nothing at all and produce `statBlocks(, 5, "luck")` -- a SyntaxError
+  // that takes the whole component down, which is the exact defect
+  // character-stats-editor.test.js documents for the #statsBox seed.
+  await render(renderPartial({ stat: 'luck', name: 'luck', value: null, max: 5 }));
+  await tick();
+  expect(document.querySelector('input[type="hidden"]').value).toBe('0');
+  expect(document.querySelectorAll('.is-empty').length).toBe(5);
+});
+
+test('max drives the block count, so a class spread renders three', async () => {
+  await render(renderPartial({ stat: 'might', name: 'stat_spread[might]', value: 2, max: 3 }));
+  await tick();
+  expect(document.querySelectorAll('[role="radio"]').length).toBe(3);
+  expect(document.querySelector('input[type="hidden"]').name).toBe('stat_spread[might]');
+});
+
+test('inputClass lands on the hidden input for surfaces that query it', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 0, max: 5, inputClass: 'level-up-stat' }));
+  await tick();
+  const input = document.querySelector('input[type="hidden"]');
+  expect(input.classList.contains('level-up-stat')).toBe(true);
+  expect(input.getAttribute('data-stat')).toBe('might');
+});
+
+test('model wires x-modelable so a parent x-data sees every change', async () => {
+  const inner = renderPartial({ stat: 'might', name: 'might', value: 1, max: 5, model: 'stats.might' });
+  await render(`<div x-data="{ stats: { might: 1 } }"><span id="mirror" x-text="stats.might"></span>${inner}</div>`);
+  await tick();
+  document.querySelectorAll('[role="radio"]')[3].click();
+  await tick();
+  expect(document.getElementById('mirror').textContent).toBe('4');
+});
+
+test('the partial omits the model bindings entirely when no model is passed', () => {
+  // x-modelable is emitted only alongside x-model. On its own it has no
+  // parent binding to attach to, and leaving it on every surface would be a
+  // directive that silently does nothing on three of the four.
+  const html = renderPartial({ stat: 'might', name: 'might', value: 1, max: 5 });
+  expect(html).not.toMatch(/\sx-model="/);
+  expect(html).not.toMatch(/\sx-modelable="/);
+});
