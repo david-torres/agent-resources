@@ -219,16 +219,12 @@
       </div>
       <div id="statsReadOnly" class="wizard-stat-grid" x-show="!editing">
         {{#each statList}}
-        <div class="wizard-stat-row" data-stat="{{this}}" data-value="{{lookup ../character this}}">
+        <div class="wizard-stat-row" data-stat="{{this}}">
           <div class="wizard-stat-name">{{capitalize this}}</div>
-          <div class="wizard-stat-boxes">
-            {{#range 0 (lookup ../character this)}}
-            <div class="wizard-stat-box is-class" title="{{capitalize ../this}}: point"></div>
-            {{/range}}
-            {{#range (lookup ../character this) 5}}
-            <div class="wizard-stat-box is-locked" title="{{capitalize ../this}}: locked"></div>
-            {{/range}}
-          </div>
+          {{> stat-blocks-readonly value=(lookup ../character this) max=5}}
+          {{#if (gt (lookup ../character this) 5)}}
+          <span class="stat-blocks-over">{{lookup ../character this}} points</span>
+          {{/if}}
         </div>
         {{/each}}
       </div>
