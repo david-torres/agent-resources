@@ -211,10 +211,13 @@ window.CharacterLevelUp = (function () {
       renderInitialMissingMissions(missing);
     }
 
-    // Wire stat input live total.
-    document.querySelectorAll('.level-up-stat').forEach((el) => {
-      el.addEventListener('input', updateStatTotal);
-    });
+    // Wire the live stat total. One delegated listener on the grid, not one
+    // per field: the blocks write through a hidden input, and a hidden
+    // input set programmatically fires no native `input` event, so the old
+    // per-field 'input' listener would never fire again and #levelUpTotal
+    // would sit frozen at its seeded value.
+    const statGrid = document.getElementById('levelUpStatGrid');
+    if (statGrid) statGrid.addEventListener('stat-change', updateStatTotal);
     updateStatTotal();
 
     // Wire "Add perk" buttons.
