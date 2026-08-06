@@ -31,6 +31,30 @@ const slugify = (value) => (value || '')
   .replace(/-+/g, '-')
   .replace(/^-+|-+$/g, '');
 
+// The one rule every stat block control obeys: clicking the block at
+// 1-based position `slot` sets the stat to `slot`, EXCEPT that clicking the
+// block you are already on steps DOWN by one -- that is how a stat reaches
+// zero, and it matches what the wizard's grid already did when you clicked
+// a point you had assigned.
+//
+// `floor` is the number of points the click may not take the stat below
+// (class + personality points in the wizard; 0 everywhere else). `ceiling`
+// is the highest total the click may produce (the per-stat cap, or the
+// remaining point budget, whichever binds first).
+//
+// Exported on `window` rather than closed over because
+// public/js/character-wizard.js renders its own imperative grid and has to
+// apply the identical rule. Two copies of this arithmetic is exactly how
+// the wizard and the editor would drift apart. alpine-components.js is a
+// deferred <head> script and character-wizard.js a deferred body script, so
+// deferred-script document order guarantees this is defined first.
+const resolveStatTarget = ({ slot, current, floor = 0, ceiling }) => {
+  const target = slot === current ? slot - 1 : slot;
+  return Math.max(floor, Math.min(target, ceiling));
+};
+
+window.StatBlocks = { resolveStatTarget };
+
 document.addEventListener('alpine:init', () => {
   // Title -> slug sync for the page editor. Stops as soon as the slug is
   // edited by hand. On load, a slug that still matches its title is
@@ -137,6 +161,101 @@ document.addEventListener('alpine:init', () => {
       }).finally(() => {
         this.saving = false;
       });
+    }
+  }));
+
+  // Star-rating stat selector. Backs every stat-editing surface: the inline
+  // stats editor, the level-up modal, the character form, and the class
+  // form. Replaces the number inputs all four used to render.
+  //
+  // `value` is the committed points, `preview` the block the pointer is
+  // currently over (or null). `previewValue` deliberately runs the hovered
+  // block through the same resolveStatTarget the click uses, so the preview
+  // shows what will HAPPEN, not merely what is under the cursor -- hovering
+  // the block you are already on previews one lower, because that is what
+  // clicking it does.
+  //
+  // Keyboard commits immediately rather than previewing: arrowing IS the
+  // preview, and a focus-driven preview would fight the click preview for
+  // the same `preview` slot every time focusBlock() moved focus after a
+  // click.
+  Alpine.data('statBlocks', (initial, max, stat) => ({
+    value: parseInt(initial, 10) || 0,
+    preview: null,
+    max: max,
+    stat: stat,
+
+    // A stat already above `max` (the editor historically allowed 0-20) can
+    // step DOWN through the blocks but must never be raised by them, so the
+    // ceiling floats up to the current value and ratchets back down as the
+    // value falls.
+    get ceiling() {
+      return Math.max(this.max, this.value);
+    },
+
+    get previewValue() {
+      if (this.preview === null) return null;
+      return resolveStatTarget({
+        slot: this.preview, current: this.value, floor: 0, ceiling: this.ceiling
+      });
+    },
+
+    boxClass(i) {
+      const shown = this.previewValue;
+      if (shown !== null) return i <= shown ? 'is-preview' : 'is-empty';
+      return i <= this.value ? 'is-set' : 'is-empty';
+    },
+
+    tabIndex(i) {
+      // Roving tabindex: the grid costs one tab stop per stat, exactly what
+      // the 12 number inputs it replaces cost.
+      return i === Math.max(1, Math.min(this.value, this.max)) ? 0 : -1;
+    },
+
+    set(i) {
+      this.commit(resolveStatTarget({
+        slot: i, current: this.value, floor: 0, ceiling: this.ceiling
+      }));
+      this.focusBlock(this.value);
+    },
+
+    commit(next) {
+      const clamped = Math.max(0, Math.min(next, this.ceiling));
+      this.preview = null;
+      if (clamped === this.value) return;
+      this.value = clamped;
+      // Surfaces without Alpine state (the level-up modal) read the hidden
+      // input, which fires no native `input` event when set programmatically.
+      this.$dispatch('stat-change', { stat: this.stat, value: this.value });
+    },
+
+    focusBlock(n) {
+      const idx = Math.max(1, Math.min(n, this.max));
+      this.$nextTick(() => {
+        const el = this.$root.querySelectorAll('[role="radio"]')[idx - 1];
+        if (el) el.focus();
+      });
+    },
+
+    key(e) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        const all = Array.prototype.slice.call(this.$root.querySelectorAll('[role="radio"]'));
+        const idx = all.indexOf(e.target);
+        if (idx === -1) return;
+        e.preventDefault();
+        this.set(idx + 1);
+        return;
+      }
+      let next;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = this.value - 1;
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = this.value + 1;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = this.max;
+      else return;
+      // Otherwise arrows scroll the page out from under the control.
+      e.preventDefault();
+      this.commit(next);
+      this.focusBlock(this.value);
     }
   }));
 
