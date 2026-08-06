@@ -193,8 +193,7 @@
         <div class="field">
           <label class="label">{{capitalize this}}</label>
           <div class="control">
-            <input class="input" type="number" name="{{this}}"
-              value="{{#if (lookup ../character this)}}{{lookup ../character this}}{{else}}0{{/if}}" required>
+            {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5}}
           </div>
         </div>
       </div>
