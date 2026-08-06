@@ -1245,26 +1245,6 @@ a.dropdown-item:hover {
   cursor: default;
   transition: transform 80ms ease, background 80ms ease, border-color 80ms ease;
 }
-/* Touch devices: the 1.4rem pips are far too small to tap reliably. Adjacent
-   pips can't each be a full 44px without overlapping their neighbours, so we
-   enlarge the box and the gap to give a much bigger hit area on coarse
-   pointers while leaving the dense desktop layout untouched. */
-@media (pointer: coarse) {
-  .wizard-stat-box {
-    width: 2rem;
-    height: 2rem;
-  }
-  /* Both containers, not just the wizard's. .stat-blocks is the interactive
-     control that replaced the stat number inputs on the stats editor, the
-     level-up modal, the character form, and the class form; matching only
-     .wizard-stat-boxes here left those four with 0.3rem gaps between 2rem
-     targets -- a smaller tap area than the full-width <input type="number">
-     they replaced. */
-  .wizard-stat-boxes,
-  .stat-blocks {
-    gap: 0.5rem;
-  }
-}
 .wizard-stat-box.is-class {
   background: var(--wizard-stat-class);
   border-color: var(--wizard-stat-class);
@@ -1356,6 +1336,36 @@ a.dropdown-item:hover {
   margin-left: 0.15rem;
 }
 .stat-blocks.is-readonly .wizard-stat-box { cursor: default; }
+/* Touch devices: the 1.4rem pips are far too small to tap reliably. Adjacent
+   pips can't each be a full 44px without overlapping their neighbours, so we
+   enlarge the box and the gap to give a much bigger hit area on coarse
+   pointers while leaving the dense desktop layout untouched.
+ *
+ * SOURCE ORDER, do not move this block up: it MUST stay below all three of
+ * the rules it overrides -- `.wizard-stat-boxes` (gap), `.wizard-stat-box`
+ * (width/height), and `.stat-blocks` (gap). A media query adds NO
+ * specificity and NO priority; `@media (pointer: coarse) { .stat-blocks }`
+ * and a plain `.stat-blocks` are both (0,1,0), so the later one in the file
+ * simply wins. This block used to sit between `.wizard-stat-box` and
+ * `.stat-blocks`, which made the .wizard-* half work and the .stat-blocks
+ * gap silently dead -- 2rem blocks with 0.3rem between them, the exact
+ * touch-target defect this block exists to prevent, hidden behind a rule
+ * that looked like the fix. Keeping every base rule above this one is what
+ * makes it apply. Same equal-specificity-plus-source-order mechanism the
+ * `.is-preview` rules above depend on. */
+@media (pointer: coarse) {
+  .wizard-stat-box {
+    width: 2rem;
+    height: 2rem;
+  }
+  /* Both containers, not just the wizard's. .stat-blocks is the interactive
+     control that replaced the stat number inputs on the stats editor, the
+     level-up modal, the character form, and the class form. */
+  .wizard-stat-boxes,
+  .stat-blocks {
+    gap: 0.5rem;
+  }
+}
 /* Coming-soon / disabled mode buttons in the character-new selector. */
 .is-disabled-mode {
   opacity: 0.55;
