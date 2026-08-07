@@ -259,14 +259,56 @@ git commit -m "feat: add the pure party summary core"
 
 **Files:**
 - Modify: `models/character.js` (add function near `searchPublicCharacters` at `:244`; add to the `module.exports` block at `:445`)
+- Test: `models/party-characters.test.js`
 
 **Interfaces:**
 - Consumes: `supabase` from `models/_base` (already imported at `models/character.js:1`), `statList` from `util/enclave-consts` (already imported at `:4`).
 - Produces: `getPartyCharacters(ids, client) -> Promise<{ data, error }>` where `data` is an array of rows carrying `id, name, image_url, class, class_id, is_deceased, is_public` plus the 12 stat columns. **Row order is not guaranteed** — Task 3 reorders. Returns `{ data: [], error: null }` for an empty/absent id list without hitting the network.
 
-There is no unit test for this task: it is a thin PostgREST query with no branching logic beyond the empty-list guard, and the repo tests model queries of this shape through the route tier. Task 3's HTTP tests cover it via a fake client. The RLS behaviour it relies on is enforced by the database, not by this code, and is already covered by the policies in `supabase/migrations/20240101000000_baseline_schema.sql:872-885`.
+The query itself is exercised through Task 3's HTTP tests against a fake client, and the RLS behaviour it relies on is enforced by the database — by the policies at `supabase/migrations/20240101000000_baseline_schema.sql:872-885`, not by this code. What this task tests directly is its one branch: the empty-list guard, which must short-circuit *without* touching the client.
 
-- [ ] **Step 1: Add the function**
+- [ ] **Step 1: Write the failing test**
+
+Create `models/party-characters.test.js`:
+
+```js
+// The empty-list guard on getPartyCharacters. It must return early rather
+// than issuing .in('id', []) — a query that is both pointless and, on some
+// PostgREST versions, malformed. The stub client throws on any use, so the
+// test fails loudly if the guard ever stops short-circuiting.
+const { test, expect } = require('bun:test');
+
+process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
+process.env.SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key';
+process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secret-key';
+
+const { getPartyCharacters } = require('./character');
+
+const explodingClient = {
+  from() { throw new Error('getPartyCharacters must not query for an empty id list'); }
+};
+
+test('an empty id list resolves to an empty party without querying', async () => {
+  const { data, error } = await getPartyCharacters([], explodingClient);
+  expect(data).toEqual([]);
+  expect(error).toBeNull();
+});
+
+test('a missing or non-array id list is treated as an empty party', async () => {
+  for (const input of [null, undefined, 'not-an-array']) {
+    const { data, error } = await getPartyCharacters(input, explodingClient);
+    expect(data).toEqual([]);
+    expect(error).toBeNull();
+  }
+});
+```
+
+- [ ] **Step 2: Run the test to verify it fails**
+
+Run: `bun test models/party-characters.test.js`
+Expected: FAIL — `getPartyCharacters is not a function`.
+
+- [ ] **Step 3: Add the function**
 
 In `models/character.js`, immediately after `searchPublicCharacters` ends (before `getRandomPublicCharacters` at `:275`), insert:
 
@@ -296,19 +338,24 @@ const getPartyCharacters = async (ids, client = supabase) => {
 };
 ```
 
-- [ ] **Step 2: Export it**
+- [ ] **Step 4: Export it**
 
 In the `module.exports` block at `models/character.js:445`, add `getPartyCharacters,` on the line directly after `searchPublicCharacters,`.
 
-- [ ] **Step 3: Verify nothing regressed**
+- [ ] **Step 5: Run the test to verify it passes**
+
+Run: `bun test models/party-characters.test.js`
+Expected: PASS, 2 tests.
+
+- [ ] **Step 6: Verify nothing regressed**
 
 Run: `bun run test:unit`
-Expected: PASS. This task adds no tests; the run confirms the edit did not break `models/character.js`'s existing consumers (a syntax error or a broken export would surface here).
+Expected: PASS. Confirms the edit did not break `models/character.js`'s existing consumers — a syntax error or a broken export surfaces here.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add models/character.js
+git add models/character.js models/party-characters.test.js
 git commit -m "feat: add getPartyCharacters, resolved through RLS"
 ```
 
@@ -584,10 +631,11 @@ test('adding past the cap drops the addition rather than an existing member', as
   expect(html).toContain('party is capped at 8');
 });
 
-test('signed out, the page offers no My Characters section', async () => {
-  const res = await get('/party');
-  expect(await res.text()).not.toContain('My Characters');
-});
+// NOTE: the signed-out "no My Characters section" test deliberately lives in
+// Task 5, not here. At this point /party renders a placeholder that has no
+// such section for any visitor, so the assertion would pass without proving
+// anything. Task 5 adds it against the real page, paired with its signed-in
+// counterpart.
 ```
 
 - [ ] **Step 2: Register the test in the HTTP tier**
@@ -761,7 +809,7 @@ module.exports = router;
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `bun run test:http`
-Expected: PASS, 13 new tests in `routes/party.test.js`, and the other HTTP-tier files unchanged.
+Expected: PASS, 12 new tests in `routes/party.test.js`, and the other HTTP-tier files unchanged.
 
 - [ ] **Step 7: Mount the route**
 
@@ -1012,6 +1060,7 @@ git commit -m "feat: add the shared party summary partial"
 - Modify: `views/partials/party-panel.handlebars` (replace the Task 3 placeholder)
 - Modify: `views/partials/party-search-results.handlebars` (replace the Task 3 placeholder)
 - Create: `views/partials/party-roster.handlebars`
+- Modify: `routes/party.test.js` (add the two My Characters tests — see Step 5)
 
 **Interfaces:**
 - Consumes: the Task 3 render context (`members`, `summary`, `partyCsv`, `droppedOverCap`, `unresolved`, `privateCount`, `ownCharacters`, `profile`) and the Task 4 `party-summary` partial.
@@ -1187,21 +1236,73 @@ Replace the entire contents of `views/party.handlebars`:
 </div>
 ```
 
-- [ ] **Step 5: Verify the route tests still pass**
+- [ ] **Step 5: Add the My Characters tests**
+
+These belong here rather than in Task 3: only now does the page have a My Characters section for them to assert about. They come as a pair — the negative alone would pass against any page that simply lacks the words.
+
+In `routes/party.test.js`, replace the `// NOTE: the signed-out ...` comment block at the end of the file with:
+
+```js
+test('signed out, the page offers no My Characters section', async () => {
+  // getProfile is mocked to null, so res.locals.profile is absent and the
+  // page shows the public search only.
+  const res = await get('/party');
+  expect(await res.text()).not.toContain('My Characters');
+});
+
+test('signed in, the page lists your own characters, private ones included', async () => {
+  // The pair to the test above: without this one, the negative would pass
+  // against a page that has no My Characters section under any condition.
+  // getOwnCharacters is RLS-scoped, which is how a private character — one
+  // the public search at /party/s can never surface — enters the page.
+  const res = await fetch(`${baseUrl}/party`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' }
+  });
+  const html = await res.text();
+  expect(html).toContain('My Characters');
+  expect(html).toContain('Private Character');
+  expect(html).toContain(`data-add-character="${ID[7]}"`);
+});
+```
+
+For the signed-in test to have a profile and characters, extend the two mocks at the top of the same file. Replace the `getOwnCharacters` line in the `../models/character` mock with:
+
+```js
+  getOwnCharacters: async () => ({
+    data: [characterRow(ID[7], { name: 'Private Character', is_public: false })],
+    error: null
+  }),
+```
+
+and replace the `../models/auth` and `../models/profile` mocks with:
+
+```js
+// A bearer token routes authOptional down its signed-in branch; without one
+// it short-circuits and never consults these.
+mock.module('../models/auth', () => ({
+  getUserFromToken: async (token) => (token ? { id: 'test-user' } : false)
+}));
+mock.module('../models/profile', () => ({
+  getProfile: async () => ({ id: 'test-profile', timezone: 'UTC' })
+}));
+```
+
+- [ ] **Step 6: Verify the route tests pass**
 
 Run: `bun run test:http`
-Expected: PASS. Task 3's tests read `#party-csv` and the notice copy out of these real templates, so they are the check that the placeholders were replaced compatibly. (`subtract` and `eq` both come from `handlebars-helpers`, already registered app-wide.)
+Expected: PASS, 14 tests in `routes/party.test.js`. Task 3's tests read `#party-csv` and the notice copy out of these real templates, so they are also the check that the placeholders were replaced compatibly. (`subtract` and `eq` both come from `handlebars-helpers`, already registered app-wide.)
 
-- [ ] **Step 6: Verify the full suite**
+- [ ] **Step 7: Verify the full suite**
 
 Run: `bun run test:unit && bun run test:http`
 Expected: PASS both tiers.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add views/party.handlebars views/partials/party-panel.handlebars \
-        views/partials/party-roster.handlebars views/partials/party-search-results.handlebars
+        views/partials/party-roster.handlebars views/partials/party-search-results.handlebars \
+        routes/party.test.js
 git commit -m "feat: build the virtual party page, roster, and search"
 ```
 
