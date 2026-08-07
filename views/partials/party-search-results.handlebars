@@ -1,3 +1,34 @@
-{{#each characters}}
-<p data-result-id="{{this.id}}">{{this.name}}</p>
-{{/each}}
+{{!-- Dense rows, not character-search-results' 3-across image cards: you add
+      up to eight of these, so browsing density beats card art. Add sends only
+      this character's id and hx-includes #party-csv — see the note in
+      views/partials/party-panel.handlebars. --}}
+{{#if characters.length}}
+<div class="menu-list-wrapper">
+  {{#each characters}}
+  <div class="is-flex is-justify-content-space-between is-align-items-center py-2 px-2 party-result-row">
+    <span>
+      <strong>{{this.name}}</strong>
+      {{#if this.class}}<span class="has-text-grey is-size-7"> · {{this.class}}</span>{{/if}}
+      {{#unless this.is_public}}
+      <span class="icon is-small has-text-grey" title="Private"><i class="fas fa-lock"></i></span>
+      {{/unless}}
+      {{#if this.is_deceased}}
+      <span class="icon is-small has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+      {{/if}}
+    </span>
+    <button type="button" class="button is-small is-primary"
+      data-add-character="{{this.id}}"
+      aria-label="Add {{this.name}} to the party"
+      hx-get="/party/panel"
+      hx-vals='{"add": "{{this.id}}"}'
+      hx-include="#party-csv"
+      hx-target="#party-panel"
+      hx-swap="outerHTML">Add</button>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="notification is-info is-light">
+  {{#if q}}No characters found matching "{{q}}".{{else}}Type a name to search.{{/if}}
+</div>
+{{/if}}

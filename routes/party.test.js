@@ -75,12 +75,21 @@ mock.module('../models/character', () => ({
     data: ids.filter(id => id !== INVISIBLE).map(id => characterRow(id)).reverse(),
     error: null
   }),
-  getOwnCharacters: async () => ({ data: [], error: null }),
+  getOwnCharacters: async () => ({
+    data: [characterRow(ID[7], { name: 'Private Character', is_public: false })],
+    error: null
+  }),
   searchPublicCharacters: async () => ({ data: [], error: null }),
 }));
 
-mock.module('../models/auth', () => ({ getUserFromToken: async () => false }));
-mock.module('../models/profile', () => ({ getProfile: async () => null }));
+// A bearer token routes authOptional down its signed-in branch; without one
+// it short-circuits and never consults these.
+mock.module('../models/auth', () => ({
+  getUserFromToken: async (token) => (token ? { id: 'test-user' } : false)
+}));
+mock.module('../models/profile', () => ({
+  getProfile: async () => ({ id: 'test-profile', timezone: 'UTC' })
+}));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
 mock.module('../util/nav-loader', () => ({
@@ -238,8 +247,23 @@ test('adding past the cap drops the addition rather than an existing member', as
   expect(html).toContain('party is capped at 8');
 });
 
-// NOTE: the signed-out "no My Characters section" test deliberately lives in
-// Task 5, not here. At this point /party renders a placeholder that has no
-// such section for any visitor, so the assertion would pass without proving
-// anything. Task 5 adds it against the real page, paired with its signed-in
-// counterpart.
+test('signed out, the page offers no My Characters section', async () => {
+  // getProfile is mocked to null, so res.locals.profile is absent and the
+  // page shows the public search only.
+  const res = await get('/party');
+  expect(await res.text()).not.toContain('My Characters');
+});
+
+test('signed in, the page lists your own characters, private ones included', async () => {
+  // The pair to the test above: without this one, the negative would pass
+  // against a page that has no My Characters section under any condition.
+  // getOwnCharacters is RLS-scoped, which is how a private character — one
+  // the public search at /party/s can never surface — enters the page.
+  const res = await fetch(`${baseUrl}/party`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' }
+  });
+  const html = await res.text();
+  expect(html).toContain('My Characters');
+  expect(html).toContain('Private Character');
+  expect(html).toContain(`data-add-character="${ID[7]}"`);
+});
