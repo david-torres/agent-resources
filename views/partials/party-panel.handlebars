@@ -1,0 +1,12 @@
+<div id="party-panel">
+  <input type="hidden" id="party-csv" name="c" value="{{partyCsv}}">
+  {{#if droppedOverCap}}
+  <div class="notification is-warning">A party is capped at 8 members. {{droppedOverCap}} dropped.</div>
+  {{/if}}
+  {{#if unresolved}}
+  <div class="notification is-warning">{{unresolved}} could not be loaded.</div>
+  {{/if}}
+  {{#each members}}
+  <p data-member-id="{{this.id}}">{{this.name}}</p>
+  {{/each}}
+</div>

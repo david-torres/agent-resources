@@ -19,7 +19,8 @@ const httpFiles = new Set([
   'routes/characters.test.js',
   'routes/classes-stat-spread.test.js',
   'routes/missions.test.js',
-  'routes/nav-manage-navbar.test.js'
+  'routes/nav-manage-navbar.test.js',
+  'routes/party.test.js'
 ]);
 const mode = process.argv[2] || 'unit';
 
