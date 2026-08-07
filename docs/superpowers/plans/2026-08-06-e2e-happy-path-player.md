@@ -1337,16 +1337,20 @@ bun run test:integration
 bunx playwright test --workers=1
 ```
 
-- [ ] **Step 2: Confirm the browser tier against the recorded baseline**
+- [ ] **Step 2: Confirm the browser tier against the corrected baseline**
 
-Expected: 80 pre-existing passes + the new specs, all passing, with exactly two failures — `03b-class-reassignment.spec.js:81` and `13-page-slug.spec.js:506`. Both are deliberately-red characterization tests and are out of scope (design doc, "Non-goals").
+**Expected: ZERO failures.** All 83 pre-existing specs plus every spec this plan adds must pass.
 
-Any third failure is a regression introduced by this branch. Do not proceed past it.
+Corrected 2026-08-07: an earlier measurement recorded 80 passed / 2 failed / 1 flake and attributed the two failures to deliberately-red characterization specs (`03b-class-reassignment.spec.js:81`, `13-page-slug.spec.js:506`). That did not reproduce. Two consecutive serial full runs at commit `ced3fef`, with no production code changed, gave **86/86 passing**. The `03b` header still says the spec is expected to fail; per its own text, going green because the underlying bug was fixed is the correct outcome, and the class-reassignment fix appears to have already landed on `virtual-party-tool`.
+
+Treat ANY failure as a regression introduced by this branch. Do not proceed past one.
 
 - [ ] **Step 3: Re-run the browser tier in parallel to surface flakes**
 
 Run: `bunx playwright test`
-Expected: the same two failures, plus possibly `11-export-dropdowns.spec.js:186`, which is a known pre-existing parallelism flake (passes serially). If any NEW spec is flaky under parallel workers, fix it — the suite runs `fullyParallel: true` by default.
+Expected: zero failures. `11-export-dropdowns.spec.js:186` has been seen to fail under parallel workers and pass serially — if it recurs, confirm it passes with `--workers=1` before dismissing it. If any NEW spec is flaky under parallel workers, fix it: the suite runs `fullyParallel: true` by default.
+
+**Shared-state caution:** the local Supabase at 127.0.0.1:54321 is shared across git worktrees and sessions. A concurrent test run elsewhere mutates the same tables and can produce failures unrelated to this branch. Before declaring a regression, confirm nothing else is running against this database.
 
 - [ ] **Step 4: Commit any fixes and report**
 

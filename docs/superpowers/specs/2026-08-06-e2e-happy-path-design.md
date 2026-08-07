@@ -158,14 +158,31 @@ next stage runs.
 
 ## Baseline
 
-Measured at branch point (`virtual-party-tool` HEAD), not inherited from the
-stale 71/9 figure in `docs/superpowers/reports/2026-08-03-e2e-findings.md`:
+**Corrected 2026-08-07: the branch-point baseline is 83/83 passing — zero
+failures.**
 
-- 80 passed
-- 2 failed, both deliberately red: `03b-class-reassignment.spec.js:81`,
-  `13-page-slug.spec.js:506`
-- 1 flaky under parallel workers, passes serially:
-  `11-export-dropdowns.spec.js:186`
+An initial measurement recorded 80 passed / 2 failed / 1 flake, attributing the
+failures to `03b-class-reassignment.spec.js:81` and `13-page-slug.spec.js:506`.
+That did not reproduce. Two consecutive serial full runs after Task 1, with no
+production code changed, gave 86/86 (83 pre-existing + 3 new). The cause of the
+original failures was not confirmed; the likeliest candidates are an
+incompletely seeded local database at the time of measurement, or a concurrent
+session mutating the same local Supabase, which is shared across worktrees.
+
+Consequences:
+
+- `03b`'s header still declares it expected-to-fail, but per its own text
+  ("if it starts passing because someone actually fixed the underlying bug,
+  that's the correct way for it to go green") the class-reassignment fix
+  appears to have already landed on `virtual-party-tool`. The header is now
+  stale; updating it is out of scope here.
+- The "Non-goals" entry about leaving two red specs alone is therefore moot in
+  practice — there are none to leave alone.
+- Verification expects zero failures, not two. A tolerance of two would
+  silently absorb two real regressions.
+- `11-export-dropdowns.spec.js:186` has been seen to fail under parallel
+  workers and pass serially; treat a recurrence as flake only after confirming
+  it passes with `--workers=1`.
 
 ## Verification
 
