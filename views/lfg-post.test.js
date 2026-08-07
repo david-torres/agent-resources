@@ -65,7 +65,15 @@ test('lfg-post renders blocks and no longer prints plus characters', () => {
   expect(LFG_SRC).not.toMatch(/\{\{#range 0 \(lookup [^)]*\)\}\}\s*\n\s*\+/);
 });
 
-test('party stats keep their numeral, since totals routinely exceed five', () => {
+test('the party stats box renders the shared summary partial', () => {
+  // The numeral-beside-blocks assertion moved to
+  // views/partials/party-summary.test.js, which now owns that contract for
+  // both this page and /party. Keeping a copy here would let the two drift.
   const partySection = LFG_SRC.slice(LFG_SRC.indexOf('Party Stats'));
-  expect(partySection).toContain('({{lookup ../partyStats this}})');
+  expect(partySection).toContain('{{> party-summary');
+  expect(LFG_SRC).not.toContain('lookup ../partyStats');
+});
+
+test('the post links out to the party tool with its approved members', () => {
+  expect(LFG_SRC).toContain('/party?c=');
 });

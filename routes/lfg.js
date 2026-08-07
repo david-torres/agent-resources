@@ -24,6 +24,7 @@ const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { statList } = require('../util/enclave-consts');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
+const { summarizeParty } = require('../util/party-stats');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -102,12 +103,8 @@ router.get('/:id', authOptional, async (req, res) => {
       .filter((item) => item.status === 'approved' && item.character)
       .map((item) => item.character);
     const approvedCount = party.length;
-    const partyStats = party.reduce((acc, item) => {
-      statList.forEach(stat => {
-        acc[stat] = (acc[stat] || 0) + (item[stat] || 0);
-      });
-      return acc;
-    }, {});
+    const partySummary = summarizeParty(party);
+    const partyCsv = party.map(character => character.id).join(',');
 
     const pendingCount = (data.join_requests || []).filter(r => r.status === 'pending').length;
 
@@ -115,7 +112,8 @@ router.get('/:id', authOptional, async (req, res) => {
       profile,
       post: data,
       statList,
-      partyStats,
+      partySummary,
+      partyCsv,
       approvedCount,
       pendingCount,
       authOptional: true,
