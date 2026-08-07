@@ -25,6 +25,12 @@ test('23505 (unique violation) maps to 409', () => {
   expect(d.title).toBe('Already exists');
 });
 
+test('23503 (foreign key violation) maps to 409', () => {
+  const d = classifyError({ code: '23503', message: 'foreign key violation' });
+  expect(d.status).toBe(409);
+  expect(d.title).toBe('Still in use');
+});
+
 test('null error falls back to 404 Not found', () => {
   const d = classifyError(null);
   expect(d.status).toBe(404);
