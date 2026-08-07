@@ -34,8 +34,9 @@ const projectRef = (() => {
   u = u.replace(/\.supabase\.co.*$/, "");
   return u;
 })();
+const region = env.SUPABASE_DB_REGION || "aws-0-us-east-1";
 const client = new pg.Client({
-  host: "aws-0-us-east-1.pooler.supabase.com",
+  host: `${region}.pooler.supabase.com`,
   port: 6543,
   user: `postgres.${projectRef}`,
   password,

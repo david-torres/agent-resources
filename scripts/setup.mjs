@@ -168,7 +168,15 @@ function extractProjectRef(url) {
 }
 
 async function connect(client) {
-  await client.connect();
+  try {
+    await client.connect();
+  } catch (err) {
+    fail(
+      `Could not connect to ${client.host}: ${err.message}\n` +
+        "       If your project is in another region, set SUPABASE_DB_REGION in .env\n" +
+        "       (`bun run scripts/probe-region.mjs` detects it).",
+    );
+  }
   const { rows } = await client.query("select current_database() as db");
   ok(`connected to ${rows[0].db}`);
 }

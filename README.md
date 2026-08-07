@@ -49,6 +49,9 @@ and `bun run setup` handles the full DB bootstrap.
    - `SUPABASE_PUBLISHABLE_KEY` — the `anon` / publishable key
    - `SUPABASE_SECRET_KEY` — the `service_role` / secret key
    - `SUPABASE_DB_PASS` — the database password you set at project creation
+   - `SUPABASE_DB_REGION` — pooler region in `aws-0-<region>` form, from
+     **Project Settings → General**. Only needed if your project is not in
+     `us-east-1`. `bun run scripts/probe-region.mjs` detects it.
 
    Optional: `OPENAI_API_KEY` and any `SYSTEM_MESSAGE_*` settings.
 
@@ -179,22 +182,27 @@ supabase/
 
 New schema changes go in a new timestamped file under `supabase/migrations/`
 using the standard Supabase CLI convention (`<14-digit-timestamp>_<name>.sql`).
-There is no longer a separate `schema.sql` to keep in sync — the migrations
-*are* the canonical schema.
+The migrations *are* the canonical schema.
 
 ### Using the Supabase CLI against a linked cloud project
 
-If you have the [Supabase CLI](https://github.com/supabase/cli) installed
-and have linked your project (`supabase link --project-ref <ref>`), you
-can apply migrations with:
+An alternative to `bun run setup` for Path A, if you have the
+[Supabase CLI](https://github.com/supabase/cli) installed.
 
-```sh
-supabase db push
-```
+1. Link the local checkout to your cloud project. Your project ref is the
+   subdomain of `SUPABASE_URL` — for `https://abcdefgh.supabase.co` it is
+   `abcdefgh`. You only need to do this once per checkout:
+   ```sh
+   supabase link --project-ref=<project-ref>
+   ```
 
-This is an alternative to `bun run setup` for Path A — it applies every
-file in `supabase/migrations/` and tracks them in the
-`supabase_migrations.schema_migrations` table, just like the bundled
+2. Apply the migrations:
+   ```sh
+   supabase db push
+   ```
+
+`db push` applies every file in `supabase/migrations/` and tracks them in
+the `supabase_migrations.schema_migrations` table, just like the bundled
 script. **It does not apply `supabase/seed.sql`** (the CLI reserves seed
 files for `supabase db reset`); for nav items seeding either run `bun run
 setup` once or apply `supabase/seed.sql` manually.
