@@ -1,7 +1,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "defaultSettleDelay": 0}'>
+  <!-- methodsThatUseUrlParams: htmx 2.x defaults this to ["get","delete"], which
+       serialises a delete button's related form into the request URL. The
+       character edit form's Delete button (character-form.handlebars:388) sits
+       inside the <form hx-put>, so that overflowed Node's 16 KB maxHeaderSize
+       and made character deletion fail. No DELETE route in this app reads query
+       parameters -- they are all path-based. -->
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "defaultSettleDelay": 0, "methodsThatUseUrlParams": ["get"]}'>
   <title>{{#if title}}{{title}} - Agent Resources{{else}}Agent Resources{{/if}}</title>
   <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" integrity="sha384-DCY3M8xLkMu6c9IKcKbe+jHKMjelnwC0p+SBaxfHxoBYZWdJF2X400UdBCgATtAB" crossorigin="anonymous">

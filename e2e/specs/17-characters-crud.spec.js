@@ -147,3 +147,48 @@ test('editing a character round-trips the change to the database', async ({ page
   // passes here only because beforeAll unlocked the class for this profile.
   expect(rows[0].class_id).toBe(classRow.id);
 });
+
+// D1. htmx 2.0.8 defaults methodsThatUseUrlParams to ['get', 'delete'], and
+// for a non-GET verb getInputValues() includes the RELATED FORM -- so the
+// Delete button at views/character-form.handlebars:388, which sits inside the
+// <form hx-put> opened at :14, sends all 20 named fields plus 7 rich-text
+// areas as query parameters. A real character exceeds Node's 16 KB
+// maxHeaderSize (the request line counts against it) and is rejected with a
+// 431 before Express sees it; a nearly-empty one fits and works, which is why
+// this reads as "broken in real use, fine in dev".
+//
+// The load-bearing assertion is on the REQUEST URL, not on payload size.
+// Asserting "a big character fails to delete" would make the test a function
+// of how much text the fixture happens to carry, and would pass today for a
+// small one. Asserting the query string is empty characterises the defect
+// itself and is size-independent.
+test('deleting from the edit page sends a bare URL and removes the character', async ({ page }) => {
+  const name = `${prefix} Deletable`;
+  const id = await createCharacterViaUi(page, name);
+
+  const deleteUrls = [];
+  page.on('request', (r) => {
+    if (r.method() === 'DELETE') deleteUrls.push(r.url());
+  });
+  // hx-confirm is native window.confirm and Playwright auto-DISMISSES
+  // dialogs. Without this the click is a silent no-op and every assertion
+  // below would be measuring nothing.
+  page.on('dialog', (d) => d.accept());
+
+  await page.goto(`/characters/${id}/edit`);
+  await page.waitForLoadState('networkidle');
+
+  await page.locator('form[hx-put] button[hx-delete]').click();
+
+  // routes/characters.js:1009 answers HX-Location: /characters
+  await page.waitForURL((url) => url.pathname === '/characters');
+
+  expect(deleteUrls).toHaveLength(1);
+  expect(
+    new URL(deleteUrls[0]).search,
+    'the DELETE must not carry the edit form as query parameters'
+  ).toBe('');
+
+  const { rows } = await db.query('select id from characters where id = $1', [id]);
+  expect(rows).toHaveLength(0);
+});
