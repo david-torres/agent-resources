@@ -1,0 +1,74 @@
+{{!-- The party stat summary, rendered by BOTH the /party tool and the LFG
+      post page. Takes a summary object from util/party-stats.js — see
+      views/partials/party-summary.test.js for the contract.
+
+      Params:
+        summary  { totals, gaps, strongest, weakest, breakdown, memberCount }
+--}}
+<div class="party-summary">
+  <div class="columns is-multiline">
+    {{#each summary.totals}}
+    <div class="column is-3">
+      <p class="mb-1"><strong>{{capitalize @key}}</strong> ({{this}})</p>
+      {{> stat-blocks-readonly value=this max=5}}
+    </div>
+    {{/each}}
+  </div>
+
+  {{#if summary.memberCount}}
+  <div class="content mt-4">
+    {{#if summary.gaps.length}}
+    <p class="has-text-danger">
+      <span class="icon"><i class="fas fa-triangle-exclamation"></i></span>
+      <strong>No coverage:</strong>
+      {{#each summary.gaps}}{{capitalize this}}{{#unless @last}}, {{/unless}}{{/each}}
+    </p>
+    {{/if}}
+    {{#if summary.strongest.length}}
+    <p><strong>Strongest:</strong>
+      {{#each summary.strongest}}{{capitalize this}}{{#unless @last}}, {{/unless}}{{/each}}
+    </p>
+    {{/if}}
+    {{#if summary.weakest.length}}
+    <p><strong>Weakest:</strong>
+      {{#each summary.weakest}}{{capitalize this}}{{#unless @last}}, {{/unless}}{{/each}}
+    </p>
+    {{/if}}
+  </div>
+
+  {{!-- 13 columns will not fit a narrow screen. .table-container scrolls the
+        table rather than the whole page. --}}
+  <div class="table-container mt-4">
+    <table class="table is-narrow is-striped is-fullwidth">
+      <thead>
+        <tr>
+          <th>Member</th>
+          {{#each summary.totals}}<th title="{{capitalize @key}}">{{substring (capitalize @key) 0 3}}</th>{{/each}}
+        </tr>
+      </thead>
+      <tbody>
+        {{#each summary.breakdown}}
+        <tr>
+          <td>
+            {{this.name}}
+            {{#unless this.is_public}}
+            <span class="icon has-text-grey" title="Private — not visible to people you share this link with"><i class="fas fa-lock"></i></span>
+            {{/unless}}
+            {{#if this.is_deceased}}
+            <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+            {{/if}}
+          </td>
+          {{#each this.stats}}<td>{{this}}</td>{{/each}}
+        </tr>
+        {{/each}}
+      </tbody>
+      <tfoot>
+        <tr>
+          <th>Total</th>
+          {{#each summary.totals}}<th>{{this}}</th>{{/each}}
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+  {{/if}}
+</div>
