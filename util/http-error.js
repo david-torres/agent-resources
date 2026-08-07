@@ -20,6 +20,16 @@ function classifyError(error, fallback = {}) {
     case '23505':
       base = { status: 409, title: 'Already exists', message: 'That already exists.' };
       break;
+    // 23503 = foreign_key_violation. Without this branch a blocked delete
+    // falls through to a bare 500 reading "An unexpected error occurred.",
+    // which is what made the lfg_join_requests FK take so long to find.
+    case '23503':
+      base = {
+        status: 409,
+        title: 'Still in use',
+        message: "Something else still refers to this, so it can't be deleted yet.",
+      };
+      break;
     default:
       if (!error) {
         base = { status: 404, title: 'Not found', message: FRIENDLY_NOT_FOUND };

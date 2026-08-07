@@ -19,7 +19,8 @@
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass, unlockClassForProfile } = require('../fixtures/class');
-const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
+const { seedLfgPost, seedJoinRequest } = require('../fixtures/lfg');
+const { PLAYER_EMAIL, PLAYER_STATE, ADMIN_EMAIL } = require('../global-setup');
 
 test.use({ storageState: PLAYER_STATE });
 
@@ -191,4 +192,56 @@ test('deleting from the edit page sends a bare URL and removes the character', a
 
   const { rows } = await db.query('select id from characters where id = $1', [id]);
   expect(rows).toHaveLength(0);
+});
+
+// D2. lfg_join_requests.character_id is the ONLY foreign key pointing at
+// characters without an ON DELETE action (baseline_schema.sql:222; verified
+// against the live local DB -- every other one is 'c', this one is 'a'). So a
+// character that has ever joined a game cannot be deleted at all: Postgres
+// raises 23503, util/http-error.js has no branch for it, and the user gets a
+// bare 500 reading "An unexpected error occurred."
+//
+// e2e/fixtures/db.js:37-49 already documents this FK and deletes join
+// requests by hand during cleanup, which is why no existing spec ever hit it.
+//
+// SET NULL rather than CASCADE: the join request is the host's record that
+// someone joined their game. Deleting an old character should not silently
+// remove a player from a host's roster or from a closed post's history.
+//
+// Deviation from the brief: seedLfgPost(prefix, profile, { hosting: true })
+// auto-approves a CONDUIT join request for `profile` on the post
+// (e2e/fixtures/lfg.js:36-41), and lfg_join_requests carries
+// `unique_lfg_post_profile UNIQUE (lfg_post_id, profile_id)`
+// (baseline_schema.sql:226) -- one row per profile per post, regardless of
+// join_type. A second seedJoinRequest(post, profile, ...) for the SAME
+// profile therefore violates that constraint with 23505, before the D2
+// defect is ever reached. 14-lfg-controls.spec.js:176/181 hits the same
+// shape and avoids it by hosting as `admin` and joining as `player`; this
+// test does the same so the player who owns the character (and is signed in
+// via PLAYER_STATE) is the one who joins, and delete still runs as them.
+test('a character that joined an LFG game can still be deleted', async ({ page }) => {
+  const name = `${prefix} Joined`;
+  const id = await createCharacterViaUi(page, name);
+
+  const admin = await profileForEmail(db, ADMIN_EMAIL);
+  const post = await seedLfgPost(prefix, admin, { title: `${prefix} Post`, hosting: true });
+  const request = await seedJoinRequest(post, profile, { joinType: 'player', characterId: id });
+
+  page.on('dialog', (d) => d.accept());
+  await page.goto(`/characters/${id}/edit`);
+  await page.waitForLoadState('networkidle');
+  await page.locator('form[hx-put] button[hx-delete]').click();
+  await page.waitForURL((url) => url.pathname === '/characters');
+
+  const { rows: charRows } = await db.query(
+    'select id from characters where id = $1', [id]
+  );
+  expect(charRows, 'the character must actually be gone').toHaveLength(0);
+
+  // The host's record of the join survives, with the character detached.
+  const { rows: reqRows } = await db.query(
+    'select character_id from lfg_join_requests where id = $1', [request.id]
+  );
+  expect(reqRows).toHaveLength(1);
+  expect(reqRows[0].character_id).toBeNull();
 });
