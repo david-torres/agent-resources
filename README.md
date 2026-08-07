@@ -230,17 +230,13 @@ you should see them in your database.
 
 #### Backups
 
-`scripts/db-backup.sh` runs `pg_dump` against the configured Supabase pooler
-and writes a compressed dump to `backups/`. It reads `SUPABASE_DB_PASS` from
-`.env`:
+`scripts/db-backup.sh` runs `pg_dump` against your project's Supabase pooler
+and writes a compressed dump to `backups/`. It derives the host and user from
+`SUPABASE_URL`, `SUPABASE_DB_REGION`, and `SUPABASE_DB_PASS` in `.env`:
 
 ```sh
 bun run db:backup
 ```
-
-Note: the host and user in `scripts/db-backup.sh` are hardcoded to the
-project's Supabase instance — edit the script if you're pointing at your
-own project.
 
 ## Usage
 
