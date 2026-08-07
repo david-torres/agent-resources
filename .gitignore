@@ -18,3 +18,4 @@ coverage/
 .bun/
 e2e/.auth/
 e2e/report/
+.claude/worktrees/
