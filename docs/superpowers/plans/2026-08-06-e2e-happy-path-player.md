@@ -308,7 +308,7 @@ Expected: 4 PASS.
 - [ ] **Step 5: Run the full suite to check the config change broke nothing**
 
 Run: `bunx playwright test --workers=1`
-Expected: same result as the recorded baseline — all pass except the two deliberately-red specs (`03b-class-reassignment.spec.js:81`, `13-page-slug.spec.js:506`). Serial workers avoid the known `11-export-dropdowns.spec.js:186` parallelism flake.
+Expected: **zero failures.** Baseline corrected 2026-08-07 — the full suite passes 86/86 at commit `ced3fef`. Any failure here is a regression from the htmx config change, which is app-wide and therefore the highest-risk edit in this plan. Serial workers avoid the `11-export-dropdowns.spec.js:186` parallelism flake.
 
 Also run: `bun run test:http`
 Expected: PASS. Route-level DELETE handlers read path params only, so this should be unaffected — confirm rather than assume.
