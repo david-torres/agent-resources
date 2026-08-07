@@ -30,12 +30,12 @@
         </div>
       </div>
       <div id="party-search-results" class="mt-3">
-        {{> party-search-results characters=[]}}
+        {{> party-search-results characters=null}}
       </div>
     </div>
   </div>
 
   <div class="column is-7">
-    {{> party-panel}}
+    {{> party-panel partyCsv=partyCsv summary=summary droppedOverCap=droppedOverCap unresolved=unresolved members=members privateCount=privateCount}}
   </div>
 </div>

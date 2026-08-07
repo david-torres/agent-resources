@@ -95,8 +95,12 @@ router.get('/panel', authOptional, async (req, res) => {
 });
 
 router.get('/s', authOptional, async (req, res) => {
-  const { q, classId } = req.query;
-  const hasQuery = q && q.trim().length >= 2;
+  // req.query.q can be an array or object (?q=a&q=b, ?q[x]=1) under Express's
+  // extended query parser — coerce once, the same way parseMembership does
+  // above, so a polluted q can neither throw here nor reach the model layer.
+  const q = String(req.query.q || '').trim();
+  const { classId } = req.query;
+  const hasQuery = q.length >= 2;
 
   if (!hasQuery && !classId) {
     return res.render('partials/party-search-results', { layout: false, characters: [], q });

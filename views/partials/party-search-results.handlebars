@@ -3,9 +3,9 @@
       this character's id and hx-includes #party-csv — see the note in
       views/partials/party-panel.handlebars. --}}
 {{#if characters.length}}
-<div class="menu-list-wrapper">
+<div>
   {{#each characters}}
-  <div class="is-flex is-justify-content-space-between is-align-items-center py-2 px-2 party-result-row">
+  <div class="is-flex is-justify-content-space-between is-align-items-center py-2 px-2">
     <span>
       <strong>{{this.name}}</strong>
       {{#if this.class}}<span class="has-text-grey is-size-7"> · {{this.class}}</span>{{/if}}

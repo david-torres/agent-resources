@@ -70,16 +70,27 @@ mock.module('../models/_base', () => ({
 // DELIBERATELY SHUFFLED order (reversed) — .in() makes no ordering promise, so
 // the route must reorder, and a mock that returns them already-sorted would
 // let that bug through.
+// ID[6] stands in for a party member whose owner keeps them private — it is
+// otherwise unused across this file's tests.
+const PRIVATE_MEMBER = ID[6];
+
 mock.module('../models/character', () => ({
   getPartyCharacters: async (ids) => ({
-    data: ids.filter(id => id !== INVISIBLE).map(id => characterRow(id)).reverse(),
+    data: ids.filter(id => id !== INVISIBLE)
+      .map(id => characterRow(id, id === PRIVATE_MEMBER ? { is_public: false } : {}))
+      .reverse(),
     error: null
   }),
   getOwnCharacters: async () => ({
     data: [characterRow(ID[7], { name: 'Private Character', is_public: false })],
     error: null
   }),
-  searchPublicCharacters: async () => ({ data: [], error: null }),
+  // Real search results only when given a query — lets the "renders result
+  // rows" and "no query renders empty prompt" tests below tell each other apart.
+  searchPublicCharacters: async (q) => ({
+    data: q ? [characterRow(ID[0]), characterRow(ID[1])] : [],
+    error: null
+  }),
 }));
 
 // A bearer token routes authOptional down its signed-in branch; without one
@@ -266,4 +277,52 @@ test('signed in, the page lists your own characters, private ones included', asy
   expect(html).toContain('My Characters');
   expect(html).toContain('Private Character');
   expect(html).toContain(`data-add-character="${ID[7]}"`);
+});
+
+test('a private member in the party surfaces the sharing-degrades notice', async () => {
+  // party-panel.handlebars:26-32's privateCount branch — the other half of
+  // the design's "sharing degrades visibly" decision (see the unresolved-id
+  // notice above). Without a mocked row that is actually is_public: false,
+  // privateCount is always 0 and this branch never renders.
+  const res = await get(`/party?c=${ID[0]},${PRIVATE_MEMBER}`);
+  const html = await res.text();
+  expect(html).toContain('1 member is private');
+  expect(html).toContain('will see a 1-member party');
+});
+
+// Finding 1 regression coverage: GET /party/s had zero test coverage. A
+// repeated ?q makes Express's extended query parser hand the handler an
+// array, not a string; the un-fixed handler called q.trim() directly and
+// threw synchronously inside a bare async function with no try/catch and no
+// asyncHandler wrapper — Express 4 does not catch that, so the request never
+// got a response at all. These tests exercise /party/s directly.
+test('a repeated q does not hang the request', async () => {
+  const res = await get('/party/s?q=a&q=b');
+  expect(res.status).toBe(200);
+});
+
+test('an object-shaped q does not hang the request', async () => {
+  const res = await get('/party/s?q[x]=1');
+  expect(res.status).toBe(200);
+});
+
+test('no query and no classId renders the empty search prompt', async () => {
+  const res = await get('/party/s');
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('Type a name to search.');
+});
+
+test('a query of 2+ characters renders result rows', async () => {
+  const res = await get('/party/s?q=he');
+  const html = await res.text();
+  expect(html).toContain(`data-add-character="${ID[0]}"`);
+});
+
+test('a 1-character query is treated as no query', async () => {
+  const res = await get('/party/s?q=h');
+  const html = await res.text();
+  // Below the >= 2 threshold, searchPublicCharacters is never called — the
+  // mock returns rows for any truthy q, so their absence here proves the
+  // threshold held rather than a real search coming back empty.
+  expect(html).not.toContain('data-add-character');
 });
