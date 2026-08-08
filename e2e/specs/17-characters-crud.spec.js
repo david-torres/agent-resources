@@ -89,7 +89,8 @@ async function createCharacterViaUi(page, name) {
   await page.locator('form[hx-post] button[type="submit"]').click();
 
   // routes/characters.js:613 answers HX-Location /characters/{id}/{name} --
-  // NOT /characters, despite the form's inert hx-redirect attribute.
+  // NOT /characters. (The form used to carry an inert hx-redirect="/characters"
+  // claiming otherwise; this branch deleted it.)
   await page.waitForURL(/\/characters\/[0-9a-f-]{36}/);
   const id = page.url().match(/\/characters\/([0-9a-f-]{36})/)[1];
   return id;
@@ -151,7 +152,7 @@ test('editing a character round-trips the change to the database', async ({ page
 
 // D1. htmx 2.0.8 defaults methodsThatUseUrlParams to ['get', 'delete'], and
 // for a non-GET verb getInputValues() includes the RELATED FORM -- so the
-// Delete button at views/character-form.handlebars:388, which sits inside the
+// Delete button at views/character-form.handlebars:387, which sits inside the
 // <form hx-put> opened at :14, sends all 20 named fields plus 7 rich-text
 // areas as query parameters. A real character exceeds Node's 16 KB
 // maxHeaderSize (the request line counts against it) and is rejected with a
