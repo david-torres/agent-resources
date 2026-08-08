@@ -38,8 +38,22 @@
               <input type="hidden" name="host_id" class="lfg-{{this.id}}" value="{{this.host_id}}">
               {{/if}}
               <input type="hidden" name="host_name" class="lfg-{{this.id}}" value="{{this.host_name}}">
+              {{!-- The {{#if}} is load-bearing. A conduit join request has no
+                    character, and (since lfg_join_requests_character_id_fkey
+                    became ON DELETE SET NULL) so does any request whose
+                    character was deleted. An unguarded null renders
+                    value="", which posts characters[]="" to POST /missions;
+                    routes/missions.js:210-213 does not filter it out, so
+                    Postgres rejects the empty string with 22P02 (invalid
+                    input syntax for type uuid) as a bare 500 -- AFTER the
+                    mission row was already committed at :194-207, leaving an
+                    orphaned mission the user never hears about. --}}
               {{#each this.join_requests}}
+              {{#if this.character_id}}
+              {{!-- Still ../this.id, not ../../: {{#if}} does not change
+                    context, so it adds no depth frame. --}}
               <input type="hidden" name="characters[]" class="lfg-{{../this.id}}" value="{{this.character_id}}">
+              {{/if}}
               {{/each}}
               <button class="button is-info is-small" hx-post="/missions" hx-confirm="Create a mission from this LFG post?">Create Mission</button>
             </div>
