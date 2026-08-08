@@ -89,18 +89,32 @@ Separately, classify `23503` in `util/http-error.js` as a 409 with an
 actionable message, so the next missing cascade surfaces as a diagnosis rather
 than a blank 500.
 
-### D3 — 204 responses leave delete buttons inert
+### D3 — the class delete buttons are inert, for two different reasons
 
-`DELETE /classes/:id` (`routes/classes.js:746`) and `DELETE /pages/:id`
-(`routes/pages.js:138`) return `204 No Content`. htmx does not swap on 204, so
-the delete buttons at `my-classes.handlebars:115`, `class-view.handlebars:29`
-and `pages-manage.handlebars:65` do nothing visible until a manual reload.
+**D3a — the 204.** `DELETE /classes/:id` (`routes/classes.js:746`) and
+`DELETE /pages/:id` (`routes/pages.js:138`) return `204 No Content`. htmx does
+not swap on 204, so the delete buttons at `my-classes.handlebars:115` and
+`pages-manage.handlebars:65` do nothing visible until a manual reload — the
+delete succeeds, the row stays on screen.
 
 **Fix:** return `HX-Location` as the character, mission, and LFG delete routes
 already do.
 
+**D3b — the unresolvable target.** `class-view.handlebars:29` carried
+`hx-target="closest tr" hx-swap="outerHTML"` on a page that contains no `<tr>`
+and no `<table>` at all. htmx aborts inside `issueAjaxRequest` with
+`htmx:targetError` *before* it evaluates `hx-confirm`, so this button issued no
+request, raised no confirm dialog, and surfaced no error (there is no
+`htmx:targetError` listener in `public/js/app.js`). Verified with an isolated
+htmx probe: 0 DELETE requests, 1 `targetError`, no dialog. `HX-Location` cannot
+rescue a request that is never sent, so D3a does not fix this button.
+
+**Fix:** drop `hx-target`/`hx-swap` from the button. With `HX-Location` the
+target is irrelevant — it only has to resolve, and the default (the element
+itself) does.
+
 Found while mapping rather than reported; specs 21 and 23 cannot pass without
-it.
+D3a, and spec 21's detail-page delete test cannot pass without D3b.
 
 ## Spec inventory
 
