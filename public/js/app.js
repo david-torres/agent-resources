@@ -879,20 +879,25 @@ const App = (function (document, supabase, htmx) {
             targetEl.classList.add('is-hidden');
           }, 10000);
         }
+        // For hx-swap="outerHTML" the swapped-out target is detached by the time this
+        // runs, so scoping to it searches a node that is no longer in the document and
+        // every initializer below silently no-ops. Fall back to a full-document scan in
+        // that case; keep the cheap scoped path for normal swaps.
+        const swapRoot = (targetEl && targetEl.isConnected) ? targetEl : document;
         // Initialize tooltips after swaps (for boosted navs and partial swaps)
-        _initTooltips(targetEl || document);
+        _initTooltips(swapRoot);
         // Initialize searchable selects after swaps
-        _initSearchableSelects(targetEl || document);
+        _initSearchableSelects(swapRoot);
         // Initialize nav form toggle behavior after swaps
-        _initNavForm(targetEl || document);
+        _initNavForm(swapRoot);
         // Initialize profile image cropper when swapping in profile form
-        _initImageCroppers(targetEl || document);
+        _initImageCroppers(swapRoot);
         // Apply saved crop styles on swapped content
-        _applySavedCrops(targetEl || document);
+        _applySavedCrops(swapRoot);
         // Initialize ToastUI editors after swaps
         // Use a delay to ensure DOM is fully settled after swap and auth redirects
         setTimeout(() => {
-          _initToastUIEditors(targetEl || document);
+          _initToastUIEditors(swapRoot);
         }, 150);
       });
 
