@@ -187,9 +187,11 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   // cleanupByPrefix reaches lfg_join_requests two ways, and BOTH are needed
   // here: by lfg_post_id (the posts above) and by character_id. The second was
-  // added for this spec -- lfg_join_requests_character_id_fkey has no
-  // referential action, so a character-bound request is a hard FK block on the
-  // character delete. See the comment in e2e/fixtures/db.js.
+  // added for this spec. It is still required now that
+  // lfg_join_requests_character_id_fkey is ON DELETE SET NULL: the FK no
+  // longer blocks the character delete, but without this pass a request
+  // against a non-prefixed post would survive with a null character_id and
+  // leak into shared data. See the comment in e2e/fixtures/db.js.
   await cleanupByPrefix(db, prefix);
   await db.end();
 });
