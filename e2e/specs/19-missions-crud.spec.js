@@ -6,7 +6,12 @@
 // (routes/missions.js:375) AND appends a hidden characters[] input, and the
 // later PUT reconciles membership from those hidden inputs
 // (routes/missions.js:338-360). Either half breaking silently loses party
-// members.
+// members. A separate test below exercises that second half specifically:
+// it saves via "Update Mission" (PUT) with a character attached, and detaches
+// one by removing its hidden characters[] input directly (never the Remove
+// button, which only proves the immediate DELETE endpoint) before saving
+// again -- so a regression confined to the PUT reconciliation diff logic
+// cannot pass unnoticed.
 //
 // NAVIGATION IS NOT WHAT THE MARKUP SAYS. mission-form.handlebars:5 carries
 // hx-redirect="/missions", which is not an htmx attribute and is implemented
@@ -156,6 +161,73 @@ test('a character can be attached to a mission and removed again', async ({ page
     );
     return rows[0].n;
   }, { timeout: 15_000 }).toBe(0);
+});
+
+test('attaching a character survives a PUT save, and removing its hidden input detaches it via PUT reconciliation', async ({ page }) => {
+  const name = `${prefix} PartyPut`;
+  const id = await createMissionViaUi(page, name);
+
+  await page.goto(`/missions/${id}/edit`);
+  await page.waitForLoadState('networkidle');
+
+  // Scoped: the editor search input at :193 shares name="q".
+  const search = page.locator('input[name="q"][hx-get^="/characters/add-to-mission-search"]');
+  await search.fill(character.name);
+
+  const result = page.locator(`#characterSearchResults button.button.is-text:has-text("${character.name}")`);
+  await expect(result).toBeVisible();
+  await result.click();
+
+  const item = page.locator(`#selectedCharactersList li:has-text("${character.name}")`);
+  await expect(item).toBeVisible();
+
+  // The POST fires immediately -- wait for the link row before saving, same
+  // guard the sibling attach/detach test uses.
+  await expect.poll(async () => {
+    const { rows } = await db.query(
+      'select count(*)::int as n from mission_characters where mission_id = $1 and character_id = $2',
+      [id, character.id]
+    );
+    return rows[0].n;
+  }, { timeout: 15_000 }).toBe(1);
+
+  // Save via PUT. routes/missions.js:338-360 reconciles membership from the
+  // hidden characters[] inputs on the form -- the "second half" of the
+  // two-phase attach mechanism that the immediate POST above never
+  // exercises. Membership must survive this round-trip.
+  await page.locator('button[type="submit"]:has-text("Update Mission")').click();
+  await page.waitForURL((url) => url.pathname === `/missions/${id}`);
+
+  const afterSave = await db.query(
+    'select count(*)::int as n from mission_characters where mission_id = $1 and character_id = $2',
+    [id, character.id]
+  );
+  expect(afterSave.rows[0].n).toBe(1);
+
+  // Reload the edit form -- mission.characters is now populated server-side,
+  // so the <li> and its hidden characters[] input render from that, not
+  // from the earlier in-page POST.
+  await page.goto(`/missions/${id}/edit`);
+  await page.waitForLoadState('networkidle');
+
+  const itemAfterReload = page.locator(`#selectedCharactersList li:has-text("${character.name}")`);
+  await expect(itemAfterReload).toBeVisible();
+
+  // Detach WITHOUT the Remove button: that button fires the immediate
+  // DELETE endpoint (routes/missions.js:375-ish) and would prove nothing
+  // about PUT reconciliation. Instead strip the hidden characters[] input
+  // for this character directly, so the only way membership can end up
+  // removed is through the PUT diff logic at routes/missions.js:338-360.
+  await itemAfterReload.locator('input[name="characters[]"]').evaluate((el) => el.remove());
+
+  await page.locator('button[type="submit"]:has-text("Update Mission")').click();
+  await page.waitForURL((url) => url.pathname === `/missions/${id}`);
+
+  const afterPutRemoval = await db.query(
+    'select count(*)::int as n from mission_characters where mission_id = $1 and character_id = $2',
+    [id, character.id]
+  );
+  expect(afterPutRemoval.rows[0].n).toBe(0);
 });
 
 test('a mission can be deleted from its detail page', async ({ page }) => {
