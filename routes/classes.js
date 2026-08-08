@@ -756,7 +756,11 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     if (error) {
         return sendError(req, res, error);
     }
-    return res.status(204).send();
+    // HX-Location, not 204: htmx does not swap on 204, so the delete buttons
+    // at my-classes.handlebars:115 and class-view.handlebars:29 left the row
+    // on screen even on success. Matches how the character, mission, and LFG
+    // delete routes already answer.
+    return res.header('HX-Location', '/classes/my').send();
 }));
 
 module.exports = router;
