@@ -113,7 +113,12 @@ test('an LFG post can be created through the form', async ({ page }) => {
     'select title, description from lfg_posts where id = $1', [id]
   );
   expect(rows[0].title).toBe(title);
-  expect(rows[0].description).toContain('description');
+  // toContain(title), not toContain('description'): the description is filled
+  // with `${title} description`, and `title` carries the run-unique prefix. A
+  // match on the common word 'description' would also pass against a stale or
+  // unrelated body; matching the prefix proves THIS run's WYSIWYG content
+  // round-tripped through the editor into Postgres.
+  expect(rows[0].description).toContain(title);
 });
 
 test('the post detail page shows the post that was just created', async ({ page }) => {
@@ -162,9 +167,10 @@ test('a player can join a post with a character and then leave it', async ({ pag
   await joinForm.locator('select[name="characterId"]').selectOption(character.id);
   await joinForm.locator('button[type="submit"]:has-text("Request to Join")').click();
 
-  // POST /lfg/:id/join answers HX-Location /lfg/:id
-  await page.waitForURL((url) => url.pathname === `/lfg/${id}`);
-
+  // No waitForURL here: POST /lfg/:id/join answers HX-Location /lfg/:id, but
+  // the page is ALREADY at /lfg/:id, so the predicate is true before the
+  // request is even sent and the wait resolves in ~0ms without synchronizing
+  // on anything. The DB poll below is the real wait.
   await expect.poll(async () => {
     const { rows } = await db.query(
       'select count(*)::int as n from lfg_join_requests where lfg_post_id = $1 and character_id = $2',
@@ -178,12 +184,21 @@ test('a player can join a post with a character and then leave it', async ({ pag
   await page.goto(`/lfg/${id}`);
   await page.waitForLoadState('networkidle');
   await page.locator('button:text-is("Unjoin")').click();
-  await page.waitForURL((url) => url.pathname.startsWith('/lfg'));
+  // Again no waitForURL: `pathname.startsWith('/lfg')` is true everywhere in
+  // this feature, including the page we are already on, so it would resolve
+  // instantly and verify nothing. The DB poll below does the synchronizing.
 
+  // Counted on (lfg_post_id, profile_id), NOT (lfg_post_id, character_id).
+  // Since lfg_join_requests_character_id_fkey became ON DELETE SET NULL, a
+  // character_id-keyed count reaches 0 both when the row is really deleted
+  // and when it merely had its character_id nulled -- so it could no longer
+  // tell "the user left" from "the character was deleted out from under a
+  // surviving row". profile_id survives either way, so only a real delete
+  // takes this to 0.
   await expect.poll(async () => {
     const { rows } = await db.query(
-      'select count(*)::int as n from lfg_join_requests where lfg_post_id = $1 and character_id = $2',
-      [id, character.id]
+      'select count(*)::int as n from lfg_join_requests where lfg_post_id = $1 and profile_id = $2',
+      [id, profile.id]
     );
     return rows[0].n;
   }, { timeout: 15_000 }).toBe(0);
@@ -208,4 +223,11 @@ test('an LFG post can be deleted from the My Posts tab', async ({ page }) => {
     const { rows } = await db.query('select id from lfg_posts where id = $1', [id]);
     return rows.length;
   }, { timeout: 15_000 }).toBe(0);
+
+  // And the list must actually repaint. Without this the test passes on a
+  // delete that succeeded server-side but left the row on screen -- exactly
+  // the D3 failure mode, which this is the only delete spec that would not
+  // have caught. (21-classes-crud asserts the same thing via #row-<id>; the
+  // My Posts rows carry no id, so match the row by its title instead.)
+  await expect(page.locator('#lfg-posts tr', { hasText: title })).toHaveCount(0);
 });
