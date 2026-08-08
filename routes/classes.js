@@ -756,10 +756,16 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     if (error) {
         return sendError(req, res, error);
     }
-    // HX-Location, not 204: htmx does not swap on 204, so the delete buttons
-    // at my-classes.handlebars:115 and class-view.handlebars:29 left the row
-    // on screen even on success. Matches how the character, mission, and LFG
-    // delete routes already answer.
+    // HX-Location, not 204: htmx does not swap on 204, so the my-classes
+    // delete button (my-classes.handlebars:115) left the row on screen even on
+    // success. Matches how the character, mission, and LFG delete routes
+    // already answer.
+    //
+    // The class-view delete button was inert for a SECOND, unrelated reason:
+    // it carried hx-target="closest tr" on a page with no <tr>, so htmx
+    // aborted with htmx:targetError before ever issuing a request. That is
+    // fixed in the template, not here -- HX-Location cannot help a request
+    // that is never sent.
     return res.header('HX-Location', '/classes/my').send();
 }));
 

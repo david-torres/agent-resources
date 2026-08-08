@@ -2,13 +2,21 @@
 //
 // Player-created class lifecycle through the real UI.
 //
-// D3 -- THE DELETE BUTTON IS INERT. routes/classes.js:759 answers 204 No
-// Content, and htmx does not swap on 204. Both delete triggers
-// (my-classes.handlebars:115 targeting #row-<id>, class-view.handlebars:29
-// targeting "closest tr" on a page that HAS no <tr>) therefore leave the row
-// on screen even when the delete succeeded. The delete test below asserts
-// against Postgres, which is the only way to tell "it worked but did not
-// repaint" from "it did nothing".
+// D3 -- BOTH DELETE BUTTONS WERE INERT, FOR TWO DIFFERENT REASONS.
+//
+//   * my-classes.handlebars:115 (targets #row-<id>): the route answered 204
+//     No Content, and htmx does not swap on 204, so the row stayed on screen
+//     even when the delete succeeded. Fixed in routes/classes.js by answering
+//     HX-Location.
+//   * class-view.handlebars:29: it carried hx-target="closest tr" on a page
+//     that has no <tr> and no <table> at all. htmx aborts at issueAjaxRequest
+//     with htmx:targetError BEFORE the hx-confirm check, so the button issued
+//     no request, raised no dialog, and reported nothing (there is no
+//     htmx:targetError listener in public/js/app.js). HX-Location cannot help
+//     a request that is never sent; fixed by dropping the bad target.
+//
+// The delete tests below assert against Postgres as well as the DOM, which is
+// the only way to tell "it worked but did not repaint" from "it did nothing".
 //
 // The abilities/gear rows are FIXED-COUNT and server-rendered -- exactly 3
 // and 6, via {{#times}} (class-form.handlebars:157, :185). There is no
@@ -76,9 +84,20 @@ test('a class can be created through the form', async ({ page }) => {
   const name = `${prefix} Created`;
   const id = await createClassViaUi(page, name);
 
-  const { rows } = await db.query('select name from classes where id = $1', [id]);
+  const { rows } = await db.query(
+    'select name, abilities, gear from classes where id = $1', [id]
+  );
   expect(rows).toHaveLength(1);
   expect(rows[0].name).toBe(name);
+
+  // The form fills 9 required name fields; asserting only on classes.name
+  // would leave the whole abilities/gear half of the create path unverified.
+  // Both are jsonb arrays on `classes` (NOT the class_abilities/class_gear
+  // tables -- those are character-scoped and require a character_id).
+  expect(rows[0].abilities.map((a) => a.name))
+    .toEqual([1, 2, 3].map((n) => `${prefix} Ability ${n}`));
+  expect(rows[0].gear.map((g) => g.name))
+    .toEqual([1, 2, 3, 4, 5, 6].map((n) => `${prefix} Gear ${n}`));
 });
 
 test('the class page shows the class that was just created', async ({ page }) => {
@@ -129,6 +148,29 @@ test('a class can be deleted from the My PCCs list', async ({ page }) => {
     return rows.length;
   }, { timeout: 15_000 }).toBe(0);
 
-  // And the list must actually repaint -- this is the half D3 breaks.
+  // And the list must actually repaint -- this is the half the 204 broke.
   await expect(page.locator(`#row-${id}`)).toHaveCount(0);
+});
+
+test('a class can be deleted from its own detail page', async ({ page }) => {
+  const name = `${prefix} Detail Deletable`;
+  const id = await createClassViaUi(page, name);
+
+  page.on('dialog', (d) => d.accept());
+  await page.goto(`/classes/${id}`);
+  await page.waitForLoadState('networkidle');
+
+  await page.locator('button:has-text("Delete")').click();
+
+  await expect.poll(async () => {
+    const { rows } = await db.query('select id from classes where id = $1', [id]);
+    return rows.length;
+  }, { timeout: 15_000 }).toBe(0);
+
+  // The other half of this button's fix: with hx-target="closest tr" on a
+  // page that has no <tr>, htmx aborted at issueAjaxRequest with
+  // htmx:targetError before the request (and before the confirm dialog), so
+  // nothing happened at all. Landing on /classes/my proves the DELETE was
+  // actually issued and its HX-Location honoured.
+  await page.waitForURL((url) => url.pathname === '/classes/my', { timeout: 15_000 });
 });

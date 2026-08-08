@@ -1055,13 +1055,19 @@ git commit -m "test: cover LFG create, view, edit, join, leave, and delete happy
 //
 // Player-created class lifecycle through the real UI.
 //
-// D3 -- THE DELETE BUTTON IS INERT. routes/classes.js:759 answers 204 No
-// Content, and htmx does not swap on 204. Both delete triggers
-// (my-classes.handlebars:115 targeting #row-<id>, class-view.handlebars:29
-// targeting "closest tr" on a page that HAS no <tr>) therefore leave the row
-// on screen even when the delete succeeded. The delete test below asserts
-// against Postgres, which is the only way to tell "it worked but did not
-// repaint" from "it did nothing".
+// D3 -- BOTH DELETE BUTTONS ARE INERT, FOR TWO DIFFERENT REASONS.
+//
+//   * my-classes.handlebars:115 (targets #row-<id>): routes/classes.js:759
+//     answers 204 No Content and htmx does not swap on 204, so the row stays
+//     on screen even when the delete succeeded.
+//   * class-view.handlebars:29: it carries hx-target="closest tr" on a page
+//     with no <tr> and no <table>, so htmx aborts at issueAjaxRequest with
+//     htmx:targetError BEFORE the hx-confirm check -- no request, no dialog,
+//     no error. HX-Location cannot help a request that is never sent; this
+//     one is fixed in the template.
+//
+// The delete tests below assert against Postgres, which is the only way to
+// tell "it worked but did not repaint" from "it did nothing".
 //
 // The abilities/gear rows are FIXED-COUNT and server-rendered -- exactly 3
 // and 6, via {{#times}} (class-form.handlebars:157, :185). There is no
@@ -1176,7 +1182,7 @@ test('a class can be deleted from the My PCCs list', async ({ page }) => {
     return rows.length;
   }, { timeout: 15_000 }).toBe(0);
 
-  // And the list must actually repaint -- this is the half D3 breaks.
+  // And the list must actually repaint -- this is the half the 204 breaks.
   await expect(page.locator(`#row-${id}`)).toHaveCount(0);
 });
 ```
@@ -1186,9 +1192,9 @@ test('a class can be deleted from the My PCCs list', async ({ page }) => {
 Run: `bunx playwright test e2e/specs/21-classes-crud.spec.js`
 Expected: the first three PASS; the delete test FAILS on the final `toHaveCount(0)` while the `expect.poll` above it succeeds — proving the row was deleted server-side but htmx never swapped.
 
-- [ ] **Step 3: Apply the D3 fix**
+- [ ] **Step 3: Apply the D3 fix (both halves)**
 
-`routes/classes.js:759` — replace:
+**D3a** — `routes/classes.js:759` — replace:
 
 ```js
     return res.status(204).send();
@@ -1197,12 +1203,18 @@ Expected: the first three PASS; the delete test FAILS on the final `toHaveCount(
 with:
 
 ```js
-    // HX-Location, not 204: htmx does not swap on 204, so the delete buttons
-    // at my-classes.handlebars:115 and class-view.handlebars:29 left the row
-    // on screen even on success. Matches how the character, mission, and LFG
-    // delete routes already answer.
+    // HX-Location, not 204: htmx does not swap on 204, so the my-classes
+    // delete button (my-classes.handlebars:115) left the row on screen even
+    // on success. Matches how the character, mission, and LFG delete routes
+    // already answer.
     return res.header('HX-Location', '/classes/my').send();
 ```
+
+**D3b** — `views/class-view.handlebars:29` — drop
+`hx-target="closest tr" hx-swap="outerHTML"` from the Delete button. That page
+has no `<tr>`, so the target resolved to nothing and htmx aborted with
+`htmx:targetError` before issuing the request or showing the confirm dialog.
+With `HX-Location` the target only has to resolve; the default does.
 
 - [ ] **Step 4: Run the spec to verify it passes**
 
