@@ -897,7 +897,12 @@ const App = (function (document, supabase, htmx) {
         // Initialize ToastUI editors after swaps
         // Use a delay to ensure DOM is fully settled after swap and auth redirects
         setTimeout(() => {
-          _initToastUIEditors(swapRoot);
+          // Recompute rather than closing over swapRoot: targetEl can still be
+          // connected at afterSwap time and be detached by a FOLLOW-UP swap
+          // inside these 150ms, which would restore the very no-op the
+          // isConnected guard exists to prevent.
+          const lateRoot = (targetEl && targetEl.isConnected) ? targetEl : document;
+          _initToastUIEditors(lateRoot);
         }, 150);
       });
 
