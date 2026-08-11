@@ -18,7 +18,8 @@ const httpFiles = new Set([
   'routes/character-wizard.test.js',
   'routes/characters.test.js',
   'routes/classes-stat-spread.test.js',
-  'routes/missions.test.js'
+  'routes/missions.test.js',
+  'routes/nav-manage-navbar.test.js'
 ]);
 const mode = process.argv[2] || 'unit';
 
@@ -27,7 +28,7 @@ const testFiles = (dir) => readdirSync(join(root, dir), { withFileTypes: true })
     ? testFiles(`${dir}/${entry.name}`)
     : entry.name.endsWith('.test.js') ? [`${dir}/${entry.name}`] : []);
 
-const allFiles = ['models', 'routes', 'services', 'util', 'views'].flatMap(testFiles).sort();
+const allFiles = ['models', 'routes', 'services', 'test', 'util', 'views'].flatMap(testFiles).sort();
 const files = mode === 'integration'
   ? allFiles.filter(file => integrationFiles.has(file))
   : mode === 'http'

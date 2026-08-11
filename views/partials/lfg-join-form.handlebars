@@ -1,4 +1,4 @@
-<form hx-post="/lfg/{{post.id}}/join" hx-swap="outerHTML" class="box">
+<form hx-post="/lfg/{{post.id}}/join" hx-swap="outerHTML" class="box" x-data="{ joinType: 'player' }">
   <h3 class="title is-4">Join "{{post.title}}"</h3>
   <p>Date: {{date_tz post.date "dddd, MMMM Do YYYY, h:mm A" profile.timezone}}</p>
   <p>Created by: {{#if post.creator_is_public}}<a href="/profile/view/{{encodeURIComponentH post.creator_name}}">{{post.creator_name}}</a>{{else}}{{post.creator_name}}{{/if}}</p>
@@ -7,17 +7,17 @@
     <label class="label">Join as:</label>
     <div class="control">
       <label class="radio">
-        <input type="radio" name="joinType" value="player" id="join-player-opt" hx-on:click="if (htmx.find('#join-player-opt').checked === true) htmx.removeClass(htmx.find('#character-select'), 'is-hidden')" checked>
+        <input type="radio" name="joinType" value="player" id="join-player-opt" checked x-model="joinType">
         Player
       </label>
       <label class="radio">
-        <input type="radio" name="joinType" value="conduit" hx-on:click="if (htmx.find('#join-player-opt').checked === false) htmx.addClass(htmx.find('#character-select'), 'is-hidden')" {{#if post.host_id}}disabled{{/if}}>
+        <input type="radio" name="joinType" value="conduit" x-model="joinType" {{#if post.host_id}}disabled{{/if}}>
         Conduit {{#if post.host_id}}(Already assigned){{/if}}
       </label>
     </div>
   </div>
 
-  <div class="field" id="character-select">
+  <div class="field" id="character-select" x-show="joinType === 'player'">
     <label class="label">Select Character:</label>
     <div class="control">
       <div class="select">

@@ -16,3 +16,5 @@ bun.lockb
 dist/
 coverage/
 .bun/
+e2e/.auth/
+e2e/report/

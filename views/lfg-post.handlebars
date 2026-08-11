@@ -26,14 +26,14 @@
   {{/if}}
   {{/if}}
 
-  <div class="buttons is-right">
-    <button class="button" id="calendar-buttons-show"
-      hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');">
+  <div class="buttons is-right" x-data="{ calendarOpen: false }">
+    <button class="button" id="calendar-buttons-show" x-show="!calendarOpen"
+      @click="calendarOpen = true">
       Calendar
     </button>
-    <div id="calendar-buttons" class="is-hidden">
+    <div id="calendar-buttons" x-show="calendarOpen" x-cloak>
       <button class="delete mt-2" id="calendar-buttons-hide"
-        hx-on:click="htmx.toggleClass(htmx.find('#calendar-buttons-show'), 'is-hidden');htmx.toggleClass(htmx.find('#calendar-buttons'), 'is-hidden');">
+        @click="calendarOpen = false">
       </button>
       <a class="button" href="{{calendar_link 'ics' post.date post.title post.description}}">iCal</a>
       <a class="button" href="{{calendar_link 'yahoo' post.date post.title post.description}}">Yahoo</a>
@@ -68,10 +68,10 @@
             <th>Actions</th>
           </tr>
         </thead>
-        <tbody>
-          {{#each post.join_requests}}
+        {{#each post.join_requests}}
           {{#if (eq this.status "approved")}}
           {{#if this.character}}
+          <tbody x-data="{ open: false }">
           <tr>
             <td>
               <a href="/characters/{{this.character.id}}/{{encodeURIComponentH this.character.name}}?lfg={{../post.id}}">{{this.character.name}}</a>
@@ -86,17 +86,26 @@
               {{/if}}
             </td>
             <td>
-              <button class="button is-small is-info" 
-                hx-history="false"
-                hx-push-url="false"
-                hx-on:click="htmx.toggleClass(htmx.find('#character-details-{{this.character.id}}'), 'is-hidden');">
+              <!-- No hx-history="false"/hx-push-url="false" here. They were
+                   inert from birth (37efac4: the hx-get they would have
+                   modified was already commented out, and this is now a plain
+                   Alpine toggle that issues no htmx request at all), but
+                   htmx queries [hx-history="false"] DOCUMENT-WIDE before
+                   snapshotting, so their mere presence suppressed the history
+                   snapshot of /lfg/:id itself. Back then missed the cache and
+                   fell through to htmx's unauthenticated restore XHR, which
+                   this authOptional route answers with a full SIGNED-OUT
+                   render (measured: body 16326 -> 7180 bytes, nav showing
+                   LOGIN/SIGNUP). Do not add them back. -->
+              <button class="button is-small is-info"
+                @click="open = !open">
                 Details
               </button>
             </td>
           </tr>
           <tr>
             <td colspan="5">
-              <div id="character-details-{{this.character.id}}" class="box is-hidden">
+              <div id="character-details-{{this.character.id}}" class="box" x-show="open" x-cloak>
                 <div class="columns is-multiline">
                   <div class="column is-4">
                     <h4 class="title is-5">Stats</h4>
@@ -150,10 +159,10 @@
               </div>
             </td>
           </tr>
+          </tbody>
           {{/if}}
           {{/if}}
           {{/each}}
-        </tbody>
       </table>
     </div>
 

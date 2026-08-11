@@ -1330,3 +1330,16 @@ a.dropdown-item:hover {
 .wizard-step {
   max-width: 100%;
 }
+/* Alpine is deferred, so the browser can paint un-initialized markup
+   before it runs. x-cloak hides those elements until Alpine strips the
+   attribute during init. */
+[x-cloak] { display: none !important; }
+/* Sortable character-list headers (views/character-list.handlebars, driven
+   by the sortableTable Alpine component). Every clickable header carries
+   data-sort-key, so key the affordance off that attribute rather than a
+   class -- matches what the old inline script set via el.style before it
+   was deleted, just as a stylesheet rule instead of per-element JS. */
+[data-sort-key] {
+  cursor: pointer;
+  user-select: none;
+}

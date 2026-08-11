@@ -2,7 +2,8 @@ require('./env');
 const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
 const { SYSTEM_ACTOR } = require('./actor');
-const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread } = require('./enclave-consts');
+const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread, classGearList, classAbilityList } = require('./enclave-consts');
+const { STARTER_CLASS_UNLOCKS } = require('./starter-content');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -10,42 +11,6 @@ const supabase = createClient(
     process.env.SUPABASE_SECRET_KEY
 );
 
-// build a list of classes from the consts
-const hardcodedClasses = [
-    ...adventClassList.map(cls => ({
-        name: cls,
-        description: '',
-        is_public: true,
-        status: 'release',
-        is_player_created: false,
-        rules_edition: 'advent',
-        rules_version: 'v1',
-        stat_spread: classStatSpread[cls] || {},
-        created_by: null
-    })),
-    ...aspirantPreviewClassList.map(cls => ({
-        name: cls,
-        description: '',
-        is_public: true,
-        status: 'release',
-        is_player_created: false,
-        rules_edition: 'advent',
-        rules_version: 'v1',
-        stat_spread: classStatSpread[cls] || {},
-        created_by: null
-    })),
-    ...playerCreatedClassList.map(cls => ({
-        name: cls,
-        description: '',
-        is_public: true,
-        status: 'release',
-        is_player_created: true,
-        rules_edition: 'advent',
-        rules_version: 'v1',
-        stat_spread: classStatSpread[cls] || {},
-        created_by: null
-    }))
-];
 
 
 async function seedClasses() {
@@ -64,7 +29,7 @@ async function seedClasses() {
         }
 
         // Set created_by to admin user ID
-        const classesWithAdmin = hardcodedClasses.map(cls => ({
+        const classesWithAdmin = buildHardcodedClasses().map(cls => ({
             ...cls,
             created_by: adminUser.user_id
         }));
@@ -86,5 +51,38 @@ async function seedClasses() {
     }
 }
 
-// Run the seed function
-seedClasses(); 
+// Building the row list must be import-safe (no network, no side effects) so
+// it can be unit tested.
+const buildRow = (cls, is_player_created) => {
+    const row = {
+        name: cls,
+        description: '',
+        is_public: true,
+        status: 'release',
+        is_player_created,
+        rules_edition: 'advent',
+        rules_version: 'v1',
+        stat_spread: classStatSpread[cls] || {},
+        gear: (classGearList[cls] || []).map(name => ({ name, description: '' })),
+        abilities: (classAbilityList[cls] || []).map(name => ({ name, description: '' })),
+        created_by: null
+    };
+    if (Object.prototype.hasOwnProperty.call(STARTER_CLASS_UNLOCKS, cls)) {
+        row.id = STARTER_CLASS_UNLOCKS[cls];
+    }
+    return row;
+};
+
+const buildHardcodedClasses = () => [
+    ...adventClassList.map(cls => buildRow(cls, false)),
+    ...aspirantPreviewClassList.map(cls => buildRow(cls, false)),
+    ...playerCreatedClassList.map(cls => buildRow(cls, true)),
+];
+
+module.exports = { buildHardcodedClasses };
+
+// Run the seed function — only when invoked directly (`bun run seed:classes`),
+// never as a side effect of require().
+if (require.main === module) {
+  seedClasses();
+} 

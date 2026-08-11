@@ -1,9 +1,18 @@
-<div id="levelUpModal" class="modal" data-clear-on-close="false">
-  <div class="modal-background" hx-on:click="App.closeModal('#levelUpModal')"></div>
+{{!-- Object form is load-bearing: the string form (`show && 'is-active'`) cannot
+     clear an `is-active` that htmx froze into its history snapshot -- Alpine
+     only removes classes it added itself -- so the modal restores stuck open
+     with its overlay swallowing every click on the page.
+     See public/js/alpine-components.js. --}}
+<div id="levelUpModal" class="modal" x-data="modal('levelUp')"
+     :class="{ 'is-active': show }"
+     @open-modal.window="open($event.detail)"
+     @close-modal.window="close($event.detail)"
+     @keydown.escape.window="close()">
+  <div class="modal-background" @click="close()"></div>
   <div class="modal-card is-double">
     <header class="modal-card-head">
       <p class="modal-card-title">Level Up &mdash; {{character.name}}</p>
-      <button type="button" class="delete" aria-label="close" hx-on:click="App.closeModal('#levelUpModal')"></button>
+      <button type="button" class="delete" aria-label="close" @click="close()"></button>
     </header>
     <section class="modal-card-body">
       <p class="has-text-grey is-size-7 mb-3">
@@ -103,7 +112,7 @@
       <div id="levelUpError" class="notification is-danger is-light is-hidden mt-3"></div>
     </section>
     <footer class="modal-card-foot is-justify-content-flex-end">
-      <button type="button" class="button" hx-on:click="App.closeModal('#levelUpModal')">Cancel</button>
+      <button type="button" class="button" @click="close()">Cancel</button>
       <button type="button" class="button is-primary" id="levelUpSaveBtn">
         <span class="icon"><i class="fas fa-arrow-up"></i></span>
         <span>Level Up</span>

@@ -664,7 +664,11 @@ const App = (function (document, supabase, htmx) {
 
   // Handle form submissions - sync editors before submit
   const _setupFormSync = () => {
-    document.body.addEventListener('submit', function(event) {
+    // Bound to `document`, not `document.body`: redirectTo() replaces the
+    // <body> element on every authed page load (outerHTML swap), which
+    // destroys any listener bound directly to that node. `document` itself
+    // is never replaced, so listeners survive.
+    document.addEventListener('submit', function(event) {
       const form = event.target;
       if (form && form.tagName === 'FORM') {
         _syncToastUIEditorsToTextareas(form);
@@ -672,7 +676,7 @@ const App = (function (document, supabase, htmx) {
     }, true); // Use capture phase to run before HTMX
 
     // Also sync before HTMX requests
-    document.body.addEventListener('htmx:configRequest', function(event) {
+    document.addEventListener('htmx:configRequest', function(event) {
       const form = event.detail.elt;
       if (form && form.tagName === 'FORM') {
         _syncToastUIEditorsToTextareas(form);
@@ -698,10 +702,32 @@ const App = (function (document, supabase, htmx) {
       })();
       // initialize supabase client
       supabaseClient = supabase.createClient(supabaseUrl, supabaseKey);
-      supabaseClient.auth.onAuthStateChange(_handleAuthStateChange);
+      // This subscription handles only the LIVE auth events. supabase-js
+      // also emits INITIAL_SESSION to every subscriber once it finishes
+      // initializing (onAuthStateChange fires an async IIFE ->
+      // _emitInitialSession -> callback('INITIAL_SESSION', session)), and
+      // start() below already dispatches that event itself from an explicit
+      // getSession(). Handling it in both places ran the whole INITIAL_SESSION
+      // branch twice per page load -- two _syncDiscordToProfile() round-trips
+      // and two redirectTo() body swaps of the entire page.
+      //
+      // start() owns INITIAL_SESSION rather than this subscription because
+      // its session comes from a getSession() we await directly, so the
+      // event is dispatched exactly once with a known session, independent
+      // of when supabase's own emit happens to win the lock. Do not drop
+      // the guard and rely on the emit instead: that couples the whole
+      // authed-page bootstrap to supabase-js internals.
+      supabaseClient.auth.onAuthStateChange((event, session) => {
+        if (event === 'INITIAL_SESSION') return;
+        return _handleAuthStateChange(event, session);
+      });
 
       // add auth token to htmx requests
-      document.body.addEventListener("htmx:configRequest", function (event) {
+      // Bound to `document`, not `document.body`: redirectTo() replaces the
+      // <body> element on every authed page load (outerHTML swap), which
+      // destroys any listener bound directly to that node. `document` itself
+      // is never replaced, so listeners survive.
+      document.addEventListener("htmx:configRequest", function (event) {
         const authToken = _getAuthToken();
         const refreshToken = _getRefreshToken();
         if (authToken && refreshToken) {
@@ -711,7 +737,7 @@ const App = (function (document, supabase, htmx) {
       });
 
       // handle htmx errors
-      document.body.addEventListener("htmx:responseError", function (event) {
+      document.addEventListener("htmx:responseError", function (event) {
         _displayError(_extractErrorMessage(event.detail.xhr.response));
       });
 
@@ -723,7 +749,7 @@ const App = (function (document, supabase, htmx) {
       });
 
       // Add handler for htmx:afterSettle
-      document.body.addEventListener('htmx:afterSettle', function(event) {
+      document.addEventListener('htmx:afterSettle', function(event) {
         const xhr = event.detail && event.detail.xhr;
         if (!xhr) return;
         const authOptional = xhr.getResponseHeader('X-Auth-Optional') === 'true';
@@ -840,7 +866,11 @@ const App = (function (document, supabase, htmx) {
         form.dataset.navFormInit = 'true';
       };
 
-      document.body.addEventListener('htmx:afterSwap', function(evt) {
+      // Bound to `document`, not `document.body`: redirectTo() replaces the
+      // <body> element on every authed page load (outerHTML swap), which
+      // destroys any listener bound directly to that node. `document` itself
+      // is never replaced, so listeners survive.
+      document.addEventListener('htmx:afterSwap', function(evt) {
         // Handle character search results visibility
         const targetEl = evt.detail && evt.detail.target;
         if (targetEl && targetEl.id === 'characterSearchResults') {
@@ -864,30 +894,6 @@ const App = (function (document, supabase, htmx) {
         setTimeout(() => {
           _initToastUIEditors(targetEl || document);
         }, 150);
-      });
-
-      // Global keydown handler for closing modals on Escape
-      document.addEventListener('keydown', function(event) {
-        if (event.key === 'Escape') {
-          const activeModal = document.querySelector('.modal.is-active');
-          if (activeModal) {
-            App.closeModal('#' + activeModal.id);
-          }
-          // Also close any open dropdowns
-          document.querySelectorAll('.dropdown.is-active').forEach(function(dropdown) {
-            dropdown.classList.remove('is-active');
-          });
-        }
-      });
-
-      // Global click handler for closing dropdowns when clicking outside
-      document.addEventListener('click', function(event) {
-        const dropdowns = document.querySelectorAll('.dropdown.is-active');
-        dropdowns.forEach(function(dropdown) {
-          if (!dropdown.contains(event.target)) {
-            dropdown.classList.remove('is-active');
-          }
-        });
       });
 
       // Delegated handler: copy a deep link to a section anchor to the clipboard.
@@ -952,6 +958,52 @@ const App = (function (document, supabase, htmx) {
     start();
   }
 
+  // ---------------------------------------------------------------------
+  // In-flight boosted navigations.
+  //
+  // htmx's boosted links move the page WITHOUT a page load, and they write
+  // window.location only once the swap COMPLETES. So reading the location
+  // cannot see a click whose response is still on the wire -- and that is
+  // precisely the case the deferred post-load refresh below has to avoid
+  // stomping on. htmx marks every boosted request with `detail.boosted` and
+  // fires htmx:beforeRequest while the click is still being handled, which is
+  // the earliest observable "the user is leaving this page" signal there is.
+  //
+  // Pendency is read off the XHR's own readyState rather than tracked with a
+  // matching htmx:afterRequest listener, because a boosted request's element
+  // can be detached by an unrelated body swap before its afterRequest fires,
+  // and an event dispatched on a detached node never reaches `document`. That
+  // would leave a counter stuck above zero and silently disable the refresh
+  // for the life of the page. readyState cannot get stuck.
+  //
+  // Registered at module scope, not inside start(): app.js is a deferred
+  // script, so this runs before DOMContentLoaded -- before htmx processes the
+  // document and before any click is possible. Bound to `document` for the
+  // usual reason: redirectTo() replaces <body> wholesale.
+  let _boostedNavXhrs = [];
+  const _isPendingXhr = (xhr) => !!xhr && xhr.readyState !== XMLHttpRequest.DONE;
+
+  document.addEventListener('htmx:beforeRequest', function (event) {
+    if (!event.detail || !event.detail.boosted) return;
+    // Prune on write as well as on read so this cannot grow unbounded.
+    _boostedNavXhrs = _boostedNavXhrs.filter(_isPendingXhr);
+    _boostedNavXhrs.push(event.detail.xhr);
+  });
+
+  function _boostedNavigationInFlight() {
+    _boostedNavXhrs = _boostedNavXhrs.filter(_isPendingXhr);
+    return _boostedNavXhrs.length > 0;
+  }
+
+  // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
+  // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
+  // values so a crafted ?r= cannot redirect the user off-site. Stricter than
+  // the server-side isSameOriginPath check (which loosely accepts
+  // "/\evil.com") -- do not relax this to match it.
+  function _isSafeInAppPath(url) {
+    return !!url && url[0] === '/' && url[1] !== '/' && url[1] !== '\\';
+  }
+
   function redirectTo(url) {
     const token = _getAuthToken();
     const refresh = _getRefreshToken();
@@ -960,6 +1012,16 @@ const App = (function (document, supabase, htmx) {
       headers['Authorization'] = `Bearer ${token}`;
       headers['Refresh-Token'] = refresh;
     }
+    // Update the address bar synchronously, before the swap settles, so it
+    // never diverges from what's rendered. Use replaceState (never
+    // pushState) so Back can't land on /auth/check and re-trigger the
+    // bounce. This must not be deferred into the ajax completion callback:
+    // if the swap fails, an already-updated URL means a reload retries the
+    // intended target, whereas deferring the write would leave the user
+    // stuck at /auth/check -- exactly the trap being fixed.
+    if (_isSafeInAppPath(url)) {
+      history.replaceState(null, '', url);
+    }
     // Use swap: 'outerHTML' to ensure proper body replacement
     htmx.ajax('GET', url, { target: 'body', swap: 'outerHTML', headers });
   }
@@ -967,11 +1029,7 @@ const App = (function (document, supabase, htmx) {
   function getRedirectUrl() {
     const url = new URL(window.location.href);
     const r = url.searchParams.get('r');
-    // Only honor same-origin, in-app paths ("/foo"). Reject protocol-relative
-    // ("//evil.com"), absolute ("https://evil.com"), and backslash-prefixed
-    // values so a crafted ?r= cannot redirect the user off-site. Mirrors the
-    // server-side isSameOriginPath check.
-    if (!r || r[0] !== '/' || r[1] === '/' || r[1] === '\\') {
+    if (!_isSafeInAppPath(r)) {
       return null;
     }
     return r;
@@ -1005,6 +1063,36 @@ const App = (function (document, supabase, htmx) {
           const current = window.location.pathname + window.location.search;
           // Use a small delay to ensure any editors are initialized first, then redirect
           setTimeout(() => {
+            // A boosted navigation can move the user to a different page
+            // during this delay without a real page load, leaving this timer
+            // pending. Bail if that has happened, so we don't drag the user
+            // back to a page they already left. TWO reads are needed, and
+            // they cover different halves of the same window:
+            //
+            //   - the location, for a boosted navigation that has already
+            //     COMPLETED (43c6120's guard);
+            //   - _boostedNavigationInFlight(), for one that is still on the
+            //     wire. window.location is not written until the swap
+            //     completes, so the location read is blind to a click made
+            //     inside this window whose response has not come back yet --
+            //     and that is the common case, not a corner: 14 of 60 natural
+            //     clicks straight after load, no network shaping at all.
+            //     redirectTo(current) would go out, its response would land
+            //     after the boosted swap, and the user would be left with the
+            //     address bar on the new page and the body on the old one.
+            //
+            // Nothing is lost by bailing. Boosted requests carry the
+            // Authorization header (the htmx:configRequest listener in
+            // start()), so the page the user navigated to is already the
+            // authed render this refresh exists to produce.
+            //
+            // Do not simplify this to an unconditional redirectTo(current) --
+            // and do not simplify it to an unconditional return either: a
+            // plain page load carries no Authorization header, so without
+            // this refresh a signed-in user is left looking at the guest
+            // render of the page they actually loaded.
+            const now = window.location.pathname + window.location.search;
+            if (now !== current || _boostedNavigationInFlight()) return;
             redirectTo(current);
           }, 100);
         }
@@ -1260,35 +1348,6 @@ const App = (function (document, supabase, htmx) {
   };
 
   // UI helpers
-  const openModal = (selector) => {
-    const modal = htmx.find(selector);
-    if (!modal) return;
-    if (!modal.classList.contains('is-active')) {
-      htmx.toggleClass(modal, 'is-active');
-    }
-    if (!document.body.classList.contains('modal-open')) {
-      htmx.toggleClass(document.body, 'modal-open');
-    }
-  };
-
-  const closeModal = (selector) => {
-    const modal = htmx.find(selector);
-    if (!modal) return;
-    if (modal.classList.contains('is-active')) {
-      htmx.toggleClass(modal, 'is-active');
-    }
-    if (document.body.classList.contains('modal-open')) {
-      htmx.toggleClass(document.body, 'modal-open');
-    }
-    // If modal requests clearing target on close
-    const clearOnClose = modal.getAttribute('data-clear-on-close') === 'true';
-    const clearTarget = modal.getAttribute('data-clear-target');
-    if (clearOnClose && clearTarget) {
-      const el = htmx.find(clearTarget);
-      if (el) el.innerHTML = '';
-    }
-  };
-
   const copyToClipboard = async (text, evt) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -1370,8 +1429,6 @@ const App = (function (document, supabase, htmx) {
     signUpWithDiscord,
     linkDiscord,
     unlinkDiscord,
-    openModal,
-    closeModal,
     copyToClipboard
   };
 })(document, supabase, htmx);

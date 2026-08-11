@@ -1,7 +1,7 @@
 // Level-Up modal for the character show page.
 //
 // Flow:
-//   - Open the modal with App.openModal('#levelUpModal').
+//   - Open the modal by dispatching: new CustomEvent('open-modal', { detail: 'levelUp' }).
 //   - User can edit stat values, add a perk to any ability (optionally
 //     compounding it with an existing or sibling perk), fill in
 //     missing-mission text boxes, and toggle "Conduit Credit".
@@ -235,8 +235,7 @@ window.CharacterLevelUp = (function () {
 
     // Open / close the modal.
     openBtn.addEventListener('click', () => {
-      if (typeof App !== 'undefined' && App.openModal) App.openModal('#levelUpModal');
-      else modal.classList.add('is-active');
+      window.dispatchEvent(new CustomEvent('open-modal', { detail: 'levelUp' }));
     });
 
     const onSave = () => {

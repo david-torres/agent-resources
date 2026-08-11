@@ -158,13 +158,58 @@ class CharacterService {
       throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
     }
 
-    let rulesVersion = await this.adapter.getRulesVersion(input.class_id);
+    // A character's class is IMMUTABLE on update: the STORED class_id always
+    // wins over whatever was submitted.
+    //
+    // Why: the edit form's Class <select> is built from the *editing user's*
+    // currently-unlocked classes (routes/characters.js#filterClassDataForUser),
+    // so as soon as a character's class stops being unlocked -- a
+    // class_unlocks.expires_at lapsing, or a class's is_public flipping false --
+    // the form renders no <option> for it, the browser auto-selects the first
+    // enabled one, `required` is satisfied, and an otherwise-untouched save
+    // silently reassigns the character to an unrelated class. The user never
+    // touches the Class field; every ordinary edit does it, repeatedly.
+    //
+    // That reassignment is not cosmetic. The save rewrites class_abilities
+    // wholesale (saveCharacterAtomic below / the save_character_atomic RPC) and
+    // character_perks.class_ability_id is ON DELETE CASCADE, so the character's
+    // perks are deleted along with the old ability rows -- and they are not
+    // necessarily rebuilt, because the rebuild is gated on `rulesVersion`,
+    // which used to be derived from the submitted (wrong) class as well.
+    // Characterized by e2e/specs/03b-class-reassignment.spec.js.
+    //
+    // Deliberate class changes have their own validated capability --
+    // upgradeClass() below, behind POST /characters/:id/upgrade -- and never
+    // come through here. The mismatch is IGNORED rather than rejected on
+    // purpose: a player whose unlock has lapsed must still be able to edit
+    // their character normally, not be locked out of every save until someone
+    // restores the unlock.
+    const storedClassId = existing.data.class_id ?? null;
     let prepared = cloneInput(input);
+    const submittedClassId = prepared.class_id ?? null;
+    if (submittedClassId !== null && submittedClassId !== storedClassId) {
+      // Surfaced so this state is diagnosable rather than invisible: it only
+      // happens when the editor's unlocked set no longer covers the class.
+      console.warn(
+        `[updateCharacter] Ignoring submitted class_id "${submittedClassId}" for character ${id}: ` +
+        `class is immutable on update, keeping "${storedClassId}"`
+      );
+    }
+    // Both keys, not just class_id: resolveClassReference re-derives class_id
+    // from a submitted class NAME, so pinning the id alone would leave a
+    // bypass -- and keeping the submitted name would desync the denormalized
+    // `class` column from class_id. Dropping `class` lets resolveClassReference
+    // fill it back in from the stored id.
+    prepared.class_id = storedClassId;
+    delete prepared.class;
+
+    // Resolved from the stored class, never the submitted one: this gates both
+    // the v2-only field strip below and the perk rebuild in saveCharacterAtomic.
+    const rulesVersion = await this.adapter.getRulesVersion(storedClassId);
     if (rulesVersion !== 'v2') {
       for (const field of V2_ONLY_FIELDS) delete prepared[field];
     }
     prepared = await this.adapter.resolveClassReference(prepared);
-    rulesVersion = await this.adapter.getRulesVersion(prepared.class_id);
 
     const normalized = normalizeCharacterInput(prepared, {
       rulesVersion,

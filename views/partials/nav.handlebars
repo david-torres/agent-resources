@@ -1,9 +1,15 @@
-<nav class="navbar is-dark" role="navigation" aria-label="main navigation">
+{{!-- The `:class` bindings below MUST stay in object form. `open && 'is-active'`
+     routes through Alpine's setClassesFromString, which only ever removes
+     classes Alpine itself added -- so an `is-active` that htmx froze into its
+     history snapshot survives re-init and the menu comes back permanently
+     stuck open. The object form uses setClassesFromObject, which does remove a
+     falsy class it did not add. Full mechanism: public/js/alpine-components.js. --}}
+<nav class="navbar is-dark" role="navigation" aria-label="main navigation" x-data="{ open: false }">
   <div class="navbar-brand">
     <a class="navbar-item" href="/">
       <strong>Agent Resources</strong>
     </a>
-    <button class="navbar-burger" id="navbar-burger" role="button" aria-label="menu" aria-expanded="false" hx-on:click="const b = htmx.find('#navbar-burger'); const m = htmx.find('#navbar-menu'); htmx.toggleClass(b, 'is-active'); htmx.toggleClass(m, 'is-active'); b.setAttribute('aria-expanded', b.classList.contains('is-active')); return false;">
+    <button class="navbar-burger" id="navbar-burger" role="button" aria-label="menu" :class="{ 'is-active': open }" :aria-expanded="open" @click="open = !open">
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>
       <span aria-hidden="true"></span>
@@ -11,7 +17,7 @@
     </button>
   </div>
 
-  <div class="navbar-menu" id="navbar-menu">
+  <div class="navbar-menu" id="navbar-menu" :class="{ 'is-active': open }">
     <div class="navbar-end">
       {{#if navItems}}
         {{#if navItems.length}}

@@ -1,7 +1,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="htmx-config" content='{"includeIndicatorStyles": false}'>
+  <meta name="htmx-config" content='{"includeIndicatorStyles": false, "defaultSettleDelay": 0}'>
   <title>{{#if title}}{{title}} - Agent Resources{{else}}Agent Resources{{/if}}</title>
   <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" integrity="sha384-DCY3M8xLkMu6c9IKcKbe+jHKMjelnwC0p+SBaxfHxoBYZWdJF2X400UdBCgATtAB" crossorigin="anonymous">
@@ -13,6 +13,11 @@
   <script src="https://unpkg.com/htmx.org@2.0.8" integrity="sha384-/TgkGk7p307TH7EXJDuUlgG3Ce1UVolAOFopFekQkkXihi5u/6OCvVKyz1W+idaz" crossorigin="anonymous" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" crossorigin="anonymous" defer></script>
   <script src="/js/app.js" defer></script>
+  <script src="/js/alpine-components.js" defer></script>
+  <!-- Alpine must load LAST: Alpine.start() fires in a microtask right
+       after this tag, before any later deferred script, so anything
+       calling Alpine.data() has to be registered above. -->
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.15.12/dist/cdn.min.js" integrity="sha384-pb6hrQvo4s23cEUFtj0CZkzGE3jyK3pj26RIupXXxhSrrcUA/Cn0lZgcCrGH0t6L" crossorigin="anonymous" defer></script>
   <script>
     document.addEventListener('DOMContentLoaded', function() {
       App.init("{{supabaseUrl}}", "{{supabaseKey}}");

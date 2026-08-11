@@ -1,7 +1,8 @@
-// Shared helpers for the character creator, stats editor, and level-up modules
-// (character-wizard.js, character-stats.js, character-level-up.js). Loaded
-// before them on every page that uses those modules; exposes the
-// CharacterCommon namespace.
+// Shared helpers for the character creator and level-up modules
+// (character-wizard.js, character-level-up.js), plus the Alpine
+// characterStats component in alpine-components.js. Loaded before them on
+// every page that uses those modules; exposes the CharacterCommon
+// namespace.
 //
 // Assigned to `window` rather than a top-level `const` so the script is safe to
 // re-execute. The layout sets hx-boost, which swaps the <body> (where these

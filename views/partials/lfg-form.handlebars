@@ -1,5 +1,5 @@
 <form hx-{{#if post}}put{{else}}post{{/if}}="{{#if post}}/lfg/{{post.id}}{{else}}/lfg{{/if}}" hx-swap="afterend"
-  class="box">
+  class="box" x-data="{ hosting: {{#if (eq post.host_id profile.id)}}true{{else}}false{{/if}} }">
   <div class="field">
     <label class="label" for="lfg-title">Game Title</label>
     <div class="control">
@@ -26,13 +26,13 @@
     <label class="label">Conduit</label>
     <div class="control">
       <label class="checkbox">
-        <input type="checkbox" name="host_id" hx-on:click="htmx.toggleClass(htmx.find('#character-select'), 'is-hidden')" {{#if (eq post.host_id profile.id)}}checked{{/if}}>
+        <input type="checkbox" name="host_id" {{#if (eq post.host_id profile.id)}}checked{{/if}} x-model="hosting">
         I will Conduit this game
       </label>
     </div>
   </div>
 
-  <div class="field{{#if (eq post.host_id profile.id)}} is-hidden{{/if}}" id="character-select">
+  <div class="field" id="character-select" x-show="!hosting" x-cloak>
     <label class="label" for="lfg-character">Character</label>
     <div class="control">
       <div class="select">

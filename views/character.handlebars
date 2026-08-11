@@ -158,22 +158,38 @@
         </div>
       </div>
       <div class="control">
-        <div class="dropdown is-right" id="export-dropdown">
+        {{!-- Object form is load-bearing: the string form (`open && 'is-active'`)
+             cannot clear an `is-active` that htmx froze into its history
+             snapshot, because Alpine only removes classes it added itself, and
+             the dropdown restores stuck open. See public/js/alpine-components.js. --}}
+        <div class="dropdown is-right" id="export-dropdown"
+             x-data="exportDropdown"
+             :class="{ 'is-active': open }"
+             @click.outside="open = false"
+             @keydown.escape.window="open = false">
           <div class="dropdown-trigger">
-            <button class="button is-white" aria-haspopup="true" aria-controls="export-menu" onclick="document.getElementById('export-dropdown').classList.toggle('is-active')" title="Export">
+            <button class="button is-white" aria-haspopup="true" aria-controls="export-menu" :aria-expanded="open" @click="open = !open" title="Export">
               <span class="icon"><i class="fas fa-ellipsis-vertical"></i></span>
             </button>
           </div>
+          {{!-- hx-boost="false" AND @click.prevent, both load-bearing: the
+                export routes are authenticated by a header JavaScript writes,
+                so neither an htmx-boosted swap nor a real navigation can
+                download the file. The component fetches it with the header and
+                hands the browser a Blob. See public/js/alpine-components.js. --}}
           <div class="dropdown-menu" id="export-menu" role="menu">
             <div class="dropdown-content">
-              <a href="/characters/{{character.id}}/export?format=markdown" class="dropdown-item">
+              <a href="/characters/{{character.id}}/export?format=markdown" class="dropdown-item"
+                 hx-boost="false" @click.prevent="download($el.href)">
                 <span class="icon"><i class="fas fa-file-alt"></i></span>
                 <span>Markdown (.md)</span>
               </a>
-              <a href="/characters/{{character.id}}/export?format=json" class="dropdown-item">
+              <a href="/characters/{{character.id}}/export?format=json" class="dropdown-item"
+                 hx-boost="false" @click.prevent="download($el.href)">
                 <span class="icon"><i class="fas fa-file-code"></i></span>
                 <span>JSON (.json)</span>
               </a>
+              <div class="notification is-danger is-light m-2 p-2 is-size-7" x-show="error" x-text="error"></div>
             </div>
           </div>
         </div>
@@ -184,7 +200,8 @@
   </div>
 
   <div class="column is-two-thirds">
-    <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}">
+    <div class="box" id="statsBox" data-character-id="{{character.id}}" data-character-name="{{character.name}}" data-character-level="{{character.level}}"
+         x-data="characterStats({{json character.id}}, { {{#each statList}}{{#unless @first}}, {{/unless}}{{this}}: {{json (lookup ../character this)}}{{/each}} })">
       <div class="level is-mobile mb-3">
         <div class="level-left">
           <h3 class="title is-4 mb-0">Stats</h3>
@@ -192,7 +209,7 @@
         {{#if profile}}
         {{#if (eq character.creator_id profile.id)}}
         <div class="level-right">
-          <button type="button" class="button is-small is-link is-light" id="statsUnlockBtn">
+          <button type="button" class="button is-small is-link is-light" id="statsUnlockBtn" x-show="!editing" @click="edit()">
             <span class="icon"><i class="fas fa-pen"></i></span>
             <span>Edit</span>
           </button>
@@ -200,7 +217,7 @@
         {{/if}}
         {{/if}}
       </div>
-      <div id="statsReadOnly" class="wizard-stat-grid">
+      <div id="statsReadOnly" class="wizard-stat-grid" x-show="!editing">
         {{#each statList}}
         <div class="wizard-stat-row" data-stat="{{this}}" data-value="{{lookup ../character this}}">
           <div class="wizard-stat-name">{{capitalize this}}</div>
@@ -219,7 +236,7 @@
         </div>
         {{/each}}
       </div>
-      <div id="statsEditor" hidden>
+      <div id="statsEditor" x-show="editing" x-cloak>
         {{> character-stats-editor}}
       </div>
     </div>
@@ -405,5 +422,4 @@
 {{> character-level-up}}
 
 <script src="/js/character-common.js" defer></script>
-<script src="/js/character-stats.js" defer></script>
 <script src="/js/character-level-up.js" defer></script>

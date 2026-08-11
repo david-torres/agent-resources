@@ -97,5 +97,16 @@
         modal.classList.remove('is-active');
       }
     });
+    // This modal predates the Alpine `modal` component and is deliberately
+    // NOT converted to it (Phase 4 work -- converting would drag in the
+    // localStorage draft flow this branch left alone). The global handler
+    // that used to close any active .modal on Escape lived in
+    // public/js/app.js and was deleted once every OTHER modal grew its
+    // own Alpine-driven escape binding; this modal was missed. Give it
+    // its own minimal Escape handler rather than reviving the global one
+    // or converting this modal.
+    window.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') modal.classList.remove('is-active');
+    });
   })();
 </script>
