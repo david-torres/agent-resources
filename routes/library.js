@@ -17,17 +17,15 @@ const {
     deleteRulesPdfUnlock,
     createRulesPdfUnlockCodes,
     listRulesPdfUnlockCodes,
-    storeRulesPdf,
-    deletePdfObject,
-    getSignedPdfUrl,
-    canViewRulesPdf,
-    RULES_PDF_BUCKET,
-    getProfileByNameAdmin,
-    getProfileByIdAdmin
-} = require('../util/supabase');
+    canViewRulesPdf
+} = require('../models/rules');
+const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
+const { getProfileByNameAdmin, getProfileByIdAdmin } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -268,12 +266,13 @@ router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req,
 });
 
 // Admin: generate unlock codes for a rules PDF
-router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
+router.post('/:id/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { expires_at, max_uses, amount } = req.body;
     const createdByProfileId = res.locals.profile.id;
     const count = parseInt(amount, 10) || 1;
-    const { data, error } = await createRulesPdfUnlockCodes({
+    const actor = actorFromLocals(res.locals);
+    const { data, error } = await createRulesPdfUnlockCodes(actor, {
         rulesPdfId: id,
         createdByProfileId,
         expiresAt: parseExpiresAt(expires_at),
@@ -299,7 +298,7 @@ router.post('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
         max_uses: codeRow.max_uses,
         expires_at: codeRow.expires_at
     });
-});
+}));
 
 // Admin: list unlock codes for a rules PDF
 router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {

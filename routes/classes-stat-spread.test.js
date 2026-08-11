@@ -22,7 +22,9 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
 const realBase = require('../models/_base');
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
+const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -56,37 +58,20 @@ mock.module('../models/_base', () => ({
   anonKey: 'test-anon-key',
 }));
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'p1', user_id: 'u1', role: 'admin' }),
+}));
+
+mock.module('../models/class', () => ({
   // The route under test — capture the payload and return a created class.
-  createClass: async (payload) => {
+  createClass: async (actor, payload) => {
     capturedCreate = payload;
     return { data: { id: 'new-class-id', name: payload.name }, error: null };
   },
-  // Other named exports routes/classes.js destructures at module load —
-  // stubbed so the require doesn't throw. None are reached on this path.
-  getClasses: async () => ({ data: null, error: null }),
-  getClass: async () => ({ data: null, error: null }),
-  getRulesPdf: async () => ({ data: null, error: null }),
-  updateClass: async () => ({ data: null, error: null }),
-  duplicateClass: async () => ({ data: null, error: null }),
-  getUnlockedClasses: async () => ({ data: null, error: null }),
-  unlockClass: async () => ({ data: null, error: null }),
-  isClassUnlocked: async () => ({ data: null, error: null }),
-  getVersionHistory: async () => ({ data: null, error: null }),
-  createUnlockCodes: async () => ({ data: null, error: null }),
-  listUnlockCodes: async () => ({ data: null, error: null }),
-  redeemUnlockCode: async () => ({ data: null, error: null }),
-  deleteClass: async () => ({ data: null, error: null }),
-  getProfileById: async () => ({ data: null, error: null }),
-  saveClassPdfMetadata: async () => ({ data: null, error: null }),
-  storeClassPdf: async () => ({ data: null, error: null }),
-  getSignedPdfUrl: async () => ({ data: null, error: null }),
-  canViewClassPdf: async () => ({ data: null, error: null }),
-  deletePdfObject: async () => ({ data: null, error: null }),
-  CLASS_PDF_BUCKET: 'class-pdfs',
 }));
 
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
@@ -97,23 +82,25 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./classes')];
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use('/classes', require('./classes'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  if (server) server.close();
+afterAll(async () => {
+  await stopHttpServer(server);
   mock.module('../models/_base', () => realBase);
-  mock.module('../util/supabase', () => realSupabase);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
+  mock.module('../models/class', () => realClass);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);

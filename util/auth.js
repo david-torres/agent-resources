@@ -1,5 +1,6 @@
-const { supabase, supabaseAdmin, createUserClient } = require('../models/_base');
-const { getUserFromToken, getProfile } = require('./supabase');
+const { supabase, createUserClient } = require('../models/_base');
+const { getUserFromToken } = require('../models/auth');
+const { getProfile } = require('../models/profile');
 const { getSystemMessage } = require('./system-message');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
@@ -145,7 +146,7 @@ const isAgentAuthenticated = async (req, res, next) => {
   }
 
   res.locals.user = { id: data.userId };
-  res.locals.supabase = supabaseAdmin;
+  res.locals.supabase = supabase;
   res.locals.profile = data.profile;
   res.locals.agentToken = {
     id: data.tokenId,

@@ -1,4 +1,5 @@
-const { redeemUnlockCode, redeemRulesPdfUnlockCode } = require('./supabase');
+const { redeemUnlockCode } = require('../models/class');
+const { redeemRulesPdfUnlockCode } = require('../models/rules');
 
 // Try a code as a class unlock code first, then as a rules PDF unlock code.
 // Returns { type: 'class' | 'pdf', id } on success. When neither table

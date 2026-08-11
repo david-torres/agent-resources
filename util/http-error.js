@@ -14,6 +14,9 @@ function classifyError(error, fallback = {}) {
     case '42501':
       base = { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND };
       break;
+    case 'forbidden':
+      base = { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND };
+      break;
     case '23505':
       base = { status: 409, title: 'Already exists', message: 'That already exists.' };
       break;

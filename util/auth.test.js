@@ -1,6 +1,12 @@
 const { test, expect, mock, afterAll } = require('bun:test');
 
 const realBase = require('../models/_base');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
+const realSystemMessage = require('./system-message');
+const realLfg = require('../models/lfg');
+const realAgentToken = require('../models/agent-token');
+const realNavLoader = require('./nav-loader');
 
 const fakeAnon = { __name: 'anon', auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
 const fakeAdmin = { __name: 'admin' };
@@ -13,8 +19,10 @@ mock.module('../models/_base', () => ({
   createUserClient: fakeCreateUserClient
 }));
 
-mock.module('./supabase', () => ({
+mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => token === 'valid-jwt' ? { id: 'u1' } : false,
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'p1', user_id: 'u1' })
 }));
 mock.module('./system-message', () => ({ getSystemMessage: () => null }));
@@ -30,6 +38,12 @@ const { isAuthenticated, authOptional, isAgentAuthenticated } = require('./auth'
 
 afterAll(() => {
   mock.module('../models/_base', () => realBase);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
+  mock.module('./system-message', () => realSystemMessage);
+  mock.module('../models/lfg', () => realLfg);
+  mock.module('../models/agent-token', () => realAgentToken);
+  mock.module('./nav-loader', () => realNavLoader);
   delete require.cache[require.resolve('./auth')];
 });
 
@@ -71,9 +85,9 @@ test('authOptional with a token attaches the user-scoped client', async () => {
   expect(res.locals.supabase.__name).toBe('user');
 });
 
-test('isAgentAuthenticated attaches the admin client', async () => {
+test('isAgentAuthenticated attaches the anon client (agent reads go through *ForAgent repositories, not res.locals.supabase)', async () => {
   const req = makeReq({ 'x-agent-token': 'aat_stub' });
   const res = makeRes();
   await isAgentAuthenticated(req, res, () => {});
-  expect(res.locals.supabase.__name).toBe('admin');
+  expect(res.locals.supabase.__name).toBe('anon');
 });

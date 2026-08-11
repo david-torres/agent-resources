@@ -1,7 +1,9 @@
-const { supabase, supabaseAdmin } = require('./_base');
-const { sanitizeUrlFields } = require('../util/url');
+const { supabase } = require('./_base');
 const { escapeLikePattern } = require('../util/validate');
 const { recalcMilestoneBadgesSafely, getMissionProfileIds } = require('./badge');
+const { MissionService } = require('../services/mission/service');
+const missionRepository = require('../services/mission/repository');
+const { actorFromProfile } = require('../util/actor');
 
 const getMissions = async () => {
   const { data, error } = await supabase
@@ -96,94 +98,18 @@ const getOwnMissions = async (profile, client = supabase) => {
   return { data: transformedData, error };
 }
 
-const createMission = async (missionData, profile) => {
-  missionData.creator_id = profile.id;
-  sanitizeUrlFields(missionData, ['media_url']);
-  const { data, error } = await supabaseAdmin.from('missions').insert(missionData).select();
-  if (!error && missionData.host_id) {
-    await recalcMilestoneBadgesSafely([missionData.host_id]);
-  }
-  return { data, error };
-};
-
-const updateMission = async (id, missionData, profile) => {
-  // Check if profile can edit this mission (creator, host, or editor)
-  const canEdit = await canEditMission(id, profile);
-  if (!canEdit) {
-    return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
-  }
-
-  // Capture the current host before the write: a host swap must recalc the
-  // outgoing host's badges too (counts only ever ADD badges; this just keeps
-  // both profiles' award rows up to date). Like every query in this module,
-  // this read returns { data, error } rather than throwing on a query error,
-  // so it is safe to await unguarded ahead of the mutation.
-  const { data: existing } = await supabaseAdmin
-    .from('missions')
-    .select('host_id')
-    .eq('id', id)
-    .maybeSingle();
-
-  sanitizeUrlFields(missionData, ['media_url']);
-
-  const { data, error } = await supabaseAdmin
-    .from('missions')
-    .update(missionData)
-    .eq('id', id)
-    .select();
-  if (!error) {
-    await recalcMilestoneBadgesSafely([existing?.host_id, missionData.host_id]);
-  }
-  return { data, error };
-};
-
-const deleteMission = async (id, profile) => {
-  // Affected profiles must be captured BEFORE the rows disappear.
-  const affected = await getMissionProfileIds(id);
-  const { data, error } = await supabaseAdmin
-    .from('missions')
-    .delete()
-    .eq('id', id)
-    .eq('creator_id', profile.id);
-  if (!error) {
-    await recalcMilestoneBadgesSafely(affected);
-  }
-  return { data, error };
-};
-
-const recalcCharacterCreator = async (characterId) => {
-  // Resolves to { data, error } (never throws on a query error), so an
-  // unguarded await here cannot break the calling mutation's return contract.
-  const { data: character } = await supabaseAdmin
-    .from('characters')
-    .select('creator_id')
-    .eq('id', characterId)
-    .maybeSingle();
-  await recalcMilestoneBadgesSafely([character?.creator_id]);
-};
-
-const addCharacterToMission = async (missionId, characterId) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_characters')
-    .upsert({ mission_id: missionId, character_id: characterId })
-    .select();
-  if (!error) {
-    await recalcCharacterCreator(characterId);
-  }
-  return { data, error };
-};
-
-const removeCharacterFromMission = async (missionId, characterId) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_characters')
-    .delete()
-    .eq('mission_id', missionId)
-    .eq('character_id', characterId);
-  if (!error) {
-    await recalcCharacterCreator(characterId);
-  }
-  return { data, error };
-};
+// Compatibility functions are deliberately kept at the model boundary for
+// routes and imports; their write decisions and authorization live in
+// services/mission. Mutations take `actor` (built by the caller via
+// actorFromLocals/actorFromProfile/SYSTEM_ACTOR); denials throw AuthorizationError.
+let missionService;
+const createMission = async (actor, missionData) => missionService.createMission(actor, missionData);
+const updateMission = async (actor, id, missionData) => missionService.updateMission(actor, id, missionData);
+const deleteMission = async (actor, id) => missionService.deleteMission(actor, id);
+const addCharacterToMission = async (actor, missionId, characterId) =>
+  missionService.addCharacter(actor, { missionId, characterId });
+const removeCharacterFromMission = async (actor, missionId, characterId) =>
+  missionService.removeCharacter(actor, { missionId, characterId });
 
 const getMissionCharacters = async (missionId, client = supabase) => {
   const { data, error } = await client
@@ -193,26 +119,8 @@ const getMissionCharacters = async (missionId, client = supabase) => {
   return { data, error };
 }
 
-const setUnregisteredCharacterNames = async (missionId, names, profile) => {
-  // Check if profile can edit this mission (creator, host, or editor)
-  const canEdit = await canEditMission(missionId, profile);
-  if (!canEdit) {
-    return { data: null, error: 'Unauthorized: You do not have permission to edit this mission' };
-  }
-
-  // Filter and clean names
-  const cleanedNames = (Array.isArray(names) ? names : [])
-    .map(n => (typeof n === 'string' ? n.trim() : ''))
-    .filter(n => n.length > 0);
-  
-  const { data, error } = await supabaseAdmin
-    .from('missions')
-    .update({ unregistered_character_names: cleanedNames })
-    .eq('id', missionId)
-    .select();
-  
-  return { data, error };
-}
+const setUnregisteredCharacterNames = async (actor, missionId, names) =>
+  missionService.setUnregisteredNames(actor, missionId, names);
 
 const searchPublicMissions = async (q, count = 12, hasVideo = false, characterName = null, characterClass = null, conduitName = null) => {
   try {
@@ -480,96 +388,37 @@ const getMissionEditors = async (missionId, client = supabase) => {
 };
 
 /**
- * Add an editor to a mission
+ * Add an editor to a mission. Only the mission creator (or admin/system)
+ * may add editors; addedBy is derived from the actor.
  */
-const addMissionEditor = async (missionId, profileId, addedBy) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_editors')
-    .upsert({
-      mission_id: missionId,
-      profile_id: profileId,
-      added_by: addedBy
-    })
-    .select();
-  return { data, error };
-};
+const addMissionEditor = async (actor, missionId, profileId) =>
+  missionService.addEditor(actor, { missionId, profileId });
 
 /**
- * Remove an editor from a mission
+ * Remove an editor from a mission. Only the mission creator (or admin/system)
+ * may remove editors.
  */
-const removeMissionEditor = async (missionId, profileId) => {
-  const { data, error } = await supabaseAdmin
-    .from('mission_editors')
-    .delete()
-    .eq('mission_id', missionId)
-    .eq('profile_id', profileId);
-  return { data, error };
-};
+const removeMissionEditor = async (actor, missionId, profileId) =>
+  missionService.removeEditor(actor, { missionId, profileId });
 
 /**
- * Check if a profile can edit a mission
- * Returns true if profile is creator, host, or an editor
- *
- * Uses supabaseAdmin to bypass RLS — this is a permission check in
- * application code, not a data-visibility read. Without admin, the
- * anon client (no JWT) would fail-closed for private missions and
- * lock creators out of their own mission edit pages.
+ * Check if a profile can edit a mission.
+ * Returns true if profile is creator, host, or an editor (or admin/system).
+ * Signature preserved for existing (read/render) callers; the decision is
+ * now made by the service against repository-loaded rows.
  */
 const canEditMission = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
-
-  // First check if user is creator or host
-  const { data: mission, error: missionError } = await supabaseAdmin
-    .from('missions')
-    .select('creator_id, host_id')
-    .eq('id', missionId)
-    .single();
-
-  if (missionError || !mission) {
-    console.error('Error checking mission permissions:', missionError);
-    return false;
-  }
-
-  // Check if user is creator or host
-  if (mission.creator_id === profile.id || (mission.host_id && mission.host_id === profile.id)) {
-    return true;
-  }
-
-  // Check if user is an editor
-  const { data: editor, error: editorError } = await supabaseAdmin
-    .from('mission_editors')
-    .select('profile_id')
-    .eq('mission_id', missionId)
-    .eq('profile_id', profile.id)
-    .single();
-
-  if (editorError && editorError.code !== 'PGRST116') {
-    // PGRST116 is "not found" which is fine - means user is not an editor
-    // Other errors are logged but don't necessarily mean no access
-    if (editorError.code !== 'PGRST116') {
-      console.error('Error checking editor permissions:', editorError);
-    }
-    return false;
-  }
-
-  return !!editor;
+  return missionService.canEditMission(actorFromProfile(profile), missionId);
 };
 
 /**
- * Check if a profile is the creator of a mission.
- * Uses supabaseAdmin for the same reason as canEditMission.
+ * Check if a profile is the creator of a mission (or admin/system).
+ * Signature preserved for existing callers.
  */
 const isCreator = async (missionId, profile) => {
   if (!profile || !profile.id) return false;
-
-  const { data: mission, error } = await supabaseAdmin
-    .from('missions')
-    .select('creator_id')
-    .eq('id', missionId)
-    .single();
-
-  if (error || !mission) return false;
-  return mission.creator_id === profile.id;
+  return missionService.isCreator(actorFromProfile(profile), missionId);
 };
 
 /**
@@ -721,35 +570,8 @@ const searchSimilarMissions = async (date, name, excludeId = null, daysRange = 3
  * - Adds editors from secondary to primary
  * - Deletes secondary mission
  */
-const mergeMissions = async (primaryId, secondaryId, profile) => {
-  const [canPrimary, canSecondary] = await Promise.all([
-    canEditMission(primaryId, profile),
-    canEditMission(secondaryId, profile)
-  ]);
-  if (!canPrimary || !canSecondary) {
-    return { data: null, error: 'You must be able to edit both missions to merge them' };
-  }
-
-  // Capture BEFORE the merge: the secondary mission's rows are deleted by the RPC.
-  const affected = [
-    ...(await getMissionProfileIds(primaryId)),
-    ...(await getMissionProfileIds(secondaryId))
-  ];
-
-  const { error } = await supabaseAdmin.rpc('merge_missions', {
-    primary_id: primaryId,
-    secondary_id: secondaryId,
-    actor_profile_id: profile.id
-  });
-  if (error) {
-    console.error('merge_missions RPC failed:', error);
-    return { data: null, error };
-  }
-
-  await recalcMilestoneBadgesSafely(affected);
-
-  return await getMission(primaryId);
-};
+const mergeMissions = async (actor, primaryId, secondaryId) =>
+  missionService.mergeMissions(actor, primaryId, secondaryId);
 
 /**
  * Preview what a merge would look like without actually performing it
@@ -808,6 +630,17 @@ const previewMergeMissions = async (primaryId, secondaryId) => {
     return { data: null, error };
   }
 };
+
+// Repository holds every privileged (service-role) mission query; this
+// object layers in the badge/read dependencies the service also needs.
+// Authorization, input handling, sequencing, and badge decisions are
+// testable in MissionService.
+missionService = new MissionService({
+  ...missionRepository,
+  getMissionProfileIds,
+  getMission,
+  recalcBadges: recalcMilestoneBadgesSafely
+});
 
 module.exports = {
   getMissions,

@@ -6,9 +6,17 @@
   "scripts": {
     "start": "bun run index.js",
     "dev": "bun --watch index.js",
-    "test": "bun test",
+    "test": "bun run test:unit",
+    "test:unit": "bun scripts/run-tests.mjs unit",
+    "test:http": "bun scripts/run-tests.mjs http",
+    "test:integration": "bun scripts/run-tests.mjs integration",
+    "check": "bun scripts/check.mjs",
+    "setup": "bun run scripts/setup.mjs",
+    "seed:local": "bun run scripts/seed-local.mjs",
     "seed:classes": "bun run util/seed-classes.js",
     "seed:admin": "bun run util/seed-admin.js",
+    "seed:badges": "bun run scripts/seed-badges.js",
+    "fetch:badges": "bun run scripts/fetch-badge-art.js",
     "db:backup": "sh scripts/db-backup.sh"
   },
   "dependencies": {

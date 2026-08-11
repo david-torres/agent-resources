@@ -1,12 +1,10 @@
-const { supabase, supabaseAdmin } = require('./_base');
+const { supabase } = require('./_base');
 const { getClasses, getClass, buildClassContentLookupMaps } = require('./class');
-const { sanitizeUrlFields } = require('../util/url');
-const { escapeLikePattern, validateAbilityPerks } = require('../util/validate');
+const { escapeLikePattern } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
-const { deriveCharacterTotals } = require('../util/character-derived');
-const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../util/ability-perks');
-const { diffChildRows, resolveCompoundLinks } = require('../util/reconcile');
-const { listOffscreenMissions } = require('./offscreen-mission');
+const { cloneInput } = require('../services/character/input');
+const { CharacterService } = require('../services/character/service');
+const characterRepository = require('../services/character/repository');
 
 // Resolve the rules version a character should be rendered/validated against.
 // Inherits from the linked class; falls back to 'v1' when no class is linked
@@ -19,6 +17,32 @@ const effectiveRulesVersion = async (classId, client = supabase) => {
   } catch (_) {
     return 'v1';
   }
+};
+
+// This remains the database-facing part of class preparation. The pure input
+// module receives the resulting rules version and never needs Supabase.
+const resolveCharacterClassReference = async (input) => {
+  const data = cloneInput(input);
+  if (!data.class_id && data.class) {
+    try {
+      let lookup = await getClasses({ name: data.class });
+      if (!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0) {
+        lookup = await getClasses({ name: data.class, is_public: true });
+      }
+      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) data.class_id = lookup.data[0].id;
+    } catch (_) {
+      // Class lookup is intentionally non-fatal for the existing create/edit flow.
+    }
+  }
+  if (data.class_id && !data.class) {
+    try {
+      const { data: cls } = await getClass(data.class_id);
+      if (cls && cls.name) data.class = cls.name;
+    } catch (_) {
+      // Keep the submitted reference when a catalog lookup is unavailable.
+    }
+  }
+  return data;
 };
 
 const findUpgradeTargetsFor = async (classId, client = supabase) => {
@@ -63,35 +87,42 @@ const getPublicCharactersByCreator = async (creatorId) => {
   return { data, error };
 }
 
+// Reads the primary character row through `client` (RLS-scoped by default,
+// or an admin client when a caller explicitly passes one) but always reads
+// its traits/gear/abilities/ability_perks through the repository's privileged
+// helpers — mirrors the pre-refactor behavior, where those child reads always
+// bypassed RLS regardless of the caller's client.
 const getCharacter = async (id, client = supabase) => {
   const { data, error } = await client.from('characters').select('*').eq('id', id).single();
   if (error) {
-    console.error(error);
+    // PGRST116 is an expected "0 rows" not-found (mapped to 404 by util/http-error.js),
+    // so don't log it; any other error code is unexpected and still logged.
+    if (error.code !== 'PGRST116') console.error(error);
     return { data: null, error };
   }
 
-  const { data: traits, error: traitsError } = await getCharacterTraits(id);
+  const { data: traits, error: traitsError } = await characterRepository.getCharacterTraits(id);
   if (traitsError) {
     console.error(traitsError);
     return { data: null, error: traitsError };
   }
   data.traits = traits.map(trait => trait.name);
 
-  const { data: gear, error: gearError } = await getCharacterGear(id, client);
+  const { data: gear, error: gearError } = await characterRepository.getCharacterGear(id, client);
   if (gearError) {
     console.error(gearError);
     return { data: null, error: gearError };
   }
   data.gear = gear;
 
-  const { data: abilities, error: abilitiesError } = await getCharacterAbilities(id, client);
+  const { data: abilities, error: abilitiesError } = await characterRepository.getCharacterAbilities(id, client);
   if (abilitiesError) {
     console.error(abilitiesError);
     return { data: null, error: abilitiesError };
   }
   data.abilities = abilities;
 
-  const { data: abilityPerks, error: perksError } = await getCharacterAbilityPerks(id);
+  const { data: abilityPerks, error: perksError } = await characterRepository.getCharacterAbilityPerks(id);
   if (perksError) {
     console.error(perksError);
     return { data: null, error: perksError };
@@ -120,810 +151,6 @@ const getCharacter = async (id, client = supabase) => {
   return { data, error };
 }
 
-const createCharacter = async (characterReq, profile) => {
-  characterReq.creator_id = profile.id;
-
-  const v2OnlyFields = ['quirks', 'accessories', 'ability_perks'];
-  const v1OnlyFields = ['perks', 'additional_gear'];
-  const linkedVersion = await effectiveRulesVersion(characterReq.class_id);
-  if (linkedVersion !== 'v2') {
-    for (const k of v2OnlyFields) delete characterReq[k];
-  } else {
-    for (const k of v1OnlyFields) delete characterReq[k];
-  }
-
-  // Ensure class_id is populated from the class name when missing
-  if (!characterReq.class_id && characterReq.class) {
-    try {
-      let lookup = await getClasses({ name: characterReq.class });
-      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
-        lookup = await getClasses({ name: characterReq.class, is_public: true });
-      }
-      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
-        characterReq.class_id = lookup.data[0].id;
-      }
-    } catch (_) {
-      // Non-fatal: if lookup fails, proceed without blocking character creation
-    }
-  }
-
-  // Ensure class name is populated from class_id when missing
-  if (characterReq.class_id && !characterReq.class) {
-    try {
-      const { data: cls } = await getClass(characterReq.class_id);
-      if (cls && cls.name) {
-        characterReq.class = cls.name;
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  // handle personality traits
-  const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
-  ['trait0', 'trait1', 'trait2'].forEach(trait => delete characterReq[trait]);
-  
-  // Extract v2 ability_perks before insert; we persist them after the row exists.
-  const abilityPerks = characterReq.ability_perks;
-  delete characterReq.ability_perks;
-
-  if (linkedVersion === 'v2') {
-    const v = validateAbilityPerks(normalizeAbilityPerks(abilityPerks));
-    if (!v.ok) {
-      return { data: null, error: v.errors.join(' ') };
-    }
-  }
-
-  // handle class gear
-  const classGear = characterReq.gear;
-  delete characterReq.gear;
-
-  // handle class abilities
-  const classAbilities = characterReq.abilities;
-  delete characterReq.abilities;
-
-  // handle common items - normalize to array of non-empty strings
-  if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items)
-      ? characterReq.common_items
-      : [characterReq.common_items];
-    characterReq.common_items = items
-      .map(item => (typeof item === 'string' ? item.trim() : ''))
-      .filter(item => item.length > 0);
-  } else {
-    characterReq.common_items = [];
-  }
-
-  // handle is_public
-  if (characterReq.is_public == 'on') {
-    characterReq.is_public = true;
-  } else {
-    characterReq.is_public = false;
-  }
-
-  // handle hide_from_search
-  if (characterReq.hide_from_search == 'on') {
-    characterReq.hide_from_search = true;
-  } else {
-    characterReq.hide_from_search = false;
-  }
-
-  // handle creator_mode (wizard mode label). Reject anything outside the
-  // allowed set; treat empty/missing as NULL (Expert-Mode-built characters).
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
-    characterReq.creator_mode = null;
-  } else if (!allowedModes.includes(characterReq.creator_mode)) {
-    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
-  }
-
-  // normalize v2 JSONB fields before insert
-  if (linkedVersion === 'v2') {
-    characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
-    characterReq.accessories = normalizeNamedJsonbList(characterReq.accessories);
-  }
-
-  // sanitize URL fields before insert
-  sanitizeUrlFields(characterReq, ['image_url']);
-
-  // create character (authz: creator_id is set server-side to profile.id above)
-  const { data, error } = await supabaseAdmin.from('characters').insert(characterReq).select();
-  if (error) {
-    console.error(error);
-    return { data, error };
-  }
-  if (!data || data.length === 0) {
-    return { data: null, error: 'Character creation returned no rows' };
-  }
-  const character = data[0];
-
-  // set personality traits
-  const { data: traitsSet, error: traitsSetError } = await setCharacterTraits(character.id, traitFields);
-  if (traitsSetError) {
-    console.error(traitsSetError);
-    return { data: null, error: traitsSetError };
-  }
-
-  // set class gear
-  if (classGear) {
-    const { data: gearSet, error: gearSetError } = await setCharacterGear(
-      character.id,
-      classGear
-    );
-    if (gearSetError) {
-      console.error(gearSetError);
-      return { data: null, error: gearSetError };
-    }
-  }
-
-  // set class abilities
-  let newAbilityRows = null;
-  if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
-    if (abilitiesSetError) {
-      console.error(abilitiesSetError);
-      return { data: null, error: abilitiesSetError };
-    }
-    newAbilityRows = abilitiesSet;
-  }
-
-  if (linkedVersion === 'v2') {
-    // The create form references each perk's ability by NAME (no row ids exist
-    // until the abilities are inserted just above). Remap name -> new row id;
-    // perks whose ability isn't present are dropped.
-    const perksToSave = remapPerkAbilityIdsByName(abilityPerks, newAbilityRows || []);
-    const { error: perksError } = await setCharacterPerks(character.id, perksToSave);
-    if (perksError) {
-      return { data: null, error: perksError };
-    }
-  }
-
-  return { data: character, error };
-}
-
-const updateCharacter = async (id, characterReq, profile) => {
-  // Use admin to read for the ownership probe: the anon client can't see
-  // private rows under RLS, which would 404 a user trying to edit their own
-  // private character (PGRST116). Authz is enforced by the creator_id check
-  // immediately below + the .eq('creator_id', ...) filter on the UPDATE.
-  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
-  if (characterError) return { data: null, error: characterError };
-  if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
-
-  const v2OnlyFields = ['quirks', 'accessories', 'ability_perks'];
-  // Pre-normalization strip: remove v2-only fields early if the submitted class_id
-  // is already non-v2. linkedVersion is recomputed below after class_id is finalized.
-  let linkedVersion = await effectiveRulesVersion(characterReq.class_id);
-  if (linkedVersion !== 'v2') {
-    for (const k of v2OnlyFields) delete characterReq[k];
-  }
-
-  // Ensure class_id is populated from the class name when missing or when class changed
-  if (!characterReq.class_id && characterReq.class) {
-    try {
-      let lookup = await getClasses({ name: characterReq.class });
-      if ((!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0)) {
-        lookup = await getClasses({ name: characterReq.class, is_public: true });
-      }
-      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) {
-        characterReq.class_id = lookup.data[0].id;
-      }
-    } catch (_) {
-      // Non-fatal: if lookup fails, proceed with remaining updates
-    }
-  }
-
-  // Ensure class name is populated from class_id when missing
-  if (characterReq.class_id && !characterReq.class) {
-    try {
-      const { data: cls } = await getClass(characterReq.class_id);
-      if (cls && cls.name) {
-        characterReq.class = cls.name;
-      }
-    } catch (_) {
-      // ignore
-    }
-  }
-
-  // Recompute linkedVersion now that class_id is fully resolved — the name→id
-  // lookup above can change class_id, which changes the effective rules version.
-  linkedVersion = await effectiveRulesVersion(characterReq.class_id);
-
-  // handle personality traits
-  const traitFields = [characterReq.trait0, characterReq.trait1, characterReq.trait2];
-  ['trait0', 'trait1', 'trait2'].forEach(trait => delete characterReq[trait]);
-  delete characterData.traits;
-
-  // Extract v2 ability_perks before update; we persist them after the row exists.
-  const abilityPerks = characterReq.ability_perks;
-  delete characterReq.ability_perks;
-
-  if (linkedVersion === 'v2') {
-    const v = validateAbilityPerks(normalizeAbilityPerks(abilityPerks));
-    if (!v.ok) {
-      return { data: null, error: v.errors.join(' ') };
-    }
-  }
-
-  // handle class gear
-  const classGear = characterReq.gear;
-  delete characterReq.gear;
-  delete characterData.gear;
-
-  // handle class abilities
-  const classAbilities = characterReq.abilities;
-  // Snapshot existing ability rows: setCharacterAbilities replaces them with
-  // fresh UUIDs, but submitted ability_perks reference the old row ids (the
-  // form bakes them into hidden inputs at render time). We remap old→new by
-  // name+class_id below before persisting perks.
-  const previousAbilities = Array.isArray(characterData.abilities) ? characterData.abilities : [];
-  delete characterReq.abilities;
-  delete characterData.abilities;
-
-  // handle common items - normalize to array of non-empty strings
-  if (characterReq.common_items) {
-    const items = Array.isArray(characterReq.common_items)
-      ? characterReq.common_items
-      : [characterReq.common_items];
-    characterReq.common_items = items
-      .map(item => (typeof item === 'string' ? item.trim() : ''))
-      .filter(item => item.length > 0);
-  } else {
-    characterReq.common_items = [];
-  }
-
-  // handle is_public
-  if (characterReq.is_public == 'on') {
-    characterReq.is_public = true;
-  } else {
-    characterReq.is_public = false;
-  }
-
-  // handle hide_from_search
-  if (characterReq.hide_from_search == 'on') {
-    characterReq.hide_from_search = true;
-  } else {
-    characterReq.hide_from_search = false;
-  }
-
-  // handle creator_mode (wizard mode label). Reject anything outside the
-  // allowed set; treat empty/missing as NULL.
-  const allowedModes = ['advent', 'aspiring', 'aspirant'];
-  if (characterReq.creator_mode == null || characterReq.creator_mode === '') {
-    characterReq.creator_mode = null;
-  } else if (!allowedModes.includes(characterReq.creator_mode)) {
-    return { data: null, error: `Invalid creator_mode: ${characterReq.creator_mode}` };
-  }
-
-  // handle auto_calculate
-  characterReq.auto_calculate = characterReq.auto_calculate === 'on' || characterReq.auto_calculate === true;
-
-  // Auto-calculate: when enabled, recompute level/completed_missions/commissary_reward
-  // from the submitted in-flight payload (gear, common_items, class_id) and the
-  // character's mission history. Server is authoritative — submitted values for
-  // these three fields are ignored when the flag is on.
-  if (characterReq.auto_calculate) {
-    // Resolve gear strings ("ClassName::GearName") to objects with class_id so
-    // on-class/off-class classification matches the persisted shape.
-    const submittedGear = Array.isArray(classGear) ? classGear : (classGear ? [classGear] : []);
-    let resolvedGear = [];
-    if (submittedGear.length > 0) {
-      const { gearNameToClassId } = await buildClassContentLookupMaps();
-      resolvedGear = submittedGear
-        .map(item => {
-          if (!item) return null;
-          if (typeof item === 'string') {
-            const trimmed = item.trim();
-            if (!trimmed) return null;
-            const name = trimmed.includes('::') ? trimmed.split('::')[1].trim() : trimmed;
-            return name ? { name, class_id: gearNameToClassId.get(name) || null } : null;
-          }
-          if (typeof item === 'object' && item.name) {
-            return { name: item.name, class_id: item.class_id || gearNameToClassId.get(item.name) || null };
-          }
-          return null;
-        })
-        .filter(Boolean);
-    }
-
-    const [missionsRes, offscreenRes] = await Promise.all([
-      getCharacterRealMissionsForDerivation(id, supabaseAdmin),
-      listOffscreenMissions({ characterId: id, supabase: supabaseAdmin })
-    ]);
-    if (missionsRes.error || offscreenRes.error) {
-      return { data: null, error: missionsRes.error || offscreenRes.error };
-    }
-    const realMissions = missionsRes.data || [];
-    const offscreenMissions = offscreenRes.data || [];
-
-    const derived = deriveCharacterTotals({
-      character: {
-        class_id: characterReq.class_id,
-        gear: resolvedGear,
-        common_items: characterReq.common_items
-      },
-      realMissions: realMissions || [],
-      offscreenMissions: offscreenMissions || [],
-      rulesVersion: linkedVersion
-    });
-
-    characterReq.level = derived.level;
-    characterReq.completed_missions = derived.completed_missions;
-    characterReq.commissary_reward = derived.commissary_reward;
-  }
-
-  // normalize v2 JSONB fields before update
-  if (linkedVersion === 'v2') {
-    characterReq.quirks = normalizeNamedJsonbList(characterReq.quirks);
-    characterReq.accessories = normalizeNamedJsonbList(characterReq.accessories);
-  }
-
-  // sanitize URL fields before update
-  sanitizeUrlFields(characterReq, ['image_url']);
-
-  // update character (authz: creator_id check above + filter below)
-  const { data, error } = await supabaseAdmin.from('characters').update(characterReq).eq('id', id).eq('creator_id', profile.id).select();
-  if (error) {
-    console.error(error);
-    return { data, error };
-  }
-  if (!data || data.length === 0) {
-    return { data: null, error: 'Character update returned no rows' };
-  }
-
-  const character = data[0];
-
-  // update traits
-  const { data: traitsSet, error: traitsSetError } = await setCharacterTraits(character.id, traitFields);
-  if (traitsSetError) {
-    console.error(traitsSetError);
-    return { data: null, error: traitsSetError };
-  }
-
-  // update gear
-  if (classGear) {
-    const { data: gearSet, error: gearSetError } = await setCharacterGear(
-      character.id,
-      classGear
-    );
-    if (gearSetError) {
-      console.error(gearSetError);
-      return { data: null, error: gearSetError };
-    }
-  }
-
-  // update abilities
-  let newAbilityRows = null;
-  if (classAbilities) {
-    const { data: abilitiesSet, error: abilitiesSetError } = await setCharacterAbilities(character.id, classAbilities);
-    if (abilitiesSetError) {
-      console.error(abilitiesSetError);
-      return { data: null, error: abilitiesSetError };
-    }
-    newAbilityRows = abilitiesSet;
-  }
-
-  if (linkedVersion === 'v2') {
-    // Abilities are reconciled above: kept abilities retain their row ids, so
-    // the form's perk references pass through remap unchanged. Only abilities
-    // the user swapped out get a different id (their old row is gone), and
-    // remap drops the submitted perks that pointed at them — otherwise the
-    // perk insert would hit a foreign key violation. When abilities weren't
-    // submitted at all, the rows (and ids) are untouched — no remap needed.
-    const perksToSave = newAbilityRows
-      ? remapPerkAbilityIds(abilityPerks, previousAbilities, newAbilityRows)
-      : abilityPerks;
-    const { error: perksError } = await setCharacterPerks(character.id, perksToSave);
-    if (perksError) {
-      return { data: null, error: perksError };
-    }
-  }
-
-  return { data: character, error };
-}
-
-const deleteCharacter = async (id, profile) => {
-  // Admin read for the ownership probe — see updateCharacter for the same
-  // reasoning. The creator_id JS check + .eq() filter still enforce authz.
-  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
-  if (characterError) return { data: null, error: characterError };
-  if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
-
-  // authz: creator_id check above + filter below
-  const { data, error } = await supabaseAdmin.from('characters').delete().eq('id', id).eq('creator_id', profile.id);
-  return { data, error };
-}
-
-// helpers
-
-const getCharacterTraits = async (id) => {
-  const { data, error } = await supabaseAdmin.from('traits').select('*').eq('character_id', id);
-  return { data, error };
-}
-
-// Apply a diffChildRows result: inserts -> updates -> deletes. Deletes run
-// last and target only truly-removed row ids, so a mid-flight failure leaves
-// extra rows rather than missing ones (never a mass delete).
-const applyChildDiff = async (table, characterId, { toInsert, toUpdate, toDelete }) => {
-  if (toInsert.length > 0) {
-    const rows = toInsert.map(fields => ({ character_id: characterId, ...fields }));
-    const { error } = await supabaseAdmin.from(table).insert(rows);
-    if (error) {
-      console.error(error);
-      return { data: null, error };
-    }
-  }
-  for (const { id: rowId, ...changes } of toUpdate) {
-    const { error } = await supabaseAdmin.from(table).update(changes).eq('id', rowId);
-    if (error) {
-      console.error(error);
-      return { data: null, error };
-    }
-  }
-  if (toDelete.length > 0) {
-    const { error } = await supabaseAdmin.from(table).delete().in('id', toDelete).eq('character_id', characterId);
-    if (error) {
-      console.error(error);
-      return { data: null, error };
-    }
-  }
-  return { data: true, error: null };
-};
-
-const setCharacterTraits = async (id, traits) => {
-  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { data: existing, error: fetchError } = await supabaseAdmin.from('traits').select('*').eq('character_id', id);
-  if (fetchError) {
-    console.error(fetchError);
-    return { data: null, error: fetchError };
-  }
-
-  // Drop empty/missing slots so we never persist null- or ''-named traits
-  // (the form always submits three non-empty traits; this guards other callers).
-  const desired = (Array.isArray(traits) ? traits : [])
-    .filter(name => name != null && name !== '')
-    .map(name => ({ name }));
-  const diff = diffChildRows(existing, desired, {
-    keyOf: r => r.name,
-    rowFields: item => ({ name: item.name })
-  });
-  return applyChildDiff('traits', id, diff);
-};
-
-const getCharacterGear = async (id, client = supabase) => {
-  // Fetch character gear rows
-  const { data: gear, error: gearError } = await supabaseAdmin
-    .from('class_gear')
-    .select('*')
-    .eq('character_id', id);
-  if (gearError) {
-    return { data: null, error: gearError };
-  }
-
-  if (!Array.isArray(gear) || gear.length === 0) {
-    return { data: [], error: null };
-  }
-
-  // Fetch related class definitions (non-fatal)
-  const classIds = [...new Set(gear.map(g => g.class_id).filter(Boolean))];
-  if (classIds.length === 0) {
-    return { data: gear, error: null };
-  }
-  const { data: classes, error: classesError } = await client
-    .from('classes')
-    .select('id, name, gear')
-    .in('id', classIds);
-  if (classesError) {
-    // Fallback: return raw gear rows as-is
-    return { data: gear, error: null };
-  }
-
-  // Merge class gear definition values directly onto each character gear row
-  const mergedGear = gear.map(item => {
-    const cls = classes?.find(c => c.id === item.class_id);
-    const classGear = Array.isArray(cls?.gear)
-      ? cls.gear.find(g => g && g.name === item.name)
-      : null;
-
-    if (classGear) {
-      // Prefer existing row values when overlapping keys exist
-      return { ...classGear, ...item };
-    }
-    return item;
-  });
-
-  return { data: mergedGear, error: null };
-}
-
-const normalizeNamedJsonbList = (input) => {
-  if (!Array.isArray(input)) return [];
-  return input
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        return trimmed ? { name: trimmed } : null;
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const name = item.name.trim();
-        if (!name) return null;
-        const out = { name };
-        if (typeof item.description === 'string' && item.description.trim()) {
-          out.description = item.description.trim();
-        }
-        return out;
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
-const normalizeGearItems = (gear) => {
-  if (!Array.isArray(gear)) {
-    return [];
-  }
-  return gear
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (!trimmed) return null;
-        // Handle "ClassName::GearName" format from searchable selects
-        if (trimmed.includes('::')) {
-          const [, gearName] = trimmed.split('::');
-          return gearName ? { name: gearName.trim() } : null;
-        }
-        return { name: trimmed };
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const trimmed = item.name.trim();
-        if (!trimmed) return null;
-        return {
-          ...item,
-          name: trimmed
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
-const setCharacterGear = async (id, gear) => {
-  const normalizedGear = normalizeGearItems(gear);
-
-  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { data: existing, error: fetchError } = await supabaseAdmin.from('class_gear').select('*').eq('character_id', id);
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  const desired = [];
-  if (normalizedGear.length > 0) {
-    const { gearNameToClassId, gearNameToDescription } = await buildClassContentLookupMaps();
-    for (const item of normalizedGear) {
-      const clsId = item.class_id ?? gearNameToClassId.get(item.name);
-      if (!clsId) {
-        const errorMessage = `[setCharacterGear] Missing class_id for gear item "${item.name}"`;
-        console.error(errorMessage, { characterId: id, item });
-        return { data: null, error: errorMessage };
-      }
-      const desc = item.description ?? gearNameToDescription.get(item.name);
-      desired.push({ name: item.name, class_id: clsId, description: desc || null });
-    }
-  }
-
-  const diff = diffChildRows(existing, desired, {
-    keyOf: r => `${r.class_id}:${r.name}`,
-    rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
-  });
-  return applyChildDiff('class_gear', id, diff);
-};
-
-const getCharacterAbilities = async (id, client = supabase) => {
-  // First get the character abilities
-  const { data: abilities, error: abilitiesError } = await supabaseAdmin
-    .from('class_abilities')
-    .select('*')
-    .eq('character_id', id);
-  
-  if (abilitiesError) {
-    return { data: null, error: abilitiesError };
-  }
-
-  if (!abilities || abilities.length === 0) {
-    return { data: [], error: null };
-  }
-
-  // Get unique class IDs
-  const classIds = [...new Set(abilities.map(ability => ability.class_id).filter(Boolean))];
-  if (classIds.length === 0) {
-    return { data: abilities, error: null };
-  }
-  
-  // Get classes with their abilities JSONB (non-fatal)
-  const { data: classes, error: classesError } = await client
-    .from('classes')
-    .select('id, name, abilities')
-    .in('id', classIds);
-
-  if (classesError) {
-    // Fallback: return raw ability rows as-is
-    return { data: abilities, error: null };
-  }
-
-  // Merge class ability definition values directly onto each character ability
-  const mergedAbilities = abilities.map(ability => {
-    const cls = classes.find(c => c.id === ability.class_id);
-    const classAbility = Array.isArray(cls?.abilities)
-      ? cls.abilities.find(a => a && a.name === ability.name)
-      : null;
-
-    if (classAbility) {
-      // Prefer existing ability row values when overlapping keys exist
-      return { ...classAbility, ...ability };
-    }
-
-    return ability;
-  });
-
-  return { data: mergedAbilities, error: null };
-}
-
-const getCharacterAbilityPerks = async (id) => {
-  const { data, error } = await supabaseAdmin
-    .from('character_perks')
-    .select('*')
-    .eq('character_id', id)
-    .order('position', { ascending: true });
-  if (error) return { data: null, error };
-  return { data: Array.isArray(data) ? data : [], error: null };
-};
-
-const normalizeAbilityItems = (abilities) => {
-  if (!Array.isArray(abilities)) {
-    return [];
-  }
-  return abilities
-    .map(item => {
-      if (!item) return null;
-      if (typeof item === 'string') {
-        const trimmed = item.trim();
-        if (!trimmed) return null;
-        // Handle "ClassName::AbilityName" format from searchable selects
-        if (trimmed.includes('::')) {
-          const [, abilityName] = trimmed.split('::');
-          return abilityName ? { name: abilityName.trim() } : null;
-        }
-        return { name: trimmed };
-      }
-      if (typeof item === 'object' && typeof item.name === 'string') {
-        const trimmed = item.name.trim();
-        if (!trimmed) return null;
-        return {
-          ...item,
-          name: trimmed
-        };
-      }
-      return null;
-    })
-    .filter(Boolean);
-};
-
-const normalizeAbilityPerks = (perks) => {
-  if (!Array.isArray(perks)) return [];
-  return perks
-    .map((p, i) => {
-      if (!p || typeof p !== 'object') return null;
-      const text = typeof p.text === 'string' ? p.text.trim() : '';
-      const classAbilityId = p.class_ability_id || null;
-      if (!text || !classAbilityId) return null;
-      const position = Number.isFinite(Number(p.position)) ? Number(p.position) : i;
-      const compoundsWith = p.compounds_with_id || p.compounds_with || null;
-      return {
-        class_ability_id: classAbilityId,
-        text,
-        position,
-        compounds_with: compoundsWith
-      };
-    })
-    .filter(Boolean);
-};
-
-const setCharacterPerks = async (characterId, perks) => {
-  const normalized = normalizeAbilityPerks(perks);
-
-  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { data: existing, error: fetchError } = await supabaseAdmin
-    .from('character_perks')
-    .select('*')
-    .eq('character_id', characterId);
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  // Pass 1: reconcile rows on ability+position. compounds_with is resolved in
-  // pass 2 against the surviving row set, so it is not part of the row diff
-  // (inserts therefore store it as NULL via DB default).
-  const diff = diffChildRows(existing, normalized, {
-    keyOf: r => `${r.class_ability_id}:${r.position}`,
-    rowFields: p => ({ class_ability_id: p.class_ability_id, text: p.text, position: p.position })
-  });
-  const { error: applyError } = await applyChildDiff('character_perks', characterId, diff);
-  if (applyError) {
-    return { data: null, error: applyError };
-  }
-
-  // Pass 2: resolve compound links ('position-N' sentinels from the form,
-  // row UUIDs from the agent/API path) against the current rows. With stable
-  // ids a UUID may legitimately reference a kept row, which the old
-  // inserted-rows-only check could not honor.
-  const { data: current, error: selError } = await supabaseAdmin
-    .from('character_perks')
-    .select('*')
-    .eq('character_id', characterId);
-  if (selError) {
-    return { data: null, error: selError };
-  }
-
-  const linkUpdates = resolveCompoundLinks(normalized, current);
-  for (const u of linkUpdates) {
-    const { error: updError } = await supabaseAdmin
-      .from('character_perks')
-      .update({ compounds_with: u.compounds_with })
-      .eq('id', u.id);
-    if (updError) {
-      return { data: null, error: updError };
-    }
-  }
-
-  return { data: current, error: null };
-};
-
-const setCharacterAbilities = async (id, abilities) => {
-  const normalizedAbilities = normalizeAbilityItems(abilities);
-
-  // Internal helper: authz is enforced by the calling function (createCharacter/updateCharacter).
-  const { data: existing, error: fetchError } = await supabaseAdmin.from('class_abilities').select('*').eq('character_id', id);
-  if (fetchError) {
-    return { data: null, error: fetchError };
-  }
-
-  const desired = [];
-  if (normalizedAbilities.length > 0) {
-    const { abilityNameToClassId, abilityNameToDescription } = await buildClassContentLookupMaps();
-    for (const item of normalizedAbilities) {
-      const clsId = item.class_id ?? abilityNameToClassId.get(item.name);
-      if (!clsId) {
-        const errorMessage = `[setCharacterAbilities] Missing class_id for ability "${item.name}"`;
-        console.error(errorMessage, { characterId: id, item });
-        return { data: null, error: errorMessage };
-      }
-      const desc = item.description ?? abilityNameToDescription.get(item.name);
-      desired.push({ name: item.name, class_id: clsId, description: desc || null });
-    }
-  }
-
-  // rowFields intentionally omits essence_cost/cooldown/duration: the save
-  // path never writes them (they live on the class catalog and are merged in
-  // at read time by getCharacterAbilities), so they aren't part of the diff.
-  const diff = diffChildRows(existing, desired, {
-    keyOf: r => `${r.class_id}:${r.name}`,
-    rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
-  });
-  const { error: applyError } = await applyChildDiff('class_abilities', id, diff);
-  if (applyError) {
-    return { data: null, error: applyError };
-  }
-
-  // Return the full post-reconcile set (kept + inserted): updateCharacter
-  // remaps the form's perk references against these rows.
-  const { data: current, error: selError } = await supabaseAdmin.from('class_abilities').select('*').eq('character_id', id);
-  if (selError) {
-    return { data: null, error: selError };
-  }
-  return { data: current, error: null };
-};
-
 const getCharacterRecentMissions = async (characterId, limit = 5) => {
   const { data, error } = await supabase
     .from('mission_characters')
@@ -941,7 +168,7 @@ const getCharacterRecentMissions = async (characterId, limit = 5) => {
     .eq('character_id', characterId)
     .order('missions(date)', { ascending: false })
     .limit(limit);
-  
+
   if (error) {
     console.error(error);
     return { data: null, error };
@@ -955,8 +182,8 @@ const getCharacterRecentMissions = async (characterId, limit = 5) => {
   }).map(m => m.missions);
 
   return {
-    data: filteredMissions, 
-    error 
+    data: filteredMissions,
+    error
   };
 };
 
@@ -1012,72 +239,6 @@ const getCharacterRealMissionsForDerivation = async (characterId, client = supab
     data: (data || []).map(mc => mc.missions).filter(Boolean),
     error: null
   };
-};
-
-const markCharacterDeceased = async (id, profile) => {
-  // Admin read for the ownership probe — see updateCharacter for the same
-  // reasoning. The creator_id JS check + .eq() filter still enforce authz.
-  const { data: characterData, error: characterError } = await getCharacter(id, supabaseAdmin);
-  if (characterError) return { data: null, error: characterError };
-  if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
-  if (characterData.is_deceased) return { data: null, error: 'Character is already deceased' };
-
-  // authz: creator_id check above + filter below
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .update({ is_deceased: true })
-    .eq('id', id)
-    .eq('creator_id', profile.id)
-    .select();
-
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
-  if (!data || data.length === 0) {
-    return { data: null, error: 'Character update returned no rows' };
-  }
-
-  return { data: data[0], error: null };
-};
-
-const upgradeCharacterClass = async (id, targetClassId, profile, client = supabase) => {
-  // Lean admin-client read of just what we need from the character. The default
-  // anon `supabase` would RLS-strip private characters, so we use admin here;
-  // ownership is enforced by the creator_id check below + the UPDATE's
-  // .eq('creator_id', profile.id) filter.
-  const { data: characterData, error: characterError } = await supabaseAdmin
-    .from('characters')
-    .select('id, creator_id, class_id')
-    .eq('id', id)
-    .maybeSingle();
-  if (characterError) return { data: null, error: characterError };
-  if (!characterData) return { data: null, error: 'Character not found' };
-  if (characterData.creator_id != profile.id) return { data: null, error: 'Unauthorized' };
-  if (!targetClassId) return { data: null, error: 'Missing target class id' };
-
-  // Target-class lookup uses the per-request client so RLS gates which
-  // candidates the caller can pick: admins see private forks, non-admins
-  // see only public ones. This prevents non-admins from upgrading into an
-  // unreleased private v2 by guessing its id.
-  const candidates = await findUpgradeTargetsFor(characterData.class_id, client);
-  const target = candidates.find(c => c.id === targetClassId);
-  if (!target) return { data: null, error: 'Target class is not a valid upgrade for this character' };
-
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .update({ class_id: target.id, class: target.name })
-    .eq('id', id)
-    .eq('creator_id', profile.id)
-    .select();
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
-  if (!data || data.length === 0) {
-    return { data: null, error: 'Character upgrade returned no rows' };
-  }
-  return { data: data[0], error: null };
 };
 
 const searchPublicCharacters = async (q, count, options = {}) => {
@@ -1206,31 +367,7 @@ const serializeCharacterForAgent = (row, actor = {}) => {
 };
 
 const searchCharactersForAgent = async (query, actor = {}) => {
-  const q = typeof query === 'string' ? query.trim() : '';
-  let builder = supabaseAdmin
-    .from('characters')
-    .select('id, name, class, level, is_public, is_deceased, creator_id, profile:creator_id(name)')
-    .order('name', { ascending: true })
-    .limit(10);
-
-  if (actor.role !== 'admin') {
-    if (actor.profileId) {
-      builder = builder.or(`is_public.eq.true,creator_id.eq.${actor.profileId}`);
-    } else {
-      builder = builder.eq('is_public', true);
-    }
-  }
-
-  if (q.length > 0) {
-    const escaped = escapeLikePattern(q);
-    builder = builder.ilike('name', `%${escaped}%`);
-  } else if (actor.profileId) {
-    builder = builder.eq('creator_id', actor.profileId).order('updated_at', { ascending: false });
-  } else {
-    return { data: [], error: null };
-  }
-
-  const { data, error } = await builder;
+  const { data, error } = await characterRepository.searchCharactersForAgent(query, actor);
   if (error) return { data: null, error };
 
   const mapped = (data || []).map((row) =>
@@ -1240,24 +377,13 @@ const searchCharactersForAgent = async (query, actor = {}) => {
 };
 
 const getCharacterForAgent = async (id, actor = {}) => {
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .select(`
-      id, name, class, class_id, level, is_public, is_deceased, creator_id,
-      ${statList.join(',')},
-      profile:creator_id(name),
-      personality:traits(name),
-      abilities:class_abilities(name,description),
-      gear:class_gear(name,description)
-    `)
-    .eq('id', id)
-    .maybeSingle();
-  if (error && error.code !== 'PGRST116') return { data: null, error };
+  const { data, error } = await characterRepository.getCharacterForAgentRow(id);
+  if (error) return { data: null, error };
   if (!data) return { data: null, error: null };
 
   const rulesVersion = await effectiveRulesVersion(data.class_id);
   if (rulesVersion === 'v2') {
-    const { data: perks } = await getCharacterAbilityPerks(data.id);
+    const { data: perks } = await characterRepository.getCharacterAbilityPerks(data.id);
     data.ability_perks = perks || [];
   }
 
@@ -1268,6 +394,36 @@ const getCharacterForAgent = async (id, actor = {}) => {
   return { data: serialized, error: null };
 };
 
+// Application boundary: the repository owns every privileged (service-role)
+// query for the character domain (services/character/repository.js). This
+// service composes that repository with the RLS-agnostic model-local helpers
+// (class-reference resolution, rules-version lookup, catalog maps, upgrade
+// targets) that don't need the privileged client — routes and other models
+// continue using this model's exported functions while the service owns
+// validation, authorization, sequencing, and reconciliation decisions.
+const characterService = new CharacterService({
+  ...characterRepository,
+  getRulesVersion: classId => effectiveRulesVersion(classId),
+  resolveClassReference: resolveCharacterClassReference,
+  getClassContentLookupMaps: buildClassContentLookupMaps,
+  findUpgradeTargets: (classId, client) => findUpgradeTargetsFor(classId, client)
+});
+
+const createCharacter = (input, actor) => characterService.createCharacter(input, actor);
+const updateCharacter = (id, input, actor) => characterService.updateCharacter(id, input, actor);
+
+// Mutation capabilities. Signatures take `actor` (built by the caller via
+// actorFromLocals/actorFromProfile/SYSTEM_ACTOR) first, matching the mission/
+// class service seams; denials throw AuthorizationError.
+const deleteCharacter = (actor, id) => characterService.deleteCharacter(actor, id);
+const markCharacterDeceased = (actor, id, confirmName) => characterService.markDeceased(actor, id, confirmName);
+const upgradeCharacterClass = (actor, id, targetClassId, client) => characterService.upgradeClass(actor, id, targetClassId, client);
+const updateCharacterStats = (actor, id, fields) => characterService.updateStats(actor, id, fields);
+const levelUpCharacter = (actor, id, body) => characterService.levelUp(actor, id, body);
+const createCharacterOffscreenMission = (actor, characterId, body) => characterService.createOffscreenMission(actor, characterId, body);
+const updateCharacterOffscreenMission = (actor, characterId, omId, body) => characterService.updateOffscreenMission(actor, characterId, omId, body);
+const deleteCharacterOffscreenMission = (actor, characterId, omId) => characterService.deleteOffscreenMission(actor, characterId, omId);
+
 module.exports = {
   getOwnCharacters,
   getCharacter,
@@ -1277,6 +433,11 @@ module.exports = {
   deleteCharacter,
   markCharacterDeceased,
   upgradeCharacterClass,
+  updateCharacterStats,
+  levelUpCharacter,
+  createCharacterOffscreenMission,
+  updateCharacterOffscreenMission,
+  deleteCharacterOffscreenMission,
   findUpgradeTargetsFor,
   getCharacterRecentMissions,
   getCharacterAllMissions,

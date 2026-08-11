@@ -2,7 +2,14 @@
 // Integration tests for agent-scoped LFG model wrappers.
 // Requires local Supabase to be running (http://127.0.0.1:54321).
 const { describe, test, expect, beforeEach, afterEach } = require('bun:test');
+const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
+const { actorFromProfile } = require('../util/actor');
+
+// createLfgPost/updateLfgPost now take an actor (built by the caller via
+// actorFromLocals/actorFromProfile) rather than a bare profile row, extended
+// with `timezone` since normalizeLfgInput needs it for date conversion.
+const actorFor = (profile) => ({ ...actorFromProfile(profile), timezone: profile.timezone });
 
 const {
   listPostsForAgent,
@@ -23,28 +30,28 @@ const SERVICE_ROLE_KEY = process.env.SUPABASE_SECRET_KEY;
 const SUPABASE_URL = process.env.SUPABASE_URL;
 
 async function createAuthUser(email) {
-  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
-    method: 'POST',
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({ email, password: 'test-password-123', email_confirm: true })
-  });
-  const json = await res.json();
-  if (!json.id) throw new Error(`createAuthUser failed: ${JSON.stringify(json)}`);
-  return json.id; // auth user UUID
+  const db = new Client({ connectionString: process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' });
+  await db.connect();
+  const { rows } = await db.query(
+    `insert into auth.users (id, aud, role, email, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
+     values (gen_random_uuid(), 'authenticated', 'authenticated', $1, now(), now(), now(), '{}'::jsonb, '{}'::jsonb) returning id`,
+    [email]
+  );
+  await db.end();
+  return rows[0].id;
 }
 
 async function deleteAuthUser(userId) {
-  await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${userId}`, {
-    method: 'DELETE',
-    headers: {
-      apikey: SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`
-    }
-  });
+  const db = new Client({ connectionString: process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres' });
+  await db.connect();
+  try {
+    await db.query('delete from auth.users where id = $1', [userId]);
+  } catch (error) {
+    // Some legacy fixtures intentionally leave their profile cleanup to the
+    // next local reset; match the old best-effort admin-delete behavior.
+    if (error.code !== '23503') throw error;
+  }
+  await db.end();
 }
 
 async function createProfile(authUserId, name) {
@@ -367,13 +374,13 @@ describe('self-join auto-approve', () => {
 describe('createLfgPost host-flag flow', () => {
   test('host_id=on creates+approves a conduit join_request and syncs host_id', async () => {
     const { createLfgPost } = require('./lfg');
-    const { data: post, error } = await createLfgPost({
+    const { data: post, error } = await createLfgPost(actorFor(hostProfile), {
       title: 'Host-flag post',
       description: 'test',
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4,
       host_id: 'on'
-    }, hostProfile);
+    });
     expect(error).toBeNull();
     expect(post).toBeTruthy();
     try {
@@ -397,12 +404,12 @@ describe('createLfgPost host-flag flow', () => {
 
   test('no host_id flag leaves post with no conduit', async () => {
     const { createLfgPost } = require('./lfg');
-    const { data: post, error } = await createLfgPost({
+    const { data: post, error } = await createLfgPost(actorFor(hostProfile), {
       title: 'No-host post',
       description: 'test',
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4
-    }, hostProfile);
+    });
     expect(error).toBeNull();
     try {
       const { data: row } = await supabaseAdmin
@@ -426,13 +433,13 @@ describe('updateLfgPost role reconciliation', () => {
 
   test('setting host_id=on when not yet conduit creates+approves the conduit request', async () => {
     const { updateLfgPost } = require('./lfg');
-    const { error } = await updateLfgPost(openPost.id, {
+    const { error } = await updateLfgPost(actorFor(hostProfile), openPost.id, {
       title: openPost.title,
       description: openPost.description,
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4,
       host_id: 'on'
-    }, hostProfile);
+    });
     expect(error).toBeNull();
 
     const { data: req } = await supabaseAdmin
@@ -455,13 +462,13 @@ describe('updateLfgPost role reconciliation', () => {
     await supabaseAdmin.from('lfg_posts').update({ host_id: hostProfile.id }).eq('id', openPost.id);
 
     const { updateLfgPost } = require('./lfg');
-    const { error } = await updateLfgPost(openPost.id, {
+    const { error } = await updateLfgPost(actorFor(hostProfile), openPost.id, {
       title: 'Edited title',
       description: openPost.description,
       date: new Date(Date.now() + 86400000).toISOString(),
       max_characters: 4
       // note: no host_id field at all
-    }, hostProfile);
+    });
     expect(error).toBeNull();
 
     const { data: req } = await supabaseAdmin
@@ -518,6 +525,33 @@ describe('closeForAgent', () => {
     expect(data).toBeNull();
     expect(error.status).toBe(403);
     expect(error.code).toBe('not_host');
+  });
+});
+
+// ─── updateForAgent (agent surface must not grant an admin-role bypass) ──────
+
+describe('updateForAgent', () => {
+  test('an admin-role agent profile acting on another profile\'s post is blocked, same as delete/close', async () => {
+    const adminAuthId = await createAuthUser(`lfg-test-admin-${Date.now()}@test.invalid`);
+    const adminProfile = await createProfile(adminAuthId, 'Admin Agent');
+    await supabaseAdmin.from('profiles').update({ role: 'admin' }).eq('id', adminProfile.id);
+    try {
+      const { data, error } = await updateForAgent({
+        agentProfile: { ...adminProfile, role: 'admin' },
+        postId: openPost.id,
+        body: { title: 'Hijacked title' }
+      });
+      expect(data).toBeNull();
+      expect(error.status).toBe(403);
+      expect(error.code).toBe('not_host');
+
+      const { data: row } = await supabaseAdmin
+        .from('lfg_posts').select('title').eq('id', openPost.id).single();
+      expect(row.title).not.toBe('Hijacked title');
+    } finally {
+      await supabaseAdmin.from('profiles').delete().eq('id', adminProfile.id);
+      await deleteAuthUser(adminAuthId);
+    }
   });
 });
 

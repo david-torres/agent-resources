@@ -2,14 +2,17 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
-const { updateUser, getProfileByName, setDiscordId, getPublicCharactersByCreator, getClasses, searchProfiles, getProfileConduitCredits } = require('../util/supabase');
+const { updateUser, getProfileByName, setDiscordId, searchProfiles, getProfileConduitCredits } = require('../models/profile');
+const { getPublicCharactersByCreator } = require('../models/character');
+const { getClasses, getUnlockedClasses } = require('../models/class');
 const { parseImageCrop } = require('../util/crop');
 const { partitionProfileClasses } = require('../util/class-filter');
-const { getUnlockedClasses } = require('../models/class');
 const { createAgentToken, listAgentTokens, revokeAgentToken } = require('../models/agent-token');
 const { getProfileBadges } = require('../models/badge');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
@@ -94,8 +97,9 @@ router.get('/view/:name', authOptional, async (req, res) => {
   });
 });
 
-router.put('/', isAuthenticated, async (req, res) => {
+router.put('/', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
+  const actor = actorFromLocals(res.locals);
   const { email, password, name, bio, image_url, is_public, timezone, conduit_briefing } = req.body;
   const image_crop = parseImageCrop(req.body.image_crop);
   const profile = {
@@ -107,84 +111,74 @@ router.put('/', isAuthenticated, async (req, res) => {
     timezone,
     conduit_briefing
   }
-  const { data, error } = await updateUser(user.id, email, password, profile);
+  const { data, error } = await updateUser(actor, user.id, email, password, profile);
   if (error) {
     return sendError(req, res, error);
   } else {
     return res.header('HX-Location', '/profile').send();
   }
-});
+}));
 
-router.post('/discord/sync', isAuthenticated, async (req, res) => {
+router.post('/discord/sync', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
+  const actor = actorFromLocals(res.locals);
   const { discord_id, discord_email } = req.body;
-  const { error } = await setDiscordId(user.id, discord_id, discord_email);
+  const { error } = await setDiscordId(actor, user.id, discord_id, discord_email);
   if (error) {
     return sendError(req, res, error);
   }
   return res.status(204).send();
-});
+}));
 
-router.post('/discord/clear', isAuthenticated, async (req, res) => {
+router.post('/discord/clear', isAuthenticated, asyncHandler(async (req, res) => {
   const user = res.locals.user;
-  const { error } = await setDiscordId(user.id, null, null);
+  const actor = actorFromLocals(res.locals);
+  const { error } = await setDiscordId(actor, user.id, null, null);
   if (error) {
     return sendError(req, res, error);
   }
   return res.status(204).send();
-});
+}));
 
-router.get('/agent-tokens', isAuthenticated, async (req, res) => {
-  const { user, profile } = res.locals;
+router.get('/agent-tokens', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const includeRevoked = req.query.include_revoked === 'true';
-  const { data, error } = await listAgentTokens({
-    userId: user.id,
-    profileId: profile.id,
-    includeRevoked
-  });
+  const { data, error } = await listAgentTokens(actor, { includeRevoked });
 
   if (error) {
     return res.status(500).json({ error: error.message });
   }
 
   return res.json({ tokens: data });
-});
+}));
 
-router.post('/agent-tokens', isAuthenticated, async (req, res) => {
-  const { user, profile } = res.locals;
+router.post('/agent-tokens', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
   const name = (req.body.name || '').trim();
 
   if (!name) {
     return res.status(400).json({ error: 'Token name is required' });
   }
 
-  const { data, error } = await createAgentToken({
-    userId: user.id,
-    profileId: profile.id,
-    name
-  });
+  const { data, error } = await createAgentToken(actor, { name });
 
   if (error) {
     return res.status(500).json({ error: error.message });
   }
 
   return res.status(201).json(data);
-});
+}));
 
-router.delete('/agent-tokens/:id', isAuthenticated, async (req, res) => {
-  const { user, profile } = res.locals;
-  const { data, error } = await revokeAgentToken({
-    tokenId: req.params.id,
-    userId: user.id,
-    profileId: profile.id
-  });
+router.delete('/agent-tokens/:id', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { data, error } = await revokeAgentToken(actor, { tokenId: req.params.id });
 
   if (error) {
     return res.status(404).json({ error: 'Token not found' });
   }
 
   return res.json(data);
-});
+}));
 
 // Search profiles (for adding editors, etc.)
 router.get('/search', isAuthenticated, async (req, res) => {

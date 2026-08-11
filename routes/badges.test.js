@@ -14,7 +14,7 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY
   || process.env.SUPABASE_SERVICE_ROLE_KEY
   || 'test-secret-key';
 
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -26,9 +26,8 @@ const calls = { grant: [], revoke: [] };
 let grantResult = { data: { slug: 'enclave-day-1' }, error: null };
 let revokeResult = { data: { slug: 'enclave-day-1' }, error: null };
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
-  getProfile: async () => ({ id: 'p-admin', user_id: 'u1', role: profileRole })
 }));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
@@ -41,31 +40,32 @@ mock.module('../models/badge', () => ({
   // doesn't need a Handlebars view engine.
   getBadgeCatalog: async () => ({ data: null, error: new Error('catalog unavailable') }),
   listProfileBadges: async () => ({ data: [], error: null }),
-  grantBadge: async (args) => { calls.grant.push(args); return grantResult; },
-  revokeBadge: async (args) => { calls.revoke.push(args); return revokeResult; }
+  grantBadge: async (actor, args) => { calls.grant.push({ actor, ...args }); return grantResult; },
+  revokeBadge: async (actor, args) => { calls.revoke.push({ actor, ...args }); return revokeResult; }
 }));
 mock.module('../models/profile', () => ({
+  getProfile: async () => ({ id: 'p-admin', user_id: 'u1', role: profileRole }),
   getProfileByIdAdmin: async (id) => ({ data: { id, name: 'Someone', user_id: 'u2' }, error: null }),
   searchProfilesAdmin: async () => ({ data: [], error: null })
 }));
 
 const express = require('express');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./badges')];
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use('/badges', require('./badges'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  server?.close();
-  mock.module('../util/supabase', () => realSupabase);
+afterAll(async () => {
+  await stopHttpServer(server);
+  mock.module('../models/auth', () => realAuth);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
@@ -124,7 +124,12 @@ test('POST /badges/grant calls grantBadge with the admin as granter and redirect
   });
   expect(res.status).toBe(302);
   expect(res.headers.get('location')).toBe('/badges/manage?profile_id=p2');
-  expect(calls.grant).toEqual([{ profileId: 'p2', badgeSlug: 'enclave-day-1', grantedById: 'p-admin' }]);
+  expect(calls.grant).toEqual([{
+    actor: { userId: 'u1', profileId: 'p-admin', role: 'admin' },
+    profileId: 'p2',
+    badgeSlug: 'enclave-day-1',
+    grantedById: 'p-admin'
+  }]);
 });
 
 test('POST /badges/grant surfaces milestone rejection as 400', async () => {
@@ -161,5 +166,9 @@ test('POST /badges/revoke calls revokeBadge and redirects', async () => {
     body: JSON.stringify({ profile_id: 'p2', badge_slug: 'enclave-day-1' })
   });
   expect(res.status).toBe(302);
-  expect(calls.revoke).toEqual([{ profileId: 'p2', badgeSlug: 'enclave-day-1' }]);
+  expect(calls.revoke).toEqual([{
+    actor: { userId: 'u1', profileId: 'p-admin', role: 'admin' },
+    profileId: 'p2',
+    badgeSlug: 'enclave-day-1'
+  }]);
 });

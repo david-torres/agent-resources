@@ -8,9 +8,8 @@ const { supabaseAdmin } = require('../models/_base');
 
 const DISCORD_ID = '222222222222222222';
 
-// These tests require the remote/local Supabase to be reachable AND the
-// migrations from Tasks A1 and A5 to be applied. They create and clean up
-// their own rows.
+// These integration tests require local Supabase at http://127.0.0.1:54321
+// with migrations applied. They create and clean up their own rows.
 
 const cleanup = async () => {
   await supabaseAdmin.from('pending_bot_links').delete().eq('discord_user_id', DISCORD_ID);

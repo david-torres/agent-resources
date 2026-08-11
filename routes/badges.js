@@ -4,6 +4,8 @@ const { isAuthenticated, requireAdmin } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { getBadgeCatalog, listProfileBadges, grantBadge, revokeBadge } = require('../models/badge');
 const { getProfileByIdAdmin, searchProfilesAdmin } = require('../models/profile');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
 
 router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
   const { data: catalog, error } = await getBadgeCatalog();
@@ -62,11 +64,12 @@ const grantRevokeParams = (req, res) => {
 const grantRevokeErrorStatus = (error) =>
   /milestone|not found/i.test(error?.message || '') ? 400 : 500;
 
-router.post('/grant', isAuthenticated, requireAdmin, async (req, res) => {
+router.post('/grant', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
   const params = grantRevokeParams(req, res);
   if (!params) return;
 
-  const { error } = await grantBadge({
+  const actor = actorFromLocals(res.locals);
+  const { error } = await grantBadge(actor, {
     profileId: params.profileId,
     badgeSlug: params.badgeSlug,
     grantedById: res.locals.profile.id
@@ -78,13 +81,14 @@ router.post('/grant', isAuthenticated, requireAdmin, async (req, res) => {
     });
   }
   return res.redirect(`/badges/manage?profile_id=${encodeURIComponent(params.profileId)}`);
-});
+}));
 
-router.post('/revoke', isAuthenticated, requireAdmin, async (req, res) => {
+router.post('/revoke', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
   const params = grantRevokeParams(req, res);
   if (!params) return;
 
-  const { error } = await revokeBadge({
+  const actor = actorFromLocals(res.locals);
+  const { error } = await revokeBadge(actor, {
     profileId: params.profileId,
     badgeSlug: params.badgeSlug
   });
@@ -95,6 +99,6 @@ router.post('/revoke', isAuthenticated, requireAdmin, async (req, res) => {
     });
   }
   return res.redirect(`/badges/manage?profile_id=${encodeURIComponent(params.profileId)}`);
-});
+}));
 
 module.exports = router;

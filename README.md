@@ -6,7 +6,11 @@ games, and more!
 ## Table of Contents
 
 - [Installation](#installation)
-  - [Database Setup](#database-setup)
+  - [Quick start (one-call setup)](#quick-start-one-call-setup)
+    - [Path A — Free Supabase cloud project](#path-a--free-supabase-cloud-project-supabasecom)
+    - [Path B — Local Supabase with the CLI](#path-b--local-supabase-with-the-cli)
+  - [Manual installation](#manual-installation)
+- [Database Setup](#database-setup)
 - [Usage](#usage)
 - [Dependencies](#dependencies)
 - [Enclave](#enclave)
@@ -21,7 +25,126 @@ Install Bun first if you don't already have it:
 curl -fsSL https://bun.sh/install | bash
 ```
 
-Then:
+### Quick start (one-call setup)
+
+The first step differs depending on where your database will live. Pick the
+path that matches your setup and follow it through the remaining steps.
+
+#### Path A — Free Supabase cloud project (supabase.com)
+
+The easiest path: a free-tier project on supabase.com, no Docker required,
+and `bun run setup` handles the full DB bootstrap.
+
+1. Sign up at <https://supabase.com> and create a new project. Wait for it
+   to finish provisioning (~2 min).
+
+2. Create a `.env` from the template and fill in your project's credentials
+   from **Project Settings → API** and **Project Settings → Database**:
+   ```sh
+   cp .env.example .env
+   $EDITOR .env
+   ```
+   Required keys:
+   - `SUPABASE_URL` — Project URL, e.g. `https://abcdefgh.supabase.co`
+   - `SUPABASE_PUBLISHABLE_KEY` — the `anon` / publishable key
+   - `SUPABASE_SECRET_KEY` — the `service_role` / secret key
+   - `SUPABASE_DB_PASS` — the database password you set at project creation
+   - `SUPABASE_DB_REGION` — pooler region in `aws-0-<region>` form, from
+     **Project Settings → General**. Only needed if your project is not in
+     `us-east-1`. `bun run scripts/probe-region.mjs` detects it.
+
+   Optional: `OPENAI_API_KEY` and any `SYSTEM_MESSAGE_*` settings.
+
+3. Run the setup script. It installs dependencies, applies all migrations
+   in `supabase/migrations/`, and seeds the navigation table — safe to
+   re-run:
+   ```sh
+   bun run setup
+   ```
+
+4. Start the app:
+   ```sh
+   bun run dev
+   ```
+
+#### Path B — Local Supabase with the CLI
+
+Runs the entire Supabase stack in Docker on your machine — useful for
+offline development, frequent DB resets, or working against a throwaway
+environment.
+
+Prerequisites: [Docker](https://docs.docker.com/get-docker/) and the
+[Supabase CLI](https://github.com/supabase/cli#install-the-cli) (`brew
+install supabase/tap/supabase`, or `npm i -D supabase`, or the install
+script).
+
+1. Start the local stack (Postgres, GoTrue, PostgREST, etc.). The repository
+   includes `supabase/config.toml`, migrations, and seed data, so no separate
+   initialization step is needed:
+   ```sh
+   supabase start
+   ```
+   The first run pulls Docker images and may take a few minutes. When it
+   finishes, copy the printed `API URL`, `anon key`, and `service_role key`
+   — you'll need them in a moment.
+
+2. Create a `.env` from the template. The local stack uses fixed defaults
+   — the DB password is always `postgres`:
+   ```sh
+   cp .env.example .env
+   $EDITOR .env
+   ```
+   Required keys for local dev:
+   - `SUPABASE_URL=http://127.0.0.1:54321`
+   - `SUPABASE_PUBLISHABLE_KEY=<anon key from `supabase status`>`
+   - `SUPABASE_SECRET_KEY=<service_role key from `supabase status`>`
+   - `SUPABASE_DB_PASS=postgres`
+
+3. Apply migrations and seeds via the Supabase CLI. (The bundled `bun run
+   setup` script targets the Supabase cloud pooler and won't work against a
+   local stack — `supabase db reset` is the local equivalent: it runs every
+   file in `supabase/migrations/` plus `supabase/seed.sql`):
+   ```sh
+   supabase db reset
+   ```
+
+4. Seed the local app data (admin user, classes, and badges). `db reset`
+   only loads `nav_items`; this one idempotent command fills in the rest in
+   the right order and is safe to re-run (each step is skipped when its table
+   is already populated):
+   ```sh
+   bun run seed:local
+   ```
+   It seeds a `dummy@testing.com` / `dummypassword` admin, the class
+   definitions, and the badge catalog. Badge art is pulled from the public
+   prod storage bucket on first run (no credentials needed); override the
+   source with `BADGE_ART_SOURCE_URL`.
+
+5. Start the app:
+   ```sh
+   bun run dev
+   ```
+
+---
+
+Useful flags on `bun run setup` (Path A only):
+
+| Flag | Effect |
+| --- | --- |
+| `--with-admin` | Also seed a `dummy@testing.com` admin user (interactive confirmation by default; auto-confirmed with `--yes`). |
+| `--with-classes` | Also seed the class definitions. |
+| `--skip-install` | Skip `bun install` even if `node_modules` is missing. |
+| `--skip-seed` | Skip applying `supabase/seed.sql`. |
+| `--yes` | Non-interactive mode (auto-confirm prompts, assume "yes"). |
+| `--dry-run` | Print what would happen without making any changes. |
+
+If you don't have a real Supabase project and Docker is unavailable, sign
+up for the free tier on supabase.com — it's the simplest path with no
+infrastructure to manage.
+
+If you prefer to do each step by hand, see [Manual installation](#manual-installation) below.
+
+### Manual installation
 
 1. Clone the repository:
 
@@ -48,88 +171,70 @@ Then:
 ### Database Setup
 
 This project uses [Supabase](https://supabase.com/) (hosted Postgres) for
-storage and auth. Point `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, and
-`SUPABASE_SECRET_KEY` in `.env` at your Supabase project before applying
-any SQL.
+storage and auth. The full schema is reconstructed by applying every file
+in `supabase/migrations/` in filename order. `bun run setup` does this
+automatically; you can also use the Supabase CLI directly once your
+project is linked.
 
-#### 1. Create a Supabase project
+### Schema layout
 
-To create a Superbase project for development, you can either deploy locally
-or deploy to a new project on the Superbase Platform. Since using a hosted
-Superbase project does not require Docker, this guild will walk you through
-that. You can find a guide for local deploment
-[here](https://supabase.com/docs/guides/local-development) if you prefer local
-development.
-
-1. Go to <https://www.supabase.com>
-2. Create a new project. The free tier is enough for development and testing.
-3. Copy the `anon` and `service_role` keys into `.env`. You'll find them under
-project Settings > API Keys > Legacy anon, service_role API keys.
-
-#### 2. Apply the base schema
-
-`schema.sql` at the repo root contains the full baseline schema (profiles,
-characters, classes, missions, conduits, pages, etc.). Apply the schema by
-either:
-
-   1. Open the SQL editor for your project in the Superbase dashboard, paste
-      the contents of `schema.sql`, and run it.
-   2. Or via `psql`:
-
-  ```sh
-  psql "$SUPABASE_DB_URL" -f schema.sql
-  ```
-
-#### 3. Apply incremental migrations
-
-Migrations in `supabase/migrations/` are applied in filename order on top of
-the baseline schema. Run each one you haven't already applied against your
-database. You can apply these changes in the dashboard SQL editor
-or from the command line using Supabase's CLI.
-
-```sh
-# Install the Supabase CLI
-brew install supabase/tap/supabase
-
-# Log in and connect to Supabase
-supabase login
-
-# Navigate to the root directory of this repository.
-cd $AGENT_RESOURCES_REPO_ROOT
-
-# Link your project. Get project-ref from your Supabase dashboard URL:
-# https://supabase.com/dashboard/project/{project-ref}
-supabase link --project-ref $SUPABASE_PROJECT_ID
-
-supabase db push
+```
+supabase/
+├── migrations/
+│   ├── 20240101000000_baseline_schema.sql   ← full schema for a fresh DB
+│   ├── 20241213_collaborative_missions.sql
+│   ├── …
+│   └── 20260609000100_nav_items.sql         ← dynamic-navigation table
+└── seed.sql                                  ← default nav_items rows
 ```
 
-The two top-level files `migration_nav_items.sql` and `seed_nav_items.sql`
-set up the dynamic navigation table and seed its default entries — run the
-migration first, then the seed.
+New schema changes go in a new timestamped file under `supabase/migrations/`
+using the standard Supabase CLI convention (`<14-digit-timestamp>_<name>.sql`).
+The migrations *are* the canonical schema.
 
-TODO: these migrations may not be necessary anymore. Check to see if they
-can be removed.
+### Using the Supabase CLI against a linked cloud project
+
+An alternative to `bun run setup` for Path A, if you have the
+[Supabase CLI](https://github.com/supabase/cli) installed.
+
+1. Link the local checkout to your cloud project. Your project ref is the
+   subdomain of `SUPABASE_URL` — for `https://abcdefgh.supabase.co` it is
+   `abcdefgh`. You only need to do this once per checkout:
+   ```sh
+   supabase link --project-ref=<project-ref>
+   ```
+
+2. Apply the migrations:
+   ```sh
+   supabase db push
+   ```
+
+`db push` applies every file in `supabase/migrations/` and tracks them in
+the `supabase_migrations.schema_migrations` table, just like the bundled
+script. **It does not apply `supabase/seed.sql`** (the CLI reserves seed
+files for `supabase db reset`); for nav items seeding either run `bun run
+setup` once or apply `supabase/seed.sql` manually.
+
+### Seeding app data (admin, classes, badges)
+
+For a local stack, `bun run seed:local` seeds everything `supabase db reset`
+doesn't — an admin user, class definitions, and the badge catalog — in
+dependency order and idempotently. It's the recommended one-command path.
+
+The individual seeds can also be run directly:
 
 ```sh
-cd $AGENT_RESOURCES_REPO_ROOT
-supabase db push ./migration_nav_items.sql
-supabase db push ./seed_nav_items.sql
+bun run seed:admin      # dummy@testing.com / dummypassword admin (dev only)
+bun run seed:classes    # class definitions — requires an admin profile first
+bun run fetch:badges    # download badge art from the public prod bucket
+bun run seed:badges     # upload art to the badges bucket + upsert catalog rows
 ```
 
-#### 4. (Optional) Seed class data
+`seed:classes` sets each class's `created_by` to the admin profile, so
+`seed:admin` (or an existing admin) must run first. `seed:badges` reads art
+from `public/img/badges/`, which `fetch:badges` populates.
 
-To (re)load class definitions from the seed util:
-
-```sh
-# If you haven't populated an admin user, populate one now:
-bun run seed:admin
-
-# Seed classes
-bun run seed:classes
-```
-
-#### 5. (Optional) Check schema and tables
+### Checking the schema and tables
 
 You can see a visual representation of the database schema on the Supabase
 dashboard for your project under Database > Schema Visualizser.
@@ -138,19 +243,15 @@ You can check the rows of your table from the Supabase dashboard for your
 project under Table Editor. If you ran `seed:admin` and `seed:classes` above,
 you should see them in your database.
 
-#### Backups
+### Backups
 
-`scripts/db-backup.sh` runs `pg_dump` against the configured Supabase pooler
-and writes a compressed dump to `backups/`. It reads `SUPABASE_DB_PASS` from
-`.env`:
+`scripts/db-backup.sh` runs `pg_dump` against your project's Supabase pooler
+and writes a compressed dump to `backups/`. It derives the host and user from
+`SUPABASE_URL`, `SUPABASE_DB_REGION`, and `SUPABASE_DB_PASS` in `.env`:
 
 ```sh
 bun run db:backup
 ```
-
-Note: the host and user in `scripts/db-backup.sh` are hardcoded to the
-project's Supabase instance — edit the script if you're pointing at your
-own project.
 
 ## Usage
 
@@ -166,11 +267,33 @@ To start the application in production mode:
 bun run start
 ```
 
-To run the test suite:
+### Tests
+
+This project uses Bun for its test runner and module-mocking API. Run the
+default isolated, database-free unit suite with:
 
 ```sh
-bun test
+bun run test
 ```
+
+Route HTTP tests are a separate tier because they bind a local ephemeral port:
+
+```sh
+bun run test:http
+```
+
+The two database integration suites are intentionally excluded. To run them,
+start local Supabase and reset it with the repository migrations, configure
+your `.env` with the local credentials from `supabase status`, then run:
+
+```sh
+supabase start
+supabase db reset
+bun run test:integration
+```
+
+`test:integration` rejects a non-local `SUPABASE_URL`, so it cannot write to a
+cloud project by accident.
 
 ## Agent Tokens
 

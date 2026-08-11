@@ -19,11 +19,13 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
 const realBase = require('../models/_base');
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+const realCharacter = require('../models/character');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -54,33 +56,20 @@ mock.module('../models/_base', () => ({
   anonKey: 'test-anon-key',
 }));
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
+}));
+
+mock.module('../models/character', () => ({
   // The route under test:
   createCharacter: async (payload, profile) => ({
     data: { id: CHAR_ID, name: payload.name },
     error: null,
   }),
-  // Other named exports the characters route imports at module load — stubbed
-  // so the require doesn't fail. None are reached on the wizard success path.
-  getOwnCharacters: async () => ({ data: null, error: null }),
-  getCharacter: async () => ({ data: null, error: null }),
-  updateCharacter: async () => ({ data: null, error: null }),
-  deleteCharacter: async () => ({ data: null, error: null }),
-  markCharacterDeceased: async () => ({ data: null, error: null }),
-  getCharacterRecentMissions: async () => ({ data: null, error: null }),
-  searchPublicCharacters: async () => ({ data: null, error: null }),
-  getRandomPublicCharacters: async () => ({ data: null, error: null }),
-  getMission: async () => ({ data: null, error: null }),
-  getClasses: async () => ({ data: null, error: null }),
-  getClass: async () => ({ data: null, error: null }),
-  getLfgPost: async () => ({ data: null, error: null }),
-  getProfileById: async () => ({ data: null, error: null }),
-  getCharacterRealMissionsForDerivation: async () => ({ data: null, error: null }),
-  createMission: async () => ({ data: null, error: null }),
-  addCharacterToMission: async () => ({ data: null, error: null }),
 }));
 
 mock.module('../models/offscreen-mission', () => ({
@@ -100,27 +89,29 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./characters')];
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
   app.use('/characters', require('./characters'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  if (server) server.close();
+afterAll(async () => {
+  await stopHttpServer(server);
   mock.module('../models/_base', () => realBase);
-  mock.module('../util/supabase', () => realSupabase);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
+  mock.module('../models/character', () => realCharacter);
   delete require.cache[require.resolve('./characters')];
 });
 

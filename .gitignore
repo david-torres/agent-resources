@@ -9,6 +9,7 @@ supabase/.branches/
 .cursor/
 .DS_Store
 backups/
+public/img/badges/
 *.log
 logs/
 bun.lockb

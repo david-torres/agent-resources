@@ -12,12 +12,16 @@ const {
   normalizeLinkCode,
   isValidDiscordUserId,
   formatLinkCode,
-  createPendingLink,
-  consumePendingLink,
   cleanupStaleLinks
 } = require('../models/bot-link');
-const { supabaseAdmin } = require('../models/_base');
-const { revokeAgentToken } = require('../models/agent-token');
+const { BotLinkService } = require('../services/bot-link/service');
+const botLinkRepository = require('../services/bot-link/repository');
+const { revokeAgentToken, createAgentToken } = require('../models/agent-token');
+const agentTokenRepository = require('../services/agent-token/repository');
+const { actorFromLocals } = require('../util/actor');
+const { asyncHandler } = require('../util/async-handler');
+
+const botLinkService = new BotLinkService(botLinkRepository, createAgentToken);
 const {
   listPostsForAgent,
   getPostForAgent,
@@ -48,6 +52,11 @@ const parseBooleanFilter = (value) => {
   return undefined;
 };
 
+// Used for class/character agent reads. Unlike lfg's buildAgentActor
+// (models/lfg.js), this deliberately preserves the profile's REAL role
+// (e.g. 'admin') rather than stripping it: it preserves the pre-refactor
+// resolveClassAgentAccess visibility contract, where an admin's agent token
+// gets the same admin-wide read visibility an admin's session would.
 const getActorContext = (res) => ({
   userId: res.locals.user?.id || null,
   profileId: res.locals.profile?.id || null,
@@ -59,7 +68,7 @@ router.post('/bot-link/start', express.json(), async (req, res) => {
   if (!isValidDiscordUserId(discordUserId)) {
     return res.status(400).json({ error: 'Invalid discord_user_id' });
   }
-  const { data, error } = await createPendingLink(discordUserId);
+  const { data, error } = await botLinkService.startLink({ discordUserId });
   if (error) {
     if (error.message === 'Too many pending codes') {
       return res.status(429).json({ error: error.message });
@@ -81,7 +90,7 @@ router.post('/bot-link/claim', express.json(), async (req, res) => {
     return res.status(400).json({ error: 'Invalid code or discord_user_id' });
   }
 
-  const { data, error } = await consumePendingLink({
+  const { data, error } = await botLinkService.claimLink({
     code: normalized,
     discordUserId
   });
@@ -91,31 +100,13 @@ router.post('/bot-link/claim', express.json(), async (req, res) => {
   if (error === 'pending') return res.status(202).json({ status: 'pending' });
   if (error) return res.status(500).json({ error: error.message || 'Internal error' });
 
-  const { data: tokenRow, error: tokenError } = await supabaseAdmin
-    .from('agent_api_tokens')
-    .select('id, profile:profile_id(id, name)')
-    .eq('id', data.agentTokenId)
-    .single();
+  const { data: tokenRow, error: tokenError } = await agentTokenRepository.fetchTokenWithProfile(data.agentTokenId);
   if (tokenError || !tokenRow) {
     return res.status(500).json({ error: 'Token lookup failed' });
   }
 
-  const { data: rawTokenRow, error: rawError } = await supabaseAdmin
-    .from('pending_bot_links_raw_tokens')
-    .select('raw_token')
-    .eq('agent_token_id', data.agentTokenId)
-    .maybeSingle();
-  if (rawError || !rawTokenRow) {
-    return res.status(500).json({ error: 'Token stash missing' });
-  }
-
-  await supabaseAdmin
-    .from('pending_bot_links_raw_tokens')
-    .delete()
-    .eq('agent_token_id', data.agentTokenId);
-
   return res.json({
-    token: rawTokenRow.raw_token,
+    token: data.rawToken,
     agent_token_id: data.agentTokenId,
     profile: {
       id: tokenRow.profile?.id || null,
@@ -173,16 +164,13 @@ router.get('/characters/:id', async (req, res) => {
   return res.json({ character: data });
 });
 
-router.delete('/tokens/me', async (req, res) => {
-  const { data, error } = await revokeAgentToken({
-    tokenId: res.locals.agentToken.id,
-    userId: res.locals.user.id,
-    profileId: res.locals.profile.id
-  });
+router.delete('/tokens/me', asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { data, error } = await revokeAgentToken(actor, { tokenId: res.locals.agentToken.id });
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Token not found or already revoked' });
   return res.json({ revoked: true });
-});
+}));
 
 const validatePostBody = (body, { isEdit = false } = {}) => {
   if (!body || typeof body !== 'object') {

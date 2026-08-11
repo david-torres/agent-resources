@@ -1,6 +1,7 @@
 // util/http-error.test.js
 const { test, expect } = require('bun:test');
 const { classifyError } = require('./http-error');
+const { AuthorizationError } = require('./errors');
 
 const FRIENDLY = "We couldn't find that, or you don't have access to it.";
 
@@ -35,6 +36,13 @@ test('fallback overrides win over the default mapping', () => {
   expect(d.status).toBe(403);
   expect(d.title).toBe('No access');
   expect(d.message).toBe('Custom.');
+});
+
+test('a forbidden-coded error (AuthorizationError) classifies as 403', () => {
+  const d = classifyError(new AuthorizationError('denied'));
+  expect(d.status).toBe(403);
+  expect(d.title).toBe('No access');
+  expect(d.message).toBe(FRIENDLY);
 });
 
 test('unknown error is 500; non-production exposes the raw message', () => {

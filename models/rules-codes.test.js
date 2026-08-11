@@ -54,7 +54,7 @@ afterAll(() => {
 
 test('createRulesPdfUnlockCodes inserts amount rows with unique base64url codes', async () => {
     inserted.length = 0;
-    const { data, error } = await createRulesPdfUnlockCodes({
+    const { data, error } = await createRulesPdfUnlockCodes({ profileId: 'admin-1', role: 'admin' }, {
         rulesPdfId: 'pdf-1',
         createdByProfileId: 'profile-1',
         expiresAt: null,

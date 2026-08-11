@@ -63,3 +63,17 @@ DROP POLICY IF EXISTS "Only admins can delete nav items" ON nav_items;
 CREATE POLICY "Only admins can delete nav items"
     ON nav_items FOR DELETE
     USING (is_admin());
+
+-- Table privileges (RLS still requires these on the underlying table).
+-- Guarded so the migration is safe on installs where Supabase roles
+-- (anon / authenticated) haven't been pre-created.
+DO $do$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'anon') THEN
+        EXECUTE 'GRANT SELECT ON public.nav_items TO anon';
+    END IF;
+    IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+        EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON public.nav_items TO authenticated';
+    END IF;
+END
+$do$;

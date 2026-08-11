@@ -166,3 +166,36 @@ test('joinLfgPost uses the passed client to read the character', async () => {
   // read failing.
   expect(error).toBeFalsy();
 });
+
+// ─── agent actor construction consistency (no admin bypass on the agent surface) ───
+
+test('updateForAgent does not grant an admin-role bypass: an admin-role agent profile acting on another profile\'s post is blocked, same as delete/close', async () => {
+  mock.module('./_base', () => ({
+    supabase: defaultAnon,
+    supabaseAdmin: makeSpyClient({ lfg_posts: [{ id: 'post-1', creator_id: 'host-1' }] }),
+    anonKey: 'x',
+    createUserClient: () => defaultAnon
+  }));
+  delete require.cache[require.resolve('./lfg')];
+  delete require.cache[require.resolve('../services/lfg/repository')];
+  const { updateForAgent } = require('./lfg');
+
+  const { data, error } = await updateForAgent({
+    agentProfile: { id: 'admin-1', role: 'admin', timezone: 'UTC' },
+    postId: 'post-1',
+    body: { title: 'Hijacked title' }
+  });
+  expect(data).toBeNull();
+  expect(error.status).toBe(403);
+  expect(error.code).toBe('not_host');
+
+  // Restore the original module mock for subsequent tests.
+  mock.module('./_base', () => ({
+    supabase: defaultAnon,
+    supabaseAdmin: makeSpyClient(),
+    anonKey: 'x',
+    createUserClient: () => defaultAnon
+  }));
+  delete require.cache[require.resolve('./lfg')];
+  delete require.cache[require.resolve('../services/lfg/repository')];
+});

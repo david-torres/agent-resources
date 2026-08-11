@@ -133,11 +133,13 @@ mock.module('./_base', () => ({
 // an earlier test file may have already loaded it with real `_base`. Bust the
 // cache so this require re-executes with the mocked exports in place.
 delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 const { updateCharacter } = require('./character');
 
 afterAll(() => {
   mock.module('./_base', () => realBase);
   delete require.cache[require.resolve('./character')];
+delete require.cache[require.resolve('../services/character/repository')];
 });
 
 const PRIVATE_CHARACTER = {
@@ -191,14 +193,16 @@ test('updateCharacter can flip is_public on a private character (regression)', a
 });
 
 test('updateCharacter still rejects edits from non-owners on a private character', async () => {
-  const { data, error } = await updateCharacter(
+  // As of the character service seam, ownership denials THROW an
+  // AuthorizationError (services/character/service.js) instead of returning
+  // { data: null, error: 'Unauthorized' } — mirroring the mission/class
+  // service seams.
+  await expect(updateCharacter(
     'char-private-1',
     { is_public: 'on' },
     { id: 'someone-else' }
-  );
+  )).rejects.toThrow(/not authorized/i);
 
-  expect(error).toBe('Unauthorized');
-  expect(data).toBeNull();
   // The row must not have been flipped.
   expect(adminTables.characters[0].is_public).toBe(false);
 });

@@ -11,8 +11,8 @@ const {
     deleteNavItem,
     reorderNavItems,
     getDropdownParents
-} = require('../util/supabase');
-const { getPages } = require('../util/supabase');
+} = require('../models/nav');
+const { getPages } = require('../models/pages');
 const { isAuthenticated, requireAdmin } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 

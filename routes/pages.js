@@ -11,7 +11,7 @@ const {
     updatePage,
     deletePage,
     canViewPage
-} = require('../util/supabase');
+} = require('../models/pages');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 

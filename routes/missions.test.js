@@ -17,7 +17,10 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
-const realSupabase = require('../util/supabase');
+const realAuth = require('../models/auth');
+const realProfile = require('../models/profile');
+const realMission = require('../models/mission');
+const realCharacter = require('../models/character');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -26,14 +29,20 @@ const realNavLoader = require('../util/nav-loader');
 let canEditResult = false;
 const calls = { add: 0, remove: 0 };
 
-mock.module('../util/supabase', () => ({
+mock.module('../models/auth', () => ({
   // Consumed by the real isAuthenticated middleware:
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
+}));
+mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: 'attacker-profile', user_id: 'u1' }),
+}));
+mock.module('../models/mission', () => ({
   // Consumed by the routes under test:
   canEditMission: async () => canEditResult,
   addCharacterToMission: async () => { calls.add++; return { error: null }; },
   removeCharacterFromMission: async () => { calls.remove++; return { error: null }; },
+}));
+mock.module('../models/character', () => ({
   // Force the post-mutation render path to bail via sendError (JSON), so the
   // authorized-case assertions don't need a Handlebars view engine.
   getCharacter: async () => ({ data: null, error: { message: 'stop before render' } }),
@@ -46,21 +55,24 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
 
-beforeAll(() => {
+beforeAll(async () => {
   delete require.cache[require.resolve('./missions')];
   const app = express();
   app.use(express.json());
   app.use('/missions', require('./missions'));
-  server = app.listen(0);
-  baseUrl = `http://localhost:${server.address().port}`;
+  ({ server, baseUrl } = await startHttpServer(app));
 });
 
-afterAll(() => {
-  server?.close();
-  mock.module('../util/supabase', () => realSupabase);
+afterAll(async () => {
+  await stopHttpServer(server);
+  mock.module('../models/auth', () => realAuth);
+  mock.module('../models/profile', () => realProfile);
+  mock.module('../models/mission', () => realMission);
+  mock.module('../models/character', () => realCharacter);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
