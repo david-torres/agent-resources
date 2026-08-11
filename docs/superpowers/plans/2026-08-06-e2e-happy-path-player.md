@@ -33,7 +33,7 @@ These apply to **every** task. They are measured behaviours of this app, not sty
 ## Task 1: Character create → view → edit (spec 17, part 1)
 
 **Files:**
-- Create: `e2e/specs/17-characters-crud.spec.js`
+- Create: `e2e/specs/18-characters-crud.spec.js`
 
 **Interfaces:**
 - Consumes: `connect, newPrefix, profileForEmail, cleanupByPrefix` (`e2e/fixtures/db.js`); `seedClass, unlockClassForProfile` (`e2e/fixtures/class.js`); `PLAYER_EMAIL, PLAYER_STATE` (`e2e/global-setup.js`).
@@ -42,7 +42,7 @@ These apply to **every** task. They are measured behaviours of this app, not sty
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/17-characters-crud.spec.js
+// e2e/specs/18-characters-crud.spec.js
 //
 // Happy-path lifecycle for characters, driven through the real UI. The
 // existing browser tier is entirely regression-shaped -- each spec targets one
@@ -192,7 +192,7 @@ would be dead code.
 
 - [ ] **Step 2: Run the spec**
 
-Run: `bunx playwright test e2e/specs/17-characters-crud.spec.js`
+Run: `bunx playwright test e2e/specs/18-characters-crud.spec.js`
 Expected: 3 PASS.
 
 If create fails on a hidden required control, read the failure carefully before changing the spec — `views/character-form.handlebars` renders both v1 and v2 blocks and only toggles visibility (`public/js/character-form-version.js:39-43`). A required control inside a `hidden` block blocks submit invisibly and is a real defect worth reporting, not a spec bug to work around.
@@ -200,7 +200,7 @@ If create fails on a hidden required control, read the failure carefully before 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add e2e/specs/17-characters-crud.spec.js
+git add e2e/specs/18-characters-crud.spec.js
 git commit -m "test: cover character create, view, and edit happy paths"
 ```
 
@@ -209,7 +209,7 @@ git commit -m "test: cover character create, view, and edit happy paths"
 ## Task 2: Fix D1 — the edit-page Delete button serialises the whole form
 
 **Files:**
-- Modify: `e2e/specs/17-characters-crud.spec.js` (append one test)
+- Modify: `e2e/specs/18-characters-crud.spec.js` (append one test)
 - Modify: `views/partials/head.handlebars:4`
 - Modify: `views/character-form.handlebars:15` and `:389` (remove inert `hx-redirect`)
 - Modify: `views/mission.handlebars:84` (remove inert `hx-redirect`)
@@ -220,7 +220,7 @@ git commit -m "test: cover character create, view, and edit happy paths"
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `e2e/specs/17-characters-crud.spec.js`:
+Append to `e2e/specs/18-characters-crud.spec.js`:
 
 ```js
 // D1. htmx 2.0.8 defaults methodsThatUseUrlParams to ['get', 'delete'], and
@@ -271,7 +271,7 @@ test('deleting from the edit page sends a bare URL and removes the character', a
 
 - [ ] **Step 2: Run it and confirm it fails for the right reason**
 
-Run: `bunx playwright test e2e/specs/17-characters-crud.spec.js -g "bare URL"`
+Run: `bunx playwright test e2e/specs/18-characters-crud.spec.js -g "bare URL"`
 Expected: FAIL on the `new URL(...).search` assertion, with a received value beginning `?name=...`. If it instead fails on `waitForURL`, the request was rejected outright — also D1, and the fix is the same.
 
 - [ ] **Step 3: Apply the fix**
@@ -302,7 +302,7 @@ Then delete the three inert `hx-redirect` attributes. `hx-redirect` is not an ht
 
 - [ ] **Step 4: Run the test to verify it passes**
 
-Run: `bunx playwright test e2e/specs/17-characters-crud.spec.js`
+Run: `bunx playwright test e2e/specs/18-characters-crud.spec.js`
 Expected: 4 PASS.
 
 - [ ] **Step 5: Run the full suite to check the config change broke nothing**
@@ -316,7 +316,7 @@ Expected: PASS. Route-level DELETE handlers read path params only, so this shoul
 - [ ] **Step 6: Commit**
 
 ```bash
-git add views/partials/head.handlebars views/character-form.handlebars views/mission.handlebars e2e/specs/17-characters-crud.spec.js
+git add views/partials/head.handlebars views/character-form.handlebars views/mission.handlebars e2e/specs/18-characters-crud.spec.js
 git commit -m "fix: stop htmx serialising the edit form into DELETE request URLs"
 ```
 
@@ -327,7 +327,7 @@ git commit -m "fix: stop htmx serialising the edit form into DELETE request URLs
 **Files:**
 - Create: `supabase/migrations/20260806000000_lfg_join_requests_character_set_null.sql`
 - Modify: `util/http-error.js:20-22` (add a `23503` case)
-- Modify: `e2e/specs/17-characters-crud.spec.js` (append one test)
+- Modify: `e2e/specs/18-characters-crud.spec.js` (append one test)
 
 **Interfaces:**
 - Consumes: `createCharacterViaUi` (Task 1); the D1 fix (Task 2) must already be in place or the delete fails for that reason instead; `seedLfgPost, seedJoinRequest` (`e2e/fixtures/lfg.js`).
@@ -335,7 +335,7 @@ git commit -m "fix: stop htmx serialising the edit form into DELETE request URLs
 
 - [ ] **Step 1: Write the failing test**
 
-Append to `e2e/specs/17-characters-crud.spec.js` — and add `seedLfgPost, seedJoinRequest` to the requires at the top of the file:
+Append to `e2e/specs/18-characters-crud.spec.js` — and add `seedLfgPost, seedJoinRequest` to the requires at the top of the file:
 
 ```js
 const { seedLfgPost, seedJoinRequest } = require('../fixtures/lfg');
@@ -384,7 +384,7 @@ test('a character that joined an LFG game can still be deleted', async ({ page }
 
 - [ ] **Step 2: Run it and confirm it fails**
 
-Run: `bunx playwright test e2e/specs/17-characters-crud.spec.js -g "joined an LFG game"`
+Run: `bunx playwright test e2e/specs/18-characters-crud.spec.js -g "joined an LFG game"`
 Expected: FAIL — the character row is still present, because the DELETE was rejected with 23503 and surfaced as a 500 into `#alerts` without changing the URL. If `seedJoinRequest` returns a shape without `.id`, read `e2e/fixtures/lfg.js:76-91` and adjust the destructuring; the assertion is on the row, not the helper's return shape.
 
 - [ ] **Step 3: Write the migration**
@@ -447,7 +447,7 @@ Expected: `confdeltype` is `n` (SET NULL). It was `a` (NO ACTION).
 
 - [ ] **Step 6: Run the test to verify it passes**
 
-Run: `bunx playwright test e2e/specs/17-characters-crud.spec.js`
+Run: `bunx playwright test e2e/specs/18-characters-crud.spec.js`
 Expected: 5 PASS.
 
 Then: `bun run test:unit && bun run test:http && bun run test:integration`
@@ -456,7 +456,7 @@ Expected: PASS. `classifyError` is directly unit-testable and widely used; confi
 - [ ] **Step 7: Commit**
 
 ```bash
-git add supabase/migrations/20260806000000_lfg_join_requests_character_set_null.sql util/http-error.js e2e/specs/17-characters-crud.spec.js
+git add supabase/migrations/20260806000000_lfg_join_requests_character_set_null.sql util/http-error.js e2e/specs/18-characters-crud.spec.js
 git commit -m "fix: let characters with LFG join requests be deleted"
 ```
 
@@ -465,7 +465,7 @@ git commit -m "fix: let characters with LFG join requests be deleted"
 ## Task 4: Character wizard create (spec 18)
 
 **Files:**
-- Create: `e2e/specs/18-character-wizard-crud.spec.js`
+- Create: `e2e/specs/19-character-wizard-crud.spec.js`
 
 **Interfaces:**
 - Consumes: the same fixture seams as Task 1.
@@ -474,7 +474,7 @@ git commit -m "fix: let characters with LFG join requests be deleted"
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/18-character-wizard-crud.spec.js
+// e2e/specs/19-character-wizard-crud.spec.js
 //
 // The wizard is a wholly separate create path from the expert form covered by
 // 17: five JS-driven steps in public/js/character-wizard.js, its own stat grid
@@ -599,7 +599,7 @@ test('the wizard creates a character end to end', async ({ page }) => {
 
 - [ ] **Step 2: Run the spec**
 
-Run: `bunx playwright test e2e/specs/18-character-wizard-crud.spec.js`
+Run: `bunx playwright test e2e/specs/19-character-wizard-crud.spec.js`
 Expected: PASS.
 
 The two `for` loops are bounded click-until-enabled drivers, not polling hacks: the wizard's budget rules live in JS and depend on the seeded class's data, so the exact number of clicks is not knowable from the markup. If a loop exhausts and the `toBeEnabled` assertion fails, read `public/js/character-wizard.js:853` (stat grid) or `:1421-1426` (Merx budget) and drive the specific control rather than raising the bound.
@@ -607,7 +607,7 @@ The two `for` loops are bounded click-until-enabled drivers, not polling hacks: 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add e2e/specs/18-character-wizard-crud.spec.js
+git add e2e/specs/19-character-wizard-crud.spec.js
 git commit -m "test: cover the character wizard create happy path"
 ```
 
@@ -616,7 +616,7 @@ git commit -m "test: cover the character wizard create happy path"
 ## Task 5: Mission lifecycle (spec 19)
 
 **Files:**
-- Create: `e2e/specs/19-missions-crud.spec.js`
+- Create: `e2e/specs/20-missions-crud.spec.js`
 
 **Interfaces:**
 - Consumes: `seedClass, unlockClassForProfile`, `seedCharacter` (`e2e/fixtures/character.js`), db fixtures, `PLAYER_EMAIL/PLAYER_STATE`.
@@ -625,7 +625,7 @@ git commit -m "test: cover the character wizard create happy path"
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/19-missions-crud.spec.js
+// e2e/specs/20-missions-crud.spec.js
 //
 // Mission lifecycle through the real UI, including the attach/detach of a
 // character -- which is a two-phase mechanism worth pinning: clicking a search
@@ -791,7 +791,7 @@ test('a mission can be deleted from its detail page', async ({ page }) => {
 
 - [ ] **Step 2: Run the spec**
 
-Run: `bunx playwright test e2e/specs/19-missions-crud.spec.js`
+Run: `bunx playwright test e2e/specs/20-missions-crud.spec.js`
 Expected: 5 PASS.
 
 - [ ] **Step 3: Check the create-path `is_public` normalisation**
@@ -808,7 +808,7 @@ If `is_public` stores something other than a clean boolean on create, that is a 
 - [ ] **Step 4: Commit**
 
 ```bash
-git add e2e/specs/19-missions-crud.spec.js
+git add e2e/specs/20-missions-crud.spec.js
 git commit -m "test: cover mission create, view, edit, party, and delete happy paths"
 ```
 
@@ -817,7 +817,7 @@ git commit -m "test: cover mission create, view, edit, party, and delete happy p
 ## Task 6: LFG lifecycle (spec 20)
 
 **Files:**
-- Create: `e2e/specs/20-lfg-crud.spec.js`
+- Create: `e2e/specs/21-lfg-crud.spec.js`
 
 **Interfaces:**
 - Consumes: db/class/character fixtures; `ADMIN_EMAIL, ADMIN_STATE, PLAYER_EMAIL, PLAYER_STATE`.
@@ -826,7 +826,7 @@ git commit -m "test: cover mission create, view, edit, party, and delete happy p
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/20-lfg-crud.spec.js
+// e2e/specs/21-lfg-crud.spec.js
 //
 // LFG lifecycle: create -> view -> edit -> join -> leave -> delete.
 //
@@ -1024,7 +1024,7 @@ test('an LFG post can be deleted from the My Posts tab', async ({ page }) => {
 
 - [ ] **Step 2: Run the spec**
 
-Run: `bunx playwright test e2e/specs/20-lfg-crud.spec.js`
+Run: `bunx playwright test e2e/specs/21-lfg-crud.spec.js`
 Expected: 5 PASS.
 
 If create fails because Chrome refuses to submit — `#lfg-description` is `required` and ToastUI has hidden it — then filling the ProseMirror is not reaching the textarea before validation. That would mean LFG posts cannot be created in a real browser at all, which is a significant defect: capture the console output and the `#alerts` content, stop, and report it rather than working around it.
@@ -1032,7 +1032,7 @@ If create fails because Chrome refuses to submit — `#lfg-description` is `requ
 - [ ] **Step 3: Commit**
 
 ```bash
-git add e2e/specs/20-lfg-crud.spec.js
+git add e2e/specs/21-lfg-crud.spec.js
 git commit -m "test: cover LFG create, view, edit, join, leave, and delete happy paths"
 ```
 
@@ -1041,7 +1041,7 @@ git commit -m "test: cover LFG create, view, edit, join, leave, and delete happy
 ## Task 7: Class lifecycle and fix D3 (spec 21)
 
 **Files:**
-- Create: `e2e/specs/21-classes-crud.spec.js`
+- Create: `e2e/specs/22-classes-crud.spec.js`
 - Modify: `routes/classes.js:759`
 
 **Interfaces:**
@@ -1051,7 +1051,7 @@ git commit -m "test: cover LFG create, view, edit, join, leave, and delete happy
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/21-classes-crud.spec.js
+// e2e/specs/22-classes-crud.spec.js
 //
 // Player-created class lifecycle through the real UI.
 //
@@ -1189,7 +1189,7 @@ test('a class can be deleted from the My PCCs list', async ({ page }) => {
 
 - [ ] **Step 2: Run it and confirm the delete test fails on the repaint**
 
-Run: `bunx playwright test e2e/specs/21-classes-crud.spec.js`
+Run: `bunx playwright test e2e/specs/22-classes-crud.spec.js`
 Expected: the first three PASS; the delete test FAILS on the final `toHaveCount(0)` while the `expect.poll` above it succeeds — proving the row was deleted server-side but htmx never swapped.
 
 - [ ] **Step 3: Apply the D3 fix (both halves)**
@@ -1218,7 +1218,7 @@ With `HX-Location` the target only has to resolve; the default does.
 
 - [ ] **Step 4: Run the spec to verify it passes**
 
-Run: `bunx playwright test e2e/specs/21-classes-crud.spec.js`
+Run: `bunx playwright test e2e/specs/22-classes-crud.spec.js`
 Expected: 4 PASS.
 
 Then: `bun run test:http`
@@ -1227,7 +1227,7 @@ Expected: PASS. If an existing http test asserts a 204 from this route, update i
 - [ ] **Step 5: Commit**
 
 ```bash
-git add e2e/specs/21-classes-crud.spec.js routes/classes.js
+git add e2e/specs/22-classes-crud.spec.js routes/classes.js
 git commit -m "fix: make the class delete button repaint the list instead of returning 204"
 ```
 
@@ -1236,7 +1236,7 @@ git commit -m "fix: make the class delete button repaint the list instead of ret
 ## Task 8: Profile edit round-trip (spec 22)
 
 **Files:**
-- Create: `e2e/specs/22-profile-crud.spec.js`
+- Create: `e2e/specs/23-profile-crud.spec.js`
 
 **Interfaces:**
 - Consumes: db fixtures; `PLAYER_EMAIL, PLAYER_STATE`.
@@ -1245,7 +1245,7 @@ git commit -m "fix: make the class delete button repaint the list instead of ret
 - [ ] **Step 1: Write the spec file**
 
 ```js
-// e2e/specs/22-profile-crud.spec.js
+// e2e/specs/23-profile-crud.spec.js
 //
 // Profile has no create or delete -- it is provisioned with the account -- so
 // the lifecycle here is view -> edit -> round-trip.
@@ -1322,7 +1322,7 @@ test('editing the profile name round-trips to the database and the page', async 
 
 - [ ] **Step 2: Run the spec**
 
-Run: `bunx playwright test e2e/specs/22-profile-crud.spec.js`
+Run: `bunx playwright test e2e/specs/23-profile-crud.spec.js`
 Expected: 2 PASS.
 
 - [ ] **Step 3: Verify the shared profile was restored**
@@ -1336,7 +1336,7 @@ Expected: the original name, not an `e2e-profile-...` value. If it leaked, the `
 - [ ] **Step 4: Commit**
 
 ```bash
-git add e2e/specs/22-profile-crud.spec.js
+git add e2e/specs/23-profile-crud.spec.js
 git commit -m "test: cover profile view and edit round-trip"
 ```
 

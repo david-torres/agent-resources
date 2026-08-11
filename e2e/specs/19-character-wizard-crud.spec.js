@@ -1,4 +1,4 @@
-// e2e/specs/18-character-wizard-crud.spec.js
+// e2e/specs/19-character-wizard-crud.spec.js
 //
 // The wizard is a wholly separate create path from the expert form covered by
 // 17: five JS-driven steps in public/js/character-wizard.js, its own stat grid

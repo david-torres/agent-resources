@@ -1,4 +1,4 @@
-// e2e/specs/17-characters-crud.spec.js
+// e2e/specs/18-characters-crud.spec.js
 //
 // Happy-path lifecycle for characters, driven through the real UI. The
 // existing browser tier is entirely regression-shaped -- each spec targets one

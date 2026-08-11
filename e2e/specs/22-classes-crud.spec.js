@@ -1,4 +1,4 @@
-// e2e/specs/21-classes-crud.spec.js
+// e2e/specs/22-classes-crud.spec.js
 //
 // Player-created class lifecycle through the real UI.
 //

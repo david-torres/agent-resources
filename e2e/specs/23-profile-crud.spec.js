@@ -1,4 +1,4 @@
-// e2e/specs/22-profile-crud.spec.js
+// e2e/specs/23-profile-crud.spec.js
 //
 // Profile has no create or delete -- it is provisioned with the account -- so
 // the lifecycle here is view -> edit -> round-trip.
@@ -68,7 +68,7 @@ test('editing the profile name round-trips to the database and the page', async 
   // changing the URL), so that predicate is trivially true at the moment
   // it's registered and resolves instantly instead of synchronizing on
   // anything. This exact bug has recurred across this plan (see e.g.
-  // 21-classes-crud.spec.js's edit test). The route answers HX-Location:
+  // 22-classes-crud.spec.js's edit test). The route answers HX-Location:
   // /profile with an empty body (routes/profile.js:118), which is itself a
   // second, chained background request -- so poll Postgres for the write
   // landing, which is the one unambiguous positive signal, then force a

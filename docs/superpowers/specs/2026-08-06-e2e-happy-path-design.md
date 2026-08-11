@@ -124,12 +124,12 @@ Numbering continues the existing 00–16 series.
 
 | Spec | Feature | Lifecycle |
 |---|---|---|
-| `17-characters-crud` | Characters | expert-form create → view → edit → delete |
-| `18-character-wizard-crud` | Characters | wizard create → view |
-| `19-missions-crud` | Missions | create → view → edit → attach/detach character → delete |
-| `20-lfg-crud` | LFG | create → view → edit → join → leave → delete |
-| `21-classes-crud` | Player-created classes | create → view → edit → delete |
-| `22-profile-crud` | Profile | view → edit → round-trip |
+| `18-characters-crud` | Characters | expert-form create → view → edit → delete |
+| `19-character-wizard-crud` | Characters | wizard create → view |
+| `20-missions-crud` | Missions | create → view → edit → attach/detach character → delete |
+| `21-lfg-crud` | LFG | create → view → edit → join → leave → delete |
+| `22-classes-crud` | Player-created classes | create → view → edit → delete |
+| `23-profile-crud` | Profile | view → edit → round-trip |
 
 ### Admin-facing (`ADMIN_STATE`)
 

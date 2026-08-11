@@ -1,4 +1,4 @@
-// e2e/specs/20-lfg-crud.spec.js
+// e2e/specs/21-lfg-crud.spec.js
 //
 // LFG lifecycle: create -> view -> edit -> join -> leave -> delete.
 //
@@ -227,7 +227,7 @@ test('an LFG post can be deleted from the My Posts tab', async ({ page }) => {
   // And the list must actually repaint. Without this the test passes on a
   // delete that succeeded server-side but left the row on screen -- exactly
   // the D3 failure mode, which this is the only delete spec that would not
-  // have caught. (21-classes-crud asserts the same thing via #row-<id>; the
+  // have caught. (22-classes-crud asserts the same thing via #row-<id>; the
   // My Posts rows carry no id, so match the row by its title instead.)
   await expect(page.locator('#lfg-posts tr', { hasText: title })).toHaveCount(0);
 });
