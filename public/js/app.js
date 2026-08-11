@@ -1185,6 +1185,7 @@ const App = (function (document, supabase, htmx) {
       _setTokens(data.session.access_token, data.session.refresh_token);
     } catch (error) {
       _reportAuthError('signInWithPassword failed', error);
+      _toggleFormLoading(form, false);
     }
   };
 
@@ -1208,6 +1209,7 @@ const App = (function (document, supabase, htmx) {
       htmx.swap(form, `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
       _reportAuthError('signUp failed', error);
+      _toggleFormLoading(form, false);
     }
   };
 
@@ -1234,6 +1236,7 @@ const App = (function (document, supabase, htmx) {
       htmx.swap('#sign-in', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
       _reportAuthError('sendSignInLink failed', error);
+      _toggleFormLoading(form, false);
     }
   };
 
@@ -1261,6 +1264,7 @@ const App = (function (document, supabase, htmx) {
       htmx.swap('#sign-up', `<div class="notification is-info">${message}</div>`, { swapStyle: 'innerHTML' });
     } catch (error) {
       _reportAuthError('sendSignUpLink failed', error);
+      _toggleFormLoading(form, false);
     }
   };
 
