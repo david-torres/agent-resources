@@ -1,0 +1,20 @@
+{{!-- Display-only stat blocks. No Alpine, no ARIA group, no interaction --
+      this is the same visual vocabulary as views/partials/stat-blocks.handlebars
+      for surfaces that only report a value.
+
+      Params:
+        value  the points to show (null/missing renders an empty row)
+        max    how many blocks the row holds
+
+      A value above max fills every block and stops there rather than
+      spilling a 14-block row across the layout; callers that can exceed
+      max (party totals) print the real number alongside. There is no `min`
+      helper registered, hence the branch. --}}
+<span class="stat-blocks is-readonly">
+  {{#if (gt value max)}}
+  {{#range 0 max}}<span class="wizard-stat-box is-set"></span>{{/range}}
+  {{else}}
+  {{#range 0 value}}<span class="wizard-stat-box is-set"></span>{{/range}}
+  {{#range value max}}<span class="wizard-stat-box is-empty"></span>{{/range}}
+  {{/if}}
+</span>

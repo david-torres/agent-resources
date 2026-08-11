@@ -272,6 +272,30 @@ const searchPublicCharacters = async (q, count, options = {}) => {
   }
 }
 
+// Fetches the character rows for a virtual party (routes/party.js) or an LFG
+// party. Deliberately applies NO is_public filter: the caller passes its
+// request-scoped client, and the characters SELECT policies
+// (characters_public_select OR characters_owner_admin_select) already resolve
+// exactly "public, plus the ones you own" at the database. Filtering again in
+// JS would drop the caller's own private characters, which the party tool
+// specifically supports. Never pass supabaseAdmin here.
+const getPartyCharacters = async (ids, client = supabase) => {
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { data: [], error: null };
+  }
+
+  const { data, error } = await client
+    .from('characters')
+    .select(`id, name, image_url, class, class_id, is_deceased, is_public, ${statList.join(', ')}`)
+    .in('id', ids);
+
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error: null };
+};
+
 const getRandomPublicCharacters = async (count = 12, options = {}) => {
   try {
     // Fetch a reasonably sized pool, then sample client-side for randomness
@@ -443,6 +467,7 @@ module.exports = {
   getCharacterAllMissions,
   getCharacterRealMissionsForDerivation,
   searchPublicCharacters,
+  getPartyCharacters,
   getRandomPublicCharacters,
   getPublicCharactersByCreator,
   serializeCharacterSummaryForAgent,

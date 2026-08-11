@@ -1,0 +1,41 @@
+{{> breadcrumbs}}
+<h2 class="title is-2">Virtual Party</h2>
+<p class="subtitle is-6 has-text-grey">
+  Build a party from any public character — plus your own — and see its combined stats.
+  The party lives in this page's address, so you can bookmark or share it.
+</p>
+
+<div class="columns">
+  <div class="column is-5">
+    {{#if profile}}
+    <div class="box">
+      <h3 class="title is-5">My Characters</h3>
+      {{#if ownCharacters.length}}
+      {{> party-search-results characters=ownCharacters}}
+      {{else}}
+      <p class="has-text-grey">You have no characters yet.</p>
+      {{/if}}
+    </div>
+    {{/if}}
+
+    <div class="box">
+      <h3 class="title is-5">Find Characters</h3>
+      <div class="field">
+        <div class="control has-icons-left">
+          <input class="input" type="text" name="q" placeholder="Enter character name..."
+            hx-get="/party/s"
+            hx-trigger="keyup changed delay:500ms, search"
+            hx-target="#party-search-results">
+          <span class="icon is-left"><i class="fas fa-search"></i></span>
+        </div>
+      </div>
+      <div id="party-search-results" class="mt-3">
+        {{> party-search-results characters=null}}
+      </div>
+    </div>
+  </div>
+
+  <div class="column is-7">
+    {{> party-panel partyCsv=partyCsv summary=summary droppedOverCap=droppedOverCap unresolved=unresolved members=members privateCount=privateCount}}
+  </div>
+</div>

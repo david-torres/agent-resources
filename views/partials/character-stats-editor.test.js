@@ -6,6 +6,26 @@ const customHelpers = require('../../util/handlebars');
 const { statList } = require('../../util/enclave-consts');
 const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
+const hbsHelpers = require('handlebars-helpers')();
+const rangeHelper = require('handlebars-helper-range');
+
+const STAT_BLOCKS_SRC = fs.readFileSync(
+  path.join(__dirname, 'stat-blocks.handlebars'), 'utf8'
+);
+
+// Renders the REAL stat-blocks partial into the fixture rather than a
+// hand-copied stand-in, so a regression in the shipped partial fails here
+// too instead of only in stat-blocks.test.js.
+const statBlocks = (stat, value) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  return hb.compile(STAT_BLOCKS_SRC)({
+    stat, name: stat, value, max: 5, model: `stats.${stat}`
+  });
+};
+
 const STATS = { vitality: 3, might: 2, resilience: 1 };
 
 // The x-data attribute is single-quote delimited (not double) because
@@ -19,9 +39,9 @@ const mount = (stats) => render(`
     <button id="edit" x-show="!editing" @click="edit()"></button>
     <div id="readonly" x-show="!editing"></div>
     <form id="editor" x-show="editing" @submit.prevent="save()">
-      <input class="stats-input" type="number" x-model.number="stats.vitality">
-      <input class="stats-input" type="number" x-model.number="stats.might">
-      <input class="stats-input" type="number" x-model.number="stats.resilience">
+      ${statBlocks('vitality', stats.vitality)}
+      ${statBlocks('might', stats.might)}
+      ${statBlocks('resilience', stats.resilience)}
       <strong id="statsTotalSum" x-text="total"></strong>
       <button id="cancel" type="button" @click="cancel()"></button>
       <button id="save" type="submit" :disabled="saving"></button>
@@ -51,11 +71,16 @@ test('Edit reveals the editor and hides the read-only grid', async () => {
   expect(document.getElementById('readonly').style.display).toBe('none');
 });
 
-test('Edit moves focus to the first stats input', async () => {
+test('Edit moves focus to the first stat block', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await settle();
-  const first = document.querySelector('.stats-input');
+  // Not a truthy-only assertion: statList starts with 'vitality', and both
+  // #statsReadOnly and #statsEditor iterate it, so the first .stat-blocks in
+  // DOM order is vitality's. Focus landing on the wrong stat's control must
+  // fail here, which a bare "something is focused" check would not catch.
+  const first = document.querySelector('.stat-blocks[data-stat="vitality"] [role="radio"][tabindex="0"]');
+  expect(first).not.toBe(null);
   expect(document.activeElement).toBe(first);
 });
 
@@ -64,25 +89,23 @@ test('total sums the seeded stats', async () => {
   expect(document.getElementById('statsTotalSum').textContent).toBe('6');
 });
 
-test('total recomputes as inputs change', async () => {
+test('total recomputes as blocks are clicked', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await tick();
-  const input = document.querySelector('.stats-input');
-  input.value = '10';
-  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  // vitality 3 -> 5, so 3+2+1 = 6 becomes 5+2+1 = 8.
+  document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
   await tick();
-  expect(document.getElementById('statsTotalSum').textContent).toBe('13');
+  expect(document.getElementById('statsTotalSum').textContent).toBe('8');
 });
 
 test('Cancel restores the original values and exits edit mode', async () => {
   await mount(STATS);
   document.getElementById('edit').click();
   await tick();
-  const input = document.querySelector('.stats-input');
-  input.value = '19';
-  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+  document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
   await tick();
+  expect(document.getElementById('statsTotalSum').textContent).toBe('8');
 
   document.getElementById('cancel').click();
   await settle();
@@ -90,7 +113,7 @@ test('Cancel restores the original values and exits edit mode', async () => {
   expect(document.getElementById('statsTotalSum').textContent).toBe('6');
 });
 
-test('save PATCHes clamped integers to the stats endpoint', async () => {
+test('save PATCHes the block-set value to the stats endpoint', async () => {
   await mount(STATS);
   let captured = null;
   globalThis.fetch = async (url, options) => {
@@ -119,9 +142,7 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
   try {
     document.getElementById('edit').click();
     await tick();
-    const input = document.querySelector('.stats-input');
-    input.value = '99';                       // above the 0-20 range
-    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    document.querySelectorAll('.stat-blocks[data-stat="vitality"] [role="radio"]')[4].click();
     await tick();
 
     document.getElementById('editor').dispatchEvent(
@@ -135,8 +156,52 @@ test('save PATCHes clamped integers to the stats endpoint', async () => {
 
   expect(captured.url).toBe('/characters/char-1/stats');
   expect(captured.options.method).toBe('PATCH');
-  expect(JSON.parse(captured.options.body).vitality).toBe(20);
+  expect(JSON.parse(captured.options.body).vitality).toBe(5);
   expect(reloaded).toBe(true);
+});
+
+// The blocks can only ever produce 0..max, so clicking them can never reach
+// save()'s 0-20 clamp or its NaN/negative floor. Those two lines still guard
+// everything the control does NOT produce: a legacy value stored above 20, a
+// negative, or a null column that parseInt turns into NaN. Seed that state
+// directly -- the clamp is unreachable from the UI, which is exactly why a
+// click-driven test cannot pin it. (Deleting both lines leaves every other
+// test in this file green.)
+const submitAndCapturePayload = async () => {
+  let captured = null;
+  globalThis.fetch = async (url, options) => {
+    captured = { url, options };
+    return { ok: true, json: async () => ({ character: {} }) };
+  };
+  // Same jsdom-location workaround as the test above; see its comment.
+  const realWindow = window;
+  const locationStub = { reload: () => {} };
+  globalThis.window = new Proxy(realWindow, {
+    get(target, prop, receiver) {
+      if (prop === 'location') return locationStub;
+      return Reflect.get(target, prop, receiver);
+    }
+  });
+  try {
+    document.getElementById('editor').dispatchEvent(
+      new realWindow.Event('submit', { bubbles: true, cancelable: true })
+    );
+    await tick();
+    await tick();
+  } finally {
+    globalThis.window = realWindow;
+  }
+  return JSON.parse(captured.options.body);
+};
+
+test('save clamps stored values the blocks cannot produce', async () => {
+  await mount({ vitality: 25, might: -3, resilience: 1 });
+  expect(await submitAndCapturePayload()).toEqual({ vitality: 20, might: 0, resilience: 1 });
+});
+
+test('save coerces a null stat to zero rather than PATCHing NaN', async () => {
+  await mount({ vitality: null, might: 2, resilience: 1 });
+  expect(await submitAndCapturePayload()).toEqual({ vitality: 0, might: 2, resilience: 1 });
 });
 
 test('save surfaces a server error and re-enables the button', async () => {
@@ -187,7 +252,8 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
   );
 
   expect(src).toContain('x-text="total"');
-  expect(src).toContain('x-model.number="stats.{{this}}"');
+  expect(src).toContain('{{> stat-blocks');
+  expect(src).toContain('model=(concat "stats." this)');
   expect(src).toContain('@submit.prevent="save()"');
   expect(src).toContain('@click="cancel()"');
   expect(src).toContain(':disabled="saving"');
@@ -196,6 +262,9 @@ test('character-stats-editor.handlebars carries the Alpine bindings', () => {
   expect(src).toContain(":class=\"{ 'is-loading': saving }\"");
   expect(src).toContain('x-show="error" x-text="error"');
 
+  // The number inputs this replaced must be gone, not merely hidden.
+  expect(src).not.toContain('stats-input');
+  expect(src).not.toContain('type="number"');
   expect(src).not.toContain('character-stats.js');
   expect(src).not.toContain('CharacterStats');
 });
@@ -270,4 +339,113 @@ test('the real #statsBox x-data seed survives a missing (undefined) stat', async
   await mountRealStatsSeed(withoutLuck);
   await tick();
   expect(document.getElementById('statsTotalSum').textContent).toBe('19');
+});
+
+// --- unify-readonly-grid ------------------------------------------------
+//
+// #statsReadOnly used to hand-roll its own boxes with the WIZARD's
+// vocabulary (.is-class filled / .is-locked dashed), while #statsEditor
+// (revealed by the very same Edit click) used the stat-blocks control's
+// vocabulary (.is-set / .is-empty), and /lfg/:id used a third rendering via
+// stat-blocks-readonly. Same stat, three different looks. This extracts the
+// REAL #statsReadOnly markup out of character.handlebars (still containing
+// its Handlebars syntax, Handlebars source and all) and compiles it with the
+// app's real helpers plus the real stat-blocks-readonly partial -- mirroring
+// extractStatsXData above -- so a regression in the shipped template fails
+// here, not just in a hand-copied stand-in.
+const extractStatsReadOnlyBlock = () => {
+  const startMarker = '<div id="statsReadOnly"';
+  const endMarker = '<div id="statsEditor"';
+  const startIdx = CHARACTER_SRC.indexOf(startMarker);
+  if (startIdx === -1) throw new Error('#statsReadOnly not found in character.handlebars');
+  const endIdx = CHARACTER_SRC.indexOf(endMarker, startIdx);
+  if (endIdx === -1) throw new Error('#statsEditor not found after #statsReadOnly');
+  return CHARACTER_SRC.slice(startIdx, endIdx);
+};
+
+const renderStatsReadOnly = (character) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks-readonly', fs.readFileSync(
+    path.join(__dirname, 'stat-blocks-readonly.handlebars'), 'utf8'
+  ));
+  return hb.compile(extractStatsReadOnlyBlock())({ character, statList });
+};
+
+const count = (html, cls) => (html.match(new RegExp(cls, 'g')) || []).length;
+
+// Isolates one stat's row out of the rendered grid by slicing from its
+// data-stat marker to the next one (or end of string for the last stat).
+// The sliced tail carries a few harmless characters of the next row's own
+// opening tag, but nothing in that prefix can match is-set/is-empty/points,
+// so it never contaminates the count.
+const statRowHtml = (html, stat) => {
+  const start = html.indexOf(`data-stat="${stat}"`);
+  if (start === -1) throw new Error(`data-stat="${stat}" not found in rendered grid`);
+  const nextStart = html.indexOf('data-stat="', start + 1);
+  return html.slice(start, nextStart === -1 ? html.length : nextStart);
+};
+
+const ZERO_STATS = Object.fromEntries(statList.map((stat) => [stat, 0]));
+
+test('the read-only grid uses is-set/is-empty and no longer emits the wizard vocabulary', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  expect(html).toContain('is-set');
+  expect(html).toContain('is-empty');
+  expect(html).not.toContain('is-class');
+  expect(html).not.toContain('is-locked');
+});
+
+test('a stat of 3 renders 3 filled and 2 empty blocks', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(count(row, 'is-set')).toBe(3);
+  expect(count(row, 'is-empty')).toBe(2);
+});
+
+test('a stat of 0 renders an all-empty row', () => {
+  const html = renderStatsReadOnly(ZERO_STATS);
+  const row = statRowHtml(html, 'vitality');
+  expect(count(row, 'is-set')).toBe(0);
+  expect(count(row, 'is-empty')).toBe(5);
+});
+
+test('a stat above 5 caps the row at 5 blocks and surfaces the real number', () => {
+  // Today {{#range 0 7}} renders seven boxes and spills the grid cell.
+  // stat-blocks-readonly caps at max, but a capped row alone would silently
+  // read as "5" for a stat of 7 -- the numeral alongside the row is what
+  // keeps that legible, same as the LFG party-stats caller and the editable
+  // control's "N points" text.
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 7 });
+  const row = statRowHtml(html, 'might');
+  expect(count(row, 'is-set')).toBe(5);
+  expect(count(row, 'is-empty')).toBe(0);
+  expect(row).toContain('7 points');
+});
+
+test('a stat within range shows no overflow numeral', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(row).not.toContain('points');
+});
+
+test('the read-only row keeps data-stat as a live selector hook', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  expect(html).toContain('data-stat="might"');
+});
+
+test('the dead data-value attribute is gone from character.handlebars', () => {
+  expect(CHARACTER_SRC).not.toContain('data-value=');
+});
+
+test('the lost title tooltips are gone from the read-only row', () => {
+  const html = renderStatsReadOnly({ ...ZERO_STATS, might: 3 });
+  const row = statRowHtml(html, 'might');
+  expect(row).not.toContain('title=');
+});
+
+test('the #statsReadOnly container line is unchanged by the conversion', () => {
+  expect(CHARACTER_SRC).toContain('id="statsReadOnly" class="wizard-stat-grid" x-show="!editing"');
 });

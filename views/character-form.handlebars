@@ -191,10 +191,13 @@
       {{#each statList}}
       <div class="column is-one-third">
         <div class="field">
-          <label class="label">{{capitalize this}}</label>
+          {{!-- A <div>, not a <label>: the stat is now a radiogroup of
+                blocks, not a single labellable control, so a <label> here
+                would have no `for` target and clicking it would move focus
+                nowhere. The group carries its own aria-label. --}}
+          <div class="label">{{capitalize this}}</div>
           <div class="control">
-            <input class="input" type="number" name="{{this}}"
-              value="{{#if (lookup ../character this)}}{{lookup ../character this}}{{else}}0{{/if}}" required>
+            {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5}}
           </div>
         </div>
       </div>

@@ -15,6 +15,7 @@ const homeRoutes = require('./routes/home');
 const authRoutes = require('./routes/auth');
 const charactersRoutes = require('./routes/characters');
 const lfgRoutes = require('./routes/lfg');
+const partyRoutes = require('./routes/party');
 const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
 const classesRoutes = require('./routes/classes');
@@ -75,6 +76,7 @@ const createApp = () => {
   app.use('/profile', profileRoutes);
   app.use('/characters', charactersRoutes);
   app.use('/lfg', lfgRoutes);
+  app.use('/party', partyRoutes);
   app.use('/missions', missionsRoutes);
   app.use('/classes', classesRoutes);
   app.use('/library', libraryRoutes);

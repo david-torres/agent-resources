@@ -1,0 +1,28 @@
+{{!-- Member chips for the current party. Remove sends only this member's id
+      and hx-includes #party-csv for the rest — see the note in
+      views/partials/party-panel.handlebars. --}}
+{{#if members.length}}
+<div class="tags are-medium">
+  {{#each members}}
+  <span class="tag is-primary" data-member-id="{{this.id}}">
+    {{this.name}}
+    {{#unless this.is_public}}
+    <span class="icon is-small" title="Private"><i class="fas fa-lock"></i></span>
+    {{/unless}}
+    {{#if this.is_deceased}}
+    <span class="icon is-small" title="Deceased"><i class="fas fa-skull"></i></span>
+    {{/if}}
+    <button type="button" class="delete is-small"
+      data-remove-character="{{this.id}}"
+      aria-label="Remove {{this.name}} from the party"
+      hx-get="/party/panel"
+      hx-vals='{"remove": "{{this.id}}"}'
+      hx-include="#party-csv"
+      hx-target="#party-panel"
+      hx-swap="outerHTML"></button>
+  </span>
+  {{/each}}
+</div>
+{{else}}
+<p class="has-text-grey">No members yet. Add characters from the left to build a party.</p>
+{{/if}}

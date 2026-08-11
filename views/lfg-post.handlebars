@@ -112,9 +112,8 @@
                     <div class="columns is-multiline">
                       {{#each ../statList}}
                       <div class="column is-6">
-                        <p><strong>{{capitalize this}}:</strong>
-                          {{#range 0 (lookup ../this.character this)}}+ {{/range}}
-                        </p>
+                        <p class="mb-1"><strong>{{capitalize this}}</strong></p>
+                        {{> stat-blocks-readonly value=(lookup ../this.character this) max=5}}
                       </div>
                       {{/each}}
                     </div>
@@ -173,20 +172,17 @@
   {{/if}}
 
   <div class="box mt-4">
-    <h4 class="title is-5">Party Stats</h4>
-    {{#if (gt approvedCount 0)}}
-    <div class="columns is-multiline">
-      {{#each statList}}
-      <div class="column is-3">
-        <p><strong>{{capitalize this}}:</strong>
-          {{#range 0 (lookup ../partyStats this)}}
-          +
-          {{/range}}
-          ({{lookup ../partyStats this}})
-        </p>
-      </div>
-      {{/each}}
+    <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+      <h4 class="title is-5 mb-0">Party Stats</h4>
+      {{#if (gt approvedCount 0)}}
+      <a class="button is-small is-light" href="/party?c={{partyCsv}}">
+        <span class="icon"><i class="fas fa-users"></i></span>
+        <span>Open in party tool</span>
+      </a>
+      {{/if}}
     </div>
+    {{#if (gt approvedCount 0)}}
+    {{> party-summary summary=partySummary}}
     {{else}}
     <p class="has-text-grey">No approved party members yet.</p>
     {{/if}}

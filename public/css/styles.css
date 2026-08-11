@@ -6,13 +6,13 @@
 :root {
   color-scheme: light;
 
-  /* Character wizard stat icon gray ramp (see .wizard-stat-box states). */
-  --wizard-stat-class: #6b6b6b;
+  /* Character wizard stat-box gray ramp (see .wizard-stat-box states). */
+  --wizard-stat-class: #1a1a1a;
   --wizard-stat-user: #595959;
   --wizard-stat-user-edge: #404040;
   --wizard-stat-empty: #f0f0f0;
   --wizard-stat-empty-hover: #e0e0e0;
-  --wizard-stat-locked: #d2d2d2;
+  --wizard-stat-preview: #a8a8a8;
 
   /* Elevation scale — shared drop-shadow tokens. Prefer these over ad-hoc
      box-shadow recipes so raised surfaces stay visually consistent.
@@ -1195,13 +1195,12 @@ a.dropdown-item:hover {
    - .wizard-stat-grid is a 4×3 grid (12 stats). Each cell is one stat.
    - .wizard-stat-row stacks the stat's name, boxes, and labels vertically
      so the cell reads top-to-bottom inside the grid.
-   - .wizard-stat-box represents a single point slot. The square-plus icon
-     carries the point state. The four visual
+   - .wizard-stat-box represents a single point slot. The four visual
      states match the spec:
-       .is-class       medium gray icon (class/personality assigned, not clickable)
-       .is-user        dark gray icon (user assigned, click to remove)
-       .is-assignable  outlined gray icon (click to add)
-       .is-locked      outlined muted icon (above the per-stat max, not clickable) */
+       .is-class       filled black (class/personality assigned, not clickable)
+       .is-user        dark gray    (user assigned, click to remove)
+       .is-assignable  light gray w/ dark border (click to add)
+       .is-locked      dashed border (above the per-stat max, not clickable) */
 .wizard-stat-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1240,51 +1239,132 @@ a.dropdown-item:hover {
 .wizard-stat-box {
   width: 1.4rem;
   height: 1.4rem;
-  display: inline-flex;
+  border: 2.5px solid var(--bulma-border, #1a1a1a);
+  border-radius: 3px;
+  background: var(--wizard-stat-empty);
+  cursor: default;
+  transition: transform 80ms ease, background 80ms ease, border-color 80ms ease;
+}
+.wizard-stat-box.is-class {
+  background: var(--wizard-stat-class);
+  border-color: var(--wizard-stat-class);
+  cursor: default;
+}
+.wizard-stat-box.is-user {
+  background: var(--wizard-stat-user);
+  border-color: var(--wizard-stat-user-edge);
+  cursor: pointer;
+}
+.wizard-stat-box.is-user:hover { background: var(--wizard-stat-user-edge); }
+.wizard-stat-box.is-assignable {
+  background: var(--wizard-stat-empty);
+  border-color: var(--wizard-stat-user);
+  cursor: pointer;
+}
+.wizard-stat-box.is-assignable:hover {
+  background: var(--wizard-stat-empty-hover);
+  transform: translateY(-1px);
+}
+.wizard-stat-box.is-locked {
+  background: transparent;
+  border: 2.5px dashed var(--bulma-border, #1a1a1a);
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+/* Interactive stat block control (views/partials/stat-blocks.handlebars).
+   Shares .wizard-stat-box with the wizard's grid so the two read as one
+   control. States:
+     .is-set      a committed point
+     .is-empty    an unfilled slot
+     .is-preview  what a click on the hovered block would produce -- used in
+                  BOTH directions, so hovering below the current value shows
+                  the drop rather than pretending nothing would change */
+.stat-blocks {
+  display: flex;
+  gap: 0.3rem;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: center;
-  color: var(--wizard-stat-empty);
-  cursor: default;
-  line-height: 1;
-  transition: transform 80ms ease, color 80ms ease;
 }
-.wizard-stat-box .fa-square-plus {
-  font-size: 1.35rem;
+.wizard-stat-box.is-set {
+  background: var(--wizard-stat-user);
+  border-color: var(--wizard-stat-user-edge);
+  cursor: pointer;
 }
+.wizard-stat-box.is-empty {
+  background: var(--wizard-stat-empty);
+  border-color: var(--wizard-stat-user);
+  cursor: pointer;
+}
+.wizard-stat-box.is-empty:hover {
+  background: var(--wizard-stat-empty-hover);
+}
+/* SPECIFICITY, do not reorder: the wizard's grid keeps .is-assignable /
+   .is-user on a box and LAYERS .is-preview on top, so the block under the
+   pointer matches a :hover rule and this one at the same time. The three
+   :hover rules above are (0,3,0); a bare `.wizard-stat-box.is-preview` is
+   (0,2,0) and loses, which paints the hovered block as empty and previews
+   N-1 filled instead of N -- an off-by-one in the exact gesture the preview
+   exists for. Matching :hover here makes that case (0,3,0) too, and this
+   block sits BELOW the :hover rules so the tie resolves in its favour. Same
+   equal-specificity-plus-source-order mechanism .is-preview already uses to
+   beat `.wizard-stat-box.is-assignable` (0,2,0) at :1272 for the blocks that
+   are NOT under the pointer. Moving this above the :hover rules, or dropping
+   the :hover selector, reintroduces the bug. */
+.wizard-stat-box.is-preview,
+.wizard-stat-box.is-preview:hover {
+  background: var(--wizard-stat-preview);
+  border-color: var(--wizard-stat-user-edge);
+  cursor: pointer;
+}
+/* A point the hovered click would give BACK. Dimming it (rather than
+   emptying it) keeps the row's shape stable while the pointer moves. */
+.wizard-stat-box.is-preview-off {
+  opacity: 0.4;
+}
+/* Roving tabindex means only one block per stat is in the tab order; that
+   block must show where focus is or keyboard users are navigating blind. */
+.stat-blocks [role="radio"]:focus-visible {
+  outline: 2px solid var(--bulma-link, #2e63b8);
+  outline-offset: 2px;
+}
+/* The numeral shown beside a full row when a stat exceeds its block count. */
+.stat-blocks-over {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--bulma-text, #4a4a4a);
+  margin-left: 0.15rem;
+}
+.stat-blocks.is-readonly .wizard-stat-box { cursor: default; }
 /* Touch devices: the 1.4rem pips are far too small to tap reliably. Adjacent
    pips can't each be a full 44px without overlapping their neighbours, so we
    enlarge the box and the gap to give a much bigger hit area on coarse
-   pointers while leaving the dense desktop layout untouched. */
+   pointers while leaving the dense desktop layout untouched.
+ *
+ * SOURCE ORDER, do not move this block up: it MUST stay below all three of
+ * the rules it overrides -- `.wizard-stat-boxes` (gap), `.wizard-stat-box`
+ * (width/height), and `.stat-blocks` (gap). A media query adds NO
+ * specificity and NO priority; `@media (pointer: coarse) { .stat-blocks }`
+ * and a plain `.stat-blocks` are both (0,1,0), so the later one in the file
+ * simply wins. This block used to sit between `.wizard-stat-box` and
+ * `.stat-blocks`, which made the .wizard-* half work and the .stat-blocks
+ * gap silently dead -- 2rem blocks with 0.3rem between them, the exact
+ * touch-target defect this block exists to prevent, hidden behind a rule
+ * that looked like the fix. Keeping every base rule above this one is what
+ * makes it apply. Same equal-specificity-plus-source-order mechanism the
+ * `.is-preview` rules above depend on. */
 @media (pointer: coarse) {
   .wizard-stat-box {
     width: 2rem;
     height: 2rem;
   }
-  .wizard-stat-boxes {
+  /* Both containers, not just the wizard's. .stat-blocks is the interactive
+     control that replaced the stat number inputs on the stats editor, the
+     level-up modal, the character form, and the class form. */
+  .wizard-stat-boxes,
+  .stat-blocks {
     gap: 0.5rem;
   }
-}
-.wizard-stat-box.is-class {
-  color: var(--wizard-stat-class);
-  cursor: default;
-}
-.wizard-stat-box.is-user {
-  color: var(--wizard-stat-user);
-  cursor: pointer;
-}
-.wizard-stat-box.is-user:hover { color: var(--wizard-stat-user-edge); }
-.wizard-stat-box.is-assignable {
-  color: var(--wizard-stat-user);
-  cursor: pointer;
-}
-.wizard-stat-box.is-assignable:hover {
-  color: var(--wizard-stat-user-edge);
-  transform: translateY(-1px);
-}
-.wizard-stat-box.is-locked {
-  color: var(--wizard-stat-locked);
-  cursor: not-allowed;
-  opacity: 0.8;
 }
 /* Coming-soon / disabled mode buttons in the character-new selector. */
 .is-disabled-mode {

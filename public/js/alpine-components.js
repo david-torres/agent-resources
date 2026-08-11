@@ -31,6 +31,56 @@ const slugify = (value) => (value || '')
   .replace(/-+/g, '-')
   .replace(/^-+|-+$/g, '');
 
+// The one rule every stat block control obeys: clicking the block at
+// 1-based position `slot` sets the stat to `slot`, EXCEPT that clicking the
+// block you are already on steps DOWN by one -- that is how a stat reaches
+// zero, and it matches what the wizard's grid already did when you clicked
+// a point you had assigned.
+//
+// `floor` is the number of points the click may not take the stat below
+// (class + personality points in the wizard; 0 everywhere else). `ceiling`
+// is the highest total the click may produce (the per-stat cap, or the
+// remaining point budget, whichever binds first).
+//
+// Exported on `window` rather than closed over because
+// public/js/character-wizard.js renders its own imperative grid and has to
+// apply the identical rule. Two copies of this arithmetic is exactly how
+// the wizard and the editor would drift apart. alpine-components.js is a
+// deferred <head> script and character-wizard.js a deferred body script, so
+// deferred-script document order guarantees this is defined first.
+const resolveStatTarget = ({ slot, current, floor = 0, ceiling }) => {
+  const target = slot === current ? slot - 1 : slot;
+  return Math.max(floor, Math.min(target, ceiling));
+};
+
+// The wizard's half of the same rule. Its grid is imperative and its boxes
+// carry a 0-BASED `data-slot`, and its floor and ceiling are functions of
+// class points, personality points, the per-stat cap, and what is left of
+// the point budget. Building those four arguments is exactly where an
+// off-by-one can hide -- `slot + 1` in particular -- so the construction
+// lives here, next to the rule and inside the tested unit, rather than in
+// public/js/character-wizard.js, which has no unit tests and cannot be
+// mounted under jsdom. character-wizard.js gathers the state; this decides
+// what a click means.
+//
+// Takes the raw 0-based data-slot; returns the stat's new TOTAL (class +
+// personality + user points), which is what the caller subtracts its class
+// and personality points from to get the user portion.
+const resolveWizardTarget = ({ slot, cp = 0, pp = 0, up = 0, remaining = 0, cap }) =>
+  resolveStatTarget({
+    // data-slot is 0-based; resolveStatTarget speaks 1-based positions.
+    slot: slot + 1,
+    current: cp + pp + up,
+    // Class- and personality-assigned points are the floor: no click can
+    // take the stat below them.
+    floor: cp + pp,
+    // Whichever binds first -- the per-stat cap for this level, or what the
+    // remaining budget can actually pay for.
+    ceiling: Math.min(cap, cp + pp + up + remaining)
+  });
+
+window.StatBlocks = { resolveStatTarget, resolveWizardTarget };
+
 document.addEventListener('alpine:init', () => {
   // Title -> slug sync for the page editor. Stops as soon as the slug is
   // edited by hand. On load, a slug that still matches its title is
@@ -78,9 +128,9 @@ document.addEventListener('alpine:init', () => {
       // Capture the x-data root here, not inside edit(). $el is bound to
       // whichever element invoked the current method — inside edit() that
       // is the Edit <button> itself (called via @click="edit()"), which has
-      // no .stats-input descendants, so querySelector off $el there always
+      // no .stat-blocks descendants, so querySelector off $el there always
       // returns null and focus silently never moves. init() runs with $el
-      // bound to the x-data root, which does contain the inputs.
+      // bound to the x-data root, which does contain the blocks.
       this.root = this.$el;
     },
 
@@ -93,7 +143,14 @@ document.addEventListener('alpine:init', () => {
       this.error = '';
       this.editing = true;
       this.$nextTick(() => {
-        const first = this.root.querySelector('.stats-input');
+        // The blocks use a roving tabindex, so the one tabbable block per
+        // stat is the right landing spot; the fallback covers the tick
+        // before Alpine has evaluated :tabindex on a freshly-revealed
+        // editor. Still scoped to this.root, not $el, for the reason in
+        // init() above: $el inside edit() is the Edit button, which
+        // contains no blocks at all.
+        const first = this.root.querySelector('.stat-blocks [role="radio"][tabindex="0"]')
+          || this.root.querySelector('.stat-blocks [role="radio"]');
         if (first) first.focus();
       });
     },
@@ -137,6 +194,120 @@ document.addEventListener('alpine:init', () => {
       }).finally(() => {
         this.saving = false;
       });
+    }
+  }));
+
+  // Star-rating stat selector. Backs every stat-editing surface: the inline
+  // stats editor, the level-up modal, the character form, and the class
+  // form. Replaces the number inputs all four used to render.
+  //
+  // `value` is the committed points, `preview` the block the pointer is
+  // currently over (or null). `previewValue` deliberately runs the hovered
+  // block through the same resolveStatTarget the click uses, so the preview
+  // shows what will HAPPEN, not merely what is under the cursor -- hovering
+  // the block you are already on previews one lower, because that is what
+  // clicking it does.
+  //
+  // Keyboard commits immediately rather than previewing: arrowing IS the
+  // preview, and a focus-driven preview would fight the click preview for
+  // the same `preview` slot every time focusBlock() moved focus after a
+  // click.
+  Alpine.data('statBlocks', (initial, max, stat) => ({
+    value: parseInt(initial, 10) || 0,
+    preview: null,
+    max: max,
+    stat: stat,
+
+    // A stat already above `max` (the editor historically allowed 0-20) can
+    // step DOWN through the blocks but must never be raised by them, so the
+    // ceiling floats up to the current value and ratchets back down as the
+    // value falls.
+    get ceiling() {
+      return Math.max(this.max, this.value);
+    },
+
+    get previewValue() {
+      if (this.preview === null) return null;
+      return resolveStatTarget({
+        slot: this.preview, current: this.value, floor: 0, ceiling: this.ceiling
+      });
+    },
+
+    // Returns an OBJECT, not a class string, because the partial's blocks
+    // are server-rendered and already carry `is-set`/`is-empty` in the
+    // markup Alpine finds. Alpine's string form only tracks the classes it
+    // added itself and can remove only those, so a served `is-set` could
+    // never be taken off again -- a block restored from an hx-boost history
+    // snapshot would be stuck filled. The object form adds and removes by
+    // truthiness regardless of who put the class there.
+    boxClass(i) {
+      const shown = this.previewValue;
+      const previewing = shown !== null;
+      return {
+        'is-preview': previewing && i <= shown,
+        'is-set': !previewing && i <= this.value,
+        'is-empty': previewing ? i > shown : i > this.value
+      };
+    },
+
+    tabIndex(i) {
+      // Roving tabindex: the grid costs one tab stop per stat, exactly what
+      // the 12 number inputs it replaces cost.
+      return i === Math.max(1, Math.min(this.value, this.max)) ? 0 : -1;
+    },
+
+    set(i) {
+      this.commit(resolveStatTarget({
+        slot: i, current: this.value, floor: 0, ceiling: this.ceiling
+      }));
+      this.focusBlock(this.value);
+    },
+
+    commit(next) {
+      const clamped = Math.max(0, Math.min(next, this.ceiling));
+      this.preview = null;
+      if (clamped === this.value) return;
+      this.value = clamped;
+      // Surfaces without Alpine state (the level-up modal) read the hidden
+      // input, which fires no native `input` event when set programmatically.
+      // Deferred to $nextTick: Alpine's own :value effect on that hidden
+      // input hasn't flushed to the DOM yet at the point `value` is
+      // assigned, so a listener that (like the level-up modal's) re-reads
+      // every hidden input synchronously would sum the stale value for
+      // whichever stat just changed -- one interaction behind -- if the
+      // event went out before the DOM write it's reporting.
+      this.$nextTick(() => {
+        this.$dispatch('stat-change', { stat: this.stat, value: this.value });
+      });
+    },
+
+    focusBlock(n) {
+      const idx = Math.max(1, Math.min(n, this.max));
+      this.$nextTick(() => {
+        const el = this.$root.querySelectorAll('[role="radio"]')[idx - 1];
+        if (el) el.focus();
+      });
+    },
+
+    key(e) {
+      if (e.key === ' ' || e.key === 'Enter') {
+        const all = Array.prototype.slice.call(this.$root.querySelectorAll('[role="radio"]'));
+        const idx = all.indexOf(e.target);
+        if (idx === -1) return;
+        e.preventDefault();
+        this.set(idx + 1);
+        return;
+      }
+      let next;
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') next = this.value - 1;
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') next = this.value + 1;
+      else if (e.key === 'Home') next = 0;
+      else if (e.key === 'End') next = this.max;
+      else return;
+      // Otherwise arrows scroll the page out from under the control.
+      e.preventDefault();
+      this.commit(next);
+      this.focusBlock(this.value);
     }
   }));
 

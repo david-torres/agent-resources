@@ -196,13 +196,27 @@ async function seedNavItems() {
         if (searchChars.error) console.error('Error creating Search Characters:', searchChars.error);
         else console.log('Created Search Characters');
 
+        const virtualParty = await createNavItemDirect({
+            label: 'Virtual Party',
+            type: 'link',
+            url: '/party',
+            icon: 'fas fa-users',
+            parent_id: socialId,
+            position: 2,
+            requires_auth: false,
+            requires_admin: false,
+            is_active: true
+        });
+        if (virtualParty.error) console.error('Error creating Virtual Party:', virtualParty.error);
+        else console.log('Created Virtual Party');
+
         const searchMissions = await createNavItemDirect({
             label: 'Search Mission Logs',
             type: 'link',
             url: '/missions/search',
             icon: 'fas fa-scroll',
             parent_id: socialId,
-            position: 2,
+            position: 3,
             requires_auth: false,
             requires_admin: false,
             is_active: true

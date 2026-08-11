@@ -1,0 +1,37 @@
+{{!-- The party panel owns the current membership. #party-csv is the single
+      source of truth for it: every Add and Remove hx-includes this input
+      rather than carrying membership in its own URL, because the Add buttons
+      live in the left column, which does not re-render when this panel swaps.
+      A baked-in URL would go stale after the first add. routes/party.js sets
+      HX-Push-Url on the response so the address bar follows. --}}
+<div id="party-panel" class="box">
+  <input type="hidden" id="party-csv" name="c" value="{{partyCsv}}">
+
+  <h3 class="title is-4">Party <span class="tag is-light">{{summary.memberCount}}/8</span></h3>
+
+  {{#if droppedOverCap}}
+  <div class="notification is-warning is-light">
+    A party is capped at 8 members. {{droppedOverCap}} {{#if (eq droppedOverCap 1)}}character was{{else}}characters were{{/if}} left out.
+  </div>
+  {{/if}}
+
+  {{#if unresolved}}
+  <div class="notification is-warning is-light">
+    {{unresolved}} {{#if (eq unresolved 1)}}character{{else}}characters{{/if}} could not be loaded. They may be private or no longer exist.
+  </div>
+  {{/if}}
+
+  {{> party-roster members=members}}
+
+  {{#if privateCount}}
+  <div class="notification is-info is-light mt-3">
+    <span class="icon"><i class="fas fa-lock"></i></span>
+    {{privateCount}} {{#if (eq privateCount 1)}}member is private{{else}}members are private{{/if}}.
+    Anyone you share this link with will see a {{subtract summary.memberCount privateCount}}-member party.
+  </div>
+  {{/if}}
+
+  <hr>
+
+  {{> party-summary summary=summary}}
+</div>
