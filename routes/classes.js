@@ -766,7 +766,19 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     // aborted with htmx:targetError before ever issuing a request. That is
     // fixed in the template, not here -- HX-Location cannot help a request
     // that is never sent.
-    return res.header('HX-Location', '/classes/my').send();
+    //
+    // Delete returns you to the list you came from. The My PCCs list is served
+    // at /classes/my (this router is mounted at /classes, see app.js) -- NOT
+    // /my-classes, which is only the activeNav key and matches no route.
+    let dest = '/classes';
+    try {
+        if (new URL(req.get('HX-Current-URL')).pathname === '/classes/my') {
+            dest = '/classes/my';
+        }
+    } catch {
+        // Missing/unparseable HX-Current-URL — fall back to /classes.
+    }
+    return res.header('HX-Location', dest).send();
 }));
 
 module.exports = router;

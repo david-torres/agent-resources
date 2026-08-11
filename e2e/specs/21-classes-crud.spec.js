@@ -170,7 +170,9 @@ test('a class can be deleted from its own detail page', async ({ page }) => {
   // The other half of this button's fix: with hx-target="closest tr" on a
   // page that has no <tr>, htmx aborted at issueAjaxRequest with
   // htmx:targetError before the request (and before the confirm dialog), so
-  // nothing happened at all. Landing on /classes/my proves the DELETE was
-  // actually issued and its HX-Location honoured.
-  await page.waitForURL((url) => url.pathname === '/classes/my', { timeout: 15_000 });
+  // nothing happened at all. Navigating away at all proves the DELETE was
+  // actually issued and its HX-Location honoured. The destination is /classes
+  // rather than /classes/my because the route sends you back to the list you
+  // came from, and this delete came from the detail page (routes/classes.js).
+  await page.waitForURL((url) => url.pathname === '/classes', { timeout: 15_000 });
 });

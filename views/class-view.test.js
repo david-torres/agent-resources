@@ -76,6 +76,17 @@ test('class-view does not inline the clearing logic itself', () => {
   expect(SRC).not.toContain('$refs.result.innerHTML');
 });
 
+// The class-view page has no <table>, so `hx-target="closest tr"` has no
+// ancestor to resolve against: htmx 2 throws htmx:targetError and never even
+// sends the DELETE. The button must keep its hx-delete + hx-confirm but carry
+// no hx-target at all (the route answers with HX-Location, mirroring
+// missions/characters delete).
+test('the delete button keeps hx-delete and hx-confirm but has no closest-tr hx-target', () => {
+  expect(SRC).toContain('hx-delete="/classes/{{class.id}}"');
+  expect(SRC).toContain('hx-confirm="Are you sure you want to delete this class?"');
+  expect(SRC).not.toContain('hx-target="closest tr"');
+});
+
 // Mirrors the real duplicate-modal markup closely enough to exercise the
 // shared shell: name-scoped open/close, Escape, and the body scroll lock.
 const DUPLICATE_MODAL = `
