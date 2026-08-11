@@ -112,7 +112,7 @@
                     @click="$dispatch('open-modal', 'duplicate-{{this.id}}')">
               Duplicate…
             </button>
-            <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-target="#row-{{this.id}}" hx-swap="outerHTML" hx-confirm="Delete this class?">Delete</button>
+            <button class="button is-danger" hx-delete="/classes/{{this.id}}" hx-confirm="Delete this class?">Delete</button>
           </div>
           <!-- Duplicate Modal -->
           {{!-- Object form is load-bearing: the string form (`show && 'is-active'`)

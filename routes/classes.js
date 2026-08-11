@@ -756,7 +756,15 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     if (error) {
         return sendError(req, res, error);
     }
-    return res.status(204).send();
+    let dest = '/classes';
+    try {
+        if (new URL(req.get('HX-Current-URL')).pathname === '/my-classes') {
+            dest = '/my-classes';
+        }
+    } catch {
+        // Missing/unparseable HX-Current-URL — fall back to /classes.
+    }
+    return res.header('HX-Location', dest).send();
 }));
 
 module.exports = router;
