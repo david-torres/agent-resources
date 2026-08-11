@@ -28,7 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      # Pinned for the same reason as integration.yml -- see the note there.
       - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.4
       - run: bun install --frozen-lockfile
       - run: supabase start
       # Safe here, and only here: CI gets a fresh ephemeral database. The
