@@ -303,15 +303,28 @@ test.describe('the deferred post-load refresh', () => {
     await expect(page.locator('a[href="/profile"]').first()).toBeVisible();
   });
 
-  // DELIBERATELY RED -- a real product defect, reported and not fixed.
+  // GREEN, and load-bearing: this now guards the fix rather than characterising
+  // the defect. (It was committed DELIBERATELY RED and this block described the
+  // defect as unfixed; the fix landed in the same squash as the test, so the
+  // wording was never brought up to date.)
   //
-  // 43c6120's guard re-reads window.location when the timer fires and bails if
-  // it moved. In a real browser that is not enough: a boosted navigation
-  // updates window.location only when its swap COMPLETES, so a click inside
-  // the 100 ms window that has not come back yet is invisible to the guard.
-  // redirectTo(current) then fires, and its response lands after the boosted
-  // swap and overwrites it -- leaving the address bar on the new page and the
-  // body on the old one, the exact divergence af2b098 set out to end.
+  // The defect: 43c6120's guard re-reads window.location when the timer fires
+  // and bails if it moved. In a real browser that is not enough -- a boosted
+  // navigation updates window.location only when its swap COMPLETES, so a click
+  // inside the 100 ms window that has not come back yet is invisible to the
+  // guard. redirectTo(current) then fires, its response lands after the boosted
+  // swap and overwrites it, leaving the address bar on the new page and the body
+  // on the old one: the exact divergence af2b098 set out to end.
+  //
+  // The fix is the second half of the condition at public/js/app.js:1095,
+  //
+  //   if (now !== current || _boostedNavigationInFlight()) return;
+  //
+  // added by "fix: don't let the deferred auth refresh stomp an in-flight
+  // boosted nav (ar-h6rt)". The location read covers a boosted navigation that
+  // already COMPLETED; _boostedNavigationInFlight() covers one still on the
+  // wire, which is the half this test exercises. Delete that call and this test
+  // goes red again -- which is the point of keeping it.
   //
   // Measured with no network shaping at all (natural click straight after
   // commit): it collides on its own, at a rate that swings with machine load
@@ -327,16 +340,23 @@ test.describe('the deferred post-load refresh', () => {
   // request for /privacy), which every valid fix preserves. It deliberately
   // does not gate on the timer's own marker.
   //
-  // Consequences worth stating plainly: deleting 43c6120's guard entirely
-  // changes nothing THIS FILE can see -- the shaping deliberately puts the
-  // boosted request outside the 100 ms window, which is exactly the regime the
-  // guard cannot help in -- while making the timer bail unconditionally turns
-  // this test GREEN and fails the positive control above. So this is red by
-  // design and flips on a genuine fix, not permanently broken. 43c6120 is not
-  // uncovered: the unit tier pins it (test/auth-redirect-history.test.js:259,
-  // "a boosted navigation away from the page before the deferred refresh fires
-  // is not undone by a stale redirect", fails with the guard deleted), and the
-  // guard measurably narrows the window rather than doing nothing.
+  // Which guard this test actually pins, stated plainly: deleting 43c6120's
+  // location read changes nothing THIS FILE can see -- the shaping deliberately
+  // puts the boosted request outside the 100 ms window, exactly the regime that
+  // read cannot help in. It is _boostedNavigationInFlight() that this test
+  // holds. 43c6120 is not uncovered either: the unit tier pins it
+  // (test/auth-redirect-history.test.js:259, "a boosted navigation away from the
+  // page before the deferred refresh fires is not undone by a stale redirect",
+  // fails with the guard deleted).
+  //
+  // Making the timer bail unconditionally would also turn this test green -- and
+  // fail the positive control above, which is why that control is there.
+  //
+  // Being a race, this occasionally fails for reasons that are not this defect:
+  // under parallel workers the local Supabase stack intermittently answers "An
+  // invalid response was received from the upstream server" (Kong reporting a
+  // failed upstream), which lands on a random spec, this one included. A failure
+  // here is only meaningful if the assertions below are what failed.
   test('a boosted navigation started inside the deferred-refresh window is not overwritten', async ({ page, baseURL }) => {
     const origin = new URL(baseURL).origin;
     const documents = [];

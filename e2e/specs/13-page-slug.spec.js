@@ -104,11 +104,14 @@
 // seeded published + public -- anything else 404s on the edit form and this spec
 // could not run at all.
 //
-// Consequently the round-trip test below is DELIBERATELY RED, in the same way
-// as 03b-class-reassignment.spec.js and the reds in 10/11. It is split from the
-// client-side half ("the form posts the unchanged slug"), which is what ar-7v3k
-// check 8 is actually about and which passes today -- so a fix to the model
-// layer turns exactly one test green and nothing else moves.
+// The round-trip test below was committed DELIBERATELY RED against that defect,
+// in the same way as 03b-class-reassignment.spec.js and the reds in 10/11. It is
+// GREEN now: routes/pages.js:129 threads the caller's client into the model
+// (`updatePage(id, updates, res.locals.supabase)`), which is precisely the fix
+// this file prescribed, so the UPDATE runs as the signed-in admin and RLS
+// matches. It stays split from the client-side half ("the form posts the
+// unchanged slug") -- that split is what kept the model-layer fix to exactly one
+// test flipping.
 //
 //   3. `fill()` IS NOT TYPING. It sets .value and dispatches ONE input event.
 //      That is enough for x-model and @input, but the behaviour under test is
@@ -496,13 +499,15 @@ test('submitting after a title edit posts the ORIGINAL slug', async ({ page }) =
   });
 });
 
-// DELIBERATELY RED -- see the "PRE-EXISTING PRODUCT DEFECT" block in the header.
-// This is the server-side half of the same claim, and it fails on the FIRST
-// assertion after the submit: POST /pages/:id answers 404 because
-// models/pages.js runs the UPDATE as the anon role and RLS matches no rows.
-// Nothing about the slug behaviour is broken; the page simply cannot be saved.
-// Thread `res.locals.supabase` into models/pages.js and this test goes green
-// with no change to the spec.
+// The server-side half of the claim in the "PRE-EXISTING PRODUCT DEFECT" block
+// in the header -- now green, and guarding the fix. It used to fail on the FIRST
+// assertion after the submit: POST /pages/:id answered 404 because
+// models/pages.js ran the UPDATE as the anon role and RLS matched no rows.
+// Nothing about the slug behaviour was ever broken; the page simply could not be
+// saved. The prescribed fix -- thread the caller's client through -- is in place
+// at routes/pages.js:129, and `updatePage(id, updates, client = supabase)` still
+// defaults to the anon client, so a call site that forgets the third argument
+// puts this test straight back to red.
 test('saving a title edit round-trips the edit and leaves the public URL alone', async ({ page }) => {
   await openForm(page, editUrl(savePage.id));
 

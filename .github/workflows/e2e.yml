@@ -1,12 +1,32 @@
 name: E2E browser tests
 
-# No `push: branches: [main]` trigger. The suite currently carries nine
-# deliberate characterization tests that are red by design, so it exits
-# non-zero unconditionally and cannot gate a branch. Add the push trigger
-# only after those findings are triaged --- see
-# docs/superpowers/reports/2026-08-03-e2e-findings.md, section 8.
+# The nine deliberate characterization tests that used to make this suite exit
+# non-zero unconditionally (docs/superpowers/reports/2026-08-03-e2e-findings.md,
+# measured on e2e-browser-tier at 020cc69: 71 passed, 9 failed) have all been
+# triaged -- the ar-h6rt and ar-7v3k fixes landed and flipped them green, which
+# is what they were built to do. The suite is 109/109, so it can gate a branch
+# and the push trigger is back.
+#
+# Note this workflow could not run at all between 2026-07-10 and 2026-08-11:
+# `supabase start` failed at config parse on every branch until the CLI pin
+# below. Read any green older than that as "did not execute", not "passed".
 on:
   pull_request:
+    paths:
+      - 'public/**'
+      - 'views/**'
+      - 'routes/**'
+      - 'models/**'
+      - 'services/**'
+      - 'util/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'e2e/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'bun.lock'
+  push:
+    branches: [main]
     paths:
       - 'public/**'
       - 'views/**'
