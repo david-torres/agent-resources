@@ -1,12 +1,32 @@
 name: E2E browser tests
 
-# No `push: branches: [main]` trigger. The suite currently carries nine
-# deliberate characterization tests that are red by design, so it exits
-# non-zero unconditionally and cannot gate a branch. Add the push trigger
-# only after those findings are triaged --- see
-# docs/superpowers/reports/2026-08-03-e2e-findings.md, section 8.
+# The nine deliberate characterization tests that used to make this suite exit
+# non-zero unconditionally (docs/superpowers/reports/2026-08-03-e2e-findings.md,
+# measured on e2e-browser-tier at 020cc69: 71 passed, 9 failed) have all been
+# triaged -- the ar-h6rt and ar-7v3k fixes landed and flipped them green, which
+# is what they were built to do. The suite is 109/109, so it can gate a branch
+# and the push trigger is back.
+#
+# Note this workflow could not run at all between 2026-07-10 and 2026-08-11:
+# `supabase start` failed at config parse on every branch until the CLI pin
+# below. Read any green older than that as "did not execute", not "passed".
 on:
   pull_request:
+    paths:
+      - 'public/**'
+      - 'views/**'
+      - 'routes/**'
+      - 'models/**'
+      - 'services/**'
+      - 'util/**'
+      - 'supabase/**'
+      - 'scripts/**'
+      - 'e2e/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - 'bun.lock'
+  push:
+    branches: [main]
     paths:
       - 'public/**'
       - 'views/**'
@@ -28,7 +48,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      # Pinned for the same reason as integration.yml -- see the note there.
       - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.4
       - run: bun install --frozen-lockfile
       - run: supabase start
       # Safe here, and only here: CI gets a fresh ephemeral database. The
@@ -46,6 +69,14 @@ jobs:
       # (dummy@testing.com) against whatever SUPABASE_URL happens to point at.
       # Writing the file keeps the check honest: if this workflow were ever
       # wired to a cloud project, the guard would still refuse.
+      #
+      # OPENAI_API_KEY is a placeholder, never a real key. util/mission-import.js
+      # builds an OpenAIChatApi at import time and llm-api throws on an empty
+      # key, and app.js -> routes/characters.js -> util/character-import.js
+      # reaches it on every boot -- so without this the Playwright webServer
+      # exits 1 before serving a single request. Nothing in the suite calls the
+      # model; the value only has to be non-empty. Same reasoning as the
+      # placeholder in scripts/run-tests.mjs, which covers the other tiers.
       - name: Write .env for the local stack
         run: |
           eval "$(supabase status -o env)"
@@ -55,6 +86,7 @@ jobs:
           SUPABASE_SECRET_KEY=$SERVICE_ROLE_KEY
           SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY
           SUPABASE_DB_URL=$DB_URL
+          OPENAI_API_KEY=test-openai-key
           EOF
       - name: Seed local app data
         run: |

@@ -30,7 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      # Pinned, and kept in step with the CLI developers run locally. The
+      # action's own default is 2.20.3, which predates keys supabase/config.toml
+      # uses (auth.web3, auth.oauth_server, storage.s3_protocol, storage.vector,
+      # db.network_restrictions, db.migrations.enabled, ...), so `supabase start`
+      # failed at config parse before this job ever reached a test. Bump this
+      # alongside the local CLI, not on its own.
       - uses: supabase/setup-cli@v1
+        with:
+          version: 2.84.4
       - run: bun install --frozen-lockfile
       - run: supabase start
       - run: supabase db reset

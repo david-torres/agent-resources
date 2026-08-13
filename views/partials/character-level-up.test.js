@@ -67,10 +67,28 @@ test('the htmx:afterSwap re-init hub is untouched', () => {
   // to change (e.g. ar-h6rt moved it to `document` so it survives the
   // redirectTo() body swap) without this test failing.
   expect(src).toMatch(/document(?:\.body)?\.addEventListener\('htmx:afterSwap'/);
-  expect(src).toContain('_initTooltips(targetEl || document)');
-  expect(src).toContain('_initSearchableSelects(targetEl || document)');
-  expect(src).toContain('_initImageCroppers(targetEl || document)');
-  expect(src).toContain('_initToastUIEditors(targetEl || document)');
+  // D4 fix: for hx-swap="outerHTML" the swapped-out evt.detail.target is
+  // detached from the document by the time this handler runs, so scoping
+  // the initializers to it silently no-ops all of them app-wide. The
+  // handler now computes a single swapRoot -- targetEl only when it's still
+  // connected, otherwise the whole document -- and passes THAT to every
+  // synchronous initializer. This pins the guard itself (so a revert to the
+  // old `targetEl || document` per-call pattern fails here) without pinning
+  // each initializer's argument spelling beyond "uses the computed root."
+  expect(src).toMatch(/const swapRoot = \(targetEl && targetEl\.isConnected\) \? targetEl : document;/);
+  expect(src).toContain('_initTooltips(swapRoot)');
+  expect(src).toContain('_initSearchableSelects(swapRoot)');
+  expect(src).toContain('_initImageCroppers(swapRoot)');
+
+  // The ToastUI init is deferred 150ms, and a follow-up swap inside that
+  // window can detach a targetEl that WAS connected when swapRoot was
+  // computed -- which would restore the same no-op. So it must not close over
+  // swapRoot; it re-runs the isConnected guard inside the timeout and uses
+  // that fresh root. Both halves are pinned: the recomputation must exist,
+  // and the deferred call must not be handed the stale outer root.
+  expect(src).toMatch(/const lateRoot = \(targetEl && targetEl\.isConnected\) \? targetEl : document;/);
+  expect(src).toContain('_initToastUIEditors(lateRoot)');
+  expect(src).not.toContain('_initToastUIEditors(swapRoot)');
 });
 
 test('no template calls App.openModal or App.closeModal', () => {

@@ -2,7 +2,7 @@
 const { test, expect, afterAll } = require('bun:test');
 const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
-const { createCharacter } = require('./character');
+const { createCharacter, updateCharacter } = require('./character');
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const email = `character-atomic-${suffix}@example.test`;
@@ -80,4 +80,51 @@ test('atomic character create rolls back the parent when a child write fails', a
   expect(error).toBeTruthy();
   const { data } = await supabaseAdmin.from('characters').select('id').eq('name', name);
   expect(data).toHaveLength(0);
+});
+
+// The UPDATE branch of save_character_atomic had no coverage here, which is how
+// `FROM jsonb_populate_record(current, p_character)` shipped: it references the
+// UPDATE's own target alias, Postgres raises "invalid reference to FROM-clause
+// entry for table \"current\"", and every character edit 500'd. Both tests above
+// take the INSERT branch, so this suite stayed green against a database built
+// from migrations alone. Fixed by 20260811000000_fix_save_character_atomic_update.
+//
+// Asserted against the row itself, not just the returned error: a function that
+// silently matched nothing would report no error while changing nothing.
+test('atomic character update persists the change to the parent row', async () => {
+  await setup();
+  const { data: created, error: createError } = await createCharacter(
+    input(`Atomic update ${suffix}`), profile
+  );
+  expect(createError).toBeNull();
+
+  const renamed = `Atomic updated ${suffix}`;
+  const { error } = await updateCharacter(
+    created.id, { ...input(renamed), id: created.id }, profile
+  );
+  expect(error).toBeFalsy();
+
+  const { rows } = await db.query('select name from characters where id = $1', [created.id]);
+  expect(rows[0]?.name).toBe(renamed);
+});
+
+// Driven straight at the RPC, not through updateCharacter: CharacterService
+// throws a 403 on ownership long before the function runs, so the service-level
+// path cannot reach this guard. The pre-read the fix introduces IS the guard --
+// a mismatched creator must raise, not quietly match zero rows and report
+// success.
+test('save_character_atomic raises rather than updating a row the creator does not own', async () => {
+  await setup();
+  const { data: created } = await createCharacter(input(`Atomic foreign ${suffix}`), profile);
+
+  const { error } = await supabaseAdmin.rpc('save_character_atomic', {
+    p_character_id: created.id,
+    p_creator_id: '00000000-0000-4000-8000-000000000002',
+    p_character: { name: `Atomic hijacked ${suffix}` },
+    p_traits: [], p_gear: [], p_abilities: [], p_perks: []
+  });
+  expect(error).toBeTruthy();
+
+  const { rows } = await db.query('select name from characters where id = $1', [created.id]);
+  expect(rows[0]?.name).toBe(`Atomic foreign ${suffix}`);
 });

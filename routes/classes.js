@@ -756,10 +756,24 @@ router.delete('/:id', isAuthenticated, asyncHandler(async (req, res) => {
     if (error) {
         return sendError(req, res, error);
     }
+    // HX-Location, not 204: htmx does not swap on 204, so the my-classes
+    // delete button (my-classes.handlebars:115) left the row on screen even on
+    // success. Matches how the character, mission, and LFG delete routes
+    // already answer.
+    //
+    // The class-view delete button was inert for a SECOND, unrelated reason:
+    // it carried hx-target="closest tr" on a page with no <tr>, so htmx
+    // aborted with htmx:targetError before ever issuing a request. That is
+    // fixed in the template, not here -- HX-Location cannot help a request
+    // that is never sent.
+    //
+    // Delete returns you to the list you came from. The My PCCs list is served
+    // at /classes/my (this router is mounted at /classes, see app.js) -- NOT
+    // /my-classes, which is only the activeNav key and matches no route.
     let dest = '/classes';
     try {
-        if (new URL(req.get('HX-Current-URL')).pathname === '/my-classes') {
-            dest = '/my-classes';
+        if (new URL(req.get('HX-Current-URL')).pathname === '/classes/my') {
+            dest = '/classes/my';
         }
     } catch {
         // Missing/unparseable HX-Current-URL — fall back to /classes.

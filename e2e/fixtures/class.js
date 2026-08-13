@@ -41,11 +41,22 @@ const seedClass = async (prefix, {
     { name: `${prefix} E2E Ability`, description: 'Fixture ability' },
     { name: `${prefix} E2E Ability Two`, description: 'Fixture ability two' }
   ],
-  gear = []
+  gear = [],
+  // { stat: points }, mirrors the classes.stat_spread column (migration
+  // 20260609_classes_stat_spread) that routes/classes.js's parseStatSpread
+  // populates from the class-form UI. Left as the column's own default
+  // ({}) so existing callers see no behavior change. The character wizard
+  // (public/js/character-wizard.js:718-719, populatePersonalitySelects)
+  // requires >= 2 keys here before it will unlock the trait1/trait2
+  // selects -- a caller driving the wizard must override this.
+  statSpread = {}
 } = {}) => {
   const { data, error } = await supabaseAdmin
     .from('classes')
-    .insert({ name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities, created_by: createdBy })
+    .insert({
+      name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities,
+      created_by: createdBy, stat_spread: statSpread
+    })
     .select()
     .single();
   if (error) throw error;

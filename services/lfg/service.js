@@ -30,8 +30,15 @@ const normalizeJoinRequests = (rows) => {
 
 const serializePostForAgent = (post, { agentProfileId, includePending }) => {
   const host = post.creator || post.host || {};
+  // `&& r.character` matches the web UI's party filter (routes/lfg.js:102) and
+  // is what makes lfg_join_requests_character_id_fkey's ON DELETE SET NULL
+  // safe: deleting a character leaves its approved player rows in place with a
+  // null character_id. Without this they serialise as ghost roster entries
+  // ({character_id: null, name: null, ...}) AND inflate player_count -- a
+  // published contract on GET /api/agent/lfg/posts[/:id] -- so the web UI
+  // would show 0 players while the agent API reported 1.
   const roster = (post.join_requests || [])
-    .filter((r) => r.status === 'approved' && r.join_type === 'player')
+    .filter((r) => r.status === 'approved' && r.join_type === 'player' && r.character)
     .map((r) => ({
       character_id: r.character_id,
       name: r.character?.name || null,

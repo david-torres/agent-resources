@@ -28,7 +28,18 @@ module.exports = defineConfig({
   expect: { timeout: 10_000 },
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
-  retries: process.env.CI ? 1 : 0,
+  // 2, not 1: under parallel workers the local Supabase stack intermittently
+  // answers "An invalid response was received from the upstream server" -- Kong
+  // reporting a failed upstream, not an application or test fault. It lands on a
+  // random spec (05-level-up-modal, 14-lfg-controls, 21-classes-crud and
+  // 21-lfg-crud have all taken it) at roughly 2 runs in 7 locally. One retry
+  // absorbed it on every CI run so far, but this suite now gates main
+  // (.github/workflows/e2e.yml), and one retry against that base rate is thin.
+  //
+  // This buys tolerance; it does not fix the cause. If it starts biting, the
+  // cause is stack capacity -- look at the pooler settings in
+  // supabase/config.toml rather than raising this number again.
+  retries: process.env.CI ? 2 : 0,
   forbidOnly: !!process.env.CI,
   reporter: [
     ['list'],

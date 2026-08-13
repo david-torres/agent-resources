@@ -5,7 +5,7 @@
 // so nothing happens client-side even when the deletion succeeds. The intended
 // contract mirrors missions (routes/missions.js) and characters
 // (routes/characters.js): on success respond with an HX-Location header —
-// '/my-classes' when the request's HX-Current-URL pathname is /my-classes,
+// '/classes/my' when the request's HX-Current-URL pathname is /classes/my,
 // otherwise '/classes'.
 //
 // Mocking recipe mirrors routes/classes-stat-spread.test.js: real
@@ -116,13 +116,18 @@ const deleteClassRequest = (extraHeaders = {}) =>
     },
   });
 
-test('DELETE /classes/:id from /my-classes responds with HX-Location /my-classes', async () => {
+// /classes/my is the real My PCCs path (routes/classes.js:118, router mounted
+// at /classes). An earlier version of this test fed the handler
+// http://localhost:3000/my-classes, a path that matches no route: the
+// conditional could never fire against a real browser URL, so the test passed
+// while every delete in the running app redirected to /classes.
+test('DELETE /classes/:id from /classes/my responds with HX-Location /classes/my', async () => {
   const res = await deleteClassRequest({
-    'HX-Current-URL': 'http://localhost:3000/my-classes',
+    'HX-Current-URL': 'http://localhost:3000/classes/my',
   });
 
   expect(res.ok).toBe(true);
-  expect(res.headers.get('HX-Location')).toBe('/my-classes');
+  expect(res.headers.get('HX-Location')).toBe('/classes/my');
 });
 
 test('DELETE /classes/:id from the class view responds with HX-Location /classes', async () => {

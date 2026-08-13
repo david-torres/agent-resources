@@ -11,8 +11,7 @@
 </div>
 {{/unless}}
 
-<form hx-{{#if isNew}}post{{else}}put{{/if}}="/characters{{#unless isNew}}/{{character.id}}{{/unless}}"
-  hx-redirect="{{#if isNew}}/characters{{else}}/characters/{{character.id}}/{{encodeURIComponentH character.name}}{{/if}}">
+<form hx-{{#if isNew}}post{{else}}put{{/if}}="/characters{{#unless isNew}}/{{character.id}}{{/unless}}">
   <div class="field">
     <label class="label" for="char-name">Name</label>
     <div class="control">
@@ -386,7 +385,7 @@
   <div class="buttons is-right">
     {{#unless isNew}}
     <button class="button is-danger" hx-delete="/characters/{{character.id}}"
-      hx-confirm="Are you sure you want to delete this character?" hx-redirect="/characters" hx-indicator="this">Delete
+      hx-confirm="Are you sure you want to delete this character?" hx-indicator="this">Delete
       Character</button>
     {{#unless character.is_deceased}}
     <button type="button" class="button is-dark" @click="$dispatch('open-modal', 'deceased')">

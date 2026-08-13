@@ -26,6 +26,13 @@
           @click="$dispatch('open-modal', 'duplicate')">
     Duplicate…
   </button>
+  {{!-- No hx-target/hx-swap: there is no <tr> (or <table>) anywhere on this
+       page, so `closest tr` resolved to nothing and htmx aborted the request
+       at issueAjaxRequest with htmx:targetError -- BEFORE the hx-confirm
+       check, so the button issued no request, showed no dialog, and reported
+       no error. DELETE /classes/:id answers HX-Location, which navigates the
+       whole page, so the target only has to resolve; the default (this
+       element) does. --}}
   <button class="button is-danger" hx-delete="/classes/{{class.id}}"
     hx-confirm="Are you sure you want to delete this class?">Delete</button>
   {{#unless (or (eq class.status 'beta') (eq class.status 'alpha'))}}

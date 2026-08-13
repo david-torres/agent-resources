@@ -36,16 +36,18 @@ const cleanupByPrefix = async (db, prefix) => {
   );
   const characterIds = characters.map((r) => r.id);
   if (characterIds.length) {
-    // `lfg_join_requests` is in this list for a reason the others are not:
-    // lfg_join_requests_character_id_fkey has NO referential action at all
-    // (baseline schema; verified with \d lfg_join_requests), so a
-    // character-bound join request is a hard FK block on the character delete
-    // below -- and NOT reachable from the lfg_posts pass further down, which
-    // only ever deletes requests whose POST carries the prefix. A spec that
-    // joins a prefixed character to a NON-prefixed post (a developer's own, or
-    // another worker's) would otherwise leave the character undeletable and
-    // fail cleanup with a foreign-key violation. Deleting by character_id here
-    // is scoped to prefixed characters only, so nothing else is in range.
+    // `lfg_join_requests` is in this list for a reason the others are not.
+    // lfg_join_requests_character_id_fkey is now ON DELETE SET NULL (see
+    // supabase/migrations/20260806000000_lfg_join_requests_character_set_null.sql),
+    // so it no longer BLOCKS the character delete below -- but it does leave
+    // the join request behind with a null character_id, and that orphan is NOT
+    // reachable from the lfg_posts pass further down, which only ever deletes
+    // requests whose POST carries the prefix. A spec that joins a prefixed
+    // character to a NON-prefixed post (a developer's own, or another
+    // worker's) would otherwise leak a nulled row into shared data forever.
+    // Deleting by character_id here happens BEFORE the character delete, so it
+    // removes the real row rather than hunting for nulls afterwards, and it is
+    // scoped to prefixed characters only, so nothing else is in range.
     for (const table of ['character_perks', 'class_abilities', 'class_gear', 'traits', 'offscreen_missions', 'lfg_join_requests']) {
       await db.query(`delete from ${table} where character_id = any($1::uuid[])`, [characterIds]);
     }

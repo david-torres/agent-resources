@@ -54,13 +54,20 @@ if (mode === 'integration') {
 // exercises only pure functions, so provide inert placeholder credentials to
 // child test processes. Integration tests intentionally use only the caller's
 // local-Supabase credentials.
+//
+// OPENAI_API_KEY is here for the same reason: util/class-import.js:7 builds an
+// OpenAIChatApi at import time and llm-api throws when the key is unset, so
+// every test that reaches routes/classes.js -- which requires class-import at
+// the top -- died on a clean checkout. Never a real key: nothing under test
+// calls the model, and the placeholder only has to be non-empty.
 const testEnv = mode === 'integration'
   ? process.env
   : {
       ...process.env,
       SUPABASE_URL: process.env.SUPABASE_URL || 'https://test.invalid',
       SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key',
-      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY || 'test-secret-key'
+      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY || 'test-secret-key',
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'test-openai-key'
     };
 
 // Run one file per Bun process. Several older tests install process-global
