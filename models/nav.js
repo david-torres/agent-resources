@@ -1,16 +1,25 @@
 const { supabase } = require('./_base');
 
+// Every query here takes the caller's client. `nav_items` has RLS on both
+// halves: the write policies require is_admin(), and the SELECT policy is
+// USING (is_active = true). The anon singleton carries no user JWT, so bound to
+// it is_admin() is false and an admin's INSERT/UPDATE/DELETE is rejected
+// outright (Postgres 42501), while deactivated items are invisible to the
+// management screen. `res.locals.supabase` (util/auth.js) carries the caller's
+// token — anon for signed-out visitors, so the default keeps the public navbar
+// working for callers with no request context.
+
 /**
  * Get all active nav items filtered by user context
  * Returns hierarchical structure with parent items containing children
  */
-const getNavItems = async (userContext = {}) => {
+const getNavItems = async (userContext = {}, client = supabase) => {
     const { userId = null, role = null, currentPath = null } = userContext;
     const isAuthenticated = !!userId;
     const isAdmin = role === 'admin';
 
     // Build query with filters
-    let query = supabase
+    let query = client
         .from('nav_items')
         .select(`
             *,
@@ -112,8 +121,8 @@ const getNavItems = async (userContext = {}) => {
 /**
  * Get a single nav item by ID
  */
-const getNavItem = async (id) => {
-    const { data, error } = await supabase
+const getNavItem = async (id, client = supabase) => {
+    const { data, error } = await client
         .from('nav_items')
         .select(`
             *,
@@ -136,8 +145,8 @@ const getNavItem = async (id) => {
 /**
  * Get all nav items (for admin management, no filtering)
  */
-const getAllNavItems = async () => {
-    const { data, error } = await supabase
+const getAllNavItems = async (client = supabase) => {
+    const { data, error } = await client
         .from('nav_items')
         .select(`
             *,
@@ -160,7 +169,7 @@ const getAllNavItems = async () => {
 /**
  * Create a new nav item
  */
-const createNavItem = async (payload) => {
+const createNavItem = async (payload, client = supabase) => {
     // Validate required fields
     if (!payload.label || !payload.type) {
         return {
@@ -186,7 +195,7 @@ const createNavItem = async (payload) => {
 
     // If no position specified, get the next position for this parent
     if (payload.position === undefined || payload.position === null) {
-        const { data: siblings } = await supabase
+        const { data: siblings } = await client
             .from('nav_items')
             .select('position')
             .eq('parent_id', payload.parent_id || null)
@@ -198,7 +207,7 @@ const createNavItem = async (payload) => {
             : 0;
     }
 
-    const { data, error } = await supabase
+    const { data, error } = await client
         .from('nav_items')
         .insert(payload)
         .select(`
@@ -221,8 +230,8 @@ const createNavItem = async (payload) => {
 /**
  * Update an existing nav item
  */
-const updateNavItem = async (id, updates) => {
-    const { data, error } = await supabase
+const updateNavItem = async (id, updates, client = supabase) => {
+    const { data, error } = await client
         .from('nav_items')
         .update(updates)
         .eq('id', id)
@@ -246,8 +255,8 @@ const updateNavItem = async (id, updates) => {
 /**
  * Delete a nav item (cascades to children via foreign key)
  */
-const deleteNavItem = async (id) => {
-    const { error } = await supabase
+const deleteNavItem = async (id, client = supabase) => {
+    const { error } = await client
         .from('nav_items')
         .delete()
         .eq('id', id);
@@ -263,7 +272,7 @@ const deleteNavItem = async (id) => {
  * Reorder nav items
  * Accepts array of { id, position, parent_id } objects
  */
-const reorderNavItems = async (items) => {
+const reorderNavItems = async (items, client = supabase) => {
     const updates = items.map(item => ({
         id: item.id,
         position: item.position,
@@ -271,8 +280,8 @@ const reorderNavItems = async (items) => {
     }));
 
     // Update each item
-    const promises = updates.map(update => 
-        supabase
+    const promises = updates.map(update =>
+        client
             .from('nav_items')
             .update({ position: update.position, parent_id: update.parent_id })
             .eq('id', update.id)
@@ -292,8 +301,8 @@ const reorderNavItems = async (items) => {
 /**
  * Get dropdown parents (items that can be parents)
  */
-const getDropdownParents = async () => {
-    const { data, error } = await supabase
+const getDropdownParents = async (client = supabase) => {
+    const { data, error } = await client
         .from('nav_items')
         .select('id, label, type')
         .eq('type', 'dropdown')

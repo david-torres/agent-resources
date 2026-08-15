@@ -27,7 +27,7 @@ const normalizeBoolean = (value, fallback = false) => {
 router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
 
-    const { data: navItems, error } = await getAllNavItems();
+    const { data: navItems, error } = await getAllNavItems(res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to load navigation items' });
     }
@@ -88,7 +88,7 @@ router.get('/new', isAuthenticated, requireAdmin, async (req, res) => {
     const { data: pages } = await getPages({}, res.locals.supabase);
     
     // Get dropdown parents
-    const { data: dropdownParents } = await getDropdownParents();
+    const { data: dropdownParents } = await getDropdownParents(res.locals.supabase);
 
     return res.render('nav-form', {
         profile,
@@ -137,12 +137,12 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
         is_active: normalizeBoolean(is_active, true)
     };
 
-    const { data: navItem, error } = await createNavItem(payload);
+    const { data: navItem, error } = await createNavItem(payload, res.locals.supabase);
     if (error) {
         const status = error.message && error.message.includes('required') ? 400 : 500;
         if (status === 400) {
             const { data: pages } = await getPages({}, res.locals.supabase);
-            const { data: dropdownParents } = await getDropdownParents();
+            const { data: dropdownParents } = await getDropdownParents(res.locals.supabase);
             return res.status(400).render('nav-form', {
                 profile,
                 title: 'Create Navigation Item',
@@ -179,7 +179,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
     const { id } = req.params;
 
-    const { data: navItem, error } = await getNavItem(id);
+    const { data: navItem, error } = await getNavItem(id, res.locals.supabase);
     if (error || !navItem) {
         return sendError(req, res, error, { status: 404, message: 'Navigation item not found' });
     }
@@ -188,7 +188,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
     const { data: pages } = await getPages({}, res.locals.supabase);
     
     // Get dropdown parents (exclude self to prevent circular references)
-    const { data: allDropdownParents } = await getDropdownParents();
+    const { data: allDropdownParents } = await getDropdownParents(res.locals.supabase);
     const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
 
     return res.render('nav-form', {
@@ -221,7 +221,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         is_active
     } = req.body;
 
-    const { data: existingItem, error: loadError } = await getNavItem(id);
+    const { data: existingItem, error: loadError } = await getNavItem(id, res.locals.supabase);
     if (loadError || !existingItem) {
         return sendError(req, res, loadError, { status: 404, message: 'Navigation item not found' });
     }
@@ -243,7 +243,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     if (resolvedType === 'page' && !updates.page_id) {
         const { profile } = res.locals;
         const { data: pages } = await getPages({}, res.locals.supabase);
-        const { data: allDropdownParents } = await getDropdownParents();
+        const { data: allDropdownParents } = await getDropdownParents(res.locals.supabase);
         const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
         return res.status(400).render('nav-form', {
             profile,
@@ -260,13 +260,13 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         });
     }
 
-    const { error } = await updateNavItem(id, updates);
+    const { error } = await updateNavItem(id, updates, res.locals.supabase);
     if (error) {
         const status = error.message && error.message.includes('required') ? 400 : 500;
         if (status === 400) {
             const { profile } = res.locals;
             const { data: pages } = await getPages({}, res.locals.supabase);
-            const { data: allDropdownParents } = await getDropdownParents();
+            const { data: allDropdownParents } = await getDropdownParents(res.locals.supabase);
             const dropdownParents = (allDropdownParents || []).filter(p => p.id !== id);
             return res.status(400).render('nav-form', {
                 profile,
@@ -292,7 +292,7 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
 router.delete('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
 
-    const { error } = await deleteNavItem(id);
+    const { error } = await deleteNavItem(id, res.locals.supabase);
     if (error) {
         if (req.get('HX-Request')) {
             return sendError(req, res, error, { message: 'Failed to delete navigation item' });
@@ -315,7 +315,7 @@ router.post('/reorder', isAuthenticated, requireAdmin, async (req, res) => {
         return sendError(req, res, null, { status: 400, message: 'Items must be an array' });
     }
 
-    const { error } = await reorderNavItems(items);
+    const { error } = await reorderNavItems(items, res.locals.supabase);
     if (error) {
         return sendError(req, res, error, { message: 'Failed to reorder navigation items' });
     }
