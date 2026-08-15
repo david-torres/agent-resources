@@ -7,17 +7,6 @@
 
 <div class="columns">
   <div class="column is-5">
-    {{#if profile}}
-    <div class="box">
-      <h3 class="title is-5">My Characters</h3>
-      {{#if ownCharacters.length}}
-      {{> party-search-results characters=ownCharacters}}
-      {{else}}
-      <p class="has-text-grey">You have no characters yet.</p>
-      {{/if}}
-    </div>
-    {{/if}}
-
     <div class="box">
       <h3 class="title is-5">Find Characters</h3>
       <div class="field">
@@ -33,6 +22,17 @@
         {{> party-search-results characters=null}}
       </div>
     </div>
+
+    {{#if profile}}
+    <div class="box">
+      <h3 class="title is-5">My Characters</h3>
+      {{#if ownCharacters.length}}
+      {{> party-search-results characters=ownCharacters}}
+      {{else}}
+      <p class="has-text-grey">You have no characters yet.</p>
+      {{/if}}
+    </div>
+    {{/if}}
   </div>
 
   <div class="column is-7">
