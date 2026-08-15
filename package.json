@@ -20,7 +20,8 @@
     "seed:admin": "bun run util/seed-admin.js",
     "seed:badges": "bun run scripts/seed-badges.js",
     "fetch:badges": "bun run scripts/fetch-badge-art.js",
-    "db:backup": "sh scripts/db-backup.sh"
+    "db:backup": "sh scripts/db-backup.sh",
+    "rehearse:migrations": "bash scripts/rehearse-migrations.sh"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.1",
