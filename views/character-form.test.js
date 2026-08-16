@@ -171,3 +171,27 @@ test('every stat POSTs its own name from a hidden input', async () => {
   expect(document.querySelector('input[name="might"]').value)
     .toBe(String(character.might));
 });
+
+// --- created-at date bound --------------------------------------------------
+//
+// normalizeCharacterInput (services/character/input.js) already rejects a
+// future created_at server-side, but that error renders as a generic 500
+// page (util/http-error.js), not a field-level message. The `max` attribute
+// is a client-side convenience that stops most players from ever submitting
+// one; the route must supply today's date (UTC) as maxCreatedAt.
+
+test('the Created date input carries a max attribute sourced from the render context', () => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+
+  const inputMatch = FORM_SRC.match(/<input[^>]*id="char-created-at"[^>]*>/);
+  expect(inputMatch).toBeTruthy();
+
+  const html = hb.compile(inputMatch[0])({
+    character: { created_at: '2026-01-05T00:00:00+00:00' },
+    maxCreatedAt: '2026-08-15'
+  });
+
+  expect(html).toContain('max="2026-08-15"');
+});

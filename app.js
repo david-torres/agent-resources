@@ -2,7 +2,7 @@ const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
 const {
-  times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
+  times, date_tz, time_ago, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
   setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring,
   concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
 } = require('./util/handlebars');
@@ -43,6 +43,7 @@ const createApp = () => {
       times,
       range,
       date_tz,
+      time_ago,
       calendar_link,
       encodeURIComponentH,
       getTotalV1MissionsNeeded,

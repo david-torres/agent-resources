@@ -1,0 +1,15 @@
+{{#if news.length}}
+<section class="block">
+  <h2 class="title is-5">Latest news</h2>
+  {{#each news}}
+  <article class="mb-4">
+    <h3 class="is-size-6 has-text-weight-semibold mb-1">
+      <a href="/pages/{{slug}}">{{title}}</a>
+      <span class="has-text-grey has-text-weight-normal is-size-7 ml-2">{{date_tz created_at "ll" ../profile.timezone}}</span>
+    </h3>
+    <p class="is-size-7">{{excerpt}}</p>
+  </article>
+  {{/each}}
+  <a href="/news" class="is-size-7">See all news</a>
+</section>
+{{/if}}

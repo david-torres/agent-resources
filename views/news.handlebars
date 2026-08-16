@@ -1,0 +1,23 @@
+{{> breadcrumbs}}
+
+<div class="box">
+  <h1 class="title is-2">News</h1>
+
+  {{#if news.length}}
+  <div class="content mt-5">
+    {{#each news}}
+    <article class="mb-5">
+      <h2 class="title is-4 mb-1">
+        <a href="/pages/{{slug}}">{{title}}</a>
+      </h2>
+      <p class="has-text-grey is-size-7 mb-2">{{date_tz created_at "ll" ../profile.timezone}}</p>
+      <p>{{excerpt}}</p>
+    </article>
+    {{/each}}
+  </div>
+  {{else}}
+  <div class="notification is-light mt-5">
+    No news posts yet.
+  </div>
+  {{/if}}
+</div>

@@ -744,7 +744,7 @@ const App = (function (document, supabase, htmx) {
       document.addEventListener('htmx:afterRequest', function (evt) {
         if (!_getAuthToken()) return;
         const pathInfo = evt.detail && evt.detail.pathInfo;
-        if (!pathInfo || pathInfo.finalRequestPath !== '/') return;
+        if (!pathInfo || pathInfo.finalRequestPath !== '/lfg/tab/calendar') return;
         renderCalendar();
       });
 

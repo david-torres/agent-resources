@@ -73,6 +73,43 @@ const getOwnCharacters = async (profile, client = supabase) => {
   return { data, error };
 }
 
+// Homepage feeds. These select only the columns the feed row renders — the
+// homepage has six sections competing for one request, so none of them pull
+// full character records.
+const getRecentCharactersByCreator = async (profileId, { limit = 6 } = {}, client = supabase) => {
+  const { data, error } = await client
+    .from('characters')
+    .select('id, name, class, level, updated_at')
+    .eq('creator_id', profileId)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error };
+}
+
+// hide_from_search is deliberately honored here as well as in search: opting out
+// of discovery means opting out of the homepage too.
+const getRecentPublicCharacters = async ({ limit = 6, excludeProfileId = null } = {}, client = supabase) => {
+  let query = client
+    .from('characters')
+    .select('id, name, class, level, updated_at')
+    .eq('is_public', true)
+    .eq('hide_from_search', false);
+  if (excludeProfileId) query = query.neq('creator_id', excludeProfileId);
+
+  const { data, error } = await query
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error };
+}
+
 const getPublicCharactersByCreator = async (creatorId) => {
   const { data, error } = await supabase
     .from('characters')
@@ -470,6 +507,8 @@ module.exports = {
   getPartyCharacters,
   getRandomPublicCharacters,
   getPublicCharactersByCreator,
+  getRecentCharactersByCreator,
+  getRecentPublicCharacters,
   serializeCharacterSummaryForAgent,
   serializeCharacterForAgent,
   searchCharactersForAgent,

@@ -1,4 +1,5 @@
 const { mock, test, expect, beforeAll, afterAll } = require('bun:test');
+const { clientStub } = require('../test/helpers/supabase-query-stub');
 
 // Capture real `_base` so we can restore it after this file runs and not
 // leak the mock into sibling test files.
@@ -91,4 +92,16 @@ test('listUnlockCodes uses the passed client', async () => {
     expect(Array.isArray(data)).toBe(true);
     expect(data.length).toBe(1);
     expect(data[0].id).toBe('code-1');
+});
+
+test('getRecentClassesByCreator keys off created_by and sorts by updated_at desc', async () => {
+    const { getRecentClassesByCreator } = require('./class');
+    const { client, builder } = clientStub([{ id: 'k1' }]);
+    const { data, error } = await getRecentClassesByCreator('p1', { limit: 6 }, client);
+
+    expect(error).toBeNull();
+    expect(data).toEqual([{ id: 'k1' }]);
+    expect(builder.calls).toContainEqual(['from', 'classes']);
+    expect(builder.calls).toContainEqual(['eq', 'created_by', 'p1']);
+    expect(builder.calls).toContainEqual(['order', 'updated_at', { ascending: false }]);
 });

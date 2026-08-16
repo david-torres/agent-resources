@@ -225,6 +225,52 @@ const canViewPage = async (userContext = {}, page) => {
     return { data: false, error: null };
 };
 
+/**
+ * Latest published news posts for the homepage.
+ *
+ * Ordered by created_at, so a post drafted early and published later carries
+ * the draft date. Acceptable while posts are written and published in one
+ * sitting; a published_at column is the fix if that stops being true.
+ *
+ * The caller's client applies the pages RLS SELECT policies, so access_level
+ * gating comes for free — an anon caller sees only access_level='public'.
+ */
+const getRecentNews = async ({ limit = 2 } = {}, client = supabase) => {
+    const { data, error } = await client
+        .from('pages')
+        .select('id, title, slug, content, created_at')
+        .eq('is_news', true)
+        .eq('is_published', true)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error };
+};
+
+/**
+ * Every published news post, newest first. Same filters as getRecentNews,
+ * with no limit -- this backs the /news index, where "all of it" is the point.
+ *
+ * The caller's client applies the pages RLS SELECT policies, same as
+ * getRecentNews.
+ */
+const getAllNews = async (client = supabase) => {
+    const { data, error } = await client
+        .from('pages')
+        .select('id, title, slug, content, created_at')
+        .eq('is_news', true)
+        .eq('is_published', true)
+        .order('created_at', { ascending: false });
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error };
+};
+
 module.exports = {
     getPages,
     getPageBySlug,
@@ -234,5 +280,7 @@ module.exports = {
     deletePage,
     canViewPage,
     generateSlug,
-    isSlugUnique
+    isSlugUnique,
+    getRecentNews,
+    getAllNews
 };

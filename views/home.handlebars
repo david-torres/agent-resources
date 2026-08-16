@@ -46,8 +46,11 @@
     </div>
   </div>
   {{/unless}}
-</div>
 
-{{#if profile}}
-<div id="calendar"></div>
-{{/if}}
+  {{#if profile}}
+  {{> home-recent-mine}}
+  {{> home-upcoming-games}}
+  {{/if}}
+  {{> home-news}}
+  {{> home-community}}
+</div>

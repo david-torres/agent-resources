@@ -1,4 +1,5 @@
 const { test, expect, mock, afterAll } = require('bun:test');
+const { clientStub } = require('../test/helpers/supabase-query-stub');
 const realBase = require('./_base');
 const { makeSpyClient } = require('./test-helpers');
 
@@ -103,4 +104,32 @@ test('searchSimilarMissions uses the passed client', async () => {
   await searchSimilarMissions('2026-04-21', 'test', null, 3, userClient);
   expect(userClient.calls).toContain('missions');
   expect(defaultAnon.calls).not.toContain('missions');
+});
+
+test('getRecentMissionsByCreator filters to the creator and sorts by updated_at desc', async () => {
+  const { getRecentMissionsByCreator } = require('./mission');
+  const { client, builder } = clientStub([{ id: 'm1' }]);
+  const { data, error } = await getRecentMissionsByCreator('p1', { limit: 6 }, client);
+
+  expect(error).toBeNull();
+  expect(data).toEqual([{ id: 'm1' }]);
+  expect(builder.calls).toContainEqual(['from', 'missions']);
+  expect(builder.calls).toContainEqual(['eq', 'creator_id', 'p1']);
+  expect(builder.calls).toContainEqual(['order', 'updated_at', { ascending: false }]);
+});
+
+test('getRecentPublicMissions filters to public missions only', async () => {
+  const { getRecentPublicMissions } = require('./mission');
+  const { client, builder } = clientStub([]);
+  await getRecentPublicMissions({ limit: 6 }, client);
+
+  expect(builder.calls).toContainEqual(['eq', 'is_public', true]);
+});
+
+test('getRecentPublicMissions excludes the viewer own rows when given a profile id', async () => {
+  const { getRecentPublicMissions } = require('./mission');
+  const { client, builder } = clientStub([]);
+  await getRecentPublicMissions({ limit: 6, excludeProfileId: 'p1' }, client);
+
+  expect(builder.calls).toContainEqual(['neq', 'creator_id', 'p1']);
 });

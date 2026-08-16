@@ -364,6 +364,19 @@
 
   <hr />
 
+  {{#unless isNew}}
+  <div class="field">
+    <label class="label" for="char-created-at">Created</label>
+    <div class="control">
+      <input class="input" type="date" name="created_at" id="char-created-at"
+        value="{{date_tz character.created_at 'YYYY-MM-DD' 'UTC'}}" max="{{maxCreatedAt}}">
+    </div>
+    <p class="help">When this character was made. Correct it if the date is wrong — it orders your recent work on the homepage.</p>
+  </div>
+
+  <hr />
+  {{/unless}}
+
   <div class="field">
     <label class="label">Visibility</label>
     <div class="control">

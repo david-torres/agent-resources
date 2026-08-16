@@ -131,3 +131,40 @@ test('collectCharacterFormArrays tolerates single (non-array) form values', () =
   });
   expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'solo', position: 3, compounds_with: null }]);
 });
+
+test('normalizeCharacterInput accepts a YYYY-MM-DD created_at and normalizes it to ISO', () => {
+  const { data, error } = normalizeCharacterInput({ name: 'Vex', created_at: '2026-03-04' }, {});
+  expect(error).toBeNull();
+  expect(data.created_at).toBe('2026-03-04T00:00:00.000Z');
+});
+
+test('normalizeCharacterInput accepts a full ISO created_at', () => {
+  const { data, error } = normalizeCharacterInput({ name: 'Vex', created_at: '2026-03-04T09:30:00.000Z' }, {});
+  expect(error).toBeNull();
+  expect(data.created_at).toBe('2026-03-04T09:30:00.000Z');
+});
+
+test('normalizeCharacterInput rejects an unparseable created_at', () => {
+  const { data, error } = normalizeCharacterInput({ name: 'Vex', created_at: 'last tuesday' }, {});
+  expect(data).toBeNull();
+  expect(error).toBe('Invalid created date.');
+});
+
+test('normalizeCharacterInput rejects a future created_at', () => {
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  const { data, error } = normalizeCharacterInput({ name: 'Vex', created_at: tomorrow }, {});
+  expect(data).toBeNull();
+  expect(error).toBe('Created date cannot be in the future.');
+});
+
+test('normalizeCharacterInput drops an empty created_at rather than sending null', () => {
+  const { data, error } = normalizeCharacterInput({ name: 'Vex', created_at: '' }, {});
+  expect(error).toBeNull();
+  expect('created_at' in data).toBe(false);
+});
+
+test('normalizeCharacterInput leaves created_at absent when it was never submitted', () => {
+  const { data, error } = normalizeCharacterInput({ name: 'Vex' }, {});
+  expect(error).toBeNull();
+  expect('created_at' in data).toBe(false);
+});

@@ -1,4 +1,5 @@
 const { mock, test, expect, beforeAll, afterAll } = require('bun:test');
+const { clientStub } = require('../test/helpers/supabase-query-stub');
 
 // Capture the real `_base` exports before we replace them, so we can restore
 // after this file runs. Without this, the mock leaks into subsequent test
@@ -521,4 +522,42 @@ test('serializeCharacterForAgent includes v2 fields on v2 characters', () => {
   expect(out.quirks[0].name).toBe('Synthetic');
   expect(out.accessories[0].name).toBe('Monocle');
   expect(out.ability_perks[0].text).toBe('Bigger sword');
+});
+
+test('getRecentCharactersByCreator filters to the creator and sorts by updated_at desc', async () => {
+  const { getRecentCharactersByCreator } = require('./character');
+  const { client, builder } = clientStub([{ id: 'c1' }]);
+  const { data, error } = await getRecentCharactersByCreator('p1', { limit: 6 }, client);
+
+  expect(error).toBeNull();
+  expect(data).toEqual([{ id: 'c1' }]);
+  expect(builder.calls).toContainEqual(['from', 'characters']);
+  expect(builder.calls).toContainEqual(['eq', 'creator_id', 'p1']);
+  expect(builder.calls).toContainEqual(['order', 'updated_at', { ascending: false }]);
+  expect(builder.calls).toContainEqual(['limit', 6]);
+});
+
+test('getRecentPublicCharacters excludes private and search-hidden characters', async () => {
+  const { getRecentPublicCharacters } = require('./character');
+  const { client, builder } = clientStub([]);
+  await getRecentPublicCharacters({ limit: 6 }, client);
+
+  expect(builder.calls).toContainEqual(['eq', 'is_public', true]);
+  expect(builder.calls).toContainEqual(['eq', 'hide_from_search', false]);
+});
+
+test('getRecentPublicCharacters excludes the viewer own rows when given a profile id', async () => {
+  const { getRecentPublicCharacters } = require('./character');
+  const { client, builder } = clientStub([]);
+  await getRecentPublicCharacters({ limit: 6, excludeProfileId: 'p1' }, client);
+
+  expect(builder.calls).toContainEqual(['neq', 'creator_id', 'p1']);
+});
+
+test('getRecentPublicCharacters excludes nothing for a signed-out caller', async () => {
+  const { getRecentPublicCharacters } = require('./character');
+  const { client, builder } = clientStub([]);
+  await getRecentPublicCharacters({ limit: 6 }, client);
+
+  expect(builder.calls.some(call => call[0] === 'neq')).toBe(false);
 });

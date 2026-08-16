@@ -25,6 +25,15 @@ const date_tz = function (datetime, format, timezone) {
   return moment.utc(datetime).tz(timezone).format(format);
 }
 
+// Feed rows read better as "3 days ago" than as an absolute stamp. Unparseable
+// input renders as nothing rather than moment's "Invalid date" leaking into a page.
+const time_ago = function (datetime) {
+  if (!datetime) return '';
+  const parsed = moment.utc(datetime);
+  if (!parsed.isValid()) return '';
+  return parsed.fromNow();
+};
+
 const encodeURIComponentH = function (str) {
   return encodeURIComponent(str);
 }
@@ -204,6 +213,7 @@ const nextPerkPositionH = function (perks, abilityId) {
 module.exports = {
   times,
   date_tz,
+  time_ago,
   calendar_link,
   encodeURIComponentH,
   getTotalV1MissionsNeeded,

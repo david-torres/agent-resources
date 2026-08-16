@@ -199,3 +199,125 @@ test('updateForAgent does not grant an admin-role bypass: an admin-role agent pr
   delete require.cache[require.resolve('./lfg')];
   delete require.cache[require.resolve('../services/lfg/repository')];
 });
+
+// Two-query stub: `from('lfg_posts')` returns hosted rows, `from('lfg_join_requests')`
+// returns joined rows. Each builder resolves when awaited.
+const upcomingClientStub = ({ hosted = [], joined = [] }) => {
+  const calls = [];
+  const make = (rows) => {
+    const builder = {
+      select: (...a) => { calls.push(['select', ...a]); return builder; },
+      eq: (...a) => { calls.push(['eq', ...a]); return builder; },
+      gte: (...a) => { calls.push(['gte', ...a]); return builder; },
+      order: (...a) => { calls.push(['order', ...a]); return builder; },
+      then: (resolve) => resolve({ data: rows, error: null })
+    };
+    return builder;
+  };
+  return {
+    calls,
+    client: { from: (table) => { calls.push(['from', table]); return make(table === 'lfg_posts' ? hosted : joined); } }
+  };
+};
+
+const future = (days) => new Date(Date.now() + days * 86400000).toISOString();
+const past = (days) => new Date(Date.now() - days * 86400000).toISOString();
+
+// Renders `instant` (a Date) as an ISO string carrying an explicit numeric
+// offset (e.g. +02:00) instead of `Z`, for the same instant.
+const withOffset = (instant, offsetHours) => {
+  const shifted = new Date(instant.getTime() + offsetHours * 3600000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const sign = offsetHours >= 0 ? '+' : '-';
+  const abs = Math.abs(offsetHours);
+  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())}` +
+    `T${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}` +
+    `${sign}${pad(abs)}:00`;
+};
+
+test('getUpcomingForProfile labels created posts as host and joined posts as player', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  const { client } = upcomingClientStub({
+    hosted: [{ id: 'a', title: 'Hosted Run', date: future(2), creator_id: 'p1' }],
+    joined: [{
+      character: { name: 'Vex' },
+      lfg_posts: { id: 'b', title: 'Joined Run', date: future(1), creator_id: 'p2' }
+    }]
+  });
+
+  const { data, error } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+
+  expect(error).toBeNull();
+  expect(data).toEqual([
+    { id: 'b', title: 'Joined Run', date: data[0].date, role: 'player', characterName: 'Vex' },
+    { id: 'a', title: 'Hosted Run', date: data[1].date, role: 'host', characterName: null }
+  ]);
+});
+
+test('getUpcomingForProfile drops posts whose date has passed', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  const { client } = upcomingClientStub({
+    hosted: [],
+    joined: [{ character: null, lfg_posts: { id: 'old', title: 'Last Week', date: past(3), creator_id: 'p2' } }]
+  });
+
+  const { data } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+  expect(data).toEqual([]);
+});
+
+test('getUpcomingForProfile lists a post once when the viewer both created and joined it', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  const when = future(2);
+  const { client } = upcomingClientStub({
+    hosted: [{ id: 'a', title: 'My Run', date: when, creator_id: 'p1' }],
+    joined: [{ character: { name: 'Vex' }, lfg_posts: { id: 'a', title: 'My Run', date: when, creator_id: 'p1' } }]
+  });
+
+  const { data } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+  expect(data).toHaveLength(1);
+  expect(data[0].role).toBe('host');
+  expect(data[0].characterName).toBe('Vex');
+});
+
+test('getUpcomingForProfile truncates to the limit', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  const { client } = upcomingClientStub({
+    hosted: [1, 2, 3, 4].map(n => ({ id: `h${n}`, title: `Run ${n}`, date: future(n), creator_id: 'p1' })),
+    joined: []
+  });
+
+  const { data } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+  expect(data.map(p => p.id)).toEqual(['h1', 'h2', 'h3']);
+});
+
+test('getUpcomingForProfile skips join requests whose post was deleted', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  const { client } = upcomingClientStub({ hosted: [], joined: [{ character: null, lfg_posts: null }] });
+
+  const { data, error } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+  expect(error).toBeNull();
+  expect(data).toEqual([]);
+});
+
+test('getUpcomingForProfile compares dates as instants, not raw strings, across timezone offsets', async () => {
+  const { getUpcomingForProfile } = require('./lfg');
+  // A +02:00 offset pushes the local hour digits up, so as a raw string this
+  // past instant sorts *after* a `Z`-suffixed "now" -- a naive string
+  // comparison would wrongly treat it as not-yet-past.
+  const thirtyMinAgo = withOffset(new Date(Date.now() - 30 * 60000), 2);
+  // A -05:00 offset pushes the local hour digits down, so this future instant
+  // sorts *before* a `Z`-suffixed "now" -- a naive string comparison would
+  // wrongly treat it as already past.
+  const thirtyMinFromNow = withOffset(new Date(Date.now() + 30 * 60000), -5);
+
+  const { client } = upcomingClientStub({
+    hosted: [],
+    joined: [
+      { character: null, lfg_posts: { id: 'just-finished', title: 'Just Finished', date: thirtyMinAgo, creator_id: 'p2' } },
+      { character: { name: 'Vex' }, lfg_posts: { id: 'starting-soon', title: 'Starting Soon', date: thirtyMinFromNow, creator_id: 'p2' } }
+    ]
+  });
+
+  const { data } = await getUpcomingForProfile('p1', { limit: 3 }, client);
+  expect(data.map(p => p.id)).toEqual(['starting-soon']);
+});

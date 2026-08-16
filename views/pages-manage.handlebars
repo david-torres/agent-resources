@@ -20,6 +20,7 @@
         <th>Slug</th>
         <th>Access Level</th>
         <th>Status</th>
+        <th>News</th>
         <th>Updated</th>
         <th>Actions</th>
       </tr>
@@ -47,6 +48,13 @@
           <span class="tag {{#if this.is_published}}is-success{{else}}is-danger{{/if}} is-light">
             {{#if this.is_published}}Published{{else}}Draft{{/if}}
           </span>
+        </td>
+        <td>
+          {{#if this.is_news}}
+          <span class="tag is-info is-light">News</span>
+          {{else}}
+          <span class="has-text-grey">&mdash;</span>
+          {{/if}}
         </td>
         <td>
           {{#if this.updated_at}}

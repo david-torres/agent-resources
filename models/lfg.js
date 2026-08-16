@@ -251,6 +251,72 @@ const getLfgJoinedPosts = async (profileId, client = supabase) => {
   return { data: joinedPosts, error: null };
 }
 
+// Homepage "your upcoming games".
+//
+// Deliberately NOT built on getLfgPostsByCreator/getLfgJoinedPosts: both run a
+// profile fetch and a join-request fetch per post, which is ~20 round trips on a
+// landing page rendering three rows. Two flat queries instead, selecting only
+// what the row shows. The pending-request badge is not fetched here at all --
+// util/auth.js already exposes res.locals.pendingLfgRequests.
+const getUpcomingForProfile = async (profileId, { limit = 3 } = {}, client = supabase) => {
+  const now = moment().toISOString();
+  const nowMs = Date.parse(now);
+
+  const { data: hosted, error: hostedError } = await client
+    .from('lfg_posts')
+    .select('id, title, date, creator_id')
+    .eq('creator_id', profileId)
+    .gte('date', now)
+    .order('date', { ascending: true });
+  if (hostedError) {
+    console.error(hostedError);
+    return { data: null, error: hostedError };
+  }
+
+  const { data: joined, error: joinedError } = await client
+    .from('lfg_join_requests')
+    .select('character:characters(name), lfg_posts:lfg_post_id(id, title, date, creator_id)')
+    .eq('profile_id', profileId)
+    .eq('status', 'approved');
+  if (joinedError) {
+    console.error(joinedError);
+    return { data: null, error: joinedError };
+  }
+
+  const byId = new Map();
+  for (const post of hosted || []) {
+    byId.set(post.id, { id: post.id, title: post.title, date: post.date, role: 'host', characterName: null });
+  }
+  for (const request of joined || []) {
+    const post = request.lfg_posts;
+    // A join request outlives its post only if the post was deleted mid-flight.
+    // Compare instants, not raw strings -- two ISO timestamps for the same
+    // moment can differ lexicographically across offsets (e.g. a `+02:00`
+    // string can sort "later" than a `Z` string that is actually later).
+    if (!post || Date.parse(post.date) < nowMs) continue;
+    const existing = byId.get(post.id);
+    const characterName = request.character ? request.character.name : null;
+    if (existing) {
+      // Created it AND joined it: keep the host label, keep the character.
+      existing.characterName = characterName;
+      continue;
+    }
+    byId.set(post.id, {
+      id: post.id,
+      title: post.title,
+      date: post.date,
+      role: post.creator_id === profileId ? 'host' : 'player',
+      characterName
+    });
+  }
+
+  const data = [...byId.values()]
+    .sort((a, b) => Date.parse(a.date) - Date.parse(b.date))
+    .slice(0, limit);
+
+  return { data, error: null };
+}
+
 // Not admin: called by util/auth.js with the request's own RLS client.
 const getPendingJoinRequestCount = async (profileId, client = supabase) => {
   const { count, error } = await client
@@ -364,6 +430,7 @@ module.exports = {
   getLfgPostsByCreator,
   getLfgPostsByOthers,
   getLfgJoinedPosts,
+  getUpcomingForProfile,
   getLfgPost,
   createLfgPost,
   updateLfgPost,

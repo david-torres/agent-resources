@@ -17,7 +17,7 @@
 - Model functions return `{ data, error }`. They log with `console.error(error)` and never throw.
 - Templates use Bulma classes, matching the surrounding markup.
 - No dead code: when something is replaced, the replaced thing is deleted in the same commit.
-- TDD (red → green → refactor) applies to every task except Task 1, which is a migration — per the repo's TDD policy, migrations are exempt.
+- TDD (red → green → refactor) applies to every task except Tasks 1, 9, 11, and 13, which are exempt by name. Task 1 and the migration half of Task 12 are schema changes, which the repo's TDD policy exempts. Task 9 is a local-development seed script. Task 11 is a four-line route delegating to a service that Task 8 tests exhaustively, rendering a template that Task 10 tests. Task 13 moves an existing template block and retargets one trigger string. All four carry explicit manual verification steps instead; the absence of automated tests in them is intended, not an oversight.
 - Commit at the end of every task. All commit messages end with:
   `Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>`
 - Feed item limits: 6 for "recent mine", 6 for "community", 3 for "upcoming games", 2 for news.
@@ -44,6 +44,7 @@
 | `views/partials/lfg-calendar.handlebars` | The relocated `#calendar` container |
 | `views/home.test.js` | Homepage template tests |
 | `util/handlebars.test.js` | Tests for `time_ago` |
+| `test/helpers/supabase-query-stub.js` | Chainable Supabase-builder stub shared by the model tests |
 
 **Modified:** `models/character.js`, `models/mission.js`, `models/class.js`, `models/pages.js`, `models/lfg.js`, `util/handlebars.js`, `app.js`, `routes/home.js`, `routes/lfg.js`, `views/home.handlebars`, `views/lfg.handlebars`, `views/character-form.handlebars`, `services/character/input.js`, `services/character/input.test.js`, `models/character-atomic.integration.test.js`, `public/js/app.js`, `scripts/seed-local.mjs`.
 
@@ -360,7 +361,7 @@ module.exports = { toFeedItem, mergeRecent };
 - [ ] **Step 4: Run the tests to verify they pass**
 
 Run: `bun test services/home/recent-feed.test.js`
-Expected: PASS, 8 tests.
+Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Commit**
 
@@ -571,6 +572,7 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 ### Task 5: Character and mission recency queries
 
 **Files:**
+- Create: `test/helpers/supabase-query-stub.js`
 - Modify: `models/character.js` (add functions; extend `module.exports` at line 451)
 - Modify: `models/mission.js` (add functions; extend `module.exports` at line 645)
 - Test: `models/character.test.js`, `models/mission.test.js` (append)
@@ -585,30 +587,46 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 Names are type-qualified rather than the bare `getRecentByCreator` because `services/home/sections.js` imports from both modules at once, and the codebase already reads this way (`getRandomPublicCharacters`, `getPublicCharactersByCreator`).
 
-- [ ] **Step 1: Write the failing tests**
+- [ ] **Step 1: Write the shared query stub**
 
-Append to `models/character.test.js`:
+Four test files across Tasks 5 and 6 need the same chainable Supabase-builder
+stub, so it lives in `test/helpers/` beside the existing `alpine-dom.js` and
+`http-server.js` rather than being copied per file.
+
+Create `test/helpers/supabase-query-stub.js`:
 
 ```js
-// A chainable stub standing in for the Supabase query builder. Each call
-// records itself, so the tests assert the FILTERS were applied — a stub that
-// only returned rows would pass even if hide_from_search were dropped.
-const queryStub = (rows) => {
+// A chainable stand-in for the Supabase query builder. Every call records
+// itself, so tests can assert the FILTERS were applied — a stub that only
+// returned rows would pass even if a filter like hide_from_search were dropped.
+//
+// The chain resolves when `limit` is called, which is where every homepage
+// recency query terminates.
+const clientStub = (rows) => {
   const calls = [];
   const builder = {
-    calls,
     select: (...a) => { calls.push(['select', ...a]); return builder; },
     eq: (...a) => { calls.push(['eq', ...a]); return builder; },
     neq: (...a) => { calls.push(['neq', ...a]); return builder; },
     order: (...a) => { calls.push(['order', ...a]); return builder; },
     limit: (...a) => { calls.push(['limit', ...a]); return Promise.resolve({ data: rows, error: null }); }
   };
-  return builder;
+  const client = {
+    from: (table) => { calls.push(['from', table]); return builder; }
+  };
+  return { client, builder: { calls } };
 };
-const clientStub = (rows) => {
-  const builder = queryStub(rows);
-  return { client: { from: (table) => { builder.calls.push(['from', table]); return builder; } }, builder };
-};
+
+module.exports = { clientStub };
+```
+
+- [ ] **Step 2: Write the failing tests**
+
+Append to `models/character.test.js`, requiring the shared stub at the top of
+the file:
+
+```js
+const { clientStub } = require('../test/helpers/supabase-query-stub');
 
 test('getRecentCharactersByCreator filters to the creator and sorts by updated_at desc', async () => {
   const { getRecentCharactersByCreator } = require('./character');
@@ -649,7 +667,8 @@ test('getRecentPublicCharacters excludes nothing for a signed-out caller', async
 });
 ```
 
-Append the mirrored set to `models/mission.test.js` — copy the `queryStub`/`clientStub` helpers into that file too, then:
+Append the mirrored set to `models/mission.test.js`, requiring the same shared
+stub (`const { clientStub } = require('../test/helpers/supabase-query-stub');`):
 
 ```js
 test('getRecentMissionsByCreator filters to the creator and sorts by updated_at desc', async () => {
@@ -681,12 +700,12 @@ test('getRecentPublicMissions excludes the viewer own rows when given a profile 
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [ ] **Step 3: Run the tests to verify they fail**
 
 Run: `bun test models/character.test.js models/mission.test.js`
 Expected: FAIL — `getRecentCharactersByCreator is not a function`.
 
-- [ ] **Step 3: Implement the character queries**
+- [ ] **Step 4: Implement the character queries**
 
 In `models/character.js`, add beside the other public-character readers (near `getPublicCharactersByCreator`, line 76):
 
@@ -731,7 +750,7 @@ const getRecentPublicCharacters = async ({ limit = 6, excludeProfileId = null } 
 
 Add both names to `module.exports` (line 451).
 
-- [ ] **Step 4: Implement the mission queries**
+- [ ] **Step 5: Implement the mission queries**
 
 In `models/mission.js`, add near the other public readers:
 
@@ -770,15 +789,16 @@ const getRecentPublicMissions = async ({ limit = 6, excludeProfileId = null } = 
 
 Add both names to `module.exports` (line 645).
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `bun test models/character.test.js models/mission.test.js`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add models/character.js models/character.test.js models/mission.js models/mission.test.js
+git add test/helpers/supabase-query-stub.js \
+        models/character.js models/character.test.js models/mission.js models/mission.test.js
 git commit -m "feat: add recency queries for characters and mission logs
 
 Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
@@ -803,7 +823,8 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>"
 
 - [ ] **Step 1: Write the failing tests**
 
-Append to `models/class.test.js` (copy the `queryStub`/`clientStub` helpers from Task 5 into this file):
+Append to `models/class.test.js`, requiring the shared stub Task 5 created
+(`const { clientStub } = require('../test/helpers/supabase-query-stub');`):
 
 ```js
 test('getRecentClassesByCreator keys off created_by and sorts by updated_at desc', async () => {
@@ -819,7 +840,7 @@ test('getRecentClassesByCreator keys off created_by and sorts by updated_at desc
 });
 ```
 
-Append to `models/pages.test.js` (same helpers):
+Append to `models/pages.test.js` (same shared stub):
 
 ```js
 test('getRecentNews returns only published news, newest first', async () => {
@@ -1037,6 +1058,9 @@ In `models/lfg.js`, add beside `getLfgJoinedPosts`:
 // util/auth.js already exposes res.locals.pendingLfgRequests.
 const getUpcomingForProfile = async (profileId, { limit = 3 } = {}, client = supabase) => {
   const now = moment().toISOString();
+  // Compared as an instant below, not as a string: '...T21:44+02:00' sorts
+  // after '...T20:14Z' lexically while being the earlier moment.
+  const nowMs = Date.parse(now);
 
   const { data: hosted, error: hostedError } = await client
     .from('lfg_posts')
@@ -1066,7 +1090,7 @@ const getUpcomingForProfile = async (profileId, { limit = 3 } = {}, client = sup
   for (const request of joined || []) {
     const post = request.lfg_posts;
     // A join request outlives its post only if the post was deleted mid-flight.
-    if (!post || post.date < now) continue;
+    if (!post || Date.parse(post.date) < nowMs) continue;
     const existing = byId.get(post.id);
     const characterName = request.character ? request.character.name : null;
     if (existing) {
@@ -1888,6 +1912,16 @@ Create `supabase/migrations/20260815000002_character_created_at_editable.sql`:
 -- The signature is unchanged: created_at rides in the existing p_character jsonb.
 -- On UPDATE, jsonb_populate_record is seeded from `current`, so an omitted
 -- created_at already resolves to the row's existing value.
+--
+-- This restates the whole function body rather than patching it. That is not
+-- copy-paste drift: Postgres CREATE OR REPLACE FUNCTION has no partial form, so
+-- redefining any part means redefining all of it, and every migration in this
+-- repo that touches an RPC does the same. Exactly three lines differ from
+-- 20260710000000_atomic_character_writes.sql, all of them created_at:
+--   1. `created_at` appended to the INSERT column list
+--   2. `COALESCE(record.created_at, now())` appended to the INSERT SELECT list
+--   3. `created_at = record.created_at` appended to the UPDATE SET list
+-- Everything else is byte-identical and must stay that way.
 
 CREATE OR REPLACE FUNCTION public.save_character_atomic(
   p_character_id uuid,
@@ -1914,9 +1948,16 @@ BEGIN
 ```
 
 Then copy the remainder of the existing function body verbatim from
-`supabase/migrations/20260710000000_atomic_character_writes.sql` (from the
-`IF p_character_id IS NULL THEN` line to the end of the file), applying exactly
-three edits:
+**`supabase/migrations/20260811000000_fix_save_character_atomic_update.sql`** —
+NOT from `20260710000000_atomic_character_writes.sql`, which is superseded. The
+later migration repaired an UPDATE branch that referenced its own target alias
+from a non-`LATERAL` FROM item, which Postgres rejects at execution and which
+500'd every character edit. Copying the older file would silently reintroduce
+that bug. Verify with `grep -rl save_character_atomic supabase/migrations/` that
+no migration after `20260811000000` redefines it before applying this one.
+
+Copy from the `IF p_character_id IS NULL THEN` line to the end of the file,
+applying exactly three edits:
 
 1. In the INSERT column list, append `, created_at` after `creator_mode`.
 2. In the INSERT `SELECT` list, append `, COALESCE(record.created_at, now())` after `record.creator_mode`.
@@ -1976,8 +2017,11 @@ test('updating a character bumps updated_at via the trigger', async () => {
   const { rows: after } = await db.query(
     'select created_at, updated_at from characters where id = $1', [created.id]
   );
-  expect(Date.parse(after[0].updated_at)).toBeGreaterThan(Date.parse(before[0].updated_at));
-  expect(Date.parse(after[0].updated_at)).toBeGreaterThanOrEqual(Date.parse(after[0].created_at));
+  // new Date(x).getTime(), not Date.parse(x): node-pg returns timestamptz as a
+  // Date object, and Date.parse coerces it via toString(), truncating to whole
+  // seconds — which makes a sub-second bump compare as unchanged.
+  expect(new Date(after[0].updated_at).getTime()).toBeGreaterThan(new Date(before[0].updated_at).getTime());
+  expect(new Date(after[0].updated_at).getTime()).toBeGreaterThanOrEqual(new Date(after[0].created_at).getTime());
 });
 ```
 

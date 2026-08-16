@@ -128,3 +128,55 @@ test('save_character_atomic raises rather than updating a row the creator does n
   const { rows } = await db.query('select name from characters where id = $1', [created.id]);
   expect(rows[0]?.name).toBe(`Atomic foreign ${suffix}`);
 });
+
+test('a supplied created_at is persisted on create', async () => {
+  await setup();
+  const backdated = '2025-01-15T00:00:00.000Z';
+  const { data: created, error } = await createCharacter(
+    { ...input(`Atomic backdated ${suffix}`), created_at: backdated }, profile
+  );
+  expect(error).toBeNull();
+
+  const { rows } = await db.query('select created_at from characters where id = $1', [created.id]);
+  expect(new Date(rows[0].created_at).toISOString()).toBe(backdated);
+});
+
+test('created_at survives an update whose payload omits it', async () => {
+  await setup();
+  const backdated = '2025-01-15T00:00:00.000Z';
+  const { data: created } = await createCharacter(
+    { ...input(`Atomic preserve ${suffix}`), created_at: backdated }, profile
+  );
+
+  const renamed = `Atomic preserved ${suffix}`;
+  const { error } = await updateCharacter(
+    created.id, { ...input(renamed), id: created.id }, profile
+  );
+  expect(error).toBeFalsy();
+
+  const { rows } = await db.query('select name, created_at from characters where id = $1', [created.id]);
+  expect(rows[0].name).toBe(renamed);
+  expect(new Date(rows[0].created_at).toISOString()).toBe(backdated);
+});
+
+test('updating a character bumps updated_at via the trigger', async () => {
+  await setup();
+  const { data: created } = await createCharacter(input(`Atomic bump ${suffix}`), profile);
+  const { rows: before } = await db.query('select updated_at from characters where id = $1', [created.id]);
+
+  await updateCharacter(
+    created.id, { ...input(`Atomic bumped ${suffix}`), id: created.id }, profile
+  );
+
+  const { rows: after } = await db.query(
+    'select created_at, updated_at from characters where id = $1', [created.id]
+  );
+  // node-pg parses timestamptz into a Date object, not a string. Date.parse()
+  // on a Date argument coerces it via the default Date#toString(), which has
+  // only whole-second resolution -- that silently dropped the sub-second part
+  // of these fast (tens-of-ms) round trips and made "before" and "after"
+  // collide on the same second almost every run. new Date(...).getTime()
+  // preserves full precision for both Date and string inputs.
+  expect(new Date(after[0].updated_at).getTime()).toBeGreaterThan(new Date(before[0].updated_at).getTime());
+  expect(new Date(after[0].updated_at).getTime()).toBeGreaterThanOrEqual(new Date(after[0].created_at).getTime());
+});

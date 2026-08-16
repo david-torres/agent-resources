@@ -1,3 +1,4 @@
+const moment = require('moment-timezone');
 const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
 const { statList } = require('../../util/enclave-consts');
@@ -115,6 +116,26 @@ const normalizeCharacterInput = (input, context = {}) => {
 
   if (context.normalizeAutoCalculate) data.auto_calculate = data.auto_calculate === 'on' || data.auto_calculate === true;
   if ('image_url' in data) data.image_url = data.image_url ? sanitizeHttpUrl(data.image_url) : null;
+
+  // created_at is editable because the backfill that seeded it was a guess and
+  // characters carry no other date a player could correct it with. Only this
+  // column is editable -- updated_at stays trigger-owned, or a row could be
+  // pinned to the top of the homepage feeds indefinitely.
+  if ('created_at' in data) {
+    const raw = typeof data.created_at === 'string' ? data.created_at.trim() : data.created_at;
+    if (!raw) {
+      delete data.created_at;
+    } else {
+      const parsed = moment.utc(raw, ['YYYY-MM-DD', moment.ISO_8601], true);
+      if (!parsed.isValid()) {
+        return { data: null, childData: null, error: 'Invalid created date.' };
+      }
+      if (parsed.isAfter(moment.utc())) {
+        return { data: null, childData: null, error: 'Created date cannot be in the future.' };
+      }
+      data.created_at = parsed.toISOString();
+    }
+  }
 
   return { data, childData, error: null };
 };

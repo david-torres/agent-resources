@@ -403,6 +403,20 @@ const buildClassContentLookupMaps = async () => {
 
 classService = new ClassService(classRepository);
 
+const getRecentClassesByCreator = async (profileId, { limit = 6 } = {}, client = supabase) => {
+    const { data, error } = await client
+        .from('classes')
+        .select('id, name, status, rules_edition, updated_at')
+        .eq('created_by', profileId)
+        .order('updated_at', { ascending: false })
+        .limit(limit);
+    if (error) {
+        console.error(error);
+        return { data: null, error };
+    }
+    return { data, error };
+}
+
 module.exports = {
     getClasses,
     getClass,
@@ -424,5 +438,6 @@ module.exports = {
     listClassesForAgent,
     getClassForAgent,
     serializeClassForAgent,
-    serializeClassSummaryForAgent
+    serializeClassSummaryForAgent,
+    getRecentClassesByCreator
 };

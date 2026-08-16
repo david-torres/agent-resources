@@ -11,6 +11,7 @@
 //   classes    -> seed:classes                 (needs admin; if empty)
 //   rules_pdfs -> seed:rules                    (needs admin; if empty)
 //   badges     -> fetch-badge-art + seed-badges (if empty)
+//   news       -> 2 published news pages      (needs admin; if empty)
 //
 // Usage: bun run seed:local [--force]
 //   --force  bypass the "must be a local Supabase URL" guard (dangerous).
@@ -136,9 +137,36 @@ async function main() {
       run("seeding badges", ["bun", "run", "seed:badges"]);
     }
 
+    // news — two published posts so the homepage news section renders locally.
+    // Authored by the admin profile, which the step above guarantees exists.
+    const newsCount = (
+      await client.query("select count(*)::int as n from pages where is_news")
+    ).rows[0].n;
+    if (newsCount > 0) {
+      skip("news pages already seeded");
+    } else {
+      const { rows: [admin] } = await client.query(
+        "select id from profiles where role = 'admin' order by id limit 1"
+      );
+      await client.query(
+        `insert into pages (title, slug, content, access_level, is_published, is_news, created_by, created_at)
+         values
+           ($1, 'welcome-to-agent-resources',
+            '## Welcome, Agent' || chr(10) || chr(10) ||
+            'Agent Resources is where you build Enclave characters, find games, and log missions.',
+            'public', true, true, $3, now() - interval '9 days'),
+           ($2, 'mission-logs-are-live',
+            '## Mission logs are live' || chr(10) || chr(10) ||
+            'Log a mission, tag the characters who ran it, and it shows up on their sheets.',
+            'public', true, true, $3, now() - interval '2 days')`,
+        ["Welcome to Agent Resources", "Mission logs are live", admin.id]
+      );
+      ok("news pages seeded (2)");
+    }
+
     console.log("");
     ok("local seeding complete");
-    for (const t of ["nav_items", "classes", "rules_pdfs", "badges", "profiles"]) {
+    for (const t of ["nav_items", "classes", "rules_pdfs", "badges", "pages", "profiles"]) {
       console.log(`      ${t.padEnd(12)} ${await count(t)} rows`);
     }
   } finally {

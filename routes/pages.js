@@ -63,7 +63,7 @@ router.get('/new', isAuthenticated, requireAdmin, async (req, res) => {
 // Admin: Create new page
 router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
-    const { title, slug, content, access_level, is_published } = req.body;
+    const { title, slug, content, access_level, is_published, is_news } = req.body;
 
     if (!title) {
         return sendError(req, res, null, { status: 400, message: 'Title is required' });
@@ -75,6 +75,7 @@ router.post('/', isAuthenticated, requireAdmin, async (req, res) => {
         content: content || '',
         access_level: access_level || 'public',
         is_published: normalizeBoolean(is_published, false),
+        is_news: normalizeBoolean(is_news, false),
         created_by: profile?.id || null
     };
 
@@ -111,7 +112,7 @@ router.get('/:id/edit', isAuthenticated, requireAdmin, async (req, res) => {
 // Admin: Update existing page
 router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
     const { id } = req.params;
-    const { title, slug, content, access_level, is_published } = req.body;
+    const { title, slug, content, access_level, is_published, is_news } = req.body;
 
     const { data: existingPage, error: loadError } = await getPage(id, res.locals.supabase);
     if (loadError || !existingPage) {
@@ -123,7 +124,16 @@ router.post('/:id', isAuthenticated, requireAdmin, async (req, res) => {
         slug: slug?.trim() || null, // Will be auto-generated if not provided
         content: content || existingPage.content,
         access_level: access_level || existingPage.access_level,
-        is_published: normalizeBoolean(is_published, existingPage.is_published)
+        // An unchecked HTML checkbox submits nothing -- there is no
+        // "is_published=off"/"is_news=off" in the body, the key is just
+        // absent. views/page-form.handlebars:15 is the ONLY thing that POSTs
+        // here (no partial-update API caller exists), so absent unambiguously
+        // means the admin unchecked the box. Falling back to the existing
+        // value here would make unchecking a permanent no-op -- once
+        // published/news, always published/news. Do not restore the
+        // existingPage.* fallback for these two fields.
+        is_published: normalizeBoolean(is_published, false),
+        is_news: normalizeBoolean(is_news, false)
     };
 
     const { error } = await updatePage(id, updates, res.locals.supabase);

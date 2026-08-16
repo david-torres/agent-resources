@@ -1,0 +1,20 @@
+{{#if upcomingGames.length}}
+<section class="block">
+  <h2 class="title is-5">
+    Your upcoming games
+    {{#if pendingLfgRequests}}<a href="/lfg" class="tag is-danger ml-2">{{pendingLfgRequests}} pending</a>{{/if}}
+  </h2>
+  <ul>
+    {{#each upcomingGames}}
+    <li class="is-flex is-justify-content-space-between is-align-items-baseline py-2">
+      <span>
+        <span class="tag is-light mr-2">{{#if (eq role "host")}}Host{{else}}Player{{/if}}</span>
+        <a href="/lfg/{{id}}">{{title}}</a>
+        {{#if characterName}}<span class="has-text-grey is-size-7 ml-2">as {{characterName}}</span>{{/if}}
+      </span>
+      <span class="has-text-grey is-size-7">{{date_tz date "lll" ../profile.timezone}}</span>
+    </li>
+    {{/each}}
+  </ul>
+</section>
+{{/if}}

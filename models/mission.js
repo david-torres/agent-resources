@@ -218,6 +218,40 @@ const searchPublicMissions = async (q, count = 12, hasVideo = false, characterNa
   }
 }
 
+// Homepage feeds. These select only the columns the feed row renders — the
+// homepage has six sections competing for one request, so none of them pull
+// full mission records.
+const getRecentMissionsByCreator = async (profileId, { limit = 6 } = {}, client = supabase) => {
+  const { data, error } = await client
+    .from('missions')
+    .select('id, name, outcome, date, updated_at')
+    .eq('creator_id', profileId)
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error };
+}
+
+const getRecentPublicMissions = async ({ limit = 6, excludeProfileId = null } = {}, client = supabase) => {
+  let query = client
+    .from('missions')
+    .select('id, name, outcome, date, updated_at')
+    .eq('is_public', true);
+  if (excludeProfileId) query = query.neq('creator_id', excludeProfileId);
+
+  const { data, error } = await query
+    .order('updated_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data, error };
+}
+
 const getRandomPublicMissions = async (count = 12, hasVideo = false, characterName = null, characterClass = null, conduitName = null) => {
   try {
     // Fetch a reasonably sized pool, then sample client-side for randomness
@@ -656,6 +690,8 @@ module.exports = {
   getHostedMissions,
   searchPublicMissions,
   getRandomPublicMissions,
+  getRecentMissionsByCreator,
+  getRecentPublicMissions,
   // Editor management
   getMissionEditors,
   addMissionEditor,

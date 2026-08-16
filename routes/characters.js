@@ -1,4 +1,5 @@
 const express = require('express');
+const moment = require('moment-timezone');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
@@ -404,6 +405,12 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       profile,
       isNew: false,
       character,
+      // Bounds the Created date input client-side so the browser blocks a
+      // future date before submit -- normalizeCharacterInput rejects it
+      // server-side too (services/character/input.js), but that rejection
+      // renders as a generic error page, not a field-level message. UTC to
+      // match the server-side check, which uses moment.utc().
+      maxCreatedAt: moment.utc().format('YYYY-MM-DD'),
       effectiveVersion,
       characterClass,
       upgradeTargets,

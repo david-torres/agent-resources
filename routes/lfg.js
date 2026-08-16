@@ -72,6 +72,12 @@ router.get('/tab/public', isAuthenticated, async (req, res) => {
   }
 });
 
+router.get('/tab/calendar', isAuthenticated, async (req, res) => {
+  // The container only; public/js/app.js fills it from /lfg/events/all once the
+  // tab's htmx request settles, which also lazy-loads the FullCalendar script.
+  res.render('partials/lfg-calendar', { layout: false });
+});
+
 router.get('/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
   const { data: allCharacters, error: characterError } = await getOwnCharacters(profile, res.locals.supabase);

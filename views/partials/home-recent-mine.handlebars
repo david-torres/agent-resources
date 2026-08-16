@@ -1,0 +1,13 @@
+{{#if recentMine.length}}
+<section class="block">
+  <h2 class="title is-5">Pick up where you left off</h2>
+  <ul class="mb-3">
+    {{#each recentMine}}{{> home-feed-item this}}{{/each}}
+  </ul>
+  <p class="is-size-7">
+    <a href="/characters">All characters</a> ·
+    <a href="/missions">All mission logs</a> ·
+    <a href="/classes/mine">My classes</a>
+  </p>
+</section>
+{{/if}}
