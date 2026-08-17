@@ -24,6 +24,7 @@ const badgesRoutes = require('./routes/badges');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
 const agentRoutes = require('./routes/agent');
+const sitemapRoutes = require('./routes/sitemap');
 const botLinkRoutes = require('./routes/bot-link');
 const { loadNavItems } = require('./util/nav-loader');
 
@@ -70,6 +71,10 @@ const createApp = () => {
     res.locals.supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
     next();
   });
+
+  // Before loadNavItems: the sitemap renders no layout, so it has no use for
+  // nav items and no reason to pay for the query.
+  app.use('/', sitemapRoutes);
 
   app.use(loadNavItems);
   app.use('/', homeRoutes);

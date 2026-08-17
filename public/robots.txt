@@ -1,0 +1,61 @@
+# Public game content is crawlable. Everything disallowed below is sign-in
+# gated, an admin screen, a machine endpoint, or an HTMX fragment.
+
+# Must be absolute; hard-coded because this file is static. The sitemap itself
+# derives its own origin per request (SITE_URL, see routes/sitemap.js).
+Sitemap: https://agent-resources.vip/sitemap.xml
+
+User-agent: *
+
+# Auth flow and machine endpoints.
+Disallow: /auth/
+Disallow: /api/
+Disallow: /link/bot
+
+# Gated index pages, anchored with $ so their public detail pages
+# (/characters/:id, /missions/:id, /lfg/:id) stay crawlable.
+Disallow: /characters$
+Disallow: /missions$
+Disallow: /lfg$
+Disallow: /profile$
+Disallow: /classes/my
+
+# Per-user areas. /profile/view/:name is the public player profile.
+Disallow: /profile/
+Allow: /profile/view/
+Disallow: /lfg/tab/
+Disallow: /lfg/events/
+
+# Admin screens.
+Disallow: /badges/
+Disallow: /nav/
+Disallow: /pages/manage
+Disallow: /library/manage
+Disallow: /library/unlocks
+
+# Forms and destructive actions.
+Disallow: /*/new
+Disallow: /*/edit
+Disallow: /*/import
+Disallow: /*/export
+Disallow: /*/join
+Disallow: /*/requests
+Disallow: /characters/wizard
+Disallow: /classes/redeem
+
+# Search endpoints and HTMX fragments.
+Disallow: /*/search
+Disallow: /*/s$
+Disallow: /*/similar
+Disallow: /party/panel
+Disallow: /characters/class-gear
+Disallow: /characters/class-abilities
+Disallow: /characters/common-item
+Disallow: /characters/quirk
+Disallow: /characters/accessory
+Disallow: /characters/ability-perk
+Disallow: /characters/version-fields
+Disallow: /characters/*/auto-calc-fields
+Disallow: /characters/*/details
+Disallow: /missions/*/editors
+Disallow: /missions/*/merge

@@ -23,7 +23,8 @@ const httpFiles = new Set([
   'routes/missions.test.js',
   'routes/nav-manage-navbar.test.js',
   'routes/pages.test.js',
-  'routes/party.test.js'
+  'routes/party.test.js',
+  'routes/sitemap.test.js'
 ]);
 const mode = process.argv[2] || 'unit';
 
