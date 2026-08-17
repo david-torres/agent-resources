@@ -1,0 +1,285 @@
+{{> breadcrumbs}}
+<div class="level">
+  <div class="level-left">
+    <h1 class="title is-2">Unlock Dashboard</h1>
+  </div>
+  <div class="level-right">
+    <a class="button" href="/library/manage">
+      <span class="icon"><i class="fas fa-file-pdf"></i></span>
+      <span>Manage Rules PDFs</span>
+    </a>
+  </div>
+</div>
+
+<div class="columns">
+  <div class="column is-half">
+    <div class="box">
+      <h2 class="title is-4">Grant Access</h2>
+      <form method="post" action="/library/unlocks">
+        <div class="field">
+          <label class="label" for="grant-document">Document</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="rules_pdf_id" id="grant-document" required>
+                <option value="" selected disabled>Select a document…</option>
+                {{#each rules}}
+                <option value="{{this.id}}">{{this.title}} — {{this.edition}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+                {{/each}}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="grant-profile-name">Profile Name</label>
+          <div class="control">
+            <input class="input" type="text" name="profile_name" id="grant-profile-name" placeholder="Exact profile name">
+          </div>
+          <p class="help">Provide a profile name <em>or</em> ID below.</p>
+        </div>
+        <div class="field">
+          <label class="label" for="grant-profile-id">Profile ID</label>
+          <div class="control">
+            <input class="input" type="text" name="profile_id" id="grant-profile-id" placeholder="UUID">
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="grant-expires">Expires At (optional)</label>
+          <div class="control">
+            <input class="input" type="datetime-local" name="expires_at" id="grant-expires">
+          </div>
+          <p class="help">Leave blank for no expiration.</p>
+        </div>
+        <div class="field">
+          <button class="button is-primary" type="submit">
+            <span class="icon"><i class="fas fa-key"></i></span>
+            <span>Grant Access</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+  <div class="column is-half">
+    <div class="box">
+      <h2 class="title is-4">Generate Unlock Codes</h2>
+      <form hx-post="/library/codes" hx-target="#codeResult" hx-swap="innerHTML transition:true" hx-disabled-elt="input, button, select, textarea" hx-sync="this:abort" hx-on::after-request="if(event.detail.successful) this.reset()">
+        <div class="field">
+          <label class="label" for="codes-document">Document</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="rules_pdf_id" id="codes-document" required>
+                <option value="" selected disabled>Select a document…</option>
+                {{#each rules}}
+                <option value="{{this.id}}">{{this.title}} — {{this.edition}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+                {{/each}}
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="codes-expires">Expires At (optional)</label>
+          <div class="control">
+            <input class="input" type="datetime-local" name="expires_at" id="codes-expires">
+          </div>
+          <p class="help">Expiry of the code itself; redeemed unlocks are permanent.</p>
+        </div>
+        <div class="columns">
+          <div class="column">
+            <div class="field">
+              <label class="label" for="codes-max-uses">Max Uses</label>
+              <div class="control">
+                <input class="input" type="number" min="1" name="max_uses" id="codes-max-uses" value="1">
+              </div>
+            </div>
+          </div>
+          <div class="column">
+            <div class="field">
+              <label class="label" for="codes-amount">Amount</label>
+              <div class="control">
+                <input class="input" type="number" min="1" name="amount" id="codes-amount" value="1">
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <div class="control">
+            <button class="button is-primary" type="submit">
+              <span class="icon"><i class="fas fa-key"></i></span>
+              <span>Generate Code(s)</span>
+            </button>
+          </div>
+        </div>
+      </form>
+      <div id="codeResult" class="mt-4"></div>
+    </div>
+  </div>
+</div>
+
+<div class="box">
+  <h2 class="title is-4">Unlocks</h2>
+  <div class="field is-grouped is-grouped-multiline">
+    <div class="control">
+      <div class="select">
+        <select id="filter-document" aria-label="Filter by document">
+          <option value="">All documents</option>
+          {{#each rules}}
+          <option value="{{this.id}}">{{this.title}} — {{this.edition}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+          {{/each}}
+        </select>
+      </div>
+    </div>
+    <div class="control is-expanded">
+      <input class="input" type="text" id="filter-profile" placeholder="Filter by profile name" aria-label="Filter by profile name">
+    </div>
+    <div class="control">
+      <div class="select">
+        <select id="filter-unlock-status" aria-label="Filter unlocks by status">
+          <option value="active" selected>Active</option>
+          <option value="expired">Expired</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {{#if grants.length}}
+  <div class="table-container">
+    <table class="table is-fullwidth is-striped" id="unlocks-table">
+      <thead>
+        <tr>
+          <th>Profile</th>
+          <th>Document</th>
+          <th>Granted</th>
+          <th>Granted by</th>
+          <th>Expires</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each grants}}
+        <tr data-document-id="{{this.rules_pdf.id}}" data-profile-name="{{this.profile.name}}" data-expired="{{this.isExpired}}">
+          <td>{{#if this.profile}}{{this.profile.name}}{{else}}<em>Unknown</em>{{/if}}</td>
+          <td>{{this.rules_pdf.title}} — {{this.rules_pdf.edition}}</td>
+          <td>{{date_tz this.unlocked_at}}</td>
+          <td>{{#if this.granter}}{{this.granter.name}}{{else}}—{{/if}}</td>
+          <td>
+            {{#if this.expires_at}}
+              {{date_tz this.expires_at}}
+              {{#if this.isExpired}}<span class="tag is-danger is-light">Expired</span>{{/if}}
+            {{else}}
+              <span class="tag is-success is-light">No expiration</span>
+            {{/if}}
+          </td>
+          <td class="has-text-right">
+            <button class="button is-small is-danger"
+                    hx-delete="/library/{{this.rules_pdf.id}}/unlocks/{{this.user_id}}"
+                    hx-confirm="Revoke access for {{#if this.profile}}{{this.profile.name}}{{else}}this profile{{/if}}?"
+                    hx-target="closest tr"
+                    hx-swap="outerHTML">
+              <span class="icon"><i class="fas fa-trash"></i></span>
+            </button>
+          </td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  <p class="notification is-light" id="unlocks-no-match" hidden>No unlocks match the current filters.</p>
+  {{else}}
+  <p class="notification is-light">No unlocks yet.</p>
+  {{/if}}
+</div>
+
+<div class="box">
+  <h2 class="title is-4">Unlock Codes</h2>
+  <div class="field is-grouped">
+    <div class="control">
+      <div class="select">
+        <select id="filter-code-status" aria-label="Filter codes by status">
+          <option value="usable" selected>Usable</option>
+          <option value="not-usable">Exhausted / Expired</option>
+          <option value="all">All</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  {{#if codes.length}}
+  <div class="table-container">
+    <table class="table is-fullwidth is-striped" id="codes-table">
+      <thead>
+        <tr>
+          <th>Code</th>
+          <th>Document</th>
+          <th>Uses</th>
+          <th>Expires</th>
+          <th>Created</th>
+          <th>Created by</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each codes}}
+        <tr data-document-id="{{this.rules_pdf.id}}" data-usable="{{this.isUsable}}">
+          <td><code>{{this.code}}</code></td>
+          <td>{{this.rules_pdf.title}} — {{this.rules_pdf.edition}}</td>
+          <td>{{this.used_count}}/{{this.max_uses}}</td>
+          <td>{{#if this.expires_at}}{{date_tz this.expires_at}}{{else}}Never{{/if}}</td>
+          <td>{{date_tz this.created_at}}</td>
+          <td>{{#if this.creator}}{{this.creator.name}}{{else}}—{{/if}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+  <p class="notification is-light" id="codes-no-match" hidden>No codes match the current filters.</p>
+  {{else}}
+  <p class="notification is-light">No codes yet.</p>
+  {{/if}}
+</div>
+
+<script>
+(() => {
+  const docFilter = document.getElementById('filter-document');
+  const nameFilter = document.getElementById('filter-profile');
+  const unlockStatus = document.getElementById('filter-unlock-status');
+  const codeStatus = document.getElementById('filter-code-status');
+
+  const filterTable = (tableId, noMatchId, rowMatches) => {
+    const table = document.getElementById(tableId);
+    if (!table) return;
+    let visible = 0;
+    table.querySelectorAll('tbody tr').forEach((row) => {
+      const show = rowMatches(row);
+      row.hidden = !show;
+      if (show) visible += 1;
+    });
+    const noMatch = document.getElementById(noMatchId);
+    if (noMatch) noMatch.hidden = visible > 0;
+  };
+
+  const applyFilters = () => {
+    const doc = docFilter.value;
+    const name = nameFilter.value.trim().toLowerCase();
+
+    filterTable('unlocks-table', 'unlocks-no-match', (row) => {
+      if (doc && row.dataset.documentId !== doc) return false;
+      if (name && !(row.dataset.profileName || '').toLowerCase().includes(name)) return false;
+      const expired = row.dataset.expired === 'true';
+      if (unlockStatus.value === 'active' && expired) return false;
+      if (unlockStatus.value === 'expired' && !expired) return false;
+      return true;
+    });
+
+    filterTable('codes-table', 'codes-no-match', (row) => {
+      if (doc && row.dataset.documentId !== doc) return false;
+      const usable = row.dataset.usable === 'true';
+      if (codeStatus.value === 'usable' && !usable) return false;
+      if (codeStatus.value === 'not-usable' && usable) return false;
+      return true;
+    });
+  };
+
+  [docFilter, unlockStatus, codeStatus].forEach((el) => el.addEventListener('change', applyFilters));
+  nameFilter.addEventListener('input', applyFilters);
+  applyFilters();
+})();
+</script>

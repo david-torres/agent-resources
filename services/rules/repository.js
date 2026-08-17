@@ -13,24 +13,6 @@ const withResult = async (query) => {
 };
 
 module.exports = {
-  // Admin-only: embedded profile/granter joins require bypassing RLS so
-  // non-public grantee profiles still resolve in the manage UI.
-  listUnlockGrantsAdmin: (rulesPdfId) => withResult(
-    supabaseAdmin
-      .from('rules_pdf_unlocks')
-      .select(`
-        user_id,
-        profile_id,
-        granted_by,
-        unlocked_at,
-        expires_at,
-        profile:profiles!rules_pdf_unlocks_profile_id_fkey(id, name),
-        granter:profiles!rules_pdf_unlocks_granted_by_fkey(id, name)
-      `)
-      .eq('rules_pdf_id', rulesPdfId)
-      .order('unlocked_at', { ascending: false })
-  ),
-
   insertUnlockCodes: (rows) => withResult(
     supabaseAdmin.from('rules_pdf_unlock_codes').insert(rows).select()
   ),
@@ -53,5 +35,42 @@ module.exports = {
         .or(`expires_at.is.null,expires_at.gt.${now}`)
         .limit(1)
     );
-  }
+  },
+
+  // Dashboard: every grant across every PDF, with the PDF joined in so
+  // rows can be labeled without a second lookup.
+  listAllUnlockGrantsAdmin: () => withResult(
+    supabaseAdmin
+      .from('rules_pdf_unlocks')
+      .select(`
+        user_id,
+        profile_id,
+        granted_by,
+        unlocked_at,
+        expires_at,
+        profile:profiles!rules_pdf_unlocks_profile_id_fkey(id, name),
+        granter:profiles!rules_pdf_unlocks_granted_by_fkey(id, name),
+        rules_pdf:rules_pdfs(id, title, edition)
+      `)
+      .order('unlocked_at', { ascending: false })
+  ),
+
+  // Dashboard: every code across every PDF. Admin client: creator profiles
+  // may not be public, and the codes table is admin-only under RLS.
+  listAllUnlockCodesAdmin: () => withResult(
+    supabaseAdmin
+      .from('rules_pdf_unlock_codes')
+      .select(`
+        id,
+        code,
+        rules_pdf_id,
+        created_at,
+        expires_at,
+        max_uses,
+        used_count,
+        rules_pdf:rules_pdfs(id, title, edition),
+        creator:profiles!rules_pdf_unlock_codes_created_by_fkey(id, name)
+      `)
+      .order('created_at', { ascending: false })
+  )
 };

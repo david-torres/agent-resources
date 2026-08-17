@@ -3,7 +3,7 @@ const multer = require('multer');
 const crypto = require('crypto');
 
 const router = express.Router();
-const { registerUuidParams } = require('../util/validate');
+const { registerUuidParams, isValidUuid } = require('../util/validate');
 registerUuidParams(router, ['id', 'userId']);
 
 const {
@@ -11,13 +11,13 @@ const {
     getRulesPdf,
     createRulesPdf,
     updateRulesPdf,
-    listRulesPdfUnlocks,
     listRulesPdfUnlocksForUser,
     upsertRulesPdfUnlock,
     deleteRulesPdfUnlock,
     createRulesPdfUnlockCodes,
-    listRulesPdfUnlockCodes,
-    canViewRulesPdf
+    canViewRulesPdf,
+    listAllUnlockGrantsAdmin,
+    listAllUnlockCodesAdmin
 } = require('../models/rules');
 const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
 const { getProfileByNameAdmin, getProfileByIdAdmin } = require('../models/profile');
@@ -110,20 +110,10 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
         return sendError(req, res, error, { message: 'Failed to load rules PDFs' });
     }
 
-    const rulesWithUnlocks = await Promise.all(
-        (rules || []).map(async (rule) => {
-            const { data: unlocks } = await listRulesPdfUnlocks(rule.id);
-            return {
-                ...rule,
-                unlocks: unlocks || []
-            };
-        })
-    );
-
     return res.render('library-manage', {
         profile,
         title: 'Manage Rules PDFs',
-        rules: rulesWithUnlocks,
+        rules: rules || [],
         activeNav: 'library',
         breadcrumbs: [
             { label: 'Library', href: '/library' },
@@ -131,6 +121,138 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
         ]
     });
 });
+
+// Admin: unlock dashboard — every grant and code across every PDF.
+router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
+    const { profile } = res.locals;
+
+    const [rulesResult, grantsResult, codesResult] = await Promise.all([
+        getRulesPdfs({ includeInactive: true }),
+        listAllUnlockGrantsAdmin(),
+        listAllUnlockCodesAdmin()
+    ]);
+
+    const error = rulesResult.error || grantsResult.error || codesResult.error;
+    if (error) {
+        return sendError(req, res, error, { message: 'Failed to load unlock dashboard' });
+    }
+
+    // Display state is computed here, not in the template: the client-side
+    // filter script reads it off data attributes.
+    const now = new Date();
+    const grants = (grantsResult.data || []).map((grant) => ({
+        ...grant,
+        isExpired: grant.expires_at ? new Date(grant.expires_at) <= now : false
+    }));
+    const codes = (codesResult.data || []).map((code) => ({
+        ...code,
+        isUsable: (!code.expires_at || new Date(code.expires_at) > now)
+            && code.used_count < code.max_uses
+    }));
+
+    return res.render('library-unlocks', {
+        profile,
+        title: 'Unlock Dashboard',
+        rules: rulesResult.data || [],
+        grants,
+        codes,
+        activeNav: 'library',
+        breadcrumbs: [
+            { label: 'Library', href: '/library' },
+            { label: 'Manage', href: '/library/manage' },
+            { label: 'Unlocks', href: '/library/unlocks' }
+        ]
+    });
+});
+
+// Admin: grant a user access to a rules PDF (document chosen in the form).
+router.post('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
+    const { rules_pdf_id, profile_name, profile_id, expires_at } = req.body;
+    const { profile } = res.locals;
+
+    if (!isValidUuid(rules_pdf_id)) {
+        return sendError(req, res, null, { status: 400, message: 'Invalid rules PDF id' });
+    }
+
+    const { data: rulesPdf, error: loadError } = await getRulesPdf(rules_pdf_id);
+    if (loadError || !rulesPdf) {
+        return sendError(req, res, loadError, { status: 404, message: 'Rules PDF not found' });
+    }
+
+    let profileRecord = null;
+    if (profile_id && profile_id.trim()) {
+        const result = await getProfileByIdAdmin(profile_id.trim());
+        if (result?.data) {
+            profileRecord = result.data;
+        }
+    } else if (profile_name && profile_name.trim()) {
+        const result = await getProfileByNameAdmin(profile_name.trim());
+        if (result?.data) {
+            profileRecord = result.data;
+        }
+    }
+
+    if (!profileRecord) {
+        return sendError(req, res, null, { status: 400, message: 'Profile not found' });
+    }
+
+    if (!profileRecord.user_id) {
+        return sendError(req, res, null, { status: 400, message: 'Profile is missing a linked user' });
+    }
+
+    const { error } = await upsertRulesPdfUnlock({
+        userId: profileRecord.user_id,
+        profileId: profileRecord.id,
+        rulesPdfId: rules_pdf_id,
+        expiresAt: parseExpiresAt(expires_at),
+        grantedBy: profile?.id || null
+    });
+
+    if (error) {
+        return sendError(req, res, error, { message: 'Failed to grant access' });
+    }
+
+    return res.redirect('/library/unlocks');
+});
+
+// Admin: generate unlock codes (document chosen in the form).
+router.post('/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
+    const { rules_pdf_id, expires_at, max_uses, amount } = req.body;
+
+    if (!isValidUuid(rules_pdf_id)) {
+        return sendError(req, res, null, { status: 400, message: 'Invalid rules PDF id' });
+    }
+
+    const createdByProfileId = res.locals.profile.id;
+    const count = parseInt(amount, 10) || 1;
+    const actor = actorFromLocals(res.locals);
+    const { data, error } = await createRulesPdfUnlockCodes(actor, {
+        rulesPdfId: rules_pdf_id,
+        createdByProfileId,
+        expiresAt: parseExpiresAt(expires_at),
+        maxUses: parseInt(max_uses, 10) || 1,
+        amount: count
+    });
+    if (error) return sendError(req, res, error);
+
+    if (count > 1) {
+        return res.render('partials/unlock-code-result', {
+            layout: false,
+            codes: data
+        });
+    }
+
+    if (!data || data.length === 0) {
+        return sendError(req, res, null, { status: 400, message: 'Unlock code creation returned no rows' });
+    }
+    const codeRow = data[0];
+    return res.render('partials/unlock-code-result', {
+        layout: false,
+        code: codeRow.code,
+        max_uses: codeRow.max_uses,
+        expires_at: codeRow.expires_at
+    });
+}));
 
 router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), async (req, res) => {
     const { profile } = res.locals;
@@ -207,54 +329,6 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
     return res.redirect('/library/manage');
 });
 
-router.post('/:id/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
-    const { id } = req.params;
-    const { profile_name, profile_id, expires_at } = req.body;
-    const { profile } = res.locals;
-
-    const { data: rulesPdf, error: loadError } = await getRulesPdf(id);
-    if (loadError || !rulesPdf) {
-        return sendError(req, res, loadError, { status: 404, message: 'Rules PDF not found' });
-    }
-
-    let profileRecord = null;
-    if (profile_id && profile_id.trim()) {
-        const result = await getProfileByIdAdmin(profile_id.trim());
-        if (result?.data) {
-            profileRecord = result.data;
-        }
-    } else if (profile_name && profile_name.trim()) {
-        const result = await getProfileByNameAdmin(profile_name.trim());
-        if (result?.data) {
-            profileRecord = result.data;
-        }
-    }
-
-    if (!profileRecord) {
-        return sendError(req, res, null, { status: 400, message: 'Profile not found' });
-    }
-
-    if (!profileRecord.user_id) {
-        return sendError(req, res, null, { status: 400, message: 'Profile is missing a linked user' });
-    }
-
-    const expiresAt = parseExpiresAt(expires_at);
-
-    const { error } = await upsertRulesPdfUnlock({
-        userId: profileRecord.user_id,
-        profileId: profileRecord.id,
-        rulesPdfId: id,
-        expiresAt,
-        grantedBy: profile?.id || null
-    });
-
-    if (error) {
-        return sendError(req, res, error, { message: 'Failed to grant access' });
-    }
-
-    return res.redirect('/library/manage');
-});
-
 router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req, res) => {
     const { id, userId } = req.params;
 
@@ -264,49 +338,6 @@ router.delete('/:id/unlocks/:userId', isAuthenticated, requireAdmin, async (req,
     }
 
     return res.status(204).send();
-});
-
-// Admin: generate unlock codes for a rules PDF
-router.post('/:id/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const { expires_at, max_uses, amount } = req.body;
-    const createdByProfileId = res.locals.profile.id;
-    const count = parseInt(amount, 10) || 1;
-    const actor = actorFromLocals(res.locals);
-    const { data, error } = await createRulesPdfUnlockCodes(actor, {
-        rulesPdfId: id,
-        createdByProfileId,
-        expiresAt: parseExpiresAt(expires_at),
-        maxUses: parseInt(max_uses, 10) || 1,
-        amount: count
-    });
-    if (error) return sendError(req, res, error);
-
-    if (count > 1) {
-        return res.render('partials/unlock-code-result', {
-            layout: false,
-            codes: data
-        });
-    }
-
-    if (!data || data.length === 0) {
-        return sendError(req, res, null, { status: 400, message: 'Unlock code creation returned no rows' });
-    }
-    const codeRow = data[0];
-    return res.render('partials/unlock-code-result', {
-        layout: false,
-        code: codeRow.code,
-        max_uses: codeRow.max_uses,
-        expires_at: codeRow.expires_at
-    });
-}));
-
-// Admin: list unlock codes for a rules PDF
-router.get('/:id/codes', isAuthenticated, requireAdmin, async (req, res) => {
-    const { id } = req.params;
-    const { data, error } = await listRulesPdfUnlockCodes(id, res.locals.supabase);
-    if (error) return sendError(req, res, error);
-    return res.json(data);
 });
 
 router.get('/:id/view', authOptional, async (req, res) => {

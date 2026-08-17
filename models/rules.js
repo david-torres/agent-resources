@@ -64,9 +64,8 @@ const updateRulesPdf = async (id, updates) => {
     return { data, error: null };
 };
 
-// Admin-only: embedded profile/granter joins require bypassing RLS so
-// non-public grantee profiles still resolve in the manage UI.
-const listRulesPdfUnlocks = (rulesPdfId) => rulesRepository.listUnlockGrantsAdmin(rulesPdfId);
+const listAllUnlockGrantsAdmin = () => rulesRepository.listAllUnlockGrantsAdmin();
+const listAllUnlockCodesAdmin = () => rulesRepository.listAllUnlockCodesAdmin();
 
 const upsertRulesPdfUnlock = async ({ userId, profileId, rulesPdfId, expiresAt, grantedBy }) => {
     const payload = {
@@ -131,20 +130,6 @@ const createRulesPdfUnlockCodes = async (actor, { rulesPdfId, createdByProfileId
     return rulesService.mintUnlockCodes(actor, inserts);
 };
 
-const listRulesPdfUnlockCodes = async (rulesPdfId, client = supabase) => {
-    const { data, error } = await client
-        .from('rules_pdf_unlock_codes')
-        .select('*')
-        .eq('rules_pdf_id', rulesPdfId)
-        .order('created_at', { ascending: false });
-
-    if (error) {
-        console.error(error);
-        return { data: null, error };
-    }
-    return { data, error: null };
-};
-
 const redeemRulesPdfUnlockCode = async (code, userId) => {
     const { data, error } = await supabase
         .rpc('redeem_rules_pdf_code_for_user', { p_code: code, p_user_id: userId });
@@ -206,12 +191,12 @@ module.exports = {
     getRulesPdf,
     createRulesPdf,
     updateRulesPdf,
-    listRulesPdfUnlocks,
+    listAllUnlockGrantsAdmin,
+    listAllUnlockCodesAdmin,
     listRulesPdfUnlocksForUser,
     upsertRulesPdfUnlock,
     deleteRulesPdfUnlock,
     createRulesPdfUnlockCodes,
-    listRulesPdfUnlockCodes,
     redeemRulesPdfUnlockCode,
     canViewRulesPdf
 };

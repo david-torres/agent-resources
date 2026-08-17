@@ -1,10 +1,8 @@
-const { mock, test, expect, afterAll } = require('bun:test');
+const { test, expect } = require('bun:test');
+const { freshRequire } = require('../test/helpers/fresh-require');
 
-const realBase = require('./_base');
-
-// Records inserts, eq filters, and rpc calls; resolves with canned data.
+// Records inserts and rpc calls; resolves with canned data.
 const inserted = [];
-const eqCalls = [];
 const rpcCalls = [];
 const fakeClient = {
     from(table) {
@@ -16,10 +14,7 @@ const fakeClient = {
                 return chain;
             },
             select() { return chain; },
-            eq(column, value) {
-                eqCalls.push({ table, column, value });
-                return chain;
-            },
+            eq() { return chain; },
             order() { return chain; },
             then(onFulfilled, onRejected) {
                 return Promise.resolve({ data: pendingRows, error: null }).then(onFulfilled, onRejected);
@@ -33,24 +28,27 @@ const fakeClient = {
     }
 };
 
-mock.module('./_base', () => ({
-    supabase: fakeClient,
-    supabaseAdmin: fakeClient,
-    anonKey: 'test-anon-key',
-    createUserClient: () => fakeClient
-}));
-
-delete require.cache[require.resolve('./rules')];
+// bun's mock.module permanently rebinds a resolved path the first time any
+// file calls it (see routes/library-unlocks.test.js and
+// util/redeem-code.test.js, which mock the whole '../models/rules' module
+// for their own route/fallback tests). Once that happens, deleting
+// require.cache and re-requiring './rules' can no longer force real code
+// to re-run -- it just keeps returning whatever mock.module last
+// registered for that path, regardless of import order. freshRequire loads
+// the real file via Node's own module loader instead, bypassing bun's
+// mock.module registry entirely so this file can't be poisoned by (or
+// poison) any other test file.
 const {
     createRulesPdfUnlockCodes,
-    listRulesPdfUnlockCodes,
     redeemRulesPdfUnlockCode
-} = require('./rules');
-
-afterAll(() => {
-    mock.module('./_base', () => realBase);
-    delete require.cache[require.resolve('./rules')];
-});
+} = freshRequire(require.resolve('./rules'), new Map([
+    [require.resolve('./_base'), {
+        supabase: fakeClient,
+        supabaseAdmin: fakeClient,
+        anonKey: 'test-anon-key',
+        createUserClient: () => fakeClient
+    }]
+]));
 
 test('createRulesPdfUnlockCodes inserts amount rows with unique base64url codes', async () => {
     inserted.length = 0;
@@ -76,15 +74,6 @@ test('createRulesPdfUnlockCodes inserts amount rows with unique base64url codes'
     }
     expect(new Set(rows.map(r => r.code)).size).toBe(3);
     expect(Array.isArray(data)).toBe(true);
-});
-
-test('listRulesPdfUnlockCodes filters by rules_pdf_id', async () => {
-    eqCalls.length = 0;
-    const { error } = await listRulesPdfUnlockCodes('pdf-1');
-    expect(error).toBeNull();
-    expect(eqCalls).toEqual([
-        { table: 'rules_pdf_unlock_codes', column: 'rules_pdf_id', value: 'pdf-1' }
-    ]);
 });
 
 test('redeemRulesPdfUnlockCode calls the for_user RPC', async () => {

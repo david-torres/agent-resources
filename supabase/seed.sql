@@ -169,3 +169,17 @@ VALUES (
     true,
     true
 );
+
+-- Unlock Dashboard (child of Admin, requires admin)
+INSERT INTO nav_items (label, type, url, icon, parent_id, position, requires_auth, requires_admin, is_active)
+VALUES (
+    'Unlock Dashboard',
+    'link',
+    '/library/unlocks',
+    'fas fa-key',
+    (SELECT id FROM nav_items WHERE label = 'Admin' AND type = 'dropdown' LIMIT 1),
+    2,
+    true,
+    true,
+    true
+);

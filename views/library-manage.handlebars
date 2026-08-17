@@ -4,10 +4,16 @@
     <h1 class="title is-2">Manage Rules PDFs</h1>
   </div>
   <div class="level-right">
-    <a class="button" href="/library">
-      <span class="icon"><i class="fas fa-arrow-left"></i></span>
-      <span>Back to Library</span>
-    </a>
+    <div class="buttons">
+      <a class="button is-link is-light" href="/library/unlocks">
+        <span class="icon"><i class="fas fa-key"></i></span>
+        <span>Unlock Dashboard</span>
+      </a>
+      <a class="button" href="/library">
+        <span class="icon"><i class="fas fa-arrow-left"></i></span>
+        <span>Back to Library</span>
+      </a>
+    </div>
   </div>
 </div>
 
@@ -127,123 +133,6 @@
         </button>
       </div>
     </form>
-
-    <div class="columns">
-      <div class="column is-half">
-        <h3 class="title is-5">Grant Access</h3>
-        <form method="post" action="/library/{{this.id}}/unlocks">
-          <div class="field">
-            <label class="label">Profile Name</label>
-            <div class="control">
-              <input class="input" type="text" name="profile_name" placeholder="Exact profile name">
-            </div>
-            <p class="help">Provide a profile name <em>or</em> ID below.</p>
-          </div>
-          <div class="field">
-            <label class="label">Profile ID</label>
-            <div class="control">
-              <input class="input" type="text" name="profile_id" placeholder="UUID">
-            </div>
-          </div>
-          <div class="field">
-            <label class="label">Expires At (optional)</label>
-            <div class="control">
-              <input class="input" type="datetime-local" name="expires_at">
-            </div>
-            <p class="help">Leave blank for no expiration.</p>
-          </div>
-          <div class="field">
-            <button class="button is-primary" type="submit">
-              <span class="icon"><i class="fas fa-key"></i></span>
-              <span>Grant Access</span>
-            </button>
-          </div>
-        </form>
-      </div>
-      <div class="column is-half">
-        <h3 class="title is-5">Current Unlocks</h3>
-        {{#if this.unlocks.length}}
-        <div class="table-container">
-          <table class="table is-fullwidth is-striped">
-            <thead>
-              <tr>
-                <th>Profile</th>
-                <th>Granted</th>
-                <th>Expires</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {{#each this.unlocks}}
-              <tr>
-                <td>{{#if this.profile}}{{this.profile.name}}{{else}}<em>Unknown</em>{{/if}}</td>
-                <td>{{date_tz this.unlocked_at}}</td>
-                <td>
-                  {{#if this.expires_at}}
-                    {{date_tz this.expires_at}}
-                  {{else}}
-                    <span class="tag is-success is-light">No expiration</span>
-                  {{/if}}
-                </td>
-                <td class="has-text-right">
-                  <button class="button is-small is-danger"
-                          hx-delete="/library/{{../id}}/unlocks/{{this.user_id}}"
-                          hx-confirm="Revoke access for {{#if this.profile}}{{this.profile.name}}{{else}}this profile{{/if}}?"
-                          hx-target="closest tr"
-                          hx-swap="outerHTML">
-                    <span class="icon"><i class="fas fa-trash"></i></span>
-                  </button>
-                </td>
-              </tr>
-              {{/each}}
-            </tbody>
-          </table>
-        </div>
-        {{else}}
-        <p class="notification is-light">No unlocks yet.</p>
-        {{/if}}
-      </div>
-    </div>
-
-    <h3 class="title is-5">Generate Unlock Codes</h3>
-    <form hx-post="/library/{{this.id}}/codes" hx-target="#pdfCodeResult-{{this.id}}" hx-swap="innerHTML transition:true" hx-disabled-elt="input, button, select, textarea" hx-sync="this:abort" hx-on::after-request="if(event.detail.successful) this.reset()">
-      <div class="columns">
-        <div class="column">
-          <div class="field">
-            <label class="label">Expires At (optional)</label>
-            <div class="control">
-              <input class="input" type="datetime-local" name="expires_at">
-            </div>
-            <p class="help">Expiry of the code itself; redeemed unlocks are permanent.</p>
-          </div>
-        </div>
-        <div class="column">
-          <div class="field">
-            <label class="label">Max Uses</label>
-            <div class="control">
-              <input class="input" type="number" min="1" name="max_uses" value="1">
-            </div>
-          </div>
-        </div>
-        <div class="column">
-          <div class="field">
-            <label class="label">Amount</label>
-            <div class="control">
-              <input class="input" type="number" min="1" name="amount" value="1">
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="field">
-        <div class="control">
-          <button class="button is-primary" type="submit">
-            <span class="icon"><i class="fas fa-key"></i></span>
-            <span>Generate Code(s)</span>
-          </button>
-        </div>
-      </div>
-    </form>
-    <div id="pdfCodeResult-{{this.id}}" class="mt-4"></div>
   </div>
   {{/each}}
 {{else}}

@@ -300,6 +300,20 @@ async function seedNavItems() {
         if (navManage.error) console.error('Error creating Manage Navigation:', navManage.error);
         else console.log('Created Manage Navigation');
 
+        const unlockDashboard = await createNavItemDirect({
+            label: 'Unlock Dashboard',
+            type: 'link',
+            url: '/library/unlocks',
+            icon: 'fas fa-key',
+            parent_id: adminId,
+            position: 2,
+            requires_auth: true,
+            requires_admin: true,
+            is_active: true
+        });
+        if (unlockDashboard.error) console.error('Error creating Unlock Dashboard:', unlockDashboard.error);
+        else console.log('Created Unlock Dashboard');
+
         console.log('\n✅ Navigation items seeded successfully!');
         console.log('Note: Profile and Sign Out buttons are still hardcoded in the nav partial.');
     } catch (error) {
