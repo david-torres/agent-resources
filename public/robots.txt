@@ -12,6 +12,12 @@
 #   * an HTMX fragment -- partial HTML with no layout, meaningless as a
 #     standalone search result.
 
+# Absolute by spec -- a Sitemap line cannot be relative. Hard-coded to the
+# canonical host because this file is static; the sitemap itself derives its
+# own <loc> origin from SITE_URL (see routes/sitemap.js), so a non-production
+# deployment still generates correct URLs for its own host.
+Sitemap: https://agent-resources.vip/sitemap.xml
+
 User-agent: *
 
 # Auth flow and machine endpoints.

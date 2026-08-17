@@ -53,7 +53,11 @@ and `bun run setup` handles the full DB bootstrap.
      **Project Settings → General**. Only needed if your project is not in
      `us-east-1`. `bun run scripts/probe-region.mjs` detects it.
 
-   Optional: `OPENAI_API_KEY` and any `SYSTEM_MESSAGE_*` settings.
+   Optional: `OPENAI_API_KEY`, `SITE_URL`, and any `SYSTEM_MESSAGE_*`
+   settings. `SITE_URL` is the canonical public origin (e.g.
+   `https://agent-resources.vip`) used for the absolute URLs in
+   `/sitemap.xml`; leave it unset in development and the sitemap uses the
+   request's own scheme and host.
 
 3. Run the setup script. It installs dependencies, applies all migrations
    in `supabase/migrations/`, and seeds the navigation table — safe to

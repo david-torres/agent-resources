@@ -98,6 +98,21 @@ test('serves a wildcard group that does not blanket-block the site', () => {
   expect(isAllowed(rules, '/')).toBe(true);
 });
 
+// A Sitemap line is host-global, not part of any user-agent group, and the
+// spec requires it to be absolute -- a relative path is silently ignored,
+// which looks exactly like having no sitemap at all.
+test('points crawlers at an absolute sitemap URL', () => {
+  const sitemaps = body
+    .split('\n')
+    .map(line => line.replace(/#.*$/, '').trim())
+    .filter(line => /^sitemap:/i.test(line))
+    .map(line => line.slice(line.indexOf(':') + 1).trim());
+
+  expect(sitemaps.length).toBe(1);
+  expect(() => new URL(sitemaps[0])).not.toThrow();
+  expect(new URL(sitemaps[0]).pathname).toBe('/sitemap.xml');
+});
+
 test.each([
   // Public content stays crawlable.
   ['/', true],
