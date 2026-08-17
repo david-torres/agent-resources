@@ -1,16 +1,7 @@
-// services/sitemap/build.test.js
-//
-// The sitemap is a document nobody on the team ever looks at directly -- a
-// crawler reads it, and a mistake shows up weeks later as pages missing from
-// (or wrongly present in) search results. So the things worth pinning down are
-// the ones with no visible failure mode:
-//
-//   * URLs match the routes the app actually serves (/characters/:id/:name,
-//     /classes/:id/:name, /missions/:id, /pages/:slug, /profile/view/:name).
-//   * Names and slugs are URL-encoded and then XML-escaped -- a character
-//     called "Nadia & Co" must not produce a malformed document.
-//   * A section whose table is unreachable degrades to empty and is reported,
-//     rather than 500ing the whole sitemap or being silently cached.
+// Nobody reads the sitemap directly -- a mistake shows up weeks later as pages
+// missing from search results. Covers the parts with no visible failure mode:
+// URLs matching the routes the app serves, encoding/escaping of user-supplied
+// names, and a failing section degrading rather than breaking the document.
 const { test, expect, beforeEach } = require('bun:test');
 const { JSDOM } = require('jsdom');
 
@@ -44,8 +35,7 @@ const emptyDeps = () => ({
 
 const locs = (xml) => [...xml.matchAll(/<loc>([^<]*)<\/loc>/g)].map(match => match[1]);
 
-// Parse as XML so escaping bugs surface as a parse error rather than as a
-// string comparison that happens to still pass.
+// Parse as XML so escaping bugs surface as a parse error.
 const { DOMParser } = new JSDOM('').window;
 const parse = (xml) => new DOMParser().parseFromString(xml, 'text/xml');
 
@@ -103,8 +93,8 @@ test('names are URL-encoded and XML-escaped', async () => {
   const doc = parse(xml);
   expect(doc.getElementsByTagName('parsererror').length).toBe(0);
 
-  // encodeURIComponent turns & into %26, so the escaped document carries no
-  // raw markup characters from user data at all.
+  // encodeURIComponent turns & into %26, so no raw markup from user data
+  // reaches the document at all.
   expect(xml).toContain(`${BASE}/characters/char-1/Nadia%20%26%20%22Rook%22%20%3Cthe%20Kid%3E`);
   expect(xml).toContain(`${BASE}/profile/view/a%20b%2Fc`);
 });
@@ -112,9 +102,8 @@ test('names are URL-encoded and XML-escaped', async () => {
 test('rows with no usable URL segment are dropped', async () => {
   const { xml } = await buildSitemap({ baseUrl: BASE }, {
     ...emptyDeps(),
-    // A blank name is fine for characters and classes -- the routes make the
-    // name segment optional -- but a page needs its slug and a profile is
-    // looked up by name, so those rows have no reachable URL.
+    // A blank name is fine for characters and classes (optional segment), but
+    // a page needs its slug and a profile is looked up by name.
     listPublicCharacters: ok([{ id: 'char-1', name: '   ', updated_at: null }]),
     listPublicPages: ok([{ slug: null, updated_at: null }, { slug: 'real', updated_at: null }]),
     listPublicProfiles: ok([{ name: '' }])
@@ -180,7 +169,7 @@ test('each section asks for its documented cap', async () => {
   });
 
   expect(asked).toEqual(LIMITS);
-  // The caps have to leave room for a single valid sitemap (50,000 URLs).
+  // Must leave room for a single valid sitemap (50,000 URLs).
   const total = Object.values(LIMITS).reduce((sum, value) => sum + value, 0);
   expect(total + STATIC_PATHS.length).toBeLessThanOrEqual(50000);
 });
@@ -202,7 +191,7 @@ test('a complete document is cached; a degraded one is not', async () => {
   expect(second.cached).toBe(true);
   expect(second.xml).toBe(first.xml);
 
-  // A different origin is a different document and must not reuse the cache.
+  // A different origin is a different document.
   const other = await getSitemapXml({ baseUrl: 'http://localhost:3000' }, counting());
   expect(calls).toBe(2);
   expect(other.cached).toBe(false);

@@ -6,12 +6,9 @@ const {
   listPublicProfiles
 } = require('../../models/sitemap');
 
-// sitemaps.org caps a single sitemap at 50,000 URLs. These per-section caps sum
-// to 40,000, which leaves headroom for the static list and for one section to
-// grow without silently pushing another out of a valid document. A section that
-// hits its cap is logged, never quietly truncated -- if one of these starts
-// firing, the fix is a sitemap index with one child document per section, not a
-// bigger number here.
+// sitemaps.org caps a single sitemap at 50,000 URLs; these sum to 40,000. If a
+// section starts logging that it hit its cap, the fix is a sitemap index with a
+// child document per section, not a bigger number here.
 const LIMITS = {
   characters: 10000,
   missions: 10000,
@@ -20,10 +17,8 @@ const LIMITS = {
   profiles: 10000
 };
 
-// Routes that exist regardless of what is in the database. Auth-gated indexes
-// (/characters, /missions, /lfg, /profile) are deliberately absent: a crawler
-// only ever gets a redirect to /auth/check from them, which is also why
-// robots.txt disallows them.
+// Auth-gated indexes (/characters, /missions, /lfg, /profile) are absent on
+// purpose: a crawler only gets a redirect to /auth/check from them.
 const STATIC_PATHS = [
   '/',
   '/news',
@@ -50,9 +45,8 @@ const escapeXml = (value) => String(value)
   .replace(/"/g, '&quot;')
   .replace(/'/g, '&apos;');
 
-// <lastmod> takes a W3C datetime. Anything unparseable is dropped rather than
-// emitted malformed: an entry with no lastmod is valid, one with a broken date
-// invalidates the document.
+// An entry with no lastmod is valid; one with a malformed date invalidates the
+// whole document, so anything unparseable is dropped.
 const toLastmod = (value) => {
   if (!value) return null;
   const parsed = new Date(value);
@@ -61,8 +55,7 @@ const toLastmod = (value) => {
 
 const segment = (value) => encodeURIComponent(String(value));
 
-// The routes accept /characters/:id and /classes/:id with the name segment
-// omitted, so a row with a blank name still gets a working URL.
+// The name segment is optional in the routes, so a blank name still works.
 const named = (prefix, id, name) => (name && String(name).trim()
   ? `${prefix}/${segment(id)}/${segment(name)}`
   : `${prefix}/${segment(id)}`);
@@ -81,10 +74,9 @@ const renderSitemap = (entries) => {
   ].join('\n');
 };
 
-// One sick table should not blank the whole sitemap, so each section is
-// isolated the way the homepage isolates its feeds (services/home/sections.js).
-// The difference: a degraded sitemap is reported back to the caller in
-// `failures` so the route can decline to cache it and retry on the next hit.
+// Sections are isolated like the homepage feeds (services/home/sections.js), so
+// one sick table cannot blank the sitemap. Failures are reported back so the
+// caller can decline to cache a degraded document.
 const collect = async (label, run, toEntries, failures) => {
   try {
     const { data, error } = await run();
@@ -132,8 +124,8 @@ const buildSitemap = async ({ baseUrl }, deps = defaultDeps) => {
         lastmod: toLastmod(row.updated_at)
       })), failures),
     collect('profiles', () => deps.listPublicProfiles({ limit: LIMITS.profiles }),
-      // /profile/view/:name is looked up by name, so an unnamed profile has no
-      // reachable URL. profiles carries no updated_at, hence no lastmod.
+      // Looked up by name, so an unnamed profile has no reachable URL.
+      // profiles carries no updated_at, hence no lastmod.
       rows => rows.filter(row => row.name).map(row => ({
         loc: url(`/profile/view/${segment(row.name)}`)
       })), failures)
@@ -151,15 +143,10 @@ const buildSitemap = async ({ baseUrl }, deps = defaultDeps) => {
   return { xml: renderSitemap(entries), entries, failures };
 };
 
-// Building the document is five paginated table scans, and crawlers refetch
-// /sitemap.xml on their own schedule (sometimes several bots at once), so the
-// rendered XML is held briefly in memory. Fifteen minutes is well inside how
-// quickly any crawler acts on a lastmod change.
-//
-// A degraded document (one section's table was unreachable) is still worth
-// serving -- the URLs in it are correct -- but it is deliberately not cached,
-// or a transient blip freezes an incomplete sitemap in front of crawlers for
-// the next quarter hour.
+// The document costs five paginated table scans and crawlers refetch it on
+// their own schedule, so it is held briefly in memory. A degraded document is
+// not cached -- a transient blip should not freeze an incomplete sitemap in
+// front of crawlers for a quarter hour.
 const CACHE_TTL_MS = 15 * 60 * 1000;
 
 let cache = null;
@@ -176,8 +163,7 @@ const getSitemapXml = async ({ baseUrl }, deps = defaultDeps) => {
   return { xml, failures, cached: false };
 };
 
-// Exported for tests; also the hook to reach for if content writes ever need
-// to invalidate the sitemap eagerly.
+// Exported for tests, and for eager invalidation if content writes ever need it.
 const clearSitemapCache = () => { cache = null; };
 
 module.exports = {

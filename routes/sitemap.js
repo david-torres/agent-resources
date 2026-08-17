@@ -3,11 +3,9 @@ const router = express.Router();
 const { asyncHandler } = require('../util/async-handler');
 const { getSitemapXml } = require('../services/sitemap/build');
 
-// <loc> has to be an absolute URL, so the document needs to know its own
-// origin. SITE_URL is authoritative when set (the Host header is client
-// controlled, and behind a TLS-terminating proxy req.protocol reads as http);
-// the request-derived fallback is what makes this work in local dev, where
-// nobody has a SITE_URL configured.
+// <loc> must be absolute, so the document needs its own origin. SITE_URL wins
+// when set (Host is client controlled, and behind a TLS-terminating proxy
+// req.protocol reads as http); the fallback is what makes local dev work.
 const resolveBaseUrl = (req) => {
   const configured = (process.env.SITE_URL || '').trim();
   if (configured) return configured.replace(/\/+$/, '');
@@ -20,8 +18,8 @@ router.get('/sitemap.xml', asyncHandler(async (req, res) => {
   const { xml, failures } = await getSitemapXml({ baseUrl: resolveBaseUrl(req) });
 
   res.set('Content-Type', 'application/xml; charset=utf-8');
-  // A degraded document is served but marked short-lived, so crawlers and any
-  // CDN in front of us come back for the complete one soon.
+  // A degraded document is marked short-lived so crawlers and any CDN in front
+  // of us come back for the complete one soon.
   res.set('Cache-Control', failures.length === 0 ? 'public, max-age=900' : 'public, max-age=60');
   return res.send(xml);
 }));

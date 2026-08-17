@@ -72,8 +72,8 @@ const createApp = () => {
     next();
   });
 
-  // Mounted before loadNavItems: the sitemap renders no layout, so it has no
-  // use for nav items and no reason to pay for the query.
+  // Before loadNavItems: the sitemap renders no layout, so it has no use for
+  // nav items and no reason to pay for the query.
   app.use('/', sitemapRoutes);
 
   app.use(loadNavItems);

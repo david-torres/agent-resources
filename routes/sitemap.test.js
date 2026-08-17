@@ -1,13 +1,6 @@
-// routes/sitemap.test.js
-//
-// Covers the part of the sitemap that lives in the route rather than the
-// builder: how the document learns its own origin, and what it tells caches.
-//
-// Origin matters more than it looks. <loc> must be absolute, and a sitemap
-// whose URLs point at the wrong scheme or host is worse than no sitemap --
-// every URL in it is unreachable or cross-host, and crawlers reject it. In
-// production the app sits behind a TLS-terminating proxy, so req.protocol
-// reads as http and only SITE_URL (or X-Forwarded-Proto) knows better.
+// Covers what lives in the route rather than the builder: how the document
+// learns its own origin, and what it tells caches. A sitemap whose URLs carry
+// the wrong scheme or host is worse than no sitemap -- crawlers reject it.
 const { test, expect, mock, beforeAll, afterAll, beforeEach } = require('bun:test');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
@@ -16,8 +9,7 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 
 const realSitemapModel = require('../models/sitemap');
 
-// Mutable test state: the route exercises the real service and the real
-// builder, and only the database layer is stubbed.
+// Only the database layer is stubbed; the real route, service, and builder run.
 let missionRows = [];
 let missionError = null;
 
@@ -95,8 +87,8 @@ test('SITE_URL wins over the request, and its trailing slash is trimmed', async 
   expect(body).not.toContain(baseUrl);
 });
 
-// Behind a TLS-terminating proxy the app itself speaks http, so without this
-// every <loc> would advertise http:// for an https-only site.
+// The app itself speaks http behind the proxy, so without this every <loc>
+// would advertise http:// for an https-only site.
 test('honors X-Forwarded-Proto when SITE_URL is unset', async () => {
   const res = await fetch(`${baseUrl}/sitemap.xml`, {
     headers: { 'X-Forwarded-Proto': 'https, http' }
@@ -119,8 +111,8 @@ test('a degraded document is still served, but marked short-lived', async () => 
   // ...and the failed one contributed nothing.
   expect(body).not.toContain('/missions/');
 
-  // Nothing partial was cached: once the table recovers, the very next request
-  // serves the complete document rather than waiting out a 15-minute TTL.
+  // Nothing partial was cached, so recovery is immediate rather than waiting
+  // out the 15-minute TTL.
   missionError = null;
   const recovered = await fetch(`${baseUrl}/sitemap.xml`);
   expect(recovered.headers.get('cache-control')).toBe('public, max-age=900');

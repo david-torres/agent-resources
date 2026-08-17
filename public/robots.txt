@@ -1,21 +1,8 @@
-# Agent Resources
-#
-# Public game content is welcome to be crawled: the home page, news, static
-# pages, classes, missions, character sheets, player profiles, LFG posts and
-# the rules library all render standalone for signed-out visitors.
-#
-# Everything disallowed below is one of:
-#   * sign-in gated (an anonymous crawler only ever gets a redirect to
-#     /auth/check, so crawling it is pure waste),
-#   * an admin screen,
-#   * a machine endpoint (/api/agent/*, exports), or
-#   * an HTMX fragment -- partial HTML with no layout, meaningless as a
-#     standalone search result.
+# Public game content is crawlable. Everything disallowed below is sign-in
+# gated, an admin screen, a machine endpoint, or an HTMX fragment.
 
-# Absolute by spec -- a Sitemap line cannot be relative. Hard-coded to the
-# canonical host because this file is static; the sitemap itself derives its
-# own <loc> origin from SITE_URL (see routes/sitemap.js), so a non-production
-# deployment still generates correct URLs for its own host.
+# Must be absolute; hard-coded because this file is static. The sitemap itself
+# derives its own origin per request (SITE_URL, see routes/sitemap.js).
 Sitemap: https://agent-resources.vip/sitemap.xml
 
 User-agent: *
@@ -25,8 +12,8 @@ Disallow: /auth/
 Disallow: /api/
 Disallow: /link/bot
 
-# Sign-in gated index pages. The detail pages beneath them stay crawlable
-# (e.g. /characters/:id, /missions/:id), so these are anchored with $.
+# Gated index pages, anchored with $ so their public detail pages
+# (/characters/:id, /missions/:id, /lfg/:id) stay crawlable.
 Disallow: /characters$
 Disallow: /missions$
 Disallow: /lfg$
@@ -46,7 +33,7 @@ Disallow: /pages/manage
 Disallow: /library/manage
 Disallow: /library/unlocks
 
-# Create/edit/import forms and destructive actions.
+# Forms and destructive actions.
 Disallow: /*/new
 Disallow: /*/edit
 Disallow: /*/import

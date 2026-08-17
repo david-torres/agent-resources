@@ -1,20 +1,10 @@
-// test/robots-txt.test.js
+// public/robots.txt is a static file, so there is no handler to test -- but
+// getting it wrong is invisible until pages drop out of (or into) search
+// results. Checks that it is reachable and that its anchored/wildcard patterns
+// classify real paths correctly.
 //
-// public/robots.txt is a plain file served by the express.static mount in
-// app.js, so there is no route handler to test -- but the file itself is easy
-// to get subtly wrong in a way nobody notices until pages quietly drop out of
-// (or into) search results. Two things are worth pinning down:
-//
-//   1. It is actually reachable at /robots.txt. Crawlers only look there;
-//      a file that stops being served is indistinguishable from no rules.
-//   2. The rules classify paths the way we mean them to. The anchored and
-//      wildcard patterns are the fiddly part: "Disallow: /characters$" must
-//      keep the gated index out while leaving /characters/:id crawlable, and
-//      "Allow: /profile/view/" must win over "Disallow: /profile/".
-//
-// The matcher below implements the subset of the robots.txt spec our file
-// uses -- '*' wildcards, '$' end-anchors, and longest-match-wins between
-// Allow and Disallow -- which is what Googlebot and Bingbot both do.
+// The matcher implements the subset of the spec the file uses -- '*', '$', and
+// longest-match-wins between Allow and Disallow -- as Googlebot and Bingbot do.
 const { test, expect, beforeAll, afterAll } = require('bun:test');
 const express = require('express');
 const path = require('path');
@@ -93,14 +83,13 @@ test('serves a wildcard group that does not blanket-block the site', () => {
   const rules = parseRules(body);
 
   expect(rules.length).toBeGreaterThan(0);
-  // "Disallow: /" would deindex everything -- the one catastrophic typo here.
+  // The one catastrophic typo here: it would deindex everything.
   expect(rules.some(rule => !rule.allow && rule.pattern === '/')).toBe(false);
   expect(isAllowed(rules, '/')).toBe(true);
 });
 
-// A Sitemap line is host-global, not part of any user-agent group, and the
-// spec requires it to be absolute -- a relative path is silently ignored,
-// which looks exactly like having no sitemap at all.
+// A relative Sitemap line is silently ignored, which looks exactly like having
+// no sitemap at all.
 test('points crawlers at an absolute sitemap URL', () => {
   const sitemaps = body
     .split('\n')
@@ -130,8 +119,7 @@ test.each([
   ['/profile/view/nadia', true],
   ['/party', true],
 
-  // Sign-in gated indexes: blocked, without taking their detail pages with
-  // them (covered by the crawlable cases above).
+  // Gated indexes, blocked without taking their detail pages with them.
   ['/characters', false],
   ['/missions', false],
   ['/lfg', false],

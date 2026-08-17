@@ -1,16 +1,13 @@
 const { supabase } = require('./_base');
 
-// Sitemap listings. Every query here runs on the anon singleton on purpose:
-// the sitemap is a public document, so the rows it can see should be exactly
-// the rows a signed-out visitor can see. The explicit is_public/is_published
-// filters below are belt-and-braces on top of RLS, and they double as the
-// definition of "crawlable" for anything RLS leaves readable but the routes
-// still gate (see canViewPage / canViewClass).
+// Every query runs on the anon singleton on purpose: the sitemap is a public
+// document, so the rows it sees should be exactly the rows a signed-out visitor
+// sees. The explicit is_public/is_published filters are belt-and-braces on top
+// of RLS.
 
-// PostgREST caps a single response at 1000 rows, so every listing pages with
-// .range() until it runs dry or hits its cap. Ordering is by `id` rather than
-// recency: range pagination over a table that is being written to needs a
-// stable sort, or rows shift between pages and get skipped or duplicated.
+// PostgREST caps a response at 1000 rows, so listings page with .range().
+// Ordered by `id`, not recency: range pagination over a table being written to
+// needs a stable sort, or rows shift between pages and get skipped.
 const PAGE_SIZE = 1000;
 
 const fetchAllRows = async (buildQuery, limit) => {
@@ -24,18 +21,16 @@ const fetchAllRows = async (buildQuery, limit) => {
       return { data: null, error };
     }
     rows.push(...(data || []));
-    // A short page means the table is exhausted -- stop before spending a
-    // round trip on a range we know is empty.
+    // A short page means the table is exhausted.
     if (!data || data.length < size) break;
   }
 
   return { data: rows, error: null };
 };
 
-// hide_from_search is honored here for the same reason models/character.js
-// honors it on the homepage feed and in search: opting a character out of
-// discovery has to mean opting it out of the sitemap too, which is the most
-// literal discovery surface there is.
+// hide_from_search is honored for the same reason models/character.js honors it
+// in search and the homepage feed: opting out of discovery has to mean opting
+// out of the sitemap too.
 const listPublicCharacters = ({ limit }, client = supabase) => fetchAllRows(() => client
   .from('characters')
   .select('id, name, updated_at')
@@ -55,9 +50,8 @@ const listPublicClasses = ({ limit }, client = supabase) => fetchAllRows(() => c
   .eq('is_public', true)
   .order('id', { ascending: true }), limit);
 
-// access_level 'authenticated' and 'admin' pages are excluded even though they
-// exist and are published: routes/pages.js gates them, so a crawler following
-// the URL would only ever get an error page.
+// Published 'authenticated'/'admin' pages are excluded: routes/pages.js gates
+// them, so a crawler following the URL only gets an error page.
 const listPublicPages = ({ limit }, client = supabase) => fetchAllRows(() => client
   .from('pages')
   .select('slug, updated_at')
