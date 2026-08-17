@@ -48,17 +48,26 @@ Breadcrumbs: Library → Manage → Unlocks. Nav: an "Unlock Dashboard" entry
 under the Admin dropdown, added in `util/seed-nav.js` and
 `supabase/seed.sql` (same pattern as Manage Pages).
 
-### Existing endpoints
+### Action endpoints
 
-- `POST /library/:id/unlocks` (grant) — behavior unchanged, except the final
-  redirect changes from `/library/manage` to `/library/unlocks`, where the
-  form now lives.
-- `DELETE /library/:id/unlocks/:userId` (revoke) — unchanged.
-- `POST /library/:id/codes` (generate) — unchanged; still renders
-  `partials/unlock-code-result`.
-- `GET /library/:id/codes` (JSON list, never surfaced in any UI) —
-  **deleted**. The dashboard renders codes server-side, so the endpoint is
-  dead code.
+The grant and generate endpoints move the document id from the URL path
+into the request body, because the dashboard forms pick the document from a
+select. (A script swapping the form's action/`hx-post` URL per selection
+was considered and rejected: htmx captures the `hx-post` path when it first
+processes the element, so attribute mutation is silently ignored.)
+
+- `POST /library/unlocks` (new, replaces `POST /library/:id/unlocks`) —
+  same grant behavior, with `rules_pdf_id` read from the body and validated
+  as a UUID (400 otherwise). Redirects to `/library/unlocks`.
+- `POST /library/codes` (new, replaces `POST /library/:id/codes`) — same
+  generate behavior, with `rules_pdf_id` read from the body and validated
+  as a UUID (400 otherwise). Still renders `partials/unlock-code-result`.
+- `DELETE /library/:id/unlocks/:userId` (revoke) — unchanged; revoke
+  buttons live on table rows that know their ids.
+- The replaced path-param endpoints and `GET /library/:id/codes` (JSON
+  list, never surfaced in any UI) are **deleted**, along with the model
+  functions they orphan (`listRulesPdfUnlocks`, `listRulesPdfUnlockCodes`,
+  `repository.listUnlockGrantsAdmin`) — no dead code.
 
 No code-revoke endpoint. Deliberately out of scope for now.
 
@@ -84,17 +93,16 @@ Three blocks, top to bottom.
 ### Action panel
 
 Two side-by-side forms (Bulma columns), compact versions of today's forms.
-Each gains a **document select** (dropdown of all PDFs as
-`Title — Edition`, inactive ones marked) since the forms no longer live
-inside a PDF's box. A small script sets the form's action URL from the
-selected document's id.
+Each gains a **document select** (`<select name="rules_pdf_id">`, all PDFs
+as `Title — Edition`, inactive ones marked) since the forms no longer live
+inside a PDF's box.
 
 - **Grant Access**: document select, profile name *or* profile ID input,
-  optional expires-at. Posts to `POST /library/:id/unlocks`.
+  optional expires-at. Plain POST to `POST /library/unlocks`.
 - **Generate Codes**: document select, expires-at (code expiry), max uses,
-  amount. Posts to `POST /library/:id/codes` via htmx with the existing
-  form behavior (result into a `partials/unlock-code-result` target below
-  the form, reset on success).
+  amount. Posts to `POST /library/codes` via htmx with the existing form
+  behavior (result into a `partials/unlock-code-result` target below the
+  form, reset on success).
 
 ### Unlocks table
 
@@ -155,8 +163,10 @@ TDD, matching existing patterns:
   markup, and links to `/library/unlocks`.
 - **Route tests** `routes/library-unlocks.test.js` (following
   `routes/pages.test.js` style): dashboard requires admin; renders with
-  the three data sources; grant redirects to `/library/unlocks`;
-  `GET /:id/codes` no longer exists.
+  the three data sources; `POST /library/unlocks` grants and redirects to
+  `/library/unlocks`; invalid `rules_pdf_id` → 400; `POST /library/codes`
+  mints codes; the replaced `/:id` endpoints and `GET /:id/codes` no
+  longer exist.
 - **Model tests** (extend the `models/rules-codes.test.js` pattern): the
   two new list-all helpers query the right tables with the joins and
   ordering above.
