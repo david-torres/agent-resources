@@ -1,0 +1,109 @@
+{{!-- Full-sheet character details fragment. Rendered by
+      GET /characters/:id/details with { character, effectiveVersion,
+      statList } and lazy-loaded into the /party roster and the LFG post
+      page. Descriptions arrive already gated by
+      services/character/description-gate.js — a gated item has a blank
+      description and renders as a plain tag (see character-detail-tag). --}}
+<div class="character-details">
+  <h4 class="title is-5">Stats</h4>
+  <div class="columns is-multiline is-mobile">
+    {{#each statList}}
+    <div class="column is-half-mobile is-one-third-tablet">
+      <p class="mb-1"><strong>{{capitalize this}}</strong></p>
+      {{> stat-blocks-readonly value=(lookup ../character this) max=5}}
+    </div>
+    {{/each}}
+  </div>
+
+  {{#if character.abilities.length}}
+  <h4 class="title is-5">Class Abilities</h4>
+  <div class="tags">
+    {{#each character.abilities}}
+    {{> character-detail-tag item=this idPrefix=(concat "detail-" ../character.id "-ability") className="tag is-primary is-medium"}}
+    {{/each}}
+  </div>
+  {{/if}}
+
+  {{#if character.gear.length}}
+  <h4 class="title is-5">Signature Gear</h4>
+  <div class="tags">
+    {{#each character.gear}}
+    {{> character-detail-tag item=this idPrefix=(concat "detail-" ../character.id "-gear") className="tag is-gray is-medium"}}
+    {{/each}}
+  </div>
+  {{/if}}
+
+  {{#if character.traits.length}}
+  <h4 class="title is-5">Personality</h4>
+  <div class="tags">
+    {{#each character.traits}}
+    <span class="tag is-primary is-medium">{{capitalize this}}</span>
+    {{/each}}
+  </div>
+  {{/if}}
+
+  {{#if (eq effectiveVersion 'v1')}}
+  {{#if character.perks}}
+  <h4 class="title is-5">Ability Perks</h4>
+  <div class="content">{{{markdown character.perks}}}</div>
+  {{/if}}
+  {{/if}}
+
+  {{#if character.common_items.length}}
+  <h4 class="title is-5">Common Items</h4>
+  <div class="content">
+    <ul>
+      {{#each character.common_items}}
+      <li>{{{markdown this}}}</li>
+      {{/each}}
+    </ul>
+  </div>
+  {{/if}}
+
+  {{#if (eq effectiveVersion 'v2')}}
+    {{#if character.quirks.length}}
+    <h4 class="title is-5">Quirks</h4>
+    <ul>
+      {{#each character.quirks}}
+      <li><strong>{{this.name}}</strong>{{#if this.description}} — {{this.description}}{{/if}}</li>
+      {{/each}}
+    </ul>
+    {{/if}}
+
+    {{#if character.accessories.length}}
+    <h4 class="title is-5">Accessories</h4>
+    <ul>
+      {{#each character.accessories}}
+      <li><strong>{{this.name}}</strong>{{#if this.description}} — {{this.description}}{{/if}}</li>
+      {{/each}}
+    </ul>
+    {{/if}}
+
+    {{#if character.ability_perks.length}}
+    <h4 class="title is-5">Ability Perks</h4>
+    {{#each character.abilities}}
+      {{#with (perksForAbility ../character.ability_perks this.id) as |perks|}}
+        {{#if perks.length}}
+        <h5 class="title is-6">{{capitalize ../this.name}}</h5>
+        <ol>
+          {{#each perks}}
+          <li>
+            {{this.text}}
+            {{#if this.compounds_with}}<span class="tag is-info is-light ml-2">compounding</span>{{/if}}
+          </li>
+          {{/each}}
+        </ol>
+        {{/if}}
+      {{/with}}
+    {{/each}}
+    {{/if}}
+  {{/if}}
+
+  {{#if (and (eq effectiveVersion 'v1') character.additional_gear)}}
+  <h4 class="title is-5">
+    Additional Gear
+    <span class="tag is-warning is-light ml-2">Deprecated</span>
+  </h4>
+  <div class="content">{{{markdown character.additional_gear}}}</div>
+  {{/if}}
+</div>

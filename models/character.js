@@ -323,7 +323,7 @@ const getPartyCharacters = async (ids, client = supabase) => {
 
   const { data, error } = await client
     .from('characters')
-    .select(`id, name, image_url, class, class_id, is_deceased, is_public, ${statList.join(', ')}`)
+    .select(`id, name, image_url, class, class_id, level, is_deceased, is_public, ${statList.join(', ')}`)
     .in('id', ids);
 
   if (error) {

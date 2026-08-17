@@ -22,12 +22,12 @@ const {
   findUpgradeTargetsFor
 } = require('../models/character');
 const characterRepository = require('../services/character/repository');
+const { applyDescriptionGate } = require('../services/character/description-gate');
 const { normalizeWizardPayload, collectCharacterFormArrays } = require('../services/character/input');
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
-const { getLfgPost } = require('../models/lfg');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
@@ -811,6 +811,46 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
   res.send(content);
 });
 
+// Full-sheet details fragment, lazy-loaded by the /party roster and the LFG
+// post page (which passes ?lfg=<postId> so a hosting Conduit sees approved
+// applicants ungated). Visibility is RLS's: a character the viewer cannot
+// see never comes back from getCharacter. Must stay mounted before
+// /:id/:name? or that greedy route swallows it as name="details".
+router.get('/:id/details', authOptional, async (req, res) => {
+  const { profile } = res.locals;
+  const { data: character, error } = await getCharacter(req.params.id, res.locals.supabase);
+  if (error || !character) {
+    return res.status(404).send('<p class="has-text-grey">Character not found.</p>');
+  }
+
+  // fetch class record for the effective rules version (non-fatal on failure)
+  let characterClass = null;
+  try {
+    if (character.class_id) {
+      const { data: cls } = await getClass(character.class_id, res.locals.supabase);
+      if (cls) characterClass = cls;
+    }
+  } catch (_) {
+    // ignore; render as v1 without class details
+  }
+  const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
+
+  await applyDescriptionGate({
+    character,
+    profile,
+    userId: (profile && profile.user_id) || (res.locals.user && res.locals.user.id) || null,
+    lfgPostId: req.query.lfg,
+    client: res.locals.supabase
+  });
+
+  res.render('partials/character-details', {
+    layout: false,
+    character,
+    effectiveVersion,
+    statList
+  });
+});
+
 router.get('/:id/:name?', authOptional, async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
@@ -860,83 +900,13 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // owner link is optional
       }
 
-      // compute tooltip availability and description maps (never block render)
-      try {
-        const characterId = character.id;
-        let hostingViaLfg = false;
-
-        // If an LFG context is provided and the current user is the host for this character on that post,
-        // allow full descriptions regardless of unlocks
-        if (profile && req.query.lfg) {
-          try {
-            const { data: lfgPost } = await getLfgPost(req.query.lfg, res.locals.supabase);
-            if (lfgPost && lfgPost.host_id === profile.id) {
-              hostingViaLfg = Array.isArray(lfgPost.join_requests) && lfgPost.join_requests.some(r =>
-                r && r.status === 'approved' && r.character && r.character.id === characterId
-              );
-            }
-          } catch (_) { /* ignore; hostingViaLfg remains false */ }
-        }
-
-        if (!profile) {
-          // Not logged in: hide all descriptions
-          if (Array.isArray(character.abilities)) {
-            for (const ability of character.abilities) {
-              ability.description = '';
-            }
-          }
-          if (Array.isArray(character.gear)) {
-            for (const gear of character.gear) {
-              gear.description = '';
-            }
-          }
-        } else if (!hostingViaLfg) {
-          // Logged in but not host in this LFG context: enforce unlock gating
-          const userId = profile.user_id || (res.locals.user && res.locals.user.id) || null;
-          let unlockedClassIds = new Set();
-          try {
-            // Use admin-backed lookup: the shared anon client no longer carries the
-            // user's JWT (setSession was removed), so RLS on class_unlocks would
-            // return zero rows and wipe every description.
-            const { data: ids } = await getUnlockedClassIdsForUser(userId);
-            if (ids instanceof Set) {
-              unlockedClassIds = ids;
-            }
-          } catch (e) {
-            // On error fetching unlocks, default to hiding everything that is class-gated
-            unlockedClassIds = new Set();
-          }
-
-          if (Array.isArray(character.abilities)) {
-            for (const ability of character.abilities) {
-              if (ability && ability.class_id && !unlockedClassIds.has(ability.class_id)) {
-                ability.description = '';
-              }
-            }
-          }
-          if (Array.isArray(character.gear)) {
-            for (const gear of character.gear) {
-              if (gear && gear.class_id && !unlockedClassIds.has(gear.class_id)) {
-                gear.description = '';
-              }
-            }
-          }
-        }
-      } catch (_) {
-        // Never block page render for tooltip logic; fail closed by hiding descriptions
-        try {
-          if (Array.isArray(character.abilities)) {
-            for (const ability of character.abilities) {
-              if (ability) ability.description = '';
-            }
-          }
-          if (Array.isArray(character.gear)) {
-            for (const gear of character.gear) {
-              if (gear) gear.description = '';
-            }
-          }
-        } catch (_) { /* ignore */ }
-      }
+      await applyDescriptionGate({
+        character,
+        profile,
+        userId: (profile && profile.user_id) || (res.locals.user && res.locals.user.id) || null,
+        lfgPostId: req.query.lfg,
+        client: res.locals.supabase
+      });
 
       const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
 

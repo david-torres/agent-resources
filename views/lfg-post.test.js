@@ -58,11 +58,20 @@ test('the read-only control carries no interactive affordances', () => {
   expect(html).not.toContain('tabindex');
 });
 
-test('lfg-post renders blocks and no longer prints plus characters', () => {
-  expect(LFG_SRC).toContain('{{> stat-blocks-readonly');
-  // Both {{#range}} loops that printed a bare '+' per point are gone.
-  expect(LFG_SRC).not.toMatch(/\{\{#range 0 \(lookup [^)]*\)\}\}\+/);
-  expect(LFG_SRC).not.toMatch(/\{\{#range 0 \(lookup [^)]*\)\}\}\s*\n\s*\+/);
+test('member details lazy-load the shared fragment with the lfg host context', () => {
+  // The inline stats/abilities/gear/personality panel is gone; the Details
+  // button fetches the shared character-details fragment once, carrying the
+  // post id so the description gate can apply the host exception.
+  expect(LFG_SRC).toContain('hx-get="/characters/{{this.character.id}}/details?lfg={{../post.id}}"');
+  expect(LFG_SRC).toContain('hx-trigger="click once"');
+  expect(LFG_SRC).not.toContain('lfg-ability-');
+  expect(LFG_SRC).not.toContain('lfg-gear-');
+});
+
+test('the empty details container keeps its id prefix for the history probe', () => {
+  // e2e/specs/14-lfg-controls.spec.js counts [id^="character-details-"] as
+  // its fixture-integrity check before the history-snapshot regression.
+  expect(LFG_SRC).toContain('id="character-details-{{this.character.id}}"');
 });
 
 test('the party stats box renders the shared summary partial', () => {

@@ -21,7 +21,6 @@ const {
 const { getOwnCharacters } = require('../models/character');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
-const { statList } = require('../util/enclave-consts');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { summarizeParty } = require('../util/party-stats');
@@ -117,7 +116,6 @@ router.get('/:id', authOptional, async (req, res) => {
     res.render('lfg-post', {
       profile,
       post: data,
-      statList,
       partySummary,
       partyCsv,
       approvedCount,

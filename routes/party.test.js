@@ -36,6 +36,7 @@ const characterRow = (id, overrides = {}) => ({
   image_url: null,
   class: 'Tester',
   class_id: uuid(99),
+  level: 3,
   is_deceased: false,
   is_public: true,
   ...Object.fromEntries(statList.map(stat => [stat, 1])),
@@ -217,6 +218,19 @@ test('members are ordered by URL position, not by what the database returned', a
   // #party-csv already lists them in URL order further up the document.
   const rendered = [...html.matchAll(/data-member-id="([^"]+)"/g)].map(match => match[1]);
   expect(rendered).toEqual([ID[0], ID[1], ID[2]]);
+});
+
+test('each member row lazy-loads the shared details fragment', async () => {
+  const res = await get(`/party?c=${ID[0]}`);
+  const html = await res.text();
+  // "click once": the fragment loads on first expand only; Alpine's x-show
+  // handles every toggle after that. A panel swap re-renders the row
+  // collapsed and re-arms the trigger, which is correct — membership
+  // changed, the details re-fetch on next expand.
+  expect(html).toContain(`hx-get="/characters/${ID[0]}/details"`);
+  expect(html).toContain('hx-trigger="click once"');
+  expect(html).toContain(`id="member-details-${ID[0]}"`);
+  expect(html).toContain('Level 3');
 });
 
 test('the panel route adds an id to the party it was given', async () => {

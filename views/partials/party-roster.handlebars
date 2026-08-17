@@ -1,26 +1,55 @@
-{{!-- Member chips for the current party. Remove sends only this member's id
+{{!-- Member rows for the current party. Remove sends only this member's id
       and hx-includes #party-csv for the rest — see the note in
-      views/partials/party-panel.handlebars. --}}
+      views/partials/party-panel.handlebars. Details lazy-loads the shared
+      character-details fragment on first expand ("click once") into the
+      row's container; Alpine's open flag handles visibility from then on.
+      A panel swap re-renders rows collapsed and re-arms the trigger, so
+      details simply re-fetch on the next expand. No hx-push-url anywhere
+      here: expanding details is not navigation. --}}
 {{#if members.length}}
-<div class="tags are-medium">
+<div class="party-roster">
   {{#each members}}
-  <span class="tag is-primary" data-member-id="{{this.id}}">
-    {{this.name}}
-    {{#unless this.is_public}}
-    <span class="icon is-small" title="Private"><i class="fas fa-lock"></i></span>
-    {{/unless}}
-    {{#if this.is_deceased}}
-    <span class="icon is-small" title="Deceased"><i class="fas fa-skull"></i></span>
-    {{/if}}
-    <button type="button" class="delete is-small"
-      data-remove-character="{{this.id}}"
-      aria-label="Remove {{this.name}} from the party"
-      hx-get="/party/panel"
-      hx-vals='{"remove": "{{this.id}}"}'
-      hx-include="#party-csv"
-      hx-target="#party-panel"
-      hx-swap="outerHTML"></button>
-  </span>
+  <div class="box p-3 mb-2" data-member-id="{{this.id}}" x-data="{ open: false }">
+    <div class="level is-mobile mb-0">
+      <div class="level-left">
+        <div class="level-item">
+          <div>
+            <a href="/characters/{{this.id}}/{{encodeURIComponentH this.name}}"><strong>{{this.name}}</strong></a>
+            {{#unless this.is_public}}
+            <span class="icon is-small" title="Private"><i class="fas fa-lock"></i></span>
+            {{/unless}}
+            {{#if this.is_deceased}}
+            <span class="icon is-small" title="Deceased"><i class="fas fa-skull"></i></span>
+            {{/if}}
+            <p class="help mb-0">{{this.class}}{{#if this.level}} · Level {{this.level}}{{/if}}</p>
+          </div>
+        </div>
+      </div>
+      <div class="level-right">
+        <div class="level-item">
+          <button type="button" class="button is-small is-info"
+            @click="open = !open"
+            hx-get="/characters/{{this.id}}/details"
+            hx-trigger="click once"
+            hx-target="#member-details-{{this.id}}"
+            hx-swap="innerHTML">
+            Details
+          </button>
+        </div>
+        <div class="level-item">
+          <button type="button" class="delete"
+            data-remove-character="{{this.id}}"
+            aria-label="Remove {{this.name}} from the party"
+            hx-get="/party/panel"
+            hx-vals='{"remove": "{{this.id}}"}'
+            hx-include="#party-csv"
+            hx-target="#party-panel"
+            hx-swap="outerHTML"></button>
+        </div>
+      </div>
+    </div>
+    <div id="member-details-{{this.id}}" x-show="open" x-cloak class="mt-3"></div>
+  </div>
   {{/each}}
 </div>
 {{else}}

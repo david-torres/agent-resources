@@ -98,64 +98,18 @@
                    render (measured: body 16326 -> 7180 bytes, nav showing
                    LOGIN/SIGNUP). Do not add them back. -->
               <button class="button is-small is-info"
-                @click="open = !open">
+                @click="open = !open"
+                hx-get="/characters/{{this.character.id}}/details?lfg={{../post.id}}"
+                hx-trigger="click once"
+                hx-target="#character-details-{{this.character.id}}"
+                hx-swap="innerHTML">
                 Details
               </button>
             </td>
           </tr>
           <tr>
             <td colspan="5">
-              <div id="character-details-{{this.character.id}}" class="box" x-show="open" x-cloak>
-                <div class="columns is-multiline">
-                  <div class="column is-4">
-                    <h4 class="title is-5">Stats</h4>
-                    <div class="columns is-multiline">
-                      {{#each ../statList}}
-                      <div class="column is-6">
-                        <p class="mb-1"><strong>{{capitalize this}}</strong></p>
-                        {{> stat-blocks-readonly value=(lookup ../this.character this) max=5}}
-                      </div>
-                      {{/each}}
-                    </div>
-                  </div>
-                  <div class="column is-4">
-                    <h4 class="title is-5">Abilities</h4>
-                    <div class="tags">
-                      {{#each this.character.abilities}}
-                      {{#if (lookup this 'description')}}
-                      <span class="tag is-primary is-medium" data-tooltip-markdown="#lfg-ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{this.name}}</span>
-                      <div id="lfg-ability-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
-                        {{{markdown (lookup this 'description')}}}
-                      </div>
-                      {{else}}
-                      <span class="tag is-primary is-medium">{{this.name}}</span>
-                      {{/if}}
-                      {{/each}}
-                    </div>
-                  </div>
-                  <div class="column is-4">
-                    <h4 class="title is-5">Signature Gear</h4>
-                    <div class="tags">
-                      {{#each this.character.gear}}
-                      {{#if (lookup this 'description')}}
-                      <span class="tag is-gray is-medium" data-tooltip-markdown="#lfg-gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}">{{this.name}}</span>
-                      <div id="lfg-gear-{{dashcase (lookup this 'class_id')}}-{{dashcase (lookup this 'name')}}" class="is-hidden">
-                        {{{markdown (lookup this 'description')}}}
-                      </div>
-                      {{else}}
-                      <span class="tag is-gray is-medium">{{this.name}}</span>
-                      {{/if}}
-                      {{/each}}
-                    </div>
-                  </div>
-                </div>
-                <div class="container">
-                  <h4 class="title is-5">Personality</h4>
-                  {{#each this.character.personality}}
-                    <span class="tag is-primary is-medium">{{capitalize this.name}}</span>
-                  {{/each}}
-                </div>
-              </div>
+              <div id="character-details-{{this.character.id}}" class="box" x-show="open" x-cloak></div>
             </td>
           </tr>
           </tbody>

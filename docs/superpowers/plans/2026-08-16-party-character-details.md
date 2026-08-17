@@ -1352,4 +1352,4 @@ git commit -m "test: cover party details expansion end-to-end"
 
 ## Release note (for the deploy that ships this)
 
-The LFG post page's Details panel now shows the full character sheet but gates class ability/gear descriptions behind sign-in + class unlock (hosts still see approved applicants in full). Signed-out viewers lose descriptions they could previously read there — intended; it closes a paid-content leak.
+The LFG post page's Details panel now shows the full character sheet but gates class ability/gear descriptions behind sign-in + class unlock (hosts still see approved applicants in full). Signed-out viewers lose descriptions they could previously read there — intended; it closes a paid-content leak. Ability and gear names in the LFG Details panel are now capitalized, matching the character page.

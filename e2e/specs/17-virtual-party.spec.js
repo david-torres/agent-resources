@@ -66,3 +66,20 @@ test('a party URL loads its members directly, so a shared link works', async ({ 
   await expect(page.locator(`#party-panel [data-member-id="${beta.id}"]`)).toBeVisible();
   await expect(page.locator('#party-panel')).toContainText('Might (5)');
 });
+
+test('a member row expands to show the lazy details fragment', async ({ page }) => {
+  await page.goto(`/party?c=${alpha.id}`);
+
+  const row = page.locator(`#party-panel [data-member-id="${alpha.id}"]`);
+  await row.locator('button:has-text("Details")').click();
+
+  // The fragment arrives over htmx after the click; toContainText retries
+  // until it lands. alpha's might: 3 proves real stats rendered, not just
+  // the section scaffold.
+  const details = page.locator(`#member-details-${alpha.id}`);
+  await expect(details).toContainText('Stats');
+  await expect(details).toContainText('Might');
+
+  // Expanding details is not navigation: the URL must not change.
+  await expect(page).toHaveURL(new RegExp(`/party\\?c=${alpha.id}`));
+});

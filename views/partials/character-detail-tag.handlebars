@@ -1,0 +1,16 @@
+{{!-- One ability/gear name with its tooltip description. Shared by the
+      character page and the character-details fragment so the tooltip markup
+      exists exactly once. The element id is "<idPrefix>-<class_id>-<name>":
+      the character page passes idPrefix "ability"/"gear" (reproducing its
+      historical ids exactly), the fragment passes
+      "detail-<character id>-ability" so two same-class party members on one
+      page cannot collide. An item whose description was blanked by
+      services/character/description-gate.js renders as a plain tag. --}}
+{{#if item.description}}
+<span class="{{className}}" data-tooltip-markdown="#{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}">{{capitalize item.name}}</span>
+<div id="{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}" class="is-hidden">
+  {{{markdown item.description}}}
+</div>
+{{else}}
+<span class="{{className}}">{{capitalize item.name}}</span>
+{{/if}}

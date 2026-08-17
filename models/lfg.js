@@ -128,10 +128,7 @@ const getLfgPost = async (id, client = supabase) => {
         level,
         is_public,
         is_deceased,
-        ${statList.join(',')},
-        personality:traits(name),
-        abilities:class_abilities(name,description,class_id),
-        gear:class_gear(name,description,class_id)
+        ${statList.join(',')}
       )
     `)
     .eq('lfg_post_id', id);
