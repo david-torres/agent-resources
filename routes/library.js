@@ -24,6 +24,7 @@ const { getProfileByNameAdmin, getProfileByIdAdmin } = require('../models/profil
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
+const { groupRulesVersions } = require('../util/library-list-grouping');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 
@@ -92,7 +93,7 @@ router.get('/', authOptional, async (req, res) => {
     return res.render('library', {
         profile,
         title: 'Library',
-        rules: rulesWithAccess,
+        ruleGroups: groupRulesVersions(rulesWithAccess),
         isAdmin,
         activeNav: 'library',
         breadcrumbs: [
