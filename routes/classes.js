@@ -32,6 +32,7 @@ const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/cl
 const { parseImageCrop } = require('../util/crop');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
+const { partitionClassGroups } = require('../util/class-filter');
 const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
@@ -100,11 +101,15 @@ router.get('/', authOptional, async (req, res) => {
     const classGroups = versionFiltered
         ? (classes || []).map((c) => ({ primary: c, previous: [] }))
         : groupClassVersions(classes || []);
+    // Released classes (officials + graduated PCCs) lead the page; unreleased
+    // PCCs get their own art-free section below.
+    const { released: releasedGroups, pcc: pccGroups } = partitionClassGroups(classGroups);
 
     res.render('classes', {
         profile,
         title: 'Classes',
-        classGroups,
+        releasedGroups,
+        pccGroups,
         filters: filters,
         isAdmin,
         activeNav: 'classes',

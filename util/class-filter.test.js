@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { filterClassListsByIds, partitionProfileClasses } = require('./class-filter');
+const { filterClassListsByIds, partitionProfileClasses, partitionClassGroups } = require('./class-filter');
 
 const mk = (id, name, edition = 'advent') => ({ id, name, rules_edition: edition });
 
@@ -79,5 +79,53 @@ describe('partitionProfileClasses', () => {
   test('handles non-array input', () => {
     expect(partitionProfileClasses(null)).toEqual({ released: [], pcc: [] });
     expect(partitionProfileClasses(undefined)).toEqual({ released: [], pcc: [] });
+  });
+});
+
+describe('partitionClassGroups', () => {
+  const grp = (id, { pcc = false, status = 'release' } = {}) => ({
+    primary: { id, is_player_created: pcc, status },
+    previous: []
+  });
+
+  test('groups with official primaries go to released regardless of status', () => {
+    const groups = [grp('off-rel'), grp('off-alpha', { status: 'alpha' })];
+    const { released, pcc } = partitionClassGroups(groups);
+    expect(released.map(g => g.primary.id)).toEqual(['off-rel', 'off-alpha']);
+    expect(pcc).toEqual([]);
+  });
+
+  test('a released-PCC group graduates into the released section', () => {
+    const { released, pcc } = partitionClassGroups([grp('pcc-rel', { pcc: true, status: 'release' })]);
+    expect(released.map(g => g.primary.id)).toEqual(['pcc-rel']);
+    expect(pcc).toEqual([]);
+  });
+
+  test('unreleased PCC groups go to the pcc partition, order preserved', () => {
+    const groups = [
+      grp('pcc-beta', { pcc: true, status: 'beta' }),
+      grp('off'),
+      grp('pcc-alpha', { pcc: true, status: 'alpha' })
+    ];
+    const { released, pcc } = partitionClassGroups(groups);
+    expect(released.map(g => g.primary.id)).toEqual(['off']);
+    expect(pcc.map(g => g.primary.id)).toEqual(['pcc-beta', 'pcc-alpha']);
+  });
+
+  test('no group appears in both partitions', () => {
+    const groups = [
+      grp('off'),
+      grp('pcc-rel', { pcc: true, status: 'release' }),
+      grp('pcc-beta', { pcc: true, status: 'beta' })
+    ];
+    const { released, pcc } = partitionClassGroups(groups);
+    const ids = [...released, ...pcc].map(g => g.primary.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.length).toBe(groups.length);
+  });
+
+  test('handles non-array input', () => {
+    expect(partitionClassGroups(null)).toEqual({ released: [], pcc: [] });
+    expect(partitionClassGroups(undefined)).toEqual({ released: [], pcc: [] });
   });
 });
