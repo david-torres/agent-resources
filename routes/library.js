@@ -26,6 +26,7 @@ const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
 const { groupRulesVersions } = require('../util/library-list-grouping');
+const { withRuleAccess } = require('../util/library-access');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 
@@ -76,20 +77,7 @@ router.get('/', authOptional, async (req, res) => {
         }
     }
 
-    const now = new Date();
-    const rulesWithAccess = (rules || []).map((rule) => {
-        const unlock = unlocksMap.get(rule.id);
-        const expiresAt = unlock?.expires_at ? new Date(unlock.expires_at) : null;
-        const isExpired = expiresAt ? expiresAt <= now : false;
-        const canView = isAdmin || !!rule.free_access || (!!unlock && !isExpired);
-        return {
-            ...rule,
-            isUnlocked: !!unlock,
-            isExpired,
-            canView,
-            expires_at: unlock?.expires_at || null
-        };
-    });
+    const rulesWithAccess = withRuleAccess(rules || [], unlocksMap, isAdmin, new Date());
 
     return res.render('library', {
         profile,

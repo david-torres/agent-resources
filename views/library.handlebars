@@ -53,6 +53,14 @@
           </p>
           {{/if}}
           {{#if this.primary.canView}}
+          {{#if this.primary.isAdminOverride}}
+          <div class="notification is-warning is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-user-shield"></i></span>
+              <span>Admin Override</span>
+            </span>
+          </div>
+          {{else}}
           <div class="notification is-success is-light">
             <span class="icon-text">
               <span class="icon"><i class="fas fa-unlock"></i></span>
@@ -63,6 +71,7 @@
             <span class="is-size-7">Expires {{date_tz this.primary.expires_at}}</span>
             {{/if}}
           </div>
+          {{/if}}
           <a class="button is-link is-fullwidth" href="/library/{{this.primary.id}}/view">
             <span class="icon"><i class="fas fa-file-pdf"></i></span>
             <span>Open PDF</span>
