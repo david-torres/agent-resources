@@ -113,7 +113,7 @@ test('POST /library/:id passes free_access=true through to updateRulesPdf', asyn
   const res = await fetch(`${baseUrl}/library/${PDF_A}`, {
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'title=Core&edition=Advent+v1&is_active=on&free_access=on',
+    body: 'title=Core&edition=Advent+v1&rules_edition=advent&book_type=core&is_active=on&free_access=on',
     redirect: 'manual'
   });
   expect(res.status).toBe(302);
@@ -126,7 +126,7 @@ test('POST /library/:id without the checkbox writes free_access=false', async ()
   const res = await fetch(`${baseUrl}/library/${PDF_A}`, {
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: 'title=Core&edition=Advent+v1&is_active=on',
+    body: 'title=Core&edition=Advent+v1&rules_edition=advent&book_type=core&is_active=on',
     redirect: 'manual'
   });
   expect(res.status).toBe(302);

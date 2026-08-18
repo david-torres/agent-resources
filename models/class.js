@@ -1,9 +1,11 @@
 const { supabase } = require('./_base');
 const crypto = require('crypto');
-const { computeVersionFamily, expandIdsToFamilies } = require('../util/class-family');
+const { expandIdsToFamilies } = require('../util/class-family');
+const { coreClassIdsForEditions } = require('../util/book-classes');
 const { applyClassFilters } = require('../util/class-filters');
 const { ClassService } = require('../services/class/service');
 const classRepository = require('../services/class/repository');
+const rulesRepository = require('../services/rules/repository');
 
 const getClasses = async (filters = {}, client = supabase) => {
     const query = applyClassFilters(
@@ -66,30 +68,101 @@ const redeemUnlockCode = async (code, userId) => {
 // failure so callers can degrade to exact-id behavior.
 const fetchClassFamilyRows = () => classRepository.fetchClassFamilyRows();
 
-// Resolve the same-edition version family of a class (see util/class-family).
-// Falls back to a singleton set on error: unlock checks degrade to exact-id.
-const getVersionFamilyIds = async (classId) => {
-    const rows = await fetchClassFamilyRows();
-    if (!rows) return new Set([classId]);
-    return computeVersionFamily(rows, classId);
-};
-
-// An unlock covers a class's whole version family, and the least restrictive
-// grant wins: one permanent row makes access permanent, otherwise the latest
-// expiry applies. `null` means permanent OR no rows at all -- callers pair
-// this with an `unlocked` flag to tell those apart. Dates are compared as
+// Access to one class can come from several grants at once -- a direct
+// unlock, a book, a sibling version of either -- and the least restrictive
+// one wins: a single permanent grant makes access permanent, otherwise the
+// latest expiry applies. `null` means permanent OR no grants at all; callers
+// pair it with an `unlocked` flag to tell those apart. Dates are compared as
 // instants, not strings, because Postgres can hand back either a `Z` or a
 // `+00:00` offset and those don't sort lexicographically.
-const leastRestrictiveExpiry = (rows) => {
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-    if (rows.some(row => !row.expires_at)) return null;
+const leastRestrictiveExpiry = (values) => {
+    if (!Array.isArray(values) || values.length === 0) return null;
+    if (values.some(value => !value)) return null;
     let latest = null;
-    for (const row of rows) {
-        if (latest === null || Date.parse(row.expires_at) > Date.parse(latest)) {
-            latest = row.expires_at;
-        }
+    for (const value of values) {
+        if (latest === null || Date.parse(value) > Date.parse(latest)) latest = value;
     }
     return latest;
+};
+// The user's effective class access: direct class_unlocks unioned with the
+// core roster of every ruleset they hold a book for, then expanded across
+// same-edition version families. Computed on read — a lapsed book revokes its
+// classes with no cleanup step. A failed read grants nothing from that source
+// (fail closed) but is surfaced via `error` so callers can tell an infra
+// failure apart from an authoritative "no access".
+const getEffectiveClassUnlocks = async (userId) => {
+    const empty = { ids: new Set(), sourceById: new Map(), expiryById: new Map(), directIds: new Set(), error: null };
+    if (!userId) return empty;
+
+    const nowIso = new Date().toISOString();
+    const [directResult, booksResult] = await Promise.all([
+        classRepository.unlockedClassIdRows({ userId, nowIso }),
+        rulesRepository.fetchActiveBooksForUser({ userId, nowIso })
+    ]);
+    const readError = directResult?.error || booksResult?.error || null;
+    // Attribution below is first-book-wins, and the repository read is
+    // unordered: sort least-restrictive-first (permanent, then latest
+    // expiry, title as tiebreak) so the badge deterministically names a
+    // book whose grant matches the effective expiry it is shown with.
+    const books = [...(booksResult?.data || [])].sort((a, b) => {
+        if ((a.expires_at == null) !== (b.expires_at == null)) return a.expires_at == null ? -1 : 1;
+        if (a.expires_at != null && a.expires_at !== b.expires_at) {
+            return Date.parse(b.expires_at) - Date.parse(a.expires_at);
+        }
+        return String(a.title || '').localeCompare(String(b.title || ''));
+    });
+
+    const directRows = (directResult?.error ? [] : (directResult?.data || []));
+    const directIds = new Set(directRows.map(row => row.class_id));
+
+    const rawUnion = new Set(directIds);
+    for (const book of books || []) {
+        for (const id of coreClassIdsForEditions([book.rules_edition])) rawUnion.add(id);
+    }
+    // rawUnion is a superset of directIds, so an empty union means no direct
+    // ids either — `empty` is the whole answer.
+    if (rawUnion.size === 0) return { ...empty, error: readError };
+
+    const classRows = await fetchClassFamilyRows();
+    const expand = (idSet) => (classRows ? expandIdsToFamilies(classRows, idSet) : new Set(idSet));
+
+    // A fork inherits the source of whatever unlocked its seed id: expand
+    // each book's roster and the direct ids separately, rather than the
+    // union, so a same-edition fork of a book-granted class is tagged
+    // 'book' rather than falsely 'direct'. Later books do not overwrite an
+    // earlier title for the same id; any owning book is a truthful badge.
+    // Direct always wins when both an unlock and a book cover the same id.
+    const sourceById = new Map();
+    // Every grant covering an id contributes a candidate expiry; the least
+    // restrictive of them is that id's real expiry. A book-derived class is
+    // only ever as durable as the book grant that confers it.
+    const expiriesById = new Map();
+    const contribute = (id, expiresAt) => {
+        if (!expiriesById.has(id)) expiriesById.set(id, []);
+        expiriesById.get(id).push(expiresAt ?? null);
+    };
+
+    for (const book of books || []) {
+        for (const id of expand(coreClassIdsForEditions([book.rules_edition]))) {
+            if (!sourceById.has(id)) sourceById.set(id, { source: 'book', title: book.title });
+            contribute(id, book.expires_at);
+        }
+    }
+    for (const row of directRows) {
+        for (const id of expand(new Set([row.class_id]))) {
+            sourceById.set(id, { source: 'direct' });
+            contribute(id, row.expires_at);
+        }
+    }
+
+    const expiryById = new Map(
+        [...expiriesById].map(([id, values]) => [id, leastRestrictiveExpiry(values)])
+    );
+
+    // directIds rides along raw (unexpanded): the hydration read needs to know
+    // which ids came from an explicit class_unlocks row, so it can exempt
+    // those — and only those — from its visibility filter.
+    return { ids: new Set(sourceById.keys()), sourceById, expiryById, directIds, error: readError };
 };
 
 const getEffectiveClassUnlock = async (userId, classId) => {
@@ -98,27 +171,20 @@ const getEffectiveClassUnlock = async (userId, classId) => {
         return { data: none, error: null };
     }
 
-    // An unlock for any same-edition version of the class counts.
-    const familyIds = await getVersionFamilyIds(classId);
-
-    const now = new Date().toISOString();
-    const { data, error } = await classRepository.activeUnlockRows({
-        userId,
-        classIds: [...familyIds],
-        nowIso: now
-    });
-
-    // Fail closed: an unreadable unlocks table must not read as access.
-    if (error) {
-        return { data: none, error };
+    // ids already includes every same-edition version of anything granted
+    // (direct or book-derived), so a plain membership check is enough --
+    // expanding classId's own family here would just re-fetch the same
+    // classes projection getEffectiveClassUnlocks already fetched. The
+    // resolver reduced each id's grants to one effective expiry on the way.
+    const { ids, expiryById, error: readError } = await getEffectiveClassUnlocks(userId);
+    if (readError) {
+        return { data: none, error: readError };
     }
-
-    const rows = Array.isArray(data) ? data : [];
-    if (rows.length === 0) {
+    if (!ids.has(classId)) {
         return { data: none, error: null };
     }
     return {
-        data: { unlocked: true, expiresAt: leastRestrictiveExpiry(rows) },
+        data: { unlocked: true, expiresAt: expiryById.get(classId) ?? null },
         error: null
     };
 };
@@ -177,61 +243,39 @@ const duplicateClass = async (baseId, newVersion, newEdition = null) => {
 const saveClassPdfMetadata = async (actor, classId, storagePath) =>
     classService.savePdfMetadata(actor, classId, storagePath);
 
+// Profile display: every class the user can play, tagged with where the
+// access came from so the view can badge book-derived rows.
 const getUnlockedClasses = async (userId) => {
-    const now = new Date().toISOString();
-    const { data, error } = await classRepository.unlockedClassRows({ userId, nowIso: now });
+    const { ids, sourceById, expiryById, directIds, error: readError } = await getEffectiveClassUnlocks(userId);
+    if (readError) {
+        return { data: null, error: readError };
+    }
+    if (ids.size === 0) {
+        return { data: [], error: null };
+    }
 
+    const { data, error } = await classRepository.classRowsByIds(
+        [...ids],
+        { alwaysVisibleIds: [...directIds] }
+    );
     if (error) {
         return { data: null, error };
     }
 
-    const rows = (data || []).filter(entry => entry && entry.class && entry.class.id);
-    if (rows.length === 0) {
-        return { data: [], error: null };
-    }
-
-    // Expiry is a family-wide property: a permanent v1 unlock must stop v2
-    // from advertising an expiry it doesn't really have. One projection load
-    // serves every row; degrade to each row's own expiry if it can't load.
-    const familyRows = await fetchClassFamilyRows();
-
     return {
-        data: rows.map((entry) => {
-            if (!familyRows) {
-                return { ...entry.class, unlock_expires_at: entry.expires_at ?? null };
-            }
-            const family = computeVersionFamily(familyRows, entry.class.id);
-            const familyUnlocks = rows.filter(other => family.has(other.class.id));
-            return { ...entry.class, unlock_expires_at: leastRestrictiveExpiry(familyUnlocks) };
-        }),
+        data: (data || []).map(cls => ({
+            ...cls,
+            unlock_source: sourceById.get(cls.id)?.source || 'direct',
+            unlock_book_title: sourceById.get(cls.id)?.title || null,
+            unlock_expires_at: expiryById.get(cls.id) ?? null
+        })),
         error: null
     };
 };
 
 const getUnlockedClassIdsForUser = async (userId) => {
-    if (!userId) {
-        return { data: new Set(), error: null };
-    }
-
-    const now = new Date().toISOString();
-    const { data, error } = await classRepository.unlockedClassIdRows({ userId, nowIso: now });
-
-    if (error) {
-        return { data: null, error };
-    }
-
-    const directIds = new Set((data || []).map((entry) => entry.class_id));
-    if (directIds.size === 0) {
-        return { data: directIds, error: null };
-    }
-
-    // An unlock applies to the whole same-edition version family. Degrade to
-    // direct ids if the classes projection can't be loaded.
-    const classRows = await fetchClassFamilyRows();
-    if (!classRows) {
-        return { data: directIds, error: null };
-    }
-    return { data: expandIdsToFamilies(classRows, directIds), error: null };
+    const { ids, error } = await getEffectiveClassUnlocks(userId);
+    return { data: ids, error: error || null };
 };
 
 const resolveClassAgentAccess = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
@@ -344,7 +388,11 @@ const getClassForAgent = async (id, actor = {}) => {
     return { data: serialized, error: null };
 };
 
-const canViewClassPdf = async (userContext = {}, classData = {}) => {
+// `unlocked` lets a caller that has already resolved this user's unlock state
+// hand it in rather than paying for a second resolve: getEffectiveClassUnlocks
+// costs three queries including a full classes projection, and the class-view
+// page would otherwise run it twice per request.
+const canViewClassPdf = async (userContext = {}, classData = {}, { unlocked = null } = {}) => {
     const { userId = null, profileId = null, role = null } = userContext;
 
     if (!classData?.pdf_storage_path) {
@@ -363,12 +411,12 @@ const canViewClassPdf = async (userContext = {}, classData = {}) => {
         return { data: false, error: null };
     }
 
-    const { data, error } = await isClassUnlocked(userId, classData.id);
-    if (error) {
-        return { data: false, error };
+    if (unlocked !== null) {
+        return { data: !!unlocked, error: null };
     }
 
-    return { data: !!data, error: null };
+    const { data, error } = await isClassUnlocked(userId, classData.id);
+    return { data: !!data, error: error || null };
 };
 
 const unlockClass = async (userId, classId, expiresAt = null) => {
@@ -477,6 +525,7 @@ module.exports = {
     createClass,
     updateClass,
     duplicateClass,
+    getEffectiveClassUnlocks,
     getUnlockedClasses,
     getUnlockedClassIdsForUser,
     unlockClass,

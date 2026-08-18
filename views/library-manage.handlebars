@@ -21,7 +21,7 @@
   <h2 class="title is-4">Add New Rules PDF</h2>
   <form method="post" action="/library" enctype="multipart/form-data">
     <div class="columns">
-      <div class="column is-half">
+      <div class="column is-one-fifth">
         <div class="field">
           <label class="label" for="new-rules-title">Title</label>
           <div class="control">
@@ -29,15 +29,42 @@
           </div>
         </div>
       </div>
-      <div class="column is-one-quarter">
+      <div class="column is-one-fifth">
         <div class="field">
-          <label class="label" for="new-rules-edition">Edition</label>
+          <label class="label" for="new-rules-edition">Version</label>
           <div class="control">
-            <input class="input" type="text" name="edition" id="new-rules-edition" placeholder="e.g. Advent v2" required>
+            <input class="input" type="text" name="edition" id="new-rules-edition" placeholder="e.g. v2" required>
           </div>
         </div>
       </div>
-      <div class="column is-one-quarter">
+      <div class="column is-one-fifth">
+        <div class="field">
+          <label class="label" for="new-rules-ruleset">Ruleset</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="rules_edition" id="new-rules-ruleset" required>
+                <option value="advent">Advent</option>
+                <option value="aspirant">Aspirant</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-fifth">
+        <div class="field">
+          <label class="label" for="new-rules-book-type">Type</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="book_type" id="new-rules-book-type" required>
+                <option value="core">Core rules</option>
+                <option value="supplement" selected>Supplement</option>
+              </select>
+            </div>
+          </div>
+          <p class="help">Only core rules grant the ruleset's classes.</p>
+        </div>
+      </div>
+      <div class="column is-one-fifth">
         <div class="field">
           <label class="label">Status</label>
           <label class="checkbox">
@@ -74,7 +101,7 @@
       <div class="level-left">
         <div>
           <p class="title is-4">{{this.title}}</p>
-          <p class="subtitle is-6">Edition: {{this.edition}}</p>
+          <p class="subtitle is-6">{{capitalize this.rules_edition}} · {{this.edition}}</p>
         </div>
       </div>
       <div class="level-right">
@@ -84,7 +111,7 @@
 
     <form method="post" action="/library/{{this.id}}" enctype="multipart/form-data" class="mb-5">
       <div class="columns">
-        <div class="column is-one-third">
+        <div class="column is-one-fifth">
           <div class="field">
             <label class="label">Title</label>
             <div class="control">
@@ -92,15 +119,42 @@
             </div>
           </div>
         </div>
-        <div class="column is-one-third">
+        <div class="column is-one-fifth">
           <div class="field">
-            <label class="label">Edition</label>
+            <label class="label">Version</label>
             <div class="control">
               <input class="input" type="text" name="edition" value="{{this.edition}}" required>
             </div>
           </div>
         </div>
-        <div class="column is-one-third">
+        <div class="column is-one-fifth">
+          <div class="field">
+            <label class="label">Ruleset</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select name="rules_edition" required>
+                  <option value="advent" {{#if (eq this.rules_edition 'advent')}}selected{{/if}}>Advent</option>
+                  <option value="aspirant" {{#if (eq this.rules_edition 'aspirant')}}selected{{/if}}>Aspirant</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="column is-one-fifth">
+          <div class="field">
+            <label class="label">Type</label>
+            <div class="control">
+              <div class="select is-fullwidth">
+                <select name="book_type" required>
+                  <option value="core" {{#if (eq this.book_type 'core')}}selected{{/if}}>Core rules</option>
+                  <option value="supplement" {{#if (eq this.book_type 'supplement')}}selected{{/if}}>Supplement</option>
+                </select>
+              </div>
+            </div>
+            <p class="help">Only core rules grant the ruleset's classes.</p>
+          </div>
+        </div>
+        <div class="column is-one-fifth">
           <div class="field">
             <label class="label">Active</label>
             <label class="checkbox">

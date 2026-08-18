@@ -9,7 +9,8 @@ const integrationFiles = new Set([
   'models/character-level-up.integration.test.js',
   'models/nav-rls.integration.test.js',
   'models/lfg-agent.test.js',
-  'routes/bot-link.test.js'
+  'routes/bot-link.test.js',
+  'util/core-roster.integration.test.js'
 ]);
 const httpFiles = new Set([
   'routes/badges.test.js',
@@ -19,7 +20,9 @@ const httpFiles = new Set([
   'routes/character-offscreen.test.js',
   'routes/character-wizard.test.js',
   'routes/characters.test.js',
+  'routes/class-view-unlock-resolution.test.js',
   'routes/classes-stat-spread.test.js',
+  'routes/library-book-type.test.js',
   'routes/missions.test.js',
   'routes/nav-manage-navbar.test.js',
   'routes/pages.test.js',

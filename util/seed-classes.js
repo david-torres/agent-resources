@@ -3,7 +3,7 @@ const { createClient } = require('@supabase/supabase-js');
 const ClassModel = require('../models/class');
 const { SYSTEM_ACTOR } = require('./actor');
 const { adventClassList, aspirantPreviewClassList, playerCreatedClassList, classStatSpread, classGearList, classAbilityList } = require('./enclave-consts');
-const { STARTER_CLASS_UNLOCKS } = require('./starter-content');
+const { CORE_CLASS_UNLOCKS } = require('./starter-content');
 
 // Initialize Supabase client
 const supabase = createClient(
@@ -53,30 +53,32 @@ async function seedClasses() {
 
 // Building the row list must be import-safe (no network, no side effects) so
 // it can be unit tested.
-const buildRow = (cls, is_player_created) => {
+const buildRow = (cls, is_player_created, rules_edition = 'advent') => {
     const row = {
         name: cls,
         description: '',
         is_public: true,
         status: 'release',
         is_player_created,
-        rules_edition: 'advent',
+        rules_edition,
         rules_version: 'v1',
         stat_spread: classStatSpread[cls] || {},
         gear: (classGearList[cls] || []).map(name => ({ name, description: '' })),
         abilities: (classAbilityList[cls] || []).map(name => ({ name, description: '' })),
         created_by: null
     };
-    if (Object.prototype.hasOwnProperty.call(STARTER_CLASS_UNLOCKS, cls)) {
-        row.id = STARTER_CLASS_UNLOCKS[cls];
+    // Core roster rows must land on the exact id the book grant references.
+    const roster = CORE_CLASS_UNLOCKS[rules_edition] || {};
+    if (Object.prototype.hasOwnProperty.call(roster, cls)) {
+        row.id = roster[cls];
     }
     return row;
 };
 
 const buildHardcodedClasses = () => [
-    ...adventClassList.map(cls => buildRow(cls, false)),
-    ...aspirantPreviewClassList.map(cls => buildRow(cls, false)),
-    ...playerCreatedClassList.map(cls => buildRow(cls, true)),
+    ...adventClassList.map(cls => buildRow(cls, false, 'advent')),
+    ...aspirantPreviewClassList.map(cls => buildRow(cls, false, 'aspirant')),
+    ...playerCreatedClassList.map(cls => buildRow(cls, true, 'advent')),
 ];
 
 module.exports = { buildHardcodedClasses };

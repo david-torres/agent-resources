@@ -20,6 +20,12 @@ let tableErrors = {};
 // when there's nothing to resolve families for.
 let fromCalls = [];
 
+// getUnlockedClasses reads `classes` twice: once unfiltered for the version
+// family projection, once with `.in('id', ...)` to hydrate the resolved ids.
+// Set this to make only the first fail, which is the case the degradation
+// path is about.
+let familyProjectionFails = false;
+
 const fakeClient = {
     from(table) {
         fromCalls.push(table);
@@ -44,20 +50,33 @@ const fakeClient = {
         // table to null to simulate a projection that failed to load, and
         // `??` would silently rewrite that null into an empty array.
         const rows = table in tableRows ? tableRows[table] : [];
-        const result = { data: rows, error: null };
+        // `.in()` IS honored (unlike the other filter methods): hydration
+        // reads `classes` with `.in('id', resolvedIds)`, and a fake that
+        // served every class row regardless would hide whether the resolver
+        // picked the right ids at all.
+        let filter = null;
+        const resolve = () => {
+            if (familyProjectionFails && table === 'classes' && !filter) {
+                return { data: null, error: null };
+            }
+            if (!filter || !Array.isArray(rows)) return { data: rows, error: null };
+            const [column, values] = filter;
+            return { data: rows.filter(row => values.includes(row[column])), error: null };
+        };
         const chain = {
             select() { return chain; },
             eq() { return chain; },
             or() { return chain; },
             limit() { return chain; },
             order() { return chain; },
-            in() { return chain; },
+            in(column, values) { filter = [column, values]; return chain; },
             single() {
-                const first = Array.isArray(rows) ? (rows[0] ?? null) : null;
+                const data = resolve().data;
+                const first = Array.isArray(data) ? (data[0] ?? null) : null;
                 return Promise.resolve({ data: first, error: null });
             },
             then(onFulfilled, onRejected) {
-                return Promise.resolve(result).then(onFulfilled, onRejected);
+                return Promise.resolve(resolve()).then(onFulfilled, onRejected);
             }
         };
         return chain;
@@ -73,7 +92,7 @@ mock.module('./_base', () => ({
 
 // Bust the cache in case a sibling test file already loaded `./class`.
 delete require.cache[require.resolve('./class')];
-const { getEffectiveClassUnlock, isClassUnlocked, getUnlockedClasses } = require('./class');
+const { getEffectiveClassUnlock, isClassUnlocked, getUnlockedClasses, canViewClassPdf } = require('./class');
 
 afterAll(() => {
     mock.module('./_base', () => realBase);
@@ -82,16 +101,19 @@ afterAll(() => {
 
 // Advent Librarian v1 -> v2 fork, plus an aspirant fork that must stay
 // outside the family.
+// These rows serve both reads now -- the family projection and the hydration
+// -- so they carry the display columns getUnlockedClasses returns.
 const CLASS_ROWS = [
-    { id: 'lib-v1', base_class_id: null, rules_edition: 'advent' },
-    { id: 'lib-v2', base_class_id: 'lib-v1', rules_edition: 'advent' },
-    { id: 'lib-asp', base_class_id: 'lib-v1', rules_edition: 'aspirant' }
+    { id: 'lib-v1', name: 'Librarian', is_public: true, base_class_id: null, rules_edition: 'advent' },
+    { id: 'lib-v2', name: 'Librarian II', is_public: true, base_class_id: 'lib-v1', rules_edition: 'advent' },
+    { id: 'lib-asp', name: 'Librarian (Aspirant)', is_public: true, base_class_id: 'lib-v1', rules_edition: 'aspirant' }
 ];
 
 beforeEach(() => {
-    tableRows = { classes: CLASS_ROWS, class_unlocks: [] };
+    tableRows = { classes: CLASS_ROWS, class_unlocks: [], rules_pdf_unlocks: [] };
     tableErrors = {};
     fromCalls = [];
+    familyProjectionFails = false;
 });
 
 test('reports not unlocked when the user holds no active unlock', async () => {
@@ -115,12 +137,10 @@ test('a single temporary unlock reports that row\'s expiry', async () => {
 });
 
 // The next three tests exercise leastRestrictiveExpiry's precedence rules
-// (a permanent row beats a temporary one; the latest expiry wins regardless
+// (a permanent grant beats a temporary one; the latest expiry wins regardless
 // of row order) using whatever rows `tableRows.class_unlocks` holds. The
-// fake's `.in()` is a no-op, so it serves these rows for ANY class id --
-// these tests do NOT verify that family scoping itself (getVersionFamilyIds
-// -> activeUnlockRows's `.in(familyIds)`) actually restricts the query to
-// the right ids; a class outside the family would pass identically here.
+// resolver reduces every grant covering an id down to one effective expiry,
+// so these pin that reduction rather than the family scoping that feeds it.
 // Family scoping is pinned by models/class-unlock-family.test.js, whose fake
 // records `.in()` calls and asserts on them.
 test('a permanent unlock in the family beats a temporary one', async () => {
@@ -181,18 +201,45 @@ test('isClassUnlocked still returns a plain boolean', async () => {
 });
 
 // This feeds `canViewClassPdf` directly, so a repository error must fail
-// closed (no access, no crash) rather than throw or leak a truthy value.
-test('a repository error on the unlocks read fails closed', async () => {
+// closed on data (no access leaks) -- but the error itself has to SURFACE,
+// not degrade into "no unlocks". An infrastructure failure answered with
+// `{ unlocked: false, error: null }` is indistinguishable from an
+// authoritative denial, so routes turn a transient outage into a 403
+// instead of a 500 and nothing is observable. Pre-1da7c8b these paths
+// propagated the error; these tests pin that contract.
+test('a repository error on the unlocks read surfaces a non-null error and fails closed', async () => {
     tableErrors.class_unlocks = { message: 'unlocks table unreadable' };
     const { data, error } = await getEffectiveClassUnlock('user-1', 'lib-v1');
-    expect(error).toEqual({ message: 'unlocks table unreadable' });
-    expect(data).toEqual({ unlocked: false, expiresAt: null });
+    expect(error).not.toBeNull();
+    // Fail closed on data: whether the envelope carries null data or an
+    // explicit locked shape, it must not report the class as unlocked.
+    expect(data?.unlocked).toBeFalsy();
 });
 
-// `unlockedClassRows` selects `class:classes(*), expires_at`, so its rows
-// carry a nested class object. The fake ignores `.select()`, so a fixture
-// row can carry both that nested object and the flat `class_id` the
-// family-resolution path reads.
+test('a repository error on the books read surfaces a non-null error and fails closed', async () => {
+    tableErrors.rules_pdf_unlocks = { message: 'books table unreadable' };
+    const { data, error } = await getEffectiveClassUnlock('user-1', 'lib-v1');
+    expect(error).not.toBeNull();
+    expect(data?.unlocked).toBeFalsy();
+});
+
+// The route-facing check: routes/classes.js decides 500-vs-403 off this
+// envelope, so the error member must ride through isClassUnlocked and
+// canViewClassPdf rather than being flattened to `error: null`.
+test('canViewClassPdf propagates the error when the unlocks read fails', async () => {
+    tableErrors.class_unlocks = { message: 'unlocks table unreadable' };
+    const { data, error } = await canViewClassPdf(
+        { userId: 'user-1' },
+        { id: 'lib-v1', pdf_storage_path: 'pdfs/lib-v1.pdf' }
+    );
+    expect(error).not.toBeNull();
+    expect(data).toBe(false);
+});
+
+// Unlock rows are read flat now (`class_id, expires_at`) and the class body
+// is hydrated separately from CLASS_ROWS, so the nested `class` object here
+// is vestigial for hydration -- it stays only because the flat fields are
+// what the resolver reads.
 const unlockRow = (classId, name, expiresAt) => ({
     class_id: classId,
     expires_at: expiresAt,
@@ -202,10 +249,14 @@ const unlockRow = (classId, name, expiresAt) => ({
 test('a temporary unlock surfaces its expiry on the listed class', async () => {
     tableRows.class_unlocks = [unlockRow('lib-v1', 'Librarian', '2026-09-16T00:00:00Z')];
     const { data } = await getUnlockedClasses('user-1');
-    expect(data).toHaveLength(1);
-    expect(data[0].id).toBe('lib-v1');
-    expect(data[0].name).toBe('Librarian');
-    expect(data[0].unlock_expires_at).toBe('2026-09-16T00:00:00Z');
+    // The unlock covers the whole same-edition family, so v2 is listed too;
+    // the aspirant fork stays out of it.
+    expect(data.map(c => c.id).sort()).toEqual(['lib-v1', 'lib-v2']);
+    const v1 = data.find(c => c.id === 'lib-v1');
+    expect(v1.name).toBe('Librarian');
+    expect(v1.unlock_expires_at).toBe('2026-09-16T00:00:00Z');
+    // The expiry is family-wide: the fork it reaches carries it too.
+    expect(data.find(c => c.id === 'lib-v2').unlock_expires_at).toBe('2026-09-16T00:00:00Z');
 });
 
 test('a permanent unlock surfaces a null expiry', async () => {
@@ -247,10 +298,10 @@ test('the later expiry wins across a family', async () => {
 
 test('degrades to the row\'s own expiry when the class projection is unavailable', async () => {
     // `fetchClassFamilyRows` returns null when the classes projection can't
-    // be read (`services/class/repository.js:43-57` bails on a non-array),
-    // so a null `classes` table is what that failure looks like here. Each
+    // be read (`services/class/repository.js` bails on a non-array). Only
+    // that read fails here -- hydration still resolves the ids -- so each
     // row must fall back to its own expiry rather than losing it.
-    tableRows.classes = null;
+    familyProjectionFails = true;
     tableRows.class_unlocks = [
         unlockRow('lib-v1', 'Librarian', '2026-09-16T00:00:00Z'),
         unlockRow('lib-v2', 'Librarian II', null)

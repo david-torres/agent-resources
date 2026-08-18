@@ -6,9 +6,9 @@
 
 const sameEditionEdge = (parent, child) => parent.rules_edition === child.rules_edition;
 
-// classes: array of { id, base_class_id, rules_edition }
-// Returns Set of class ids in classId's version family (always includes classId).
-const computeVersionFamily = (classes, classId) => {
+// Index the class graph once so repeated family walks don't rebuild the
+// maps per id — expandIdsToFamilies runs one walk per unlocked id.
+const buildFamilyIndex = (classes) => {
   const rows = Array.isArray(classes) ? classes.filter(c => c && c.id) : [];
   const byId = new Map(rows.map(c => [c.id, c]));
 
@@ -21,7 +21,10 @@ const computeVersionFamily = (classes, classId) => {
     if (!childrenOf.has(parent.id)) childrenOf.set(parent.id, []);
     childrenOf.get(parent.id).push(c.id);
   }
+  return { byId, childrenOf };
+};
 
+const familyFromIndex = ({ byId, childrenOf }, classId) => {
   const family = new Set();
   const queue = [classId];
   while (queue.length > 0) {
@@ -39,12 +42,18 @@ const computeVersionFamily = (classes, classId) => {
   return family;
 };
 
+// classes: array of { id, base_class_id, rules_edition }
+// Returns Set of class ids in classId's version family (always includes classId).
+const computeVersionFamily = (classes, classId) =>
+  familyFromIndex(buildFamilyIndex(classes), classId);
+
 // Expand a set of unlocked class ids to include every member of each id's
 // version family.
 const expandIdsToFamilies = (classes, ids) => {
+  const index = buildFamilyIndex(classes);
   const expanded = new Set();
   for (const id of ids) {
-    for (const member of computeVersionFamily(classes, id)) {
+    for (const member of familyFromIndex(index, id)) {
       expanded.add(member);
     }
   }

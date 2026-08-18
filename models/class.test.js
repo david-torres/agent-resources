@@ -37,10 +37,7 @@ const makeClient = (tableToRows) => ({
     }
 });
 
-const unlockRow = {
-    class: { id: 'class-1', name: 'Illusionist' },
-    expires_at: null
-};
+const unlockRow = { class_id: 'class-1', expires_at: null };
 
 // Anon is RLS-blocked: zero class_unlocks rows even when the user really
 // has unlocks. This mirrors the production bug — the shared anon client
@@ -51,7 +48,9 @@ const fakeAnon = makeClient({
 
 // Admin has the real row. The fix routes these reads through supabaseAdmin.
 const fakeAdmin = makeClient({
-    class_unlocks: [unlockRow]
+    class_unlocks: [unlockRow],
+    classes: [{ id: 'class-1', name: 'Illusionist' }],
+    rules_pdf_unlocks: []
 });
 
 mock.module('./_base', () => ({
@@ -76,7 +75,11 @@ test('unlock reads route through supabaseAdmin so anon RLS does not hide rows', 
     expect(listResult.error).toBeFalsy();
     expect(Array.isArray(listResult.data)).toBe(true);
     expect(listResult.data.length).toBe(1);
-    expect(listResult.data[0]).toEqual({ id: 'class-1', name: 'Illusionist', unlock_expires_at: null });
+    expect(listResult.data[0]).toMatchObject({
+        id: 'class-1',
+        name: 'Illusionist',
+        unlock_source: 'direct'
+    });
 
     const unlockedResult = await isClassUnlocked('u1', 'class-1');
     expect(unlockedResult).toEqual({ data: true, error: null });

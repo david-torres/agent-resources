@@ -20,9 +20,10 @@ const loadProfileModel = () => freshRequire(require.resolve('../models/profile')
     }
   }],
   [require.resolve('../services/profile/repository'), {
-    fetchOwnProfile: async () => ({ data: null, error: { code: 'PGRST116' } })
+    fetchOwnProfile: async () => ({ data: null, error: { code: 'PGRST116' } }),
+    markStarterGranted: async () => ({ data: null, error: null })
   }],
-  [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf', STARTER_CLASS_UNLOCKS: {} }]
+  [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf' }]
 ]));
 
 test('getProfile returns the profile object, not the insert array, on first sign-in', async () => {
@@ -43,9 +44,10 @@ test('getProfile returns false when provisioning yields no row', async () => {
       }
     }],
     [require.resolve('../services/profile/repository'), {
-      fetchOwnProfile: async () => ({ data: null, error: { code: 'PGRST116' } })
+      fetchOwnProfile: async () => ({ data: null, error: { code: 'PGRST116' } }),
+      markStarterGranted: async () => ({ data: null, error: null })
     }],
-    [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf', STARTER_CLASS_UNLOCKS: {} }]
+    [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf' }]
   ]));
   const profile = await emptyInsert.getProfile({ id: 'u1', confirmed_at: '2026-08-17T00:00:00Z' });
   expect(profile).toBe(false);

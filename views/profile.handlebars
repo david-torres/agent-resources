@@ -51,6 +51,12 @@
         <tr>
           <td>
             <a href="/classes/{{this.id}}/{{this.name}}">{{this.name}}</a>
+            {{#if (eq this.unlock_source 'book')}}
+              <span class="tag is-info is-light ml-2"
+                    title="Access comes from your rulebook and ends when it does">
+                Included with {{this.unlock_book_title}}
+              </span>
+            {{/if}}
           </td>
           <td>
             {{#if (eq this.status 'release')}}

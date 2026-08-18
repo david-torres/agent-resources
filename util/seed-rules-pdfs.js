@@ -51,6 +51,10 @@ const buildHardcodedRulesPdfs = () => [
         id: STARTER_RULES_PDF_ID,
         title: 'Enclave: Advent',
         edition: 'v1',
+        rules_edition: 'advent',
+        // The core rulebook for its ruleset, so it confers the Advent roster.
+        // The column defaults to 'supplement'; this must be explicit.
+        book_type: 'core',
         storage_path: `${STARTER_RULES_PDF_ID}/local-seed-placeholder.pdf`,
         is_active: true
     }

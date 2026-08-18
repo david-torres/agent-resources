@@ -3,12 +3,12 @@ const { escapeLikePattern } = require('../util/validate');
 const { SYSTEM_ACTOR } = require('../util/actor');
 const { ProfileService } = require('../services/profile/service');
 const profileRepository = require('../services/profile/repository');
-const { STARTER_RULES_PDF_ID, STARTER_CLASS_UNLOCKS } = require('../util/starter-content');
+const { STARTER_RULES_PDF_ID } = require('../util/starter-content');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
-// Starter content IDs - Advent v1 rules and base 6 classes
-const STARTER_CLASS_IDS = Object.values(STARTER_CLASS_UNLOCKS);
+// Starter content - the Advent v1 rulebook. Its core class roster follows on
+// read (util/book-classes.js), so no class rows are written here.
 const STARTER_UNLOCK_DAYS = 30;
 
 const profileService = new ProfileService(profileRepository);
@@ -39,14 +39,11 @@ const getProfile = async (user) => {
     }
   }
 
-  // Profile exists - check if user has any class unlocks, grant starter unlocks if missing
-  if (data && user.confirmed_at) {
-    const { data: unlockData, error: unlockError } = await profileRepository.fetchStarterUnlockRows(user.id);
-
-    // If no unlocks exist, grant starter unlocks (handles existing profiles created before feature)
-    if (!unlockError && (!unlockData || unlockData.length === 0)) {
-      await grantStarterUnlocks(user.id, data.id);
-    }
+  // Profile exists - grant starter unlocks unless the row is already stamped
+  // starter_granted_at (handles existing profiles created before the feature;
+  // the stamp keeps revoked grants from resurrecting on the next request)
+  if (data && user.confirmed_at && !data.starter_granted_at) {
+    await grantStarterUnlocks(user.id, data.id);
   }
 
   return data;
@@ -89,7 +86,8 @@ const grantStarterUnlocks = async (userId, profileId) => {
   expiresAt.setDate(expiresAt.getDate() + STARTER_UNLOCK_DAYS);
   const expiresAtISO = expiresAt.toISOString();
 
-  // Grant rules PDF unlock using SECURITY DEFINER function (bypasses RLS)
+  // Grant rules PDF unlock using SECURITY DEFINER function (bypasses RLS).
+  // The six Advent core classes derive from this grant and expire with it.
   const rulesResult = await supabase.rpc('grant_starter_rules_unlock', {
     p_user_id: userId,
     p_profile_id: profileId,
@@ -99,18 +97,11 @@ const grantStarterUnlocks = async (userId, profileId) => {
 
   if (rulesResult.error) {
     console.error('Failed to grant starter rules unlock:', rulesResult.error);
+    return;
   }
 
-  // Grant class unlocks using SECURITY DEFINER function (bypasses RLS)
-  const classResult = await supabase.rpc('grant_starter_class_unlocks', {
-    p_user_id: userId,
-    p_class_ids: STARTER_CLASS_IDS,
-    p_expires_at: expiresAtISO
-  });
-
-  if (classResult.error) {
-    console.error('Failed to grant starter class unlocks:', classResult.error);
-  }
+  // Stamp the profile so getProfile's guard never re-fires this grant.
+  await profileRepository.markStarterGranted(userId);
 }
 
 // authz: self-write, enforced by profileService (throws AuthorizationError on
@@ -208,6 +199,7 @@ module.exports = {
   getProfileByIdAdmin,
   getProfileByNameAdmin,
   createProfile,
+  grantStarterUnlocks,
   updateUser,
   setDiscordId,
   searchProfiles,

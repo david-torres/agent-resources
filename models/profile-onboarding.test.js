@@ -33,7 +33,7 @@ const fakeAdmin = {
 //   ../util/actor                  -> { SYSTEM_ACTOR } (no relative requires of its own; loaded for real)
 //   ../services/profile/service    -> { ProfileService } (a class, `new`-ed at module load time)
 //   ../services/profile/repository -> the whole module object (default require, not destructured)
-//   ../util/starter-content        -> { STARTER_RULES_PDF_ID, STARTER_CLASS_UNLOCKS }
+//   ../util/starter-content        -> { STARTER_RULES_PDF_ID }
 // Only _base needs a real fake (supabaseAdmin); the rest are inert stand-ins
 // shaped to match how profile.js actually imports them, so the module loads
 // without touching real Supabase clients or the real ProfileService's
@@ -44,7 +44,7 @@ const loadProfileModel = () => freshRequire(require.resolve('../models/profile')
   }],
   [require.resolve('../services/profile/service'), { ProfileService: class ProfileService {} }],
   [require.resolve('../services/profile/repository'), {}],
-  [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf', STARTER_CLASS_UNLOCKS: {} }]
+  [require.resolve('../util/starter-content'), { STARTER_RULES_PDF_ID: 'starter-pdf' }]
 ]));
 
 test('patchOnboarding shallow-merges the patch into the existing jsonb', async () => {

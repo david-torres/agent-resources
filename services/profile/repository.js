@@ -29,9 +29,6 @@ module.exports = {
   fetchOwnProfile: (userId) => withResultQuiet404(
     supabaseAdmin.from('profiles').select('*').eq('user_id', userId).single()
   ),
-  fetchStarterUnlockRows: (userId) => withResult(
-    supabaseAdmin.from('class_unlocks').select('class_id').eq('user_id', userId).limit(1)
-  ),
   // Admin variants bypass RLS — only call from routes already gated by requireAdmin.
   fetchProfileByIdAdmin: (id) => withResult(
     supabaseAdmin.from('profiles').select('*').eq('id', id).single()
@@ -59,5 +56,10 @@ module.exports = {
   },
   updateDiscord: (userId, discordId, discordEmail) => withResult(
     supabaseAdmin.from('profiles').update({ discord_id: discordId, discord_email: discordEmail }).eq('user_id', userId).select()
+  ),
+  // Stamps the starter-grant guard column; models/profile.js grantStarterUnlocks
+  // calls this only after the grant RPC succeeds.
+  markStarterGranted: (userId) => withResult(
+    supabaseAdmin.from('profiles').update({ starter_granted_at: new Date().toISOString() }).eq('user_id', userId)
   )
 };

@@ -7,7 +7,6 @@ const makeRepo = () => {
   return {
     calls,
     fetchOwnProfile: async userId => { calls.push(['fetchOwnProfile', userId]); return { data: null, error: null }; },
-    fetchStarterUnlockRows: async userId => { calls.push(['fetchStarterUnlockRows', userId]); return { data: [], error: null }; },
     fetchProfileByIdAdmin: async id => { calls.push(['fetchProfileByIdAdmin', id]); return { data: null, error: null }; },
     fetchProfileByNameAdmin: async name => { calls.push(['fetchProfileByNameAdmin', name]); return { data: null, error: null }; },
     searchProfilesAdmin: async pattern => { calls.push(['searchProfilesAdmin', pattern]); return { data: [], error: null }; },

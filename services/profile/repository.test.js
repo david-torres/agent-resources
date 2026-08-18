@@ -12,7 +12,6 @@ const repository = require('./repository');
 // already exercise these paths.
 const expectedMethods = [
   'fetchOwnProfile',
-  'fetchStarterUnlockRows',
   'fetchProfileByIdAdmin',
   'fetchProfileByNameAdmin',
   'searchProfilesAdmin',

@@ -27,3 +27,24 @@ test('the seed builds the starter rules PDF row under the exact id the starter-u
   expect(row.storage_path.startsWith(`${STARTER_RULES_PDF_ID}/`)).toBe(true);
   expect(row.storage_path.endsWith('.pdf')).toBe(true);
 });
+
+// rules_pdfs.rules_edition is the ruleset ('advent'|'aspirant'); the older
+// `edition` column holds the VERSION ('v1'). Book-derived class unlocks read
+// rules_edition, so a seeded book with the wrong value silently grants the
+// wrong roster.
+test('the seeded starter rules PDF declares its ruleset explicitly', () => {
+  const row = buildHardcodedRulesPdfs().find(r => r.id === STARTER_RULES_PDF_ID);
+
+  expect(row.rules_edition).toBe('advent');
+  expect(row.edition).toBe('v1');
+});
+
+// book_type defaults to 'supplement' at the column level (deliberately — a
+// book confers nothing until someone marks it core), so the starter rulebook
+// has to opt in explicitly or a fresh local stack seeds a book that grants
+// no classes and every book-unlock test goes red for the wrong reason.
+test('the seeded starter rules PDF is a core rulebook', () => {
+  const row = buildHardcodedRulesPdfs().find(r => r.id === STARTER_RULES_PDF_ID);
+
+  expect(row.book_type).toBe('core');
+});

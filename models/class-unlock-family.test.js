@@ -4,11 +4,10 @@ const { mock, test, expect, afterAll } = require('bun:test');
 // sibling test files (same pattern as class.test.js).
 const realBase = require('./_base');
 
-// Like class.test.js's makeClient, but records `.in()` calls so tests can
-// assert which ids the unlock query was given.
-// NOTE: the fake ignores filter args, so negative cases (expired/missing unlocks)
-// can't be asserted in this file; they're covered by util/class-family.test.js and class.test.js.
-const makeRecordingClient = (tableToRows, inCalls) => ({
+// Like class.test.js's makeClient. NOTE: the fake ignores filter args, so
+// negative cases (expired/missing unlocks) can't be asserted in this file;
+// they're covered by util/class-family.test.js and class.test.js.
+const makeClient = (tableToRows) => ({
     from(table) {
         const rows = tableToRows[table] ?? [];
         const result = { data: rows, error: null };
@@ -18,10 +17,7 @@ const makeRecordingClient = (tableToRows, inCalls) => ({
             or() { return chain; },
             limit() { return chain; },
             order() { return chain; },
-            in(column, values) {
-                inCalls.push({ table, column, values });
-                return chain;
-            },
+            in() { return chain; },
             single() { return Promise.resolve({ data: rows[0] ?? null, error: null }); },
             then(onFulfilled, onRejected) {
                 return Promise.resolve(result).then(onFulfilled, onRejected);
@@ -39,11 +35,10 @@ const classRows = [
     { id: 'lib-asp', base_class_id: 'lib-v1', rules_edition: 'aspirant' }
 ];
 
-const inCalls = [];
-const fakeClient = makeRecordingClient({
+const fakeClient = makeClient({
     classes: classRows,
     class_unlocks: [{ class_id: 'lib-v1', expires_at: null }]
-}, inCalls);
+});
 
 mock.module('./_base', () => ({
     supabase: fakeClient,
@@ -62,16 +57,14 @@ afterAll(() => {
 });
 
 test('isClassUnlocked checks the whole same-edition version family', async () => {
-    inCalls.length = 0;
-    // User unlocked lib-v1; checking the v2 fork must count as unlocked.
+    // User unlocked lib-v1; checking the v2 fork must count as unlocked
+    // because both are in the same version family, and the aspirant fork
+    // (lib-asp) must not, because it sits across the edition boundary.
     const result = await isClassUnlocked('u1', 'lib-v2');
     expect(result).toEqual({ data: true, error: null });
 
-    // The unlock query must cover exactly the same-edition family —
-    // not the aspirant edition fork.
-    const unlockCall = inCalls.find(c => c.table === 'class_unlocks' && c.column === 'class_id');
-    expect(unlockCall).toBeTruthy();
-    expect(new Set(unlockCall.values)).toEqual(new Set(['lib-v1', 'lib-v2']));
+    const aspirantResult = await isClassUnlocked('u1', 'lib-asp');
+    expect(aspirantResult).toEqual({ data: false, error: null });
 });
 
 test('getUnlockedClassIdsForUser expands direct unlocks to version families', async () => {

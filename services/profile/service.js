@@ -4,7 +4,6 @@ const { sanitizeUrlFields } = require('../../util/url');
 
 const REQUIRED_REPOSITORY_METHODS = [
   'fetchOwnProfile',
-  'fetchStarterUnlockRows',
   'fetchProfileByIdAdmin',
   'fetchProfileByNameAdmin',
   'searchProfilesAdmin',

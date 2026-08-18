@@ -72,5 +72,45 @@ module.exports = {
         creator:profiles!rules_pdf_unlock_codes_created_by_fkey(id, name)
       `)
       .order('created_at', { ascending: false })
-  )
+  ),
+
+  // Which rulesets does this user hold a CORE rulebook for? Admin client so
+  // RLS does not hide the user's own unlock rows. is_active is deliberately
+  // not filtered: a retired edition of a book still names the ruleset owned.
+  // book_type IS filtered: rules_edition only says which ruleset a book
+  // belongs to, and a supplement for that ruleset confers no classes.
+  //
+  // The book_type filter targets the EMBEDDED rules_pdfs resource, so it must
+  // be qualified with the embed alias — a bare .eq('book_type', 'core') would
+  // resolve against rules_pdf_unlocks and error. The embed is also !inner:
+  // without it PostgREST keeps the parent unlock row and nulls the embed
+  // instead of dropping the row.
+  // Returns a { data, error } envelope: on failure data is null and error is
+  // set, so callers can fail closed on book-derived classes while still
+  // surfacing the failure instead of mistaking it for "no books".
+  fetchActiveBooksForUser: async ({ userId, nowIso }) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('rules_pdf_unlocks')
+        .select('expires_at, rules_pdf:rules_pdfs!inner(rules_edition, title)')
+        .eq('user_id', userId)
+        .eq('rules_pdf.book_type', 'core')
+        .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
+      if (error || !Array.isArray(data)) {
+        if (error) console.error(error);
+        return { data: null, error: error || { message: 'rules_pdf_unlocks read returned no rows' } };
+      }
+      // The grant's expiry rides along with the book it confers: a
+      // book-derived class is only as durable as the grant behind it.
+      return {
+        data: data
+          .filter(row => row.rules_pdf && row.rules_pdf.rules_edition)
+          .map(row => ({ ...row.rules_pdf, expires_at: row.expires_at ?? null })),
+        error: null
+      };
+    } catch (e) {
+      console.error(e);
+      return { data: null, error: e };
+    }
+  }
 };

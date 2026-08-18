@@ -441,13 +441,18 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     let classPdfAccessible = false;
     let classPdfError = null;
     if (classData?.pdf_storage_path) {
+        const viewerUserId = res.locals.user?.id || null;
         const { data: canAccess, error: accessError } = await canViewClassPdf(
             {
-                userId: res.locals.user?.id || null,
+                userId: viewerUserId,
                 profileId: profile?.id || null,
                 role: profile?.role || null
             },
-            classData
+            classData,
+            // Reuse the unlock check already made above rather than resolving
+            // the user's effective unlocks a second time — only when it was
+            // resolved for this same viewer.
+            profile && profile.user_id === viewerUserId ? { unlocked } : {}
         );
         classPdfAccessible = !!canAccess;
         if (accessError) {

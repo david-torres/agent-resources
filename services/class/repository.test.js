@@ -18,9 +18,8 @@ const expectedMethods = [
   'insertUnlockCodes',
   'insertUnlock',
   'fetchClassFamilyRows',
-  'activeUnlockRows',
-  'unlockedClassRows',
   'unlockedClassIdRows',
+  'classRowsByIds',
   'fetchClassByIdAdmin',
   'fetchClassesForAgentAdmin'
 ];

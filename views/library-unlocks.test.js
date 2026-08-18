@@ -146,3 +146,12 @@ test('form document selects force an explicit choice via a disabled placeholder'
   const placeholders = html.match(/<option value="" selected disabled>Select a document…<\/option>/g) || [];
   expect(placeholders.length).toBe(2);
 });
+
+// Granting a core book confers that ruleset's classes as a side effect
+// (models/class.js#getEffectiveClassUnlocks). Nothing on the form said so.
+test('the grant form warns that a core book also confers its ruleset classes', () => {
+  const src = fs.readFileSync(path.join(__dirname, 'library-unlocks.handlebars'), 'utf8');
+  const grantForm = src.slice(src.indexOf('action="/library/unlocks"'));
+
+  expect(grantForm.slice(0, grantForm.indexOf('</form>'))).toContain('core rulebook');
+});

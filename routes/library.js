@@ -21,7 +21,7 @@ const {
 } = require('../models/rules');
 const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
 const { getProfileByNameAdmin, getProfileByIdAdmin, patchOnboarding } = require('../models/profile');
-const { STARTER_RULES_PDF_ID } = require('../util/starter-content');
+const { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS } = require('../util/starter-content');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
@@ -43,6 +43,31 @@ const upload = multer({
         cb(null, true);
     }
 });
+
+// The rulesets that exist are exactly the ones with a core roster.
+const RULESETS = new Set(Object.keys(CORE_CLASS_UNLOCKS));
+const normalizeRuleset = (value) => (RULESETS.has(value) ? value : null);
+
+// rules_edition names the ruleset a book belongs to; book_type says whether
+// it is that ruleset's core rulebook. Only 'core' confers the roster
+// (services/rules/repository.js), so this is never inferred — an unset or
+// unrecognised value is rejected rather than defaulted.
+const BOOK_TYPES = new Set(['core', 'supplement']);
+const normalizeBookType = (value) => (BOOK_TYPES.has(value) ? value : null);
+
+// Create and update post the same ruleset/type pair with the same rejection
+// rules; `error` carries the 400 message when either field is unusable.
+const parseBookFields = (body) => {
+    const rulesEdition = normalizeRuleset(body.rules_edition);
+    if (!rulesEdition) {
+        return { error: `Ruleset must be ${[...RULESETS].join(' or ')}` };
+    }
+    const bookType = normalizeBookType(body.book_type);
+    if (!bookType) {
+        return { error: 'Type must be core or supplement' };
+    }
+    return { rulesEdition, bookType, error: null };
+};
 
 const normalizeBoolean = (value, fallback = false) => {
     if (value === undefined || value === null) return fallback;
@@ -246,10 +271,15 @@ router.post('/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, re
 router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), async (req, res) => {
     const { profile } = res.locals;
     const { title, edition } = req.body;
+    const { rulesEdition, bookType, error: bookFieldError } = parseBookFields(req.body);
     const isActive = normalizeBoolean(req.body.is_active, true);
 
     if (!title || !edition) {
         return sendError(req, res, null, { status: 400, message: 'Title and edition are required' });
+    }
+
+    if (bookFieldError) {
+        return sendError(req, res, null, { status: 400, message: bookFieldError });
     }
 
     if (!req.file) {
@@ -266,6 +296,8 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
         id: rulesPdfId,
         title: title.trim(),
         edition: edition.trim(),
+        rules_edition: rulesEdition,
+        book_type: bookType,
         storage_path: storageInfo.path,
         is_active: isActive,
         free_access: normalizeBoolean(req.body.free_access, false),
@@ -284,8 +316,16 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
 router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), async (req, res) => {
     const { id } = req.params;
     const { title, edition } = req.body;
-    const isActive = normalizeBoolean(req.body.is_active, true);
+    const { rulesEdition, bookType, error: bookFieldError } = parseBookFields(req.body);
+    // The edit form always renders the is_active checkbox, so an absent field
+    // means it was unchecked — falling back to true here made deactivation
+    // impossible.
+    const isActive = normalizeBoolean(req.body.is_active, false);
     const removePdf = normalizeBoolean(req.body.remove_pdf, false);
+
+    if (bookFieldError) {
+        return sendError(req, res, null, { status: 400, message: bookFieldError });
+    }
 
     const { data: existingRule, error: loadError } = await getRulesPdf(id);
     if (loadError || !existingRule) {
@@ -295,6 +335,8 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
     const updates = {
         title: title?.trim() || existingRule.title,
         edition: edition?.trim() || existingRule.edition,
+        rules_edition: rulesEdition,
+        book_type: bookType,
         is_active: isActive,
         free_access: normalizeBoolean(req.body.free_access, false)
     };

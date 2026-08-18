@@ -55,12 +55,11 @@ module.exports = {
       return null;
     }
   },
-  activeUnlockRows: async ({ userId, classIds, nowIso }) => {
+  unlockedClassIdRows: async ({ userId, nowIso }) => {
     const { data, error } = await supabaseAdmin
       .from('class_unlocks')
       .select('class_id, expires_at')
       .eq('user_id', userId)
-      .in('class_id', classIds)
       .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
     if (error) {
       console.error(error);
@@ -68,24 +67,37 @@ module.exports = {
     }
     return { data, error: null };
   },
-  unlockedClassRows: async ({ userId, nowIso }) => {
-    const { data, error } = await supabaseAdmin
-      .from('class_unlocks')
-      .select('class:classes(*), expires_at')
-      .eq('user_id', userId)
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
-    if (error) {
-      console.error(error);
-      return { data: null, error };
+  // Hydrate class rows for an already-resolved id set (see
+  // getEffectiveClassUnlocks). Admin client so private forks resolve — which
+  // is exactly why this needs its own visibility filter: the id set is
+  // family-expanded, so an admin's unpublished v2 draft of a core class is in
+  // it for every holder of the book, and the class-view route reads through
+  // the RLS-bound anon client, so its link would 404 for them.
+  //
+  // alwaysVisibleIds is the caller's raw direct-unlock set. A class the user
+  // holds an explicit class_unlocks row for was listed before book grants
+  // existed and stays listed, private or not; only ids reached by expansion
+  // are filtered. Interpolating them into the filter is safe: they are
+  // class_unlocks.class_id values, a uuid column, so they cannot carry a
+  // comma or quote.
+  classRowsByIds: async (classIds, { alwaysVisibleIds = [] } = {}) => {
+    if (!Array.isArray(classIds) || classIds.length === 0) {
+      return { data: [], error: null };
     }
-    return { data, error: null };
-  },
-  unlockedClassIdRows: async ({ userId, nowIso }) => {
-    const { data, error } = await supabaseAdmin
-      .from('class_unlocks')
-      .select('class_id')
-      .eq('user_id', userId)
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
+    const requested = new Set(classIds);
+    const exempt = [...new Set(alwaysVisibleIds)].filter(id => requested.has(id));
+
+    let query = supabaseAdmin
+      .from('classes')
+      .select('*')
+      .in('id', classIds);
+    query = exempt.length
+      ? query.or(`is_public.eq.true,id.in.(${exempt.join(',')})`)
+      : query.eq('is_public', true);
+
+    // 6-12+ rows now, so an unordered read reshuffles the table between page
+    // loads.
+    const { data, error } = await query.order('name');
     if (error) {
       console.error(error);
       return { data: null, error };
