@@ -76,7 +76,7 @@ test('unlock reads route through supabaseAdmin so anon RLS does not hide rows', 
     expect(listResult.error).toBeFalsy();
     expect(Array.isArray(listResult.data)).toBe(true);
     expect(listResult.data.length).toBe(1);
-    expect(listResult.data[0]).toEqual({ id: 'class-1', name: 'Illusionist' });
+    expect(listResult.data[0]).toEqual({ id: 'class-1', name: 'Illusionist', unlock_expires_at: null });
 
     const unlockedResult = await isClassUnlocked('u1', 'class-1');
     expect(unlockedResult).toEqual({ data: true, error: null });

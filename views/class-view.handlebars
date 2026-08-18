@@ -128,6 +128,11 @@
             </span>
             <span>Open Class PDF</span>
           </a>
+          {{#if unlockExpiresAt}}
+          <p class="mt-2 has-text-centered">
+            <span class="tag is-warning is-light">Access expires {{date_tz unlockExpiresAt}}</span>
+          </p>
+          {{/if}}
           {{else}}
           <div class="notification is-warning is-light">
             Unlock this class to gain access to the PDF.

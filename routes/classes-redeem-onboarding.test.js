@@ -1,9 +1,16 @@
 // routes/classes-redeem-onboarding.test.js
 //
-// RED-phase test for the onboarding "redeemed" step: POST /classes/redeem/bulk
-// should mark profiles.onboarding.redeemed = true (via patchOnboarding) the
-// first time a batch contains at least one successfully-redeemed code, and
-// must NOT write anything when every code in the batch fails.
+// Covers two independent things against the same freshRequire'd router,
+// sharing its overrides/app/server setup:
+//
+// 1. The onboarding "redeemed" step: POST /classes/redeem/bulk should mark
+//    profiles.onboarding.redeemed = true (via patchOnboarding) the first
+//    time a batch contains at least one successfully-redeemed code, and
+//    must NOT write anything when every code in the batch fails.
+// 2. GET /classes/:id/:name? supplies `unlockExpiresAt` to the class-view
+//    render context (the route -> view seam for models/class.js's
+//    getEffectiveClassUnlock; see models/class-unlock-expiry.test.js for
+//    the model-level coverage of the value itself).
 //
 // Uses the freshRequire scaffold (see routes/library-unlocks.test.js for the
 // full rationale): bun's mock.module is a process-global registry shared by
@@ -36,7 +43,8 @@ const overrides = new Map([
   [require.resolve('../models/profile'), {
     // Consumed by the real isAuthenticated middleware.
     getProfile: async (user) => ({ id: 'p1', user_id: user.id, role: 'user' }),
-    // Destructured by routes/classes.js but not exercised by /redeem/bulk.
+    // Destructured by routes/classes.js; the class-view route's optional
+    // owner-profile lookup, not exercised by any assertion below.
     getProfileById: async () => ({ data: null, error: null }),
     // The behavior under test.
     patchOnboarding: async (userId, patch) => {
@@ -46,13 +54,27 @@ const overrides = new Map([
   }],
   [require.resolve('../models/class'), {
     getClasses: async () => ({ data: [], error: null }),
-    getClass: async () => ({ data: { name: 'Thane' }, error: null }),
+    // status: 'draft' (not 'release') so the class-view route always skips
+    // its teaser branch, regardless of the request's unlock state.
+    getClass: async () => ({
+      data: {
+        id: 'c1',
+        name: 'Thane',
+        status: 'draft',
+        created_by: 'someone-else',
+        rules_edition: 'advent',
+        rules_version: 'v1'
+      },
+      error: null
+    }),
     createClass: async () => ({ data: null, error: null }),
     updateClass: async () => ({ data: null, error: null }),
     duplicateClass: async () => ({ data: null, error: null }),
-    getUnlockedClasses: async () => ({ data: [], error: null }),
     unlockClass: async () => ({ error: null }),
-    isClassUnlocked: async () => ({ data: false, error: null }),
+    getEffectiveClassUnlock: async () => ({
+      data: { unlocked: true, expiresAt: '2026-09-16T00:00:00Z' },
+      error: null
+    }),
     getVersionHistory: async () => ({ data: [], error: null }),
     createUnlockCodes: async () => ({ data: [], error: null }),
     listUnlockCodes: async () => ({ data: [], error: null }),
@@ -127,4 +149,21 @@ test('an all-failure batch does not mark redeemed', async () => {
   expect(res.status).toBe(200);
   await new Promise(r => setTimeout(r, 10));
   expect(patchCalls).toEqual([]);
+});
+
+// I-1 route -> view seam: the model (models/class-unlock-expiry.test.js)
+// proves getEffectiveClassUnlock resolves the right expiry; this proves the
+// route actually threads that value into the render context under the exact
+// key views/class-view.handlebars reads (`unlockExpiresAt`, class-view.handlebars:133).
+// Renaming either end would leave every other test green while the tag
+// silently stopped rendering.
+test('the class view route supplies unlockExpiresAt to the render context', async () => {
+  const res = await fetch(`${baseUrl}/classes/11111111-1111-1111-1111-111111111111/Thane`, {
+    headers: authHeaders
+  });
+  expect(res.status).toBe(200);
+  const { view, ctx } = await res.json();
+  expect(view).toBe('class-view');
+  expect(ctx.unlocked).toBe(true);
+  expect(ctx.unlockExpiresAt).toBe('2026-09-16T00:00:00Z');
 });

@@ -61,8 +61,7 @@ module.exports = {
       .select('class_id, expires_at')
       .eq('user_id', userId)
       .in('class_id', classIds)
-      .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-      .limit(1);
+      .or(`expires_at.is.null,expires_at.gt.${nowIso}`);
     if (error) {
       console.error(error);
       return { data: null, error };

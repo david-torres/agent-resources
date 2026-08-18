@@ -9,9 +9,8 @@ const {
     createClass,
     updateClass,
     duplicateClass,
-    getUnlockedClasses,
+    getEffectiveClassUnlock,
     unlockClass,
-    isClassUnlocked,
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,
@@ -401,9 +400,11 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     }
 
     let unlocked = false;
+    let unlockExpiresAt = null;
     if (profile) {
-        const result = await isClassUnlocked(profile.user_id, id);
-        unlocked = result?.data || false;
+        const { data: access } = await getEffectiveClassUnlock(profile.user_id, id);
+        unlocked = access?.unlocked || false;
+        unlockExpiresAt = access?.expiresAt || null;
     }
 
     // Show teaser if Release and not unlocked for non-admins/non-creators
@@ -459,6 +460,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         title: `${classData.name} - View Class`,
         class: classData,
         unlocked,
+        unlockExpiresAt,
         ownerProfile,
         classPdfAccessible,
         classPdfError,

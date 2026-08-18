@@ -195,3 +195,60 @@ test('the duplicate modal opens and closes independently of the unlock-code moda
   expect(document.getElementById('duplicateModal-c1').classList.contains('is-active')).toBe(false);
   expect(document.body.classList.contains('modal-open')).toBe(false);
 });
+
+const Handlebars = require('handlebars');
+const customHelpers = require('../util/handlebars');
+const { renderMarkdown } = require('../util/markdown');
+const handlebarsHelpers = require('handlebars-helpers')();
+
+// class-view.handlebars calls `markdown`, which app.js registers separately
+// from the util/handlebars bundle (app.js:62) -- without it Handlebars
+// throws "Missing helper: markdown" and every test here fails for the wrong
+// reason.
+function renderClassView(context) {
+  const hb = Handlebars.create();
+  hb.registerHelper(handlebarsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('markdown', renderMarkdown);
+  hb.registerPartial('breadcrumbs', '');
+  hb.registerPartial('private-badge', '');
+  return hb.compile(SRC)(context);
+}
+
+const pdfContext = (overrides) => ({
+  profile: { name: 'Alice' },
+  class: {
+    id: 'lib-v1',
+    name: 'Librarian',
+    description: 'A class.',
+    status: 'release',
+    is_public: true,
+    rules_edition: 'advent',
+    rules_version: 'v1',
+    pdf_storage_path: 'classes/lib-v1.pdf'
+  },
+  unlocked: true,
+  classPdfAccessible: true,
+  ...overrides
+});
+
+test('an expiring unlock renders an Access expires tag by the PDF button', () => {
+  const html = renderClassView(pdfContext({ unlockExpiresAt: '2026-09-16T00:00:00Z' }));
+  expect(html).toContain('Access expires');
+  expect(html).toMatch(/Access expires\s+Sep 1[56], 2026/);
+});
+
+test('a permanent unlock renders no expiry tag', () => {
+  const html = renderClassView(pdfContext({ unlockExpiresAt: null }));
+  expect(html).toContain('Open Class PDF');
+  expect(html).not.toContain('Access expires');
+});
+
+test('an inaccessible PDF renders no expiry tag', () => {
+  const html = renderClassView(pdfContext({
+    classPdfAccessible: false,
+    unlockExpiresAt: '2026-09-16T00:00:00Z'
+  }));
+  expect(html).not.toContain('Access expires');
+  expect(html).toContain('Unlock this class to gain access to the PDF.');
+});

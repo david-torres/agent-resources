@@ -42,6 +42,7 @@
         <tr>
           <th>Name</th>
           <th>Status</th>
+          <th>Access</th>
           <th>Rules</th>
         </tr>
       </thead>
@@ -60,6 +61,11 @@
             {{/if}}
             {{#if (eq this.status 'alpha')}}
               <span class="tag is-danger is-light">alpha</span>
+            {{/if}}
+          </td>
+          <td>
+            {{#if this.unlock_expires_at}}
+            <span class="tag is-warning is-light">Expires {{date_tz this.unlock_expires_at}}</span>
             {{/if}}
           </td>
           <td>{{capitalize this.rules_edition}} {{this.rules_version}}</td>

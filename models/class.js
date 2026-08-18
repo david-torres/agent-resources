@@ -74,9 +74,28 @@ const getVersionFamilyIds = async (classId) => {
     return computeVersionFamily(rows, classId);
 };
 
-const isClassUnlocked = async (userId, classId) => {
+// An unlock covers a class's whole version family, and the least restrictive
+// grant wins: one permanent row makes access permanent, otherwise the latest
+// expiry applies. `null` means permanent OR no rows at all -- callers pair
+// this with an `unlocked` flag to tell those apart. Dates are compared as
+// instants, not strings, because Postgres can hand back either a `Z` or a
+// `+00:00` offset and those don't sort lexicographically.
+const leastRestrictiveExpiry = (rows) => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    if (rows.some(row => !row.expires_at)) return null;
+    let latest = null;
+    for (const row of rows) {
+        if (latest === null || Date.parse(row.expires_at) > Date.parse(latest)) {
+            latest = row.expires_at;
+        }
+    }
+    return latest;
+};
+
+const getEffectiveClassUnlock = async (userId, classId) => {
+    const none = { unlocked: false, expiresAt: null };
     if (!userId || !classId) {
-        return { data: false, error: null };
+        return { data: none, error: null };
     }
 
     // An unlock for any same-edition version of the class counts.
@@ -89,10 +108,27 @@ const isClassUnlocked = async (userId, classId) => {
         nowIso: now
     });
 
+    // Fail closed: an unreadable unlocks table must not read as access.
+    if (error) {
+        return { data: none, error };
+    }
+
+    const rows = Array.isArray(data) ? data : [];
+    if (rows.length === 0) {
+        return { data: none, error: null };
+    }
+    return {
+        data: { unlocked: true, expiresAt: leastRestrictiveExpiry(rows) },
+        error: null
+    };
+};
+
+const isClassUnlocked = async (userId, classId) => {
+    const { data, error } = await getEffectiveClassUnlock(userId, classId);
     if (error) {
         return { data: false, error };
     }
-    return { data: Array.isArray(data) && data.length > 0, error: null };
+    return { data: data.unlocked, error: null };
 };
 
 const getClass = async (id, client = supabase) => {
@@ -148,8 +184,26 @@ const getUnlockedClasses = async (userId) => {
     if (error) {
         return { data: null, error };
     }
+
+    const rows = (data || []).filter(entry => entry && entry.class && entry.class.id);
+    if (rows.length === 0) {
+        return { data: [], error: null };
+    }
+
+    // Expiry is a family-wide property: a permanent v1 unlock must stop v2
+    // from advertising an expiry it doesn't really have. One projection load
+    // serves every row; degrade to each row's own expiry if it can't load.
+    const familyRows = await fetchClassFamilyRows();
+
     return {
-        data: data.map(entry => entry.class),
+        data: rows.map((entry) => {
+            if (!familyRows) {
+                return { ...entry.class, unlock_expires_at: entry.expires_at ?? null };
+            }
+            const family = computeVersionFamily(familyRows, entry.class.id);
+            const familyUnlocks = rows.filter(other => family.has(other.class.id));
+            return { ...entry.class, unlock_expires_at: leastRestrictiveExpiry(familyUnlocks) };
+        }),
         error: null
     };
 };
@@ -427,6 +481,7 @@ module.exports = {
     getUnlockedClassIdsForUser,
     unlockClass,
     isClassUnlocked,
+    getEffectiveClassUnlock,
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,
