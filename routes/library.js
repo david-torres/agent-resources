@@ -20,7 +20,8 @@ const {
     listAllUnlockCodesAdmin
 } = require('../models/rules');
 const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
-const { getProfileByNameAdmin, getProfileByIdAdmin } = require('../models/profile');
+const { getProfileByNameAdmin, getProfileByIdAdmin, patchOnboarding } = require('../models/profile');
+const { STARTER_RULES_PDF_ID } = require('../util/starter-content');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
@@ -80,7 +81,7 @@ router.get('/', authOptional, async (req, res) => {
         const unlock = unlocksMap.get(rule.id);
         const expiresAt = unlock?.expires_at ? new Date(unlock.expires_at) : null;
         const isExpired = expiresAt ? expiresAt <= now : false;
-        const canView = isAdmin || (!!unlock && !isExpired);
+        const canView = isAdmin || !!rule.free_access || (!!unlock && !isExpired);
         return {
             ...rule,
             isUnlocked: !!unlock,
@@ -279,6 +280,7 @@ router.post('/', isAuthenticated, requireAdmin, upload.single('rules_pdf'), asyn
         edition: edition.trim(),
         storage_path: storageInfo.path,
         is_active: isActive,
+        free_access: normalizeBoolean(req.body.free_access, false),
         created_by: profile?.id || null
     };
 
@@ -305,7 +307,8 @@ router.post('/:id', isAuthenticated, requireAdmin, upload.single('rules_pdf'), a
     const updates = {
         title: title?.trim() || existingRule.title,
         edition: edition?.trim() || existingRule.edition,
-        is_active: isActive
+        is_active: isActive,
+        free_access: normalizeBoolean(req.body.free_access, false)
     };
 
     if (req.file) {
@@ -383,6 +386,11 @@ router.get('/:id/view', authOptional, async (req, res) => {
             error: signedError?.message || signedError
         });
         return sendError(req, res, null, { status: 500, message: 'Failed to prepare rules PDF' });
+    }
+
+    if (user && (rulesPdf.free_access || rulesPdf.id === STARTER_RULES_PDF_ID)) {
+        // Learn-the-game step: fire-and-forget, the viewer never waits on it.
+        patchOnboarding(user.id, { read_rules: true }).catch(() => {});
     }
 
     return res.render('pdf-viewer', {

@@ -1,0 +1,68 @@
+{{#if onboarding.show}}
+<div id="onboarding-card" class="notification is-info is-light">
+  {{#if onboarding.allDone}}
+  <p class="is-size-5 has-text-weight-semibold mb-1">You're all set, Agent.</p>
+  <p>Character created, game found. Good hunting out there.</p>
+  {{else if onboarding.askPath}}
+  <p class="is-size-5 has-text-weight-semibold mb-1">Welcome to Agent Resources</p>
+  <p class="mb-3">Have you played Enclave before?</p>
+  <div class="buttons">
+    <button class="button is-primary" hx-post="/profile/onboarding"
+      hx-vals='{"action":"path","path":"new"}' hx-target="#onboarding-card" hx-swap="outerHTML">
+      I'm new — show me the ropes
+    </button>
+    <button class="button is-link is-outlined" hx-post="/profile/onboarding"
+      hx-vals='{"action":"path","path":"veteran"}' hx-target="#onboarding-card" hx-swap="outerHTML">
+      I already play
+    </button>
+  </div>
+  {{else}}
+  <div class="is-flex is-justify-content-space-between is-align-items-baseline">
+    <p class="is-size-5 has-text-weight-semibold mb-2">Getting started</p>
+    <div>
+      <a class="is-size-7 mr-3" hx-post="/profile/onboarding"
+        hx-vals='{"action":"switch"}' hx-target="#onboarding-card" hx-swap="outerHTML" href="#">
+        {{#if (eq onboarding.path "new")}}Already play? Switch{{else}}New to Enclave? Switch{{/if}}
+      </a>
+      <a class="is-size-7" hx-post="/profile/onboarding"
+        hx-vals='{"action":"dismiss"}' hx-target="#onboarding-card" hx-swap="outerHTML" href="#">Dismiss</a>
+    </div>
+  </div>
+  <ul>
+    <li class="mb-2">
+      <span class="icon is-small mr-1"><i class="fas {{#if onboarding.nameDone}}fa-check has-text-success{{else}}fa-circle-notch{{/if}}"></i></span>
+      <a href="/profile">Set your agent name</a>
+    </li>
+    {{#if (eq onboarding.path "new")}}
+    <li class="mb-2">
+      <span class="icon is-small mr-1"><i class="fas {{#if onboarding.learnDone}}fa-check has-text-success{{else}}fa-circle-notch{{/if}}"></i></span>
+      <span>Learn the game &mdash;
+        {{#if onboarding.quickstartHref}}<a href="{{onboarding.quickstartHref}}">read the free Quickstart</a>{{/if}}
+        {{#if onboarding.adventHref}}{{#if onboarding.quickstartHref}} or {{/if}}<a href="{{onboarding.adventHref}}">dive into Enclave: Advent</a>
+        <span class="has-text-grey">({{onboarding.adventDaysLeft}} days left on your free trial)</span>{{/if}}
+      </span>
+      <span class="is-size-7 has-text-grey ml-4 is-block">Prefer video?
+        <a href="https://www.youtube.com/watch?v=aBVeIi6s6rE" target="_blank" rel="noopener">Watch the intro</a>
+      </span>
+    </li>
+    {{else}}
+    <li class="mb-2">
+      <span class="icon is-small mr-1"><i class="fas {{#if onboarding.redeemDone}}fa-check has-text-success{{else}}fa-circle-notch{{/if}}"></i></span>
+      <a href="/classes/redeem/bulk">Redeem your unlock code</a>
+      {{#if onboarding.adventDaysLeft}}
+      <span class="is-size-7 has-text-grey ml-4 is-block">Your account already includes Enclave: Advent free for {{onboarding.adventDaysLeft}} more days.</span>
+      {{/if}}
+    </li>
+    {{/if}}
+    <li class="mb-2">
+      <span class="icon is-small mr-1"><i class="fas {{#if onboarding.characterDone}}fa-check has-text-success{{else}}fa-circle-notch{{/if}}"></i></span>
+      <a href="/characters/new">Create your first character</a>
+    </li>
+    <li>
+      <span class="icon is-small mr-1"><i class="fas {{#if onboarding.gameDone}}fa-check has-text-success{{else}}fa-circle-notch{{/if}}"></i></span>
+      <a href="/lfg">Find a game</a>
+    </li>
+  </ul>
+  {{/if}}
+</div>
+{{/if}}

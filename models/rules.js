@@ -100,9 +100,9 @@ const deleteRulesPdfUnlock = async ({ userId, rulesPdfId }) => {
     return { error: null };
 };
 
-const listRulesPdfUnlocksForUser = async (userId) => {
+const listRulesPdfUnlocksForUser = async (userId, client = supabase) => {
     const now = new Date().toISOString();
-    const { data, error } = await supabase
+    const { data, error } = await client
         .from('rules_pdf_unlocks')
         .select('rules_pdf_id, expires_at, unlocked_at')
         .eq('user_id', userId)
@@ -163,6 +163,10 @@ const canViewRulesPdf = async (userContext = {}, rulesPdf) => {
 
     if (!rulesPdf?.storage_path) {
         return { data: false, error: null };
+    }
+
+    if (rulesPdf.free_access) {
+        return { data: true, error: null };
     }
 
     if (role === 'admin') {

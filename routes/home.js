@@ -5,6 +5,7 @@ const { asyncHandler } = require('../util/async-handler');
 const { loadHomeSections } = require('../services/home/sections');
 const { getAllNews } = require('../models/pages');
 const { buildExcerpt } = require('../services/home/excerpt');
+const { patchOnboarding } = require('../models/profile');
 
 router.get('/', authOptional, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
@@ -16,6 +17,11 @@ router.get('/', authOptional, asyncHandler(async (req, res) => {
   // including background/appearance/private_notes/perks, of every character
   // the player owns) solely to compute this flag.
   const sections = await loadHomeSections({ profile, client: res.locals.supabase });
+
+  if (sections.onboarding?.persistDismiss && res.locals.user) {
+    // Fire-and-forget: the gate/completion write must never delay the page.
+    patchOnboarding(res.locals.user.id, { dismissed: true }).catch(() => {});
+  }
 
   res.render('home', {
     profile,

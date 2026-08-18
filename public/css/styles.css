@@ -50,7 +50,31 @@
     --bulma-active-background-l-delta: -10%;
     --bulma-hover-border-l-delta: -10%;
     --bulma-active-border-l-delta: -20%;
+
+    /* Bulma 1.0 also flips each color's on-scheme lightness for dark
+       backgrounds (link 58%→73%, info 25%→70%, ...). The page stays light
+       (pinned above), so restore the light-mode values — otherwise bare
+       links and -light notification text wash out under OS dark mode. */
+    --bulma-white-on-scheme-l: 35%;
+    --bulma-black-on-scheme-l: 4%;
+    --bulma-light-on-scheme-l: 36%;
+    --bulma-dark-on-scheme-l: 21%;
+    --bulma-text-on-scheme-l: 29%;
+    --bulma-primary-on-scheme-l: 21%;
+    --bulma-link-on-scheme-l: 58%;
+    --bulma-info-on-scheme-l: 25%;
+    --bulma-success-on-scheme-l: 23%;
+    --bulma-warning-on-scheme-l: 23%;
+    --bulma-danger-on-scheme-l: 40%;
   }
+}
+
+/* Lux (0.8-era) paints links white inside .notification.is-info for the solid
+   blue variant and predates is-light, so its rule also wins on the pale
+   is-light background — white on near-white. Restore currentColor (the
+   variant's own text color) at higher specificity. */
+.notification.is-info.is-light a:not(.button) {
+  color: currentColor;
 }
 
 /* Skip to content link */

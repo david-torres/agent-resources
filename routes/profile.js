@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id']);
-const { updateUser, getProfileByName, setDiscordId, searchProfiles, getProfileConduitCredits } = require('../models/profile');
+const { updateUser, getProfileByName, setDiscordId, searchProfiles, getProfileConduitCredits, patchOnboarding } = require('../models/profile');
+const { loadOnboarding } = require('../services/home/onboarding');
 const { getPublicCharactersByCreator } = require('../models/character');
 const { getClasses, getUnlockedClasses } = require('../models/class');
 const { parseImageCrop } = require('../util/crop');
@@ -192,5 +193,34 @@ router.get('/search', isAuthenticated, async (req, res) => {
     profiles
   });
 });
+
+router.post('/onboarding', isAuthenticated, asyncHandler(async (req, res) => {
+  const { profile } = res.locals;
+  const userId = res.locals.user.id;
+  const { action, path } = req.body;
+
+  let patch;
+  if (action === 'path' && (path === 'new' || path === 'veteran')) {
+    patch = { path };
+  } else if (action === 'switch' && (profile.onboarding?.path === 'new' || profile.onboarding?.path === 'veteran')) {
+    patch = { path: profile.onboarding.path === 'new' ? 'veteran' : 'new' };
+  } else if (action === 'dismiss') {
+    patch = { dismissed: true };
+  } else {
+    return sendError(req, res, null, { status: 400, message: 'Invalid onboarding action' });
+  }
+
+  const { data: merged, error } = await patchOnboarding(userId, patch);
+  if (error) {
+    return sendError(req, res, error, { message: 'Failed to update onboarding' });
+  }
+
+  const onboarding = await loadOnboarding({
+    profile: { ...profile, onboarding: merged },
+    client: res.locals.supabase
+  });
+
+  return res.render('partials/home-onboarding', { layout: false, onboarding });
+}));
 
 module.exports = router;

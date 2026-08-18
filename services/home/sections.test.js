@@ -136,5 +136,56 @@ test('every section failing still resolves with four empty arrays', async () => 
   const deps = Object.fromEntries(Object.keys(allGood()).map(key => [key, throws('down')]));
   const result = await loadHomeSections({ profile, client }, deps);
 
-  expect(result).toEqual({ hasCharacters: false, recentMine: [], upcomingGames: [], news: [], community: [] });
+  // Onboarding reads aren't part of allGood()'s key set, so they're absent
+  // from `deps` here too and each throws inside loadOnboarding's own
+  // settle() wrapper -- degrading to the same "nothing known yet" shape.
+  expect(result).toEqual({
+    hasCharacters: false, recentMine: [], upcomingGames: [], news: [], community: [],
+    onboarding: {
+      show: true, askPath: true, persistDismiss: false, path: null,
+      nameDone: true, learnDone: false, redeemDone: false,
+      characterDone: false, gameDone: false, allDone: false,
+      adventDaysLeft: null, adventHref: null, quickstartHref: null
+    }
+  });
+});
+
+// --- onboarding --------------------------------------------------------------
+
+const onboardingDeps = {
+  countCharactersByCreator: ok(0),
+  hasAnyGameActivity: ok(false),
+  listRulesPdfUnlocksForUser: ok([]),
+  getRulesPdfs: ok([{ id: 'qs-id', is_active: true, free_access: true }])
+};
+
+test('loadHomeSections computes onboarding for a signed-in player', async () => {
+  const result = await loadHomeSections(
+    { profile: { id: 'p1', user_id: 'u1', name: 'Agent #u1', onboarding: {} }, client },
+    { ...allGood(), ...onboardingDeps, getRecentCharactersByCreator: ok([]), getRecentMissionsByCreator: ok([]) }
+  );
+  expect(result.onboarding.show).toBe(true);
+  expect(result.onboarding.askPath).toBe(true);
+});
+
+test('loadHomeSections reuses its own character/mission reads for the onboarding gate', async () => {
+  // Player has characters via the section read; the gate must see that
+  // without a second count query.
+  let countCalls = 0;
+  const result = await loadHomeSections(
+    { profile: { id: 'p1', user_id: 'u1', name: 'Agent #u1', onboarding: {} }, client },
+    { ...allGood(), ...onboardingDeps, countCharactersByCreator: async () => { countCalls++; return { data: 9, error: null }; } }
+  );
+  expect(result.onboarding.show).toBe(false);       // has characters -> gated
+  expect(result.onboarding.persistDismiss).toBe(true);
+  expect(countCalls).toBe(0);
+});
+
+test('loadHomeSections gives a signed-out visitor the quickstart link only', async () => {
+  const result = await loadHomeSections(
+    { profile: null, client },
+    { ...allGood(), ...onboardingDeps }
+  );
+  expect(result.onboarding.show).toBe(false);
+  expect(result.onboarding.quickstartHref).toBe('/library/qs-id/view');
 });

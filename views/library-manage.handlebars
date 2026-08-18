@@ -44,6 +44,10 @@
             <input type="checkbox" name="is_active" checked>
             Active
           </label>
+          <label class="checkbox ml-3">
+            <input type="checkbox" name="free_access">
+            Free (viewable by anyone, no unlock)
+          </label>
         </div>
       </div>
     </div>
@@ -102,6 +106,10 @@
             <label class="checkbox">
               <input type="checkbox" name="is_active" {{#if this.is_active}}checked{{/if}}>
               Visible in library
+            </label>
+            <label class="checkbox ml-3">
+              <input type="checkbox" name="free_access" {{#if this.free_access}}checked{{/if}}>
+              Free
             </label>
           </div>
         </div>

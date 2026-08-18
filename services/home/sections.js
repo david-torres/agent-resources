@@ -5,6 +5,7 @@ const { getRecentNews } = require('../../models/pages');
 const { getUpcomingForProfile } = require('../../models/lfg');
 const { toFeedItem, mergeRecent } = require('./recent-feed');
 const { buildExcerpt } = require('./excerpt');
+const { loadOnboarding, defaultDeps: onboardingDefaultDeps } = require('./onboarding');
 
 const MINE_LIMIT = 6;
 const COMMUNITY_LIMIT = 6;
@@ -18,7 +19,8 @@ const defaultDeps = {
   getRecentPublicMissions,
   getRecentClassesByCreator,
   getRecentNews,
-  getUpcomingForProfile
+  getUpcomingForProfile,
+  ...onboardingDefaultDeps
 };
 
 // The homepage runs six independent reads. All-or-nothing failure would mean one
@@ -56,6 +58,13 @@ const loadHomeSections = async ({ profile, client }, deps = defaultDeps) => {
 
   const asFeed = (type) => (rows) => rows.map(row => toFeedItem(type, row));
 
+  const onboarding = await loadOnboarding({
+    profile,
+    client,
+    hasCharacters: signedIn ? myCharacters.length > 0 : undefined,
+    hasMissions: signedIn ? myMissions.length > 0 : undefined
+  }, deps);
+
   return {
     // Read from myCharacters directly, not recentMine: recentMine merges
     // characters/missions/classes and truncates to MINE_LIMIT, so a player
@@ -91,7 +100,8 @@ const loadHomeSections = async ({ profile, client }, deps = defaultDeps) => {
     community: mergeRecent([
       asFeed('character')(publicCharacters),
       asFeed('mission')(publicMissions)
-    ], COMMUNITY_LIMIT)
+    ], COMMUNITY_LIMIT),
+    onboarding
   };
 };
 

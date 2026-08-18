@@ -1,4 +1,4 @@
-const { supabase } = require('./_base');
+const { supabase, supabaseAdmin } = require('./_base');
 const { escapeLikePattern } = require('../util/validate');
 const { SYSTEM_ACTOR } = require('../util/actor');
 const { ProfileService } = require('../services/profile/service');
@@ -29,7 +29,9 @@ const getProfile = async (user) => {
           console.error(error);
           return false;
         } else {
-          return data;
+          // The insert resolves with a row array; callers expect the profile
+          // object itself (res.locals.profile.id etc. on the very first request).
+          return data?.[0] ?? false;
         }
       } else {
         return false;
@@ -170,6 +172,35 @@ const getProfileConduitCredits = async ({ profileId, supabase: client = supabase
   };
 };
 
+// Shallow-merge a patch into profiles.onboarding for a user. Admin client:
+// these writes happen from fire-and-forget hooks (PDF views, code redemption)
+// where no user JWT client is guaranteed, and RLS must not silently eat them.
+// Read-merge-write is safe here: one row, one user, negligible contention.
+const patchOnboarding = async (userId, patch) => {
+  const { data: row, error: readError } = await supabaseAdmin
+    .from('profiles')
+    .select('onboarding')
+    .eq('user_id', userId)
+    .single();
+  if (readError) {
+    console.error('patchOnboarding read failed:', readError);
+    return { data: null, error: readError };
+  }
+
+  const merged = { ...(row?.onboarding || {}), ...patch };
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .update({ onboarding: merged })
+    .eq('user_id', userId)
+    .select('onboarding')
+    .single();
+  if (error) {
+    console.error('patchOnboarding write failed:', error);
+    return { data: null, error };
+  }
+  return { data: data.onboarding, error: null };
+};
+
 module.exports = {
   getProfile,
   getProfileById,
@@ -181,5 +212,6 @@ module.exports = {
   setDiscordId,
   searchProfiles,
   searchProfilesAdmin,
-  getProfileConduitCredits
+  getProfileConduitCredits,
+  patchOnboarding
 };

@@ -27,7 +27,7 @@ const render = (context) => {
   hb.registerHelper('eq', packagedHelpers.eq);
   hb.registerHelper('time_ago', time_ago);
   hb.registerHelper('date_tz', dateTzStub);
-  for (const name of ['home-feed-item', 'home-recent-mine', 'home-upcoming-games', 'home-news', 'home-community']) {
+  for (const name of ['home-feed-item', 'home-recent-mine', 'home-upcoming-games', 'home-news', 'home-community', 'home-onboarding']) {
     hb.registerPartial(name, read('partials', `${name}.handlebars`));
   }
   return hb.compile(read('home.handlebars'))(context);
@@ -70,12 +70,65 @@ test('signed-out homepage still renders news and community activity', () => {
   expect(html).toContain('href="/characters/c1"');
 });
 
-test('the get-started callout shows only when the player has no characters', () => {
-  const withNone = render({ ...empty, profile: { name: 'Dave' }, hasCharacters: false });
-  expect(withNone).toContain('Get started with Agent Resources');
+const OB_ASK = {
+  show: true, askPath: true, path: null, allDone: false,
+  nameDone: false, learnDone: false, redeemDone: false, characterDone: false, gameDone: false,
+  adventDaysLeft: null, adventHref: null, quickstartHref: '/library/qs-id/view'
+};
 
-  const withSome = render({ ...empty, profile: { name: 'Dave' }, hasCharacters: true, recentMine: FEED });
-  expect(withSome).not.toContain('Get started with Agent Resources');
+test('a fresh player is asked whether they have played Enclave before', () => {
+  const html = render({ ...empty, profile: { name: 'Dave' }, hasCharacters: false, onboarding: OB_ASK });
+  expect(html).toContain('Have you played Enclave before?');
+  expect(html).toContain("I'm new — show me the ropes");
+  expect(html).toContain('I already play');
+  expect(html).toContain('hx-post="/profile/onboarding"');
+  expect(html).not.toContain('Get started with Agent Resources');
+});
+
+test('the new path renders its four steps with derived check state', () => {
+  const html = render({
+    ...empty, profile: { name: 'Vex' }, hasCharacters: true,
+    onboarding: {
+      ...OB_ASK, askPath: false, path: 'new',
+      nameDone: true, learnDone: false, characterDone: true, gameDone: false,
+      adventDaysLeft: 24, adventHref: '/library/starter/view'
+    }
+  });
+  expect(html).toContain('Set your agent name');
+  expect(html).toContain('Learn the game');
+  expect(html).toContain('24 days left');
+  expect(html).toContain('href="/library/qs-id/view"');
+  expect(html).toContain('Create your first character');
+  expect(html).toContain('Find a game');
+  expect(html).not.toContain('Redeem your unlock code');
+});
+
+test('the veteran path swaps the learn step for code redemption', () => {
+  const html = render({
+    ...empty, profile: { name: 'Vex' }, hasCharacters: false,
+    onboarding: { ...OB_ASK, askPath: false, path: 'veteran' }
+  });
+  expect(html).toContain('Redeem your unlock code');
+  expect(html).not.toContain('Learn the game');
+});
+
+test('a completed onboarding renders the all-set state', () => {
+  const html = render({
+    ...empty, profile: { name: 'Vex' }, hasCharacters: true,
+    onboarding: { ...OB_ASK, askPath: false, path: 'new', allDone: true }
+  });
+  expect(html).toContain("You're all set, Agent");
+});
+
+test('a hidden onboarding renders no card at all', () => {
+  const html = render({ ...empty, profile: { name: 'Vex' }, hasCharacters: true, onboarding: { ...OB_ASK, show: false } });
+  expect(html).not.toContain('onboarding-card');
+});
+
+test('a signed-out visitor sees the free quickstart link', () => {
+  const html = render({ ...empty, profile: null, onboarding: { ...OB_ASK, show: false } });
+  expect(html).toContain('Read the free Quickstart');
+  expect(html).toContain('href="/library/qs-id/view"');
 });
 
 test('upcoming games render the role badge and the joined character', () => {

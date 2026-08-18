@@ -314,6 +314,31 @@ const getUpcomingForProfile = async (profileId, { limit = 3 } = {}, client = sup
   return { data, error: null };
 }
 
+// Any LFG involvement ever -- hosting a post (past or future) or holding an
+// approved join. Head counts only; onboarding needs a boolean, not rows.
+const hasAnyGameActivity = async (profileId, client = supabase) => {
+  const { count: hosted, error: hostedError } = await client
+    .from('lfg_posts')
+    .select('id', { count: 'exact', head: true })
+    .eq('creator_id', profileId);
+  if (hostedError) {
+    console.error(hostedError);
+    return { data: null, error: hostedError };
+  }
+  if ((hosted || 0) > 0) return { data: true, error: null };
+
+  const { count: joined, error: joinedError } = await client
+    .from('lfg_join_requests')
+    .select('lfg_post_id', { count: 'exact', head: true })
+    .eq('profile_id', profileId)
+    .eq('status', 'approved');
+  if (joinedError) {
+    console.error(joinedError);
+    return { data: null, error: joinedError };
+  }
+  return { data: (joined || 0) > 0, error: null };
+};
+
 // Not admin: called by util/auth.js with the request's own RLS client.
 const getPendingJoinRequestCount = async (profileId, client = supabase) => {
   const { count, error } = await client
@@ -428,6 +453,7 @@ module.exports = {
   getLfgPostsByOthers,
   getLfgJoinedPosts,
   getUpcomingForProfile,
+  hasAnyGameActivity,
   getLfgPost,
   createLfgPost,
   updateLfgPost,

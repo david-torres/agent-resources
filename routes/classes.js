@@ -22,7 +22,7 @@ const {
 } = require('../models/class');
 const { getRulesPdf } = require('../models/rules');
 const { storeClassPdf, getSignedPdfUrl, deletePdfObject, CLASS_PDF_BUCKET } = require('../models/pdf');
-const { getProfileById } = require('../models/profile');
+const { getProfileById, patchOnboarding } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { actorFromLocals } = require('../util/actor');
@@ -260,6 +260,11 @@ router.post('/redeem/bulk', isAuthenticated, async (req, res) => {
         } catch (e) {
             results.push({ code, success: false, error: e?.message || 'Unknown error' });
         }
+    }
+
+    if (results.some(r => r.success)) {
+        // Onboarding step: fire-and-forget, redemption results render regardless.
+        patchOnboarding(userId, { redeemed: true }).catch(() => {});
     }
 
     return res.render('redeem-codes', {

@@ -485,6 +485,18 @@ const createCharacterOffscreenMission = (actor, characterId, body) => characterS
 const updateCharacterOffscreenMission = (actor, characterId, omId, body) => characterService.updateOffscreenMission(actor, characterId, omId, body);
 const deleteCharacterOffscreenMission = (actor, characterId, omId) => characterService.deleteOffscreenMission(actor, characterId, omId);
 
+const countCharactersByCreator = async (profileId, client = supabase) => {
+  const { count, error } = await client
+    .from('characters')
+    .select('id', { count: 'exact', head: true })
+    .eq('creator_id', profileId);
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data: count || 0, error: null };
+};
+
 module.exports = {
   getOwnCharacters,
   getCharacter,
@@ -513,5 +525,6 @@ module.exports = {
   serializeCharacterForAgent,
   searchCharactersForAgent,
   getCharacterForAgent,
+  countCharactersByCreator,
   effectiveRulesVersion
 };
