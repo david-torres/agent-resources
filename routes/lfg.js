@@ -19,6 +19,8 @@ const {
     syncConduitHostId
 } = require('../models/lfg');
 const { getOwnCharacters } = require('../models/character');
+const { getMissionByLfgPostId } = require('../models/mission');
+const { canLogGame } = require('../util/lfg-mission-draft');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { actorFromLocals } = require('../util/actor');
@@ -113,6 +115,11 @@ router.get('/:id', authOptional, async (req, res) => {
 
     const pendingCount = (data.join_requests || []).filter(r => r.status === 'pending').length;
 
+    // The log written for this game, if there is one. Read through the
+    // viewer's own client so a private mission stays hidden from anyone RLS
+    // would not show it to; the page falls back to offering the log action.
+    const { data: loggedMission } = await getMissionByLfgPostId(data.id, res.locals.supabase);
+
     res.render('lfg-post', {
       profile,
       post: data,
@@ -120,6 +127,8 @@ router.get('/:id', authOptional, async (req, res) => {
       partyCsv,
       approvedCount,
       pendingCount,
+      loggedMission,
+      canLogGame: !loggedMission && canLogGame(data, profile?.id),
       authOptional: true,
       activeNav: 'lfg',
       breadcrumbs: [
