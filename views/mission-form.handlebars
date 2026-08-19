@@ -1,7 +1,12 @@
 {{> breadcrumbs}}
-<h2 class="title is-3">{{#if isNew}}Create New Mission{{else}}Edit Mission{{/if}}</h2>
+<h2 class="title is-3">{{#if isNew}}{{#if mission.lfg_post_id}}Log This Game{{else}}Create New Mission{{/if}}{{else}}Edit Mission{{/if}}</h2>
 
 <form hx-{{#if isNew}}post{{else}}put{{/if}}="/missions{{#unless isNew}}/{{mission.id}}{{/unless}}">
+  {{!-- Set only on a draft opened from an LFG post. POST /missions re-checks
+        that this caller may link this post before honouring it. --}}
+  {{#if mission.lfg_post_id}}
+  <input type="hidden" name="lfg_post_id" value="{{mission.lfg_post_id}}">
+  {{/if}}
   <div class="field">
     <label class="label" for="mission-name">Name</label>
     <div class="control">
@@ -112,7 +117,7 @@
   <div class="field">
     <label class="label" for="mission-date">Date</label>
     <div class="control">
-      <input class="input" type="datetime-local" name="date" id="mission-date" value="{{#if mission}}{{date_tz mission.date "YYYY-MM-DDTHH:MM" profile.timezone}}{{else}}{{date_tz (date "now" "YYYY-MM-DDTHH:MM") "YYYY-MM-DDTHH:MM" profile.timezone}}{{/if}}" required
+      <input class="input" type="datetime-local" name="date" id="mission-date" value="{{#if mission}}{{date_tz mission.date "YYYY-MM-DDTHH:mm" profile.timezone}}{{else}}{{date_tz (date "now" "YYYY-MM-DDTHH:mm") "YYYY-MM-DDTHH:mm" profile.timezone}}{{/if}}" required
         {{#if isNew}}
         hx-get="/missions/similar"
         hx-trigger="change delay:500ms"
@@ -162,8 +167,10 @@
     </div>
   </div>
 
-{{!-- Editor Management Section (only for existing missions) --}}
-{{#if mission}}
+{{!-- Editor Management Section (only for existing missions). Gated on isNew,
+      not on `mission`: a "Log this game" draft is a mission-shaped context with
+      no id yet, and these sections build their URLs out of mission.id. --}}
+{{#unless isNew}}
   <div class="field mt-5">
     <label class="label">Mission Editors</label>
     <p class="help mb-3">Editors can modify this mission's details and add/remove characters.</p>
@@ -232,9 +239,47 @@
       }
     });
   </script>
+{{/unless}}
+
+{{!-- The approved party carried over from an LFG post. Character search needs
+      a saved mission to post against, so a draft ships the roster as plain
+      hidden inputs the Conduit can prune before saving; the full search UI
+      below takes over once the mission exists. --}}
+{{#if mission.characters.length}}
+{{#if isNew}}
+  <div class="field">
+    <label class="label">Characters</label>
+    <p class="help mb-2">The approved party from the LFG post. Remove anyone who did not play — you can add more once the log is saved.</p>
+    <div class="box">
+      <ul id="prefilledCharacters" class="mb-0" style="list-style:none; margin-left:0;">
+        {{#each mission.characters}}
+        <li class="is-flex is-justify-content-space-between is-align-items-center py-1">
+          <span>
+            <strong>{{this.name}}</strong>
+            {{#if this.class}}<span class="has-text-grey is-size-7"> — {{this.class}}{{#if this.level}}, Level {{this.level}}{{/if}}</span>{{/if}}
+          </span>
+          <input type="hidden" name="characters[]" value="{{this.id}}">
+          <button type="button" class="button is-small is-danger is-light remove-prefilled-character" aria-label="Remove {{this.name}}">
+            <span class="icon"><i class="fas fa-times"></i></span>
+          </button>
+        </li>
+        {{/each}}
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('prefilledCharacters').addEventListener('click', function(e) {
+      var button = e.target.closest('.remove-prefilled-character');
+      // Removing the row takes its hidden input with it, so the character is
+      // simply never posted.
+      if (button) button.closest('li').remove();
+    });
+  </script>
+{{/if}}
 {{/if}}
 
-{{#if mission}}
+{{#unless isNew}}
   <div class="field">
     <label class="label">Characters</label>
     <div class="control">
@@ -461,7 +506,7 @@
         });
     }
   </script>
-{{/if}}
+{{/unless}}
   <div class="field is-grouped mt-4">
     <div class="control">
       <button class="button is-primary" type="submit" hx-indicator="this">{{#if isNew}}Create{{else}}Update{{/if}} Mission</button>

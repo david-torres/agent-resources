@@ -31,6 +31,19 @@ const getMissions = async () => {
   return { data: transformedData, error };
 };
 
+// The log written for an LFG post, if one exists. Runs through the caller's
+// RLS-scoped client so a private mission stays invisible to viewers who are
+// neither its creator, host, nor an editor -- the post page asks this on every
+// render, including for signed-out visitors.
+const getMissionByLfgPostId = async (lfgPostId, client = supabase) => {
+  const { data, error } = await client
+    .from('missions')
+    .select('id, name, is_public')
+    .eq('lfg_post_id', lfgPostId)
+    .maybeSingle();
+  return { data, error };
+};
+
 const getMission = async (id, client = supabase) => {
   const { data, error } = await client
     .from('missions')
@@ -679,6 +692,7 @@ missionService = new MissionService({
 module.exports = {
   getMissions,
   getMission,
+  getMissionByLfgPostId,
   createMission,
   updateMission,
   deleteMission,

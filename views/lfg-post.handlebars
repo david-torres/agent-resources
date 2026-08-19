@@ -27,6 +27,20 @@
   {{/if}}
 
   <div class="buttons is-right" x-data="{ calendarOpen: false }">
+    {{!-- Once the game has been played, writing its log is the thing left to
+          do. Offered to the approved Conduit and the post creator only; the
+          route re-checks both before it will hand over a draft. --}}
+    {{#if loggedMission}}
+    <a class="button is-info" href="/missions/{{loggedMission.id}}">
+      <span class="icon"><i class="fas fa-book"></i></span>
+      <span>View mission log</span>
+    </a>
+    {{else if canLogGame}}
+    <a class="button is-success" href="/missions/new?lfg={{post.id}}">
+      <span class="icon"><i class="fas fa-feather-pointed"></i></span>
+      <span>Log this game</span>
+    </a>
+    {{/if}}
     <button class="button" id="calendar-buttons-show" x-show="!calendarOpen"
       @click="calendarOpen = true">
       Calendar

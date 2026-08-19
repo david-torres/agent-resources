@@ -23,8 +23,11 @@ const {
   searchSimilarMissions,
   mergeMissions,
   previewMergeMissions,
-  getOwnMissions
+  getOwnMissions,
+  getMissionByLfgPostId
 } = require('../models/mission');
+const { getLfgPost } = require('../models/lfg');
+const { canLogGame, buildMissionDraft } = require('../util/lfg-mission-draft');
 const { getCharacter, getCharacterAllMissions, searchPublicCharacters } = require('../models/character');
 const { getClasses } = require('../models/class');
 const { searchProfiles } = require('../models/profile');
@@ -130,18 +133,58 @@ router.get('/', isAuthenticated, async (req, res) => {
   });
 });
 
-router.get('/new', isAuthenticated, (req, res) => {
+// A submitted lfg_post_id is honoured only when the saver could have opened
+// the draft for that post and the post is still unlogged. Anything else drops
+// the link rather than failing the save: by this point the user has written a
+// log, and losing the back-link costs far less than losing the log.
+const resolveLfgPostLink = async (lfgPostId, { profile, supabase }) => {
+  if (!lfgPostId || !isValidUuid(lfgPostId)) return null;
+  const { data: post } = await getLfgPost(lfgPostId, supabase);
+  if (!canLogGame(post, profile?.id)) return null;
+  const { data: logged } = await getMissionByLfgPostId(post.id, supabase);
+  return logged ? null : post.id;
+};
+
+router.get('/new', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
+  const breadcrumbs = [
+    { label: 'Missions', href: '/missions' },
+    { label: 'New Mission', href: '/missions/new' }
+  ];
+
+  // "Log this game": ?lfg=<post> pre-fills the form from an LFG post whose
+  // date has passed. The draft is never persisted -- it exists only as the
+  // form values below until the user submits them.
+  const lfgPostId = req.query.lfg;
+  if (lfgPostId) {
+    const { data: post } = isValidUuid(lfgPostId)
+      ? await getLfgPost(lfgPostId, res.locals.supabase)
+      : { data: null };
+    if (!canLogGame(post, profile.id)) {
+      return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
+    }
+
+    // One log per post -- send the user to the log that already exists rather
+    // than to a draft the unique index would reject on save.
+    const { data: logged } = await getMissionByLfgPostId(post.id, res.locals.supabase);
+    if (logged) return res.redirect(`/missions/${logged.id}`);
+
+    return res.render('mission-form', {
+      profile,
+      isNew: true,
+      mission: buildMissionDraft(post),
+      activeNav: 'missions',
+      breadcrumbs
+    });
+  }
+
   res.render('mission-form', {
     profile,
     isNew: true,
     activeNav: 'missions',
-    breadcrumbs: [
-      { label: 'Missions', href: '/missions' },
-      { label: 'New Mission', href: '/missions/new' }
-    ]
+    breadcrumbs
   });
-});
+}));
 
 router.get('/import', isAuthenticated, (req, res) => {
   const { profile } = res.locals;
@@ -175,6 +218,8 @@ router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
     missionData.host_id = null;
   }
 
+  missionData.lfg_post_id = await resolveLfgPostLink(missionData.lfg_post_id, res.locals);
+
   // Parse date from datetime-local input format
   let missionDate = missionData.date;
   if (missionDate && !missionDate.includes('T')) {
@@ -206,13 +251,15 @@ router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
 
   const mission = missionRes[0];
 
-  // Add characters to the mission
-  if (characters && characters.length > 0) {
-    for (const characterId of characters) {
-      const { error: characterError } = await addCharacterToMission(actor, mission.id, characterId);
-      if (characterError) {
-        return sendError(req, res, characterError);
-      }
+  // Add characters to the mission. Filtered to real ids first: the mission row
+  // is already committed above, so a junk value ('' from an empty hidden input,
+  // a single id arriving as a bare string rather than an array) would 500 the
+  // request and strand a mission the user is never told about.
+  const characterIds = [].concat(characters || []).filter(isValidUuid);
+  for (const characterId of characterIds) {
+    const { error: characterError } = await addCharacterToMission(actor, mission.id, characterId);
+    if (characterError) {
+      return sendError(req, res, characterError);
     }
   }
 
@@ -304,6 +351,9 @@ router.put('/:id', isAuthenticated, asyncHandler(async (req, res) => {
   let { characters, unregistered_character_names, ...missionData } = req.body;
 
   delete missionData.q;
+  // The LFG back-link is set once, when the log is created from the post. No
+  // edit form offers it, so a submitted value here is only ever a forged one.
+  delete missionData.lfg_post_id;
 
   // Normalize host_id: empty string means no linked profile
   if (!missionData.host_id) {
