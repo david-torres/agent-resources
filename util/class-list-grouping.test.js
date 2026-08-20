@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { groupClassVersions } = require('./class-list-grouping');
+const { groupClassVersions, latestClassVersions } = require('./class-list-grouping');
 
 // Minimal class row shape used by the grouping logic.
 const cls = (id, { base = null, edition = 'advent', version = 'v1', created_at = '2026-01-01T00:00:00Z', name = id } = {}) => ({
@@ -58,5 +58,46 @@ describe('groupClassVersions', () => {
     const byPrimary = Object.fromEntries(groups.map(g => [g.primary.id, g.previous.map(c => c.id)]));
     expect(byPrimary['v3']).toEqual(['v2']);
     expect(byPrimary['lone']).toEqual([]);
+  });
+});
+
+describe('latestClassVersions', () => {
+  test('a v1 -> v2 chain collapses to the v2 leaf', () => {
+    const v1 = cls('v1', { version: 'v1', created_at: '2026-01-01T00:00:00Z' });
+    const v2 = cls('v2', { base: 'v1', version: 'v2', created_at: '2026-02-01T00:00:00Z' });
+    expect(latestClassVersions([v1, v2]).map(c => c.id)).toEqual(['v2']);
+  });
+
+  test('input order is preserved for unrelated classes', () => {
+    const rows = [cls('c'), cls('a'), cls('b')];
+    expect(latestClassVersions(rows).map(c => c.id)).toEqual(['c', 'a', 'b']);
+  });
+
+  test('editions of the same name both survive', () => {
+    const adv = cls('adv', { edition: 'advent', name: 'Stalker' });
+    const asp = cls('asp', { base: 'adv', edition: 'aspirant', name: 'Stalker' });
+    expect(latestClassVersions([adv, asp]).map(c => c.id)).toEqual(['adv', 'asp']);
+  });
+
+  test('a kept id survives collapsing alongside its leaf, in input order', () => {
+    const v1 = cls('v1', { version: 'v1', created_at: '2026-01-01T00:00:00Z' });
+    const v2 = cls('v2', { base: 'v1', version: 'v2', created_at: '2026-02-01T00:00:00Z' });
+    expect(latestClassVersions([v1, v2], { keep: ['v1'] }).map(c => c.id)).toEqual(['v1', 'v2']);
+  });
+
+  test('keeping an id that is already the leaf changes nothing', () => {
+    const v1 = cls('v1', { version: 'v1', created_at: '2026-01-01T00:00:00Z' });
+    const v2 = cls('v2', { base: 'v1', version: 'v2', created_at: '2026-02-01T00:00:00Z' });
+    expect(latestClassVersions([v1, v2], { keep: ['v2'] }).map(c => c.id)).toEqual(['v2']);
+  });
+
+  test('an unknown kept id is ignored', () => {
+    const v1 = cls('v1', { version: 'v1', created_at: '2026-01-01T00:00:00Z' });
+    const v2 = cls('v2', { base: 'v1', version: 'v2', created_at: '2026-02-01T00:00:00Z' });
+    expect(latestClassVersions([v1, v2], { keep: ['nope'] }).map(c => c.id)).toEqual(['v2']);
+  });
+
+  test('an empty list stays empty', () => {
+    expect(latestClassVersions([])).toEqual([]);
   });
 });

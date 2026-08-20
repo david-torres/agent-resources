@@ -32,6 +32,7 @@ const { getProfileById, getProfileConduitCredits } = require('../models/profile'
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { filterClassListsByIds } = require('../util/class-filter');
+const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -189,8 +190,14 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   // and display fields for the slider card. Description and tips are stored
   // as markdown and rendered to safe HTML here so the client can drop them
   // into the wizard panel verbatim (no client-side markdown lib).
+  // The kiosk shows one card per class, so version families collapse to their
+  // latest member (same rule as the /classes list). A preselected class is
+  // exempt: a link from an older version's page must still find its card.
   const { filteredAdvent, filteredAspirant, filteredPCC } = await filterClassDataForUser(user);
-  const wizardClasses = [...filteredAdvent, ...filteredAspirant, ...filteredPCC]
+  const wizardClasses = latestClassVersions(
+    [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
+    { keep: [preselectedClassId] }
+  )
     .map((c) => ({
       id: c.id,
       name: c.name,

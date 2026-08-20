@@ -57,4 +57,21 @@ const groupClassVersions = (classes) => {
   return groups;
 };
 
-module.exports = { groupClassVersions };
+// Flatten families to their latest member for pickers that show one card per
+// class (the character wizard's kiosk). Ids in `keep` survive collapsing, so a
+// link that names an older version still finds its card. Input order is
+// preserved.
+const latestClassVersions = (classes, { keep = [] } = {}) => {
+  const rows = Array.isArray(classes) ? classes.filter(c => c && c.id) : [];
+  const kept = new Set(keep.filter(Boolean));
+  const shown = new Set();
+  for (const { primary, previous } of groupClassVersions(rows)) {
+    shown.add(primary.id);
+    for (const older of previous) {
+      if (kept.has(older.id)) shown.add(older.id);
+    }
+  }
+  return rows.filter(c => shown.has(c.id));
+};
+
+module.exports = { groupClassVersions, latestClassVersions };
