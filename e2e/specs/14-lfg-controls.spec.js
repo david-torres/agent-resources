@@ -95,29 +95,31 @@
 //   B. GET /lfg/:id/requests is fetched on every post view by the creator, and
 //      again on the first Show click (two identical requests). Reported, not
 //      tested -- see trap 2.
-//   C. A viewer who is neither the post's creator/host nor an admin can never
-//      see that a post already has a Conduit. They get "Conduit needed" and an
-//      ENABLED Conduit radio on a filled post; choosing it and submitting
-//      answers HTTP 500 and puts "Join failed" in #alerts (nothing is written).
+//   C. FIXED (issue #162). A viewer who was neither the post's creator/host nor
+//      an admin could never see that a post already had a Conduit: they got
+//      "Conduit needed" and an ENABLED Conduit radio on a filled post, and
+//      choosing it answered HTTP 500 with "Join failed" in #alerts. The
+//      diagnosis below still explains why the admin viewpoint is used here.
 //
-//      THE ROOT CAUSE IS NOT "RLS HIDES IT" -- that was this file's first
+//      THE ROOT CAUSE WAS NOT "RLS HIDES IT" -- that was this file's first
 //      diagnosis and it is wrong in a way that matters, because it makes the
 //      fix look like an RLS redesign. `lfg_posts_public_select` is
 //      `USING (is_public = true)`, so the viewer DOES receive the true
-//      `host_id` on the row. models/lfg.js:32-36 then DISCARDS it, substituting
+//      `host_id` on the row. applyConduitMeta then DISCARDED it, substituting
 //      null because the *derived* source (the approved conduit join request) is
 //      invisible to that viewer under `lfg_join_requests_select`. Measured, as
 //      the player, on a post the admin conduits:
 //        raw row via the player's own client -> host_id = <admin profile id>
 //        getLfgPost(playerClient).host_id    -> null
-//      The fix is one branch in applyConduitMeta -- do not clobber a non-null
-//      column with a null derived from an RLS-filtered read.
+//      applyConduitMeta now falls back to the row's host_id (and its
+//      `host:host_id` embed for the name) instead of clobbering it; models/lfg.test.js
+//      pins that with a client that cannot see the join requests.
 //
 //      This is why the conduit-disabled test below is viewed as the ADMIN
-//      (is_admin() is the only thing in this suite that makes the derived
-//      source visible) rather than as the player. It also means check 10 has NO
-//      test that fails while this defect is live: fixing it would go unnoticed
-//      here. Recorded in the ledger as a deliberate coverage gap.
+//      (is_admin() was the only thing in this suite that made the derived
+//      source visible) rather than as the player. It also meant check 10 had NO
+//      test that failed while the defect was live -- recorded in the ledger as a
+//      deliberate coverage gap, and closed at the model tier rather than here.
 //
 // Inherited and load-bearing here:
 //   - public/js/app.js:970-989 replaces the whole <body> via an outerHTML htmx

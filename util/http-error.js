@@ -30,6 +30,9 @@ function classifyError(error, fallback = {}) {
         message: "Something else still refers to this, so it can't be deleted yet.",
       };
       break;
+    case 'conduit_taken':
+      base = { status: 409, title: 'Conduit taken', message: 'This game already has a Conduit.' };
+      break;
     default:
       if (!error) {
         base = { status: 404, title: 'Not found', message: FRIENDLY_NOT_FOUND };

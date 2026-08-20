@@ -191,7 +191,9 @@ router.post('/:id/join', isAuthenticated, async (req, res) => {
 
   const { data, error } = await joinLfgPost(req.params.id, profile.id, joinType, characterId, res.locals.supabase);
   if (error) {
-    return sendError(req, res, error, { message: 'Join failed' });
+    // A coded error (e.g. conduit_taken) classifies into its own status and
+    // wording; only an unclassifiable failure needs the generic stand-in.
+    return sendError(req, res, error, error.code ? {} : { message: 'Join failed' });
   } else {
     return res.header('HX-Location', `/lfg/${req.params.id}`).send();
   }

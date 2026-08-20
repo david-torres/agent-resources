@@ -240,7 +240,9 @@ test('join rejects a conduit request when the slot is already filled', async () 
   const service = new LfgService(repo);
   const result = await service.join(STRANGER, { postId: 'post-1', joinType: 'conduit' });
   expect(result.data).toBeNull();
-  expect(result.error).toBe('Conduit slot is already filled');
+  // The same structured error the agent surface returns for this condition, so
+  // the UI path can classify it as a 409 instead of a bare 500.
+  expect(result.error).toEqual({ status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' });
 });
 
 // ─── updateJoinRequest (previously caller-enforced — now gated here) ────────

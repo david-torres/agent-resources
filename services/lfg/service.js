@@ -186,7 +186,7 @@ class LfgService {
     if (joinType === 'conduit') {
       const { data: approvedConduit } = await this.repo.getApprovedConduit(postId);
       if (approvedConduit && approvedConduit.length > 0) {
-        return { data: null, error: 'Conduit slot is already filled' };
+        return { data: null, error: { status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' } };
       }
     }
 

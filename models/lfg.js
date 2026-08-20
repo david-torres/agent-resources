@@ -6,6 +6,11 @@ const lfgRepository = require('../services/lfg/repository');
 const { AuthorizationError } = require('../util/errors');
 moment.tz.setDefault('UTC');
 
+// Post columns plus the conduit's profile, joined through the row's
+// denormalized host_id so applyConduitMeta can name a conduit whose join
+// request the caller's client is not allowed to see.
+const POST_SELECT = '*, host:host_id (id, name, is_public)';
+
 const fetchProfileById = async (profileId, client = supabase) => {
   if (!profileId) return { profile: null, error: null };
   const { data, error } = await client.from('profiles').select('*').eq('id', profileId).single();
@@ -18,29 +23,32 @@ const assignCreatorMeta = (post, creator) => {
   post.creator_is_public = Boolean(creator?.is_public);
 };
 
-// Derive conduit metadata from the post's join_requests (single source of truth).
-// Overrides any stale host_id on the row and keeps post.host_id/host_name/host_is_public
-// in sync with the approved conduit join_request for template consumption.
+// Derive conduit metadata from the post's join_requests (the source of truth)
+// and keep post.host_id/host_name/host_is_public in sync for template consumption.
+//
+// The derivation is only as good as what the caller's client can see:
+// lfg_join_requests_select shows a non-owner only their own requests, so the
+// approved conduit's request is invisible to the very viewers this matters for,
+// while lfg_posts_public_select still hands them the row's denormalized
+// host_id. A blind derivation therefore falls back to the row rather than
+// clobbering a host the row already names. Reads that select the `host:host_id`
+// embed get the name with it; without it the conduit is still reported, unnamed.
 const applyConduitMeta = (post) => {
   const conduit = (post.join_requests || []).find(
     (r) => r.status === 'approved' && r.join_type === 'conduit'
   );
-  if (conduit && conduit.profile) {
-    post.host_id = conduit.profile.id;
-    post.host_name = conduit.profile.name;
-    post.host_is_public = Boolean(conduit.profile.is_public);
-  } else {
-    post.host_id = null;
-    post.host_name = null;
-    post.host_is_public = false;
-  }
-  post.has_conduit = Boolean(conduit);
+  const hostId = conduit ? conduit.profile_id : post.host_id || null;
+  const host = (conduit && conduit.profile) || post.host || null;
+  post.host_id = hostId;
+  post.host_name = hostId ? host?.name || 'Unknown Agent' : null;
+  post.host_is_public = Boolean(hostId && host?.is_public);
+  post.has_conduit = Boolean(hostId);
 };
 
 const getLfgPosts = async (client = supabase) => {
   const { data, error } = await client
     .from('lfg_posts')
-    .select('*')
+    .select(POST_SELECT)
     .eq('is_public', true)
     .eq('status', 'open')
     .order('created_at', { ascending: false });
@@ -62,7 +70,7 @@ const getLfgPostsByOthers = async (profileId, client = supabase) => {
   const today = moment().startOf('day').toISOString();
   const { data, error } = await client
     .from('lfg_posts')
-    .select('*')
+    .select(POST_SELECT)
     .neq('creator_id', profileId)
     .eq('is_public', true)
     .eq('status', 'open')
@@ -85,7 +93,7 @@ const getLfgPostsByOthers = async (profileId, client = supabase) => {
 const getLfgPostsByCreator = async (creator_id, client = supabase) => {
   const { data, error } = await client
     .from('lfg_posts')
-    .select('*')
+    .select(POST_SELECT)
     .eq('creator_id', creator_id)
     .order('created_at', { ascending: false });
   if (error || !data) return { data, error };
@@ -106,7 +114,7 @@ const getLfgPostsByCreator = async (creator_id, client = supabase) => {
 const getLfgPost = async (id, client = supabase) => {
   const { data, error } = await client
     .from('lfg_posts')
-    .select('*')
+    .select(POST_SELECT)
     .eq('id', id)
     .single();
   if (error) return { data, error };
@@ -226,7 +234,7 @@ const getLfgJoinedPosts = async (profileId, client = supabase) => {
     .from('lfg_join_requests')
     .select(`
       *,
-      lfg_posts:lfg_post_id (*)
+      lfg_posts:lfg_post_id (${POST_SELECT})
     `)
     .eq('profile_id', profileId);
 

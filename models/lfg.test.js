@@ -321,3 +321,87 @@ test('getUpcomingForProfile compares dates as instants, not raw strings, across 
   const { data } = await getUpcomingForProfile('p1', { limit: 3 }, client);
   expect(data.map(p => p.id)).toEqual(['starting-soon']);
 });
+
+// ─── conduit visibility for viewers who cannot see the join requests (#162) ───
+//
+// `lfg_posts_public_select` is `USING (is_public = true)`, so a signed-in
+// non-owner receives the post row -- host_id included. `lfg_join_requests_select`
+// shows that same viewer only their OWN requests, so the approved conduit's
+// request is invisible and the derivation comes up empty. The row already names
+// the conduit; a blind derivation must not overwrite it with null.
+
+const conduitBlindPost = (overrides = {}) => ({
+  id: 'l1',
+  creator_id: 'c1',
+  is_public: true,
+  host_id: 'h1',
+  host: { id: 'h1', name: 'Vega', is_public: true },
+  ...overrides
+});
+
+test('getLfgPost keeps the row host when the viewer cannot see the conduit join request', async () => {
+  const userClient = makeSpyClient({
+    lfg_posts: [conduitBlindPost()],
+    profiles: [{ id: 'c1', name: 'Creator', is_public: true }],
+    lfg_join_requests: []
+  });
+  const { data } = await getLfgPost('l1', userClient);
+  expect(data.host_id).toBe('h1');
+  expect(data.host_name).toBe('Vega');
+  expect(data.host_is_public).toBe(true);
+  expect(data.has_conduit).toBe(true);
+});
+
+test('getLfgPostsByOthers keeps the row host when the viewer cannot see the conduit join request', async () => {
+  const userClient = makeSpyClient({
+    lfg_posts: [conduitBlindPost()],
+    profiles: [{ id: 'c1', name: 'Creator', is_public: true }],
+    lfg_join_requests: []
+  });
+  const { data } = await getLfgPostsByOthers('p9', userClient);
+  expect(data[0].host_id).toBe('h1');
+  expect(data[0].host_name).toBe('Vega');
+  expect(data[0].has_conduit).toBe(true);
+});
+
+test('a post with no conduit anywhere still reads as needing one', async () => {
+  const userClient = makeSpyClient({
+    lfg_posts: [conduitBlindPost({ host_id: null, host: null })],
+    profiles: [{ id: 'c1', name: 'Creator', is_public: true }],
+    lfg_join_requests: []
+  });
+  const { data } = await getLfgPost('l1', userClient);
+  expect(data.host_id).toBeNull();
+  expect(data.host_name).toBeNull();
+  expect(data.host_is_public).toBe(false);
+  expect(data.has_conduit).toBe(false);
+});
+
+test('the approved conduit join request still wins over a stale host_id on the row', async () => {
+  const userClient = makeSpyClient({
+    lfg_posts: [conduitBlindPost({ host_id: 'stale', host: { id: 'stale', name: 'Old Host', is_public: true } })],
+    profiles: [{ id: 'c1', name: 'Creator', is_public: true }],
+    lfg_join_requests: [{
+      id: 'jr1', status: 'approved', join_type: 'conduit', profile_id: 'h2',
+      profile: { id: 'h2', name: 'Vega', is_public: false }
+    }]
+  });
+  const { data } = await getLfgPost('l1', userClient);
+  expect(data.host_id).toBe('h2');
+  expect(data.host_name).toBe('Vega');
+  expect(data.host_is_public).toBe(false);
+  expect(data.has_conduit).toBe(true);
+});
+
+test('a conduit whose profile is private is named as unknown, never as no conduit at all', async () => {
+  const userClient = makeSpyClient({
+    lfg_posts: [conduitBlindPost({ host: null })],
+    profiles: [{ id: 'c1', name: 'Creator', is_public: true }],
+    lfg_join_requests: [{ id: 'jr1', status: 'approved', join_type: 'conduit', profile_id: 'h1', profile: null }]
+  });
+  const { data } = await getLfgPost('l1', userClient);
+  expect(data.host_id).toBe('h1');
+  expect(data.host_name).toBe('Unknown Agent');
+  expect(data.host_is_public).toBe(false);
+  expect(data.has_conduit).toBe(true);
+});

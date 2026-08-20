@@ -31,6 +31,13 @@ test('23503 (foreign key violation) maps to 409', () => {
   expect(d.title).toBe('Still in use');
 });
 
+test('conduit_taken maps to 409 with a message that names the reason', () => {
+  const d = classifyError({ status: 409, code: 'conduit_taken', message: 'Conduit slot is already filled' });
+  expect(d.status).toBe(409);
+  expect(d.title).toBe('Conduit taken');
+  expect(d.message).toBe('This game already has a Conduit.');
+});
+
 test('null error falls back to 404 Not found', () => {
   const d = classifyError(null);
   expect(d.status).toBe(404);
