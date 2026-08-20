@@ -14,6 +14,14 @@
        path-based. -->
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "defaultSettleDelay": 0, "methodsThatUseUrlParams": ["get"]}'>
   <title>{{#if title}}{{title}} - Agent Resources{{else}}Agent Resources{{/if}}</title>
+  {{#if og}}
+  <meta property="og:site_name" content="Agent Resources">
+  <meta property="og:type" content="{{og.type}}">
+  <meta property="og:title" content="{{og.title}}">
+  <meta property="og:url" content="{{og.url}}">
+  {{#if og.description}}<meta property="og:description" content="{{og.description}}">{{/if}}
+  {{#if og.image}}<meta property="og:image" content="{{og.image}}">{{/if}}
+  {{/if}}
   <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.4/css/bulma.min.css" integrity="sha384-DCY3M8xLkMu6c9IKcKbe+jHKMjelnwC0p+SBaxfHxoBYZWdJF2X400UdBCgATtAB" crossorigin="anonymous">
   <link rel="stylesheet" href="https://jenil.github.io/bulmaswatch/lux/bulmaswatch.min.css" crossorigin="anonymous">

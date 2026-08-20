@@ -28,6 +28,7 @@ const httpFiles = new Set([
   'routes/missions-log-game.test.js',
   'routes/missions.test.js',
   'routes/nav-manage-navbar.test.js',
+  'routes/open-graph.test.js',
   'routes/pages.test.js',
   'routes/party.test.js',
   'routes/sitemap.test.js'

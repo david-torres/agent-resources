@@ -84,6 +84,12 @@ router.get('/view/:name', authOptional, async (req, res) => {
   res.render('profile-view', {
     user,
     profile,
+    og: res.locals.openGraph({
+      type: 'article',
+      title: viewProfile.name,
+      description: viewProfile.bio,
+      image: viewProfile.image_url
+    }),
     viewProfile,
     authOptional: true,
     badges,

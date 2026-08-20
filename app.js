@@ -27,6 +27,7 @@ const agentRoutes = require('./routes/agent');
 const sitemapRoutes = require('./routes/sitemap');
 const botLinkRoutes = require('./routes/bot-link');
 const { loadNavItems } = require('./util/nav-loader');
+const { openGraphDefaults } = require('./util/open-graph');
 
 const createApp = () => {
   const app = express();
@@ -76,6 +77,7 @@ const createApp = () => {
   // nav items and no reason to pay for the query.
   app.use('/', sitemapRoutes);
 
+  app.use(openGraphDefaults);
   app.use(loadNavItems);
   app.use('/', homeRoutes);
   app.use('/auth', authRoutes);

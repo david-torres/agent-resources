@@ -94,6 +94,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use(require('../util/open-graph').openGraphDefaults);
   app.use((req, res, next) => {
     res.render = (view, ctx) => res.json({ view, ctx: ctx || {} });
     next();

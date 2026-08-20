@@ -910,8 +910,22 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
       const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
 
+      const ownerCredit = ownerProfile && ownerProfile.is_public !== false
+        ? `by ${ownerProfile.name}`
+        : null;
+
       res.render('character', {
         title: character.name,
+        og: res.locals.openGraph({
+          type: 'article',
+          title: character.name,
+          description: [character.class, `Level ${character.level}`, ownerCredit]
+            .filter(Boolean).join(' · '),
+          image: character.image_url || (characterClass && characterClass.image_url),
+          // A sheet the owner alone can see, or one opted out of discovery,
+          // gets a bare card: the sharer already knows the title they pasted.
+          suppress: character.is_public === false || character.hide_from_search === true
+        }),
         profile,
         character,
         characterClass,

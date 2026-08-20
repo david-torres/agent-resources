@@ -297,8 +297,22 @@ router.get('/:id', authOptional, async (req, res) => {
   if (error) {
     return sendError(req, res, error);
   } else {
+    const missionDate = new Date(mission.date);
+
     res.render('mission', {
       profile,
+      og: res.locals.openGraph({
+        type: 'article',
+        title: mission.name,
+        description: [
+          Number.isNaN(missionDate.getTime())
+            ? null
+            : missionDate.toLocaleDateString('en-US', { dateStyle: 'long', timeZone: 'UTC' }),
+          mission.host_name ? `Conduit ${mission.host_name}` : null,
+          mission.summary
+        ].filter(Boolean).join(' · '),
+        suppress: mission.is_public === false
+      }),
       mission,
       authOptional: true,
       activeNav: 'missions',

@@ -2,17 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { asyncHandler } = require('../util/async-handler');
 const { getSitemapXml } = require('../services/sitemap/build');
-
-// <loc> must be absolute, so the document needs its own origin. SITE_URL wins
-// when set (Host is client controlled, and behind a TLS-terminating proxy
-// req.protocol reads as http); the fallback is what makes local dev work.
-const resolveBaseUrl = (req) => {
-  const configured = (process.env.SITE_URL || '').trim();
-  if (configured) return configured.replace(/\/+$/, '');
-
-  const forwarded = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
-  return `${forwarded || req.protocol}://${req.get('host')}`;
-};
+const { resolveBaseUrl } = require('../util/site-url');
 
 router.get('/sitemap.xml', asyncHandler(async (req, res) => {
   const { xml, failures } = await getSitemapXml({ baseUrl: resolveBaseUrl(req) });

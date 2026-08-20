@@ -399,6 +399,20 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         return sendError(req, res, error);
     }
 
+    const capitalize = (word) => (word ? word.charAt(0).toUpperCase() + word.slice(1) : word);
+
+    const classCard = () => res.locals.openGraph({
+        type: 'article',
+        title: classData.name,
+        description: [
+            // Matches how the page itself labels the edition: "Advent v2".
+            [capitalize(classData.rules_edition), classData.rules_version].filter(Boolean).join(' '),
+            classData.teaser
+        ].filter(Boolean).join(' · '),
+        image: classData.image_url,
+        suppress: classData.is_public === false
+    });
+
     let unlocked = false;
     let unlockExpiresAt = null;
     if (profile) {
@@ -416,6 +430,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         if (!unlocked) {
             return res.render('class-view-teaser', {
                 profile,
+                og: classCard(),
                 title: `${classData.name} - View Class`,
                 class: classData,
                 activeNav: 'classes',
@@ -462,6 +477,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
     res.render('class-view', {
         profile,
+        og: classCard(),
         title: `${classData.name} - View Class`,
         class: classData,
         unlocked,

@@ -112,6 +112,7 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+  app.use(require('../util/open-graph').openGraphDefaults);
   // Render capture: the route is exercised for its side effects, not its HTML.
   app.use((req, res, next) => {
     res.render = (view, ctx) => res.json({ view, ctx: ctx || {} });
