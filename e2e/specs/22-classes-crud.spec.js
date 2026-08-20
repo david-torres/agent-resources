@@ -152,6 +152,25 @@ test('a class can be deleted from the My PCCs list', async ({ page }) => {
   await expect(page.locator(`#row-${id}`)).toHaveCount(0);
 });
 
+// Issue #139: every textarea[data-toast-editor] on this form got its own
+// ToastUI Editor, and ToastUI's `autofocus` option defaults to true -- each
+// editor focused itself and scrolled itself into view on creation, so the
+// form opened partway down the page with the caret already in an editor.
+// public/js/app.js passes autofocus:false; this is the guard.
+test('the new-class form opens at the top, not inside an editor', async ({ page }) => {
+  await page.goto('/classes/new');
+  await page.waitForLoadState('networkidle');
+
+  // Wait for the editors to actually mount -- asserting scroll position
+  // before they initialise would pass no matter what they do afterwards.
+  await expect(page.locator('.toastui-editor-ww-container .ProseMirror').first()).toBeVisible();
+
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(
+    () => !!document.activeElement.closest('.toastui-editor-container')
+  )).toBe(false);
+});
+
 test('a class can be deleted from its own detail page', async ({ page }) => {
   const name = `${prefix} Detail Deletable`;
   const id = await createClassViaUi(page, name);

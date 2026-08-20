@@ -577,7 +577,11 @@ const App = (function (document, supabase, htmx) {
           initialEditType: editType,
           previewStyle: previewStyle,
           initialValue: initialValue,
-          usageStatistics: false
+          usageStatistics: false,
+          // Defaults to true, which focuses the editor and scrolls it into
+          // view on creation -- on a form with several editors that drags the
+          // viewport away from the top the moment the page loads.
+          autofocus: false
         });
 
         // Verify editor was created successfully (check for editor instance and container content)
