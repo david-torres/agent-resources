@@ -586,11 +586,12 @@ test('the character page comes back from the back button with a closed, live dro
 // painted open over a component that says closed -- and green again on restore.
 //
 // DO NOT reach for hx-history="false" or historyCacheSize: 0 instead. Both make
-// this test pass and both are worse than the defect: with the snapshot cache out
-// of play, Back falls through to htmx's loadHistoryFromServer, whose raw XHR
-// sends HX-Request: true and no Authorization header, which produces a blank
-// page on protected routes and a silently signed-out render on auth-optional
-// ones. See task-11-report.md.
+// this test pass without touching the frozen class it is about: they take the
+// snapshot out of play, so Back re-renders from the server instead. That
+// fallback used to produce a blank page on protected routes and a silently
+// signed-out render on auth-optional ones (issue #163, now fixed and covered by
+// 25-history-restore-blank.spec.js), but it is still a different mechanism, not
+// a fix for this defect.
 // ---------------------------------------------------------------------------
 
 // Reads htmx's own snapshot cache for a path and reports the class attribute the

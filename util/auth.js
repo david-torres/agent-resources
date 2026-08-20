@@ -22,6 +22,14 @@ function safeRefererPath(refererHeader) {
   }
 }
 
+// htmx re-fetches a URL whose history snapshot it no longer holds and swaps
+// the response into <body> verbatim -- it never reads HX-Redirect on this
+// path. Answering a restore the way an ordinary htmx request is answered
+// (200, HX-Redirect, empty body) therefore paints a blank page at a
+// correct-looking URL, recoverable only by a manual reload. Anything sent
+// back here has to be renderable on its own.
+const isHistoryRestore = (req) => req.get('HX-History-Restore-Request') === 'true';
+
 const getBearerToken = (req) => {
   const header = req.headers['authorization'];
   if (!header) return null;
@@ -32,6 +40,10 @@ const getBearerToken = (req) => {
 
 async function isAuthenticated(req, res, next) {
   if (!req.headers['authorization']) {
+    if (isHistoryRestore(req)) {
+      return res.render('auth');
+    }
+
     const headerRedirect = req.headers['redirect-to'];
     const redirectUrl = isSameOriginPath(headerRedirect) ? headerRedirect : req.originalUrl;
     const dest = (redirectUrl == '/auth' || redirectUrl == '/')
@@ -48,6 +60,9 @@ async function isAuthenticated(req, res, next) {
   const authToken = getBearerToken(req);
   const user = await getUserFromToken(authToken);
   if (!user) {
+    if (isHistoryRestore(req)) {
+      return res.render('auth');
+    }
     if (req.get('HX-Request')) {
       res.set('HX-Redirect', '/auth');
       return res.status(200).end();

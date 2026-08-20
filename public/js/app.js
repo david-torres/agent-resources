@@ -736,6 +736,25 @@ const App = (function (document, supabase, htmx) {
         }
       });
 
+      // ...including on htmx's history cache-miss path, which the listener
+      // above cannot reach. loadHistoryFromServer builds and sends its own
+      // XMLHttpRequest, so no htmx:configRequest is ever fired for it, and
+      // the restore arrives at the server signed out however signed in the
+      // user is -- util/auth.js then answers a protected route with a body
+      // htmx swaps verbatim. The event carries the opened, unsent xhr for
+      // exactly this purpose and fires before send(); never preventDefault
+      // it, which would stop the request rather than authenticate it.
+      document.addEventListener("htmx:historyCacheMiss", function (event) {
+        const xhr = event.detail && event.detail.xhr;
+        if (!xhr) return;
+        const authToken = _getAuthToken();
+        const refreshToken = _getRefreshToken();
+        if (authToken && refreshToken) {
+          xhr.setRequestHeader("Authorization", `Bearer ${authToken}`);
+          xhr.setRequestHeader("Refresh-Token", refreshToken);
+        }
+      });
+
       // handle htmx errors
       document.addEventListener("htmx:responseError", function (event) {
         _displayError(_extractErrorMessage(event.detail.xhr.response));

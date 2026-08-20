@@ -398,22 +398,19 @@ test('a page navigated away from with the menu closed comes back closed and live
 // Change the template and that assertion together.
 //
 // DO NOT reach for hx-history="false" or historyCacheSize: 0 instead. Both make
-// this test pass, and both are worse than the defect. With the snapshot cache
-// out of play, Back falls through to htmx's loadHistoryFromServer, whose raw
-// XHR sends `HX-Request: true` (htmx.config.historyRestoreAsHxRequest, default
-// true) and no Authorization header. Two distinct symptoms follow, and they are
-// worth keeping apart:
-//   - PROTECTED routes (test 2's back-target, /profile): util/auth.js:41-44
-//     answers that request with `200` + an `HX-Redirect` header and an EMPTY
-//     body; loadHistoryFromServer never processes HX-Redirect, so htmx swaps
-//     zero bytes into <body> and the user gets a permanently BLANK PAGE.
-//   - AUTH-OPTIONAL routes (test 3's own back-target, /): the server answers
-//     with a full page rendered SIGNED OUT -- wrong nav, no user content, no
-//     error. Measured under the hx-history="false" mutation: bodyLen 5203,
-//     signedOut true, menu closed, so test 3 passes for entirely the wrong
-//     reason.
-// See task-11-report.md; the blank page is already reachable in production with
-// no code change at all, via ordinary cache eviction past 10 history entries.
+// this test pass, and neither addresses the frozen class the test is about:
+// they take the snapshot out of play, so Back falls through to htmx's
+// loadHistoryFromServer and re-renders from the server, which is a different
+// mechanism rather than a fix.
+//
+// That fallback used to be catastrophic in its own right -- its raw XHR sends
+// `HX-Request: true` and, until issue #163, no Authorization header, so
+// PROTECTED routes got util/auth.js's `200` + `HX-Redirect` + EMPTY body swapped
+// into <body> (a permanently blank page) and AUTH-OPTIONAL routes got a full
+// page rendered SIGNED OUT. app.js now attaches the header on
+// htmx:historyCacheMiss and util/auth.js answers a restore with a renderable
+// body; 25-history-restore-blank.spec.js owns that behaviour. The fallback is
+// therefore survivable now, but it is still not the fix for THIS test.
 // ---------------------------------------------------------------------------
 test('going back after a boosted navigation restores a closed, live navbar', async ({ page }) => {
   await page.goto('/');
