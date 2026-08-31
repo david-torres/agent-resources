@@ -12,6 +12,7 @@ games, and more!
   - [Manual installation](#manual-installation)
 - [Database Setup](#database-setup)
 - [Usage](#usage)
+- [Reporting bugs from the app](#reporting-bugs-from-the-app)
 - [Dependencies](#dependencies)
 - [Enclave](#enclave)
 - [License](#license)
@@ -53,11 +54,13 @@ and `bun run setup` handles the full DB bootstrap.
      **Project Settings → General**. Only needed if your project is not in
      `us-east-1`. `bun run scripts/probe-region.mjs` detects it.
 
-   Optional: `OPENAI_API_KEY`, `SITE_URL`, and any `SYSTEM_MESSAGE_*`
-   settings. `SITE_URL` is the canonical public origin (e.g.
-   `https://agent-resources.vip`) used for the absolute URLs in
-   `/sitemap.xml`; leave it unset in development and the sitemap uses the
-   request's own scheme and host.
+   Optional: `OPENAI_API_KEY`, `SITE_URL`, `GITHUB_TOKEN`,
+   `GITHUB_ISSUE_REPO`, and any `SYSTEM_MESSAGE_*` settings. `SITE_URL` is
+   the canonical public origin (e.g. `https://agent-resources.vip`) used for
+   the absolute URLs in `/sitemap.xml`; leave it unset in development and the
+   sitemap uses the request's own scheme and host. `GITHUB_TOKEN` enables the
+   in-app bug reporter (see [Reporting bugs from the app](#reporting-bugs-from-the-app));
+   without it the widget is not rendered.
 
 3. Run the setup script. It installs dependencies, applies all migrations
    in `supabase/migrations/`, and seeds the navigation table — safe to
@@ -329,6 +332,24 @@ bunx playwright show-report e2e/report/html
 > [`docs/superpowers/reports/2026-08-03-e2e-findings.md`](docs/superpowers/reports/2026-08-03-e2e-findings.md)
 > for what each one records and which are refactor regressions rather than
 > pre-existing bugs.
+
+## Reporting bugs from the app
+
+Signed-in users get a small bug button in the bottom-right corner of every
+page. It opens a reporter that files the report as an issue on the repository
+named by `GITHUB_ISSUE_REPO` (default `david-torres/agent-resources`).
+
+- A bug report can optionally attach a screenshot of the current page, the
+  browser and screen details, and the recent browser console output. Each is a
+  separate opt-in checkbox and all three start off; the screenshot is shown
+  back as a preview before it can be sent.
+- Screenshots are stored in the public `bug-screenshots` Supabase bucket so
+  GitHub can render them in the issue, and the reporter is told as much.
+- The feature needs `GITHUB_TOKEN` — a fine-grained token with
+  Issues: read and write on that repository, and nothing else. Without it the
+  button is not rendered and `POST /feedback` answers `503`.
+- `POST /feedback` requires a signed-in session and is rate limited to five
+  reports per profile per ten minutes.
 
 ## Agent Tokens
 

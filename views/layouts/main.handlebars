@@ -16,6 +16,11 @@
         {{{body}}}
     </div>
   </section>
+  {{#if profile}}
+  {{#if feedbackEnabled}}
+  {{> feedback-widget}}
+  {{/if}}
+  {{/if}}
   <footer class="footer py-5">
     <div class="content has-text-centered is-size-7">
       <a href="/privacy">Privacy Policy</a>

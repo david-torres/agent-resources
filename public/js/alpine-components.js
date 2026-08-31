@@ -411,6 +411,135 @@ document.addEventListener('alpine:init', () => {
     }
   }));
 
+  // The in-app bug reporter (views/partials/feedback-widget.handlebars).
+  //
+  // Built on modalBase so its open/close goes through the same shared
+  // body-lock count every other modal uses. Everything that touches the
+  // browser's own state -- console buffer, environment, screenshot, the
+  // authenticated POST -- lives in App (public/js/app.js), which owns the
+  // auth token; this component only decides WHEN to ask for it.
+  Alpine.data('feedbackWidget', () => ({
+    ...modalBase('feedback'),
+
+    kind: 'bug',
+    title: '',
+    description: '',
+    // Diagnostics are opt-in and default to off. Nothing about the user's
+    // browser leaves the page unless they tick the box for it.
+    withScreenshot: false,
+    withBrowserInfo: false,
+    withConsoleLog: false,
+
+    screenshotDataUrl: '',
+    screenshotBlob: null,
+    // Snapshots taken when the box is ticked, so what the preview shows is
+    // exactly what gets sent -- not whatever the page logged in between.
+    browserInfo: null,
+    consoleEntries: [],
+    capturing: false,
+    submitting: false,
+    error: '',
+    issueUrl: '',
+
+    get isBug() {
+      return this.kind === 'bug';
+    },
+
+    reset() {
+      this.kind = 'bug';
+      this.title = '';
+      this.description = '';
+      this.withScreenshot = false;
+      this.withBrowserInfo = false;
+      this.withConsoleLog = false;
+      this.discardScreenshot();
+      this.browserInfo = null;
+      this.consoleEntries = [];
+      this.capturing = false;
+      this.submitting = false;
+      this.error = '';
+      this.issueUrl = '';
+    },
+
+    // A submitted report leaves its issue link on screen; reopening the
+    // widget is a NEW report, so the form starts clean every time.
+    openReporter() {
+      this.reset();
+      this.open('feedback');
+    },
+
+    discardScreenshot() {
+      this.screenshotDataUrl = '';
+      this.screenshotBlob = null;
+    },
+
+    // Every diagnostic is previewed before it can be sent: a reporter should
+    // never have to guess what a checkbox is about to publish.
+    toggleBrowserInfo() {
+      this.browserInfo = this.withBrowserInfo ? App.getBrowserInfo() : null;
+    },
+
+    toggleConsoleLog() {
+      this.consoleEntries = this.withConsoleLog ? App.getConsoleLog() : [];
+    },
+
+    // Toggling the box is what captures -- and the capture is shown back as a
+    // preview before anything is sent, so the user can see exactly what the
+    // report would include and untick it if it holds something private.
+    async toggleScreenshot() {
+      if (!this.withScreenshot) {
+        this.discardScreenshot();
+        return;
+      }
+      this.capturing = true;
+      this.error = '';
+      try {
+        const { dataUrl, blob } = await App.captureScreenshot();
+        this.screenshotDataUrl = dataUrl;
+        this.screenshotBlob = blob;
+      } catch (err) {
+        // Failing to capture must not silently ship a report with no image:
+        // the box goes back off so the checkbox never claims more than is true.
+        this.withScreenshot = false;
+        this.discardScreenshot();
+        this.error = (err && err.message) || 'The screenshot could not be captured.';
+      } finally {
+        this.capturing = false;
+      }
+    },
+
+    async submit() {
+      if (this.submitting) return;
+      this.error = '';
+
+      if (this.title.trim().length < 5) {
+        this.error = 'Give the report a title of at least 5 characters.';
+        return;
+      }
+      if (this.description.trim().length < 10) {
+        this.error = 'Describe the problem or request in at least 10 characters.';
+        return;
+      }
+
+      this.submitting = true;
+      try {
+        const result = await App.submitFeedback({
+          kind: this.kind,
+          title: this.title.trim(),
+          description: this.description.trim(),
+          screenshotBlob: this.isBug && this.withScreenshot ? this.screenshotBlob : null,
+          browserInfo: this.isBug && this.withBrowserInfo ? this.browserInfo : null,
+          consoleLog: this.isBug && this.withConsoleLog && this.consoleEntries.length ? this.consoleEntries : null
+        });
+        this.issueUrl = result.url;
+      } catch (err) {
+        this.error = (err && err.message) || 'Could not file the report. Please try again.';
+      } finally {
+        this.submitting = false;
+      }
+    }
+  }));
+
   // Click-to-sort table. Replaces the inline script in
   // views/character-list.handlebars.
   Alpine.data('sortableTable', () => ({

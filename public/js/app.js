@@ -143,6 +143,186 @@ const App = (function (document, supabase, htmx) {
     });
   };
 
+  // --- In-app bug reporter -------------------------------------------------
+
+  const FEEDBACK_CONSOLE_LIMIT = 50;
+  const FEEDBACK_MESSAGE_LIMIT = 500;
+  const FEEDBACK_SCREENSHOT_MAX_WIDTH = 1400;
+  const FEEDBACK_CONSOLE_LEVELS = ['log', 'info', 'warn', 'error', 'debug'];
+
+  // Ring buffer of recent console output, offered (opt-in, and only for bug
+  // reports) as part of a report. It records; it never suppresses -- every
+  // call is forwarded to the real console untouched.
+  const _consoleEntries = [];
+
+  const _formatConsoleArg = (arg) => {
+    if (typeof arg === 'string') return arg;
+    if (arg instanceof Error) return `${arg.name}: ${arg.message}`;
+    try {
+      return JSON.stringify(arg);
+    } catch (e) {
+      return String(arg);
+    }
+  };
+
+  const _recordConsoleEntry = (level, args) => {
+    const message = Array.from(args).map(_formatConsoleArg).join(' ').slice(0, FEEDBACK_MESSAGE_LIMIT);
+    _consoleEntries.push({ level, at: new Date().toISOString(), message });
+    // Oldest out, so the entries nearest the report are the ones kept.
+    if (_consoleEntries.length > FEEDBACK_CONSOLE_LIMIT) _consoleEntries.shift();
+  };
+
+  // Patches window.console rather than the free `console` binding: in the
+  // browser they are the same object, but under jsdom they are not, and
+  // patching the test runner's own console would capture its output too.
+  //
+  // Called at script-evaluation time (below), not on DOMContentLoaded, so an
+  // error thrown while the rest of the page is still loading is already in
+  // the buffer when the user opens the reporter.
+  const _installConsoleRecorder = () => {
+    const target = (typeof window !== 'undefined' && window.console) || console;
+    if (!target || target.__arFeedbackRecorder) return;
+
+    for (const level of FEEDBACK_CONSOLE_LEVELS) {
+      const original = target[level];
+      if (typeof original !== 'function') continue;
+      target[level] = function (...args) {
+        try { _recordConsoleEntry(level, args); } catch (e) { /* logging must never throw */ }
+        return original.apply(this, args);
+      };
+    }
+    target.__arFeedbackRecorder = true;
+
+    // An uncaught error and a rejected promise never reach console.error on
+    // their own -- the browser reports them itself -- so they are captured
+    // separately, and they are exactly what a bug report needs.
+    if (typeof window !== 'undefined' && window.addEventListener) {
+      window.addEventListener('error', (event) => {
+        _recordConsoleEntry('error', [
+          event.message || 'Uncaught error',
+          event.filename ? `(${event.filename}:${event.lineno})` : ''
+        ]);
+      });
+      window.addEventListener('unhandledrejection', (event) => {
+        _recordConsoleEntry('error', ['Unhandled promise rejection:', event.reason]);
+      });
+    }
+  };
+
+  _installConsoleRecorder();
+
+  const _getConsoleLog = () => _consoleEntries.slice();
+
+  const _getBrowserInfo = () => {
+    const nav = typeof navigator !== 'undefined' ? navigator : {};
+    const win = typeof window !== 'undefined' ? window : {};
+    const screenInfo = win.screen || {};
+    let timezone = '';
+    try {
+      timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    } catch (e) {
+      timezone = '';
+    }
+    return {
+      userAgent: nav.userAgent || '',
+      platform: nav.platform || '',
+      language: nav.language || '',
+      viewport: win.innerWidth ? `${win.innerWidth}x${win.innerHeight}` : '',
+      screen: screenInfo.width ? `${screenInfo.width}x${screenInfo.height}` : '',
+      devicePixelRatio: win.devicePixelRatio != null ? String(win.devicePixelRatio) : '',
+      timezone,
+      online: nav.onLine === undefined ? '' : String(nav.onLine),
+      cookiesEnabled: nav.cookieEnabled === undefined ? '' : String(nav.cookieEnabled)
+    };
+  };
+
+  const _loadHtml2Canvas = () => _loadScript(
+    'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js',
+    { crossOrigin: 'anonymous' }
+  );
+
+  const _dataUrlToBlob = (dataUrl) => {
+    const [meta, base64] = String(dataUrl).split(',');
+    const mime = (meta.match(/data:([^;]+)/) || [])[1] || 'image/jpeg';
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+    return new Blob([bytes], { type: mime });
+  };
+
+  const _downscaleCanvas = (canvas, maxWidth) => {
+    if (!canvas.width || canvas.width <= maxWidth) return canvas;
+    const ratio = maxWidth / canvas.width;
+    const target = document.createElement('canvas');
+    target.width = Math.round(canvas.width * ratio);
+    target.height = Math.round(canvas.height * ratio);
+    target.getContext('2d').drawImage(canvas, 0, 0, target.width, target.height);
+    return target;
+  };
+
+  // Captures the visible viewport -- what the reporter is actually looking at
+  // -- with the reporter's own UI excluded, so an open modal doesn't cover
+  // the thing being reported. JPEG rather than PNG: a full-width PNG
+  // routinely lands past the route's 4 MB cap.
+  const _captureScreenshot = async () => {
+    await _loadHtml2Canvas();
+    const html2canvas = window.html2canvas;
+    if (typeof html2canvas !== 'function') {
+      throw new Error('The screenshot tool could not be loaded.');
+    }
+
+    const canvas = await html2canvas(document.body, {
+      backgroundColor: '#ffffff',
+      logging: false,
+      useCORS: true,
+      scale: 1,
+      x: window.scrollX,
+      y: window.scrollY,
+      width: document.documentElement.clientWidth,
+      height: document.documentElement.clientHeight,
+      ignoreElements: (el) => Boolean(el && el.hasAttribute && el.hasAttribute('data-feedback-widget'))
+    });
+
+    const dataUrl = _downscaleCanvas(canvas, FEEDBACK_SCREENSHOT_MAX_WIDTH).toDataURL('image/jpeg', 0.85);
+    // One conversion, so the preview the user approves is byte-for-byte the
+    // image that gets uploaded.
+    return { dataUrl, blob: _dataUrlToBlob(dataUrl) };
+  };
+
+  const _submitFeedback = async ({ kind, title, description, screenshotBlob, browserInfo, consoleLog }) => {
+    const form = new FormData();
+    form.append('kind', kind);
+    form.append('title', title);
+    form.append('description', description);
+    form.append('page_url', window.location.href);
+    if (browserInfo) form.append('browser_info', JSON.stringify(browserInfo));
+    if (consoleLog) form.append('console_log', JSON.stringify(consoleLog));
+    if (screenshotBlob) form.append('screenshot', screenshotBlob, 'screenshot.jpg');
+
+    const token = _getAuthToken();
+    const headers = { Accept: 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const response = await fetch('/feedback', { method: 'POST', headers, body: form });
+
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch (e) {
+      payload = null;
+    }
+
+    if (!response.ok) {
+      throw new Error((payload && payload.error) || 'Could not file the report. Please try again.');
+    }
+    // A stale token redirects to the sign-in page, which fetch follows and
+    // reports as a cheerful 200 -- so success is the issue URL, not the status.
+    if (!payload || !payload.url) {
+      throw new Error('Your session has expired. Sign in again and retry.');
+    }
+    return payload;
+  };
+
   const _reportAuthError = (context, error) => {
     console.error(`[auth] ${context}`, error);
     _displayError(error?.message || 'Authentication failed');
@@ -1466,6 +1646,10 @@ const App = (function (document, supabase, htmx) {
     signUpWithDiscord,
     linkDiscord,
     unlinkDiscord,
-    copyToClipboard
+    copyToClipboard,
+    getBrowserInfo: _getBrowserInfo,
+    getConsoleLog: _getConsoleLog,
+    captureScreenshot: _captureScreenshot,
+    submitFeedback: _submitFeedback
   };
 })(document, supabase, htmx);

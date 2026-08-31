@@ -26,8 +26,10 @@ const navRoutes = require('./routes/nav');
 const agentRoutes = require('./routes/agent');
 const sitemapRoutes = require('./routes/sitemap');
 const botLinkRoutes = require('./routes/bot-link');
+const feedbackRoutes = require('./routes/feedback');
 const { loadNavItems } = require('./util/nav-loader');
 const { openGraphDefaults } = require('./util/open-graph');
+const { isGithubConfigured } = require('./services/feedback/github');
 
 const createApp = () => {
   const app = express();
@@ -70,6 +72,10 @@ const createApp = () => {
   app.use((req, res, next) => {
     res.locals.supabaseUrl = process.env.SUPABASE_URL;
     res.locals.supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+    // The reporter widget is only rendered when a report could actually be
+    // filed, so an unconfigured deploy shows no button rather than one that
+    // fails on submit.
+    res.locals.feedbackEnabled = isGithubConfigured();
     next();
   });
 
@@ -92,6 +98,7 @@ const createApp = () => {
   app.use('/pages', pagesRoutes);
   app.use('/nav', navRoutes);
   app.use('/link/bot', botLinkRoutes);
+  app.use('/feedback', feedbackRoutes);
   app.use('/api/agent', agentRoutes);
 
   app.use((err, req, res, next) => {
