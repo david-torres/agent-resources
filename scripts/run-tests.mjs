@@ -22,6 +22,7 @@ const httpFiles = new Set([
   'routes/characters.test.js',
   'routes/class-view-unlock-resolution.test.js',
   'routes/classes-stat-spread.test.js',
+  'routes/feedback.test.js',
   'routes/lfg-conduit-join.test.js',
   'routes/lfg-log-game.test.js',
   'routes/library-book-type.test.js',

@@ -54,7 +54,19 @@ const CLIENT_ONLY = new Set([
   // literal that is always 'player', so 'conduit' having no `checked`
   // attribute is not a dropped server value, it's the correct initial
   // state for every render.
-  "views/partials/lfg-join-form.handlebars::joinType=conduit"
+  "views/partials/lfg-join-form.handlebars::joinType=conduit",
+  // The bug reporter's form is composed entirely in the browser: it is never
+  // rendered from a saved report, and every field starts from the same static
+  // literal on every open (feedbackWidget.reset() in
+  // public/js/alpine-components.js). There is no server value any of these
+  // could drop.
+  'views/partials/feedback-widget.handlebars::feedback-title',
+  'views/partials/feedback-widget.handlebars::feedback-description',
+  // Each diagnostic is opt-IN: an unchecked box is the correct initial state
+  // for every render, not a lost `checked` attribute.
+  'views/partials/feedback-widget.handlebars::feedback-screenshot',
+  'views/partials/feedback-widget.handlebars::feedback-browser-info',
+  'views/partials/feedback-widget.handlebars::feedback-console-log'
 ]);
 
 const seen = new Set();

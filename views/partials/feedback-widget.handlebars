@@ -1,0 +1,131 @@
+{{!-- In-app bug report / feature request reporter.
+      Rendered from views/layouts/main.handlebars for signed-in users only,
+      and only when the server can actually file an issue. `data-feedback-widget`
+      is what App.captureScreenshot() excludes from the screenshot, so the
+      button and the open modal never appear in the image. --}}
+<div data-feedback-widget x-data="feedbackWidget()" @open-modal.window="open($event.detail)" @close-modal.window="close($event.detail)" @keydown.escape.window="close()">
+  <button type="button" class="feedback-fab" id="feedback-fab" @click="openReporter()"
+          aria-label="Report a bug or request a feature" title="Report a bug or request a feature">
+    <span class="icon"><i class="fas fa-bug" aria-hidden="true"></i></span>
+  </button>
+
+  <div class="modal" id="feedback-modal" :class="{ 'is-active': show }">
+    <div class="modal-background" @click="close()"></div>
+    <div class="modal-card">
+      <header class="modal-card-head">
+        <p class="modal-card-title" x-text="isBug ? 'Report a bug' : 'Request a feature'">Report a bug</p>
+        <button class="delete" aria-label="close" @click="close()"></button>
+      </header>
+
+      <section class="modal-card-body">
+        {{!-- The success panel replaces the form rather than sitting above it:
+              the report is filed and resubmitting it would open a duplicate. --}}
+        <template x-if="issueUrl">
+          <div class="content">
+            <p class="has-text-weight-semibold">Thanks — your report was filed.</p>
+            <p>
+              <a :href="issueUrl" x-text="issueUrl" target="_blank" rel="noopener noreferrer"></a>
+            </p>
+            <p class="is-size-7">Follow the issue on GitHub for updates.</p>
+          </div>
+        </template>
+
+        <template x-if="!issueUrl">
+          <div>
+            <div class="field">
+              <label class="label" for="feedback-kind">Type</label>
+              <div class="control">
+                <div class="select is-fullwidth">
+                  <select id="feedback-kind" x-model="kind">
+                    <option value="bug">Bug report</option>
+                    <option value="feature">Feature request</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="feedback-title">Title</label>
+              <div class="control">
+                <input class="input" id="feedback-title" type="text" maxlength="120" x-model="title">
+              </div>
+            </div>
+
+            <div class="field">
+              <label class="label" for="feedback-description" x-text="isBug ? 'What happened?' : 'What would you like?'">What happened?</label>
+              <div class="control">
+                <textarea class="textarea" id="feedback-description" rows="5" maxlength="5000" x-model="description"
+                          :placeholder="isBug ? 'What did you do, what did you expect, and what happened instead?' : 'Describe the feature and what it would let you do.'"></textarea>
+              </div>
+            </div>
+
+            {{!-- Diagnostics are bug-report material only, and every one of
+                  them is off until the user asks for it. --}}
+            <template x-if="isBug">
+              <div class="field">
+                <label class="label">Attach diagnostics <span class="has-text-weight-normal is-size-7">(optional)</span></label>
+
+                <label class="checkbox is-block mb-2">
+                  <input type="checkbox" id="feedback-screenshot" x-model="withScreenshot" @change="toggleScreenshot()" :disabled="capturing">
+                  Screenshot of this page
+                  <span class="is-size-7 has-text-grey" x-show="capturing">— capturing…</span>
+                </label>
+
+                <div class="feedback-screenshot-preview mb-3" x-show="screenshotDataUrl" x-cloak>
+                  <img :src="screenshotDataUrl" alt="Preview of the screenshot that will be attached">
+                  <p class="help">This image is attached to a public issue — untick the box if it shows anything private.</p>
+                </div>
+
+                <label class="checkbox is-block mb-2">
+                  <input type="checkbox" id="feedback-browser-info" x-model="withBrowserInfo" @change="toggleBrowserInfo()">
+                  Browser and screen details
+                </label>
+
+                {{!-- Previewed for the same reason the screenshot is: the
+                      reporter decides what to publish, so they get to read it
+                      first. --}}
+                <div class="feedback-diagnostic-preview mb-3" x-show="browserInfo" x-cloak>
+                  <table class="table is-narrow is-fullwidth is-size-7">
+                    <tbody>
+                      <template x-for="[field, value] in Object.entries(browserInfo || {})" :key="field">
+                        <tr>
+                          <th x-text="field"></th>
+                          <td x-text="value"></td>
+                        </tr>
+                      </template>
+                    </tbody>
+                  </table>
+                </div>
+
+                <label class="checkbox is-block">
+                  <input type="checkbox" id="feedback-console-log" x-model="withConsoleLog" @change="toggleConsoleLog()">
+                  Recent browser console output
+                </label>
+
+                <div class="feedback-diagnostic-preview mt-2" x-show="withConsoleLog" x-cloak>
+                  <p class="help" x-show="!consoleEntries.length">Nothing has been logged on this page yet — nothing will be attached.</p>
+                  <pre class="feedback-console-preview is-size-7" x-show="consoleEntries.length"><template x-for="(entry, index) in consoleEntries" :key="index"><span x-text="entry.level.toUpperCase() + ': ' + entry.message + '\n'"></span></template></pre>
+                </div>
+              </div>
+            </template>
+
+            <div class="notification is-danger is-light mt-4" x-show="error" x-cloak x-text="error"></div>
+
+            <p class="help mt-4">
+              Reports are filed as public issues on GitHub, under your display name.
+            </p>
+          </div>
+        </template>
+      </section>
+
+      <footer class="modal-card-foot">
+        <template x-if="!issueUrl">
+          <button class="button is-primary" :class="{ 'is-loading': submitting }" :disabled="submitting || capturing" @click="submit()">
+            Send report
+          </button>
+        </template>
+        <button class="button" @click="close()" x-text="issueUrl ? 'Close' : 'Cancel'">Cancel</button>
+      </footer>
+    </div>
+  </div>
+</div>

@@ -17,3 +17,12 @@ Tests are tiered:
 
 Schema changes belong exclusively in `supabase/migrations/`. Each migration
 must be independently reviewable and have a local-Supabase verification path.
+
+The in-app bug reporter is the one route that talks to a third party.
+`services/feedback/` keeps that split explicit: `input.js` and `body.js` are
+pure (normalization and Markdown), `github.js` owns the token and the REST
+call, and `repository.js` is the storage adapter for the public
+`bug-screenshots` bucket. `routes/feedback.js` authenticates, rate-limits, and
+hands the multipart submission to `FeedbackService`. The widget is rendered
+from the main layout only for a signed-in user on a server that is configured
+to file issues.

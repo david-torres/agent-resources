@@ -1447,3 +1447,56 @@ a.dropdown-item:hover {
   cursor: pointer;
   user-select: none;
 }
+/* In-app bug reporter (views/partials/feedback-widget.handlebars).
+   Deliberately small and quiet: a fixed circular button in the bottom-right
+   corner that sits above page content but BELOW Bulma's .modal (z-index 40),
+   so an open modal -- including the reporter's own -- covers it rather than
+   floating a bug icon over the dialog. */
+.feedback-fab {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 30;
+  width: 2.75rem;
+  height: 2.75rem;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 50%;
+  background-color: #363636;
+  color: #fff;
+  cursor: pointer;
+  opacity: 0.55;
+  box-shadow: 0 2px 6px rgba(10, 10, 10, 0.25);
+  transition: opacity 0.15s ease-in-out, transform 0.15s ease-in-out;
+}
+.feedback-fab:hover,
+.feedback-fab:focus-visible {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+/* The preview exists so the reporter can see exactly what would be attached,
+   so it stays legible without swallowing the modal: capped height, scaled to
+   fit, and framed so its edges are obvious against the modal background. */
+.feedback-screenshot-preview img {
+  display: block;
+  max-height: 12rem;
+  width: auto;
+  max-width: 100%;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+}
+/* Diagnostic previews inside the reporter. Both are capped and scrollable:
+   a 50-line console dump must not push the Send button off the modal. */
+.feedback-diagnostic-preview {
+  max-height: 10rem;
+  overflow: auto;
+  border: 1px solid #dbdbdb;
+  border-radius: 4px;
+  padding: 0.5rem;
+}
+.feedback-console-preview {
+  padding: 0;
+  background: none;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
