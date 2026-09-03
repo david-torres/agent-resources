@@ -1,4 +1,5 @@
 const moment = require('moment-timezone');
+const { trimStrings } = require('../../util/trim-input');
 
 const cloneInput = (input) => ({ ...(input || {}) });
 
@@ -8,7 +9,7 @@ const cloneInput = (input) => ({ ...(input || {}) });
  * join request rather than on lfg_posts.
  */
 const normalizeLfgInput = (input, { creatorId, timezone } = {}) => {
-  const data = cloneInput(input);
+  const data = trimStrings(cloneInput(input));
   const characterId = data.character || null;
   const hostFlag = data.host_id === 'on';
   delete data.character;
