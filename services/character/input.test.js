@@ -1,5 +1,16 @@
 const { test, expect } = require('bun:test');
-const { normalizeCharacterInput } = require('./input');
+const { normalizeCharacterInput, normalizeGearItems } = require('./input');
+
+test('trims every string in a character payload, not just item names', () => {
+  const { data, childData } = normalizeCharacterInput({
+    name: ' Ragnar ',
+    background: 'A tale. ',
+    gear: ['Shonen::Training Weights '],
+  });
+  expect(data.name).toBe('Ragnar');
+  expect(data.background).toBe('A tale.');
+  expect(normalizeGearItems(childData.classGear)[0].name).toBe('Training Weights');
+});
 
 test('normalizes a v1 payload without mutating the submitted request', () => {
   const input = {
@@ -37,7 +48,7 @@ test('normalizes v2 fields and strips legacy free-text fields', () => {
   expect(result.data).not.toHaveProperty('perks');
   expect(result.data).not.toHaveProperty('additional_gear');
   expect(result.data.image_url).toBe('https://example.test/image.png');
-  expect(result.childData.abilityPerks[0].text).toBe('  Deal more damage  ');
+  expect(result.childData.abilityPerks[0].text).toBe('Deal more damage');
 });
 
 test('returns established validation errors for invalid creator mode and perks', () => {
