@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { expandIdsToFamilies } = require('../util/class-family');
 const { coreClassIdsForEditions } = require('../util/book-classes');
 const { applyClassFilters } = require('../util/class-filters');
+const { trimStrings } = require('../util/trim-input');
 const { ClassService } = require('../services/class/service');
 const classRepository = require('../services/class/repository');
 const rulesRepository = require('../services/rules/repository');
@@ -223,12 +224,12 @@ const createClass = async (actor, classData) => classService.createClass(actor, 
 const updateClass = async (actor, id, updates) => classService.updateClass(actor, id, updates);
 
 const duplicateClass = async (baseId, newVersion, newEdition = null) => {
-    const params = {
+    const params = trimStrings({
         new_id: crypto.randomUUID(),
         base_id: baseId,
-        new_version: newVersion
-    };
-    if (newEdition) params.new_edition = newEdition;
+        new_version: newVersion,
+        ...(newEdition ? { new_edition: newEdition } : {})
+    });
 
     const { data, error } = await supabase
         .rpc('dup_class', params);
