@@ -67,4 +67,5 @@ BEGIN
 END;
 $$;
 
+REVOKE ALL ON FUNCTION public.untrimmed_text_values() FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.untrimmed_text_values() TO service_role;
