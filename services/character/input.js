@@ -123,7 +123,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   // column is editable -- updated_at stays trigger-owned, or a row could be
   // pinned to the top of the homepage feeds indefinitely.
   if ('created_at' in data) {
-    const raw = typeof data.created_at === 'string' ? data.created_at : data.created_at;
+    const raw = data.created_at;
     if (!raw) {
       delete data.created_at;
     } else {
