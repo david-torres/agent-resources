@@ -24,6 +24,18 @@ const { statList } = require('../../util/enclave-consts');
 // (mirrors the pre-refactor behavior in models/character.js): only the
 // secondary, non-fatal "classes" catalog lookup honors the caller's client.
 
+// The class JSONB and the character row are written by different paths, so a
+// whitespace difference between them must not silently blank a description --
+// it did, for 43 character rows, invisibly.
+const nameKey = (value) => String(value ?? '').trim();
+
+const mergeClassItems = (rows, classes, listKey) => rows.map((row) => {
+  const cls = classes?.find(c => c.id === row.class_id);
+  const list = Array.isArray(cls?.[listKey]) ? cls[listKey] : null;
+  const match = list?.find(entry => entry && nameKey(entry.name) === nameKey(row.name));
+  return match ? { ...match, ...row } : row;
+});
+
 const getCharacterTraits = async (id) => {
   const { data, error } = await supabaseAdmin.from('traits').select('*').eq('character_id', id);
   return { data, error };
@@ -54,17 +66,7 @@ const getCharacterGear = async (id, client = supabase) => {
     return { data: gear, error: null };
   }
 
-  const mergedGear = gear.map(item => {
-    const cls = classes?.find(c => c.id === item.class_id);
-    const classGear = Array.isArray(cls?.gear)
-      ? cls.gear.find(g => g && g.name === item.name)
-      : null;
-
-    if (classGear) {
-      return { ...classGear, ...item };
-    }
-    return item;
-  });
+  const mergedGear = mergeClassItems(gear, classes, 'gear');
 
   return { data: mergedGear, error: null };
 };
@@ -97,18 +99,7 @@ const getCharacterAbilities = async (id, client = supabase) => {
     return { data: abilities, error: null };
   }
 
-  const mergedAbilities = abilities.map(ability => {
-    const cls = classes.find(c => c.id === ability.class_id);
-    const classAbility = Array.isArray(cls?.abilities)
-      ? cls.abilities.find(a => a && a.name === ability.name)
-      : null;
-
-    if (classAbility) {
-      return { ...classAbility, ...ability };
-    }
-
-    return ability;
-  });
+  const mergedAbilities = mergeClassItems(abilities, classes, 'abilities');
 
   return { data: mergedAbilities, error: null };
 };
@@ -307,6 +298,7 @@ module.exports = {
   getCharacterGear,
   getCharacterAbilities,
   getCharacterAbilityPerks,
+  mergeClassItems,
 
   // Agent-search reads.
   searchCharactersForAgent,
