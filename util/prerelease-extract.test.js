@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { parseStatLine, clusterBands, pairMeters } = require('./prerelease-extract');
+const { parseStatLine, clusterBands, pairMeters, buildNoteTree } = require('./prerelease-extract');
 
 test('parses the three-single form', () => {
   expect(parseStatLine('+Sensory, +Skill, +Vitality*'))
@@ -67,4 +67,33 @@ test('tolerates a half-point row misalignment', () => {
 test('throws when a label has no value on its row', () => {
   const blocks = [{ xMin: 421.5, yMin: 100, text: 'Cooldown' }];
   expect(() => pairMeters(blocks)).toThrow(/Cooldown/);
+});
+
+test('nests sub-bullets under the preceding top-level bullet', () => {
+  const bullets = [
+    { xMin: 75.8, text: '❖​ If the beast is powerful enough, this Ability ends prematurely.' },
+    { xMin: 102.8, text: '➢​ Also ends prematurely if the collar is destroyed.' },
+    { xMin: 75.8, text: '❖​ Cooldown begins on use rather than on expiry.' },
+  ];
+  expect(buildNoteTree(bullets)).toEqual([
+    {
+      text: 'If the beast is powerful enough, this Ability ends prematurely.',
+      children: [{ text: 'Also ends prematurely if the collar is destroyed.', children: [] }],
+    },
+    { text: 'Cooldown begins on use rather than on expiry.', children: [] },
+  ]);
+});
+
+test('gives every note an array of children even when it has none', () => {
+  const [note] = buildNoteTree([{ xMin: 75.8, text: '❖​ Only note.' }]);
+  expect(note.children).toEqual([]);
+});
+
+// Supplement correction: sub-bullet must come first with no preceding
+// top-level band for it to fall into, otherwise it IS the top band.
+test('throws on a sub-bullet with no parent', () => {
+  expect(() => buildNoteTree([
+    { xMin: 102.8, text: '➢ orphan' },
+    { xMin: 75.9, text: '❖ a real top-level note' },
+  ])).toThrow(/no parent/);
 });

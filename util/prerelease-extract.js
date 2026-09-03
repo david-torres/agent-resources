@@ -48,4 +48,23 @@ const pairMeters = (blocks) => {
     });
 };
 
-module.exports = { parseStatLine, clusterBands, pairMeters };
+// The glyph is followed by U+200B in the source PDF; both are furniture, and
+// stripping them leaves the sentence itself untouched.
+const stripBullet = (text) => text.replace(/^[❖➢]​?\s*/, '').trim();
+
+const buildNoteTree = (bullets) => {
+  const [topBand] = clusterBands(bullets.map(b => b.xMin), 10);
+  const notes = [];
+  for (const bullet of bullets) {
+    const note = { text: stripBullet(bullet.text), children: [] };
+    if (Math.abs(bullet.xMin - topBand) <= 10) {
+      notes.push(note);
+      continue;
+    }
+    if (!notes.length) throw new Error(`Sub-bullet with no parent: ${note.text}`);
+    notes[notes.length - 1].children.push(note);
+  }
+  return notes;
+};
+
+module.exports = { parseStatLine, clusterBands, pairMeters, buildNoteTree };
