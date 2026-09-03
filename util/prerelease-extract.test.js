@@ -89,7 +89,7 @@ test('gives every note an array of children even when it has none', () => {
   expect(note.children).toEqual([]);
 });
 
-// Supplement correction: sub-bullet must come first with no preceding
+// A sub-bullet must come first with no preceding
 // top-level band for it to fall into, otherwise it IS the top band.
 test('throws on a sub-bullet with no parent', () => {
   expect(() => buildNoteTree([
