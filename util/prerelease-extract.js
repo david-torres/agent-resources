@@ -14,4 +14,23 @@ const parseStatLine = (line) => {
   return spread;
 };
 
-module.exports = { parseStatLine };
+const round1 = (value) => Math.round(value * 10) / 10;
+
+// Bands are derived per page rather than hardcoded so a page laid out
+// slightly differently still resolves correctly.
+const clusterBands = (xMins, tolerance = 6) => {
+  const sorted = [...xMins].sort((a, b) => a - b);
+  const bands = [];
+  let run = [];
+  for (const x of sorted) {
+    if (run.length && x - run[0] > tolerance) {
+      bands.push(round1(run.reduce((a, b) => a + b, 0) / run.length));
+      run = [];
+    }
+    run.push(x);
+  }
+  if (run.length) bands.push(round1(run.reduce((a, b) => a + b, 0) / run.length));
+  return bands;
+};
+
+module.exports = { parseStatLine, clusterBands };

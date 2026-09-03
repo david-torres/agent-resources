@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { parseStatLine } = require('./prerelease-extract');
+const { parseStatLine, clusterBands } = require('./prerelease-extract');
 
 test('parses the three-single form', () => {
   expect(parseStatLine('+Sensory, +Skill, +Vitality*'))
@@ -22,4 +22,13 @@ test('parses a lone double-plus without padding to three points', () => {
 
 test('rejects a stat name not in statList', () => {
   expect(() => parseStatLine('+Charisma')).toThrow(/Charisma/);
+});
+
+test('groups near-identical xMin values into one band', () => {
+  expect(clusterBands([75.8, 75.8, 76.1, 421.5, 421.5, 503.4]))
+    .toEqual([75.9, 421.5, 503.4]);
+});
+
+test('splits bands further apart than the tolerance', () => {
+  expect(clusterBands([92.3, 99.0], 3)).toEqual([92.3, 99.0]);
 });
