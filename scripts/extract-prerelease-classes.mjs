@@ -121,9 +121,9 @@ const entryCells = (block) => {
 // it would shatter the document's own 99-112 name column into a band per entry.
 const COLUMN_TOLERANCE = 25;
 
-// The description column is printed at 198.8 or 199.5 throughout. Bounding it on both sides
-// catches a stray block dragging the band away, which is how an unrecognised running title
-// first surfaced -- it pushed the derived column out to 246 and swallowed the descriptions.
+// The description column falls between 198.8 and 201.9 on every entry page. Bounding it on
+// both sides catches a stray block -- an unrecognised running title, say -- dragging the
+// derived band away and swallowing the descriptions.
 const DESCRIPTION_COLUMN_RANGE = [190, 210];
 
 const descriptionColumnX = (cells) => {
