@@ -4,6 +4,7 @@ const { SYSTEM_ACTOR } = require('../util/actor');
 const { ProfileService } = require('../services/profile/service');
 const profileRepository = require('../services/profile/repository');
 const { STARTER_RULES_PDF_ID } = require('../util/starter-content');
+const { trimStrings } = require('../util/trim-input');
 
 const PROFILE_NOT_FOUND_ERROR = 'PGRST116';
 
@@ -178,7 +179,7 @@ const patchOnboarding = async (userId, patch) => {
     return { data: null, error: readError };
   }
 
-  const merged = { ...(row?.onboarding || {}), ...patch };
+  const merged = trimStrings({ ...(row?.onboarding || {}), ...patch });
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .update({ onboarding: merged })

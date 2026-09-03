@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const { trimStrings } = require('../util/trim-input');
 
 // Every query here takes the caller's client. `pages` has RLS on both halves:
 // the write policies require is_admin(), and the SELECT policies gate drafts and
@@ -105,6 +106,7 @@ const getPage = async (id, client = supabase) => {
  * Create a new page
  */
 const createPage = async (payload, client = supabase) => {
+    payload = trimStrings(payload);
     // Generate slug if not provided
     if (!payload.slug && payload.title) {
         payload.slug = generateSlug(payload.title);
@@ -140,6 +142,7 @@ const createPage = async (payload, client = supabase) => {
  * Update an existing page
  */
 const updatePage = async (id, updates, client = supabase) => {
+    updates = trimStrings(updates);
     // Generate slug if title changed and slug not provided
     if (updates.title && !updates.slug) {
         updates.slug = generateSlug(updates.title);

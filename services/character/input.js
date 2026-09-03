@@ -2,6 +2,7 @@ const moment = require('moment-timezone');
 const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
 const { statList } = require('../../util/enclave-consts');
+const { trimStrings } = require('../../util/trim-input');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -78,7 +79,7 @@ const normalizeAbilityPerks = (perks) => {
  * resolved rules version here so this stays deterministic and unit-testable.
  */
 const normalizeCharacterInput = (input, context = {}) => {
-  const data = cloneInput(input);
+  const data = trimStrings(cloneInput(input));
   const rulesVersion = context.rulesVersion === 'v2' ? 'v2' : 'v1';
 
   if (context.creatorId) data.creator_id = context.creatorId;
@@ -105,7 +106,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   }
 
   const items = Array.isArray(data.common_items) ? data.common_items : (data.common_items ? [data.common_items] : []);
-  data.common_items = items.map(item => typeof item === 'string' ? item.trim() : '').filter(Boolean);
+  data.common_items = items.map(item => typeof item === 'string' ? item : '').filter(Boolean);
   data.is_public = data.is_public === 'on';
   data.hide_from_search = data.hide_from_search === 'on';
 
@@ -122,7 +123,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   // column is editable -- updated_at stays trigger-owned, or a row could be
   // pinned to the top of the homepage feeds indefinitely.
   if ('created_at' in data) {
-    const raw = typeof data.created_at === 'string' ? data.created_at.trim() : data.created_at;
+    const raw = data.created_at;
     if (!raw) {
       delete data.created_at;
     } else {
@@ -157,7 +158,7 @@ const normalizeStatsPayload = (body = {}) => {
 };
 
 const normalizeWizardPayload = (rawBody) => {
-  const body = cloneInput(rawBody);
+  const body = trimStrings(cloneInput(rawBody));
 
   const trimmedName = (body.name || '').toString().trim();
   if (!trimmedName) return { data: null, error: 'Character name is required.' };
