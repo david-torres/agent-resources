@@ -67,4 +67,9 @@ const buildNoteTree = (bullets) => {
   return notes;
 };
 
-module.exports = { parseStatLine, clusterBands, pairMeters, buildNoteTree };
+const tokenize = (text) => String(text)
+  .replace(/[❖➢​­]/g, ' ')
+  .split(/\s+/)
+  .filter(Boolean);
+
+module.exports = { parseStatLine, clusterBands, pairMeters, buildNoteTree, tokenize };

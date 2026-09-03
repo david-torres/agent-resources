@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { parseStatLine, clusterBands, pairMeters, buildNoteTree } = require('./prerelease-extract');
+const { parseStatLine, clusterBands, pairMeters, buildNoteTree, tokenize } = require('./prerelease-extract');
 
 test('parses the three-single form', () => {
   expect(parseStatLine('+Sensory, +Skill, +Vitality*'))
@@ -96,4 +96,15 @@ test('throws on a sub-bullet with no parent', () => {
     { xMin: 102.8, text: '➢ orphan' },
     { xMin: 75.9, text: '❖ a real top-level note' },
   ])).toThrow(/no parent/);
+});
+
+test('collapses whitespace and drops bullet furniture', () => {
+  expect(tokenize('❖​  Cooldown   begins\non use.'))
+    .toEqual(['Cooldown', 'begins', 'on', 'use.']);
+});
+
+// The whole point of the harness: typography changes must be visible.
+test('does not normalize curly quotes or en dashes away', () => {
+  expect(tokenize('Low–High ‘Em!')).toEqual(['Low–High', '‘Em!']);
+  expect(tokenize('Low-High')).not.toEqual(tokenize('Low–High'));
 });
