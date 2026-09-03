@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { parseStatLine, clusterBands } = require('./prerelease-extract');
+const { parseStatLine, clusterBands, pairMeters } = require('./prerelease-extract');
 
 test('parses the three-single form', () => {
   expect(parseStatLine('+Sensory, +Skill, +Vitality*'))
@@ -31,4 +31,40 @@ test('groups near-identical xMin values into one band', () => {
 
 test('splits bands further apart than the tolerance', () => {
   expect(clusterBands([92.3, 99.0], 3)).toEqual([92.3, 99.0]);
+});
+
+test('pairs labels with values on the same row, in printed order', () => {
+  const blocks = [
+    { xMin: 421.5, yMin: 128.5, text: 'Essence Cost' },
+    { xMin: 503.4, yMin: 128.5, text: 'Low' },
+    { xMin: 421.5, yMin: 152.4, text: 'Cooldown' },
+    { xMin: 503.4, yMin: 152.4, text: 'Low' },
+  ];
+  expect(pairMeters(blocks)).toEqual([
+    { label: 'Essence Cost', value: 'Low' },
+    { label: 'Cooldown', value: 'Low' },
+  ]);
+});
+
+// A wide value like "Low–High" starts further left than "Mid" does, so the
+// value column is not a single x. Pairing is by row, not by exact offset.
+test('pairs a wide value whose xMin differs from the narrow values', () => {
+  const blocks = [
+    { xMin: 421.5, yMin: 328.1, text: 'Duration' },
+    { xMin: 491.4, yMin: 328.1, text: 'Low–High' },
+  ];
+  expect(pairMeters(blocks)).toEqual([{ label: 'Duration', value: 'Low–High' }]);
+});
+
+test('tolerates a half-point row misalignment', () => {
+  const blocks = [
+    { xMin: 421.5, yMin: 476.7, text: 'Essence Cost' },
+    { xMin: 503.2, yMin: 478.9, text: 'Mid' },
+  ];
+  expect(pairMeters(blocks)).toEqual([{ label: 'Essence Cost', value: 'Mid' }]);
+});
+
+test('throws when a label has no value on its row', () => {
+  const blocks = [{ xMin: 421.5, yMin: 100, text: 'Cooldown' }];
+  expect(() => pairMeters(blocks)).toThrow(/Cooldown/);
 });

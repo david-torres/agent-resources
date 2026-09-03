@@ -33,4 +33,19 @@ const clusterBands = (xMins, tolerance = 6) => {
   return bands;
 };
 
-module.exports = { parseStatLine, clusterBands };
+const ROW_TOLERANCE = 3;
+
+const pairMeters = (blocks) => {
+  const [labelBand] = clusterBands(blocks.map(b => b.xMin), 20);
+  const labels = blocks.filter(b => Math.abs(b.xMin - labelBand) <= 20);
+  const values = blocks.filter(b => !labels.includes(b));
+  return labels
+    .sort((a, b) => a.yMin - b.yMin)
+    .map((label) => {
+      const value = values.find(v => Math.abs(v.yMin - label.yMin) <= ROW_TOLERANCE);
+      if (!value) throw new Error(`Meter label with no value: ${label.text}`);
+      return { label: label.text, value: value.text };
+    });
+};
+
+module.exports = { parseStatLine, clusterBands, pairMeters };
