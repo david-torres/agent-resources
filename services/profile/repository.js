@@ -1,4 +1,5 @@
 const { supabaseAdmin } = require('../../models/_base');
+const { trimStrings } = require('../../util/trim-input');
 
 // The only consumer of supabaseAdmin for the profile domain. Holds every
 // privileged (service-role) query verbatim; models/profile.js keeps the
@@ -42,7 +43,7 @@ module.exports = {
 
   // Writes
   insertProfile: (row) => withResult(
-    supabaseAdmin.from('profiles').insert(row).select()
+    supabaseAdmin.from('profiles').insert(trimStrings(row)).select()
   ),
   updateAuthUser: async (userId, attrs) => {
     const { error } = await supabaseAdmin.auth.admin.updateUserById(userId, attrs);
@@ -50,7 +51,7 @@ module.exports = {
     return { error: error || null };
   },
   updateProfileByUserId: async (userId, fields) => {
-    const { data, error } = await supabaseAdmin.from('profiles').update(fields).eq('user_id', userId);
+    const { data, error } = await supabaseAdmin.from('profiles').update(trimStrings(fields)).eq('user_id', userId);
     if (error) console.error(error);
     return { data, error: error || null };
   },

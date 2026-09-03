@@ -1,5 +1,6 @@
 const { supabase } = require('./_base');
 const crypto = require('crypto');
+const { trimStrings } = require('../util/trim-input');
 const { RulesService } = require('../services/rules/service');
 const rulesRepository = require('../services/rules/repository');
 
@@ -40,7 +41,7 @@ const getRulesPdf = async (id) => {
 const createRulesPdf = async (payload) => {
     const { data, error } = await supabase
         .from('rules_pdfs')
-        .insert(payload)
+        .insert(trimStrings(payload))
         .select()
         .single();
     if (error) {
@@ -53,7 +54,7 @@ const createRulesPdf = async (payload) => {
 const updateRulesPdf = async (id, updates) => {
     const { data, error } = await supabase
         .from('rules_pdfs')
-        .update(updates)
+        .update(trimStrings(updates))
         .eq('id', id)
         .select()
         .single();

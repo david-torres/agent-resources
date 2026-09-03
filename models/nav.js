@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const { trimStrings } = require('../util/trim-input');
 
 // Every query here takes the caller's client. `nav_items` has RLS on both
 // halves: the write policies require is_admin(), and the SELECT policy is
@@ -170,6 +171,7 @@ const getAllNavItems = async (client = supabase) => {
  * Create a new nav item
  */
 const createNavItem = async (payload, client = supabase) => {
+    payload = trimStrings(payload);
     // Validate required fields
     if (!payload.label || !payload.type) {
         return {
@@ -231,6 +233,7 @@ const createNavItem = async (payload, client = supabase) => {
  * Update an existing nav item
  */
 const updateNavItem = async (id, updates, client = supabase) => {
+    updates = trimStrings(updates);
     const { data, error } = await client
         .from('nav_items')
         .update(updates)

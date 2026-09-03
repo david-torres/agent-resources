@@ -1,4 +1,5 @@
 const { supabase } = require('./_base');
+const { trimStrings } = require('../util/trim-input');
 
 const normalizeMerx = (raw) => {
   const n = Number(raw);
@@ -15,7 +16,7 @@ const createOffscreenMission = async ({ characterId, payload, profileId, supabas
   // finish the bookkeeping without needing to look up the just-inserted row.
   const merx = normalizeMerx(payload.merx_gained);
 
-  const row = {
+  const row = trimStrings({
     character_id: characterId,
     name: payload.name,
     summary: payload.summary,
@@ -24,7 +25,7 @@ const createOffscreenMission = async ({ characterId, payload, profileId, supabas
     source_mission_name: payload.source_mission_name,
     source_mission_date: payload.source_mission_date,
     created_by: profileId || null
-  };
+  });
 
   const { data, error: insertError } = await client
     .from('offscreen_missions')
@@ -82,14 +83,14 @@ const updateOffscreenMission = async ({ id, payload, supabase: client = supabase
   if (fetchError) return { data: null, error: fetchError };
 
   const newMerx = normalizeMerx(payload.merx_gained);
-  const row = {
+  const row = trimStrings({
     name: payload.name,
     summary: payload.summary,
     merx_gained: newMerx,
     source_mission_id: payload.source_mission_id || null,
     source_mission_name: payload.source_mission_name,
     source_mission_date: payload.source_mission_date
-  };
+  });
 
   const { data, error } = await client
     .from('offscreen_missions')

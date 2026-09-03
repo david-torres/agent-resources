@@ -58,6 +58,16 @@ test('patchOnboarding shallow-merges the patch into the existing jsonb', async (
   expect(updateCall.eq).toEqual({ col: 'user_id', val: 'u1' });
 });
 
+test('patchOnboarding trims whitespace anywhere in the merged patch', async () => {
+  currentOnboarding = { note: ' stray whitespace ' };
+  updateCall = null;
+  const { patchOnboarding } = loadProfileModel();
+  const { data, error } = await patchOnboarding('u1', { read_rules: true });
+  expect(error).toBeNull();
+  expect(data.note).toBe('stray whitespace');
+  expect(updateCall.values.onboarding.note).toBe('stray whitespace');
+});
+
 test('patchOnboarding treats a null current value as an empty object', async () => {
   currentOnboarding = null;
   updateCall = null;

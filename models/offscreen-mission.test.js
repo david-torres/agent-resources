@@ -186,6 +186,31 @@ test('createOffscreenMission coerces merx_gained to a non-negative integer', asy
   expect(rpcCalls[0].args.p_merx).toBe(0);
 });
 
+test('createOffscreenMission trims name, summary, and source_mission_name before inserting', async () => {
+  const inserted = [];
+  const rpcCalls = [];
+  const client = makeClient({ inserted, rpcCalls });
+
+  const { createOffscreenMission } = require('./offscreen-mission');
+  await createOffscreenMission({
+    characterId: 'char-1',
+    payload: {
+      name: ' A quiet errand ',
+      summary: ' Two sentences here. ',
+      merx_gained: 1,
+      source_mission_id: null,
+      source_mission_name: ' Real Mission ',
+      source_mission_date: '2026-05-01'
+    },
+    profileId: 'profile-1',
+    supabase: client
+  });
+
+  expect(inserted[0].payload.name).toBe('A quiet errand');
+  expect(inserted[0].payload.summary).toBe('Two sentences here.');
+  expect(inserted[0].payload.source_mission_name).toBe('Real Mission');
+});
+
 test('listOffscreenMissions returns rows for a character, ordered by source_mission_date desc', async () => {
   const rows = [
     { id: 'om-2', character_id: 'char-1', source_mission_date: '2026-04-01', name: 'Second', summary: '', merx_gained: 0, source_mission_id: null, source_mission_name: 'M2' },
@@ -291,6 +316,33 @@ test('updateOffscreenMission applies merx delta to character via adjust_commissa
     name: 'adjust_commissary_reward',
     args: { p_character_id: 'char-1', p_delta: 3 }
   });
+});
+
+test('updateOffscreenMission trims name, summary, and source_mission_name before updating', async () => {
+  const existing = {
+    id: 'om-1', character_id: 'char-1',
+    name: 'old', summary: 'old', merx_gained: 2,
+    source_mission_id: null, source_mission_name: 'M', source_mission_date: '2026-05-01'
+  };
+  const { calls, client } = makeUpdateClient({ existing });
+
+  const { updateOffscreenMission } = require('./offscreen-mission');
+  await updateOffscreenMission({
+    id: 'om-1',
+    payload: {
+      name: ' new name ',
+      summary: ' new summary ',
+      merx_gained: 2,
+      source_mission_id: null,
+      source_mission_name: ' M ',
+      source_mission_date: '2026-05-01'
+    },
+    supabase: client
+  });
+
+  expect(calls.rowUpdate.name).toBe('new name');
+  expect(calls.rowUpdate.summary).toBe('new summary');
+  expect(calls.rowUpdate.source_mission_name).toBe('M');
 });
 
 test('updateOffscreenMission with negative delta clamps via RPC (no JS-side clamp)', async () => {
