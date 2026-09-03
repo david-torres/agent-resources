@@ -56,7 +56,7 @@ module.exports = {
     return { data, error: error || null };
   },
   updateDiscord: (userId, discordId, discordEmail) => withResult(
-    supabaseAdmin.from('profiles').update({ discord_id: discordId, discord_email: discordEmail }).eq('user_id', userId).select()
+    supabaseAdmin.from('profiles').update(trimStrings({ discord_id: discordId, discord_email: discordEmail })).eq('user_id', userId).select()
   ),
   // Stamps the starter-grant guard column; models/profile.js grantStarterUnlocks
   // calls this only after the grant RPC succeeds.

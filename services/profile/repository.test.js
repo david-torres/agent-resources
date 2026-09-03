@@ -65,3 +65,21 @@ test('updateProfileByUserId trims whitespace from the fields before writing', as
   await updateProfileByUserId('u1', { name: ' Dave ' });
   expect(updated.name).toBe('Dave');
 });
+
+test('updateDiscord trims whitespace from the discord identity before writing', async () => {
+  let updated = null;
+  const fakeAdmin = {
+    from(table) {
+      return {
+        update(fields) {
+          updated = fields;
+          return { eq: () => ({ select: () => Promise.resolve({ data: [], error: null }) }) };
+        }
+      };
+    }
+  };
+  const { updateDiscord } = loadRepository(fakeAdmin);
+  await updateDiscord('u1', ' 123456789 ', ' player@example.com ');
+  expect(updated.discord_id).toBe('123456789');
+  expect(updated.discord_email).toBe('player@example.com');
+});
