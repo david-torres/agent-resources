@@ -2385,7 +2385,12 @@
             "value": "Mid"
           }
         ],
-        "notes": []
+        "notes": [
+          {
+            "text": "Speak a one-sentence prayer into this blade to grant it a Pitched Mid Boost to any property thematically linked to that prayer (Low Cost, Low Duration).",
+            "children": []
+          }
+        ]
       },
       {
         "name": "Flying Cloud",
@@ -2402,10 +2407,6 @@
           }
         ],
         "notes": [
-          {
-            "text": "Speak a one-sentence prayer into this blade to grant it a Pitched Mid Boost to any property thematically linked to that prayer (Low Cost, Low Duration).",
-            "children": []
-          },
           {
             "text": "Not brought onto the mission normally, instead summoned under the owner’s feet at will, vanishing after they fly a Mid total distance with it (Mid Cooldown).",
             "children": [
@@ -3992,7 +3993,17 @@
             "value": "5x"
           }
         ],
-        "notes": []
+        "notes": [
+          {
+            "text": "Negates all of the drinker’s current Stamina Exhaustion and grants them a significant speed Boost for a Mid Duration.",
+            "children": [
+              {
+                "text": "Upon expiry, the drinker crashes, experiencing increasing lethargy and irritability until they drink another.",
+                "children": []
+              }
+            ]
+          }
+        ]
       },
       {
         "name": "Slap Tags",
@@ -4009,15 +4020,6 @@
           }
         ],
         "notes": [
-          {
-            "text": "Negates all of the drinker’s current Stamina Exhaustion and grants them a significant speed Boost for a Mid Duration.",
-            "children": [
-              {
-                "text": "Upon expiry, the drinker crashes, experiencing increasing lethargy and irritability until they drink another.",
-                "children": []
-              }
-            ]
-          },
           {
             "text": "Putting a sticker on someone else’s property will render the owner of that property mildly annoyed with the sticker and make them want to remove it (which is easy to do) once they discover it.",
             "children": []

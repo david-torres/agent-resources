@@ -4,8 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
-const { parseStatLine, clusterBands, pairMeters, buildNoteTree } =
-  require('../util/prerelease-extract.js');
+import { parseStatLine, clusterBands, pairMeters, buildNoteTree } from '../util/prerelease-extract.js';
 
 const PDF = process.argv[2];
 const OUT = process.argv[3] || 'docs/data/prerelease-classes-2026-08.json';
@@ -23,7 +22,9 @@ const decodeEntities = (text) => text
 const PAGE = /<page [^>]*>([\s\S]*?)<\/page>/g;
 const BLOCK = /<block xMin="([\d.eE+-]+)" yMin="([\d.eE+-]+)"[^>]*>([\s\S]*?)<\/block>/g;
 const LINE = /<line xMin="([\d.eE+-]+)" yMin="([\d.eE+-]+)"[^>]*>([\s\S]*?)<\/line>/g;
-const WORD = /<word xMin="([\d.eE+-]+)" yMin="([\d.eE+-]+)" xMax="([\d.eE+-]+)"[^>]*>([\s\S]*?)<\/word>/g;
+const WORD = /<word xMin="([\d.eE+-]+)" yMin="([\d.eE+-]+)" xMax="([\d.eE+-]+)" yMax="([\d.eE+-]+)"[^>]*>([\s\S]*?)<\/word>/g;
+
+const lowest = (boxes) => Math.max(...boxes.map((box) => box.yMax));
 
 const parseBlocks = (xhtml) => {
   const blocks = [];
@@ -33,12 +34,12 @@ const parseBlocks = (xhtml) => {
     for (const [, blockX, blockY, blockBody] of pageBody.matchAll(BLOCK)) {
       const lines = [];
       for (const [, lineX, lineY, lineBody] of blockBody.matchAll(LINE)) {
-        const words = [...lineBody.matchAll(WORD)].map(([, x, y, xMax, text]) => ({
-          xMin: Number(x), yMin: Number(y), xMax: Number(xMax), text: decodeEntities(text),
+        const words = [...lineBody.matchAll(WORD)].map(([, x, y, xMax, yMax, text]) => ({
+          xMin: Number(x), yMin: Number(y), xMax: Number(xMax), yMax: Number(yMax), text: decodeEntities(text),
         }));
-        lines.push({ xMin: Number(lineX), yMin: Number(lineY), words });
+        lines.push({ xMin: Number(lineX), yMin: Number(lineY), yMax: lowest(words), words });
       }
-      blocks.push({ page, xMin: Number(blockX), yMin: Number(blockY), lines });
+      blocks.push({ page, xMin: Number(blockX), yMin: Number(blockY), yMax: lowest(lines), lines });
     }
   }
   return blocks;
@@ -89,7 +90,7 @@ const entryCells = (block) => {
     return [{
       xMin: block.lines[0].xMin,
       yMin: block.lines[0].yMin,
-      yMax: block.lines[block.lines.length - 1].yMin,
+      yMax: block.yMax,
       text: blockText(block),
       isNote: true,
     }];
@@ -100,7 +101,7 @@ const entryCells = (block) => {
     const flush = () => {
       if (run.length) {
         cells.push({
-          xMin: run[0].xMin, yMin: run[0].yMin, yMax: run[0].yMin, text: joinWords(run), isNote: false,
+          xMin: run[0].xMin, yMin: run[0].yMin, yMax: lowest(run), text: joinWords(run), isNote: false,
         });
       }
       run = [];
@@ -120,13 +121,21 @@ const entryCells = (block) => {
 // it would shatter the document's own 99-112 name column into a band per entry.
 const COLUMN_TOLERANCE = 25;
 
+// The description column is printed at 198.8 or 199.5 throughout. Bounding it on both sides
+// catches a stray block dragging the band away, which is how an unrecognised running title
+// first surfaced -- it pushed the derived column out to 246 and swallowed the descriptions.
+const DESCRIPTION_COLUMN_RANGE = [190, 210];
+
 const descriptionColumnX = (cells) => {
   const inner = cells
     .filter((cell) => !cell.isNote && cell.xMin > NAME_COLUMN_MAX_X && cell.xMin < METER_GUTTER_X)
     .map((cell) => cell.xMin);
   const bands = clusterBands(inner, COLUMN_TOLERANCE);
   const column = bands[bands.length - 1];
-  if (!(column >= 190)) throw new Error(`No description column in bands [${bands}]`);
+  const [low, high] = DESCRIPTION_COLUMN_RANGE;
+  if (!(column >= low && column <= high)) {
+    throw new Error(`Description column ${column} outside ${low}-${high}, from bands [${bands}]`);
+  }
   return column;
 };
 
@@ -171,6 +180,22 @@ const entryTops = (cells, groups) => {
   });
 };
 
+// pairMeters takes the FIRST value within 3pt of a label's row and does not consume it, so two
+// labels sharing a row both claim the same value and silently orphan another -- and because the
+// orphan still balances the cell count, no count-based check can see it. Guard the precondition
+// instead: a correctly printed meter row holds exactly one label and one value.
+const METER_ROW_TOLERANCE = 3;
+
+const meterRows = (meterCells) => {
+  const rows = [];
+  for (const cell of [...meterCells].sort((a, b) => a.yMin - b.yMin)) {
+    const open = rows[rows.length - 1];
+    if (open && cell.yMin - open[0].yMin <= METER_ROW_TOLERANCE) open.push(cell);
+    else rows.push([cell]);
+  }
+  return rows;
+};
+
 const readEntry = (cells, descriptionX, label, wantsPairedAction) => {
   const ordered = [...cells].sort(byPosition);
   const meterCells = ordered.filter((cell) => !cell.isNote && cell.xMin >= METER_GUTTER_X);
@@ -183,12 +208,15 @@ const readEntry = (cells, descriptionX, label, wantsPairedAction) => {
     cell.xMin >= NAME_COLUMN_MAX_X && cell.xMin < descriptionX - COLUMN_SLACK);
 
   const meters = pairMeters(meterCells);
-  // pairMeters matches by first row inside its window without consuming the value, so two
-  // labels sharing a row would both claim it and leave a cell unpaired.
-  if (meters.length * 2 !== meterCells.length) {
-    throw new Error(`${label}: ${meterCells.length} meter cells resolved to ${meters.length} meters`);
+  const crowded = meterRows(meterCells).find((row) => row.length !== 2);
+  if (crowded) {
+    throw new Error(`${label}: meter row of ${crowded.length}: ${crowded.map((c) => c.text).join(' | ')}`);
   }
   if (!titleCells.length) throw new Error(`${label}: no name`);
+  // Notes are printed last in an entry. A note above the name means a boundary landed too high
+  // and this entry has taken a note off its neighbour.
+  const stray = ordered.find((cell) => cell.isNote && cell.yMin < titleCells[0].yMin);
+  if (stray) throw new Error(`${label}: note above the name: ${stray.text.slice(0, 60)}`);
   if (wantsPairedAction !== (pairedCells.length > 0)) {
     throw new Error(`${label}: ${pairedCells.length} paired-action cells`);
   }
