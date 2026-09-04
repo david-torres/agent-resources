@@ -268,30 +268,81 @@ test('PUT /classes/:id rejects out-of-allowlist select values without a 500', as
 // prerelease_section is provenance: which section of the source document a
 // class was printed under. Both inputs are admin-only in the form, so the
 // server must not take them from a non-admin who posts them anyway.
-test('POST /classes ignores the constrained selects from a non-admin', async () => {
+const adminOnlyFields = {
+  challenge_level: 'High',
+  prerelease_section: 'exclusive',
+  designer: 'Sneaky Player',
+};
+
+test('POST /classes ignores the admin-only class metadata from a non-admin', async () => {
   profileRole = 'player';
-  const res = await post('/classes', {
-    ...baseBody,
-    challenge_level: 'High',
-    prerelease_section: 'exclusive',
-    examples: '',
-  });
+  const res = await post('/classes', { ...baseBody, ...adminOnlyFields, examples: '' });
 
   expect(res.status).toBe(200);
-  expect(capturedCreate).not.toHaveProperty('challenge_level');
-  expect(capturedCreate).not.toHaveProperty('prerelease_section');
+  for (const field of Object.keys(adminOnlyFields)) {
+    expect(capturedCreate).not.toHaveProperty(field);
+  }
 });
 
-test('PUT /classes/:id ignores the constrained selects from a non-admin', async () => {
+test('PUT /classes/:id ignores the admin-only class metadata from a non-admin', async () => {
   profileRole = 'player';
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, { ...baseBody, ...adminOnlyFields, examples: '' });
+
+  expect(res.status).toBe(200);
+  for (const field of Object.keys(adminOnlyFields)) {
+    expect(capturedUpdate).not.toHaveProperty(field);
+  }
+});
+
+// 31 of the 50 live classes have a NULL overview. The form renders a NULL
+// column as an empty textarea, so an admin toggling is_public and saving posts
+// every prose field blank -- which must leave the columns NULL rather than
+// rewrite ten of them to ''. NULL means "no such field"; '' asserts someone set
+// it to nothing.
+const nullableTextFields = [
+  'stat_line', 'stat_note', 'quote', 'quote_source', 'overview',
+  'conduit_notes', 'grounding', 'examples_heading', 'tips_heading', 'designer',
+];
+
+const blankProseBody = Object.fromEntries(
+  [...nullableTextFields, 'examples', 'teaser', 'tips'].map((field) => [field, ''])
+);
+
+test('POST /classes writes blank prose as NULL, leaving examples, teaser and tips alone', async () => {
+  const res = await post('/classes', { ...baseBody, ...blankProseBody });
+
+  expect(res.status).toBe(200);
+  for (const field of nullableTextFields) {
+    expect(capturedCreate[field]).toBeNull();
+  }
+  // jsonb NOT NULL DEFAULT '[]' -- blank is an empty array, not NULL.
+  expect(capturedCreate.examples).toEqual([]);
+  // Long-standing behaviour from outside this branch; untouched on purpose.
+  expect(capturedCreate.teaser).toBe('');
+  expect(capturedCreate.tips).toBe('');
+});
+
+test('PUT /classes/:id writes blank prose as NULL, leaving examples, teaser and tips alone', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, { ...baseBody, ...blankProseBody });
+
+  expect(res.status).toBe(200);
+  for (const field of nullableTextFields) {
+    expect(capturedUpdate[field]).toBeNull();
+  }
+  expect(capturedUpdate.examples).toEqual([]);
+  expect(capturedUpdate.teaser).toBe('');
+  expect(capturedUpdate.tips).toBe('');
+});
+
+// Whitespace-only is blank too: trimStrings would reduce it to '' downstream,
+// so catching it here is what keeps a stray space out of the column.
+test('PUT /classes/:id treats a whitespace-only prose field as blank', async () => {
   const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
     ...baseBody,
-    challenge_level: 'High',
-    prerelease_section: 'exclusive',
+    overview: '   \n  ',
     examples: '',
   });
 
   expect(res.status).toBe(200);
-  expect(capturedUpdate).not.toHaveProperty('challenge_level');
-  expect(capturedUpdate).not.toHaveProperty('prerelease_section');
+  expect(capturedUpdate.overview).toBeNull();
 });

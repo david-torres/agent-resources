@@ -86,16 +86,45 @@ const CONSTRAINED_SELECTS = {
     prerelease_section: ['pcc', 'exclusive', 'aspirant']
 };
 
-// Both inputs are admin-only in the form. prerelease_section is provenance --
-// which section of the source document a class was printed under -- so a
-// non-admin's value is dropped rather than trusted, the way is_player_created
-// already is.
-const applyConstrainedSelects = (body, isAdmin) => {
+const applyConstrainedSelects = (body) => {
     for (const [field, allowed] of Object.entries(CONSTRAINED_SELECTS)) {
-        if (!isAdmin) {
-            delete body[field];
-        } else if (body[field] !== undefined) {
+        if (body[field] !== undefined) {
             body[field] = allowed.includes(body[field]) ? body[field] : null;
+        }
+    }
+};
+
+// Curation and provenance, not player-editable metadata: prerelease_section
+// records which section of the source document a class was printed under, and
+// designer credits its author. The form hides all three from non-admins, so the
+// handlers drop them rather than trust them. Deleting rather than nulling gives
+// the same asymmetry is_player_created already has -- create takes the column
+// default, update leaves whatever an admin set.
+const ADMIN_ONLY_FIELDS = ['challenge_level', 'prerelease_section', 'designer'];
+
+const dropAdminOnlyFields = (body) => {
+    for (const field of ADMIN_ONLY_FIELDS) {
+        delete body[field];
+    }
+};
+
+// NULL means "this class has no such field"; '' asserts that someone set it to
+// nothing. Every one of these columns is nullable by design and holds a
+// verbatim copy of the source document, so a form that renders a NULL column as
+// an empty textarea must not write '' back over it on a routine save.
+//
+// `examples` is excluded: it is jsonb NOT NULL DEFAULT '[]', so blank means an
+// empty array. `teaser` and `tips` are excluded because their blank-handling
+// predates this branch.
+const NULLABLE_TEXT_FIELDS = [
+    'stat_line', 'stat_note', 'quote', 'quote_source', 'overview',
+    'conduit_notes', 'grounding', 'examples_heading', 'tips_heading', 'designer'
+];
+
+const blankTextToNull = (body) => {
+    for (const field of NULLABLE_TEXT_FIELDS) {
+        if (typeof body[field] === 'string' && body[field].trim() === '') {
+            body[field] = null;
         }
     }
 };
@@ -695,7 +724,11 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
 
     req.body.stat_spread = parseStatSpread(req.body);
     req.body.examples = parseExamples(req.body);
-    applyConstrainedSelects(req.body, isAdmin);
+    if (!isAdmin) {
+        dropAdminOnlyFields(req.body);
+    }
+    applyConstrainedSelects(req.body);
+    blankTextToNull(req.body);
 
     const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
@@ -785,7 +818,11 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     req.body.stat_spread = parseStatSpread(req.body);
     req.body.examples = parseExamples(req.body);
-    applyConstrainedSelects(req.body, isAdmin);
+    if (!isAdmin) {
+        dropAdminOnlyFields(req.body);
+    }
+    applyConstrainedSelects(req.body);
+    blankTextToNull(req.body);
 
     const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {
