@@ -135,3 +135,15 @@ test('sendError short-circuits when headers already sent', () => {
   expect(res.rendered).toBeUndefined();
   expect(res.body).toBeUndefined();
 });
+
+// PGRST204 is PostgREST's "column not found in schema cache": a stale browser
+// tab still posting a field a migration removed. Nothing is written, but an
+// unmapped code falls through to a bare 500 banner that tells the user nothing
+// about the only thing that fixes it.
+test('PGRST204 (unknown column) maps to a 400 telling the user to refresh', () => {
+  const d = classifyError({ code: 'PGRST204', message: "Could not find the 'description' column of 'classes' in the schema cache" });
+  expect(d.status).toBe(400);
+  expect(d.title).toBe('Out of date');
+  expect(d.message).toMatch(/refresh/i);
+  expect(d.message).not.toContain('schema cache');
+});

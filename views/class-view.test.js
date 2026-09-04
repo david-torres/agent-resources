@@ -543,3 +543,11 @@ test('escapes the structured prose rather than rendering it as markup', () => {
 test('the class page reads no description column', () => {
   expect(SRC).not.toContain('class.description');
 });
+
+// Every class created through the admin form has no prose at all until Task 14
+// restores prose editing, so an ungated heading is a bare "Description" over an
+// empty card on most of the site.
+test('a class with no prose renders no Description heading', () => {
+  const html = renderClassView({ class: { name: 'Bare', abilities: [], gear: [] } });
+  expect(html).not.toContain('Description');
+});

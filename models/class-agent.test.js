@@ -19,6 +19,7 @@ const baseClass = {
   examples_heading: 'Examples include:',
   examples: ['MacGyver'],
   tips_heading: 'Tips for playing a Tinker:',
+  tips: '- Bring spare parts.',
   designer: 'Reece C. Downie',
   prerelease_section: 'pcc',
   gear: [{ name: 'Wrench' }, { name: 'Bolt' }],
@@ -111,9 +112,33 @@ test('serializeClassForAgent still returns full shape for detail endpoint', () =
   expect(out.examples_heading).toBe('Examples include:');
   expect(out.examples).toEqual(['MacGyver']);
   expect(out.tips_heading).toBe('Tips for playing a Tinker:');
+  // A heading with no body under it is not worth sending.
+  expect(out.tips).toBe('- Bring spare parts.');
   expect(out.designer).toBe('Reece C. Downie');
-  expect(out.prerelease_section).toBe('pcc');
+  // Provenance -- which section of the source PDF the class came from. No
+  // consumer has a use for it and it is not class content.
+  expect(out).not.toHaveProperty('prerelease_section');
   expect(out.signature_gear).toEqual(baseClass.gear);
   expect(out).not.toHaveProperty('gear');
   expect(out.abilities).toEqual(baseClass.abilities);
+});
+
+// docs/custom-gpt-openapi.json is the Custom GPT integration's only contract:
+// a field the schema declares but the API never sends is a field the GPT asks
+// for and never gets. Nothing tied the two together, which is how
+// `ClassDetail.description` survived the column being dropped.
+test('the published OpenAPI ClassDetail matches what serializeClassForAgent emits', () => {
+  const schemas = require('../docs/custom-gpt-openapi.json').components.schemas;
+  const declared = [
+    ...Object.keys(schemas.ClassSummary.properties),
+    ...Object.keys(schemas.ClassDetail.allOf[1].properties),
+  ].sort();
+
+  const emitted = Object.keys(serializeClassForAgent({
+    classData: baseClass,
+    actor: { profileId: 'profile-owner', role: 'player', userId: 'user-1' },
+    unlockedClassIds: new Set()
+  })).sort();
+
+  expect(declared).toEqual(emitted);
 });
