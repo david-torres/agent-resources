@@ -139,7 +139,7 @@ const TEXT_FIELDS = [
 const MARKDOWN_EDITOR_FIELDS = ['teaser', 'tips'];
 
 // <select>: an unset column renders the "Not set" option, posts '', and
-// applyConstrainedSelects in routes/classes.js maps it back to NULL.
+// applyConstrainedSelects in util/class-fields.js maps it back to NULL.
 const SELECT_FIELDS = [
     'challenge_level', 'prerelease_section', 'status', 'rules_edition', 'rules_version'
 ];
