@@ -273,11 +273,11 @@ window.CharacterWizard = (function () {
       selectedPanel.innerHTML = '<p class="has-text-grey">No class selected.</p>';
       return;
     }
-    // Description/tips come pre-rendered as sanitized HTML from the server
-    // (see routes/characters.js → renderMarkdown on c.description/c.tips).
+    // Overview/tips come pre-rendered as sanitized HTML from the server
+    // (see routes/characters.js → renderMarkdown on c.overview/c.tips).
     // Falling back to the teaser keeps the panel populated for classes that
     // only have a short blurb.
-    const desc = c.description_html || c.teaser_html || '<p class="has-text-grey">No description available.</p>';
+    const desc = c.overview_html || c.teaser_html || '<p class="has-text-grey">No description available.</p>';
     const stat = DATA.statList.map((k) => {
       const v = (c.stat_spread && c.stat_spread[k]) || 0;
       if (!v) return '';

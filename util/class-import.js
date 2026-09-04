@@ -22,7 +22,7 @@ const gearSchema = z.object({
 const schema = z.object({
   name: z.string().describe("Class name"),
   teaser: z.string().nullable().optional().describe("Short teaser or hook for list display"),
-  description: z.string().describe("Full class description and pitch"),
+  overview: z.string().describe("Full class description and pitch"),
   image_url: z.string().url().nullable().optional().describe("Optional image URL for the class"),
   tips: z.string().nullable().optional().describe("Optional short gameplay tips shown under the description in the character creator"),
   abilities: z.array(abilitySchema).describe("List of class abilities (ideally three)"),
@@ -97,7 +97,7 @@ JSON output:`;
     const classData = {
       ...parsed,
       teaser: parsed.teaser ?? "",
-      description: parsed.description?.trim() || "",
+      overview: parsed.overview?.trim() || "",
       image_url: parsed.image_url || null,
       tips: parsed.tips?.trim() || "",
       abilities: normalizeAbilities(parsed.abilities),

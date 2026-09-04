@@ -5,6 +5,8 @@
  * Currently supports: markdown, json
  */
 
+const { pickClassProse } = require('./class-prose');
+
 /**
  * Available export formats
  */
@@ -68,12 +70,43 @@ const exportToMarkdown = (classData) => {
   lines.push('---');
   lines.push('');
   
-  // Description
-  if (classData.description && classData.description.trim()) {
-    lines.push('## 📖 Description');
+  // Overview: the prose columns, in the source document's printed order.
+  const overview = [];
+  const prose = (value) => (typeof value === 'string' ? value.trim() : '');
+  if (prose(classData.stat_line)) {
+    overview.push(`**${prose(classData.stat_line)}**`, '');
+  }
+  if (prose(classData.stat_note)) {
+    overview.push(prose(classData.stat_note), '');
+  }
+  if (prose(classData.quote)) {
+    overview.push(`> ${prose(classData.quote).replace(/\n/g, '\n> ')}`);
+    if (prose(classData.quote_source)) {
+      overview.push('>', `> — ${prose(classData.quote_source)}`);
+    }
+    overview.push('');
+  }
+  for (const paragraph of ['overview', 'conduit_notes', 'grounding', 'examples_heading']) {
+    if (prose(classData[paragraph])) {
+      overview.push(prose(classData[paragraph]), '');
+    }
+  }
+  if (Array.isArray(classData.examples) && classData.examples.length > 0) {
+    for (const example of classData.examples) {
+      overview.push(`- ${example}`);
+    }
+    overview.push('');
+  }
+  if (prose(classData.challenge_level)) {
+    overview.push(`**Challenge Level:** ${prose(classData.challenge_level)}`, '');
+  }
+  if (prose(classData.designer)) {
+    overview.push(`**Designer:** ${prose(classData.designer)}`, '');
+  }
+  if (overview.length > 0) {
+    lines.push('## 📖 Overview');
     lines.push('');
-    lines.push(classData.description.trim());
-    lines.push('');
+    lines.push(...overview);
   }
 
   // Tips
@@ -156,7 +189,7 @@ const exportToMarkdown = (classData) => {
 const exportToJson = (classData) => {
   const exportData = {
     name: classData.name,
-    description: classData.description || '',
+    ...pickClassProse(classData),
     rules_edition: classData.rules_edition,
     rules_version: classData.rules_version,
     status: classData.status,

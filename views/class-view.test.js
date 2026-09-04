@@ -222,7 +222,7 @@ const pdfContext = (overrides) => ({
   class: {
     id: 'lib-v1',
     name: 'Librarian',
-    description: 'A class.',
+    overview: 'A class.',
     status: 'release',
     is_public: true,
     rules_edition: 'advent',

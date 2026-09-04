@@ -101,9 +101,50 @@
     {{/if}}
     <div class="card">
       <div class="card-content">
+        {{!-- The prose columns are plain text lifted verbatim from the source
+              document, not markdown, so every one of them is escaped. Printed
+              order matches the document's. --}}
         <div class="content">
           <h3 class="title is-3">Description</h3>
-          <p>{{{markdown class.description}}}</p>
+          {{#if class.stat_line}}
+          <p><strong>{{class.stat_line}}</strong></p>
+          {{/if}}
+          {{#if class.stat_note}}
+          <p class="is-size-7 has-text-grey">{{class.stat_note}}</p>
+          {{/if}}
+          {{#if class.quote}}
+          <blockquote>
+            <p>{{class.quote}}</p>
+            {{#if class.quote_source}}
+            <p class="is-size-7 has-text-grey">— {{class.quote_source}}</p>
+            {{/if}}
+          </blockquote>
+          {{/if}}
+          {{#if class.overview}}
+          <p>{{class.overview}}</p>
+          {{/if}}
+          {{#if class.conduit_notes}}
+          <p>{{class.conduit_notes}}</p>
+          {{/if}}
+          {{#if class.grounding}}
+          <p>{{class.grounding}}</p>
+          {{/if}}
+          {{#if class.examples_heading}}
+          <p>{{class.examples_heading}}</p>
+          {{/if}}
+          {{#if class.examples.length}}
+          <ul>
+            {{#each class.examples}}
+            <li>{{this}}</li>
+            {{/each}}
+          </ul>
+          {{/if}}
+          {{#if class.challenge_level}}
+          <p><span class="tag is-info is-light">Challenge Level: {{class.challenge_level}}</span></p>
+          {{/if}}
+          {{#if class.designer}}
+          <p class="is-size-7 has-text-grey">Class by {{class.designer}}</p>
+          {{/if}}
         </div>
         <div class="content">
           <hr>
