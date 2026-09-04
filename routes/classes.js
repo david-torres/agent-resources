@@ -32,6 +32,7 @@ const { applyImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
 const { normalizeGear } = require('../util/class-gear');
 const { parseExamples } = require('../util/class-examples');
+const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
 const { partitionClassGroups } = require('../util/class-filter');
@@ -65,23 +66,6 @@ const parseStatSpread = (body) => {
         }
     }
     return spread;
-};
-
-// Mirrors the CHECK constraints these two columns carry. Both accept NULL and
-// reject '', so an unselected option must land as NULL rather than as the empty
-// string the select submits, and anything outside the allowlist -- a typo from a
-// non-browser client -- must not reach Postgres as a raw constraint violation.
-const CONSTRAINED_SELECTS = {
-    challenge_level: ['Low', 'Mid', 'High'],
-    prerelease_section: ['pcc', 'exclusive', 'aspirant']
-};
-
-const applyConstrainedSelects = (body) => {
-    for (const [field, allowed] of Object.entries(CONSTRAINED_SELECTS)) {
-        if (body[field] !== undefined) {
-            body[field] = allowed.includes(body[field]) ? body[field] : null;
-        }
-    }
 };
 
 // Curation and provenance, not player-editable metadata: prerelease_section
@@ -123,27 +107,6 @@ const dropRetiredGearFields = (body) => {
 const dropAdminOnlyFields = (body) => {
     for (const field of ADMIN_ONLY_FIELDS) {
         delete body[field];
-    }
-};
-
-// NULL means "this class has no such field"; '' asserts that someone set it to
-// nothing. Every one of these columns is nullable by design and holds a
-// verbatim copy of the source document, so a form that renders a NULL column as
-// an empty textarea must not write '' back over it on a routine save.
-//
-// `examples` is excluded: it is jsonb NOT NULL DEFAULT '[]', so blank means an
-// empty array. `teaser` and `tips` are excluded because their blank-handling
-// predates this branch.
-const NULLABLE_TEXT_FIELDS = [
-    'stat_line', 'stat_note', 'quote', 'quote_source', 'overview',
-    'conduit_notes', 'grounding', 'examples_heading', 'tips_heading', 'designer'
-];
-
-const blankTextToNull = (body) => {
-    for (const field of NULLABLE_TEXT_FIELDS) {
-        if (typeof body[field] === 'string' && body[field].trim() === '') {
-            body[field] = null;
-        }
     }
 };
 

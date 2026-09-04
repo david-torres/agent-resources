@@ -46,17 +46,14 @@
 //      textarea line ending as CRLF and util/newlines.js converts them back on
 //      the write path, so a value stored with LF -- what the loader writes --
 //      survives byte-identically and a legacy value stored with CRLF converges
-//      to LF the first time someone saves it. That is this code's own
-//      normalization, it is line endings only, and it may never touch a
-//      loader-written column of an imported class: the test asserts that
-//      separately and names every value it does touch in the output.
-//
-//   F. A NULL text column renders as an empty field and posts ''. The handlers
-//      map that back to NULL -- blankTextToNull for the prose columns,
-//      applyConstrainedSelects for the two constrained selects, and the class
-//      service's sanitizeUrlFields for image_url -- so a stored NULL and a
-//      posted '' are the same value here. A stored value that arrives empty is
-//      still a failure: only the NULL/'' distinction is waived, never content.
+//      to LF the first time someone saves it. The rule is written out by hand
+//      below rather than imported, so a change to util/newlines.js cannot
+//      cancel itself out, and it may never touch a loader-written column of an
+//      imported class: the test asserts that separately and names every value
+//      it does touch in the output.
+//   F. A stored NULL is NOT the same value as ''. The two are compared
+//      distinctly -- coercing them together is what let a save write '' over
+//      three imported classes' NULL `teaser` unnoticed.
 //   G. A column the payload omits is unchanged, which is the whole claim being
 //      tested for it. Only `image_crop` is ever omitted: util/crop.js
 //      applyImageCrop drops the key when the posted value is not a readable
@@ -64,11 +61,16 @@
 //      rather than having it overwritten or erased. The test counts how many
 //      rows are written back versus left alone, so "left alone" cannot quietly
 //      become the answer for all of them.
+//   H. A stored '' converges to NULL in the columns whose write path does that
+//      -- blankTextToNull, applyConstrainedSelects, sanitizeUrlFields. One way
+//      only: a stored NULL may never come back as ''. Like rule E it is counted
+//      and named, and may not touch an imported class's loader-written column.
 //
-// Counts (abilities, meters, notes, sub-notes, pronunciations, and the two
-// permitted whitespace/line-ending adjustments) are printed rather than only
-// asserted, so a future drop shows up in the output instead of hiding behind a
-// green boolean.
+// Counts (abilities, meters, notes, sub-notes, pronunciations, and every value
+// rules D, E, G and H adjust) are printed rather than only asserted, so a future
+// drop shows up in the output instead of hiding behind a green boolean. Every
+// count and every named value is keyed by row id: six class names are duplicated
+// in the corpus.
 const { test, expect } = require('bun:test');
 const path = require('path');
 const { JSDOM } = require('jsdom');
@@ -89,7 +91,9 @@ const { normalizeAbilities } = require('./class-abilities');
 const { normalizeGear } = require('./class-gear');
 const { parseExamples } = require('./class-examples');
 const { applyImageCrop } = require('./crop');
-const { normalizeNewlines } = require('./newlines');
+const {
+    applyConstrainedSelects, blankTextToNull, CONSTRAINED_SELECTS, NULLABLE_TEXT_FIELDS
+} = require('./class-fields');
 const { statList } = require('./enclave-consts');
 
 const VIEWS = path.join(__dirname, '..', 'views');
@@ -150,11 +154,16 @@ const COMPARED = [
     ...STRUCTURED_FIELDS, CROP_FIELD, 'is_public', 'is_player_created'
 ];
 
-// What the browser posts: every line ending as CRLF. Allowlist rule E is the
-// write path undoing it, which is util/newlines.js normalizeNewlines -- the real
-// function, not a restatement, since the claim is that the two compose to a
-// no-op rather than that this test can reproduce one of them.
+// What the browser posts: every line ending as CRLF.
 const submitNewlines = (value) => value.replace(/\r\n|\r|\n/g, '\r\n');
+
+// Allowlist rule E, written out by hand rather than imported from
+// util/newlines.js. Building the expected value by calling the function under
+// test lets a change to it cancel itself out -- R84 proved it: making
+// normalizeNewlines also collapse double spaces destroyed 34 stored values with
+// this guard still reporting green. Same reason expectedCategory restates the
+// positional rule instead of calling gearCategory.
+const expectedLineEndings = (value) => value.replace(/\r\n?/g, '\n');
 
 // Allowlist entry D. `String.prototype.trim` is what both normalizers apply.
 const trimEnds = (value) => value.trim();
@@ -197,13 +206,18 @@ const canonical = (value) => {
     return value;
 };
 
+// Six class names are duplicated in the corpus (version families), so every
+// count, every mismatch and every allowlist entry is keyed by the row id. The
+// name is carried alongside for display only.
+const label = (row) => `${row.name}#${row.id.slice(0, 8)}`;
+
 const counts = {
     classes: 0, imported: 0,
     abilities: 0, ability_meters: 0, ability_notes: 0, ability_sub_notes: 0, pronunciations: 0,
     gear: 0, gear_meters: 0, gear_notes: 0, gear_sub_notes: 0,
     examples: 0,
     crops_written_back: 0, crops_left_untouched: 0,
-    trimmed: [], line_endings_normalized: []
+    trimmed: [], line_endings_normalized: [], blanks_converged_to_null: []
 };
 
 const imported = { abilities: 0, meters: 0, notes: 0, sub_notes: 0, pronunciations: 0 };
@@ -214,7 +228,7 @@ const imported = { abilities: 0, meters: 0, notes: 0, sub_notes: 0, pronunciatio
 // assertion below can filter it without parsing display strings.
 const expectedText = (stored, ctx, path) => {
     const atRest = String(stored ?? '');
-    const expected = trimEnds(normalizeNewlines(atRest));
+    const expected = trimEnds(expectedLineEndings(atRest));
     // Reported separately, and only when the change survives trimming: a
     // trailing CRLF that becomes LF and is then trimmed away is an ends-only
     // trim, not a line-ending rewrite of the stored value.
@@ -237,10 +251,10 @@ const expectedNote = (note, ctx, path) => ({
 });
 
 // Allowlist A and C.
-const expectedAbilities = (rows, className) => {
-    const ctx = { class: className, column: 'abilities' };
-    return (rows || []).map((ability, index) => {
-        const path = `${className}.abilities[${index}]`;
+const expectedAbilities = (row) => {
+    const ctx = { class: row.id, className: row.name, column: 'abilities' };
+    return (row.abilities || []).map((ability, index) => {
+        const path = `${label(row)}.abilities[${index}]`;
         const expected = {
             name: expectedText(ability.name, ctx, `${path}.name`),
             description: expectedText(ability.description, ctx, `${path}.description`),
@@ -267,10 +281,10 @@ const expectedCategory = (category, index) =>
         ? category
         : (index < BASE_GEAR_COUNT ? 'default' : 'elective'));
 
-const expectedGear = (rows, className) => {
-    const ctx = { class: className, column: 'gear' };
-    return (rows || []).map((item, index) => {
-        const path = `${className}.gear[${index}]`;
+const expectedGear = (row) => {
+    const ctx = { class: row.id, className: row.name, column: 'gear' };
+    return (row.gear || []).map((item, index) => {
+        const path = `${label(row)}.gear[${index}]`;
         return {
             name: expectedText(item.name, ctx, `${path}.name`),
             description: expectedText(item.description, ctx, `${path}.description`),
@@ -314,8 +328,14 @@ const tally = (row) => {
     counts.examples += (row.examples || []).length;
 };
 
-// Rule F: the one distinction the comparison waives, and only for scalars.
-const blankToNull = (value) => (value === '' || value === undefined ? null : value);
+// Rule H: the columns whose blank value the write path converges to NULL --
+// blankTextToNull for the prose columns, applyConstrainedSelects for the two
+// constrained selects, and the class service's sanitizeUrlFields for image_url.
+// Read from the real modules, so a column added to either list is covered here
+// without this file being edited.
+const COLUMNS_CONVERGING_TO_NULL = new Set([
+    ...NULLABLE_TEXT_FIELDS, ...Object.keys(CONSTRAINED_SELECTS), 'image_url'
+]);
 
 // The write path the PUT handler runs: the three parsers on the structured
 // fields, then the class service's own normalizeClassInput -- which trims every
@@ -334,18 +354,38 @@ const roundTrip = async (row) => {
             .map((field) => [field, body[field]]))
     };
     applyImageCrop(payload);
+    // The real steps, in the order both write handlers run them, rather than a
+    // lookalike: a guard that reimplements part of the path it claims to
+    // exercise cannot see that part drift.
+    applyConstrainedSelects(payload);
+    blankTextToNull(payload);
     return normalizeClassInput(payload);
 };
 
-const expectedScalar = (row, field) =>
-    expectedText(row[field], { class: row.name, column: field }, `${row.name}.${field}`);
+// A stored NULL is compared as NULL, never coerced to '': that distinction is
+// the whole of R84's teaser finding, and erasing it here is what let a save
+// write '' over three imported classes' NULL teaser unnoticed. The convergence
+// runs one way only -- a stored '' may become NULL (rule H, counted below), a
+// stored NULL may never come back as ''.
+const expectedScalar = (row, field) => {
+    if (row[field] === null || row[field] === undefined) return null;
+    const ctx = { class: row.id, className: row.name, column: field };
+    const expected = expectedText(row[field], ctx, `${label(row)}.${field}`);
+    if (expected === '' && COLUMNS_CONVERGING_TO_NULL.has(field)) {
+        counts.blanks_converged_to_null.push({ ...ctx, path: `${label(row)}.${field}` });
+        return null;
+    }
+    return expected;
+};
 
 const expectedFor = (row) => ({
     image_crop: row.image_crop,
-    abilities: expectedAbilities(row.abilities, row.name),
-    gear: expectedGear(row.gear, row.name),
+    abilities: expectedAbilities(row),
+    gear: expectedGear(row),
     examples: (row.examples || []).map((example, index) => expectedText(
-        example, { class: row.name, column: 'examples' }, `${row.name}.examples[${index}]`)),
+        example,
+        { class: row.id, className: row.name, column: 'examples' },
+        `${label(row)}.examples[${index}]`)),
     is_public: Boolean(row.is_public),
     is_player_created: Boolean(row.is_player_created),
     ...Object.fromEntries([...TEXT_FIELDS, ...SELECT_FIELDS, ...MARKDOWN_EDITOR_FIELDS]
@@ -378,12 +418,10 @@ test('saving every class unchanged preserves every metadata field', async () => 
         const settled = (side, field) => (field === CROP_FIELD && !(field in got)
             ? row[CROP_FIELD]
             : side[field]);
-        const scalar = (field) => !STRUCTURED_FIELDS.includes(field) && field !== CROP_FIELD;
         for (const field of COMPARED) {
-            const value = (side) => (scalar(field) ? blankToNull(side[field]) : settled(side, field));
-            const a = JSON.stringify(canonical(value(got)));
-            const b = JSON.stringify(canonical(value(expected)));
-            if (a !== b) mismatches.push({ class: row.name, field, got: a, expected: b });
+            const a = JSON.stringify(canonical(settled(got, field)));
+            const b = JSON.stringify(canonical(settled(expected, field)));
+            if (a !== b) mismatches.push({ class: label(row), field, got: a, expected: b });
         }
     }
 
@@ -391,11 +429,13 @@ test('saving every class unchanged preserves every metadata field', async () => 
         ...counts,
         trimmed: counts.trimmed.length,
         line_endings_normalized: counts.line_endings_normalized.length,
+        blanks_converged_to_null: counts.blanks_converged_to_null.length,
         imported_classes: imported
     }));
     const paths = (entries) => entries.map((entry) => entry.path).join(', ') || 'none';
     console.log('ends-only trims:', paths(counts.trimmed));
     console.log('line endings normalized:', paths(counts.line_endings_normalized));
+    console.log('blanks converged to NULL:', paths(counts.blanks_converged_to_null));
 
     // A guard that compared nothing would also report no mismatches.
     expect(counts.abilities).toBeGreaterThan(0);
@@ -415,17 +455,19 @@ test('saving every class unchanged preserves every metadata field', async () => 
 // move a byte in any of them -- line endings included. Legacy rows are where the
 // stored CRLFs live, and converging them to LF on their next save is the
 // deliberate cost of making the imported corpus survive.
-test('no line ending in an imported class\'s loader-written column is rewritten', async () => {
+test('no imported class\'s loader-written column is touched by rule E or rule H', async () => {
     const { FIELDS } = await import('../scripts/load-prerelease-classes.mjs');
-    const importedNames = new Set(classes
+    const importedIds = new Set(classes
         .filter((row) => row.prerelease_section !== null)
-        .map((row) => row.name));
+        .map((row) => row.id));
 
-    const verbatim = counts.line_endings_normalized
-        .filter((entry) => importedNames.has(entry.class) && FIELDS.includes(entry.column))
+    const verbatim = (entries) => entries
+        .filter((entry) => importedIds.has(entry.class) && FIELDS.includes(entry.column))
         .map((entry) => entry.path);
 
-    // The 19 imported classes' `tips` are what this pins in practice: LF at
-    // rest, CRLF over the wire, LF again at rest.
-    expect(verbatim).toEqual([]);
+    // Rule E in practice pins the 19 imported classes' `tips`: LF at rest, CRLF
+    // over the wire, LF again at rest. Rule H may converge a legacy '' to NULL
+    // but must never touch a column the loader wrote on an imported class.
+    expect(verbatim(counts.line_endings_normalized)).toEqual([]);
+    expect(verbatim(counts.blanks_converged_to_null)).toEqual([]);
 });

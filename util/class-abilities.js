@@ -89,11 +89,12 @@ const normalizeNote = (row) => {
 // uniform shape the editor round-trips.
 //
 // `pronunciation` is deliberately NOT in that set. It has no input, no view
-// renders it, and only 57 of 150 live abilities carry it -- writing it onto the
-// other 93 would fabricate shape rather than normalize it. It is echoed back
-// only when the request carried it, which is what stops the form's hidden
-// round-trip field from deleting the two abilities that have a real one while
-// keeping the key off every ability that never had one.
+// renders it, and of the 150 live abilities 57 carry the KEY while only 2 carry
+// a real value -- the other 55 hold an explicit null, and 93 have no key at all.
+// Writing it onto those 93 would fabricate shape rather than normalize it. It is
+// echoed back only when the request carried it, which is what stops the form's
+// hidden round-trip field from deleting the two abilities that have a real one
+// while keeping the key off every ability that never had one.
 const normalizeAbilities = (value) => indexedRows(value)
     .map((row) => {
         const ability = {

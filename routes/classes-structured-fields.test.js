@@ -299,16 +299,24 @@ test('PUT /classes/:id ignores the admin-only class metadata from a non-admin', 
 // every prose field blank -- which must leave the columns NULL rather than
 // rewrite ten of them to ''. NULL means "no such field"; '' asserts someone set
 // it to nothing.
+//
+// `teaser` and `tips` were carved out of this list at first, to leave
+// pre-branch behaviour alone. R84 reversed that: three imported classes
+// (Ardent, Offdriver, Squire) store a NULL teaser, and a no-op admin save was
+// writing '' over it. The NULL-versus-'' argument does not stop at a column
+// boundary, and nothing in the codebase distinguishes the two on these two
+// columns -- every consumer treats both as falsy.
 const nullableTextFields = [
   'stat_line', 'stat_note', 'quote', 'quote_source', 'overview',
   'conduit_notes', 'grounding', 'examples_heading', 'tips_heading', 'designer',
+  'teaser', 'tips',
 ];
 
 const blankProseBody = Object.fromEntries(
-  [...nullableTextFields, 'examples', 'teaser', 'tips'].map((field) => [field, ''])
+  [...nullableTextFields, 'examples'].map((field) => [field, ''])
 );
 
-test('POST /classes writes blank prose as NULL, leaving examples, teaser and tips alone', async () => {
+test('POST /classes writes blank prose as NULL, leaving examples alone', async () => {
   const res = await post('/classes', { ...baseBody, ...blankProseBody });
 
   expect(res.status).toBe(200);
@@ -317,12 +325,9 @@ test('POST /classes writes blank prose as NULL, leaving examples, teaser and tip
   }
   // jsonb NOT NULL DEFAULT '[]' -- blank is an empty array, not NULL.
   expect(capturedCreate.examples).toEqual([]);
-  // Long-standing behaviour from outside this branch; untouched on purpose.
-  expect(capturedCreate.teaser).toBe('');
-  expect(capturedCreate.tips).toBe('');
 });
 
-test('PUT /classes/:id writes blank prose as NULL, leaving examples, teaser and tips alone', async () => {
+test('PUT /classes/:id writes blank prose as NULL, leaving examples alone', async () => {
   const res = await put(`/classes/${EXISTING_CLASS_ID}`, { ...baseBody, ...blankProseBody });
 
   expect(res.status).toBe(200);
@@ -330,8 +335,6 @@ test('PUT /classes/:id writes blank prose as NULL, leaving examples, teaser and 
     expect(capturedUpdate[field]).toBeNull();
   }
   expect(capturedUpdate.examples).toEqual([]);
-  expect(capturedUpdate.teaser).toBe('');
-  expect(capturedUpdate.tips).toBe('');
 });
 
 // Whitespace-only is blank too: trimStrings would reduce it to '' downstream,
