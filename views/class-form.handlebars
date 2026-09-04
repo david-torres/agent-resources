@@ -44,6 +44,10 @@
         </div>
       </div>
     </div>
+    {{!-- Admin-only: prerelease_section is provenance -- which section of the
+          source document a class was printed under -- and a player-created
+          class must not be able to tag itself with one. --}}
+    {{#if (eq profile.role 'admin')}}
     <div class="column is-one-third-tablet">
       <div class="field">
         <label class="label" for="class-challenge-level">Challenge Level</label>
@@ -84,6 +88,7 @@
         </div>
       </div>
     </div>
+    {{/if}}
   </div>
   <div class="field">
     {{#if (eq profile.role 'admin')}}
@@ -139,7 +144,7 @@
   <div class="field">
     <label class="label" for="class-overview">Overview</label>
     <div class="control">
-      <textarea class="textarea" name="overview" id="class-overview" rows="6" placeholder="What the class is and how it plays" required>{{class.overview}}</textarea>
+      <textarea class="textarea" name="overview" id="class-overview" rows="6" placeholder="What the class is and how it plays">{{class.overview}}</textarea>
     </div>
     <p class="help">The main prose block. Shown on the class page and used by the character creator wizard.</p>
   </div>

@@ -77,15 +77,25 @@ const parseExamples = (body) => String(body.examples ?? '')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
-// classes_challenge_level_check and classes_prerelease_section_check both
-// accept NULL and reject '', so an unselected option must not reach the
-// database as the empty string the select submits.
-const CONSTRAINED_SELECTS = ['challenge_level', 'prerelease_section'];
+// Mirrors the CHECK constraints these two columns carry. Both accept NULL and
+// reject '', so an unselected option must land as NULL rather than as the empty
+// string the select submits, and anything outside the allowlist -- a typo from a
+// non-browser client -- must not reach Postgres as a raw constraint violation.
+const CONSTRAINED_SELECTS = {
+    challenge_level: ['Low', 'Mid', 'High'],
+    prerelease_section: ['pcc', 'exclusive', 'aspirant']
+};
 
-const nullifyBlankConstrainedSelects = (body) => {
-    for (const field of CONSTRAINED_SELECTS) {
-        if (typeof body[field] === 'string' && body[field].trim() === '') {
-            body[field] = null;
+// Both inputs are admin-only in the form. prerelease_section is provenance --
+// which section of the source document a class was printed under -- so a
+// non-admin's value is dropped rather than trusted, the way is_player_created
+// already is.
+const applyConstrainedSelects = (body, isAdmin) => {
+    for (const [field, allowed] of Object.entries(CONSTRAINED_SELECTS)) {
+        if (!isAdmin) {
+            delete body[field];
+        } else if (body[field] !== undefined) {
+            body[field] = allowed.includes(body[field]) ? body[field] : null;
         }
     }
 };
@@ -685,7 +695,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
 
     req.body.stat_spread = parseStatSpread(req.body);
     req.body.examples = parseExamples(req.body);
-    nullifyBlankConstrainedSelects(req.body);
+    applyConstrainedSelects(req.body, isAdmin);
 
     const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
@@ -775,7 +785,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     req.body.stat_spread = parseStatSpread(req.body);
     req.body.examples = parseExamples(req.body);
-    nullifyBlankConstrainedSelects(req.body);
+    applyConstrainedSelects(req.body, isAdmin);
 
     const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {

@@ -57,8 +57,9 @@ mock.module('../models/_base', () => ({
 mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false),
 }));
+let profileRole = 'admin';
 mock.module('../models/profile', () => ({
-  getProfile: async () => ({ id: 'p1', user_id: 'u1', role: 'admin' }),
+  getProfile: async () => ({ id: 'p1', user_id: 'u1', role: profileRole }),
 }));
 
 mock.module('../models/class', () => ({
@@ -122,6 +123,7 @@ beforeAll(async () => {
 beforeEach(() => {
   capturedCreate = null;
   capturedUpdate = null;
+  profileRole = 'admin';
 });
 
 afterAll(async () => {
@@ -156,9 +158,13 @@ const structuredFields = {
 
 // Browsers submit textarea newlines as CRLF, and admins leave stray indentation
 // and blank lines behind. Ends-only trimming per line, blank lines dropped.
-const examplesTextarea = '  Watch-captain of a wall town  \r\n\r\nBodyguard turned drill sergeant\r\n   \r\nRetired duelist  ';
+//
+// The first line carries an interior double space, an en dash (U+2013) and a
+// curly apostrophe (U+2019) on purpose: parseExamples must change nothing about
+// a line but its ends, so a collapse or a punctuation rewrite has to fail here.
+const examplesTextarea = '  Watch-captain  of a wall town \u2013 she\u2019s held it twice  \r\n\r\nBodyguard turned drill sergeant\r\n   \r\nRetired duelist  ';
 const expectedExamples = [
-  'Watch-captain of a wall town',
+  'Watch-captain  of a wall town \u2013 she\u2019s held it twice',
   'Bodyguard turned drill sergeant',
   'Retired duelist',
 ];
@@ -228,4 +234,64 @@ test('PUT /classes/:id sends blank challenge_level and prerelease_section as NUL
   expect(capturedUpdate.challenge_level).toBeNull();
   expect(capturedUpdate.prerelease_section).toBeNull();
   expect(capturedUpdate.examples).toEqual([]);
+});
+
+// A non-browser client can post anything. Both columns carry a CHECK
+// constraint, so an unrecognised value has to be neutralised here or Postgres
+// answers with a raw constraint-violation 500.
+test('POST /classes rejects out-of-allowlist select values without a 500', async () => {
+  const res = await post('/classes', {
+    ...baseBody,
+    challenge_level: 'bogus',
+    prerelease_section: 'ASPIRANT CLASSES',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.challenge_level).toBeNull();
+  expect(capturedCreate.prerelease_section).toBeNull();
+});
+
+test('PUT /classes/:id rejects out-of-allowlist select values without a 500', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
+    ...baseBody,
+    challenge_level: 'mid',
+    prerelease_section: 'PCCs',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.challenge_level).toBeNull();
+  expect(capturedUpdate.prerelease_section).toBeNull();
+});
+
+// prerelease_section is provenance: which section of the source document a
+// class was printed under. Both inputs are admin-only in the form, so the
+// server must not take them from a non-admin who posts them anyway.
+test('POST /classes ignores the constrained selects from a non-admin', async () => {
+  profileRole = 'player';
+  const res = await post('/classes', {
+    ...baseBody,
+    challenge_level: 'High',
+    prerelease_section: 'exclusive',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate).not.toHaveProperty('challenge_level');
+  expect(capturedCreate).not.toHaveProperty('prerelease_section');
+});
+
+test('PUT /classes/:id ignores the constrained selects from a non-admin', async () => {
+  profileRole = 'player';
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
+    ...baseBody,
+    challenge_level: 'High',
+    prerelease_section: 'exclusive',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate).not.toHaveProperty('challenge_level');
+  expect(capturedUpdate).not.toHaveProperty('prerelease_section');
 });

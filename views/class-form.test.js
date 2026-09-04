@@ -107,10 +107,43 @@ test('every class-level structured column has an input', () => {
   }
 });
 
-// overview inherits the required attribute the deleted description textarea
-// carried: it is the one prose field every imported class has.
-test('overview is required', () => {
-  expect(SRC).toMatch(/name="overview"[^>]*required/);
+// 31 of the 50 live classes have a NULL overview. A required prose input would
+// stop an admin opening one of them to toggle is_public from saving at all
+// without inventing text, on a branch whose whole point is that the class prose
+// is a verbatim copy of a source document. Every structured column is nullable.
+test('no prose input is required', () => {
+  for (const field of ['overview', 'conduit_notes', 'grounding', 'examples', 'quote']) {
+    const tag = SRC.match(new RegExp(`<(?:textarea|input)[^>]*name="${field}"[^>]*>`))[0];
+    expect(tag).not.toContain('required');
+  }
+});
+
+// challenge_level and prerelease_section are provenance and curation, not
+// player-editable metadata: a player-created class must not be able to tag
+// itself as printed in the pre-release bundle. Gated the way is_player_created
+// already is in this template.
+const renderForm = (role) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('breadcrumbs', '');
+  hb.registerPartial('stat-blocks', fs.readFileSync(
+    path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
+  ));
+  return hb.compile(SRC)({ statList, isNew: true, class: null, profile: { role } });
+};
+
+test('the admin-only class metadata renders for an admin and not for a player', () => {
+  const adminOnly = ['challenge_level', 'prerelease_section', 'designer'];
+  const asAdmin = renderForm('admin');
+  const asPlayer = renderForm('player');
+  for (const field of adminOnly) {
+    expect(asAdmin).toContain(`name="${field}"`);
+    expect(asPlayer).not.toContain(`name="${field}"`);
+  }
+  // The prose fields are not gated -- any creator writes those.
+  expect(asPlayer).toContain('name="overview"');
 });
 
 // _syncToastUIEditorsToTextareas writes editor.getMarkdown() back on submit,
