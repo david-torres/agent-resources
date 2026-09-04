@@ -108,7 +108,14 @@ const NOT_ROUND_TRIPPED = {
     updated_at: 'database timestamp',
     pdf_storage_path: 'written by the upload path, not posted by the form',
     pdf_updated_at: 'written by the upload path, not posted by the form',
-    image_crop: 'a hidden JSON field driven by the cropper widget; parsed by util/crop.js parseImageCrop and pinned by util/crop.test.js',
+    // Excluded, and NOT because it round-trips: it does not. A NULL crop
+    // renders as the literal `null`, parseImageCrop answers undefined for that
+    // and for '', and routes/classes.js then leaves the raw string in the body,
+    // so a no-op save writes a jsonb string into the column. 17 of 50 rows
+    // already hold one ('""' or a double-encoded object). Reported with Task 17
+    // rather than fixed here, and listed so the next reader knows the exclusion
+    // is a known defect rather than a judgement that the column is safe.
+    image_crop: 'a hidden JSON field driven by the cropper widget; parsed by util/crop.js parseImageCrop, and today a no-op save rewrites it -- see the note above',
     stat_spread: 'the hidden inputs carry Alpine\'s :value, so a static render has no value to read; pinned by routes/classes-stat-spread.test.js and views/class-form.test.js'
 };
 
