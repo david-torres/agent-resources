@@ -375,3 +375,126 @@ test('renders ability meters and notes through the real class-meters/class-notes
   expect(html).toContain('Range');
   expect(html).toContain('Works on cowed animals only.');
 });
+
+// Pins the escaped slots. Nothing previously stopped a `{{ }}` becoming a
+// `{{{ }}}` in class-meters, class-notes, or the ability card -- proven by
+// flipping each and re-running before writing these.
+const XSS = '<script>alert(1)</script>';
+
+test('meter labels and values are HTML-escaped', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      abilities: [],
+      gear: [{ name: 'G', description: 'g', category: 'default', notes: [], meters: [{ label: XSS, value: XSS }] }],
+    },
+  });
+  expect(html).not.toContain(XSS);
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+});
+
+test('note text is HTML-escaped, at the root and in a child', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      abilities: [],
+      gear: [{
+        name: 'G',
+        description: 'g',
+        category: 'default',
+        meters: [],
+        notes: [{ text: XSS, children: [{ text: XSS, children: [] }] }],
+      }],
+    },
+  });
+  expect(html).not.toContain(XSS);
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+});
+
+test('an ability paired action is HTML-escaped', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      gear: [],
+      abilities: [{ name: 'A', description: 'd', paired_action: XSS, meters: [], notes: [] }],
+    },
+  });
+  expect(html).not.toContain(XSS);
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+});
+
+test('a childless note emits no inner list', () => {
+  const html = renderPartial('class-notes', {
+    notes: [{ text: 'Lonely note.', children: [] }],
+  });
+  expect(html).toContain('Lonely note.');
+  expect(html.match(/<ul>/g)).toHaveLength(1);
+});
+
+// The single-root version of this test passed even when a child rendered
+// under the wrong parent, because there was no other parent to render it
+// under. Two roots, each with its own child, and a DOM containment check
+// rather than a string-order one: a text-position assertion still passes
+// when the child list is hoisted out of its parent <li> entirely.
+test('each sub-note nests inside its own parent list item', () => {
+  const html = renderPartial('class-notes', {
+    notes: [
+      { text: 'Parent A.', children: [{ text: 'Child A.', children: [] }] },
+      { text: 'Parent B.', children: [{ text: 'Child B.', children: [] }] },
+    ],
+  });
+  document.body.innerHTML = html;
+  const roots = document.querySelectorAll('body > ul > li');
+  expect(roots).toHaveLength(2);
+  const [first, second] = roots;
+  expect(first.firstChild.textContent).toContain('Parent A.');
+  expect(second.firstChild.textContent).toContain('Parent B.');
+  expect([...first.querySelectorAll('ul > li')].map(li => li.textContent)).toEqual(['Child A.']);
+  expect([...second.querySelectorAll('ul > li')].map(li => li.textContent)).toEqual(['Child B.']);
+});
+
+const gearOnlyContext = (gear) => ({
+  class: { id: 'c1', name: 'Test Class', abilities: [], gear },
+});
+
+const columnOf = (html, name) => {
+  const baseIdx = html.indexOf('Base Gear');
+  const electiveIdx = html.indexOf('Elective Gear');
+  const idx = html.indexOf(name);
+  if (idx < 0) return 'neither';
+  return idx < electiveIdx ? 'base' : 'elective';
+};
+
+test('a null category renders in the Base Gear column', () => {
+  const html = renderClassView(gearOnlyContext([
+    { name: 'Null Category', description: 'n', category: null, meters: [], notes: [] },
+  ]));
+  expect(columnOf(html, 'Null Category')).toBe('base');
+});
+
+test('an empty-string category renders in the Base Gear column', () => {
+  const html = renderClassView(gearOnlyContext([
+    { name: 'Empty Category', description: 'e', category: '', meters: [], notes: [] },
+  ]));
+  expect(columnOf(html, 'Empty Category')).toBe('base');
+});
+
+test('a whitespace-only category renders in the Base Gear column, not nowhere', () => {
+  const html = renderClassView(gearOnlyContext([
+    { name: 'Blank Category', description: 'w', category: '   ', meters: [], notes: [] },
+  ]));
+  expect(columnOf(html, 'Blank Category')).toBe('base');
+});
+
+test('a null gear entry renders no card in either column', () => {
+  const html = renderClassView(gearOnlyContext([
+    null,
+    { name: 'Real Gear', description: 'r', category: 'elective', meters: [], notes: [] },
+  ]));
+  expect(columnOf(html, 'Real Gear')).toBe('elective');
+  const baseColumn = html.slice(html.indexOf('Base Gear'), html.indexOf('Elective Gear'));
+  expect(baseColumn).not.toContain('<div class="card">');
+});
