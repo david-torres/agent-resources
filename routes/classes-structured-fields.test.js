@@ -501,9 +501,10 @@ test('POST /classes drops a blank child note but keeps its parent', async () => 
   ]);
 });
 
-// partials/class-notes.handlebars reads `children.length` unguarded on every
-// note it renders, so `children` is an array even when it is empty -- never
-// undefined and never null.
+// `children` is an array even when it is empty -- never undefined, never null.
+// partials/class-notes.handlebars does guard on `.length`, so this is not
+// crash-avoidance: it is one shape for every note, so that a consumer reading
+// `notes[i].children` does not have to test for three of them.
 test('POST /classes gives every ability, meter list and note an array', async () => {
   const res = await post('/classes', {
     name: 'Test',
@@ -541,10 +542,14 @@ test('POST /classes keeps notes two levels deep, dropping any grandchild', async
 });
 
 // Array order IS the semantic -- it is the order abilities, meters and notes
-// print in. qs switches from an array to an object with numeric string keys
-// past 20 entries, and index 21 next to index 9 is where a lexicographic sort
-// of those keys ("21" before "9") diverges from the numeric one.
-test('POST /classes orders an object-shaped abilities body numerically', async () => {
+// print in -- and a form whose rows have been added and removed submits gappy
+// indices. body-parser sets qs's arrayLimit to `Math.max(100, paramCount)`
+// (body-parser/lib/types/urlencoded.js:168), so index 9 next to index 21
+// arrives as a two-element array, NOT the object shape qs produces at its
+// default limit of 20. That object shape is unreachable from any request
+// through this app -- append-field never builds one at all -- and is pinned
+// directly in util/class-abilities.test.js instead.
+test('POST /classes keeps gappy ability indices in ascending order', async () => {
   const res = await post('/classes', {
     name: 'Test',
     'abilities[9][name]': 'Nine',
@@ -555,7 +560,7 @@ test('POST /classes orders an object-shaped abilities body numerically', async (
   expect(capturedCreate.abilities.map((a) => a.name)).toEqual(['Nine', 'TwentyOne']);
 });
 
-test('POST /classes orders object-shaped meters and notes numerically', async () => {
+test('POST /classes keeps gappy meter and note indices in ascending order', async () => {
   const res = await post('/classes', {
     name: 'Test',
     'abilities[0][name]': 'Collar',
@@ -577,10 +582,12 @@ test('POST /classes orders object-shaped meters and notes numerically', async ()
 });
 
 // The flat ability_name[] / ability_description[] path is gone, not kept
-// alongside, so those names build nothing. (They are not stripped from the
-// body either: this codebase hands req.body to the repository wholesale, and
-// Task 13 took the same line when it retired the `description` textarea.)
-test('POST /classes builds no abilities from the retired flat field names', async () => {
+// alongside, so those names build nothing -- and they are stripped rather than
+// forwarded: req.body reaches the repository wholesale with no column
+// allowlist, so a browser holding the previous version of the form would
+// otherwise turn its next save into a Postgres error on columns that do not
+// exist.
+test('POST /classes ignores and strips the retired flat ability field names', async () => {
   const res = await post('/classes', {
     name: 'Test',
     'ability_name[]': 'Stale',
@@ -589,6 +596,95 @@ test('POST /classes builds no abilities from the retired flat field names', asyn
 
   expect(res.status).toBe(200);
   expect(capturedCreate.abilities).toEqual([]);
+  expect(capturedCreate).not.toHaveProperty('ability_name[]');
+  expect(capturedCreate).not.toHaveProperty('ability_description[]');
+});
+
+test('PUT /classes/:id ignores and strips the retired flat ability field names', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
+    ...baseBody,
+    'ability_name[]': 'Stale',
+    'ability_description[]': 'Stale description.',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.abilities).toEqual([]);
+  expect(capturedUpdate).not.toHaveProperty('ability_name[]');
+  expect(capturedUpdate).not.toHaveProperty('ability_description[]');
+});
+
+// The form renders a hidden pronunciation field only for an ability that
+// already has one. Two live abilities do; 55 more carry the key as an explicit
+// null, and 93 legacy abilities have never had it at all. The rule is echo, not
+// invent: without this the editor's round-trip field would be pointless, and
+// with it applied unconditionally every legacy ability would gain a key it
+// never had.
+test('POST /classes round-trips an ability pronunciation it was given', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Ko\u014dan',
+    'abilities[0][pronunciation]': '  KOH-ahn  ',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].pronunciation).toBe('KOH-ahn');
+});
+
+test('PUT /classes/:id round-trips an ability pronunciation it was given', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
+    ...baseBody,
+    'abilities[0][name]': 'Ko\u014dan',
+    'abilities[0][pronunciation]': 'KOH-ahn',
+    examples: '',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.abilities[0].pronunciation).toBe('KOH-ahn');
+});
+
+test('POST /classes invents no pronunciation for an ability that posts none', async () => {
+  const res = await post('/classes', { name: 'Test', 'abilities[0][name]': 'Collar' });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0]).not.toHaveProperty('pronunciation');
+});
+
+// A blank hidden field is an ability whose pronunciation was cleared, not one
+// that never had the key.
+test('POST /classes sends a blanked pronunciation as NULL, keeping the key', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][pronunciation]': '   ',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].pronunciation).toBeNull();
+});
+
+// The other half of that rule, and a deliberate difference from it. `name`,
+// `description`, `paired_action`, `meters` and `notes` are this task's declared
+// ability contract, so a legacy ability that only ever had a name and a
+// description picks up the other three on save -- the uniform shape the editor
+// renders and round-trips, and one both class-view partials already guard on.
+// That is normalization. Writing `pronunciation` onto those same rows would be
+// invention, which is why it is echoed rather than defaulted.
+test('POST /classes gives a legacy two-field ability the full contract shape', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Bulwark',
+    'abilities[0][description]': 'Plant the shield.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([{
+    name: 'Bulwark',
+    description: 'Plant the shield.',
+    paired_action: '',
+    meters: [],
+    notes: [],
+  }]);
 });
 
 // views/class-form.handlebars submits multipart/form-data (it carries the class

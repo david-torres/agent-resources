@@ -276,12 +276,22 @@
         length: views/layouts/main.handlebars puts hx-boost="true" on <body>,
         and htmx snapshots the LIVE DOM into its history cache, x-for output
         included. On Back the snapshot restores WITH those generated rows and
-        Alpine's x-for appends a second full set, so every ability doubles, the
-        stale half throws "ability is not defined" on every binding, and the
-        form posts each bracket name twice -- which normalizeAbilities reads as
-        an array where it wants a string, blanking the name and DROPPING the
-        ability on save. Real elements in the served HTML restore as
-        themselves. Keep it that way.
+        Alpine's x-for appends a second full set, so two abilities come back as
+        four, and the enlarged DOM is what gets snapshotted next -- the
+        duplication compounds with every Back.
+
+        Measured, so that nobody has to re-derive it: the stale half throws
+        "ability is not defined" on every binding, because `ability` and `ai`
+        live only in the x-for scope the restored markup has lost. It does NOT
+        post duplicate names -- Alpine re-evaluates `:name`, the throw yields
+        undefined, and Alpine REMOVES the attribute, so the stale controls
+        contribute nothing to `abilities` (they surface, if at all, under an
+        empty key no handler reads). The damage is to the editor rather than to
+        the payload: the admin sees each ability twice, and half the rows are
+        dead fields that accept typing and then post nothing.
+
+        Real elements in the served HTML restore as themselves. Keep it that
+        way.
 
         The same rule is why there is no x-model here: every value is a plain
         `value=`/inner-text attribute, so the fields are already correct in the
