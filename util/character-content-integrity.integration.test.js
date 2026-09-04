@@ -5,13 +5,15 @@
 // to the class item they came from: on every save the name is looked up in a
 // GLOBAL, name-only, exact-string map (models/class.js
 // buildClassContentLookupMaps), and a name that misses the map aborts the whole
-// save --
+// save with one of --
 //
 //     [setCharacterGear] Missing class_id for gear item "<name>"
+//     [setCharacterAbilities] Missing class_id for ability "<name>"
 //
 // (services/character/service.js, saveCharacterAtomic / reconcileGear /
-// reconcileAbilities). The character is still readable, but its owner can no
-// longer save it, and nothing tells them why.
+// reconcileAbilities). Both are quoted verbatim so a reader can grep for
+// whichever half they hit. The character is still readable, but its owner can
+// no longer save it, and nothing tells them why.
 //
 // So renaming or removing a class's item silently strands every character
 // holding the old name. Nothing in the suite pinned that, which is how it went
@@ -37,6 +39,16 @@ const { buildClassContentLookupMaps } = require('../models/class');
 // `Agent’s Fieldcoat` carries U+2019, a curly apostrophe, not ASCII '.
 // It is escaped so that neither an editor nor a copy-paste can quietly
 // substitute the ASCII form and make this pass against the wrong string.
+//
+// THIS BASELINE DESCRIBES ONE DATABASE. It was derived from the restored
+// production copy this suite runs against. Against a database that does not
+// hold those two characters the test fails with an empty `found` -- and that
+// failure means "re-derive the baseline for this database", NOT "the guard is
+// broken". Do not answer it by deleting the assertion or by asserting
+// emptiness; replace the entries with the set that database actually has, by
+// the same method (run the test and read what `found` reports). Expect exactly
+// this when the production load lands: a fresh baseline there is the normal
+// outcome, not a regression.
 const KNOWN_UNRESOLVABLE = [
   { table: 'class_gear', name: 'Agent\u2019s Fieldcoat', rows: 2, characters: ['Agent Jack Hawthorne', 'Thaddeus'] },
   { table: 'class_gear', name: 'Neuralyzer', rows: 2, characters: ['Agent Jack Hawthorne', 'Thaddeus'] }
@@ -53,23 +65,36 @@ const byTableThenName = (a, b) => (sortKey(a) < sortKey(b) ? -1 : sortKey(a) > s
 // PostgREST caps a select at 1000 rows by default and says nothing when it
 // truncates. `class_gear` is past that cap, so an unpaginated read would check
 // the first page, find no new orphan in it, and pass while never looking at a
-// third of the data. exactCount is read back separately and asserted against
-// what was actually fetched, so a future regression in this loop fails here
-// rather than silently narrowing the guard.
-const fetchAllRows = async (table) => {
-  const { count, error: countError } = await supabaseAdmin
-    .from(table)
-    .select('id', { count: 'exact', head: true });
+// third of the data. The exact count is read back separately and asserted
+// against what was actually fetched, so a future regression in this loop fails
+// here rather than silently narrowing the guard.
+//
+// `narrow` shapes both the count and the pages, so the two always describe the
+// same set of rows.
+const identity = (query) => query;
+
+const fetchAllRows = async (table, columns, narrow = identity) => {
+  const { count, error: countError } = await narrow(
+    supabaseAdmin.from(table).select('id', { count: 'exact', head: true }));
   expect(countError).toBeNull();
   expect(typeof count).toBe('number');
 
+  // The count is known before the first page is read, so the number of pages is
+  // known too: a full page plus the short or empty one that ends the walk. A
+  // loop that ran past it would be one that stopped advancing, and spinning is
+  // the worst way to fail -- a hung CI job is indistinguishable from an
+  // infrastructure problem, while a failed one names its own cause.
+  const maxPages = Math.floor(count / PAGE) + 1;
   const rows = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabaseAdmin
-      .from(table)
-      .select('name, character_id')
-      .order('id', { ascending: true })
-      .range(from, from + PAGE - 1);
+  for (let page = 0; ; page += 1) {
+    if (page >= maxPages) {
+      throw new Error(
+        `${table}: read ${rows.length} of ${count} row(s) in ${maxPages} page(s) of ${PAGE} and the range walk is still not finished`);
+    }
+    const { data, error } = await narrow(
+      supabaseAdmin.from(table).select(columns)
+        .order('id', { ascending: true })
+        .range(page * PAGE, page * PAGE + PAGE - 1));
     expect(error).toBeNull();
     expect(Array.isArray(data)).toBe(true);
     rows.push(...data);
@@ -80,15 +105,13 @@ const fetchAllRows = async (table) => {
   return rows;
 };
 
+// Paged like everything else here: a failure that stranded more than a page of
+// characters would otherwise fall back to raw uuids at exactly the moment
+// someone needs the names.
 const characterNamesById = async (ids) => {
   if (ids.length === 0) return new Map();
-  const { data, error } = await supabaseAdmin
-    .from('characters')
-    .select('id, name')
-    .in('id', ids);
-  expect(error).toBeNull();
-  expect(Array.isArray(data)).toBe(true);
-  return new Map(data.map(row => [row.id, row.name]));
+  const rows = await fetchAllRows('characters', 'id, name', query => query.in('id', ids));
+  return new Map(rows.map(row => [row.id, row.name]));
 };
 
 // The real resolver, not a reimplementation of it. A hand-built "known names"
@@ -107,7 +130,7 @@ const unresolvableRows = async () => {
 
   const found = [];
   for (const { table, known } of tables) {
-    const rows = await fetchAllRows(table);
+    const rows = await fetchAllRows(table, 'name, character_id');
     console.log(`${table}: ${rows.length} rows checked against ${known.size} catalogue names`);
     const orphans = rows.filter(row => !known.has(String(row.name).trim()));
     const names = await characterNamesById([...new Set(orphans.map(row => row.character_id))]);
