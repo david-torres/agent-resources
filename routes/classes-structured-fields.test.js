@@ -708,3 +708,317 @@ test('POST /classes accepts nested ability metadata over multipart/form-data', a
   expect(res.status).toBe(200);
   expect(capturedCreate.abilities).toEqual([expectedNestedAbility]);
 });
+
+// ---------------------------------------------------------------------------
+// Task 16: the repeatable gear editor.
+//
+// Same nesting, the same parsers and the same dropping rules as the ability
+// editor above, with `category` in place of `paired_action`. `category` is the
+// one field with no ability counterpart: views/class-view.handlebars splits
+// Signature Gear into its Base and Elective columns by an exact string match on
+// it, so a value outside {default, elective} vanishes from both columns.
+//
+// The fixtures carry an interior double space, an en dash (U+2013) and a curly
+// apostrophe (U+2019): normalizeGear trims the ends of a submitted string and
+// changes nothing else, so a collapse or a punctuation rewrite has to fail here.
+const GEAR_DESCRIPTION = 'A visor of beaten  bronze – it’s the smith’s last work.';
+const GEAR_NOTE_TEXT = 'Cracks after a hard  parry – the smith’s warning, not yours.';
+
+const nestedGearBody = {
+  name: 'Test',
+  'gear[0][name]': 'Fearsome Visage',
+  'gear[0][description]': GEAR_DESCRIPTION,
+  'gear[0][category]': 'default',
+  'gear[0][meters][0][label]': 'Accuracy Boost',
+  'gear[0][meters][0][value]': 'Mid',
+  'gear[0][notes][0][text]': GEAR_NOTE_TEXT,
+  'gear[0][notes][0][children][0][text]': 'Replaced free of charge, once.',
+};
+
+const expectedNestedGear = {
+  name: 'Fearsome Visage',
+  description: GEAR_DESCRIPTION,
+  category: 'default',
+  meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
+  notes: [{
+    text: GEAR_NOTE_TEXT,
+    children: [{ text: 'Replaced free of charge, once.', children: [] }],
+  }],
+};
+
+test('POST /classes accepts nested gear metadata from the form', async () => {
+  const res = await post('/classes', nestedGearBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([expectedNestedGear]);
+});
+
+test('PUT /classes/:id accepts nested gear metadata from the form', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, nestedGearBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.gear).toEqual([expectedNestedGear]);
+});
+
+test('POST /classes trims the ends of every gear string and nothing else', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': '  Fearsome Visage  ',
+    'gear[0][description]': `\r\n  ${GEAR_DESCRIPTION}  \r\n`,
+    'gear[0][category]': '  default  ',
+    'gear[0][meters][0][label]': '  Accuracy Boost  ',
+    'gear[0][meters][0][value]': '  Mid  ',
+    'gear[0][notes][0][text]': `  ${GEAR_NOTE_TEXT}  `,
+    'gear[0][notes][0][children][0][text]': '  Replaced free  of charge, once.  ',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([{
+    name: 'Fearsome Visage',
+    description: GEAR_DESCRIPTION,
+    category: 'default',
+    meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
+    notes: [{
+      text: GEAR_NOTE_TEXT,
+      children: [{ text: 'Replaced free  of charge, once.', children: [] }],
+    }],
+  }]);
+});
+
+// The same positional split
+// supabase/migrations/20260904000001_backfill_gear_category.sql applied to the
+// 31 pre-existing classes, so a legacy row and a backfilled row agree. The AI
+// import path (util/class-import.js) still writes gear with no category at all,
+// so this is a live case, not a hypothetical one.
+test('POST /classes defaults the first three gear entries to default and the rest to elective', async () => {
+  const body = { name: 'Test' };
+  for (let i = 0; i < 6; i++) body[`gear[${i}][name]`] = `G${i}`;
+
+  const res = await post('/classes', body);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.category))
+    .toEqual(['default', 'default', 'default', 'elective', 'elective', 'elective']);
+});
+
+// The default is read off the item's position in the SUBMITTED list, not off
+// its position among the items that happen to lack the key. Here the first
+// four carry an explicit category, so an implementation numbering only the
+// uncategorised remainder would call index 4 the first entry and answer
+// 'default' for it.
+test('POST /classes defaults a gear category by submitted position, not by position among the uncategorised', async () => {
+  const body = { name: 'Test' };
+  for (let i = 0; i < 6; i++) body[`gear[${i}][name]`] = `G${i}`;
+  for (let i = 0; i < 4; i++) body[`gear[${i}][category]`] = 'elective';
+
+  const res = await post('/classes', body);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.category))
+    .toEqual(['elective', 'elective', 'elective', 'elective', 'elective', 'elective']);
+});
+
+// An explicit category wins wherever the item sits: the two columns are a
+// curation choice, not a consequence of row order.
+test('POST /classes honours an explicit gear category against its position', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'First', 'gear[0][category]': 'elective',
+    'gear[1][name]': 'Second',
+    'gear[2][name]': 'Third',
+    'gear[3][name]': 'Fourth', 'gear[3][category]': 'default',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.category))
+    .toEqual(['elective', 'default', 'default', 'default']);
+});
+
+// views/class-view.handlebars splits the two columns by an exact string match,
+// so writing an unrecognised value through would drop the item off the class
+// page entirely -- present in the column, rendered in neither. It falls back to
+// the positional default instead.
+test('POST /classes falls back to the positional default for an unrecognised gear category', async () => {
+  const body = { name: 'Test' };
+  for (let i = 0; i < 6; i++) {
+    body[`gear[${i}][name]`] = `G${i}`;
+    body[`gear[${i}][category]`] = 'Base';
+  }
+
+  const res = await post('/classes', body);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.category))
+    .toEqual(['default', 'default', 'default', 'elective', 'elective', 'elective']);
+});
+
+// A repeater's blank row is a normal intermediate state -- the inputs carry no
+// `required`, so the server is the only thing that drops them.
+test('POST /classes drops a gear item whose name is blank after trimming', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': '   ',
+    'gear[0][description]': 'Orphaned description.',
+    'gear[1][name]': 'Kept',
+    'gear[1][description]': 'Kept description.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.name)).toEqual(['Kept']);
+});
+
+// A meter is a label/value pair by definition: partials/class-meters.handlebars
+// renders a <dt>/<dd> row, so neither half alone shows anything meaningful.
+test('POST /classes drops a gear meter row missing either half of its pair', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'Visor',
+    'gear[0][meters][0][label]': '  ',
+    'gear[0][meters][0][value]': 'Mid',
+    'gear[0][meters][1][label]': 'Accuracy Boost',
+    'gear[0][meters][1][value]': '  ',
+    'gear[0][meters][2][label]': 'Essence Cost',
+    'gear[0][meters][2][value]': 'Low',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear[0].meters).toEqual([{ label: 'Essence Cost', value: 'Low' }]);
+});
+
+// A child reattached to the wrong parent is the corruption class the extraction
+// work fought. A blank parent takes its children down with it rather than
+// promoting them a level.
+test('POST /classes drops a blank gear note together with its children', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'Visor',
+    'gear[0][notes][0][text]': '   ',
+    'gear[0][notes][0][children][0][text]': 'Orphaned child.',
+    'gear[0][notes][1][text]': 'Kept note.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear[0].notes)
+    .toEqual([{ text: 'Kept note.', children: [] }]);
+});
+
+test('POST /classes drops a blank gear child note but keeps its parent', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'Visor',
+    'gear[0][notes][0][text]': 'Kept note.',
+    'gear[0][notes][0][children][0][text]': '   ',
+    'gear[0][notes][0][children][1][text]': 'Kept child.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear[0].notes)
+    .toEqual([{ text: 'Kept note.', children: [{ text: 'Kept child.', children: [] }] }]);
+});
+
+// Notes nest exactly two levels. A third level is not a shape the renderer or
+// the source document has, so it is dropped rather than carried into jsonb.
+test('POST /classes keeps gear notes two levels deep, dropping any grandchild', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'Visor',
+    'gear[0][notes][0][text]': 'Parent.',
+    'gear[0][notes][0][children][0][text]': 'Child.',
+    'gear[0][notes][0][children][0][children][0][text]': 'Grandchild.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear[0].notes)
+    .toEqual([{ text: 'Parent.', children: [{ text: 'Child.', children: [] }] }]);
+});
+
+test('POST /classes sends no gear as an empty array', async () => {
+  const res = await post('/classes', { name: 'Test' });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([]);
+});
+
+// Array order IS the semantic -- it is the order the two gear columns print in
+// -- and a form whose rows have been added and removed submits gappy indices.
+test('POST /classes keeps gappy gear indices in ascending order', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[21][name]': 'TwentyOne',
+    'gear[9][name]': 'Nine',
+    'gear[100][name]': 'OneHundred',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => item.name))
+    .toEqual(['Nine', 'TwentyOne', 'OneHundred']);
+});
+
+// `name`, `description`, `category`, `meters` and `notes` are this branch's
+// declared gear contract, so a legacy item that only ever had a name and a
+// description picks up the other three on save -- the uniform shape the editor
+// renders and round-trips, and the one both class-view partials guard on. That
+// is normalization, and unlike the abilities' `pronunciation` there is no gear
+// key outside the contract: a census of jsonb_object_keys over all 300 live
+// gear items answers exactly {category, description, name} and
+// {category, description, meters, name, notes}.
+test('POST /classes gives a legacy two-field gear item the full contract shape', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear[0][name]': 'Tower shield',
+    'gear[0][description]': 'Heavy.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([{
+    name: 'Tower shield',
+    description: 'Heavy.',
+    category: 'default',
+    meters: [],
+    notes: [],
+  }]);
+});
+
+// The flat gear_name[] / gear_description[] path is gone, not kept alongside,
+// so those names build nothing -- and they are stripped rather than forwarded:
+// req.body reaches the repository wholesale with no column allowlist, so a
+// browser holding the previous version of the form would otherwise turn its
+// next save into a Postgres error on columns that do not exist.
+test('POST /classes ignores and strips the retired flat gear field names', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'gear_name[]': 'Stale gear',
+    'gear_description[]': 'Stale description.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([]);
+  expect(capturedCreate['gear_name[]']).toBeUndefined();
+  expect(capturedCreate['gear_description[]']).toBeUndefined();
+  expect(capturedCreate.gear_name).toBeUndefined();
+  expect(capturedCreate.gear_description).toBeUndefined();
+});
+
+test('PUT /classes/:id ignores and strips the retired flat gear field names', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, {
+    name: 'Test',
+    'gear_name[]': 'Stale gear',
+    'gear_description[]': 'Stale description.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.gear).toEqual([]);
+  expect(capturedUpdate['gear_name[]']).toBeUndefined();
+  expect(capturedUpdate['gear_description[]']).toBeUndefined();
+  expect(capturedUpdate.gear_name).toBeUndefined();
+  expect(capturedUpdate.gear_description).toBeUndefined();
+});
+
+// The path an actual browser takes: views/class-form.handlebars carries the
+// class PDF, so multer parses the body through `append-field` rather than qs.
+test('POST /classes accepts nested gear metadata over multipart/form-data', async () => {
+  const res = await postMultipart('/classes', nestedGearBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear).toEqual([expectedNestedGear]);
+});

@@ -18,10 +18,13 @@
 // The delete tests below assert against Postgres as well as the DOM, which is
 // the only way to tell "it worked but did not repaint" from "it did nothing".
 //
-// The abilities/gear rows are FIXED-COUNT and server-rendered -- exactly 3
-// and 6, via {{#times}} (class-form.handlebars:157, :185). There is no
-// add-row UI. All 9 name fields are `required`, as is the Overview textarea,
-// so a valid create must fill every one.
+// The abilities and gear blocks are repeaters now: server-rendered rows under
+// bracket names, an Add/Remove button per row, and a new class opening on three
+// blank abilities and six blank gear items. None of those inputs is `required`
+// -- normalizeAbilities and normalizeGear drop a nameless row server-side -- so
+// the create below fills all 9 names to prove they survive the round trip, not
+// because the form would block without them. The Overview textarea IS
+// required.
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
@@ -60,7 +63,10 @@ async function createClassViaUi(page, name) {
   await expect(abilities).toHaveCount(3);
   for (let i = 0; i < 3; i++) await abilities.nth(i).fill(`${prefix} Ability ${i + 1}`);
 
-  const gear = form.locator('input[name="gear_name[]"]');
+  // Gear is a repeater on the same contract as the abilities above -- rows
+  // server-rendered under gear[0][name], a new class opening on six blank ones,
+  // and the inert <template data-prototype> rows out of this locator's reach.
+  const gear = form.locator('input[name^="gear["][name$="[name]"]');
   await expect(gear).toHaveCount(6);
   for (let i = 0; i < 6; i++) await gear.nth(i).fill(`${prefix} Gear ${i + 1}`);
 

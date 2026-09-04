@@ -30,6 +30,7 @@ const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { parseImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
+const { normalizeGear } = require('../util/class-gear');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
 const { partitionClassGroups } = require('../util/class-filter');
@@ -48,12 +49,6 @@ const upload = multer({
         cb(null, true);
     }
 });
-
-const ensureArray = (value) => {
-    if (Array.isArray(value)) return value;
-    if (value === undefined || value === null) return [];
-    return [value];
-};
 
 const parseStatSpread = (body) => {
     const nested = (body.stat_spread && typeof body.stat_spread === 'object' && !Array.isArray(body.stat_spread))
@@ -114,6 +109,19 @@ const RETIRED_ABILITY_FIELDS = [
 
 const dropRetiredAbilityFields = (body) => {
     for (const field of RETIRED_ABILITY_FIELDS) {
+        delete body[field];
+    }
+};
+
+// The same for gear: the flat gear_name[] / gear_description[] path is gone,
+// and a stale tab still posting those names must be ignored rather than
+// forwarded to a column that does not exist.
+const RETIRED_GEAR_FIELDS = [
+    'gear_name[]', 'gear_description[]', 'gear_name', 'gear_description'
+];
+
+const dropRetiredGearFields = (body) => {
+    for (const field of RETIRED_GEAR_FIELDS) {
         delete body[field];
     }
 };
@@ -688,19 +696,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     req.body.abilities = normalizeAbilities(req.body.abilities);
     dropRetiredAbilityFields(req.body);
 
-    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
-    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
-    const gear = gearNames
-        .map((name, index) => ({
-            name: name,
-            description: gearDescriptions[index] || ''
-        }))
-        .filter((item) => item.name);
-    req.body.gear = gear;
-    delete req.body['gear_name[]'];
-    delete req.body['gear_description[]'];
-    delete req.body.gear_name;
-    delete req.body.gear_description;
+    req.body.gear = normalizeGear(req.body.gear);
+    dropRetiredGearFields(req.body);
 
     // Normalize is_public checkbox
     if (req.body.is_public === 'on') {
@@ -772,19 +769,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
     req.body.abilities = normalizeAbilities(req.body.abilities);
     dropRetiredAbilityFields(req.body);
 
-    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
-    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
-    const gear = gearNames
-        .map((name, index) => ({
-            name: name,
-            description: gearDescriptions[index] || ''
-        }))
-        .filter((item) => item.name);
-    req.body.gear = gear;
-    delete req.body['gear_name[]'];
-    delete req.body['gear_description[]'];
-    delete req.body.gear_name;
-    delete req.body.gear_description;
+    req.body.gear = normalizeGear(req.body.gear);
+    dropRetiredGearFields(req.body);
 
     if (req.body.is_public === 'on') {
         req.body.is_public = true;

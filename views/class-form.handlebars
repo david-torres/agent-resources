@@ -419,42 +419,126 @@
     <template data-prototype="note">{{> abilityNoteRow ai=0 ni=0}}</template>
     <template data-prototype="child">{{> abilityNoteChildRow ai=0 ni=0 ci=0}}</template>
   </div>
-    <!-- classes have 6 gear items (name and description) -->
-    {{#if (or isNew (eq class.gear.length 0))}}
-      {{#times 6}}
-        <div class="field">
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
-          </label>
-          <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" required>
-          </div>
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
-          </label>
-          <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px"></textarea>
+  {{!-- Repeatable gear editor: the ability editor's twin, and every rule its
+        comment above records applies here unchanged and for the same measured
+        reasons -- server-rendered rows, no Alpine-only source of truth, no
+        input the admin must fill before the server can drop the row, and plain
+        textareas rather than ToastUI. views/class-form.test.js pins each of
+        them over this section.
+
+        The one field with no ability counterpart is `category`.
+        views/class-view.handlebars splits Signature Gear into its Base and
+        Elective columns by an exact string match on it, so the <select> offers
+        exactly the two values normalizeGear accepts. Which option opens
+        selected comes from the shared gearCategory helper rather than a second
+        copy of the positional rule: util/class-import.js's AI path still writes
+        gear with no category at all, and an uncategorised fourth item has to
+        open on Elective here for the same reason it saves as Elective. --}}
+  <div class="field" x-data="gearEditor()">
+    {{#*inline "gearMeterRow"}}
+    <div class="field is-grouped mb-2" data-meter-row>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="label" name="gear[{{gi}}][meters][{{mi}}][label]" value="{{meter.label}}" placeholder="Label, e.g. Accuracy Boost" aria-label="Meter label">
+      </div>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="value" name="gear[{{gi}}][meters][{{mi}}][value]" value="{{meter.value}}" placeholder="Value, e.g. Mid" aria-label="Meter value">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-light" @click="removeMeter($el)">Remove meter</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearNoteChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="gear[{{gi}}][notes][{{ni}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildNote($el)">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearNoteRow"}}
+    <div class="mb-3" data-note-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-note-field="text" name="gear[{{gi}}][notes][{{ni}}][text]" value="{{note.text}}" placeholder="Note" aria-label="Note">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeNote($el)">Remove note</button>
+        </div>
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each note.children}}{{> gearNoteChildRow child=this gi=../gi ni=../ni ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildNote($el)">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearRow"}}
+    <div class="box" data-gear-row>
+      <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+        <span class="label mb-0" data-gear-heading>Gear {{add gi 1}}</span>
+        <button type="button" class="button is-small is-danger is-light" @click="removeGear($el)">Remove gear</button>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="name" for="gear-name-{{gi}}">Name</label>
+        <div class="control">
+          <input class="input" type="text" id="gear-name-{{gi}}" data-field="name" name="gear[{{gi}}][name]" value="{{gear.name}}" placeholder="Gear name">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="category" for="gear-category-{{gi}}">Column</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="gear-category-{{gi}}" data-field="category" name="gear[{{gi}}][category]">
+              <option value="default" {{#if (eq (gearCategory gear.category gi) "default")}}selected{{/if}}>Base gear</option>
+              <option value="elective" {{#if (eq (gearCategory gear.category gi) "elective")}}selected{{/if}}>Elective gear</option>
+            </select>
           </div>
         </div>
-      {{/times}}
-    {{else}}
-      {{#each class.gear}}
-        <div class="field">
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
-          </label>
-          <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" value="{{this.name}}" required>
-          </div>
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
-          </label>
-          <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
-          </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="description" for="gear-description-{{gi}}">Description</label>
+        <div class="control">
+          <textarea class="textarea" rows="4" id="gear-description-{{gi}}" data-field="description" name="gear[{{gi}}][description]" placeholder="What the gear does">{{gear.description}}</textarea>
         </div>
-      {{/each}}
-    {{/if}}
+      </div>
+      <div class="field">
+        <label class="label is-small">Meters</label>
+        <div data-meter-list>
+          {{#each gear.meters}}{{> gearMeterRow meter=this gi=../gi mi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addMeter($el)">Add meter</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Notes</label>
+        <div data-note-list>
+          {{#each gear.notes}}{{> gearNoteRow note=this gi=../gi ni=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Signature Gear</label>
+    <p class="help mb-3">Column decides where an item prints on the class page: Base gear every character of the class starts with, Elective gear they choose from. Meters and notes print exactly as they are entered here. A gear item with no name is dropped on save, as is a meter missing either half of its pair and a note with no text.</p>
+    <div data-gear-list>
+      {{#if class.gear.length}}
+        {{#each class.gear}}{{> gearRow gear=this gi=@index}}{{/each}}
+      {{else}}
+        {{#times 6}}{{> gearRow gi=@index}}{{/times}}
+      {{/if}}
+    </div>
+    <button type="button" class="button" @click="addGear()">Add gear</button>
+    {{!-- Inert prototypes; see the ability editor's note. A plain <template>
+          keeps its children in a DocumentFragment, so Alpine's walker never
+          enters it and the browser renders nothing. --}}
+    <template data-prototype="gear">{{> gearRow gi=0}}</template>
+    <template data-prototype="meter">{{> gearMeterRow gi=0 mi=0}}</template>
+    <template data-prototype="note">{{> gearNoteRow gi=0 ni=0}}</template>
+    <template data-prototype="child">{{> gearNoteChildRow gi=0 ni=0 ci=0}}</template>
+  </div>
   <div class="field">
     <div class="control">
       <button class="button is-primary" type="submit">Save</button>

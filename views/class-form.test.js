@@ -199,7 +199,16 @@ const populatedClass = {
       children: [{ text: 'Ends early if you step off the mark.', children: [] }],
     }],
   }],
-  gear: [{ name: 'Tower shield', description: 'Heavy.' }],
+  gear: [{
+    name: 'Tower shield',
+    description: 'Heavy \u2013 and it doesn\u2019t  move for anyone.',
+    category: 'elective',
+    meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
+    notes: [{
+      text: 'Splinters  after a hard parry \u2013 the smith\u2019s warning.',
+      children: [{ text: 'Replaced free of charge, once.', children: [] }],
+    }],
+  }],
 };
 
 test('the edit form renders a populated class', () => {
@@ -207,8 +216,7 @@ test('the edit form renders a populated class', () => {
 
   expect(html).toContain(`hx-put="/classes/${populatedClass.id}"`);
   expect(html).toContain('value="Vanguard"');
-  // Gear is still the fixed six-block form; Task 16 converts it.
-  expect(html).toContain('name="gear_name[]"');
+  expect(html).toContain('name="gear[0][name]"');
   expect(html).toContain('value="Tower shield"');
 });
 
@@ -246,7 +254,7 @@ test('examples render one per line in the textarea', () => {
 // markup, and the interaction ones drive real DOM.
 const ABILITY_SECTION = SRC.slice(
   SRC.indexOf('<div class="field" x-data="abilityEditor('),
-  SRC.indexOf('<!-- classes have 6 gear items')
+  SRC.indexOf('{{!-- Repeatable gear editor:')
 );
 
 // Four of the assertions below are `not.toContain`, which an empty slice
@@ -256,12 +264,12 @@ const ABILITY_SECTION = SRC.slice(
 // guard it was supposed to enforce.
 test('the ability section slice is non-empty and bounded where it claims', () => {
   expect(SRC).toContain('<div class="field" x-data="abilityEditor(');
-  expect(SRC).toContain('<!-- classes have 6 gear items');
+  expect(SRC).toContain('{{!-- Repeatable gear editor:');
   expect(ABILITY_SECTION.length).toBeGreaterThan(1000);
   // The whole editor, and nothing of the gear block that follows it.
   expect(ABILITY_SECTION).toContain('name="abilities[{{ai}}][name]"');
   expect(ABILITY_SECTION).toContain('data-prototype="child"');
-  expect(ABILITY_SECTION).not.toContain('gear_name[]');
+  expect(ABILITY_SECTION).not.toContain('gear[{{gi}}]');
 });
 
 const renderAbilities = async (cls) => {
@@ -507,4 +515,295 @@ test('an ability pronunciation round-trips through a hidden field', async () => 
 test('an ability without a pronunciation posts no pronunciation field', async () => {
   await renderAbilities(populatedClass);
   expect(document.querySelector('[name="abilities[0][pronunciation]"]')).toBeNull();
+});
+
+// ---------------------------------------------------------------------------
+// Task 16: the repeatable gear editor.
+//
+// The gear block is no longer six fixed blocks posting flat gear_name[] /
+// gear_description[] arrays. It is the ability editor's twin: rows
+// SERVER-RENDERED with bracket names carrying the row index, Alpine only
+// cloning a blank row in and taking one out. The one field with no ability
+// counterpart is the category <select>.
+const GEAR_SECTION = SRC.slice(
+  SRC.indexOf('{{!-- Repeatable gear editor:'),
+  SRC.indexOf('<button class="button is-primary" type="submit">Save</button>')
+);
+
+// Four of the assertions below are `not.toContain`, which an empty slice
+// satisfies for free. String.indexOf answers -1 for a boundary that has been
+// edited away, and slice(-1, -1) is ''. This runs first so that a moved
+// boundary fails as a missing section rather than silently passing every guard
+// it was supposed to enforce.
+test('the gear section slice is non-empty and bounded where it claims', () => {
+  expect(SRC).toContain('{{!-- Repeatable gear editor:');
+  expect(SRC).toContain('<button class="button is-primary" type="submit">Save</button>');
+  expect(GEAR_SECTION.length).toBeGreaterThan(1000);
+  // The whole editor, and nothing of the ability block that precedes it.
+  expect(GEAR_SECTION).toContain('name="gear[{{gi}}][name]"');
+  expect(GEAR_SECTION).toContain('data-prototype="child"');
+  expect(GEAR_SECTION).not.toContain('abilities[{{ai}}]');
+});
+
+const renderGear = async (cls) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  await render(hb.compile(GEAR_SECTION)({ class: cls }));
+  await tick();
+};
+
+const gearNameFields = () => Array.from(document.querySelectorAll('[name^="gear["]'))
+  .map((el) => el.name)
+  .filter((name) => /^gear\[\d+\]\[name\]$/.test(name));
+
+const postedGearNames = () => Array.from(document.querySelectorAll('[name^="gear["]'))
+  .map((el) => el.name);
+
+test('the gear block is the repeater, not the flat arrays', () => {
+  expect(SRC).toContain('x-data="gearEditor()"');
+  expect(SRC).not.toContain('gear_name[]');
+  expect(SRC).not.toContain('gear_description[]');
+});
+
+// Same rule, same reason as the ability rows: htmx snapshots the live DOM into
+// its history cache, so x-for output comes back in the snapshot AND gets
+// regenerated on Back.
+test('the gear rows are server-rendered, never x-for output', () => {
+  expect(GEAR_SECTION).not.toContain('x-for');
+});
+
+// The other half of that rule: a field whose only source of truth is Alpine
+// state renders empty until Alpine boots, and permanently if the pinned CDN is
+// blocked -- so a save from that state writes the blanks over real prose. The
+// <select> carries its server state in a per-option `selected` attribute, which
+// is the mechanism test/x-model-server-value.test.js excludes selects for.
+test('every gear field carries its value in the served markup', () => {
+  expect(GEAR_SECTION).not.toContain('x-model');
+  expect(GEAR_SECTION).toContain('value="{{gear.name}}"');
+  expect(GEAR_SECTION).toContain('>{{gear.description}}</textarea>');
+  expect(GEAR_SECTION).toContain('selected');
+});
+
+test('an hx-boost history snapshot restores the same gear rows, not twice as many', async () => {
+  await renderGear(populatedClass);
+  const before = gearNameFields();
+
+  await render(document.body.innerHTML);
+  await tick();
+
+  expect(gearNameFields()).toEqual(before);
+});
+
+// A repeater's blank row is a normal intermediate state and routes/classes.js
+// drops it server-side. `required` on a dynamically added blank row silently
+// blocks submission with no visible error anywhere near the field. The six
+// fixed gear inputs this replaces were all `required`.
+test('no repeated gear input is required', () => {
+  expect(GEAR_SECTION).not.toContain('required');
+});
+
+// The gear descriptions used to carry data-toast-editor. _initToastUIEditors
+// runs on page load and on htmx afterSwap only, so a row added later would get
+// no editor at all -- and ToastUI writes its value back through getMarkdown(),
+// which reflows the verbatim source prose.
+test('no repeated gear input carries a markdown editor', () => {
+  expect(GEAR_SECTION).not.toContain('data-toast-editor');
+});
+
+test('a new class starts on six blank gear rows', async () => {
+  await renderGear(null);
+  expect(gearNameFields()).toEqual(
+    [0, 1, 2, 3, 4, 5].map((i) => `gear[${i}][name]`)
+  );
+  expect(postedValue('gear[0][name]')).toBe('');
+});
+
+// The positional default the six blank rows open on is the same split
+// normalizeGear and the backfill migration use, so a create that touches no
+// category still fills both columns.
+test('the six blank rows open on three Base and three Elective', async () => {
+  await renderGear(null);
+  expect(Array.from(document.querySelectorAll('[data-field="category"]')).map((el) => el.value))
+    .toEqual(['default', 'default', 'default', 'elective', 'elective', 'elective']);
+});
+
+test('an existing gear item posts every nested field under its bracket name', async () => {
+  await renderGear(populatedClass);
+  const gear = populatedClass.gear[0];
+
+  expect(postedValue('gear[0][name]')).toBe(gear.name);
+  expect(postedValue('gear[0][description]')).toBe(gear.description);
+  expect(postedValue('gear[0][category]')).toBe(gear.category);
+  expect(postedValue('gear[0][meters][0][label]')).toBe(gear.meters[0].label);
+  expect(postedValue('gear[0][meters][0][value]')).toBe(gear.meters[0].value);
+  expect(postedValue('gear[0][notes][0][text]')).toBe(gear.notes[0].text);
+  expect(postedValue('gear[0][notes][0][children][0][text]'))
+    .toBe(gear.notes[0].children[0].text);
+});
+
+// An explicit category wins over the row's position: this item sits first and
+// still opens on Elective, which is what makes the <select> a round trip rather
+// than a re-derivation.
+test('an explicit gear category selects its option against the row position', async () => {
+  await renderGear(populatedClass);
+  expect(postedValue('gear[0][category]')).toBe('elective');
+});
+
+// util/class-import.js's AI path writes gear with no category at all, so the
+// form has to answer the positional default rather than showing every row as
+// Base and then saving that.
+test('uncategorised gear opens on the positional default, not all Base', async () => {
+  await renderGear({ gear: [0, 1, 2, 3, 4, 5].map((i) => ({ name: `G${i}` })) });
+
+  expect(Array.from(document.querySelectorAll('[data-field="category"]')).map((el) => el.value))
+    .toEqual(['default', 'default', 'default', 'elective', 'elective', 'elective']);
+});
+
+// A seeded class has exactly the rows it has -- the six-blank-row default is
+// for a class with no gear at all, and padding an existing class would post
+// rows the admin never saw.
+test('an existing class renders only the gear it has', async () => {
+  await renderGear(populatedClass);
+  expect(gearNameFields()).toEqual(['gear[0][name]']);
+});
+
+test('the gear row prototypes post nothing', async () => {
+  await renderGear(populatedClass);
+  expect(document.querySelectorAll('template[data-prototype]').length).toBe(4);
+  expect(gearNameFields()).toEqual(['gear[0][name]']);
+});
+
+test('adding gear appends a blank row at the next index', async () => {
+  await renderGear(populatedClass);
+  await clickButton('Add gear');
+
+  expect(gearNameFields()).toEqual(['gear[0][name]', 'gear[1][name]']);
+  expect(postedValue('gear[1][name]')).toBe('');
+  expect(postedValue('gear[0][name]')).toBe(populatedClass.gear[0].name);
+  expect(document.querySelectorAll('[name$="[category]"]').length).toBe(2);
+});
+
+// Removing a row has to renumber the ones after it: the posted index is the
+// print order, so a gap or a duplicate index silently reorders or overwrites.
+test('removing gear renumbers the rows that follow it', async () => {
+  await renderGear(null);
+  document.querySelector('[name="gear[0][name]"]').value = 'First';
+  document.querySelector('[name="gear[2][name]"]').value = 'Third';
+
+  await clickButton('Remove gear', 1);
+
+  expect(gearNameFields()).toEqual(
+    [0, 1, 2, 3, 4].map((i) => `gear[${i}][name]`)
+  );
+  expect(postedValue('gear[0][name]')).toBe('First');
+  expect(postedValue('gear[1][name]')).toBe('Third');
+});
+
+// Renumbering rewrites names and ids, never values: a category the admin chose
+// is a curation decision, not a consequence of where the row happens to sit.
+test('removing gear leaves the surviving categories alone', async () => {
+  await renderGear(null);
+  await clickButton('Remove gear', 0);
+
+  expect(Array.from(document.querySelectorAll('[data-field="category"]')).map((el) => el.value))
+    .toEqual(['default', 'default', 'elective', 'elective', 'elective']);
+});
+
+test('removing gear renumbers its meters and notes with it', async () => {
+  await renderGear({
+    gear: [
+      { name: 'First', category: 'default', meters: [], notes: [] },
+      {
+        name: 'Second',
+        category: 'elective',
+        meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
+        notes: [{ text: 'Parent.', children: [{ text: 'Child.', children: [] }] }],
+      },
+    ],
+  });
+
+  await clickButton('Remove gear', 0);
+
+  expect(postedValue('gear[0][name]')).toBe('Second');
+  expect(postedValue('gear[0][category]')).toBe('elective');
+  expect(postedValue('gear[0][meters][0][label]')).toBe('Accuracy Boost');
+  expect(postedValue('gear[0][notes][0][text]')).toBe('Parent.');
+  expect(postedValue('gear[0][notes][0][children][0][text]')).toBe('Child.');
+  expect(postedGearNames().filter((name) => name.startsWith('gear[1]'))).toEqual([]);
+});
+
+test('gear meters, notes and sub-notes can each be added and removed', async () => {
+  await renderGear(null);
+
+  await clickButton('Add meter');
+  expect(postedGearNames()).toContain('gear[0][meters][0][label]');
+  expect(postedGearNames()).toContain('gear[0][meters][0][value]');
+
+  await clickButton('Add note');
+  expect(postedGearNames()).toContain('gear[0][notes][0][text]');
+
+  await clickButton('Add sub-note');
+  expect(postedGearNames()).toContain('gear[0][notes][0][children][0][text]');
+
+  await clickButton('Remove sub-note');
+  expect(postedGearNames()).not.toContain('gear[0][notes][0][children][0][text]');
+
+  await clickButton('Remove note');
+  expect(postedGearNames()).not.toContain('gear[0][notes][0][text]');
+
+  await clickButton('Remove meter');
+  expect(postedGearNames()).not.toContain('gear[0][meters][0][label]');
+});
+
+// An added row belongs to the gear item whose button was clicked, not to the
+// first one on the page.
+test('a meter is added to the gear item whose button was clicked', async () => {
+  await renderGear(null);
+  await clickButton('Add meter', 2);
+
+  expect(postedGearNames()).toContain('gear[2][meters][0][label]');
+  expect(postedGearNames()).not.toContain('gear[0][meters][0][label]');
+});
+
+// Every gear row is numbered in the served markup, not only after Alpine
+// renumbers: six rows all reading "Gear" is what the raw HTML would show before
+// Alpine boots.
+test('gear headings are numbered in the served markup', async () => {
+  await renderGear(null);
+  expect(Array.from(document.querySelectorAll('[data-gear-heading]'))
+    .map((el) => el.textContent.trim()))
+    .toEqual(['Gear 1', 'Gear 2', 'Gear 3', 'Gear 4', 'Gear 5', 'Gear 6']);
+});
+
+// A cloned row arrives carrying the prototype's ids. Two controls sharing an id
+// send every duplicated <label for> to whichever the browser finds first, so
+// clicking the new row's "Name" would focus the first row's field.
+test('added gear rows get unique ids and keep their labels pointed at them', async () => {
+  await renderGear(populatedClass);
+  await clickButton('Add gear');
+
+  const ids = Array.from(document.querySelectorAll('[data-field][id]')).map((el) => el.id);
+  expect(new Set(ids).size).toBe(ids.length);
+
+  for (const row of document.querySelectorAll('[data-gear-row]')) {
+    for (const label of row.querySelectorAll('[data-label-for]')) {
+      const field = row.querySelector(`[data-field="${label.dataset.labelFor}"]`);
+      expect(label.htmlFor).toBe(field.id);
+    }
+  }
+  expect(Array.from(document.querySelectorAll('[data-gear-heading]'))
+    .map((el) => el.textContent.trim())).toEqual(['Gear 1', 'Gear 2']);
+});
+
+// views/class-view.handlebars splits the two columns by an exact string match,
+// so the only two values it can render are the only two the select offers.
+test('the category select offers exactly the two values the class page renders', async () => {
+  await renderGear(null);
+  const options = Array.from(document.querySelectorAll('[data-field="category"] option'));
+  expect(options.map((el) => el.value)).toEqual(
+    ['default', 'elective', 'default', 'elective', 'default', 'elective',
+      'default', 'elective', 'default', 'elective', 'default', 'elective']
+  );
 });

@@ -2,6 +2,14 @@ const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
 const { v1LevelingSequence, v2LevelingSequence } = require('./enclave-consts');
 
+// The class form's gear category <select> has to pick the same `selected`
+// option normalizeGear would pick for the same item, or an uncategorised item
+// -- everything util/class-import.js's AI path writes -- would render as Base,
+// post 'default', and land in the wrong column the moment it sits fourth.
+// Re-exported rather than reimplemented so the rule has one home.
+const { gearCategory } = require('./class-gear');
+
+
 // N times helper, usage: {{#times 5}}<div>{{index}}</div>{{/times}}
 // https://stackoverflow.com/a/41463316
 const times = function (n, block) {
@@ -244,6 +252,7 @@ module.exports = {
   substring,
   concat,
   filterBy,
+  gearCategory,
   effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
