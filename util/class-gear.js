@@ -2,10 +2,19 @@
 // `classes.gear` holds.
 //
 // This is a different function with a different contract from the module-local
-// `normalizeGear` in util/class-import.js, which caps AI output at six items
-// and emits `{name, description}` only. Neither wraps the other -- and the AI
-// path emitting no `category` is exactly why the positional default below has
-// to keep working.
+// `normalizeGear` in util/class-import.js. Since `f4c5ffc` both emit the same
+// five-key contract -- `name`, `description`, `category`, `meters`, `notes` --
+// and both apply the same positional `category` default (R79), which is what
+// makes an AI-imported class's first admin save a no-op. The import one reads
+// already-parsed model output rather than a request body and caps the list at
+// six items. Neither wraps the other.
+//
+// So the AI path is no longer why the positional default below has to keep
+// working: it now supplies its own. What keeps the default here is everything
+// that still arrives without a usable `category` -- a legacy row stored before
+// the key existed, whose <select> needs an answer to render at all, and a
+// hand-built request that omits or misspells it. Both must land in one of the
+// two real columns rather than in neither.
 //
 // It mirrors util/class-abilities.js field for field, with `category` in place
 // of `paired_action`. The two are deliberately separate modules rather than one
@@ -82,11 +91,22 @@ const BASE_GEAR_COUNT = 3;
 // 31 pre-existing classes, and it is reproduced here so a legacy row, a
 // backfilled row and a freshly saved one all agree.
 //
-// `index` is the item's position in the SUBMITTED list -- not its position
-// among the items that happen to lack the key. An unrecognised value takes the
-// same fallback rather than being written through, because writing it through
-// would drop the item off the class page entirely: present in the column,
-// rendered in neither.
+// `index` is the item's position in the SAVED list -- the array the class page
+// will actually render -- not its position among the items that happen to lack
+// the key.
+//
+// R76 ruled the other way, and the reversal is deliberate. It held that a
+// dropped blank row KEEPS its position for defaulting, matching the backfill
+// migration's `WITH ORDINALITY` over the stored array. That reasoning was about
+// which index a SURVIVING item gets, and it did not consider what a blank row
+// above real items does: it pushes one of them across the Base/Elective
+// boundary, printing it under the wrong heading. Mislabelling a column is worse
+// than renumbering one, so `normalizeGear` now drops blank rows before it
+// numbers them and this reads the index the item ends up at.
+//
+// An unrecognised value takes the same fallback rather than being written
+// through, because writing it through would drop the item off the class page
+// entirely: present in the column, rendered in neither.
 //
 // Exported because views/class-form.handlebars needs the identical answer when
 // it decides which <option> is `selected` on an uncategorised item; a second
@@ -138,14 +158,18 @@ const normalizeNote = (row) => {
 // `pronunciation` there is no gear key outside the contract to preserve -- a
 // census of jsonb_object_keys over all 300 live gear items answers exactly
 // {category, description, name} and {category, description, meters, name, notes}.
+//
+// Blank rows are dropped BEFORE the items are numbered, so `index` is the
+// position in the saved array rather than in the submitted one -- see
+// `gearCategory` above for why that reverses R76.
 const normalizeGear = (value) => indexedRows(value)
+    .filter((row) => trimField(row.name))
     .map((row, index) => ({
         name: trimField(row.name),
         description: trimField(row.description),
         category: gearCategory(row.category, index),
         meters: indexedRows(row.meters).map(normalizeMeter).filter(Boolean),
         notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean)
-    }))
-    .filter((item) => item.name);
+    }));
 
 module.exports = { normalizeGear, gearCategory };

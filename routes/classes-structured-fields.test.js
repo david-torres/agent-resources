@@ -791,8 +791,9 @@ test('POST /classes trims the ends of every gear string and nothing else', async
 // The same positional split
 // supabase/migrations/20260904000001_backfill_gear_category.sql applied to the
 // 31 pre-existing classes, so a legacy row and a backfilled row agree. The AI
-// import path (util/class-import.js) still writes gear with no category at all,
-// so this is a live case, not a hypothetical one.
+// import path applies the identical rule of its own (util/class-import.js
+// `BASE_GEAR_COUNT`), so what reaches this default is a legacy row re-saved
+// through the form or a hand-built request that omits the key.
 test('POST /classes defaults the first three gear entries to default and the rest to elective', async () => {
   const body = { name: 'Test' };
   for (let i = 0; i < 6; i++) body[`gear[${i}][name]`] = `G${i}`;
@@ -853,6 +854,25 @@ test('POST /classes falls back to the positional default for an unrecognised gea
   expect(res.status).toBe(200);
   expect(capturedCreate.gear.map((item) => item.category))
     .toEqual(['default', 'default', 'default', 'elective', 'elective', 'elective']);
+});
+
+// A blank repeater row must not move a real item between the Base and Elective
+// columns. The rows are filtered before they are numbered, so the six items
+// that survive here split three and three whatever the blanks did to the
+// submitted indices. Reverses R76, which numbered the submitted list and would
+// answer 'elective' for `G3` -- printing it under the wrong heading.
+test('POST /classes reads the gear category default off the saved position, not the submitted one', async () => {
+  const body = { name: 'Test' };
+  body['gear[0][name]'] = '   ';
+  for (let i = 0; i < 6; i++) body[`gear[${i + 1}][name]`] = `G${i}`;
+
+  const res = await post('/classes', body);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.gear.map((item) => [item.name, item.category])).toEqual([
+    ['G0', 'default'], ['G1', 'default'], ['G2', 'default'],
+    ['G3', 'elective'], ['G4', 'elective'], ['G5', 'elective'],
+  ]);
 });
 
 // A repeater's blank row is a normal intermediate state -- the inputs carry no

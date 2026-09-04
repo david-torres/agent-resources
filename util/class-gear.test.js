@@ -125,16 +125,37 @@ test('a non-string field value is treated as blank', () => {
     .toEqual([{ name: 'Visor', description: '', category: 'default', meters: [], notes: [] }]);
 });
 
-// The position the default is read from is the position in the SUBMITTED list,
-// dropped blank rows included -- the list is mapped before it is filtered. In
-// practice every row the form renders carries an explicit <select> value, so
-// this only decides hand-built requests; it is pinned so that the answer is a
-// decision rather than an accident of statement order.
-test('a dropped blank row still occupies its position for the category default', () => {
+// The position the default is read from is the position in the SAVED list, with
+// blank rows already dropped -- the list is filtered before it is mapped. This
+// reverses R76, which had the blank row hold its slot: under that rule the
+// fourth row here fell to 'elective' and printed under Elective gear even
+// though only three items were saved. A blank row must not move a real item
+// between the two columns.
+//
+// In practice every row the form renders carries an explicit <select> value, so
+// this only decides hand-built requests and legacy rows; it is pinned so that
+// the answer is a decision rather than an accident of statement order.
+test('a dropped blank row does not shift the category default of the items that survive', () => {
   const rows = [named('   '), named('Second'), named('Third'), named('Fourth')];
 
   expect(normalizeGear(rows).map((item) => [item.name, item.category]))
-    .toEqual([['Second', 'default'], ['Third', 'default'], ['Fourth', 'elective']]);
+    .toEqual([['Second', 'default'], ['Third', 'default'], ['Fourth', 'default']]);
+});
+
+// The other half of the same rule: with the blanks gone the split falls where
+// the saved array says it does, so a six-item save interleaved with blank
+// repeater rows still prints three Base and three Elective.
+test('blank rows between real ones leave the Base/Elective split at three and three', () => {
+  const rows = [
+    named('One'), named('  '), named('Two'), named('Three'), named(''),
+    named('Four'), named('Five'), named('   '), named('Six'),
+  ];
+
+  expect(normalizeGear(rows).map((item) => [item.name, item.category]))
+    .toEqual([
+      ['One', 'default'], ['Two', 'default'], ['Three', 'default'],
+      ['Four', 'elective'], ['Five', 'elective'], ['Six', 'elective'],
+    ]);
 });
 
 // gearCategory is exported so views/class-form.handlebars can pick the
