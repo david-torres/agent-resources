@@ -2,6 +2,7 @@ const z = require("zod");
 const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
 const { createClass } = require("../models/class");
+const { blankTextToNull } = require("./class-fields");
 const { assertNonEmptyImportText } = require("./validate");
 
 const openai = new OpenAIChatApi(
@@ -147,11 +148,11 @@ const normalizeExamples = (examples) => (Array.isArray(examples) ? examples : []
   .filter((example) => example.length > 0);
 
 async function processClassImport(inputText, actor) {
-  const text = assertNonEmptyImportText(inputText, 'class writeup');
+  const writeup = assertNonEmptyImportText(inputText, 'class writeup');
   const prompt = `Parse the following class writeup into the JSON schema described below. Focus on creating a PCC (player-created class) entry.
 
 Class writeup:
-${text}
+${writeup}
 
 JSON output:`;
 
@@ -161,8 +162,8 @@ JSON output:`;
     const parsed = schema.parse(result.data);
     const classData = {
       ...parsed,
-      teaser: parsed.teaser ?? "",
-      overview: parsed.overview?.trim() || "",
+      teaser: text(parsed.teaser),
+      overview: text(parsed.overview),
       stat_line: optionalText(parsed.stat_line),
       stat_note: optionalText(parsed.stat_note),
       quote: optionalText(parsed.quote),
@@ -173,7 +174,7 @@ JSON output:`;
       examples: normalizeExamples(parsed.examples),
       tips_heading: optionalText(parsed.tips_heading),
       image_url: parsed.image_url || null,
-      tips: parsed.tips?.trim() || "",
+      tips: text(parsed.tips),
       abilities: normalizeAbilities(parsed.abilities),
       gear: normalizeGear(parsed.gear),
       status: parsed.status || "alpha",
@@ -182,6 +183,13 @@ JSON output:`;
       rules_version: parsed.rules_version || "v1",
       is_player_created: true,
     };
+
+    // The admin form's own rule, run rather than restated: a blank nullable
+    // text column is written as NULL (R86, util/class-fields.js). Without this
+    // an imported class lands '' on `teaser`, `tips` or `overview` and the
+    // admin's first save flips it to NULL and bumps `updated_at` -- exactly the
+    // no-op-save mutation Tasks 14-17 closed on every other write path.
+    blankTextToNull(classData);
 
     if (!actor?.profileId) {
       throw new Error("Missing profile id for PCC creation");

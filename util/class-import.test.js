@@ -177,3 +177,32 @@ test('imported examples arrive as an array of lines', async () => {
   await processClassImport('Beastmaster writeup', { profileId: 'p1' });
   expect(created.examples).toEqual(['Siegfried & Roy', 'Rexxar (Warcraft)']);
 });
+
+// R86 made the admin form write NULL rather than '' for a blank nullable text
+// column, and did not reach this path. An import that landed '' made the
+// admin's very first save a mutating one -- '' -> NULL, plus a fresh
+// `updated_at` -- on the one write path that never runs `blankTextToNull`.
+test('a blank teaser, tips or overview is imported as NULL, not as an empty string', async () => {
+  respondWith({ teaser: '   ', tips: '', overview: '  ' });
+  await processClassImport('Beastmaster writeup', { profileId: 'p1' });
+  expect(created.teaser).toBeNull();
+  expect(created.tips).toBeNull();
+  expect(created.overview).toBeNull();
+});
+
+// The same three when the model omits them entirely rather than answering
+// blank: `teaser` and `tips` are optional in the schema, so this is the shape a
+// writeup with no hook and no tips section actually produces.
+test('an omitted teaser or tips is imported as NULL', async () => {
+  respondWith({ teaser: undefined, tips: undefined });
+  await processClassImport('Beastmaster writeup', { profileId: 'p1' });
+  expect(created.teaser).toBeNull();
+  expect(created.tips).toBeNull();
+});
+
+test('a teaser and tips the model gave are written through', async () => {
+  respondWith({ teaser: 'A domineering animal tamer.', tips: 'Lead with the beast.' });
+  await processClassImport('Beastmaster writeup', { profileId: 'p1' });
+  expect(created.teaser).toBe('A domineering animal tamer.');
+  expect(created.tips).toBe('Lead with the beast.');
+});
