@@ -8,7 +8,19 @@ const baseClass = {
   id: '550e8400-e29b-41d4-a716-446655440000',
   name: 'Tinker',
   teaser: 'Builds weird gadgets.',
-  description: 'A very long description that should NOT appear in the list payload.',
+  overview: 'A very long overview that should NOT appear in the list payload.',
+  challenge_level: 'Mid',
+  stat_line: '+Might, +Skill',
+  stat_note: 'Skill is starred.',
+  quote: 'Measure twice.',
+  quote_source: 'Anon',
+  conduit_notes: 'Give them things to break.',
+  grounding: 'Grounded in tinkerer tropes.',
+  examples_heading: 'Examples include:',
+  examples: ['MacGyver'],
+  tips_heading: 'Tips for playing a Tinker:',
+  designer: 'Reece C. Downie',
+  prerelease_section: 'pcc',
   gear: [{ name: 'Wrench' }, { name: 'Bolt' }],
   abilities: [{ name: 'Jury Rig' }],
   status: 'release',
@@ -34,6 +46,7 @@ test('serializeClassSummaryForAgent omits heavy fields', () => {
 
   expect(out).not.toBeNull();
   expect(out).not.toHaveProperty('description');
+  expect(out).not.toHaveProperty('overview');
   expect(out).not.toHaveProperty('gear');
   expect(out).not.toHaveProperty('signature_gear');
   expect(out).not.toHaveProperty('abilities');
@@ -86,7 +99,20 @@ test('serializeClassForAgent still returns full shape for detail endpoint', () =
     actor: { profileId: 'profile-owner', role: 'player', userId: 'user-1' },
     unlockedClassIds: new Set()
   });
-  expect(out.description).toBe(baseClass.description);
+  expect(out).not.toHaveProperty('description');
+  expect(out.overview).toBe(baseClass.overview);
+  expect(out.challenge_level).toBe('Mid');
+  expect(out.stat_line).toBe('+Might, +Skill');
+  expect(out.stat_note).toBe('Skill is starred.');
+  expect(out.quote).toBe('Measure twice.');
+  expect(out.quote_source).toBe('Anon');
+  expect(out.conduit_notes).toBe('Give them things to break.');
+  expect(out.grounding).toBe('Grounded in tinkerer tropes.');
+  expect(out.examples_heading).toBe('Examples include:');
+  expect(out.examples).toEqual(['MacGyver']);
+  expect(out.tips_heading).toBe('Tips for playing a Tinker:');
+  expect(out.designer).toBe('Reece C. Downie');
+  expect(out.prerelease_section).toBe('pcc');
   expect(out.signature_gear).toEqual(baseClass.gear);
   expect(out).not.toHaveProperty('gear');
   expect(out.abilities).toEqual(baseClass.abilities);

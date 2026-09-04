@@ -498,3 +498,48 @@ test('a null gear entry renders no card in either column', () => {
   const baseColumn = html.slice(html.indexOf('Base Gear'), html.indexOf('Elective Gear'));
   expect(baseColumn).not.toContain('<div class="card">');
 });
+
+// Task 13: `classes.description` was a stale assembled duplicate of the
+// structured prose columns the pre-release import writes. The page must print
+// the parts themselves, in the document's printed order, so an edit to one
+// column can never disagree with an assembled copy beside it.
+test('renders the structured prose parts instead of a description blob', () => {
+  const html = renderClassView({
+    class: {
+      stat_line: '+Sensory, +Skill, +Vitality*',
+      quote: 'Better to have beasts that let themselves be killed than men who run away.',
+      quote_source: 'Jean-Paul Sartre',
+      overview: 'You are a domineering animal tamer.',
+      conduit_notes: 'Conduits designing a mission for you should try to ensure there are some workable animals available.',
+      grounding: 'Grounded in tropes surrounding animal handlers.',
+      examples_heading: 'Examples from history and pop culture include:',
+      examples: ['Siegfried & Roy', 'Rexxar (Warcraft)'],
+      challenge_level: 'Mid',
+      designer: 'Reece C. Downie',
+      abilities: [], gear: [],
+    },
+  });
+  expect(html).toContain('+Sensory, +Skill, +Vitality*');
+  expect(html).toContain('Jean-Paul Sartre');
+  expect(html).toContain('Examples from history and pop culture include:');
+  expect(html).toContain('Siegfried &amp; Roy');
+  expect(html).toContain('Challenge Level');
+  expect(html).toContain('Reece C. Downie');
+});
+
+// The prose columns are plain text, not markdown: rendering them unescaped
+// would let a PCC author's angle bracket become live markup on the page.
+test('escapes the structured prose rather than rendering it as markup', () => {
+  const html = renderClassView({
+    class: {
+      overview: 'A <script>alert(1)</script> tamer.',
+      abilities: [], gear: [],
+    },
+  });
+  expect(html).not.toContain('<script>alert(1)</script>');
+  expect(html).toContain('&lt;script&gt;');
+});
+
+test('the class page reads no description column', () => {
+  expect(SRC).not.toContain('class.description');
+});

@@ -57,7 +57,8 @@ const STALKER_V2 = {
 const WARDEN_V1 = {
   id: 'warden-v1', name: 'Warden', base_class_id: null,
   rules_edition: 'advent', rules_version: 'v1', is_player_created: false,
-  created_at: '2026-01-01T00:00:00Z', gear: [], abilities: []
+  created_at: '2026-01-01T00:00:00Z', gear: [], abilities: [],
+  overview: 'You hold the line.', teaser: 'A stubborn defender.'
 };
 const STALKER_ASPIRANT = {
   id: 'stalker-aspirant', name: 'Stalker', base_class_id: 'stalker-v1',
@@ -211,4 +212,28 @@ test('a preselected older version stays in the kiosk', async () => {
   expect(ids).toContain('stalker-v1');
   expect(ids).toContain('stalker-v2');
   expect(ids).toContain('warden-v1');
+});
+
+// Task 13: the kiosk panel used to read `classes.description`, an assembled
+// duplicate of the prose columns. public/js/character-wizard.js reads whatever
+// this payload names, so the rename has to land on both sides at once.
+test('the kiosk payload carries the class overview, not a description', async () => {
+  const warden = (await fetchWizardClasses()).find(c => c.id === 'warden-v1');
+  expect(warden).toBeDefined();
+  expect(warden).not.toHaveProperty('description_html');
+  expect(warden.overview_html).toContain('You hold the line.');
+  expect(warden.teaser_html).toContain('A stubborn defender.');
+});
+
+// The kiosk panel is plain DOM string-building with no test harness of its
+// own, so the contract between the payload above and its only consumer is
+// pinned here: rename one side without the other and the panel silently falls
+// back to the teaser for every class.
+test('the wizard panel reads the overview field the payload sends', () => {
+  const fs = require('fs');
+  const src = fs.readFileSync(
+    require('path').join(__dirname, '..', 'public', 'js', 'character-wizard.js'), 'utf8'
+  );
+  expect(src).toContain('c.overview_html || c.teaser_html');
+  expect(src).not.toContain('c.description_html');
 });

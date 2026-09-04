@@ -68,3 +68,12 @@ test('clicking a block updates the value that would post', async () => {
   await tick();
   expect(document.querySelector('input[name="stat_spread[might]"]').value).toBe('3');
 });
+
+// Task 13: routes/classes.js hands req.body to createClass/updateClass
+// wholesale, so a `description` textarea writes straight to a column that no
+// longer exists -- a hard 500 on both create and edit. Structured prose inputs
+// arrive in Task 14.
+test('the form posts no description field', () => {
+  expect(SRC).not.toContain('name="description"');
+  expect(SRC).not.toContain('{{class.description}}');
+});
