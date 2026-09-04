@@ -20,8 +20,8 @@
 //
 // The abilities/gear rows are FIXED-COUNT and server-rendered -- exactly 3
 // and 6, via {{#times}} (class-form.handlebars:157, :185). There is no
-// add-row UI. All 9 name fields are `required`, so a valid create must fill
-// every one.
+// add-row UI. All 9 name fields are `required`, as is the Overview textarea,
+// so a valid create must fill every one.
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
@@ -50,6 +50,7 @@ async function createClassViaUi(page, name) {
 
   const form = page.locator('form[hx-post="/classes"]');
   await form.locator('#class-name').fill(name);
+  await form.locator('#class-overview').fill(`${name} overview`);
 
   const abilities = form.locator('input[name="ability_name[]"]');
   await expect(abilities).toHaveCount(3);
