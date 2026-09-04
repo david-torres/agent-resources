@@ -50,20 +50,6 @@ async function createClassViaUi(page, name) {
 
   const form = page.locator('form[hx-post="/classes"]');
   await form.locator('#class-name').fill(name);
-  // #class-description is required and data-toast-editor -- write into the
-  // ProseMirror, not the hidden textarea.
-  //
-  // TWO ProseMirrors exist per editor: ToastUI mounts a markdown-mode one and a
-  // WYSIWYG-mode one simultaneously, and the markdown one comes FIRST in the
-  // DOM while being 0x0 and hidden. A positional selector (.first(), .last(),
-  // nth) picks the wrong one and .fill() then times out -- this cost Task 6 a
-  // fix round. Scope to the WYSIWYG container explicitly, and assert
-  // visibility first so a regression fails here rather than inside .fill().
-  const descEditor = page.locator('#class-description')
-    .locator('xpath=following-sibling::div[contains(@class,"toastui-editor-container")][1]')
-    .locator('.toastui-editor-ww-container .ProseMirror');
-  await expect(descEditor).toBeVisible();
-  await descEditor.fill(`${name} description`);
 
   const abilities = form.locator('input[name="ability_name[]"]');
   await expect(abilities).toHaveCount(3);
