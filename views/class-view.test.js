@@ -252,3 +252,31 @@ test('an inaccessible PDF renders no expiry tag', () => {
   expect(html).not.toContain('Access expires');
   expect(html).toContain('Unlock this class to gain access to the PDF.');
 });
+
+// Task 11 builds these partials in isolation: renderClassView only registers
+// breadcrumbs/private-badge, and class-view.handlebars does not invoke
+// class-meters/class-notes yet (that wiring is Task 12). Compiling each
+// partial's own source directly is the only way to exercise it now.
+function renderPartial(name, context) {
+  const partialSrc = fs.readFileSync(path.join(__dirname, 'partials', `${name}.handlebars`), 'utf8');
+  const hb = Handlebars.create();
+  hb.registerHelper(handlebarsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('markdown', renderMarkdown);
+  return hb.compile(partialSrc)(context);
+}
+
+test('renders meter labels and values as a definition list', () => {
+  const html = renderPartial('class-meters', {
+    meters: [{ label: 'Essence Cost', value: 'Low' }, { label: 'Duration', value: 'Low–High' }],
+  });
+  expect(html).toContain('Essence Cost');
+  expect(html).toContain('Low–High');
+});
+
+test('renders sub-notes nested inside their parent note', () => {
+  const html = renderPartial('class-notes', {
+    notes: [{ text: 'Parent note.', children: [{ text: 'Child note.', children: [] }] }],
+  });
+  expect(html).toMatch(/Parent note\.[\s\S]*<ul>[\s\S]*Child note\./);
+});

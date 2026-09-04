@@ -1,0 +1,10 @@
+{{#if meters.length}}
+<dl class="class-meters">
+  {{#each meters}}
+  <div class="class-meters__row">
+    <dt class="has-text-weight-semibold">{{this.label}}</dt>
+    <dd><span class="tag is-light">{{this.value}}</span></dd>
+  </div>
+  {{/each}}
+</dl>
+{{/if}}
