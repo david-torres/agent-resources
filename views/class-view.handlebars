@@ -102,8 +102,26 @@
     <div class="card">
       <div class="card-content">
         {{!-- The prose columns are plain text lifted verbatim from the source
-              document, not markdown, so every one of them is escaped. Printed
-              order matches the document's. --}}
+              document, so every one of them is escaped -- except `overview`,
+              which is rendered as markdown. Printed order matches the
+              document's.
+
+              `overview` is the column that inherited the body of the dropped
+              `description` (20260904000002 backfills it before the drop), and
+              that text was authored AS markdown -- `**Class Stats:**`,
+              `## Class Overview` -- and was rendered through this same helper
+              before the branch. 31 of the 50 classes hold it, so escaping it
+              would print the asterisks and hashes on the page. The character
+              wizard has never escaped it either: routes/characters.js sends
+              `overview_html: renderMarkdown(c.overview || '')`, so this is the
+              surface that disagreed.
+
+              The cost, accepted deliberately by the owner rather than dodged
+              with a per-class conditional: the other 19 overviews ARE verbatim
+              source-document text, and an underscore, a leading dash or a
+              double hyphen in them can now display differently. One rule for
+              the column beats a rule that depends on which class you are
+              looking at. --}}
         <div class="content">
           {{#or class.stat_line class.stat_note class.quote class.overview class.conduit_notes class.grounding class.examples_heading class.examples.length class.challenge_level class.designer}}
           <h3 class="title is-3">Description</h3>
@@ -123,7 +141,7 @@
           </blockquote>
           {{/if}}
           {{#if class.overview}}
-          <p>{{class.overview}}</p>
+          {{{markdown class.overview}}}
           {{/if}}
           {{#if class.conduit_notes}}
           <p>{{class.conduit_notes}}</p>

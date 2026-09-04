@@ -527,17 +527,70 @@ test('renders the structured prose parts instead of a description blob', () => {
   expect(html).toContain('Reece C. Downie');
 });
 
-// The prose columns are plain text, not markdown: rendering them unescaped
-// would let a PCC author's angle bracket become live markup on the page.
-test('escapes the structured prose rather than rendering it as markup', () => {
+// The prose columns other than `overview` are plain text, not markdown:
+// rendering them unescaped would let a PCC author's angle bracket become live
+// markup on the page. Named one by one rather than through `overview` alone,
+// which is what this test used to do -- when `overview` became markdown the
+// single assertion stopped covering the other eight at all.
+test('escapes every structured prose column except overview', () => {
   const html = renderClassView({
     class: {
-      overview: 'A <script>alert(1)</script> tamer.',
+      stat_line: 'A <script>alert(1)</script> line.',
+      stat_note: 'A <b>note</b>.',
+      quote: 'A <i>quote</i>.',
+      quote_source: 'A <u>source</u>.',
+      conduit_notes: 'A <script>alert(2)</script> note.',
+      grounding: 'A <em>grounding</em>.',
+      examples_heading: 'A <strong>heading</strong>:',
+      examples: ['A <code>example</code>'],
+      designer: 'A <span>designer</span>',
       abilities: [], gear: [],
     },
   });
-  expect(html).not.toContain('<script>alert(1)</script>');
-  expect(html).toContain('&lt;script&gt;');
+  expect(html).not.toContain('<script>');
+  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(html).toContain('&lt;script&gt;alert(2)&lt;/script&gt;');
+  expect(html).toContain('&lt;b&gt;note&lt;/b&gt;');
+  expect(html).toContain('&lt;i&gt;quote&lt;/i&gt;');
+  expect(html).toContain('&lt;u&gt;source&lt;/u&gt;');
+  expect(html).toContain('&lt;em&gt;grounding&lt;/em&gt;');
+  expect(html).toContain('&lt;strong&gt;heading&lt;/strong&gt;');
+  expect(html).toContain('&lt;code&gt;example&lt;/code&gt;');
+  expect(html).toContain('&lt;span&gt;designer&lt;/span&gt;');
+});
+
+// `overview` is the one column rendered as markdown, so escaping is not what
+// makes it safe -- util/markdown.js's sanitize-html pass is. It removes the
+// script outright rather than showing it, which is a stronger outcome than
+// escaping, and the assertion is on the property that matters: no live script
+// and no payload anywhere in the page.
+test('sanitizes the overview it renders as markdown', () => {
+  const html = renderClassView({
+    class: { overview: 'A <script>alert(1)</script> tamer.', abilities: [], gear: [] },
+  });
+  expect(html).not.toContain('<script>');
+  expect(html).not.toContain('alert(1)');
+  expect(html).toContain('tamer.');
+});
+
+// The legacy shape: a class whose only prose is the text
+// 20260904000002 backfills out of the dropped `description` column. That text
+// was authored as markdown and rendered through this helper before the branch,
+// so escaping it would print the asterisks and hashes on the page. 31 of the 50
+// live classes are in exactly this state.
+test('renders a legacy class whose only prose is its backfilled overview', () => {
+  const html = renderClassView({
+    class: {
+      overview: '**Class Stats:** ++ LUCK / + VITALITY\r\n\r\n## Class Overview\r\n\r\nYou hold the line.',
+      abilities: [], gear: [],
+    },
+  });
+  expect(html).toContain('Description');
+  expect(html).toContain('<strong>Class Stats:</strong>');
+  expect(html).toContain('<h2>Class Overview</h2>');
+  expect(html).toContain('You hold the line.');
+  expect(html).not.toContain('**Class Stats:**');
+  expect(html).not.toContain('## Class Overview');
 });
 
 test('the class page reads no description column', () => {
