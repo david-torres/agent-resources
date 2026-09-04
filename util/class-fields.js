@@ -29,7 +29,7 @@ const applyConstrainedSelects = (body) => {
 // `examples` is excluded: it is jsonb NOT NULL DEFAULT '[]', so blank means an
 // empty array.
 // `teaser` and `tips` were carved out of this list at first, to leave
-// pre-branch behaviour alone. R84 reversed that: three imported classes store a
+// pre-branch behaviour alone. R86 reversed that: three imported classes store a
 // NULL teaser and a no-op admin save was writing '' over it. Nothing in the
 // codebase distinguishes NULL from '' on these two columns -- `renderMarkdown(c.teaser || '')`,
 // the OpenGraph `filter(Boolean)` and every `{{#if}}` treat both as falsy -- so

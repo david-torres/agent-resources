@@ -2,8 +2,14 @@
 // shape `classes.abilities` holds.
 //
 // This is a different function with a different contract from the module-local
-// `normalizeAbilities` in util/class-import.js, which caps AI output at three
-// abilities and emits `{name, description}` only. Neither wraps the other.
+// `normalizeAbilities` in util/class-import.js. Since `f4c5ffc` both emit the
+// same five-key contract -- `name`, `description`, `paired_action`, `meters`,
+// `notes` -- which is what makes an AI-imported class's first admin save a
+// no-op. They differ either side of that: the import one reads already-parsed
+// model output rather than a request body, caps the list at three abilities,
+// and adds `pronunciation` only when the writeup gave a value, where this one
+// echoes `pronunciation` back whenever the request carried the key at all.
+// Neither wraps the other.
 //
 // It lives here rather than in routes/classes.js so that it can be tested
 // directly, the way util/crop.js's parseImageCrop is -- the object-shaped input
