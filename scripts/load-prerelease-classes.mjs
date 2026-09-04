@@ -146,7 +146,7 @@ const main = async (argv) => {
 
   const url = process.env.SUPABASE_URL || process.env.API_URL || '';
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SECRET_KEY || '';
-  const source = process.env.SUPABASE_URL ? 'SUPABASE_URL' : 'API_URL';
+  const source = process.env.SUPABASE_URL ? 'SUPABASE_URL' : process.env.API_URL ? 'API_URL' : 'no env var';
 
   console.log(`target: ${url || '(unset)'} (from ${source})`);
   console.log(apply ? 'mode: APPLY - this run writes' : 'mode: dry run');
@@ -214,10 +214,10 @@ const main = async (argv) => {
   // PostgREST's upsert is INSERT ... ON CONFLICT, and Postgres rejects the
   // proposed tuple on `rules_version` NOT NULL before the conflict resolves, so
   // batching them would mean putting `rules_version` -- an owner-controlled
-  // field the allowlist excludes -- into all 16 update payloads. Until that
-  // column gets a default, each update is its own statement; a failure stops
-  // the run and names the rows already written, and re-running converges
-  // because resolution accepts both spellings of every renamed class.
+  // field the allowlist excludes -- into all 16 update payloads. So each update
+  // is its own statement; a failure stops the run and names the rows already
+  // written, and re-running converges because resolution accepts both spellings
+  // of every renamed class.
   if (creates.length) {
     const { error: insertError } = await supabase.from('classes')
         .insert(creates.map((plan) => ({ ...plan.payload, rules_version: NEW_ROW_RULES_VERSION })));
