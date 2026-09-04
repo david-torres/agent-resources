@@ -1,11 +1,7 @@
 const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
-const {
-  times, date_tz, time_ago, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
-  setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl, substring,
-  concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
-} = require('./util/handlebars');
+const customHelpers = require('./util/handlebars');
 const { renderMarkdown } = require('./util/markdown');
 const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
@@ -31,6 +27,16 @@ const { loadNavItems } = require('./util/nav-loader');
 const { openGraphDefaults } = require('./util/open-graph');
 const { isGithubConfigured } = require('./services/feedback/github');
 
+// Spread wholesale so a helper added to util/handlebars cannot silently go
+// unregistered. Custom helpers come after handlebars-helpers so they keep
+// winning the one name both define (`times`).
+const engineHelpers = {
+  ...helpers,
+  ...customHelpers,
+  range,
+  markdown: renderMarkdown
+};
+
 const createApp = () => {
   const app = express();
 
@@ -42,29 +48,7 @@ const createApp = () => {
     layoutsDir: path.join(__dirname, 'views/layouts'),
     partialsDir: path.join(__dirname, 'views/partials'),
     defaultLayout: 'main',
-    helpers: {
-      ...helpers,
-      times,
-      range,
-      date_tz,
-      time_ago,
-      calendar_link,
-      encodeURIComponentH,
-      getTotalV1MissionsNeeded,
-      getTotalV2MissionsNeeded,
-      setVariable,
-      dump,
-      videoEmbed,
-      isSupportedVideoUrl,
-      substring,
-      concat,
-      effectiveRulesVersion,
-      wordCount,
-      perksForAbility,
-      nextPerkPosition,
-      json,
-      markdown: renderMarkdown
-    }
+    helpers: engineHelpers
   }));
   app.set('view engine', 'handlebars');
   app.set('views', path.join(__dirname, 'views'));
@@ -110,4 +94,4 @@ const createApp = () => {
   return app;
 };
 
-module.exports = { createApp };
+module.exports = { createApp, engineHelpers };
