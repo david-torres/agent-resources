@@ -105,13 +105,37 @@ const fetchAllRows = async (table, columns, narrow = identity) => {
   return rows;
 };
 
-// Paged like everything else here: a failure that stranded more than a page of
-// characters would otherwise fall back to raw uuids at exactly the moment
-// someone needs the names.
+// Paging bounds the response; this bounds the request. `in.(...)` puts every id
+// in the query string, and the gateway rejects an over-long request line with a
+// 414 before PostgREST ever sees it -- which would lose the character names
+// outright at the moment they are most wanted, the same failure the paging
+// above exists to prevent.
+//
+// Both numbers are measured against this stack rather than assumed. The limit
+// is nginx's default 8k request-line buffer: 219 ids answered 200 and 220
+// answered 414, putting the cliff at 8192 bytes of `GET <path?query> HTTP/1.1`.
+// The cost is 39 bytes per id, not 37, because supabase-js percent-encodes the
+// separator -- 36 for the uuid plus `%2C` (probed by spying on the client's own
+// fetch: one id built a 118-byte path+query, two built 157).
+//
+// Spending at most half the budget on ids leaves the other half for the rest of
+// the line, which is 92 bytes today. That is the headroom for a filter or a
+// longer table name someone adds later without re-measuring any of this.
+const REQUEST_LINE_LIMIT = 8192;
+const ID_QUERY_BYTES = 39;
+const ID_CHUNK = Math.floor(REQUEST_LINE_LIMIT / 2 / ID_QUERY_BYTES);
+
+const chunked = (items, size) => Array.from(
+  { length: Math.ceil(items.length / size) },
+  (_, index) => items.slice(index * size, index * size + size));
+
 const characterNamesById = async (ids) => {
-  if (ids.length === 0) return new Map();
-  const rows = await fetchAllRows('characters', 'id, name', query => query.in('id', ids));
-  return new Map(rows.map(row => [row.id, row.name]));
+  const names = new Map();
+  for (const batch of chunked(ids, ID_CHUNK)) {
+    const rows = await fetchAllRows('characters', 'id, name', query => query.in('id', batch));
+    for (const row of rows) names.set(row.id, row.name);
+  }
+  return names;
 };
 
 // The real resolver, not a reimplementation of it. A hand-built "known names"
