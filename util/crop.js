@@ -101,6 +101,35 @@ function parseImageCrop(value) {
   return validated;
 }
 
+// parseImageCrop answers `undefined` for two different things: "the user cleared
+// the crop" -- '' or, because the hidden field renders
+// `{{{JSONstringify class.image_crop}}}`, the literal string `null` -- and "this
+// value is not a crop at all". Only the first is an instruction to store NULL.
+//
+// Writing NULL for the second would let a malformed field wipe a stored crop,
+// and leaving the raw string in req.body -- what happened before -- writes it
+// into the jsonb column: that is how 17 of the 50 live rows came to hold a jsonb
+// string (`""` or a double-encoded object) instead of an object or NULL. Neither
+// is acceptable, so an unreadable value drops the key and the stored value is
+// left exactly as it is, the same way dropAdminOnlyFields leaves a column alone
+// by removing it from the payload.
+const CLEARED_CROP_VALUES = ['', 'null', 'undefined'];
+
+const applyImageCrop = (body) => {
+    const image_crop = parseImageCrop(body.image_crop);
+    if (image_crop !== undefined) {
+        body.image_crop = image_crop;
+        return;
+    }
+    const posted = typeof body.image_crop === 'string' ? body.image_crop.trim() : body.image_crop;
+    if (CLEARED_CROP_VALUES.includes(posted)) {
+        body.image_crop = null;
+        return;
+    }
+    delete body.image_crop;
+};
+
 module.exports = {
-  parseImageCrop
+  parseImageCrop,
+  applyImageCrop
 };

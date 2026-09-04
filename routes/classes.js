@@ -28,7 +28,7 @@ const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
-const { parseImageCrop } = require('../util/crop');
+const { applyImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
 const { normalizeGear } = require('../util/class-gear');
 const { parseExamples } = require('../util/class-examples');
@@ -712,10 +712,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
         req.body.status = ['alpha', 'beta'].includes(req.body.status) ? req.body.status : 'alpha';
     }
 
-    const image_crop = parseImageCrop(req.body.image_crop);
-    if (image_crop !== undefined) {
-        req.body.image_crop = image_crop;
-    }
+    applyImageCrop(req.body);
 
     req.body.stat_spread = parseStatSpread(req.body);
     req.body.examples = parseExamples(req.body);
@@ -755,10 +752,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     // Authz (owner-or-admin) is enforced by the service via classService.updateClass.
 
-    const image_crop = parseImageCrop(req.body.image_crop);
-    if (image_crop !== undefined) {
-        req.body.image_crop = image_crop;
-    }
+    applyImageCrop(req.body);
 
     req.body.abilities = normalizeAbilities(req.body.abilities);
     dropRetiredAbilityFields(req.body);

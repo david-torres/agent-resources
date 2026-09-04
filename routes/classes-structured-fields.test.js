@@ -1022,3 +1022,39 @@ test('POST /classes accepts nested gear metadata over multipart/form-data', asyn
   expect(res.status).toBe(200);
   expect(capturedCreate.gear).toEqual([expectedNestedGear]);
 });
+
+// `image_crop` is jsonb. The hidden field renders `{{{JSONstringify class.image_crop}}}`,
+// so a class with no crop posts the literal string `null`, and a class whose
+// column already holds a jsonb string posts that string quoted -- neither of
+// which parseImageCrop can read, and both of which used to be left in req.body
+// and written straight into the column. 17 of the 50 live rows hold a jsonb
+// string because of it.
+const VALID_CROP = { x: 0.1, y: 0.2, width: 0.5, height: 0.5, naturalWidth: 800, naturalHeight: 600 };
+
+test('PUT /classes/:id stores a parsed crop object', async () => {
+  await put(`/classes/${EXISTING_CLASS_ID}`, { name: 'Vanguard', image_crop: JSON.stringify(VALID_CROP) });
+  expect(capturedUpdate.image_crop).toEqual(VALID_CROP);
+});
+
+test('PUT /classes/:id clears the crop to NULL when the field posts empty or null', async () => {
+  await put(`/classes/${EXISTING_CLASS_ID}`, { name: 'Vanguard', image_crop: '' });
+  expect(capturedUpdate.image_crop).toBeNull();
+
+  await put(`/classes/${EXISTING_CLASS_ID}`, { name: 'Vanguard', image_crop: 'null' });
+  expect(capturedUpdate.image_crop).toBeNull();
+});
+
+// Not NULL: a value this handler cannot read is not an instruction to erase a
+// stored crop, and it must never reach the column as a raw string either.
+test('PUT /classes/:id leaves the crop column untouched when the posted value is unreadable', async () => {
+  for (const unreadable of ['""', JSON.stringify(JSON.stringify(VALID_CROP)), 'not json at all', '{"x":5}']) {
+    capturedUpdate = null;
+    await put(`/classes/${EXISTING_CLASS_ID}`, { name: 'Vanguard', image_crop: unreadable });
+    expect(capturedUpdate).not.toHaveProperty('image_crop');
+  }
+});
+
+test('POST /classes never writes an unreadable crop into the column', async () => {
+  await post('/classes', { name: 'New Class', image_crop: '""' });
+  expect(capturedCreate).not.toHaveProperty('image_crop');
+});

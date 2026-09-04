@@ -42,15 +42,14 @@
 //      pronunciation with a real value MUST survive.
 //   D. Ends-only trimming may remove leading/trailing whitespace. Interior
 //      bytes may never change.
-//   E. HTML form submission normalizes every line ending in a textarea value to
-//      CRLF (the URL-encoded/multipart form-data encoding algorithms both do
-//      it). That is the browser, not this code, and it is line endings only --
-//      no other byte moves. It is reported separately from D, and only when it
-//      survives trimming, so every value it rewrites is named in the output
-//      rather than assumed. It touches 38 values today, all of which store bare
-//      LFs: the 19 imported classes' `tips` bodies, one `teaser`, and 18
-//      ability descriptions across 6 legacy classes. No abilities, gear,
-//      examples or structured prose column of an imported class is among them.
+//   E. A stored CRLF (or lone CR) becomes LF. HTML form submission posts every
+//      textarea line ending as CRLF and util/newlines.js converts them back on
+//      the write path, so a value stored with LF -- what the loader writes --
+//      survives byte-identically and a legacy value stored with CRLF converges
+//      to LF the first time someone saves it. That is this code's own
+//      normalization, it is line endings only, and it may never touch a
+//      loader-written column of an imported class: the test asserts that
+//      separately and names every value it does touch in the output.
 //
 //   F. A NULL text column renders as an empty field and posts ''. The handlers
 //      map that back to NULL -- blankTextToNull for the prose columns,
@@ -58,6 +57,13 @@
 //      service's sanitizeUrlFields for image_url -- so a stored NULL and a
 //      posted '' are the same value here. A stored value that arrives empty is
 //      still a failure: only the NULL/'' distinction is waived, never content.
+//   G. A column the payload omits is unchanged, which is the whole claim being
+//      tested for it. Only `image_crop` is ever omitted: util/crop.js
+//      applyImageCrop drops the key when the posted value is not a readable
+//      crop, so the 17 rows whose column already holds a jsonb string keep it
+//      rather than having it overwritten or erased. The test counts how many
+//      rows are written back versus left alone, so "left alone" cannot quietly
+//      become the answer for all of them.
 //
 // Counts (abilities, meters, notes, sub-notes, pronunciations, and the two
 // permitted whitespace/line-ending adjustments) are printed rather than only
@@ -82,6 +88,8 @@ const { normalizeClassInput } = require('../services/class/input');
 const { normalizeAbilities } = require('./class-abilities');
 const { normalizeGear } = require('./class-gear');
 const { parseExamples } = require('./class-examples');
+const { applyImageCrop } = require('./crop');
+const { normalizeNewlines } = require('./newlines');
 const { statList } = require('./enclave-consts');
 
 const VIEWS = path.join(__dirname, '..', 'views');
@@ -108,14 +116,6 @@ const NOT_ROUND_TRIPPED = {
     updated_at: 'database timestamp',
     pdf_storage_path: 'written by the upload path, not posted by the form',
     pdf_updated_at: 'written by the upload path, not posted by the form',
-    // Excluded, and NOT because it round-trips: it does not. A NULL crop
-    // renders as the literal `null`, parseImageCrop answers undefined for that
-    // and for '', and routes/classes.js then leaves the raw string in the body,
-    // so a no-op save writes a jsonb string into the column. 17 of 50 rows
-    // already hold one ('""' or a double-encoded object). Reported with Task 17
-    // rather than fixed here, and listed so the next reader knows the exclusion
-    // is a known defect rather than a judgement that the column is safe.
-    image_crop: 'a hidden JSON field driven by the cropper widget; parsed by util/crop.js parseImageCrop, and today a no-op save rewrites it -- see the note above',
     stat_spread: 'the hidden inputs carry Alpine\'s :value, so a static render has no value to read; pinned by routes/classes-stat-spread.test.js and views/class-form.test.js'
 };
 
@@ -142,12 +142,18 @@ const SELECT_FIELDS = [
 
 const STRUCTURED_FIELDS = ['abilities', 'gear', 'examples'];
 
+// jsonb, and the one column a save may legitimately omit (rule G).
+const CROP_FIELD = 'image_crop';
+
 const COMPARED = [
     ...TEXT_FIELDS, ...MARKDOWN_EDITOR_FIELDS, ...SELECT_FIELDS,
-    ...STRUCTURED_FIELDS, 'is_public', 'is_player_created'
+    ...STRUCTURED_FIELDS, CROP_FIELD, 'is_public', 'is_player_created'
 ];
 
-// Allowlist entry E. Line endings only.
+// What the browser posts: every line ending as CRLF. Allowlist rule E is the
+// write path undoing it, which is util/newlines.js normalizeNewlines -- the real
+// function, not a restatement, since the claim is that the two compose to a
+// no-op rather than that this test can reproduce one of them.
 const submitNewlines = (value) => value.replace(/\r\n|\r|\n/g, '\r\n');
 
 // Allowlist entry D. `String.prototype.trim` is what both normalizers apply.
@@ -196,55 +202,59 @@ const counts = {
     abilities: 0, ability_meters: 0, ability_notes: 0, ability_sub_notes: 0, pronunciations: 0,
     gear: 0, gear_meters: 0, gear_notes: 0, gear_sub_notes: 0,
     examples: 0,
+    crops_written_back: 0, crops_left_untouched: 0,
     trimmed: [], line_endings_normalized: []
 };
 
 const imported = { abilities: 0, meters: 0, notes: 0, sub_notes: 0, pronunciations: 0 };
 
-// Applies allowlist D (and E for the textarea-backed fields) to a stored value,
-// recording every value it had to change so the report is a list of names
-// rather than a count nobody can check.
-const expectedText = (stored, where, { textarea = false } = {}) => {
-    const stored_ = String(stored ?? '');
-    const submitted = textarea ? submitNewlines(stored_) : stored_;
-    const expected = trimEnds(submitted);
-    // Reported separately, and only when the change survives: a trailing bare
-    // LF that CRLF normalization rewrites and trimming then removes is an
-    // ends-only trim, not a line-ending rewrite of the stored value.
-    if (expected !== trimEnds(stored_)) counts.line_endings_normalized.push(where);
-    if (trimEnds(stored_) !== stored_) counts.trimmed.push(where);
+// Applies allowlist rules D and E to a stored value, recording every value it
+// had to change -- with the class and column it belongs to, so the report is a
+// list of names rather than a count nobody can check, and so the verbatim
+// assertion below can filter it without parsing display strings.
+const expectedText = (stored, ctx, path) => {
+    const atRest = String(stored ?? '');
+    const expected = trimEnds(normalizeNewlines(atRest));
+    // Reported separately, and only when the change survives trimming: a
+    // trailing CRLF that becomes LF and is then trimmed away is an ends-only
+    // trim, not a line-ending rewrite of the stored value.
+    if (expected !== trimEnds(atRest)) counts.line_endings_normalized.push({ ...ctx, path });
+    if (trimEnds(atRest) !== atRest) counts.trimmed.push({ ...ctx, path });
     return expected;
 };
 
-const expectedMeter = (meter, where) => ({
-    label: expectedText(meter.label, `${where}.label`),
-    value: expectedText(meter.value, `${where}.value`)
+const expectedMeter = (meter, ctx, path) => ({
+    label: expectedText(meter.label, ctx, `${path}.label`),
+    value: expectedText(meter.value, ctx, `${path}.value`)
 });
 
-const expectedNote = (note, where) => ({
-    text: expectedText(note.text, `${where}.text`),
+const expectedNote = (note, ctx, path) => ({
+    text: expectedText(note.text, ctx, `${path}.text`),
     children: (note.children || []).map((child, index) => ({
-        text: expectedText(child.text, `${where}.children[${index}].text`),
+        text: expectedText(child.text, ctx, `${path}.children[${index}].text`),
         children: []
     }))
 });
 
 // Allowlist A and C.
-const expectedAbilities = (rows, className) => (rows || []).map((ability, index) => {
-    const where = `${className}.abilities[${index}]`;
-    const expected = {
-        name: expectedText(ability.name, `${where}.name`),
-        description: expectedText(ability.description, `${where}.description`, { textarea: true }),
-        paired_action: expectedText(ability.paired_action, `${where}.paired_action`),
-        meters: (ability.meters || []).map((meter, i) => expectedMeter(meter, `${where}.meters[${i}]`)),
-        notes: (ability.notes || []).map((note, i) => expectedNote(note, `${where}.notes[${i}]`))
-    };
-    // An explicit null loses the key; a real value must survive verbatim.
-    if (ability.pronunciation !== undefined && ability.pronunciation !== null) {
-        expected.pronunciation = expectedText(ability.pronunciation, `${where}.pronunciation`);
-    }
-    return expected;
-});
+const expectedAbilities = (rows, className) => {
+    const ctx = { class: className, column: 'abilities' };
+    return (rows || []).map((ability, index) => {
+        const path = `${className}.abilities[${index}]`;
+        const expected = {
+            name: expectedText(ability.name, ctx, `${path}.name`),
+            description: expectedText(ability.description, ctx, `${path}.description`),
+            paired_action: expectedText(ability.paired_action, ctx, `${path}.paired_action`),
+            meters: (ability.meters || []).map((meter, i) => expectedMeter(meter, ctx, `${path}.meters[${i}]`)),
+            notes: (ability.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`))
+        };
+        // An explicit null loses the key; a real value must survive verbatim.
+        if (ability.pronunciation !== undefined && ability.pronunciation !== null) {
+            expected.pronunciation = expectedText(ability.pronunciation, ctx, `${path}.pronunciation`);
+        }
+        return expected;
+    });
+};
 
 // Allowlist B. The positional default is restated here rather than imported
 // from util/class-gear.js: calling the function under test to build the
@@ -257,16 +267,19 @@ const expectedCategory = (category, index) =>
         ? category
         : (index < BASE_GEAR_COUNT ? 'default' : 'elective'));
 
-const expectedGear = (rows, className) => (rows || []).map((item, index) => {
-    const where = `${className}.gear[${index}]`;
-    return {
-        name: expectedText(item.name, `${where}.name`),
-        description: expectedText(item.description, `${where}.description`, { textarea: true }),
-        category: expectedCategory(item.category, index),
-        meters: (item.meters || []).map((meter, i) => expectedMeter(meter, `${where}.meters[${i}]`)),
-        notes: (item.notes || []).map((note, i) => expectedNote(note, `${where}.notes[${i}]`))
-    };
-});
+const expectedGear = (rows, className) => {
+    const ctx = { class: className, column: 'gear' };
+    return (rows || []).map((item, index) => {
+        const path = `${className}.gear[${index}]`;
+        return {
+            name: expectedText(item.name, ctx, `${path}.name`),
+            description: expectedText(item.description, ctx, `${path}.description`),
+            category: expectedCategory(item.category, index),
+            meters: (item.meters || []).map((meter, i) => expectedMeter(meter, ctx, `${path}.meters[${i}]`)),
+            notes: (item.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`))
+        };
+    });
+};
 
 const tally = (row) => {
     counts.classes += 1;
@@ -310,7 +323,8 @@ const blankToNull = (value) => (value === '' || value === undefined ? null : val
 // as classService.updateClass does before the row reaches Postgres.
 const roundTrip = async (row) => {
     const body = serializeForm(await renderForm(row));
-    return normalizeClassInput({
+    const payload = {
+        image_crop: body.image_crop,
         abilities: normalizeAbilities(body.abilities),
         gear: normalizeGear(body.gear),
         examples: parseExamples(body),
@@ -318,20 +332,24 @@ const roundTrip = async (row) => {
         is_player_created: body.is_player_created === 'true',
         ...Object.fromEntries([...TEXT_FIELDS, ...MARKDOWN_EDITOR_FIELDS, ...SELECT_FIELDS]
             .map((field) => [field, body[field]]))
-    });
+    };
+    applyImageCrop(payload);
+    return normalizeClassInput(payload);
 };
 
+const expectedScalar = (row, field) =>
+    expectedText(row[field], { class: row.name, column: field }, `${row.name}.${field}`);
+
 const expectedFor = (row) => ({
+    image_crop: row.image_crop,
     abilities: expectedAbilities(row.abilities, row.name),
     gear: expectedGear(row.gear, row.name),
-    examples: (row.examples || []).map((example, index) =>
-        expectedText(example, `${row.name}.examples[${index}]`)).filter((example) => example.length > 0),
+    examples: (row.examples || []).map((example, index) => expectedText(
+        example, { class: row.name, column: 'examples' }, `${row.name}.examples[${index}]`)),
     is_public: Boolean(row.is_public),
     is_player_created: Boolean(row.is_player_created),
-    ...Object.fromEntries(TEXT_FIELDS.concat(SELECT_FIELDS)
-        .map((field) => [field, expectedText(row[field], `${row.name}.${field}`)])),
-    ...Object.fromEntries(MARKDOWN_EDITOR_FIELDS
-        .map((field) => [field, expectedText(row[field], `${row.name}.${field}`, { textarea: true })]))
+    ...Object.fromEntries([...TEXT_FIELDS, ...SELECT_FIELDS, ...MARKDOWN_EDITOR_FIELDS]
+        .map((field) => [field, expectedScalar(row, field)]))
 });
 
 let classes;
@@ -353,9 +371,16 @@ test('saving every class unchanged preserves every metadata field', async () => 
         tally(row);
         const got = await roundTrip(row);
         const expected = expectedFor(row);
-        const scalar = (field) => !STRUCTURED_FIELDS.includes(field);
+        // Rule G: a column the payload omits is a column the save does not
+        // touch, so the stored value is what it still holds afterwards.
+        if (CROP_FIELD in got) counts.crops_written_back += 1;
+        else counts.crops_left_untouched += 1;
+        const settled = (side, field) => (field === CROP_FIELD && !(field in got)
+            ? row[CROP_FIELD]
+            : side[field]);
+        const scalar = (field) => !STRUCTURED_FIELDS.includes(field) && field !== CROP_FIELD;
         for (const field of COMPARED) {
-            const value = (side) => (scalar(field) ? blankToNull(side[field]) : side[field]);
+            const value = (side) => (scalar(field) ? blankToNull(side[field]) : settled(side, field));
             const a = JSON.stringify(canonical(value(got)));
             const b = JSON.stringify(canonical(value(expected)));
             if (a !== b) mismatches.push({ class: row.name, field, got: a, expected: b });
@@ -368,8 +393,9 @@ test('saving every class unchanged preserves every metadata field', async () => 
         line_endings_normalized: counts.line_endings_normalized.length,
         imported_classes: imported
     }));
-    console.log('ends-only trims:', counts.trimmed.join(', ') || 'none');
-    console.log('line endings normalized:', counts.line_endings_normalized.join(', ') || 'none');
+    const paths = (entries) => entries.map((entry) => entry.path).join(', ') || 'none';
+    console.log('ends-only trims:', paths(counts.trimmed));
+    console.log('line endings normalized:', paths(counts.line_endings_normalized));
 
     // A guard that compared nothing would also report no mismatches.
     expect(counts.abilities).toBeGreaterThan(0);
@@ -377,6 +403,29 @@ test('saving every class unchanged preserves every metadata field', async () => 
     expect(counts.ability_meters + counts.gear_meters).toBeGreaterThan(0);
     expect(counts.ability_notes + counts.gear_notes).toBeGreaterThan(0);
     expect(counts.pronunciations).toBeGreaterThan(0);
+    // And rule G cannot quietly become the answer for every row.
+    expect(counts.crops_written_back).toBeGreaterThan(0);
 
     expect(mismatches).toEqual([]);
+});
+
+// Rule E is a normalization, not a licence. The columns
+// scripts/load-prerelease-classes.mjs writes hold a character-for-character
+// copy of the source document on the 19 imported classes, and a save must not
+// move a byte in any of them -- line endings included. Legacy rows are where the
+// stored CRLFs live, and converging them to LF on their next save is the
+// deliberate cost of making the imported corpus survive.
+test('no line ending in an imported class\'s loader-written column is rewritten', async () => {
+    const { FIELDS } = await import('../scripts/load-prerelease-classes.mjs');
+    const importedNames = new Set(classes
+        .filter((row) => row.prerelease_section !== null)
+        .map((row) => row.name));
+
+    const verbatim = counts.line_endings_normalized
+        .filter((entry) => importedNames.has(entry.class) && FIELDS.includes(entry.column))
+        .map((entry) => entry.path);
+
+    // The 19 imported classes' `tips` are what this pins in practice: LF at
+    // rest, CRLF over the wire, LF again at rest.
+    expect(verbatim).toEqual([]);
 });
