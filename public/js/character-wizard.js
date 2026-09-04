@@ -283,11 +283,15 @@ window.CharacterWizard = (function () {
       if (!v) return '';
       return '<span class="tag is-light mr-1">' + esc(k) + ': +' + v + '</span>';
     }).join('');
+    // The 19 imported classes carry the heading the source document prints
+    // above their tips ("Quick Tips", "Tips on Playing an Ardent"); everything
+    // else, and any class whose heading is blank, keeps the generic one.
     let tipsBlock = '';
     if (c.tips_html) {
+      const tipsHeading = (c.tips_heading || '').trim() || 'Tips';
       tipsBlock = ''
         + '<div class="wizard-tips mt-3">'
-        +   '<h5 class="title is-6 mb-1">Tips</h5>'
+        +   '<h5 class="title is-6 mb-1">' + esc(tipsHeading) + '</h5>'
         +   '<div class="content mb-0">' + c.tips_html + '</div>'
         + '</div>';
     }

@@ -58,7 +58,8 @@ const WARDEN_V1 = {
   id: 'warden-v1', name: 'Warden', base_class_id: null,
   rules_edition: 'advent', rules_version: 'v1', is_player_created: false,
   created_at: '2026-01-01T00:00:00Z', gear: [], abilities: [],
-  overview: 'You hold the line.', teaser: 'A stubborn defender.'
+  overview: 'You hold the line.', teaser: 'A stubborn defender.',
+  tips_heading: 'Tips on Playing a Warden', tips: 'Hold the door.'
 };
 const STALKER_ASPIRANT = {
   id: 'stalker-aspirant', name: 'Stalker', base_class_id: 'stalker-v1',
@@ -186,6 +187,10 @@ afterAll(async () => {
   delete require.cache[require.resolve('./characters')];
 });
 
+const wizardPanelSource = () => require('fs').readFileSync(
+  require('path').join(__dirname, '..', 'public', 'js', 'character-wizard.js'), 'utf8'
+);
+
 const fetchWizardClasses = async (query = '') => {
   const res = await fetch(`${baseUrl}/characters/wizard${query}`, {
     headers: { Accept: 'text/html', Authorization: 'Bearer valid-jwt' },
@@ -230,10 +235,29 @@ test('the kiosk payload carries the class overview, not a description', async ()
 // pinned here: rename one side without the other and the panel silently falls
 // back to the teaser for every class.
 test('the wizard panel reads the overview field the payload sends', () => {
-  const fs = require('fs');
-  const src = fs.readFileSync(
-    require('path').join(__dirname, '..', 'public', 'js', 'character-wizard.js'), 'utf8'
-  );
+  const src = wizardPanelSource();
   expect(src).toContain('c.overview_html || c.teaser_html');
   expect(src).not.toContain('c.description_html');
+});
+
+// `tips_heading` was stored on all 19 imported classes, editable, exported and
+// sent to the agent, but rendered on no surface at all. The kiosk panel is the
+// one place `tips` is printed, so the heading the source document puts above
+// those tips travels with them.
+test('the kiosk payload carries the class tips heading', async () => {
+  const classes = await fetchWizardClasses();
+  const warden = classes.find(c => c.id === 'warden-v1');
+  expect(warden.tips_heading).toBe('Tips on Playing a Warden');
+  expect(warden.tips_html).toContain('Hold the door.');
+  // A class with no heading sends null rather than an empty string, so the
+  // panel's fallback is reached the same way for both.
+  expect(classes.find(c => c.id === 'stalker-v2').tips_heading).toBeNull();
+});
+
+// The other half of that contract. A blank heading -- Fortean stores '' -- must
+// fall back to the generic word rather than print an empty <h5>.
+test('the wizard panel prints the tips heading, falling back when it is blank', () => {
+  const src = wizardPanelSource();
+  expect(src).toContain("const tipsHeading = (c.tips_heading || '').trim() || 'Tips';");
+  expect(src).toContain('esc(tipsHeading)');
 });

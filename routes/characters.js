@@ -204,6 +204,9 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       overview_html: renderMarkdown(c.overview || ''),
       teaser_html: renderMarkdown(c.teaser || ''),
       tips_html: renderMarkdown(c.tips || ''),
+      // The heading the source document prints above the tips. Sent as plain
+      // text, not markdown: it is a heading, and the panel escapes it.
+      tips_heading: c.tips_heading || null,
       image_url: c.image_url || null,
       image_crop: c.image_crop || null,
       rules_edition: c.rules_edition || 'advent',
