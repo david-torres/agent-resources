@@ -105,7 +105,9 @@
               document, not markdown, so every one of them is escaped. Printed
               order matches the document's. --}}
         <div class="content">
+          {{#or class.stat_line class.stat_note class.quote class.overview class.conduit_notes class.grounding class.examples_heading class.examples.length class.challenge_level class.designer}}
           <h3 class="title is-3">Description</h3>
+          {{/or}}
           {{#if class.stat_line}}
           <p><strong>{{class.stat_line}}</strong></p>
           {{/if}}

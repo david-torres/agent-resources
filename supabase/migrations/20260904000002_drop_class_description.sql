@@ -5,9 +5,13 @@ ALTER TABLE public.classes DROP COLUMN IF EXISTS description;
 
 -- DROP COLUMN does not rewrite a plpgsql body, so dup_class survives the ALTER
 -- above still naming `description` and fails at call time. Recreated here with
--- the structured prose columns added to the copy list: the function names its
--- columns explicitly and omitted all thirteen, so duplicating a class silently
--- dropped every field the pre-release import wrote.
+-- the copy list corrected: the function names its columns explicitly and
+-- omitted all thirteen structured prose columns, so duplicating a class
+-- silently dropped every field the pre-release import wrote. Four non-prose
+-- columns were missing too -- `teaser`, `tips`, `stat_spread` and
+-- `visibility`. `stat_spread` is the costly one: a fork landing `{}` offers
+-- zero stat points in the character wizard's step 2. `tips` was copied by the
+-- baseline function and lost when 20260525000003 rewrote it.
 CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text, new_edition text DEFAULT NULL)
 RETURNS uuid
 LANGUAGE plpgsql
@@ -33,6 +37,10 @@ BEGIN
         abilities,
         image_url,
         image_crop,
+        teaser,
+        tips,
+        stat_spread,
+        visibility,
         challenge_level,
         stat_line,
         stat_note,
@@ -61,6 +69,10 @@ BEGIN
         abilities,
         image_url,
         image_crop,
+        teaser,
+        tips,
+        stat_spread,
+        visibility,
         challenge_level,
         stat_line,
         stat_note,

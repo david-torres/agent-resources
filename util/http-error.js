@@ -30,6 +30,17 @@ function classifyError(error, fallback = {}) {
         message: "Something else still refers to this, so it can't be deleted yet.",
       };
       break;
+    // PGRST204 = PostgREST could not find a column named in the payload. In
+    // practice that is a browser tab left open across a migration, still
+    // posting a field that no longer exists. Nothing is written, so the only
+    // thing the user can act on is reloading the form.
+    case 'PGRST204':
+      base = {
+        status: 400,
+        title: 'Out of date',
+        message: 'This form is out of date. Please refresh the page and try again.',
+      };
+      break;
     case 'conduit_taken':
       base = { status: 409, title: 'Conduit taken', message: 'This game already has a Conduit.' };
       break;

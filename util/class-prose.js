@@ -19,13 +19,32 @@ const CLASS_PROSE_FIELDS = [
   'prerelease_section',
 ];
 
+// The agent payload is the one consumer whose set is not the columns: it drops
+// `prerelease_section`, which records which section of the source PDF a class
+// came from -- provenance, not class content -- and adds `tips`, because a
+// `tips_heading` with no body under it is not worth sending.
+const CLASS_AGENT_PROSE_FIELDS = [
+  ...CLASS_PROSE_FIELDS.filter((field) => field !== 'prerelease_section'),
+  'tips',
+];
+
 // `examples` is a jsonb array; every other part is text.
-const pickClassProse = (classData = {}) =>
-  Object.fromEntries(CLASS_PROSE_FIELDS.map((field) => [
+const pickClassFields = (classData, fields) =>
+  Object.fromEntries(fields.map((field) => [
     field,
     field === 'examples'
       ? (Array.isArray(classData.examples) ? classData.examples : [])
       : (classData[field] ?? null),
   ]));
 
-module.exports = { CLASS_PROSE_FIELDS, pickClassProse };
+const pickClassProse = (classData = {}) => pickClassFields(classData, CLASS_PROSE_FIELDS);
+
+const pickClassProseForAgent = (classData = {}) =>
+  pickClassFields(classData, CLASS_AGENT_PROSE_FIELDS);
+
+module.exports = {
+  CLASS_PROSE_FIELDS,
+  CLASS_AGENT_PROSE_FIELDS,
+  pickClassProse,
+  pickClassProseForAgent,
+};
