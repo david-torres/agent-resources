@@ -984,7 +984,10 @@ Row ids are preserved, so `character_perks.class_ability_id` keeps resolving and
 bun run scripts/report-character-impact.mjs; echo "exit=$?"
 ```
 
-Expected: `exit=0`, `no character rows reference a removed class item`.
+Expected: an empty vanishing-names table. The exit code is still `1` — the
+report also lists the pre-existing `Agent’s Fieldcoat` / `Neuralyzer` pair on
+Fortean, which no remap touches — so read the tables, not the exit code. See
+Task 18 Step 2c.
 
 - [ ] **Step 5: Commit**
 
@@ -1683,7 +1686,29 @@ decision before continuing.
 bun run scripts/report-character-impact.mjs; echo "exit=$?"
 ```
 
-Expected: `exit=0`. Production has more characters than local, so a name absent locally can still be held there. **A non-zero exit stops the rollout** — the new names go back through Task 10a Step 4 for confirmation and into the remap file.
+**Expected: `exit=1`, and that is not a failure.** The report knows nothing
+of `docs/data/prerelease-name-remap.json` — it compares the live catalogue
+against what characters hold and reports every name it cannot resolve — so
+before the load it necessarily lists all 15 remapped names, and after the load
+it still exits 1 on the baseline pair below. Gate on the **names it prints**,
+never on the exit code.
+
+The rollout proceeds only if the reported names are exactly:
+
+- the 15 `from` names in `docs/data/prerelease-name-remap.json`, and
+- the known baseline pair `Agent’s Fieldcoat` (U+2019 apostrophe) and
+  `Neuralyzer` on Fortean, which already resolve to nothing on production today
+  and strand Thaddeus and Agent Jack Hawthorne. This branch neither causes nor
+  repairs them.
+
+**Any name outside that set stops the rollout.** Production holds more
+characters than local, so a name absent locally can still be held there; each
+one goes back through Task 10a Step 4 for the owner's confirmation and into the
+remap file before Step 3 runs.
+
+Re-run this after Step 4. It should then print the baseline pair alone — still
+`exit=1`, with an empty vanishing-names table. Anything more means the load left
+a character holding a name the catalogue no longer has.
 
 - [ ] **Step 3: Dry-run the loader against production**
 
@@ -1711,6 +1736,22 @@ this one command, and it belongs on this line and nowhere else. Note that
 `--allow-unremapped` does **not** travel with it -- the loader rejects that
 against a non-local target under any flag, because leaving live characters
 unsaveable is a local rehearsal state and never a deployed one.
+
+**The loader's four write phases are not atomic.** Class rows, abilities, gear
+and the remap `UPDATE`s run in sequence with no enclosing transaction, so a
+failure partway through leaves the load half-applied and the characters holding
+a not-yet-remapped name unsaveable until it finishes. Every phase is idempotent
+and resolution accepts both spellings, so **on a non-zero exit re-run it
+immediately** rather than pausing to investigate — the half-applied state is the
+one worth spending the least time in.
+
+**It renames the `classes` row, not `characters.class`.** The 7 characters
+created under the old name keep `class = 'Witchhunter'` in their own column.
+Not save-blocking — all 7 carry a `class_id`, and the name lookup only runs when
+that is absent — and not new: 212 `Warrior`, 12 `Shonen` and 3 `Ember`
+characters are already desynced the same way. The one visible cost is that
+`routes/missions.js` keys `classAbilityList` by that name, so those 7 see an
+empty ability list on their missions page.
 
 This is the step that renames production's `Witchhunter` row to `Witchfinder`.
 See the sequencing note at the top of this task: it closes a window the deploy
