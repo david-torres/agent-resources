@@ -31,6 +31,7 @@ const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/cl
 const { parseImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
 const { normalizeGear } = require('../util/class-gear');
+const { parseExamples } = require('../util/class-examples');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
 const { partitionClassGroups } = require('../util/class-filter');
@@ -65,13 +66,6 @@ const parseStatSpread = (body) => {
     }
     return spread;
 };
-
-// One example per line. Ends-only trimming: interior runs of whitespace, en
-// dashes and curly quotes are verbatim content copied from the source document.
-const parseExamples = (body) => String(body.examples ?? '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0);
 
 // Mirrors the CHECK constraints these two columns carry. Both accept NULL and
 // reject '', so an unselected option must land as NULL rather than as the empty

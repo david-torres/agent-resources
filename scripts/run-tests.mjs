@@ -10,6 +10,7 @@ const integrationFiles = new Set([
   'models/nav-rls.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
+  'util/class-form-round-trip.integration.test.js',
   'util/class-structured-columns.integration.test.js',
   'util/core-roster.integration.test.js',
   'util/whitespace-integrity.integration.test.js'
