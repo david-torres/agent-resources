@@ -1538,9 +1538,33 @@ git commit -m "test: guard character item names against class content changes"
 
 **Files:** none modified.
 
-**Sequencing: Step 4 runs in the same maintenance window as the code deploy.**
-The Witchhunter -> Witchfinder rename lands on both sides of this branch, but not
-at the same moment. `util/enclave-consts.js` (`classGearList`, `classAbilityList`,
+**Sequencing: Steps 2 to 4 are one maintenance window.** Three things have to
+land -- the migrations, the code deploy, and the loader run -- and every gap
+between them costs something. The order is: `db push` (Step 2), deploy
+immediately (Step 2a), loader `--apply` (Step 4). Do not pause between them.
+
+**Migrations before the deploy, and the deploy right behind them.** Both orders
+have a bad window; this one's is shorter and self-limiting.
+
+- *If you push and do not deploy:* the code still running is `main`, whose class
+  form posts a `required` `description` field
+  (`views/class-form.handlebars:87` on `main`) and whose write handler passes the
+  body to the repository with no column allowlist. `20260904000002` has just
+  dropped that column, so **every admin class save fails** until the deploy lands
+  -- PostgREST rejects the insert on a column that no longer exists. The agent
+  serializer (`models/class.js:345` on `main`) also starts sending an empty
+  `description` for every class. The window is exactly as long as you take to
+  deploy, which is why this is the order to use.
+- *If you deploy and do not push:* the new code reads the structured columns.
+  They do not exist yet, so **class saves fail against missing columns** and
+  `/classes` pages render prose-blank -- the new view reads `overview`, and
+  nothing has backfilled it. This window does not close on its own; it closes
+  when somebody remembers to push, which is the failure mode the ordering above
+  avoids.
+
+**The loader in the same window (Witchhunter -> Witchfinder).** This rename
+lands on both sides of the branch, but not at the same moment.
+`util/enclave-consts.js` (`classGearList`, `classAbilityList`,
 `aspirantPreviewClassList`, `classStatSpread`) and `util/starter-content.js`
 (`CORE_CLASS_UNLOCKS.aspirant`) are already rekeyed to `Witchfinder` in the code;
 production's `classes` row is still named `Witchhunter` until the loader renames
@@ -1556,10 +1580,11 @@ it at Step 4. In the gap between the deploy and that step:
 - `/library` labels the unlock `Witchfinder` while `/classes` still shows
   `Witchhunter` -- one class under two names on two pages.
 
-Nothing there is destructive and all of it self-heals the moment Step 4 applies,
-so the cost is exactly the length of the gap, paid by anyone importing or reading
-a Witchhunter/Witchfinder in it. Deploy and load in one sitting; do not deploy on
-a Friday and load on Monday.
+Nothing in that last group is destructive and all of it self-heals the moment
+Step 4 applies, so its cost is exactly the length of the gap, paid by anyone
+importing or reading a Witchhunter/Witchfinder in it. The migration/deploy gap
+above is not so forgiving: it breaks writes outright. Push, deploy and load in
+one sitting; do not push on a Friday and finish on Monday.
 
 - [ ] **Step 1: Back up production**
 
@@ -1584,15 +1609,37 @@ Expected: these **three** migrations applied, in this order:
 | --- | --- |
 | `20260904000000_class_structured_content.sql` | Adds the 13 structured prose columns and drops the three dead `class_abilities` columns |
 | `20260904000001_backfill_gear_category.sql` | Writes `gear[].category` positionally onto the pre-existing classes |
-| `20260904000002_drop_class_description.sql` | Drops `classes.description` and recreates `dup_class` without it |
+| `20260904000002_drop_class_description.sql` | Copies `description` into `overview` where `overview` is NULL, then drops `classes.description` and recreates `dup_class` without it |
+
+The backfill in the third one is the step with a countable result: on a fresh
+apply it writes **47 rows** -- every class that predates this branch, all of
+which carry a non-empty `description` and no structured prose. 19 of those 47
+are overwritten later, at Step 4, when the loader writes real structured prose
+over them; the other 28 keep the backfilled text as their whole class page.
+It skips any row that already has an `overview`, so re-running the migration
+writes nothing.
 
 `db push` also carries any earlier migration production has not yet seen (the
 two `20260903*` whitespace ones, if they have not gone up) -- those sort before
 these and are not this branch's. **Read the applied list and confirm all three
-`20260904*` names are in it.** A partial push leaves the deployed code reading
-columns that are not there; stop and fix it before Step 2a.
+`20260904*` names are in it.** A partial push leaves the code you are about to
+deploy reading columns that are not there; stop and fix it before Step 2a rather
+than deploying on top of it.
 
-- [ ] **Step 2a: Re-count uncategorised gear against production (R45)**
+- [ ] **Step 2a: Deploy the code**
+
+Immediately after the push, by whatever route this project deploys. See the
+sequencing note at the top of this task: from the moment `20260904000002` lands
+until this step completes, an admin saving a class on the old code gets a
+failure, because the form it is serving still posts the `description` column the
+migration just dropped. Nothing else is affected -- reads, characters, missions
+and the character wizard all keep working -- but this is the one step whose delay
+costs writes rather than appearance.
+
+Expected: the deployed `/classes` list and a class page render, and one admin
+class save round-trips without error.
+
+- [ ] **Step 2b: Re-count uncategorised gear against production (R45)**
 
 `20260904000001`'s predicate is deliberately fail-closed: it rewrites a class
 only when `gear` is a six-item array in which *every* item is an object with no
@@ -1630,7 +1677,7 @@ known to be correct for the six-item shape, which is precisely why the migration
 refused to guess at anything else. Record the rows and hand them back for a
 decision before continuing.
 
-- [ ] **Step 2b: Run the character-impact report against production**
+- [ ] **Step 2c: Run the character-impact report against production**
 
 ```bash
 bun run scripts/report-character-impact.mjs; echo "exit=$?"
