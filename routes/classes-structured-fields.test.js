@@ -346,3 +346,269 @@ test('PUT /classes/:id treats a whitespace-only prose field as blank', async () 
   expect(res.status).toBe(200);
   expect(capturedUpdate.overview).toBeNull();
 });
+
+// ---------------------------------------------------------------------------
+// Task 15: the repeatable ability editor.
+//
+// Express runs express.urlencoded({ extended: true }), whose body-parser passes
+// qs depth: 32, so `abilities[0][notes][0][children][0][text]` -- six levels --
+// arrives already nested. Bare qs.parse defaults to depth: 5 and would hand
+// back a literal "[text]" property, so every test below goes through post()/
+// put() and the real middleware rather than parsing a query string itself.
+//
+// The fixtures carry an interior double space, an en dash (U+2013) and a curly
+// apostrophe (U+2019) in the description and in a note: normalizeAbilities
+// trims the ends of a submitted string and changes nothing else, so a collapse
+// or a punctuation rewrite has to fail here.
+const ABILITY_DESCRIPTION = 'Conjure a magical  ring – it’s the collar’s twin.';
+const NOTE_TEXT = 'Duration scales  on intimidation – the target’s, not yours.';
+
+const nestedAbilityBody = {
+  name: 'Test',
+  'abilities[0][name]': 'Collar',
+  'abilities[0][description]': ABILITY_DESCRIPTION,
+  'abilities[0][paired_action]': 'Call a cowed animal to heel.',
+  'abilities[0][meters][0][label]': 'Essence Cost',
+  'abilities[0][meters][0][value]': 'Low',
+  'abilities[0][notes][0][text]': NOTE_TEXT,
+  'abilities[0][notes][0][children][0][text]': 'Ends early if the collar is destroyed.',
+};
+
+const expectedNestedAbility = {
+  name: 'Collar',
+  description: ABILITY_DESCRIPTION,
+  paired_action: 'Call a cowed animal to heel.',
+  meters: [{ label: 'Essence Cost', value: 'Low' }],
+  notes: [{
+    text: NOTE_TEXT,
+    children: [{ text: 'Ends early if the collar is destroyed.', children: [] }],
+  }],
+};
+
+test('POST /classes accepts nested ability metadata from the form', async () => {
+  const res = await post('/classes', nestedAbilityBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([expectedNestedAbility]);
+});
+
+test('PUT /classes/:id accepts nested ability metadata from the form', async () => {
+  const res = await put(`/classes/${EXISTING_CLASS_ID}`, nestedAbilityBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedUpdate.abilities).toEqual([expectedNestedAbility]);
+});
+
+// Ends-only trimming. The browser and the admin both leave whitespace at the
+// edges; everything between the edges is a verbatim copy of the source
+// document and must survive byte for byte.
+test('POST /classes trims the ends of every ability string and nothing else', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': '  Collar  ',
+    'abilities[0][description]': `\r\n  ${ABILITY_DESCRIPTION}  \r\n`,
+    'abilities[0][paired_action]': '  Call a cowed  animal to heel.  ',
+    'abilities[0][meters][0][label]': '  Essence Cost  ',
+    'abilities[0][meters][0][value]': '  Low  ',
+    'abilities[0][notes][0][text]': `  ${NOTE_TEXT}  `,
+    'abilities[0][notes][0][children][0][text]': '  Ends early  if the collar is destroyed.  ',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([{
+    name: 'Collar',
+    description: ABILITY_DESCRIPTION,
+    paired_action: 'Call a cowed  animal to heel.',
+    meters: [{ label: 'Essence Cost', value: 'Low' }],
+    notes: [{
+      text: NOTE_TEXT,
+      children: [{ text: 'Ends early  if the collar is destroyed.', children: [] }],
+    }],
+  }]);
+});
+
+// A repeater's blank row is a normal intermediate state -- the inputs carry no
+// `required`, so the server is the only thing that drops them.
+test('POST /classes drops an ability whose name is blank after trimming', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': '   ',
+    'abilities[0][description]': 'Orphaned description.',
+    'abilities[1][name]': 'Kept',
+    'abilities[1][description]': 'Kept description.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities.map((a) => a.name)).toEqual(['Kept']);
+});
+
+// A meter is a label/value pair by definition: partials/class-meters.handlebars
+// renders a <dt>/<dd> row, so neither half alone shows anything meaningful.
+test('POST /classes drops a meter row whose label is blank', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][meters][0][label]': '  ',
+    'abilities[0][meters][0][value]': 'Low',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].meters).toEqual([]);
+});
+
+test('POST /classes drops a meter row whose value is blank', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][meters][0][label]': 'Essence Cost',
+    'abilities[0][meters][0][value]': '  ',
+    'abilities[0][meters][1][label]': 'Range',
+    'abilities[0][meters][1][value]': 'Close',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].meters).toEqual([{ label: 'Range', value: 'Close' }]);
+});
+
+// A child reattached to the wrong parent is the corruption class the extraction
+// work fought. A blank parent takes its children down with it rather than
+// promoting them a level.
+test('POST /classes drops a blank note together with its children', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][notes][0][text]': '   ',
+    'abilities[0][notes][0][children][0][text]': 'Orphan that must not be promoted.',
+    'abilities[0][notes][1][text]': 'Kept parent.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].notes).toEqual([{ text: 'Kept parent.', children: [] }]);
+});
+
+test('POST /classes drops a blank child note but keeps its parent', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][notes][0][text]': 'Kept parent.',
+    'abilities[0][notes][0][children][0][text]': '  ',
+    'abilities[0][notes][0][children][1][text]': 'Kept child.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].notes).toEqual([
+    { text: 'Kept parent.', children: [{ text: 'Kept child.', children: [] }] },
+  ]);
+});
+
+// partials/class-notes.handlebars reads `children.length` unguarded on every
+// note it renders, so `children` is an array even when it is empty -- never
+// undefined and never null.
+test('POST /classes gives every ability, meter list and note an array', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([{
+    name: 'Collar', description: '', paired_action: '', meters: [], notes: [],
+  }]);
+});
+
+test('POST /classes sends no abilities as an empty array', async () => {
+  const res = await post('/classes', { name: 'Test' });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([]);
+});
+
+// Notes nest exactly two levels. A third level is not a shape the renderer or
+// the source document has, so it is dropped rather than carried into jsonb.
+test('POST /classes keeps notes two levels deep, dropping any grandchild', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][notes][0][text]': 'Parent.',
+    'abilities[0][notes][0][children][0][text]': 'Child.',
+    'abilities[0][notes][0][children][0][children][0][text]': 'Grandchild.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities[0].notes).toEqual([
+    { text: 'Parent.', children: [{ text: 'Child.', children: [] }] },
+  ]);
+});
+
+// Array order IS the semantic -- it is the order abilities, meters and notes
+// print in. qs switches from an array to an object with numeric string keys
+// past 20 entries, and index 21 next to index 9 is where a lexicographic sort
+// of those keys ("21" before "9") diverges from the numeric one.
+test('POST /classes orders an object-shaped abilities body numerically', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[9][name]': 'Nine',
+    'abilities[21][name]': 'TwentyOne',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities.map((a) => a.name)).toEqual(['Nine', 'TwentyOne']);
+});
+
+test('POST /classes orders object-shaped meters and notes numerically', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'abilities[0][name]': 'Collar',
+    'abilities[0][meters][9][label]': 'Nine',
+    'abilities[0][meters][9][value]': 'v',
+    'abilities[0][meters][21][label]': 'TwentyOne',
+    'abilities[0][meters][21][value]': 'v',
+    'abilities[0][notes][9][text]': 'Nine',
+    'abilities[0][notes][21][text]': 'TwentyOne',
+    'abilities[0][notes][9][children][9][text]': 'ChildNine',
+    'abilities[0][notes][9][children][21][text]': 'ChildTwentyOne',
+  });
+
+  expect(res.status).toBe(200);
+  const ability = capturedCreate.abilities[0];
+  expect(ability.meters.map((m) => m.label)).toEqual(['Nine', 'TwentyOne']);
+  expect(ability.notes.map((n) => n.text)).toEqual(['Nine', 'TwentyOne']);
+  expect(ability.notes[0].children.map((c) => c.text)).toEqual(['ChildNine', 'ChildTwentyOne']);
+});
+
+// The flat ability_name[] / ability_description[] path is gone, not kept
+// alongside, so those names build nothing. (They are not stripped from the
+// body either: this codebase hands req.body to the repository wholesale, and
+// Task 13 took the same line when it retired the `description` textarea.)
+test('POST /classes builds no abilities from the retired flat field names', async () => {
+  const res = await post('/classes', {
+    name: 'Test',
+    'ability_name[]': 'Stale',
+    'ability_description[]': 'Stale description.',
+  });
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([]);
+});
+
+// views/class-form.handlebars submits multipart/form-data (it carries the class
+// PDF), so the real request never touches express.urlencoded at all -- multer
+// parses it, and multer nests bracket names through `append-field` rather than
+// qs. Every test above proves the urlencoded path; this one proves the path an
+// actual browser takes, including the six-level note key.
+const postMultipart = (path, bodyObject) => {
+  const form = new FormData();
+  for (const [key, value] of Object.entries(bodyObject)) form.append(key, value);
+  return fetch(`${baseUrl}${path}`, {
+    method: 'POST',
+    headers: { 'Authorization': 'Bearer valid-jwt', 'Accept': 'application/json' },
+    body: form,
+  });
+};
+
+test('POST /classes accepts nested ability metadata over multipart/form-data', async () => {
+  const res = await postMultipart('/classes', nestedAbilityBody);
+
+  expect(res.status).toBe(200);
+  expect(capturedCreate.abilities).toEqual([expectedNestedAbility]);
+});

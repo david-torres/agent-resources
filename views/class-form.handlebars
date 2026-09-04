@@ -269,34 +269,146 @@
     </div>
     {{/if}}
   </div>
-    <!-- classes have 3 abilities (name and description) -->
-    {{#if (or isNew (eq class.abilities.length 0))}}
-      {{#times 3}}
-        <div class="field">
-          <label class="label">Ability {{add @index 1}}</label>
-          <div class="control">
-            <input class="input" type="text" name="ability_name[]" placeholder="Ability {{add @index 1}}" required>
-          </div>
-          <label class="label">Ability {{add @index 1}} Description</label>
-          <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px"></textarea>
-          </div>
+  {{!-- Repeatable ability editor.
+
+        THE ROWS ARE SERVER-RENDERED, NOT `<template x-for>`. This is
+        load-bearing, for the reason partials/stat-blocks.handlebars records at
+        length: views/layouts/main.handlebars puts hx-boost="true" on <body>,
+        and htmx snapshots the LIVE DOM into its history cache, x-for output
+        included. On Back the snapshot restores WITH those generated rows and
+        Alpine's x-for appends a second full set, so every ability doubles, the
+        stale half throws "ability is not defined" on every binding, and the
+        form posts each bracket name twice -- which normalizeAbilities reads as
+        an array where it wants a string, blanking the name and DROPPING the
+        ability on save. Real elements in the served HTML restore as
+        themselves. Keep it that way.
+
+        The same rule is why there is no x-model here: every value is a plain
+        `value=`/inner-text attribute, so the fields are already correct in the
+        raw HTML before Alpine runs, or if it never runs at all. Alpine only
+        adds and removes rows; the `<template data-prototype>` blocks it clones
+        are inert markup that nothing renders on its own.
+
+        Plain textareas on purpose. _initToastUIEditors runs on page load and
+        on htmx afterSwap only, so a row added later would get no editor at
+        all, and ToastUI writes its value back through getMarkdown(), which
+        reflows the verbatim prose this form copies from the source document.
+
+        Nothing is `required`: a blank row is a normal intermediate state in a
+        repeater, normalizeAbilities drops it server-side, and `required` on a
+        row the admin just added blocks submission with no visible error
+        anywhere near the field.
+
+        The row markup lives in inline partials so that the prototype Alpine
+        clones and the rows the server renders cannot drift apart. --}}
+  <div class="field" x-data="abilityEditor()">
+    {{#*inline "abilityMeterRow"}}
+    <div class="field is-grouped mb-2" data-meter-row>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="label" name="abilities[{{ai}}][meters][{{mi}}][label]" value="{{meter.label}}" placeholder="Label, e.g. Essence Cost" aria-label="Meter label">
+      </div>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="value" name="abilities[{{ai}}][meters][{{mi}}][value]" value="{{meter.value}}" placeholder="Value, e.g. Low" aria-label="Meter value">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-light" @click="removeMeter($el)">Remove meter</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityNoteChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="abilities[{{ai}}][notes][{{ni}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildNote($el)">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityNoteRow"}}
+    <div class="mb-3" data-note-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-note-field="text" name="abilities[{{ai}}][notes][{{ni}}][text]" value="{{note.text}}" placeholder="Note" aria-label="Note">
         </div>
-      {{/times}}
-    {{else}}
-      {{#each class.abilities}}
-        <div class="field">
-          <label class="label">Ability {{add @index 1}}</label>
-          <div class="control">
-            <input class="input" type="text" name="ability_name[]" placeholder="Ability {{add @index 1}}" value="{{this.name}}" required>
-          </div>
-          <label class="label">Ability {{add @index 1}} Description</label>
-          <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
-          </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeNote($el)">Remove note</button>
         </div>
-      {{/each}}
-    {{/if}}
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each note.children}}{{> abilityNoteChildRow child=this ai=../ai ni=../ni ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildNote($el)">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityRow"}}
+    <div class="box" data-ability-row>
+      <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+        <span class="label mb-0" data-ability-heading>Ability {{add ai 1}}</span>
+        <button type="button" class="button is-small is-danger is-light" @click="removeAbility($el)">Remove ability</button>
+      </div>
+      {{#if ability.pronunciation}}
+      {{!-- No input edits a pronunciation guide and no view renders one, but
+            two live abilities carry one. Round-tripping it here is what stops
+            a routine save from deleting it. --}}
+      <input type="hidden" data-field="pronunciation" name="abilities[{{ai}}][pronunciation]" value="{{ability.pronunciation}}">
+      {{/if}}
+      <div class="field">
+        <label class="label is-small" data-label-for="name" for="ability-name-{{ai}}">Name</label>
+        <div class="control">
+          <input class="input" type="text" id="ability-name-{{ai}}" data-field="name" name="abilities[{{ai}}][name]" value="{{ability.name}}" placeholder="Ability name">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="description" for="ability-description-{{ai}}">Description</label>
+        <div class="control">
+          <textarea class="textarea" rows="4" id="ability-description-{{ai}}" data-field="description" name="abilities[{{ai}}][description]" placeholder="What the ability does">{{ability.description}}</textarea>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="paired_action" for="ability-paired-action-{{ai}}">Paired Action</label>
+        <div class="control">
+          <input class="input" type="text" id="ability-paired-action-{{ai}}" data-field="paired_action" name="abilities[{{ai}}][paired_action]" value="{{ability.paired_action}}" placeholder="The action this ability pairs with (optional)">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Meters</label>
+        <div data-meter-list>
+          {{#each ability.meters}}{{> abilityMeterRow meter=this ai=../ai mi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addMeter($el)">Add meter</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Notes</label>
+        <div data-note-list>
+          {{#each ability.notes}}{{> abilityNoteRow note=this ai=../ai ni=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Abilities</label>
+    <p class="help mb-3">Meters, the paired action and the notes print on the class page exactly as they are entered here. An ability with no name is dropped on save, as is a meter missing either half of its pair and a note with no text.</p>
+    <div data-ability-list>
+      {{#if class.abilities.length}}
+        {{#each class.abilities}}{{> abilityRow ability=this ai=@index}}{{/each}}
+      {{else}}
+        {{#times 3}}{{> abilityRow ai=@index}}{{/times}}
+      {{/if}}
+    </div>
+    <button type="button" class="button" @click="addAbility()">Add ability</button>
+    {{!-- Inert prototypes. A plain <template> keeps its children in a
+          DocumentFragment, so Alpine's walker never enters it and the browser
+          renders nothing -- which is also why a restored history snapshot
+          brings these back as harmless markup rather than as a second set of
+          live rows. --}}
+    <template data-prototype="ability">{{> abilityRow ai=0}}</template>
+    <template data-prototype="meter">{{> abilityMeterRow ai=0 mi=0}}</template>
+    <template data-prototype="note">{{> abilityNoteRow ai=0 ni=0}}</template>
+    <template data-prototype="child">{{> abilityNoteChildRow ai=0 ni=0 ci=0}}</template>
+  </div>
     <!-- classes have 6 gear items (name and description) -->
     {{#if (or isNew (eq class.gear.length 0))}}
       {{#times 6}}

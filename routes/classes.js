@@ -77,6 +77,81 @@ const parseExamples = (body) => String(body.examples ?? '')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);
 
+// Express runs express.urlencoded({ extended: true }), so `abilities[0][name]`
+// and `abilities[0][notes][0][children][0][text]` arrive already nested and the
+// work here is normalization, not parsing.
+//
+// qs switches an indexed group from an array to an object with numeric string
+// keys past 20 entries, so both shapes reach this function. Array order IS the
+// semantic -- it is the order abilities, meters and notes print in -- and
+// integer-like object keys only happen to iterate in ascending numeric order,
+// so the object shape is sorted explicitly rather than trusted to do that.
+const indexedRows = (value) => {
+    const rows = Array.isArray(value)
+        ? value
+        : (value && typeof value === 'object'
+            ? Object.keys(value).sort((a, b) => Number(a) - Number(b)).map((key) => value[key])
+            : []);
+    return rows.filter((row) => row && typeof row === 'object');
+};
+
+// Ends only. Interior runs of whitespace, en dashes and curly quotes are a
+// verbatim copy of the source document, not formatting to tidy up.
+const trimField = (value) => (typeof value === 'string' ? value.trim() : '');
+
+// A meter is a label/value pair by definition -- partials/class-meters.handlebars
+// renders it as a <dt>/<dd> row -- so half a pair shows nothing meaningful and
+// is dropped whichever half is missing.
+const normalizeMeter = (row) => {
+    const label = trimField(row.label);
+    const value = trimField(row.value);
+    return (label && value) ? { label, value } : null;
+};
+
+// Notes nest exactly two levels: a note and its sub-bullets, no grandchildren.
+// A blank note is dropped WITH its children rather than promoting them --
+// a child reattached to the wrong parent is exactly the corruption the
+// extraction work fought, and must not be reintroduced at the form layer.
+// `children` is always an array; partials/class-notes.handlebars reads
+// `children.length` unguarded.
+const normalizeNote = (row) => {
+    const text = trimField(row.text);
+    if (!text) return null;
+    return {
+        text,
+        children: indexedRows(row.children)
+            .map((child) => {
+                const childText = trimField(child.text);
+                return childText ? { text: childText, children: [] } : null;
+            })
+            .filter(Boolean)
+    };
+};
+
+// The repeatable ability editor's counterpart. A blank row is a normal
+// intermediate state in a repeater -- the inputs carry no `required` -- so this
+// is the only thing that drops one.
+//
+// `pronunciation` has no input: 57 live abilities carry a pronunciation guide
+// that no view renders, and the form round-trips it through a hidden field so a
+// routine save does not delete it. Absent from the body means absent from the
+// payload, which is what keeps it off a brand-new ability.
+const normalizeAbilities = (value) => indexedRows(value)
+    .map((row) => {
+        const ability = {
+            name: trimField(row.name),
+            description: trimField(row.description),
+            paired_action: trimField(row.paired_action),
+            meters: indexedRows(row.meters).map(normalizeMeter).filter(Boolean),
+            notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean)
+        };
+        if (row.pronunciation !== undefined) {
+            ability.pronunciation = trimField(row.pronunciation) || null;
+        }
+        return ability;
+    })
+    .filter((ability) => ability.name);
+
 // Mirrors the CHECK constraints these two columns carry. Both accept NULL and
 // reject '', so an unselected option must land as NULL rather than as the empty
 // string the select submits, and anything outside the allowlist -- a typo from a
@@ -669,20 +744,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     }
     const actor = actorFromLocals(res.locals);
 
-    // Process abilities and gear arrays
-    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
-    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
-    const abilities = abilityNames
-        .map((name, index) => ({
-            name: name,
-            description: abilityDescriptions[index] || ''
-        }))
-        .filter((ability) => ability.name);
-    req.body.abilities = abilities;
-    delete req.body['ability_name[]'];
-    delete req.body['ability_description[]'];
-    delete req.body.ability_name;
-    delete req.body.ability_description;
+    req.body.abilities = normalizeAbilities(req.body.abilities);
 
     const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
     const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
@@ -765,19 +827,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
         req.body.image_crop = image_crop;
     }
 
-    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
-    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
-    const abilities = abilityNames
-        .map((name, index) => ({
-            name: name,
-            description: abilityDescriptions[index] || ''
-        }))
-        .filter((ability) => ability.name);
-    req.body.abilities = abilities;
-    delete req.body['ability_name[]'];
-    delete req.body['ability_description[]'];
-    delete req.body.ability_name;
-    delete req.body.ability_description;
+    req.body.abilities = normalizeAbilities(req.body.abilities);
 
     const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
     const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);

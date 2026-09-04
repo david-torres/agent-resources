@@ -52,7 +52,11 @@ async function createClassViaUi(page, name) {
   await form.locator('#class-name').fill(name);
   await form.locator('#class-overview').fill(`${name} overview`);
 
-  const abilities = form.locator('input[name="ability_name[]"]');
+  // The ability block is a repeater now: its rows are server-rendered with
+  // bracket names carrying the row index (abilities[0][name]), and a new class
+  // still opens on three blank ones. The inert <template data-prototype> rows
+  // live in a DocumentFragment, so this locator never sees them.
+  const abilities = form.locator('input[name^="abilities["][name$="[name]"]');
   await expect(abilities).toHaveCount(3);
   for (let i = 0; i < 3; i++) await abilities.nth(i).fill(`${prefix} Ability ${i + 1}`);
 
