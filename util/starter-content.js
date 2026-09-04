@@ -25,7 +25,7 @@ const CORE_CLASS_UNLOCKS = {
     Infiltrator: 'c687840c-a781-4d46-9570-b344e1b9be04',
     Samaritan:   'f0726c9b-bfaf-4c22-9318-75c50c8e3cbf',
     Vessel:      '3a863d9c-8454-4326-87ad-ed105fccbbd4',
-    Witchhunter: '79721ac8-378e-4b3e-b1e3-8266689da89e',
+    Witchfinder: '79721ac8-378e-4b3e-b1e3-8266689da89e',
   },
 };
 
