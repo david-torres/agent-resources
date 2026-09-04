@@ -31,7 +31,7 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import {
-  ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
+  PUBLISHED_BY_LOAD, ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
 } from './lib/character-impact.mjs';
 
 const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'data');
@@ -66,13 +66,11 @@ const RICH_TEXT_KEYS = new Set(['notes']);
 // tables and the impact projection use the column names.
 const REMAP_KIND = { ability: 'abilities', gear: 'gear' };
 
-// `classes.is_public` defaults to false, so a created row lands invisible: absent
-// from /classes for non-admins, from the character wizard, and from the name map
-// the save path resolves through. These four are the ones the owner authorised
-// to be visible. Visibility is deliberately not in FIELDS -- the allowlist is what
-// stops the general write path from ever touching a row's is_public, so this
-// named set is the only thing that can.
-const PUBLISH = ['Ardent', 'Offdriver', 'Squire', 'Drachentöter'];
+// `classes.is_public` defaults to false, so a created row would land invisible:
+// absent from /classes for non-admins, from the character wizard, and from the
+// name map the save path resolves through. PUBLISHED_BY_LOAD is the owner's
+// named set, and it is the only thing here that may set a row's visibility --
+// is_public is deliberately absent from FIELDS so the general write path cannot.
 
 const LOCAL_TARGET = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
 const PREVIEW_WIDTH = 140;
@@ -147,6 +145,11 @@ export const unremapped = (groups, remap) => {
   return groups.filter((group) => group.survivesNow
       && !covered.has(remapKey(group.classId, group.kind, group.name)));
 };
+
+// The other half of the guard: every entry has to rename its rows *to* a name
+// the post-import catalogue actually carries.
+export const unresolvableTargets = (remap, after) =>
+    remap.filter((entry) => !after[REMAP_KIND[entry.kind]].has(entry.to));
 
 export const resolveTarget = (payload, rows) => {
   const wanted = new Set([fold(payload.name)]);
@@ -260,17 +263,35 @@ const main = async (argv) => {
 
   // A published class the document does not carry would be a silent no-op, so
   // the two lists are checked against each other rather than assumed to agree.
-  const unknownPublish = PUBLISH.filter((name) => !plans.some((plan) => plan.payload.name === name));
+  const unknownPublish = PUBLISHED_BY_LOAD.filter(
+      (name) => !plans.some((plan) => plan.payload.name === name));
   if (unknownPublish.length) {
     console.error(`\nABORTED - not in this document: ${unknownPublish.join(', ')}`);
     console.error('nothing written');
     return 1;
   }
 
+  const after = catalogueNames(projectImport(rows, plans));
+
+  // A `to` no class carries after the import renames live rows to a name that
+  // resolves to nothing -- the very breakage the remap exists to prevent, dealt
+  // out by the fix itself. A typo is all it takes, so it is checked here and
+  // not only in the test that covers the committed file.
+  const stranded = unresolvableTargets(remap, after);
+  if (stranded.length) {
+    for (const entry of stranded) {
+      console.error(`  remap target no class carries: ${entry.kind} "${entry.to}" ` +
+          `(class ${entry.class_id})`);
+    }
+    console.error(`\nrefusing to load: ${stranded.length} remap target(s) the import does not add`);
+    console.error('nothing written');
+    return 1;
+  }
+
   // A dry run writes nothing, so this scan only earns its cost where it can
   // still stop something.
-  const orphans = unremapped(groupUnresolvable(await fetchHeldRows(supabase),
-      catalogueNames(rows), catalogueNames(projectImport(rows, plans))), remap);
+  const orphans = unremapped(
+      groupUnresolvable(await fetchHeldRows(supabase), catalogueNames(rows), after), remap);
   for (const group of orphans) {
     console.error(`  no remap entry: ${group.kind} "${group.name}" (class ${group.classId}, ` +
         `${group.rows.length} rows, ${group.characters.size} characters)`);
@@ -343,7 +364,7 @@ const main = async (argv) => {
 
   const rowByName = new Map([...updates.map((plan) => [plan.payload.name, plan.row]),
     ...createdRows.map((row) => [row.name, row])]);
-  for (const name of PUBLISH) {
+  for (const name of PUBLISHED_BY_LOAD) {
     const target = rowByName.get(name);
     if (target.is_public) {
       console.log(`already public: ${name} (${target.id})`);

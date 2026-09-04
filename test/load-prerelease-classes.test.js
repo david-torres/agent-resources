@@ -9,9 +9,11 @@ import { fileURLToPath } from 'node:url';
 
 import {
   FIELDS, buildPayload, displayName, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
-  trimEnds, unremapped
+  trimEnds, unremapped, unresolvableTargets
 } from '../scripts/load-prerelease-classes.mjs';
-import { catalogueNames, groupUnresolvable } from '../scripts/lib/character-impact.mjs';
+import {
+  PUBLISHED_BY_LOAD, catalogueNames, groupUnresolvable, projectImport
+} from '../scripts/lib/character-impact.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const records = JSON.parse(
@@ -216,4 +218,48 @@ test('a held name is grouped only when the import leaves it unresolvable', () =>
   const groups = groupUnresolvable(held, before, after);
   expect(groups.map((entry) => [entry.name, entry.survivesNow, entry.rows.length, entry.characters.size]))
       .toEqual([['Toolbox', true, 2, 2], ['Neuralyzer', false, 1, 1]]);
+});
+
+// The owner authorised exactly these four to be made visible. Widening the set
+// publishes a class nobody approved, so the list is pinned rather than trusted.
+test('the load publishes the four classes the owner named and no others', () => {
+  expect(PUBLISHED_BY_LOAD).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter']);
+});
+
+const createdPlan = (name, gear) => ({ row: null, matches: [], payload: { name, gear } });
+
+test('a class the load publishes contributes its names to the post-import catalogue', () => {
+  const projected = projectImport([], [
+    createdPlan('Ardent', [{ name: 'Reliquary' }]),
+    createdPlan('Unapproved', [{ name: 'Contraband' }])
+  ]);
+  const names = catalogueNames(projected);
+  expect([...names.gear]).toEqual(['Reliquary']);
+});
+
+test('an existing private class the load publishes contributes its names too', () => {
+  const row = {
+    id: 'class-1', name: 'Drachentöter', is_public: false, is_player_created: false,
+    rules_edition: 'advent', gear: [{ name: 'Flask of Mead' }]
+  };
+  const plans = [{ row, matches: [row], payload: { name: 'Drachentöter', gear: [{ name: 'Ichor' }] } }];
+  expect([...catalogueNames(projectImport([row], plans)).gear]).toEqual(['Ichor']);
+});
+
+// A `to` the import does not add renames live rows to a name that resolves to
+// nothing -- the breakage the remap exists to prevent, caused by the fix.
+test('a remap target the post-import catalogue does not carry is reported', () => {
+  const after = { abilities: new Set(['Froth at the Mouth']), gear: new Set(['Bindle']) };
+  const entry = (kind, to) => ({ class_id: 'class-1', kind, from: 'Toolbox', to });
+  expect(unresolvableTargets([entry('gear', 'Bindle')], after)).toEqual([]);
+  expect(unresolvableTargets([entry('gear', 'Bindl')], after)).toHaveLength(1);
+  expect(unresolvableTargets([entry('ability', 'Bindle')], after)).toHaveLength(1);
+});
+
+test('every committed remap target survives the import into its own kind', () => {
+  const after = {
+    abilities: new Set(artifactNames('ability')),
+    gear: new Set(artifactNames('gear'))
+  };
+  expect(unresolvableTargets(remap, after)).toEqual([]);
 });

@@ -19,9 +19,16 @@ const CATALOGUE_FILTERS = [
 
 // `classes.is_public` defaults to false, `is_player_created` to false and
 // `rules_edition` to 'advent' (baseline schema), and the loader's field
-// allowlist sets none of the three -- so a class the load creates is invisible
-// to the catalogue map until an owner publishes it.
+// allowlist sets none of the three, so an inserted row starts from these.
 const CREATED_ROW_DEFAULTS = { is_public: false, is_player_created: false, rules_edition: 'advent' };
+
+// The classes the load publishes in the same --apply that writes them: the set
+// the owner authorised to be visible. It lives here rather than in the loader
+// because the projection below has to model it -- a class the load creates and
+// publishes enters the catalogue in that one run, and treating it as private
+// would drop its item names from the post-import catalogue and report names as
+// vanishing that never do.
+export const PUBLISHED_BY_LOAD = ['Ardent', 'Offdriver', 'Squire', 'Drachentöter'];
 
 const PAGE = 1000;
 
@@ -49,7 +56,8 @@ export const projectImport = (classes, plans) => {
   // one immediately, so a placeholder stands in for the id it will be given.
   const created = plans.filter((plan) => !plan.row)
       .map((plan) => ({ ...CREATED_ROW_DEFAULTS, ...plan.payload, id: `pending:${plan.payload.name}` }));
-  return [...updated, ...created];
+  return [...updated, ...created].map((cls) =>
+      (PUBLISHED_BY_LOAD.includes(cls.name) ? { ...cls, is_public: true } : cls));
 };
 
 // PostgREST caps a response at 1000 rows without saying so, and class_gear
