@@ -44,6 +44,46 @@
         </div>
       </div>
     </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-challenge-level">Challenge Level</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="challenge_level" id="class-challenge-level">
+              <option value="">Not set</option>
+              <option value="Low" {{#if (eq class.challenge_level "Low")}}selected{{/if}}>Low</option>
+              <option value="Mid" {{#if (eq class.challenge_level "Mid")}}selected{{/if}}>Mid</option>
+              <option value="High" {{#if (eq class.challenge_level "High")}}selected{{/if}}>High</option>
+            </select>
+          </div>
+        </div>
+        <p class="help">How demanding the class is to play well.</p>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-prerelease-section">Pre-release Section</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="prerelease_section" id="class-prerelease-section">
+              <option value="">Not set</option>
+              <option value="pcc" {{#if (eq class.prerelease_section "pcc")}}selected{{/if}}>PCCs</option>
+              <option value="exclusive" {{#if (eq class.prerelease_section "exclusive")}}selected{{/if}}>Exclusives</option>
+              <option value="aspirant" {{#if (eq class.prerelease_section "aspirant")}}selected{{/if}}>Aspirant Classes</option>
+            </select>
+          </div>
+        </div>
+        <p class="help">Which section of the pre-release bundle this class was printed under.</p>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-designer">Designer</label>
+        <div class="control">
+          <input class="input" type="text" name="designer" id="class-designer" value="{{class.designer}}">
+        </div>
+      </div>
+    </div>
   </div>
   <div class="field">
     {{#if (eq profile.role 'admin')}}
@@ -75,11 +115,71 @@
       <textarea class="textarea" name="teaser" id="class-teaser" placeholder="Short description for class list display (optional)" data-toast-editor data-editor-height="150px">{{class.teaser}}</textarea>
     </div>
   </div>
+  <div class="columns is-multiline">
+    <div class="column is-two-thirds-tablet">
+      <div class="field">
+        <label class="label" for="class-quote">Quote</label>
+        <div class="control">
+          <input class="input" type="text" name="quote" id="class-quote" value="{{class.quote}}">
+        </div>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-quote-source">Quote Source</label>
+        <div class="control">
+          <input class="input" type="text" name="quote_source" id="class-quote-source" value="{{class.quote_source}}">
+        </div>
+      </div>
+    </div>
+  </div>
+  {{!-- The prose fields below are plain textareas on purpose: their text is a
+        verbatim copy of the pre-release document, and a ToastUI editor would
+        rewrite it through getMarkdown() on submit. --}}
+  <div class="field">
+    <label class="label" for="class-overview">Overview</label>
+    <div class="control">
+      <textarea class="textarea" name="overview" id="class-overview" rows="6" placeholder="What the class is and how it plays" required>{{class.overview}}</textarea>
+    </div>
+    <p class="help">The main prose block. Shown on the class page and used by the character creator wizard.</p>
+  </div>
+  <div class="field">
+    <label class="label" for="class-conduit-notes">Conduit Notes</label>
+    <div class="control">
+      <textarea class="textarea" name="conduit_notes" id="class-conduit-notes" rows="4" placeholder="Guidance for the Conduit running this class (optional)">{{class.conduit_notes}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-grounding">Grounding</label>
+    <div class="control">
+      <textarea class="textarea" name="grounding" id="class-grounding" rows="4" placeholder="Where the class sits in the setting (optional)">{{class.grounding}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-examples-heading">Examples Heading</label>
+    <div class="control">
+      <input class="input" type="text" name="examples_heading" id="class-examples-heading" placeholder="e.g. Example Vanguards" value="{{class.examples_heading}}">
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-examples">Examples</label>
+    <div class="control">
+      <textarea class="textarea" name="examples" id="class-examples" rows="5" placeholder="One example per line">{{#each class.examples}}{{this}}
+{{/each}}</textarea>
+    </div>
+    <p class="help">One per line. Blank lines are dropped.</p>
+  </div>
   <div class="field">
     <label class="checkbox">
       <input type="checkbox" name="is_public" {{#if class.is_public}}checked{{/if}}>
       Public (visible to everyone)
     </label>
+  </div>
+  <div class="field">
+    <label class="label" for="class-tips-heading">Tips Heading</label>
+    <div class="control">
+      <input class="input" type="text" name="tips_heading" id="class-tips-heading" placeholder="e.g. Playing a Vanguard" value="{{class.tips_heading}}">
+    </div>
   </div>
   <div class="field">
     <label class="label" for="class-tips">Tips (optional)</label>
@@ -105,6 +205,25 @@
         </div>
       </div>
       {{/each}}
+    </div>
+    <div class="columns is-multiline">
+      <div class="column is-half-tablet">
+        <div class="field">
+          <label class="label" for="class-stat-line">Stat Line</label>
+          <div class="control">
+            <input class="input" type="text" name="stat_line" id="class-stat-line" value="{{class.stat_line}}">
+          </div>
+          <p class="help">The stat allocation exactly as the pre-release document prints it.</p>
+        </div>
+      </div>
+      <div class="column is-half-tablet">
+        <div class="field">
+          <label class="label" for="class-stat-note">Stat Note</label>
+          <div class="control">
+            <input class="input" type="text" name="stat_note" id="class-stat-note" value="{{class.stat_note}}">
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="field">

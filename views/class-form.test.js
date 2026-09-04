@@ -77,3 +77,49 @@ test('the form posts no description field', () => {
   expect(SRC).not.toContain('name="description"');
   expect(SRC).not.toContain('{{class.description}}');
 });
+
+// The two constrained selects must submit the values classes_challenge_level_check
+// and classes_prerelease_section_check accept. prerelease_section is the trap:
+// the source document's headings are PCCs / EXCLUSIVES / ASPIRANT CLASSES, but
+// the column stores the lowercase enum the loader maps those headings to.
+test('prerelease_section options submit the enum, not the document headings', () => {
+  const options = Array.from(SRC.matchAll(/name="prerelease_section"[\s\S]*?<\/select>/g))
+    .flatMap((match) => Array.from(match[0].matchAll(/<option value="([^"]*)"/g), (m) => m[1]));
+  expect(options).toEqual(['', 'pcc', 'exclusive', 'aspirant']);
+});
+
+test('challenge_level options are capitalised and offer a blank', () => {
+  const options = Array.from(SRC.matchAll(/name="challenge_level"[\s\S]*?<\/select>/g))
+    .flatMap((match) => Array.from(match[0].matchAll(/<option value="([^"]*)"/g), (m) => m[1]));
+  expect(options).toEqual(['', 'Low', 'Mid', 'High']);
+});
+
+// The thirteen structured columns the pre-release import populates all need an
+// input, or an admin editing a class silently blanks the ones the form omits.
+test('every class-level structured column has an input', () => {
+  const structuredColumns = [
+    'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
+    'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples',
+    'tips_heading', 'designer', 'prerelease_section'
+  ];
+  for (const column of structuredColumns) {
+    expect(SRC).toContain(`name="${column}"`);
+  }
+});
+
+// overview inherits the required attribute the deleted description textarea
+// carried: it is the one prose field every imported class has.
+test('overview is required', () => {
+  expect(SRC).toMatch(/name="overview"[^>]*required/);
+});
+
+// _syncToastUIEditorsToTextareas writes editor.getMarkdown() back on submit,
+// which reflows lines and renormalizes punctuation. The structured prose is a
+// verbatim copy of the source document, so these fields stay plain textareas.
+test('the structured prose fields carry no markdown editor', () => {
+  const proseFields = ['overview', 'conduit_notes', 'grounding', 'examples'];
+  for (const field of proseFields) {
+    const tag = SRC.match(new RegExp(`<textarea[^>]*name="${field}"[^>]*>`))[0];
+    expect(tag).not.toContain('data-toast-editor');
+  }
+});

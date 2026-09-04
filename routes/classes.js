@@ -70,6 +70,26 @@ const parseStatSpread = (body) => {
     return spread;
 };
 
+// One example per line. Ends-only trimming: interior runs of whitespace, en
+// dashes and curly quotes are verbatim content copied from the source document.
+const parseExamples = (body) => String(body.examples ?? '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
+
+// classes_challenge_level_check and classes_prerelease_section_check both
+// accept NULL and reject '', so an unselected option must not reach the
+// database as the empty string the select submits.
+const CONSTRAINED_SELECTS = ['challenge_level', 'prerelease_section'];
+
+const nullifyBlankConstrainedSelects = (body) => {
+    for (const field of CONSTRAINED_SELECTS) {
+        if (typeof body[field] === 'string' && body[field].trim() === '') {
+            body[field] = null;
+        }
+    }
+};
+
 // View Routes
 router.get('/', authOptional, async (req, res) => {
     const { profile } = res.locals;
@@ -664,6 +684,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     }
 
     req.body.stat_spread = parseStatSpread(req.body);
+    req.body.examples = parseExamples(req.body);
+    nullifyBlankConstrainedSelects(req.body);
 
     const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
@@ -752,6 +774,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
     delete req.body.remove_pdf;
 
     req.body.stat_spread = parseStatSpread(req.body);
+    req.body.examples = parseExamples(req.body);
+    nullifyBlankConstrainedSelects(req.body);
 
     const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {
