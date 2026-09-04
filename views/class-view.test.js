@@ -212,6 +212,8 @@ function renderClassView(context) {
   hb.registerHelper('markdown', renderMarkdown);
   hb.registerPartial('breadcrumbs', '');
   hb.registerPartial('private-badge', '');
+  hb.registerPartial('class-meters', fs.readFileSync(path.join(__dirname, 'partials', 'class-meters.handlebars'), 'utf8'));
+  hb.registerPartial('class-notes', fs.readFileSync(path.join(__dirname, 'partials', 'class-notes.handlebars'), 'utf8'));
   return hb.compile(SRC)(context);
 }
 
@@ -279,4 +281,97 @@ test('renders sub-notes nested inside their parent note', () => {
     notes: [{ text: 'Parent note.', children: [{ text: 'Child note.', children: [] }] }],
   });
   expect(html).toMatch(/Parent note\.[\s\S]*<ul>[\s\S]*Child note\./);
+});
+
+// Three elective items ahead of one default item: `first(gear, 3)` grabs all
+// three elective items and none of the default one, so the old positional
+// split hides "Base Fourth" from the Base column entirely (it only shows up
+// under Elective, via `last(gear, 3)`). A 2-item fixture can't expose this --
+// with fewer than 3 items, both `first 3` and `last 3` return the whole
+// array, so the split "passes" whichever code is in the column.
+test('splits gear by category, not by array position', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      abilities: [],
+      gear: [
+        { name: 'Elective First', description: 'e', category: 'elective', meters: [], notes: [] },
+        { name: 'Elective Second', description: 'e', category: 'elective', meters: [], notes: [] },
+        { name: 'Elective Third', description: 'e', category: 'elective', meters: [], notes: [] },
+        { name: 'Base Fourth', description: 'b', category: 'default', meters: [], notes: [] },
+      ],
+    },
+  });
+  const baseIdx = html.indexOf('Base Gear');
+  const electiveIdx = html.indexOf('Elective Gear');
+  expect(html.indexOf('Base Fourth')).toBeGreaterThan(baseIdx);
+  expect(html.indexOf('Base Fourth')).toBeLessThan(electiveIdx);
+});
+
+test('a gear item with a missing category renders in the Base Gear column', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      abilities: [],
+      gear: [
+        { name: 'Uncategorized Thing', description: 'u', meters: [], notes: [] },
+      ],
+    },
+  });
+  const baseIdx = html.indexOf('Base Gear');
+  const electiveIdx = html.indexOf('Elective Gear');
+  expect(html.indexOf('Uncategorized Thing')).toBeGreaterThan(baseIdx);
+  expect(html.indexOf('Uncategorized Thing')).toBeLessThan(electiveIdx);
+});
+
+test('renders an ability paired action', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      gear: [],
+      abilities: [{ name: 'Collar', description: 'd', paired_action: 'Call a cowed animal to heel.', meters: [], notes: [] }],
+    },
+  });
+  expect(html).toContain('Paired Action');
+  expect(html).toContain('Call a cowed animal to heel.');
+});
+
+test('renders gear meters and notes through the real class-meters/class-notes partials', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      abilities: [],
+      gear: [{
+        name: 'Bullwhip',
+        description: 'b',
+        category: 'default',
+        meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
+        notes: [{ text: 'Each whipcrack may issue a command.', children: [] }],
+      }],
+    },
+  });
+  expect(html).toContain('Accuracy Boost');
+  expect(html).toContain('Each whipcrack may issue a command.');
+});
+
+test('renders ability meters and notes through the real class-meters/class-notes partials', () => {
+  const html = renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      gear: [],
+      abilities: [{
+        name: 'Collar',
+        description: 'd',
+        meters: [{ label: 'Range', value: 'Low' }],
+        notes: [{ text: 'Works on cowed animals only.', children: [] }],
+      }],
+    },
+  });
+  expect(html).toContain('Range');
+  expect(html).toContain('Works on cowed animals only.');
 });

@@ -180,7 +180,7 @@
           <div class="columns">
             <div class="column is-half">
               <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
-            {{#each (first class.gear 3) as |gear|}}
+            {{#each (filterBy class.gear 'category' 'default') as |gear|}}
               <div class="card">
                 <div class="card-content">
                   <div class="content">
@@ -189,6 +189,8 @@
                       <span class="tag is-info is-light">Base</span>
                     </div>
                     {{{markdown gear.description}}}
+                    {{> class-meters meters=gear.meters}}
+                    {{> class-notes notes=gear.notes}}
                   </div>
                 </div>
               </div>
@@ -197,7 +199,7 @@
 
             <div class="column is-half">
               <p class="has-text-weight-semibold has-text-grey mb-2">Elective Gear</p>
-            {{#each (last class.gear 3) as |gear|}}
+            {{#each (filterBy class.gear 'category' 'elective') as |gear|}}
               <div class="card">
                 <div class="card-content">
                   <div class="content">
@@ -206,6 +208,8 @@
                       <span class="tag is-link is-light">Elective</span>
                     </div>
                     {{{markdown gear.description}}}
+                    {{> class-meters meters=gear.meters}}
+                    {{> class-notes notes=gear.notes}}
                   </div>
                 </div>
               </div>
@@ -226,6 +230,11 @@
               <div class="content">
                 <h4 class="title is-4">{{this.name}}</h4>
                 {{{markdown this.description}}}
+                {{> class-meters meters=this.meters}}
+                {{#if this.paired_action}}
+                <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
+                {{/if}}
+                {{> class-notes notes=this.notes}}
               </div>
             </div>
           </div>

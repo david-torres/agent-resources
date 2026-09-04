@@ -199,6 +199,20 @@ const concat = function (...args) {
   return args.join('');
 };
 
+// A missing/null/empty category is treated as 'default' -- the admin form
+// doesn't write category yet, so gear saved before that ships must still
+// show up on the class page rather than vanishing from both columns.
+function filterBy(list, key, value) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((item) => {
+    const actual = item && item[key];
+    if (value === 'default' && (actual === undefined || actual === null || actual === '')) {
+      return true;
+    }
+    return actual === value;
+  });
+}
+
 const perksForAbilityH = function (perks, abilityId) {
   if (!Array.isArray(perks)) return [];
   return perks.filter(p => p && p.class_ability_id === abilityId);
@@ -227,6 +241,7 @@ module.exports = {
   getVideoProvider,
   substring,
   concat,
+  filterBy,
   effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
