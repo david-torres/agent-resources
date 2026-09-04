@@ -52,6 +52,15 @@ const indexedRows = (value) => {
 // Ends only. Interior runs of whitespace, en dashes and curly quotes are a
 // verbatim copy of the source document, not formatting to tidy up.
 //
+// What "ends" costs, stated because verbatim preservation is this branch's
+// binding constraint: .trim() strips U+00A0 along with ASCII whitespace, so a
+// description deliberately ended with a non-breaking space would lose it. No
+// live gear item does -- the corpus carries 7 of them, all interior, and a
+// round trip of all 50 classes changes only 4 descriptions, each of which ends
+// in ASCII whitespace (Guardian's first item a space and an LF, Vizier's fifth
+// a CRLF, two Squatter v0 items an LF). Widen this to a trailing-ASCII-only
+// trim if that ever stops being true.
+//
 // A non-string reaches this only from a hand-built request: a repeated field
 // name arrives as an array, and answering '' for it drops the row rather than
 // writing `["a","b"]` into a text field.

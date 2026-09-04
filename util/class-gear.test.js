@@ -39,12 +39,19 @@ test('an object of rows keyed by index is ordered numerically', () => {
     .toEqual(['First', 'Second', 'Third']);
 });
 
-// Integer-like keys happen to iterate in ascending numeric order, so an
-// implementation that just called Object.values() would pass the test above.
-// Non-integer-like keys do NOT: they iterate in insertion order, which is what
-// makes this the case that proves the sort is load-bearing rather than
-// decorative. "21" before "9" is also where a lexicographic sort diverges.
-test('an object of rows is sorted numerically, not by insertion or lexically', () => {
+// This pins the ORDER the branch must answer with, not the sort that produces
+// it -- and the difference is worth stating, because the test name used to
+// claim otherwise. '9', '21' and '100' are canonical array indices, so JS
+// enumerates them in ascending numeric order by itself: deleting the sort
+// leaves this green, and a bare Object.values() passes it too. The one thing it
+// does catch is a LEXICOGRAPHIC sort, which would answer "100" before "21".
+//
+// The sort stays regardless, and it is unpinnable by construction (R73):
+// pinning it would take a key that is integer-like but NOT a canonical index --
+// '01', say, which does enumerate in insertion order -- and neither qs nor
+// append-field ever produces one. It states intent on a branch no real request
+// can reach.
+test('an object of rows keyed out of order comes back ascending', () => {
   const body = {};
   body['21'] = named('TwentyOne');
   body['9'] = named('Nine');
@@ -54,10 +61,12 @@ test('an object of rows is sorted numerically, not by insertion or lexically', (
     .toEqual(['Nine', 'TwentyOne', 'OneHundred']);
 });
 
-// The sort feeds the category default too: a shuffled object would categorise
-// the wrong items, which is the exact mistake the backfill migration's
-// ORDER BY ord guards against on the SQL side.
-test('the category default follows the sorted order of an object of rows', () => {
+// Whatever order the rows come back in is also the order the category default
+// is read from, so an ordering bug here mislabels the columns rather than just
+// shuffling them -- the exact mistake the backfill migration's ORDER BY ord
+// guards against on the SQL side. Same caveat as above: this pins the answer,
+// not the sort, since these keys are canonical indices too.
+test('the category default follows the order an object of rows comes back in', () => {
   const body = {};
   body['5'] = named('Sixth');
   body['0'] = named('First');
