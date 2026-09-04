@@ -12,6 +12,11 @@ ALTER TABLE public.classes DROP COLUMN IF EXISTS description;
 -- `visibility`. `stat_spread` is the costly one: a fork landing `{}` offers
 -- zero stat points in the character wizard's step 2. `tips` was copied by the
 -- baseline function and lost when 20260525000003 rewrote it.
+--
+-- pdf_storage_path/pdf_updated_at are deliberately NOT copied: class PDFs are
+-- unlock-gated on the row's own id and this function sets created_by to the
+-- duplicator, so copying the path would hand a fork's creator an
+-- unconditional signed URL to a PDF they never unlocked.
 CREATE OR REPLACE FUNCTION dup_class(new_id uuid, base_id uuid, new_version text, new_edition text DEFAULT NULL)
 RETURNS uuid
 LANGUAGE plpgsql
