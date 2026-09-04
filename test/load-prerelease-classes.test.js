@@ -9,12 +9,20 @@ import { fileURLToPath } from 'node:url';
 
 import {
   FIELDS, buildPayload, displayName, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
-  trimEnds
+  trimEnds, unremapped
 } from '../scripts/load-prerelease-classes.mjs';
+import { catalogueNames, groupUnresolvable } from '../scripts/lib/character-impact.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const records = JSON.parse(
     readFileSync(join(root, 'docs', 'data', 'prerelease-classes-2026-08.json'), 'utf8'));
+const remap = JSON.parse(
+    readFileSync(join(root, 'docs', 'data', 'prerelease-name-remap.json'), 'utf8'));
+
+const ITEM_KEY = { ability: 'abilities', gear: 'gear' };
+const artifactNames = (kind) =>
+    records.flatMap((record) => (record[ITEM_KEY[kind]] ?? []).map((item) => item.name.trim()));
+const codepoints = (text) => [...text].map((character) => character.codePointAt(0));
 
 const row = (name) => ({ id: `id-${name}`, name });
 
@@ -129,4 +137,83 @@ test('ability pronunciation survives into the payload', () => {
       .flatMap((record) => buildPayload(record).abilities)
       .filter((ability) => ability.pronunciation);
   expect(pronunciations).toHaveLength(2);
+});
+
+test('every remap entry names a class row, one of the two kinds and two distinct names', () => {
+  expect(remap).toHaveLength(15);
+  for (const entry of remap) {
+    expect(Object.keys(entry).sort()).toEqual(['class_id', 'from', 'kind', 'to']);
+    expect(['ability', 'gear']).toContain(entry.kind);
+    expect(entry.class_id).toMatch(/^[0-9a-f-]{36}$/);
+    expect(entry.from).not.toBe(entry.to);
+  }
+});
+
+test('each remap target is a name this document introduces and each source is not', () => {
+  for (const entry of remap) {
+    const names = artifactNames(entry.kind);
+    expect(names.filter((name) => name === entry.to)).toHaveLength(1);
+    expect(names).not.toContain(entry.from);
+  }
+});
+
+// These two differ from their targets by one codepoint, so a straight quote
+// surviving into `to` -- or a curly one into `from` -- would silently rename
+// nothing and leave every character holding the name unsaveable.
+test('the apostrophe remaps carry the exact quote characters', () => {
+  const entry = (from) => remap.find((candidate) => candidate.from === from);
+  expect(codepoints(entry("Sic 'Em!").from)).toContain(0x0027);
+  expect(codepoints(entry("Sic 'Em!").to)).toContain(0x2018);
+  expect(codepoints(entry("Tag, You're It").from)).toContain(0x0027);
+  expect(codepoints(entry("Tag, You're It").to)).toContain(0x2019);
+  for (const { from, to } of remap.filter((candidate) => /['\u2018\u2019]/.test(candidate.to))) {
+    expect(fold(from.replace(/['\u2018\u2019]/g, ''))).toBe(fold(to.replace(/['\u2018\u2019]/g, '')));
+  }
+});
+
+const group = (overrides) => ({
+  kind: 'gear', classId: 'class-1', name: 'Toolbox', survivesNow: true, rows: ['row-1'],
+  characters: new Set(['character-1']), ...overrides
+});
+
+test('a vanishing name with no remap entry is reported', () => {
+  expect(unremapped([group()], []).map((entry) => entry.name)).toEqual(['Toolbox']);
+});
+
+test('a vanishing name the remap accounts for is not reported', () => {
+  const covered = [{ class_id: 'class-1', kind: 'gear', from: 'Toolbox', to: 'Bindle' }];
+  expect(unremapped([group()], covered)).toEqual([]);
+  expect(unremapped([group({ classId: 'other' })], covered)).toHaveLength(1);
+  expect(unremapped([group({ kind: 'abilities' })], covered)).toHaveLength(1);
+});
+
+// A name already unresolvable before the import is not this import's to answer
+// for, and demanding a remap entry for one would block the load forever.
+test('a name that does not resolve today needs no remap entry', () => {
+  expect(unremapped([group({ survivesNow: false })], [])).toEqual([]);
+});
+
+const publicClass = (id, gear) =>
+    ({ id, is_public: true, is_player_created: false, rules_edition: 'advent', gear });
+
+test('only a public class contributes names to the catalogue', () => {
+  const names = catalogueNames([
+    publicClass('a', [{ name: ' Toolbox ' }]),
+    { ...publicClass('b', [{ name: 'Bindle' }]), is_public: false }
+  ]);
+  expect([...names.gear]).toEqual(['Toolbox']);
+});
+
+test('a held name is grouped only when the import leaves it unresolvable', () => {
+  const before = { abilities: new Set(), gear: new Set(['Toolbox']) };
+  const after = { abilities: new Set(), gear: new Set(['Bindle']) };
+  const held = [
+    { kind: 'gear', id: 'row-1', name: 'Toolbox', classId: 'class-1', characterId: 'character-1' },
+    { kind: 'gear', id: 'row-2', name: 'Toolbox', classId: 'class-1', characterId: 'character-2' },
+    { kind: 'gear', id: 'row-3', name: 'Bindle', classId: 'class-1', characterId: 'character-3' },
+    { kind: 'gear', id: 'row-4', name: 'Neuralyzer', classId: 'class-2', characterId: 'character-4' }
+  ];
+  const groups = groupUnresolvable(held, before, after);
+  expect(groups.map((entry) => [entry.name, entry.survivesNow, entry.rows.length, entry.characters.size]))
+      .toEqual([['Toolbox', true, 2, 2], ['Neuralyzer', false, 1, 1]]);
 });

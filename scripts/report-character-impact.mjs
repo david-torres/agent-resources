@@ -11,7 +11,13 @@
 // faith and the save dies.
 //
 // Reads and prints only -- nothing here writes, and it does not run the loader.
-// Exit 1 while any name would vanish.
+//
+// Exit 1 while any held name is unresolvable, whether the import causes it or
+// not. Once the import is applied nothing can be classified as vanishing again
+// -- the loader finds no changes, so before and after agree -- and a row a
+// remap missed keeps a name that is by then in neither catalogue, landing in
+// the already-unresolvable section. Gating on that section too is what makes
+// this exit code mean anything after a load.
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -21,61 +27,12 @@ import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 
 import { fold, planLoad } from './load-prerelease-classes.mjs';
+import {
+  KINDS, catalogueNames, fetchAll, fetchHeldRows, groupUnresolvable, itemNames, projectImport
+} from './lib/character-impact.mjs';
 
 const ARTIFACT = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'data',
     'prerelease-classes-2026-08.json');
-
-const KINDS = ['abilities', 'gear'];
-const ROW_TABLE = { abilities: 'class_abilities', gear: 'class_gear' };
-
-// The three getClasses() calls buildClassContentLookupMaps makes, kept as the
-// filters themselves rather than collapsed into one predicate so that a change
-// to the runtime map shows up here as a visible difference.
-const CATALOGUE_FILTERS = [
-  { is_public: true, is_player_created: false, rules_edition: 'advent' },
-  { is_public: true, is_player_created: false, rules_edition: 'aspirant' },
-  { is_public: true, is_player_created: true }
-];
-
-// `classes.is_public` defaults to false, `is_player_created` to false and
-// `rules_edition` to 'advent' (baseline schema), and the loader's field
-// allowlist sets none of the three -- so a class the load creates is invisible
-// to the catalogue map until an owner publishes it.
-const CREATED_ROW_DEFAULTS = { is_public: false, is_player_created: false, rules_edition: 'advent' };
-
-const PAGE = 1000;
-
-const inCatalogue = (cls) => CATALOGUE_FILTERS.some(
-    (filter) => Object.entries(filter).every(([column, value]) => cls[column] === value));
-
-// Mirrors buildClassContentLookupMaps' own walk: trimmed names, and only from a
-// row carrying an id, because a row without one contributes no class_id.
-const catalogueNames = (classes) => {
-  const names = { abilities: new Set(), gear: new Set() };
-  for (const cls of classes) {
-    if (!cls.id || !inCatalogue(cls)) continue;
-    for (const kind of KINDS) {
-      if (!Array.isArray(cls[kind])) continue;
-      for (const item of cls[kind]) {
-        if (item?.name) names[kind].add(item.name.trim());
-      }
-    }
-  }
-  return names;
-};
-
-// PostgREST caps a response at 1000 rows without saying so, and class_gear
-// alone holds more than that.
-const fetchAll = async (supabase, table, columns) => {
-  const rows = [];
-  for (let from = 0; ; from += PAGE) {
-    const { data, error } = await supabase.from(table).select(columns)
-        .order('id', { ascending: true }).range(from, from + PAGE - 1);
-    if (error) throw new Error(`failed to read ${table}: ${error.message}`);
-    rows.push(...data);
-    if (data.length < PAGE) return rows;
-  }
-};
 
 const setDifference = (left, right) => [...left].filter((value) => !right.has(value));
 
@@ -95,19 +52,6 @@ const catalogueDrift = async (classes) => {
     ...setDifference(runtime[kind], projected[kind]).map((name) => `${kind}: "${name}" in the runtime map but not projected`)
   ]);
 };
-
-const projectImport = (classes, plans) => {
-  const payloadByRowId = new Map(plans.filter((plan) => plan.row).map((plan) => [plan.row.id, plan.payload]));
-  const updated = classes.map((cls) => (payloadByRowId.has(cls.id) ? { ...cls, ...payloadByRowId.get(cls.id) } : cls));
-  // buildClassContentLookupMaps skips a class with no id; an inserted row has
-  // one immediately, so a placeholder stands in for the id it will be given.
-  const created = plans.filter((plan) => !plan.row)
-      .map((plan) => ({ ...CREATED_ROW_DEFAULTS, ...plan.payload, id: `pending:${plan.payload.name}` }));
-  return [...updated, ...created];
-};
-
-const itemNames = (cls, kind) => (Array.isArray(cls?.[kind]) ? cls[kind] : [])
-    .map((item) => item?.name?.trim()).filter(Boolean);
 
 const slotProposal = (kind, name, beforeClass, afterClass) => {
   const slot = itemNames(beforeClass, kind).indexOf(name);
@@ -211,12 +155,7 @@ const main = async () => {
     perksByAbilityId.set(perk.class_ability_id, (perksByAbilityId.get(perk.class_ability_id) ?? 0) + 1);
   }
 
-  const held = [];
-  for (const kind of KINDS) {
-    for (const row of await fetchAll(supabase, ROW_TABLE[kind], 'id, name, class_id, character_id')) {
-      held.push({ kind, id: row.id, name: row.name.trim(), classId: row.class_id, characterId: row.character_id });
-    }
-  }
+  const held = await fetchHeldRows(supabase);
   console.log(`scanned ${held.length} character-held rows across ${classes.length} classes, ` +
       `${new Set(held.map((row) => row.characterId)).size} characters, ${perks.length} perks`);
 
@@ -226,23 +165,15 @@ const main = async () => {
     return 1;
   }
 
-  const groups = new Map();
-  for (const row of held) {
-    const survivesNow = before[row.kind].has(row.name);
-    const survivesAfter = after[row.kind].has(row.name);
-    if (survivesAfter) continue;
-    const key = `${row.kind} ${row.classId} ${row.name}`;
-    if (!groups.has(key)) {
-      groups.set(key, { kind: row.kind, classId: row.classId, name: row.name, survivesNow, rows: [], characters: new Set(), perks: 0 });
-    }
-    const group = groups.get(key);
-    group.rows.push(row.id);
-    group.characters.add(row.characterId);
-    group.perks += row.kind === 'abilities' ? (perksByAbilityId.get(row.id) ?? 0) : 0;
+  const groups = groupUnresolvable(held, before, after);
+  for (const group of groups) {
+    group.perks = group.kind === 'abilities'
+        ? group.rows.reduce((sum, id) => sum + (perksByAbilityId.get(id) ?? 0), 0)
+        : 0;
   }
 
-  const vanishing = [...groups.values()].filter((group) => group.survivesNow);
-  const preexisting = [...groups.values()].filter((group) => !group.survivesNow);
+  const vanishing = groups.filter((group) => group.survivesNow);
+  const preexisting = groups.filter((group) => !group.survivesNow);
 
   const introducedFor = (group) => introducedNames(group.kind, classById.get(group.classId),
       projectedById.get(group.classId) ?? classById.get(group.classId));
@@ -320,9 +251,11 @@ const main = async () => {
     console.log(`\n${rows.length} names, ${total(rows, 'rows')} rows, ` +
         `${new Set(preexisting.flatMap((group) => [...group.characters])).size} characters. ` +
         'These characters cannot be saved today; the import neither causes nor fixes it.');
+    console.log('This section fails the run: after a load it is also where a row a remap missed');
+    console.log('would appear, so it is read rather than skipped.');
   }
 
-  return proposals.length ? 1 : 0;
+  return proposals.length || preexisting.length ? 1 : 0;
 };
 
 if (import.meta.main) process.exitCode = await main();
