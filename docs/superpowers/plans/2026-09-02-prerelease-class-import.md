@@ -1606,13 +1606,14 @@ supabase link --project-ref=<ref>
 supabase db push
 ```
 
-Expected: these **three** migrations applied, in this order:
+Expected: these **four** migrations applied, in this order:
 
 | Migration | What it does |
 | --- | --- |
 | `20260904000000_class_structured_content.sql` | Adds the 13 structured prose columns and drops the three dead `class_abilities` columns |
 | `20260904000001_backfill_gear_category.sql` | Writes `gear[].category` positionally onto the pre-existing classes |
 | `20260904000002_drop_class_description.sql` | Copies `description` into `overview` where `overview` is NULL, then drops `classes.description` and recreates `dup_class` without it |
+| `20260904000003_repair_image_crop.sql` | Repairs `image_crop` values stored as a jsonb string on `classes`, `characters` and `profiles` |
 
 The backfill in the third one is the step with a countable result: on a fresh
 apply it writes **47 rows** -- every class that predates this branch, all of
@@ -1622,9 +1623,17 @@ over them; the other 28 keep the backfilled text as their whole class page.
 It skips any row that already has an `overview`, so re-running the migration
 writes nothing.
 
+`20260904000003` prints one NOTICE per table -- *"N cleared to NULL, N crops
+recovered, N unreadable nulled, N left alone"*. **Read them.** Locally the
+figures are 13/4/0/0 on `classes` and 113/10/2/0 on `characters`; production will
+differ, and only the last number is a gate. Anything in *left alone* is an
+`image_crop` holding something that is not JSON at all -- a shape nobody has
+seen, which the migration deliberately refuses to guess at. It is not a rollout
+blocker, but note the ids it prints and hand them back.
+
 `db push` also carries any earlier migration production has not yet seen (the
 two `20260903*` whitespace ones, if they have not gone up) -- those sort before
-these and are not this branch's. **Read the applied list and confirm all three
+these and are not this branch's. **Read the applied list and confirm all four
 `20260904*` names are in it.** A partial push leaves the code you are about to
 deploy reading columns that are not there; stop and fix it before Step 2a rather
 than deploying on top of it.

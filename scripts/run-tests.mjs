@@ -14,6 +14,7 @@ const integrationFiles = new Set([
   'util/class-form-round-trip.integration.test.js',
   'util/class-structured-columns.integration.test.js',
   'util/core-roster.integration.test.js',
+  'util/image-crop-integrity.integration.test.js',
   'util/whitespace-integrity.integration.test.js'
 ]);
 const httpFiles = new Set([
