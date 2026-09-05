@@ -1,0 +1,792 @@
+<title>Agent Resources Product Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,400&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+
+<style>
+  :root {
+    --paper:      #F6F7F6;
+    --surface:    #FFFFFF;
+    --ink:        #14191C;
+    --ink-soft:   #3D484C;
+    --muted:      #6B787C;
+    --rule:       #DBE2E1;
+    --rule-soft:  #EAEFEE;
+    --signal:     #245F6C;
+    --signal-dim: #E3EEF0;
+    --crit:       #9E2F44;
+    --crit-dim:   #F6E5E8;
+    --caution:    #7E5A0D;
+    --caution-dim:#F6EEDC;
+    --ok:         #2A6249;
+    --ok-dim:     #E3EFE8;
+
+    --measure: 68ch;
+    --step--1: 0.8125rem;
+    --step-0:  1.0625rem;
+    --step-1:  1.3rem;
+    --step-2:  1.7rem;
+    --step-3:  2.3rem;
+    --step-4:  3.1rem;
+
+    --sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+    --serif: "Newsreader", Georgia, "Times New Roman", serif;
+    --mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper:      #10161A;
+      --surface:    #182126;
+      --ink:        #E3EBEC;
+      --ink-soft:   #B9C7C9;
+      --muted:      #86999D;
+      --rule:       #26333A;
+      --rule-soft:  #1D272C;
+      --signal:     #6DBBCA;
+      --signal-dim: #16333B;
+      --crit:       #E5899A;
+      --crit-dim:   #341C22;
+      --caution:    #D9AC49;
+      --caution-dim:#312716;
+      --ok:         #79C2A2;
+      --ok-dim:     #163025;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper:      #10161A;
+    --surface:    #182126;
+    --ink:        #E3EBEC;
+    --ink-soft:   #B9C7C9;
+    --muted:      #86999D;
+    --rule:       #26333A;
+    --rule-soft:  #1D272C;
+    --signal:     #6DBBCA;
+    --signal-dim: #16333B;
+    --crit:       #E5899A;
+    --crit-dim:   #341C22;
+    --caution:    #D9AC49;
+    --caution-dim:#312716;
+    --ok:         #79C2A2;
+    --ok-dim:     #163025;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 1.5rem 6rem;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .wrap { max-width: var(--measure); margin: 0 auto; }
+  .wide { max-width: 78ch; margin: 0 auto; }
+
+  /* ---------- masthead ---------- */
+
+  header.masthead {
+    max-width: 78ch;
+    margin: 0 auto;
+    padding: 4.5rem 0 2rem;
+    border-bottom: 2px solid var(--ink);
+  }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 1.4rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.4rem;
+  }
+
+  h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-size: var(--step-4);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+    margin: 0 0 1rem;
+  }
+
+  .standfirst {
+    font-family: var(--serif);
+    font-size: var(--step-1);
+    line-height: 1.5;
+    color: var(--ink-soft);
+    margin: 0 0 1.5rem;
+    max-width: 60ch;
+  }
+
+  /* ---------- sections ---------- */
+
+  section { padding-top: 3.5rem; }
+
+  h2 {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-size: var(--step-3);
+    line-height: 1.14;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0 0 0.4rem;
+    max-width: 78ch;
+    margin-inline: auto;
+  }
+
+  .section-note {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--signal);
+    margin: 0 auto 1.6rem;
+    max-width: 78ch;
+    padding-top: 0.9rem;
+    border-top: 1px solid var(--rule);
+  }
+
+  h3 {
+    font-family: var(--sans);
+    font-weight: 600;
+    font-size: var(--step-1);
+    line-height: 1.3;
+    margin: 2.4rem 0 0.6rem;
+    text-wrap: balance;
+  }
+
+  p { margin: 0 0 1.1rem; }
+  a { color: var(--signal); text-decoration-thickness: 1px; text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--signal); outline-offset: 3px; border-radius: 2px; }
+
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+
+  code, .path {
+    font-family: var(--mono);
+    font-size: 0.88em;
+    background: var(--rule-soft);
+    padding: 0.12em 0.38em;
+    border-radius: 2px;
+    word-break: break-word;
+  }
+
+  ul, ol { margin: 0 0 1.2rem; padding-left: 1.3rem; }
+  li { margin-bottom: 0.5rem; }
+
+  /* ---------- verdict strip ---------- */
+
+  .verdict {
+    max-width: 78ch;
+    margin: 0 auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0;
+    border-bottom: 1px solid var(--rule);
+  }
+  .verdict div {
+    padding: 1.4rem 1.2rem 1.5rem 0;
+    border-right: 1px solid var(--rule);
+  }
+  .verdict div:last-child { border-right: 0; }
+  .verdict dt {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+  .verdict dd {
+    margin: 0;
+    font-family: var(--serif);
+    font-size: var(--step-1);
+    line-height: 1.25;
+    color: var(--ink);
+  }
+
+  /* ---------- the loop ---------- */
+
+  .loop { max-width: 78ch; margin: 0 auto 2rem; }
+  .loop-step {
+    display: grid;
+    grid-template-columns: 8.5rem 1fr;
+    gap: 0 1.6rem;
+    padding: 1.1rem 0;
+    border-top: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+  .loop-step:first-child { border-top: 1px solid var(--rule); }
+  .loop-stage {
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .loop-body p { margin: 0; }
+  .leak {
+    display: block;
+    margin-top: 0.45rem;
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--crit);
+  }
+  .leak::before {
+    content: "LEAK";
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    background: var(--crit-dim);
+    color: var(--crit);
+    padding: 0.14em 0.42em;
+    border-radius: 2px;
+    margin-right: 0.6rem;
+    vertical-align: 0.08em;
+  }
+  .holds {
+    display: block;
+    margin-top: 0.45rem;
+    font-size: var(--step--1);
+    line-height: 1.5;
+    color: var(--ok);
+  }
+  .holds::before {
+    content: "HOLDS";
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    background: var(--ok-dim);
+    color: var(--ok);
+    padding: 0.14em 0.42em;
+    border-radius: 2px;
+    margin-right: 0.6rem;
+    vertical-align: 0.08em;
+  }
+
+  /* ---------- ranked recommendations ---------- */
+
+  .rec {
+    max-width: 78ch;
+    margin: 0 auto;
+    padding: 2.2rem 0;
+    border-top: 1px solid var(--rule);
+  }
+  .rec-head {
+    display: flex;
+    align-items: baseline;
+    gap: 1.1rem;
+    margin-bottom: 0.3rem;
+  }
+  .rank {
+    font-family: var(--mono);
+    font-size: var(--step-2);
+    font-weight: 600;
+    color: var(--signal);
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+    flex: none;
+  }
+  .rec-head h3 {
+    margin: 0;
+    font-size: var(--step-2);
+    font-family: var(--serif);
+    font-weight: 600;
+    letter-spacing: -0.012em;
+    line-height: 1.15;
+  }
+  .rec-meta {
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 1rem 3.3rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 1.2rem;
+  }
+  .rec-body { margin-left: 3.3rem; }
+  .rec-body > *:last-child { margin-bottom: 0; }
+
+  @media (max-width: 34rem) {
+    .rec-meta, .rec-body { margin-left: 0; }
+    .rec-head { gap: 0.7rem; }
+    .loop-step { grid-template-columns: 1fr; gap: 0.35rem; }
+  }
+
+  .tag {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.12em;
+    padding: 0.16em 0.45em;
+    border-radius: 2px;
+    text-transform: uppercase;
+  }
+  .tag-crit { background: var(--crit-dim); color: var(--crit); }
+  .tag-caution { background: var(--caution-dim); color: var(--caution); }
+  .tag-ok { background: var(--ok-dim); color: var(--ok); }
+
+  /* ---------- evidence block ---------- */
+
+  .evidence {
+    background: var(--surface);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--signal);
+    padding: 0.9rem 1.1rem;
+    margin: 1.1rem 0;
+    font-size: var(--step--1);
+    line-height: 1.55;
+    color: var(--ink-soft);
+  }
+  .evidence p { margin: 0 0 0.5rem; }
+  .evidence p:last-child { margin: 0; }
+  .evidence-label {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    display: block;
+    margin-bottom: 0.45rem;
+  }
+
+  /* ---------- table ---------- */
+
+  .table-scroll { overflow-x: auto; max-width: 78ch; margin: 0 auto 1.4rem; }
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    min-width: 34rem;
+    font-size: var(--step--1);
+  }
+  th, td {
+    text-align: left;
+    padding: 0.62rem 0.9rem 0.62rem 0;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: top;
+  }
+  thead th {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--ink);
+    font-weight: 500;
+  }
+  td.num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- pull ---------- */
+
+  .pull {
+    max-width: 78ch;
+    margin: 2.2rem auto;
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: var(--step-2);
+    line-height: 1.34;
+    color: var(--ink);
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    padding: 1.5rem 0;
+    text-wrap: balance;
+  }
+
+  footer {
+    max-width: 78ch;
+    margin: 4.5rem auto 0;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    color: var(--muted);
+    line-height: 1.7;
+  }
+</style>
+
+<header class="masthead">
+  <p class="eyebrow"><span>Product review</span><span>Agent Resources</span><span>18 Aug 2026</span></p>
+  <h1>The character keeper that isn't yet the game table</h1>
+  <p class="standfirst">Agent Resources is a well-built companion app with an unusually
+  disciplined engineering culture and a core loop that leaks at every seam where the
+  product touches the place its players actually live: Discord.</p>
+  <dl class="verdict">
+    <div>
+      <dt>What it is today</dt>
+      <dd>Where I keep my Enclave character</dd>
+    </div>
+    <div>
+      <dt>What must-use looks like</dt>
+      <dd>Where my group runs the game</dd>
+    </div>
+    <div>
+      <dt>Biggest single gap</dt>
+      <dd>Nothing ever reaches out to a player</dd>
+    </div>
+  </dl>
+</header>
+
+<section>
+  <p class="section-note">Read of the product</p>
+  <div class="wide">
+    <p>The surface area here is real and it is not thin. Characters have a five-step
+    guided wizard <em>and</em> an expert form, two rules versions, level-up, offscreen
+    missions, import/export, death, and public sharing. Classes carry gear, abilities,
+    stat spreads, player-created variants, version families, and a whole unlock-code
+    economy. There is a gated PDF library with temporary and free-access tiers, a
+    looking-for-game board with join requests and a calendar, collaborative mission logs
+    with editor invites and merge, a shareable virtual-party stat calculator, badges,
+    public profiles, a dynamic navbar, a CMS, a sitemap, an agent API, and Discord
+    account linking. That is a lot of product for one maintainer.</p>
+
+    <p>The engineering discipline behind it is genuinely above what this category
+    usually gets: every feature since June ships as a spec commit, then a plan commit,
+    then the implementation; there are four test tiers including a real Chromium
+    end-to-end suite; there is a migration rehearsal script that replays pending
+    migrations against a copy of production. The 2026-08-05 end-to-end report found
+    twenty defects and, checking the tree today, the critical ones are fixed — silent
+    class reassignment on save, the dead Pages CMS, the export links that never
+    downloaded. That is a team that finds its own bugs and closes them.</p>
+
+    <p>So the problem is not build quality. The problem is that the product's shape has
+    been set by what was tractable to build rather than by where the player's attention
+    actually is — and for a tableless RPG, the player's attention is in a Discord voice
+    channel, on a phone, at 8pm on a Thursday.</p>
+  </div>
+</section>
+
+<section>
+  <p class="section-note">The core loop, and where it leaks</p>
+  <div class="loop">
+    <div class="loop-step">
+      <div class="loop-stage">Discover</div>
+      <div class="loop-body">
+        <p>Someone posts a link in a Discord server. Public characters, missions,
+        classes and profiles are server-rendered and in the sitemap.</p>
+        <span class="leak">There is not a single Open Graph or Twitter card tag in the
+        codebase. Every link pasted into Discord — the one channel this community runs
+        on — renders as a bare grey URL.</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Onboard</div>
+      <div class="loop-body">
+        <p>Sign in with Discord, email, or magic link. A path-aware checklist asks
+        "have you played before?" and branches to Quickstart or code redemption.</p>
+        <span class="holds">This is good work and recently shipped. Keep it.</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Create</div>
+      <div class="loop-body">
+        <p>The wizard, or expert mode. Strongest single feature in the app.</p>
+        <span class="holds">Deep, considered, and clearly the thing the most care went into.</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Find a game</div>
+      <div class="loop-body">
+        <p>The onboarding checklist's final step points at <code>/lfg</code>.</p>
+        <span class="leak">If the board is empty, the new player's journey ends there with
+        "Check back soon." No fallback, no way to register interest, no signal to anyone
+        that a player is waiting.</span>
+        <span class="leak">Nobody is told a join request arrived. The host learns only by
+        returning to the page and clicking "Show".</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Play</div>
+      <div class="loop-body">
+        <p>The session happens somewhere else entirely.</p>
+        <span class="leak">The Library's first and most prominent box hands the player a
+        printable PDF character sheet. At the moment of play the app sends users away
+        from itself.</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Log</div>
+      <div class="loop-body">
+        <p>Someone opens the mission form and types in the title, date, conduit, and
+        every participating character by hand.</p>
+        <span class="leak">The LFG post already knows all four. It computes the approved
+        roster and its combined party stats to render the page, then throws that away.
+        There is no "log this game" action anywhere.</span>
+      </div>
+    </div>
+    <div class="loop-step">
+      <div class="loop-stage">Level</div>
+      <div class="loop-body">
+        <p>Completed missions drive level-up, which is the reason to come back.</p>
+        <span class="leak">The whole retention engine depends on the manual step above
+        actually happening after a tiring three-hour session.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="pull">Every stage that requires the product to reach a player, rather than
+wait for one, is missing. That is one gap, appearing six times.</div>
+
+<section>
+  <p class="section-note">What I would do, in order</p>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">01</span><h3>Make the product talk to Discord</h3></div>
+    <p class="rec-meta"><span class="tag tag-crit">Retention</span><span>Effort: medium</span><span>Most of the plumbing exists</span></p>
+    <div class="rec-body">
+      <p>There is no notification of any kind in this application. Not email, not
+      Discord, not in-app. A host is never told a player asked to join. A player is never
+      told they were approved. Nobody is reminded that a game they joined is tomorrow.
+      Nobody is told their character was added to a logged mission. For a product whose
+      central object is <em>a scheduled event with other people</em>, this is the gap that
+      matters more than every other item on this list combined.</p>
+      <p>What makes this a near-term project rather than a rebuild is that the hard parts
+      are already built. Discord is a sign-in method, <code>profiles.discord_id</code> is
+      stored and uniquely indexed, there is a bot-linking flow with long-lived agent
+      tokens, and the agent API already exposes the entire LFG surface. The missing piece
+      is a dispatcher and five event types.</p>
+      <div class="evidence">
+        <span class="evidence-label">Verified</span>
+        <p>No match for notification, webhook, email-send, or Discord API dispatch
+        anywhere in <span class="path">routes/</span>, <span class="path">services/</span>,
+        <span class="path">models/</span>, or <span class="path">util/</span>.</p>
+      </div>
+      <p><strong>Ship first:</strong> join request received, join request approved, game
+      starts in 24 hours. Those three carry most of the value.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">02</span><h3>Close the LFG-to-mission gap</h3></div>
+    <p class="rec-meta"><span class="tag tag-crit">Retention</span><span>Effort: small</span><span>Data already loaded</span></p>
+    <div class="rec-body">
+      <p>Mission logging is the engine of progression, and progression is the reason a
+      character is worth returning to. Right now logging is the highest-friction, most
+      redundant data entry in the app, and it lands at the point of lowest energy — the
+      end of a session.</p>
+      <div class="evidence">
+        <span class="evidence-label">Verified</span>
+        <p><span class="path">routes/lfg.js:107-120</span> builds the approved character
+        roster and party summary for the post page. <span class="path">views/lfg-post.handlebars</span>
+        renders party stats and calendar export buttons — but nothing that creates a
+        mission. The mission form asks for the title, date, conduit, and characters again
+        from scratch.</p>
+      </div>
+      <p>Add one button on a past-dated LFG post: <strong>Log this game</strong>. It opens
+      the mission form pre-filled with the post's title, date, conduit, and every approved
+      character. The Conduit writes the summary and saves. That is the difference between
+      a log that happens and a log that doesn't.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">03</span><h3>Add link previews</h3></div>
+    <p class="rec-meta"><span class="tag tag-ok">Growth</span><span>Effort: hours</span><span>Highest ratio on this list</span></p>
+    <div class="rec-body">
+      <p>The codebase contains zero <code>og:</code> or <code>twitter:</code> meta tags.
+      Public characters, classes, missions and profiles all render server-side for signed-out
+      visitors and are all in the sitemap — the content is share-ready and the sharing is
+      not. Every character someone shows off in Discord is currently an unstyled URL that
+      nobody clicks.</p>
+      <p>Title, description, and an image per shareable type. Characters and classes
+      already carry <code>image_url</code> with crop data, so there is art to use. This is
+      an afternoon of work that turns every proud player into a distribution channel, and
+      it is the only item here that grows the top of the funnel rather than plugging the
+      bottom.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">04</span><h3>Decide whether the app is the sheet at the table</h3></div>
+    <p class="rec-meta"><span class="tag tag-caution">Positioning</span><span>Effort: large</span><span>Answer this before building</span></p>
+    <div class="rec-body">
+      <p>This is the strategic question the roadmap has not been asked to answer. Today
+      the character page is a 400-line reference document: boxes of stats, gear, perks,
+      and recent missions. There is no HP or condition tracking, no dice, no in-session
+      state, no compact view for a phone held in one hand during a voice call. And the
+      Library's most prominent element is a link to a printable PDF sheet.</p>
+      <p>If players print that sheet, the app is a character <em>creator</em> they visit
+      twice per character. If the app is the sheet, it is open for three hours every
+      session and it becomes the place the group's habits form. Those are different
+      products with different retention curves, and the second one is the one that becomes
+      must-use.</p>
+      <p>The version worth prototyping is small: a "play view" route on an existing
+      character — large type, abilities and gear as the primary content rather than an
+      afterthought, whatever counters Enclave's rules actually need, and nothing else on
+      screen. Put it in front of six players for one session before building anything more.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">05</span><h3>Instrument the funnel</h3></div>
+    <p class="rec-meta"><span class="tag tag-caution">Foundation</span><span>Effort: small</span><span>Everything above is a guess without it</span></p>
+    <div class="rec-body">
+      <p>There is no analytics, no event tracking, and no product metrics anywhere in the
+      codebase. The team ships with real rigor — spec, plan, implement, four test tiers —
+      and then has no way to know whether anything worked.</p>
+      <p>Concretely unanswerable today: what share of signups create a character; what
+      share of wizard starts reach step five and which step loses them; how many LFG posts
+      ever receive a join request; how many played games get logged; how many players
+      return in week two. Every prioritization argument, including this document, is
+      currently reasoned from code rather than from behavior.</p>
+      <p>A privacy-respecting page-view tool plus a dozen named server-side events would
+      close it. Do this before item 4, so the play-view experiment produces evidence
+      instead of an opinion.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">06</span><h3>Give the Conduit a reason to be here</h3></div>
+    <p class="rec-meta"><span class="tag tag-caution">Supply side</span><span>Effort: medium</span></p>
+    <div class="rec-body">
+      <p>Game masters are the scarce side of every tabletop community — one Conduit
+      unblocks four or five players. In this product a Conduit gets a checkbox on an LFG
+      post, mission editor rights, and a <code>conduit_briefing</code> text field that
+      renders only on their public profile. The party stat summary on the post page is a
+      genuinely good start and points the right way.</p>
+      <p>What is missing is anything for preparing or running a session: no adversary or
+      NPC records, no session notes, no place to keep the thing you wrote last week, no
+      surface built around "I am running this game in ten minutes." The player side has a
+      five-step wizard; the Conduit side has a checkbox.</p>
+      <p>The cheap version is a run screen off the LFG post: the roster with each
+      character's stats expanded, the party summary, private Conduit notes for the game,
+      and the "log this game" button from item 2 sitting at the bottom.</p>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">07</span><h3>Fix the two live LFG defects before promoting the board</h3></div>
+    <p class="rec-meta"><span class="tag tag-crit">Correctness</span><span>Effort: hours</span><span>Both still present</span></p>
+    <div class="rec-body">
+      <p><strong>A player cannot see that a game already has a Conduit.</strong>
+      <span class="path">models/lfg.js:25-38</span> derives <code>host_id</code> from the
+      join requests, but row-level security shows a non-owner only their own requests — so
+      the derivation finds nothing and overwrites the correct <code>host_id</code> the row
+      actually carried with <code>null</code>. Every public post with a Conduit displays
+      "Conduit needed" to everyone else. A player volunteers, the server rejects it, and
+      because that path returns a bare string that the error handler has no branch for, they
+      read "Join failed" on a 500. This is a one-branch fix in <code>applyConduitMeta</code>
+      and it is sitting in the single funnel that matters most.</p>
+      <p><strong>Back button blanks the page.</strong> The August end-to-end report's
+      finding 2 is still open: <span class="path">util/auth.js:41-44</span> answers an
+      htmx history-restore request with a 200, an <code>HX-Redirect</code> header, and an
+      empty body, which htmx swaps into <code>&lt;body&gt;</code> as zero bytes. There is
+      no <code>HX-History-Restore-Request</code> handling anywhere in the tree. A signed-in
+      user who browses a dozen pages and holds Back gets a permanent white screen; users
+      with blocked local storage hit it on the first Back, every time.</p>
+      <div class="evidence">
+        <span class="evidence-label">Root cause worth naming</span>
+        <p>Both symptoms, plus the export workaround and the app's total dependence on
+        JavaScript for a signed-in first paint, trace to authentication by a
+        JS-written <code>Authorization</code> header rather than a cookie. Moving to
+        cookie-based sessions would delete a class of product bugs rather than another
+        instance of one. That is the one architectural rework I would argue for on product
+        grounds — but after items 1 through 3, not before.</p>
+      </div>
+    </div>
+  </article>
+
+  <article class="rec">
+    <div class="rec-head"><span class="rank">08</span><h3>Rebalance the roadmap away from entitlements</h3></div>
+    <p class="rec-meta"><span class="tag tag-caution">Process</span><span>Effort: none — a decision</span></p>
+    <div class="rec-body">
+      <p>All seventeen tickets in <span class="path">.tickets/</span> are engineering
+      tickets — architecture, tooling, test coverage, runbooks. Not one describes a player
+      outcome. The backlog has no product half, so the roadmap is being set by whatever the
+      last spec document happened to be about.</p>
+      <p>And what those specs have been about is unlock plumbing. Of the last ten shipped
+      features, six are access-control work: class-list partitioning by release state,
+      library version collapse, an admin unlocks dashboard, temporary unlock expiry
+      display, admin-override badging, and granting classes from owned PDFs. That is a
+      great deal of energy in the entitlement layer relative to the play layer.</p>
+      <p>If unlock codes are carrying real revenue, some of that is correct and this is a
+      ratio question rather than a wrong-direction question. But entitlement work only pays
+      off when there is something worth being entitled to, and right now nothing in the
+      pipeline is making the play experience better.</p>
+    </div>
+  </article>
+</section>
+
+<section>
+  <p class="section-note">Effort against impact</p>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col">Item</th>
+          <th scope="col">Effort</th>
+          <th scope="col">Moves</th>
+          <th scope="col">Blocked by</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="num">03</td><td>Link previews</td><td>Hours</td><td>New signups</td><td>—</td></tr>
+        <tr><td class="num">07</td><td>LFG conduit + Back-button defects</td><td>Hours</td><td>Trust</td><td>—</td></tr>
+        <tr><td class="num">05</td><td>Analytics + funnel events</td><td>Small</td><td>Every later decision</td><td>—</td></tr>
+        <tr><td class="num">02</td><td>Log this game</td><td>Small</td><td>Missions logged, levels earned</td><td>—</td></tr>
+        <tr><td class="num">01</td><td>Discord notifications</td><td>Medium</td><td>Return visits, games filled</td><td>—</td></tr>
+        <tr><td class="num">06</td><td>Conduit run screen</td><td>Medium</td><td>Game supply</td><td>02</td></tr>
+        <tr><td class="num">04</td><td>Play view for the sheet</td><td>Large</td><td>Session-time habit</td><td>05</td></tr>
+        <tr><td class="num">08</td><td>Product backlog rebalance</td><td>A decision</td><td>Everything after</td><td>—</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="wide">
+    <p>Rough shape for a quarter: weeks 1–2 take items 3, 7 and 5 together — they are
+    small, independent, and item 5 needs to be live before anything else ships so the rest
+    can be measured. Weeks 3–6 build items 2 and 1, which are one project told from two
+    sides: the game you joined reaches out to you, and the game you played turns into a log
+    without retyping. Weeks 7–12 are item 6 and a prototype of item 4, decided against
+    whatever the instrumentation has by then shown.</p>
+  </div>
+</section>
+
+<section>
+  <p class="section-note">What I would not touch</p>
+  <div class="wide">
+    <p><strong>The character wizard.</strong> It is the best thing in the product and it
+    is finished enough. Resist adding modes.</p>
+    <p><strong>Social features.</strong> No follows, no comments, no feeds, no
+    leaderboards. Community features amplify a loop; they do not create one. Every one of
+    them built before item 1 lands in an app nobody has a reason to open.</p>
+    <p><strong>The engineering discipline.</strong> The spec-then-plan-then-implement
+    rhythm, the four test tiers, the migration rehearsal — this is why the product is
+    trustworthy, and it is not what is holding it back. Point it at different targets
+    rather than slowing it down.</p>
+    <p><strong>Bulma and htmx.</strong> The stack is fine. Nothing on this list is
+    blocked by it. The one exception is the header-auth choice in item 7, which is a bug
+    class, not a framework.</p>
+  </div>
+</section>
+
+<section>
+  <p class="section-note">The one-line version</p>
+  <div class="wide">
+    <p>Agent Resources is three small projects away from being the thing an Enclave
+    group opens on game night instead of a PDF and a Discord thread: <strong>tell people
+    when something happens, turn the game they scheduled into the mission they played, and
+    make every link they share look like something worth clicking.</strong> Everything
+    else on this list is downstream of those.</p>
+  </div>
+</section>
+
+<footer>
+  Review prepared 18 Aug 2026 against <code>main</code> at <code>163334a</code>.<br>
+  Claims verified by reading the tree; where a defect is cited, the current file
+  and line are named. Findings drawn from
+  <code>docs/superpowers/reports/2026-08-03-e2e-findings.md</code> were re-checked
+  against today's code, and the fixed ones are described as fixed.
+</footer>
