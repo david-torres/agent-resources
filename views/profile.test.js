@@ -76,12 +76,12 @@ test('a permanent unlock still renders its own row cells', () => {
   expect(bodyCells).toBe(headCells);
 });
 
-test('a globally available class is labelled as a free pre-release', () => {
+test('a globally available class is labelled as a pre-release', () => {
   const html = renderProfile({
     ...baseContext,
     unlockedClasses: [{ ...CLASS_PERMANENT, unlock_source: 'free_prerelease' }]
   });
 
   expect(html).toContain('Available Classes');
-  expect(html).toContain('Free Pre-Release');
+  expect(html).toContain('>Pre-release<');
 });

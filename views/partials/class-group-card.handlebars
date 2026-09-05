@@ -20,7 +20,7 @@
     <div class="card-content">
       <h5 class="title is-5"><a href="/classes/{{primary.id}}/{{primary.name}}">{{primary.name}}</a>
         {{#if primary.free_play_access}}
-        <span class="tag is-info is-light ml-2">Free Pre-Release</span>
+        <span class="tag is-info is-light ml-2">Pre-release</span>
         {{/if}}
         {{#if (and @root.isAdmin (not primary.is_public))}}
         <span class="tag is-dark is-light ml-2" title="Not public — only admins can see this">Private</span>
