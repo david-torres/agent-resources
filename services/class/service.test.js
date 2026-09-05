@@ -5,10 +5,11 @@ const { AuthorizationError } = require('../../util/errors');
 
 const CLASS_ROW = { id: 'class-1', created_by: 'owner-1' };
 
-const makeRepo = ({ classRow = CLASS_ROW } = {}) => {
+const makeRepo = ({ classRow = CLASS_ROW, itemOwnership = [] } = {}) => {
   const calls = [];
   return {
     calls,
+    fetchClassItemOwnership: async () => { calls.push(['fetchClassItemOwnership']); return itemOwnership; },
     insertClass: async data => { calls.push(['insertClass', data]); return { data, error: null }; },
     updateClass: async (id, data) => { calls.push(['updateClass', id, data]); return { data, error: null }; },
     deleteClass: async id => { calls.push(['deleteClass', id]); return { error: null }; },
@@ -23,6 +24,26 @@ const OTHER_ACTOR = { profileId: 'someone-else', role: 'user' };
 const ADMIN_ACTOR = { profileId: 'admin-1', role: 'admin' };
 const SYSTEM_ACTOR = { role: 'system' };
 
+const GUNSLINGER_ROW = {
+  id: 'gs-v1',
+  name: 'Gunslinger',
+  is_public: true,
+  base_class_id: null,
+  rules_edition: 'advent',
+  gear: [{ name: 'Revolver' }],
+  abilities: []
+};
+
+const PCC_ROW = {
+  id: 'pcc-1',
+  name: 'Seamus McGlide — Gunslinger (PCC)',
+  is_public: true,
+  base_class_id: null,
+  rules_edition: 'advent',
+  gear: [{ name: 'Revolver' }, { name: 'Spyglass' }],
+  abilities: []
+};
+
 test('normalizes a class input copy without mutating the submitted payload', () => {
   const input = { name: 'Tinker', image_url: 'javascript:bad()' };
   expect(normalizeClassInput(input)).toEqual({ name: 'Tinker', image_url: null });
@@ -31,6 +52,11 @@ test('normalizes a class input copy without mutating the submitted payload', () 
 
 test('constructor requires every repository method', () => {
   expect(() => new ClassService({})).toThrow(TypeError);
+});
+
+test('constructor requires the repository to expose fetchClassItemOwnership', () => {
+  const { fetchClassItemOwnership, ...repoWithoutOwnership } = makeRepo();
+  expect(() => new ClassService(repoWithoutOwnership)).toThrow(TypeError);
 });
 
 test('createClass derives created_by from the actor, ignoring any input value', async () => {
@@ -130,4 +156,119 @@ test('a non-admin minting unlock codes throws AuthorizationError, never reaching
   const service = new ClassService(repo);
   await expect(service.mintUnlockCodes(OWNER_ACTOR, [{ code: 'abc' }])).rejects.toThrow(AuthorizationError);
   expect(repo.calls).toEqual([]);
+});
+
+test('creating a public class whose gear name belongs to another family returns an error, never reaching the insert', async () => {
+  const repo = makeRepo({ itemOwnership: [GUNSLINGER_ROW] });
+  const service = new ClassService(repo);
+
+  const result = await service.createClass(OWNER_ACTOR, {
+    name: 'Seamus McGlide — Gunslinger (PCC)',
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassItemOwnership']);
+  expect(result.data).toBeNull();
+  expect(result.error.message).toContain('Revolver');
+  expect(result.error.message).toContain('Gunslinger');
+});
+
+test('updating a public class onto another family\'s gear name returns an error, never reaching the update', async () => {
+  const repo = makeRepo({ itemOwnership: [GUNSLINGER_ROW] });
+  const service = new ClassService(repo);
+
+  const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassByIdAdmin', 'fetchClassItemOwnership']);
+  expect(result.data).toBeNull();
+  expect(result.error.message).toContain('Revolver');
+  expect(result.error.message).toContain('Gunslinger');
+});
+
+test('updating a public class that keeps a gear name it already stores reaches the update', async () => {
+  const repo = makeRepo({
+    classRow: { id: 'class-1', created_by: 'owner-1', gear: [{ name: 'Revolver' }], abilities: [] },
+    itemOwnership: [PCC_ROW]
+  });
+  const service = new ClassService(repo);
+
+  const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassByIdAdmin', 'fetchClassItemOwnership', 'updateClass']);
+  expect(result.error).toBeNull();
+});
+
+test('updating a public class names the newly added gear name, not the one it already stores', async () => {
+  const repo = makeRepo({
+    classRow: { id: 'class-1', created_by: 'owner-1', gear: [{ name: 'Revolver' }], abilities: [] },
+    itemOwnership: [PCC_ROW]
+  });
+  const service = new ClassService(repo);
+
+  const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }, { name: 'Spyglass' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassByIdAdmin', 'fetchClassItemOwnership']);
+  expect(result.data).toBeNull();
+  expect(result.error.message).toContain('Spyglass');
+  expect(result.error.message).not.toContain('Revolver');
+});
+
+test('creating a public class grandfathers nothing, rejecting a colliding gear name stored on another row', async () => {
+  const repo = makeRepo({
+    classRow: { id: 'class-1', created_by: 'owner-1', gear: [{ name: 'Revolver' }], abilities: [] },
+    itemOwnership: [PCC_ROW]
+  });
+  const service = new ClassService(repo);
+
+  const result = await service.createClass(OWNER_ACTOR, {
+    name: 'Fresh Gunslinger',
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassItemOwnership']);
+  expect(result.data).toBeNull();
+  expect(result.error.message).toContain('Revolver');
+});
+
+test('creating a v2 fork that repeats its own family\'s gear name reaches the insert', async () => {
+  const repo = makeRepo({ itemOwnership: [GUNSLINGER_ROW] });
+  const service = new ClassService(repo);
+
+  const result = await service.createClass(OWNER_ACTOR, {
+    name: 'Gunslinger v2',
+    is_public: true,
+    base_class_id: 'gs-v1',
+    rules_edition: 'advent',
+    gear: [{ name: 'Revolver' }],
+    abilities: []
+  });
+
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchClassItemOwnership', 'insertClass']);
+  expect(result.error).toBeNull();
 });

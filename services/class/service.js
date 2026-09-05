@@ -2,6 +2,7 @@ const { normalizeClassInput } = require('./input');
 const { AuthorizationError } = require('../../util/errors');
 const { isSystem } = require('../../util/actor');
 const { canManageClass, canMintUnlockCodes } = require('./policy');
+const { findItemNameConflicts } = require('./item-uniqueness');
 
 const REQUIRED_REPOSITORY_METHODS = [
   'insertClass',
@@ -9,8 +10,18 @@ const REQUIRED_REPOSITORY_METHODS = [
   'deleteClass',
   'saveClassPdfMetadata',
   'insertUnlockCodes',
-  'fetchClassByIdAdmin'
+  'fetchClassByIdAdmin',
+  'fetchClassItemOwnership'
 ];
+
+const carriesItems = (data) => Array.isArray(data?.gear) || Array.isArray(data?.abilities);
+
+const itemConflictError = async (repo, candidate, previous) => {
+  const classRows = await repo.fetchClassItemOwnership();
+  const [conflict] = findItemNameConflicts({ candidate, classRows, previous });
+  if (!conflict) return null;
+  return new Error(`"${conflict.name}" is already defined by the class "${conflict.ownerClassName}"`);
+};
 
 const requireManageable = async (repo, actor, id) => {
   const { data: existing, error } = await repo.fetchClassByIdAdmin(id);
@@ -33,13 +44,23 @@ class ClassService {
   // system actor, which is allowed to set an explicit owner (e.g. seeding).
   async createClass(actor, input) {
     const created_by = isSystem(actor) ? (input?.created_by ?? null) : (actor?.profileId ?? null);
-    return this.repo.insertClass(normalizeClassInput({ ...input, created_by }));
+    const data = normalizeClassInput({ ...input, created_by });
+    if (carriesItems(data)) {
+      const conflict = await itemConflictError(this.repo, { ...data, id: null });
+      if (conflict) return { data: null, error: conflict };
+    }
+    return this.repo.insertClass(data);
   }
 
   async updateClass(actor, id, input) {
-    const { error } = await requireManageable(this.repo, actor, id);
+    const { existing, error } = await requireManageable(this.repo, actor, id);
     if (error) return { data: null, error };
-    return this.repo.updateClass(id, normalizeClassInput(input));
+    const data = normalizeClassInput(input);
+    if (carriesItems(data)) {
+      const conflict = await itemConflictError(this.repo, { ...data, id }, existing);
+      if (conflict) return { data: null, error: conflict };
+    }
+    return this.repo.updateClass(id, data);
   }
 
   async deleteClass(actor, id) {

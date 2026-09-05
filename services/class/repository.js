@@ -55,6 +55,21 @@ module.exports = {
       return null;
     }
   },
+  fetchClassItemOwnership: async () => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('classes')
+        .select('id, name, is_public, base_class_id, rules_edition, gear, abilities');
+      if (error || !Array.isArray(data)) {
+        if (error) console.error(error);
+        return [];
+      }
+      return data;
+    } catch (e) {
+      console.error(e);
+      return [];
+    }
+  },
   unlockedClassIdRows: async ({ userId, nowIso }) => {
     const { data, error } = await supabaseAdmin
       .from('class_unlocks')
