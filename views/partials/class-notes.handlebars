@@ -1,0 +1,14 @@
+{{#if notes.length}}
+<ul>
+  {{#each notes}}
+  <li>
+    {{this.text}}
+    {{#if this.children.length}}
+    <ul>
+      {{#each this.children}}<li>{{this.text}}</li>{{/each}}
+    </ul>
+    {{/if}}
+  </li>
+  {{/each}}
+</ul>
+{{/if}}

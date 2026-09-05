@@ -4,6 +4,7 @@ const { expandIdsToFamilies } = require('../util/class-family');
 const { coreClassIdsForEditions } = require('../util/book-classes');
 const { applyClassFilters } = require('../util/class-filters');
 const { trimStrings } = require('../util/trim-input');
+const { pickClassProseForAgent } = require('../util/class-prose');
 const { ClassService } = require('../services/class/service');
 const classRepository = require('../services/class/repository');
 const rulesRepository = require('../services/rules/repository');
@@ -342,7 +343,7 @@ const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new 
     };
 
     if (accessLevel === 'full') {
-        serialized.description = classData.description || '';
+        Object.assign(serialized, pickClassProseForAgent(classData));
         serialized.signature_gear = Array.isArray(classData.gear) ? classData.gear : [];
         serialized.abilities = Array.isArray(classData.abilities) ? classData.abilities : [];
     }

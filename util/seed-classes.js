@@ -56,7 +56,6 @@ async function seedClasses() {
 const buildRow = (cls, is_player_created, rules_edition = 'advent') => {
     const row = {
         name: cls,
-        description: '',
         is_public: true,
         status: 'release',
         is_player_created,

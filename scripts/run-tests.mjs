@@ -10,7 +10,12 @@ const integrationFiles = new Set([
   'models/nav-rls.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
+  'util/character-content-integrity.integration.test.js',
+  'util/class-description-dropped.integration.test.js',
+  'util/class-form-round-trip.integration.test.js',
+  'util/class-structured-columns.integration.test.js',
   'util/core-roster.integration.test.js',
+  'util/image-crop-integrity.integration.test.js',
   'util/whitespace-integrity.integration.test.js'
 ]);
 const httpFiles = new Set([
@@ -23,6 +28,7 @@ const httpFiles = new Set([
   'routes/characters.test.js',
   'routes/class-view-unlock-resolution.test.js',
   'routes/classes-stat-spread.test.js',
+  'routes/classes-structured-fields.test.js',
   'routes/feedback.test.js',
   'routes/lfg-conduit-join.test.js',
   'routes/lfg-log-game.test.js',
@@ -73,14 +79,21 @@ if (mode === 'integration') {
 // every test that reaches routes/classes.js -- which requires class-import at
 // the top -- died on a clean checkout. Never a real key: nothing under test
 // calls the model, and the placeholder only has to be non-empty.
+//
+// The placeholders OVERRIDE rather than default. This file is itself run by bun,
+// which loads .env before any of this executes, so `process.env.SUPABASE_URL ||
+// placeholder` never reached the placeholder -- it handed every unit and HTTP
+// test whatever .env held, which on a deploy machine is production and its
+// service key. An integration test that someone forgets to register below then
+// runs against production instead of failing to connect.
 const testEnv = mode === 'integration'
   ? process.env
   : {
       ...process.env,
-      SUPABASE_URL: process.env.SUPABASE_URL || 'https://test.invalid',
-      SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key',
-      SUPABASE_SECRET_KEY: process.env.SUPABASE_SECRET_KEY || 'test-secret-key',
-      OPENAI_API_KEY: process.env.OPENAI_API_KEY || 'test-openai-key'
+      SUPABASE_URL: 'https://test.invalid',
+      SUPABASE_PUBLISHABLE_KEY: 'test-publishable-key',
+      SUPABASE_SECRET_KEY: 'test-secret-key',
+      OPENAI_API_KEY: 'test-openai-key'
     };
 
 // Run one file per Bun process. Several older tests install process-global

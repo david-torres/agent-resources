@@ -28,7 +28,11 @@ const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
-const { parseImageCrop } = require('../util/crop');
+const { applyImageCrop } = require('../util/crop');
+const { normalizeAbilities } = require('../util/class-abilities');
+const { normalizeGear } = require('../util/class-gear');
+const { parseExamples } = require('../util/class-examples');
+const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
 const { partitionClassGroups } = require('../util/class-filter');
@@ -48,12 +52,6 @@ const upload = multer({
     }
 });
 
-const ensureArray = (value) => {
-    if (Array.isArray(value)) return value;
-    if (value === undefined || value === null) return [];
-    return [value];
-};
-
 const parseStatSpread = (body) => {
     const nested = (body.stat_spread && typeof body.stat_spread === 'object' && !Array.isArray(body.stat_spread))
         ? body.stat_spread
@@ -68,6 +66,48 @@ const parseStatSpread = (body) => {
         }
     }
     return spread;
+};
+
+// Curation and provenance, not player-editable metadata: prerelease_section
+// records which section of the source document a class was printed under, and
+// designer credits its author. The form hides all three from non-admins, so the
+// handlers drop them rather than trust them. Deleting rather than nulling gives
+// the same asymmetry is_player_created already has -- create takes the column
+// default, update leaves whatever an admin set.
+const ADMIN_ONLY_FIELDS = ['challenge_level', 'prerelease_section', 'designer'];
+
+// The flat ability_name[] / ability_description[] path is gone, but a browser
+// holding the previous version of the form still posts those names. req.body
+// reaches the repository wholesale, with no column allowlist, so leaving them
+// in turns a stale tab's save into a Postgres error on columns that do not
+// exist.
+const RETIRED_ABILITY_FIELDS = [
+    'ability_name[]', 'ability_description[]', 'ability_name', 'ability_description'
+];
+
+const dropRetiredAbilityFields = (body) => {
+    for (const field of RETIRED_ABILITY_FIELDS) {
+        delete body[field];
+    }
+};
+
+// The same for gear: the flat gear_name[] / gear_description[] path is gone,
+// and a stale tab still posting those names must be ignored rather than
+// forwarded to a column that does not exist.
+const RETIRED_GEAR_FIELDS = [
+    'gear_name[]', 'gear_description[]', 'gear_name', 'gear_description'
+];
+
+const dropRetiredGearFields = (body) => {
+    for (const field of RETIRED_GEAR_FIELDS) {
+        delete body[field];
+    }
+};
+
+const dropAdminOnlyFields = (body) => {
+    for (const field of ADMIN_ONLY_FIELDS) {
+        delete body[field];
+    }
 };
 
 // View Routes
@@ -610,34 +650,11 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     }
     const actor = actorFromLocals(res.locals);
 
-    // Process abilities and gear arrays
-    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
-    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
-    const abilities = abilityNames
-        .map((name, index) => ({
-            name: name,
-            description: abilityDescriptions[index] || ''
-        }))
-        .filter((ability) => ability.name);
-    req.body.abilities = abilities;
-    delete req.body['ability_name[]'];
-    delete req.body['ability_description[]'];
-    delete req.body.ability_name;
-    delete req.body.ability_description;
+    req.body.abilities = normalizeAbilities(req.body.abilities);
+    dropRetiredAbilityFields(req.body);
 
-    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
-    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
-    const gear = gearNames
-        .map((name, index) => ({
-            name: name,
-            description: gearDescriptions[index] || ''
-        }))
-        .filter((item) => item.name);
-    req.body.gear = gear;
-    delete req.body['gear_name[]'];
-    delete req.body['gear_description[]'];
-    delete req.body.gear_name;
-    delete req.body.gear_description;
+    req.body.gear = normalizeGear(req.body.gear);
+    dropRetiredGearFields(req.body);
 
     // Normalize is_public checkbox
     if (req.body.is_public === 'on') {
@@ -658,12 +675,15 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
         req.body.status = ['alpha', 'beta'].includes(req.body.status) ? req.body.status : 'alpha';
     }
 
-    const image_crop = parseImageCrop(req.body.image_crop);
-    if (image_crop !== undefined) {
-        req.body.image_crop = image_crop;
-    }
+    applyImageCrop(req.body);
 
     req.body.stat_spread = parseStatSpread(req.body);
+    req.body.examples = parseExamples(req.body);
+    if (!isAdmin) {
+        dropAdminOnlyFields(req.body);
+    }
+    applyConstrainedSelects(req.body);
+    blankTextToNull(req.body);
 
     const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
@@ -695,38 +715,13 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     // Authz (owner-or-admin) is enforced by the service via classService.updateClass.
 
-    const image_crop = parseImageCrop(req.body.image_crop);
-    if (image_crop !== undefined) {
-        req.body.image_crop = image_crop;
-    }
+    applyImageCrop(req.body);
 
-    const abilityNames = ensureArray(req.body['ability_name[]'] || req.body.ability_name);
-    const abilityDescriptions = ensureArray(req.body['ability_description[]'] || req.body.ability_description);
-    const abilities = abilityNames
-        .map((name, index) => ({
-            name: name,
-            description: abilityDescriptions[index] || ''
-        }))
-        .filter((ability) => ability.name);
-    req.body.abilities = abilities;
-    delete req.body['ability_name[]'];
-    delete req.body['ability_description[]'];
-    delete req.body.ability_name;
-    delete req.body.ability_description;
+    req.body.abilities = normalizeAbilities(req.body.abilities);
+    dropRetiredAbilityFields(req.body);
 
-    const gearNames = ensureArray(req.body['gear_name[]'] || req.body.gear_name);
-    const gearDescriptions = ensureArray(req.body['gear_description[]'] || req.body.gear_description);
-    const gear = gearNames
-        .map((name, index) => ({
-            name: name,
-            description: gearDescriptions[index] || ''
-        }))
-        .filter((item) => item.name);
-    req.body.gear = gear;
-    delete req.body['gear_name[]'];
-    delete req.body['gear_description[]'];
-    delete req.body.gear_name;
-    delete req.body.gear_description;
+    req.body.gear = normalizeGear(req.body.gear);
+    dropRetiredGearFields(req.body);
 
     if (req.body.is_public === 'on') {
         req.body.is_public = true;
@@ -752,6 +747,12 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
     delete req.body.remove_pdf;
 
     req.body.stat_spread = parseStatSpread(req.body);
+    req.body.examples = parseExamples(req.body);
+    if (!isAdmin) {
+        dropAdminOnlyFields(req.body);
+    }
+    applyConstrainedSelects(req.body);
+    blankTextToNull(req.body);
 
     const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {

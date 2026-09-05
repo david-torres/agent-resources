@@ -178,8 +178,20 @@
               "base_class_id": { "type": ["string", "null"] },
               "pdf_available": { "type": "boolean" },
               "created_at": { "type": ["string", "null"], "format": "date-time" },
-              "description": { "type": "string" },
-              "gear": { "type": "array", "items": { "type": "object" } },
+              "challenge_level": { "type": ["string", "null"], "enum": ["Low", "Mid", "High", null] },
+              "stat_line": { "type": ["string", "null"], "description": "The stats this class favours, as printed" },
+              "stat_note": { "type": ["string", "null"] },
+              "quote": { "type": ["string", "null"] },
+              "quote_source": { "type": ["string", "null"] },
+              "overview": { "type": ["string", "null"], "description": "The class pitch" },
+              "conduit_notes": { "type": ["string", "null"], "description": "How a Conduit should build a mission for this class" },
+              "grounding": { "type": ["string", "null"], "description": "The real-world or genre tropes the class is grounded in" },
+              "examples_heading": { "type": ["string", "null"] },
+              "examples": { "type": "array", "items": { "type": "string" } },
+              "tips_heading": { "type": ["string", "null"] },
+              "tips": { "type": ["string", "null"], "description": "Markdown bullet list" },
+              "designer": { "type": ["string", "null"] },
+              "signature_gear": { "type": "array", "items": { "type": "object" } },
               "abilities": { "type": "array", "items": { "type": "object" } }
             }
           }

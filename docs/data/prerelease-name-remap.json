@@ -1,0 +1,92 @@
+[
+  {
+    "class_id": "9458db8e-7158-4aa1-8dd8-08ffb3c88aa9",
+    "kind": "ability",
+    "from": "Sic 'Em!",
+    "to": "Sic ‘Em!"
+  },
+  {
+    "class_id": "9458db8e-7158-4aa1-8dd8-08ffb3c88aa9",
+    "kind": "gear",
+    "from": "Animal Crackers",
+    "to": "Offcuts"
+  },
+  {
+    "class_id": "3c8f036f-06f0-4f72-9336-aa9c3fdd5541",
+    "kind": "ability",
+    "from": "Furor",
+    "to": "Froth at the Mouth"
+  },
+  {
+    "class_id": "3c8f036f-06f0-4f72-9336-aa9c3fdd5541",
+    "kind": "gear",
+    "from": "Great Axe",
+    "to": "Battle Axe"
+  },
+  {
+    "class_id": "c8648a53-251a-4a56-93f8-741de871bf0f",
+    "kind": "gear",
+    "from": "Toolbox",
+    "to": "Bindle"
+  },
+  {
+    "class_id": "86c38a5d-c511-4ed0-9a1b-c9d5e0c208ef",
+    "kind": "gear",
+    "from": "Disassemblinator",
+    "to": "Attenuator"
+  },
+  {
+    "class_id": "42d39b55-7db1-49a1-a53b-b1cd5fc9bc47",
+    "kind": "ability",
+    "from": "Derive",
+    "to": "Dérive"
+  },
+  {
+    "class_id": "42d39b55-7db1-49a1-a53b-b1cd5fc9bc47",
+    "kind": "ability",
+    "from": "Tag, You're It",
+    "to": "Tag, You’re It"
+  },
+  {
+    "class_id": "42d39b55-7db1-49a1-a53b-b1cd5fc9bc47",
+    "kind": "gear",
+    "from": "Sportwear",
+    "to": "Sportswear"
+  },
+  {
+    "class_id": "42d39b55-7db1-49a1-a53b-b1cd5fc9bc47",
+    "kind": "gear",
+    "from": "Action Camera",
+    "to": "Slap Tags"
+  },
+  {
+    "class_id": "3e74af63-ea2d-4ca4-ace6-c44fb637b1a1",
+    "kind": "gear",
+    "from": "Orbuclum",
+    "to": "Orbuculum"
+  },
+  {
+    "class_id": "c687840c-a781-4d46-9570-b344e1b9be04",
+    "kind": "gear",
+    "from": "Time Bomb",
+    "to": "Time Bombs"
+  },
+  {
+    "class_id": "f6cc7c66-9b31-4af0-8a4f-7c6715ba9363",
+    "kind": "ability",
+    "from": "Unverwüstlich (OON - fer - VOOST - leek)",
+    "to": "Unverwüstlich"
+  },
+  {
+    "class_id": "3a863d9c-8454-4326-87ad-ed105fccbbd4",
+    "kind": "ability",
+    "from": "Embrace Darkness",
+    "to": "Embrace the Darkness"
+  },
+  {
+    "class_id": "3a863d9c-8454-4326-87ad-ed105fccbbd4",
+    "kind": "gear",
+    "from": "Alter Lights",
+    "to": "Altar Lights"
+  }
+]

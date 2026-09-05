@@ -187,9 +187,9 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
 
   // Union class list (mode does not filter the class pool per requirements).
   // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
-  // and display fields for the slider card. Description and tips are stored
-  // as markdown and rendered to safe HTML here so the client can drop them
-  // into the wizard panel verbatim (no client-side markdown lib).
+  // and display fields for the slider card. Teaser and tips are stored as
+  // markdown and rendered to safe HTML here so the client can drop them into
+  // the wizard panel verbatim (no client-side markdown lib).
   // The kiosk shows one card per class, so version families collapse to their
   // latest member (same rule as the /classes list). A preselected class is
   // exempt: a link from an older version's page must still find its card.
@@ -201,9 +201,12 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     .map((c) => ({
       id: c.id,
       name: c.name,
-      description_html: renderMarkdown(c.description || ''),
+      overview_html: renderMarkdown(c.overview || ''),
       teaser_html: renderMarkdown(c.teaser || ''),
       tips_html: renderMarkdown(c.tips || ''),
+      // The heading the source document prints above the tips. Sent as plain
+      // text, not markdown: it is a heading, and the panel escapes it.
+      tips_heading: c.tips_heading || null,
       image_url: c.image_url || null,
       image_crop: c.image_crop || null,
       rules_edition: c.rules_edition || 'advent',

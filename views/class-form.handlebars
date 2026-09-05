@@ -44,6 +44,51 @@
         </div>
       </div>
     </div>
+    {{!-- Admin-only: prerelease_section is provenance -- which section of the
+          source document a class was printed under -- and a player-created
+          class must not be able to tag itself with one. --}}
+    {{#if (eq profile.role 'admin')}}
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-challenge-level">Challenge Level</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="challenge_level" id="class-challenge-level">
+              <option value="">Not set</option>
+              <option value="Low" {{#if (eq class.challenge_level "Low")}}selected{{/if}}>Low</option>
+              <option value="Mid" {{#if (eq class.challenge_level "Mid")}}selected{{/if}}>Mid</option>
+              <option value="High" {{#if (eq class.challenge_level "High")}}selected{{/if}}>High</option>
+            </select>
+          </div>
+        </div>
+        <p class="help">How demanding the class is to play well.</p>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-prerelease-section">Pre-release Section</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="prerelease_section" id="class-prerelease-section">
+              <option value="">Not set</option>
+              <option value="pcc" {{#if (eq class.prerelease_section "pcc")}}selected{{/if}}>PCCs</option>
+              <option value="exclusive" {{#if (eq class.prerelease_section "exclusive")}}selected{{/if}}>Exclusives</option>
+              <option value="aspirant" {{#if (eq class.prerelease_section "aspirant")}}selected{{/if}}>Aspirant Classes</option>
+            </select>
+          </div>
+        </div>
+        <p class="help">Which section of the pre-release bundle this class was printed under.</p>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-designer">Designer</label>
+        <div class="control">
+          <input class="input" type="text" name="designer" id="class-designer" value="{{class.designer}}">
+        </div>
+      </div>
+    </div>
+    {{/if}}
   </div>
   <div class="field">
     {{#if (eq profile.role 'admin')}}
@@ -75,6 +120,60 @@
       <textarea class="textarea" name="teaser" id="class-teaser" placeholder="Short description for class list display (optional)" data-toast-editor data-editor-height="150px">{{class.teaser}}</textarea>
     </div>
   </div>
+  <div class="columns is-multiline">
+    <div class="column is-two-thirds-tablet">
+      <div class="field">
+        <label class="label" for="class-quote">Quote</label>
+        <div class="control">
+          <input class="input" type="text" name="quote" id="class-quote" value="{{class.quote}}">
+        </div>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
+        <label class="label" for="class-quote-source">Quote Source</label>
+        <div class="control">
+          <input class="input" type="text" name="quote_source" id="class-quote-source" value="{{class.quote_source}}">
+        </div>
+      </div>
+    </div>
+  </div>
+  {{!-- The prose fields below are plain textareas on purpose: their text is a
+        verbatim copy of the pre-release document, and a ToastUI editor would
+        rewrite it through getMarkdown() on submit. --}}
+  <div class="field">
+    <label class="label" for="class-overview">Overview</label>
+    <div class="control">
+      <textarea class="textarea" name="overview" id="class-overview" rows="6" placeholder="What the class is and how it plays">{{class.overview}}</textarea>
+    </div>
+    <p class="help">The main prose block. Shown on the class page and used by the character creator wizard.</p>
+  </div>
+  <div class="field">
+    <label class="label" for="class-conduit-notes">Conduit Notes</label>
+    <div class="control">
+      <textarea class="textarea" name="conduit_notes" id="class-conduit-notes" rows="4" placeholder="Guidance for the Conduit running this class (optional)">{{class.conduit_notes}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-grounding">Grounding</label>
+    <div class="control">
+      <textarea class="textarea" name="grounding" id="class-grounding" rows="4" placeholder="Where the class sits in the setting (optional)">{{class.grounding}}</textarea>
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-examples-heading">Examples Heading</label>
+    <div class="control">
+      <input class="input" type="text" name="examples_heading" id="class-examples-heading" placeholder="e.g. Example Vanguards" value="{{class.examples_heading}}">
+    </div>
+  </div>
+  <div class="field">
+    <label class="label" for="class-examples">Examples</label>
+    <div class="control">
+      <textarea class="textarea" name="examples" id="class-examples" rows="5" placeholder="One example per line">{{#each class.examples}}{{this}}
+{{/each}}</textarea>
+    </div>
+    <p class="help">One per line. Blank lines are dropped.</p>
+  </div>
   <div class="field">
     <label class="checkbox">
       <input type="checkbox" name="is_public" {{#if class.is_public}}checked{{/if}}>
@@ -82,10 +181,9 @@
     </label>
   </div>
   <div class="field">
-    <label class="label" for="class-description">Description</label>
+    <label class="label" for="class-tips-heading">Tips Heading</label>
     <div class="control">
-      <textarea class="textarea" name="description" id="class-description" placeholder="Class Description"
-        data-toast-editor required>{{class.description}}</textarea>
+      <input class="input" type="text" name="tips_heading" id="class-tips-heading" placeholder="e.g. Playing a Vanguard" value="{{class.tips_heading}}">
     </div>
   </div>
   <div class="field">
@@ -112,6 +210,25 @@
         </div>
       </div>
       {{/each}}
+    </div>
+    <div class="columns is-multiline">
+      <div class="column is-half-tablet">
+        <div class="field">
+          <label class="label" for="class-stat-line">Stat Line</label>
+          <div class="control">
+            <input class="input" type="text" name="stat_line" id="class-stat-line" value="{{class.stat_line}}">
+          </div>
+          <p class="help">The stat allocation exactly as the pre-release document prints it.</p>
+        </div>
+      </div>
+      <div class="column is-half-tablet">
+        <div class="field">
+          <label class="label" for="class-stat-note">Stat Note</label>
+          <div class="control">
+            <input class="input" type="text" name="stat_note" id="class-stat-note" value="{{class.stat_note}}">
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="field">
@@ -152,70 +269,276 @@
     </div>
     {{/if}}
   </div>
-    <!-- classes have 3 abilities (name and description) -->
-    {{#if (or isNew (eq class.abilities.length 0))}}
-      {{#times 3}}
-        <div class="field">
-          <label class="label">Ability {{add @index 1}}</label>
-          <div class="control">
-            <input class="input" type="text" name="ability_name[]" placeholder="Ability {{add @index 1}}" required>
-          </div>
-          <label class="label">Ability {{add @index 1}} Description</label>
-          <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px"></textarea>
+  {{!-- Repeatable ability editor.
+
+        THE ROWS ARE SERVER-RENDERED, NOT `<template x-for>`. This is
+        load-bearing, for the reason partials/stat-blocks.handlebars records at
+        length: views/layouts/main.handlebars puts hx-boost="true" on <body>,
+        and htmx snapshots the LIVE DOM into its history cache, x-for output
+        included. On Back the snapshot restores WITH those generated rows and
+        Alpine's x-for appends a second full set, so two abilities come back as
+        four, and the enlarged DOM is what gets snapshotted next -- the
+        duplication compounds with every Back.
+
+        Measured, so that nobody has to re-derive it: the stale half throws
+        "ability is not defined" on every binding, because `ability` and `ai`
+        live only in the x-for scope the restored markup has lost. It does NOT
+        post duplicate names -- Alpine re-evaluates `:name`, the throw yields
+        undefined, and Alpine REMOVES the attribute, so the stale controls
+        contribute nothing to `abilities` (they surface, if at all, under an
+        empty key no handler reads). The damage is to the editor rather than to
+        the payload: the admin sees each ability twice, and half the rows are
+        dead fields that accept typing and then post nothing.
+
+        Real elements in the served HTML restore as themselves. Keep it that
+        way.
+
+        The same rule is why there is no x-model here: every value is a plain
+        `value=`/inner-text attribute, so the fields are already correct in the
+        raw HTML before Alpine runs, or if it never runs at all. Alpine only
+        adds and removes rows; the `<template data-prototype>` blocks it clones
+        are inert markup that nothing renders on its own.
+
+        Plain textareas on purpose. _initToastUIEditors runs on page load and
+        on htmx afterSwap only, so a row added later would get no editor at
+        all, and ToastUI writes its value back through getMarkdown(), which
+        reflows the verbatim prose this form copies from the source document.
+
+        Nothing is `required`: a blank row is a normal intermediate state in a
+        repeater, normalizeAbilities drops it server-side, and `required` on a
+        row the admin just added blocks submission with no visible error
+        anywhere near the field.
+
+        The row markup lives in inline partials so that the prototype Alpine
+        clones and the rows the server renders cannot drift apart. --}}
+  <div class="field" x-data="abilityEditor()">
+    {{#*inline "abilityMeterRow"}}
+    <div class="field is-grouped mb-2" data-meter-row>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="label" name="abilities[{{ai}}][meters][{{mi}}][label]" value="{{meter.label}}" placeholder="Label, e.g. Essence Cost" aria-label="Meter label">
+      </div>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="value" name="abilities[{{ai}}][meters][{{mi}}][value]" value="{{meter.value}}" placeholder="Value, e.g. Low" aria-label="Meter value">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-light" @click="removeMeter($el)">Remove meter</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityNoteChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="abilities[{{ai}}][notes][{{ni}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildNote($el)">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityNoteRow"}}
+    <div class="mb-3" data-note-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-note-field="text" name="abilities[{{ai}}][notes][{{ni}}][text]" value="{{note.text}}" placeholder="Note" aria-label="Note">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeNote($el)">Remove note</button>
+        </div>
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each note.children}}{{> abilityNoteChildRow child=this ai=../ai ni=../ni ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildNote($el)">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "abilityRow"}}
+    <div class="box" data-ability-row>
+      <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+        <span class="label mb-0" data-ability-heading>Ability {{add ai 1}}</span>
+        <button type="button" class="button is-small is-danger is-light" @click="removeAbility($el)">Remove ability</button>
+      </div>
+      {{#if ability.pronunciation}}
+      {{!-- No input edits a pronunciation guide and no view renders one, but
+            two live abilities carry one. Round-tripping it here is what stops
+            a routine save from deleting it. --}}
+      <input type="hidden" data-field="pronunciation" name="abilities[{{ai}}][pronunciation]" value="{{ability.pronunciation}}">
+      {{/if}}
+      <div class="field">
+        <label class="label is-small" data-label-for="name" for="ability-name-{{ai}}">Name</label>
+        <div class="control">
+          <input class="input" type="text" id="ability-name-{{ai}}" data-field="name" name="abilities[{{ai}}][name]" value="{{ability.name}}" placeholder="Ability name">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="description" for="ability-description-{{ai}}">Description</label>
+        <div class="control">
+          <textarea class="textarea" rows="4" id="ability-description-{{ai}}" data-field="description" name="abilities[{{ai}}][description]" placeholder="What the ability does">{{ability.description}}</textarea>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="paired_action" for="ability-paired-action-{{ai}}">Paired Action</label>
+        <div class="control">
+          <input class="input" type="text" id="ability-paired-action-{{ai}}" data-field="paired_action" name="abilities[{{ai}}][paired_action]" value="{{ability.paired_action}}" placeholder="The action this ability pairs with (optional)">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Meters</label>
+        <div data-meter-list>
+          {{#each ability.meters}}{{> abilityMeterRow meter=this ai=../ai mi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addMeter($el)">Add meter</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Notes</label>
+        <div data-note-list>
+          {{#each ability.notes}}{{> abilityNoteRow note=this ai=../ai ni=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Abilities</label>
+    <p class="help mb-3">Meters, the paired action and the notes print on the class page exactly as they are entered here. An ability with no name is dropped on save, as is a meter missing either half of its pair and a note with no text.</p>
+    <div data-ability-list>
+      {{#if class.abilities.length}}
+        {{#each class.abilities}}{{> abilityRow ability=this ai=@index}}{{/each}}
+      {{else}}
+        {{#times 3}}{{> abilityRow ai=@index}}{{/times}}
+      {{/if}}
+    </div>
+    <button type="button" class="button" @click="addAbility()">Add ability</button>
+    {{!-- Inert prototypes. A plain <template> keeps its children in a
+          DocumentFragment, so Alpine's walker never enters it and the browser
+          renders nothing -- which is also why a restored history snapshot
+          brings these back as harmless markup rather than as a second set of
+          live rows. --}}
+    <template data-prototype="ability">{{> abilityRow ai=0}}</template>
+    <template data-prototype="meter">{{> abilityMeterRow ai=0 mi=0}}</template>
+    <template data-prototype="note">{{> abilityNoteRow ai=0 ni=0}}</template>
+    <template data-prototype="child">{{> abilityNoteChildRow ai=0 ni=0 ci=0}}</template>
+  </div>
+  {{!-- Repeatable gear editor: the ability editor's twin, and every rule its
+        comment above records applies here unchanged and for the same measured
+        reasons -- server-rendered rows, no Alpine-only source of truth, no
+        input the admin must fill before the server can drop the row, and plain
+        textareas rather than ToastUI. views/class-form.test.js pins each of
+        them over this section.
+
+        The one field with no ability counterpart is `category`.
+        views/class-view.handlebars splits Signature Gear into its Base and
+        Elective columns by an exact string match on it, so the <select> offers
+        exactly the two values normalizeGear accepts. Which option opens
+        selected comes from the shared gearCategory helper rather than a second
+        copy of the positional rule: util/class-import.js's AI path still writes
+        gear with no category at all, and an uncategorised fourth item has to
+        open on Elective here for the same reason it saves as Elective. --}}
+  <div class="field" x-data="gearEditor()">
+    {{#*inline "gearMeterRow"}}
+    <div class="field is-grouped mb-2" data-meter-row>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="label" name="gear[{{gi}}][meters][{{mi}}][label]" value="{{meter.label}}" placeholder="Label, e.g. Accuracy Boost" aria-label="Meter label">
+      </div>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="value" name="gear[{{gi}}][meters][{{mi}}][value]" value="{{meter.value}}" placeholder="Value, e.g. Mid" aria-label="Meter value">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-light" @click="removeMeter($el)">Remove meter</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearNoteChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="gear[{{gi}}][notes][{{ni}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildNote($el)">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearNoteRow"}}
+    <div class="mb-3" data-note-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-note-field="text" name="gear[{{gi}}][notes][{{ni}}][text]" value="{{note.text}}" placeholder="Note" aria-label="Note">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeNote($el)">Remove note</button>
+        </div>
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each note.children}}{{> gearNoteChildRow child=this gi=../gi ni=../ni ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildNote($el)">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "gearRow"}}
+    <div class="box" data-gear-row>
+      <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+        <span class="label mb-0" data-gear-heading>Gear {{add gi 1}}</span>
+        <button type="button" class="button is-small is-danger is-light" @click="removeGear($el)">Remove gear</button>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="name" for="gear-name-{{gi}}">Name</label>
+        <div class="control">
+          <input class="input" type="text" id="gear-name-{{gi}}" data-field="name" name="gear[{{gi}}][name]" value="{{gear.name}}" placeholder="Gear name">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="category" for="gear-category-{{gi}}">Column</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select id="gear-category-{{gi}}" data-field="category" name="gear[{{gi}}][category]">
+              <option value="default" {{#if (eq (gearCategory gear.category gi) "default")}}selected{{/if}}>Base gear</option>
+              <option value="elective" {{#if (eq (gearCategory gear.category gi) "elective")}}selected{{/if}}>Elective gear</option>
+            </select>
           </div>
         </div>
-      {{/times}}
-    {{else}}
-      {{#each class.abilities}}
-        <div class="field">
-          <label class="label">Ability {{add @index 1}}</label>
-          <div class="control">
-            <input class="input" type="text" name="ability_name[]" placeholder="Ability {{add @index 1}}" value="{{this.name}}" required>
-          </div>
-          <label class="label">Ability {{add @index 1}} Description</label>
-          <div class="control">
-            <textarea class="textarea" name="ability_description[]" placeholder="Ability {{add @index 1}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
-          </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="description" for="gear-description-{{gi}}">Description</label>
+        <div class="control">
+          <textarea class="textarea" rows="4" id="gear-description-{{gi}}" data-field="description" name="gear[{{gi}}][description]" placeholder="What the gear does">{{gear.description}}</textarea>
         </div>
-      {{/each}}
-    {{/if}}
-    <!-- classes have 6 gear items (name and description) -->
-    {{#if (or isNew (eq class.gear.length 0))}}
-      {{#times 6}}
-        <div class="field">
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
-          </label>
-          <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" required>
-          </div>
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
-          </label>
-          <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px"></textarea>
-          </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Meters</label>
+        <div data-meter-list>
+          {{#each gear.meters}}{{> gearMeterRow meter=this gi=../gi mi=@index}}{{/each}}
         </div>
-      {{/times}}
-    {{else}}
-      {{#each class.gear}}
-        <div class="field">
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}
-          </label>
-          <div class="control">
-            <input class="input" type="text" name="gear_name[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}}" value="{{this.name}}" required>
-          </div>
-          <label class="label">
-            {{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description
-          </label>
-          <div class="control">
-            <textarea class="textarea" name="gear_description[]" placeholder="{{#if (lt @index 3)}}Base{{else}}Elective{{/if}} Gear {{#if (lt @index 3)}}{{add @index 1}}{{else}}{{subtract @index 2}}{{/if}} Description" data-toast-editor data-editor-height="200px">{{this.description}}</textarea>
-          </div>
+        <button type="button" class="button is-small" @click="addMeter($el)">Add meter</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Notes</label>
+        <div data-note-list>
+          {{#each gear.notes}}{{> gearNoteRow note=this gi=../gi ni=@index}}{{/each}}
         </div>
-      {{/each}}
-    {{/if}}
+        <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Signature Gear</label>
+    <p class="help mb-3">Column decides where an item prints on the class page: Base gear every character of the class starts with, Elective gear they choose from. Meters and notes print exactly as they are entered here. A gear item with no name is dropped on save, as is a meter missing either half of its pair and a note with no text.</p>
+    <div data-gear-list>
+      {{#if class.gear.length}}
+        {{#each class.gear}}{{> gearRow gear=this gi=@index}}{{/each}}
+      {{else}}
+        {{#times 6}}{{> gearRow gi=@index}}{{/times}}
+      {{/if}}
+    </div>
+    <button type="button" class="button" @click="addGear()">Add gear</button>
+    {{!-- Inert prototypes; see the ability editor's note. A plain <template>
+          keeps its children in a DocumentFragment, so Alpine's walker never
+          enters it and the browser renders nothing. --}}
+    <template data-prototype="gear">{{> gearRow gi=0}}</template>
+    <template data-prototype="meter">{{> gearMeterRow gi=0 mi=0}}</template>
+    <template data-prototype="note">{{> gearNoteRow gi=0 ni=0}}</template>
+    <template data-prototype="child">{{> gearNoteChildRow gi=0 ni=0 ci=0}}</template>
+  </div>
   <div class="field">
     <div class="control">
       <button class="button is-primary" type="submit">Save</button>

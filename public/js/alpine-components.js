@@ -81,6 +81,99 @@ const resolveWizardTarget = ({ slot, cp = 0, pp = 0, up = 0, remaining = 0, cap 
 
 window.StatBlocks = { resolveStatTarget, resolveWizardTarget };
 
+// Field naming for the class form's repeatable ability editor.
+//
+// The index in a field name IS the print order -- routes/classes.js reads
+// `abilities[0][notes][0][children][0][text]` back into a jsonb array in
+// exactly that order -- so after any add or remove every name is rebuilt from
+// the row's current DOM position rather than patched. A gap or a duplicate
+// index silently reorders or overwrites an ability on save.
+//
+// The rows themselves are server-rendered and stay that way; see the comment
+// in views/class-form.handlebars for why this is not an x-for.
+const renumberAbilityFields = (root) => {
+  root.querySelectorAll('[data-ability-row]').forEach((abilityRow, ai) => {
+    const heading = abilityRow.querySelector('[data-ability-heading]');
+    if (heading) heading.textContent = `Ability ${ai + 1}`;
+
+    // The id moves with the name. A cloned row arrives carrying the
+    // prototype's ids, and two controls sharing an id point every duplicated
+    // <label for> at whichever one the browser finds first -- so clicking
+    // "Name" on the fourth ability would focus the first ability's field.
+    // The hidden pronunciation field has no id and no label; it is skipped.
+    abilityRow.querySelectorAll('[data-field]').forEach((field) => {
+      const key = field.dataset.field;
+      field.name = `abilities[${ai}][${key}]`;
+      if (!field.id) return;
+      field.id = `ability-${key.replace(/_/g, '-')}-${ai}`;
+      const label = abilityRow.querySelector(`[data-label-for="${key}"]`);
+      if (label) label.htmlFor = field.id;
+    });
+
+    abilityRow.querySelectorAll('[data-meter-row]').forEach((meterRow, mi) => {
+      meterRow.querySelectorAll('[data-meter-field]').forEach((field) => {
+        field.name = `abilities[${ai}][meters][${mi}][${field.dataset.meterField}]`;
+      });
+    });
+
+    abilityRow.querySelectorAll('[data-note-row]').forEach((noteRow, ni) => {
+      noteRow.querySelectorAll('[data-note-field]').forEach((field) => {
+        field.name = `abilities[${ai}][notes][${ni}][${field.dataset.noteField}]`;
+      });
+      noteRow.querySelectorAll('[data-child-row]').forEach((childRow, ci) => {
+        childRow.querySelectorAll('[data-child-field]').forEach((field) => {
+          field.name = `abilities[${ai}][notes][${ni}][children][${ci}][${field.dataset.childField}]`;
+        });
+      });
+    });
+  });
+};
+
+// Field naming for the class form's repeatable gear editor -- the same
+// contract renumberAbilityFields implements, over `gear[...]` names and with a
+// category <select> among the row's [data-field] controls.
+//
+// The two editors are separate x-data roots, so the shared inner attribute
+// names (data-meter-row, data-note-row, data-child-row) can never be reached
+// across the boundary: every query below starts from the gear editor's own
+// root.
+const renumberGearFields = (root) => {
+  root.querySelectorAll('[data-gear-row]').forEach((gearRow, gi) => {
+    const heading = gearRow.querySelector('[data-gear-heading]');
+    if (heading) heading.textContent = `Gear ${gi + 1}`;
+
+    // The id moves with the name. A cloned row arrives carrying the
+    // prototype's ids, and two controls sharing an id point every duplicated
+    // <label for> at whichever one the browser finds first -- so clicking
+    // "Name" on the fourth item would focus the first item's field.
+    gearRow.querySelectorAll('[data-field]').forEach((field) => {
+      const key = field.dataset.field;
+      field.name = `gear[${gi}][${key}]`;
+      if (!field.id) return;
+      field.id = `gear-${key}-${gi}`;
+      const label = gearRow.querySelector(`[data-label-for="${key}"]`);
+      if (label) label.htmlFor = field.id;
+    });
+
+    gearRow.querySelectorAll('[data-meter-row]').forEach((meterRow, mi) => {
+      meterRow.querySelectorAll('[data-meter-field]').forEach((field) => {
+        field.name = `gear[${gi}][meters][${mi}][${field.dataset.meterField}]`;
+      });
+    });
+
+    gearRow.querySelectorAll('[data-note-row]').forEach((noteRow, ni) => {
+      noteRow.querySelectorAll('[data-note-field]').forEach((field) => {
+        field.name = `gear[${gi}][notes][${ni}][${field.dataset.noteField}]`;
+      });
+      noteRow.querySelectorAll('[data-child-row]').forEach((childRow, ci) => {
+        childRow.querySelectorAll('[data-child-field]').forEach((field) => {
+          field.name = `gear[${gi}][notes][${ni}][children][${ci}][${field.dataset.childField}]`;
+        });
+      });
+    });
+  });
+};
+
 document.addEventListener('alpine:init', () => {
   // Title -> slug sync for the page editor. Stops as soon as the slug is
   // edited by hand. On load, a slug that still matches its title is
@@ -382,6 +475,120 @@ document.addEventListener('alpine:init', () => {
       this.close();
     }
   });
+
+  // Repeatable ability editor on the admin class form. It owns no state: the
+  // rows are server-rendered with their real values and names, and this only
+  // clones a blank row in or takes one out, then renumbers. That split is what
+  // keeps the form correct before Alpine boots, if the Alpine CDN is blocked,
+  // and across an hx-boost history restore.
+  Alpine.data('abilityEditor', () => ({
+    addAbility() {
+      this.appendRow(this.$root, 'ability', '[data-ability-list]');
+    },
+
+    removeAbility($el) {
+      this.removeRow($el, '[data-ability-row]');
+    },
+
+    addMeter($el) {
+      this.appendRow($el.closest('[data-ability-row]'), 'meter', '[data-meter-list]');
+    },
+
+    removeMeter($el) {
+      this.removeRow($el, '[data-meter-row]');
+    },
+
+    addNote($el) {
+      this.appendRow($el.closest('[data-ability-row]'), 'note', '[data-note-list]');
+    },
+
+    removeNote($el) {
+      this.removeRow($el, '[data-note-row]');
+    },
+
+    addChildNote($el) {
+      this.appendRow($el.closest('[data-note-row]'), 'child', '[data-child-list]');
+    },
+
+    removeChildNote($el) {
+      this.removeRow($el, '[data-child-row]');
+    },
+
+    // The prototypes live once at the editor root. Their contents are only
+    // reachable through .content, so an inner list selector can never match
+    // inside one by accident.
+    appendRow(scope, prototype, listSelector) {
+      const template = this.$root.querySelector(`template[data-prototype="${prototype}"]`);
+      scope.querySelector(listSelector)
+        .appendChild(template.content.firstElementChild.cloneNode(true));
+      renumberAbilityFields(this.$root);
+    },
+
+    // The root is read BEFORE the removal: `$root` resolves by walking up from
+    // `$el` to the nearest x-data, so once the row holding the button has left
+    // the document it walks a detached tree and answers undefined.
+    removeRow($el, rowSelector) {
+      const root = this.$root;
+      $el.closest(rowSelector).remove();
+      renumberAbilityFields(root);
+    }
+  }));
+
+  // Repeatable gear editor on the admin class form -- abilityEditor's twin over
+  // `gear[...]` names. It owns no state either: the rows are server-rendered
+  // with their real values, names and selected category, and this only clones a
+  // blank row in or takes one out, then renumbers.
+  Alpine.data('gearEditor', () => ({
+    addGear() {
+      this.appendRow(this.$root, 'gear', '[data-gear-list]');
+    },
+
+    removeGear($el) {
+      this.removeRow($el, '[data-gear-row]');
+    },
+
+    addMeter($el) {
+      this.appendRow($el.closest('[data-gear-row]'), 'meter', '[data-meter-list]');
+    },
+
+    removeMeter($el) {
+      this.removeRow($el, '[data-meter-row]');
+    },
+
+    addNote($el) {
+      this.appendRow($el.closest('[data-gear-row]'), 'note', '[data-note-list]');
+    },
+
+    removeNote($el) {
+      this.removeRow($el, '[data-note-row]');
+    },
+
+    addChildNote($el) {
+      this.appendRow($el.closest('[data-note-row]'), 'child', '[data-child-list]');
+    },
+
+    removeChildNote($el) {
+      this.removeRow($el, '[data-child-row]');
+    },
+
+    // The prototypes live once at the editor root -- this editor's own, not the
+    // ability editor's, since $root scopes the lookup. Their contents are only
+    // reachable through .content, so an inner list selector can never match
+    // inside one by accident.
+    appendRow(scope, prototype, listSelector) {
+      const template = this.$root.querySelector(`template[data-prototype="${prototype}"]`);
+      scope.querySelector(listSelector)
+        .appendChild(template.content.firstElementChild.cloneNode(true));
+      renumberGearFields(this.$root);
+    },
+
+    // The root is read BEFORE the removal, for the reason abilityEditor records.
+    removeRow($el, rowSelector) {
+      const root = this.$root;
+      $el.closest(rowSelector).remove();
+      renumberGearFields(root);
+    }
+  }));
 
   Alpine.data('modal', modalBase);
 

@@ -273,21 +273,25 @@ window.CharacterWizard = (function () {
       selectedPanel.innerHTML = '<p class="has-text-grey">No class selected.</p>';
       return;
     }
-    // Description/tips come pre-rendered as sanitized HTML from the server
-    // (see routes/characters.js → renderMarkdown on c.description/c.tips).
+    // Overview/tips come pre-rendered as sanitized HTML from the server
+    // (see routes/characters.js → renderMarkdown on c.overview/c.tips).
     // Falling back to the teaser keeps the panel populated for classes that
     // only have a short blurb.
-    const desc = c.description_html || c.teaser_html || '<p class="has-text-grey">No description available.</p>';
+    const desc = c.overview_html || c.teaser_html || '<p class="has-text-grey">No description available.</p>';
     const stat = DATA.statList.map((k) => {
       const v = (c.stat_spread && c.stat_spread[k]) || 0;
       if (!v) return '';
       return '<span class="tag is-light mr-1">' + esc(k) + ': +' + v + '</span>';
     }).join('');
+    // The 19 imported classes carry the heading the source document prints
+    // above their tips ("Quick Tips", "Tips on Playing an Ardent"); everything
+    // else, and any class whose heading is blank, keeps the generic one.
     let tipsBlock = '';
     if (c.tips_html) {
+      const tipsHeading = (c.tips_heading || '').trim() || 'Tips';
       tipsBlock = ''
         + '<div class="wizard-tips mt-3">'
-        +   '<h5 class="title is-6 mb-1">Tips</h5>'
+        +   '<h5 class="title is-6 mb-1">' + esc(tipsHeading) + '</h5>'
         +   '<div class="content mb-0">' + c.tips_html + '</div>'
         + '</div>';
     }

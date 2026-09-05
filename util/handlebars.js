@@ -2,6 +2,14 @@ const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
 const { v1LevelingSequence, v2LevelingSequence } = require('./enclave-consts');
 
+// The class form's gear category <select> has to pick the same `selected`
+// option normalizeGear would pick for the same item, or an uncategorised item
+// -- everything util/class-import.js's AI path writes -- would render as Base,
+// post 'default', and land in the wrong column the moment it sits fourth.
+// Re-exported rather than reimplemented so the rule has one home.
+const { gearCategory } = require('./class-gear');
+
+
 // N times helper, usage: {{#times 5}}<div>{{index}}</div>{{/times}}
 // https://stackoverflow.com/a/41463316
 const times = function (n, block) {
@@ -199,6 +207,22 @@ const concat = function (...args) {
   return args.join('');
 };
 
+// A missing/null/blank category is treated as 'default' -- the admin form
+// doesn't write category yet, so gear saved before that ships must still
+// show up on the class page rather than vanishing from both columns.
+function filterBy(list, key, value) {
+  if (!Array.isArray(list)) return [];
+  return list.filter((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const raw = item[key];
+    const actual = typeof raw === 'string' ? raw.trim() : raw;
+    if (value === 'default' && (actual === undefined || actual === null || actual === '')) {
+      return true;
+    }
+    return actual === value;
+  });
+}
+
 const perksForAbilityH = function (perks, abilityId) {
   if (!Array.isArray(perks)) return [];
   return perks.filter(p => p && p.class_ability_id === abilityId);
@@ -227,6 +251,8 @@ module.exports = {
   getVideoProvider,
   substring,
   concat,
+  filterBy,
+  gearCategory,
   effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,

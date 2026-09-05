@@ -5,6 +5,9 @@
  * Currently supports: markdown, json
  */
 
+const { pickClassProse } = require('./class-prose');
+const { gearCategory } = require('./class-gear');
+
 /**
  * Available export formats
  */
@@ -48,6 +51,43 @@ const capitalize = (str) => {
 };
 
 /**
+ * One ability or gear item: everything the structured columns hold, since both
+ * carry the same five-key contract (util/class-abilities.js, util/class-gear.js)
+ * and an export that printed only name and description would lose the rest.
+ */
+const itemLines = (entry) => {
+  const item = typeof entry === 'string' ? { name: entry } : entry;
+  const quoted = (value) => `> ${String(value).replace(/\n/g, '\n> ')}`;
+  const lines = [item.pronunciation
+    ? `**${item.name}** *(pronounced: ${item.pronunciation})*`
+    : `**${item.name}**`];
+
+  if (item.description) {
+    lines.push('', quoted(item.description));
+  }
+  if (item.paired_action) {
+    lines.push('', `**Paired Action:** ${item.paired_action}`);
+  }
+  if (item.meters && item.meters.length > 0) {
+    lines.push('');
+    for (const meter of item.meters) {
+      lines.push(`- **${meter.label}:** ${meter.value}`);
+    }
+  }
+  if (item.notes && item.notes.length > 0) {
+    lines.push('');
+    for (const note of item.notes) {
+      lines.push(`- ${note.text}`);
+      for (const child of note.children || []) {
+        lines.push(`  - ${child.text}`);
+      }
+    }
+  }
+  lines.push('');
+  return lines;
+};
+
+/**
  * Export class to Markdown format
  */
 const exportToMarkdown = (classData) => {
@@ -68,12 +108,43 @@ const exportToMarkdown = (classData) => {
   lines.push('---');
   lines.push('');
   
-  // Description
-  if (classData.description && classData.description.trim()) {
-    lines.push('## 📖 Description');
+  // Overview: the prose columns, in the source document's printed order.
+  const overview = [];
+  const prose = (value) => (typeof value === 'string' ? value.trim() : '');
+  if (prose(classData.stat_line)) {
+    overview.push(`**${prose(classData.stat_line)}**`, '');
+  }
+  if (prose(classData.stat_note)) {
+    overview.push(prose(classData.stat_note), '');
+  }
+  if (prose(classData.quote)) {
+    overview.push(`> ${prose(classData.quote).replace(/\n/g, '\n> ')}`);
+    if (prose(classData.quote_source)) {
+      overview.push('>', `> — ${prose(classData.quote_source)}`);
+    }
+    overview.push('');
+  }
+  for (const paragraph of ['overview', 'conduit_notes', 'grounding', 'examples_heading']) {
+    if (prose(classData[paragraph])) {
+      overview.push(prose(classData[paragraph]), '');
+    }
+  }
+  if (Array.isArray(classData.examples) && classData.examples.length > 0) {
+    for (const example of classData.examples) {
+      overview.push(`- ${example}`);
+    }
+    overview.push('');
+  }
+  if (prose(classData.challenge_level)) {
+    overview.push(`**Challenge Level:** ${prose(classData.challenge_level)}`, '');
+  }
+  if (prose(classData.designer)) {
+    overview.push(`**Designer:** ${prose(classData.designer)}`, '');
+  }
+  if (overview.length > 0) {
+    lines.push('## 📖 Overview');
     lines.push('');
-    lines.push(classData.description.trim());
-    lines.push('');
+    lines.push(...overview);
   }
 
   // Tips
@@ -84,42 +155,26 @@ const exportToMarkdown = (classData) => {
     lines.push('');
   }
   
-  // Gear
+  // Gear, split by the stored `category`. Position is only the fallback the
+  // column was backfilled from (util/class-gear.js gearCategory), so an item
+  // saved as Elective prints under Elective wherever it sits in the list.
   if (classData.gear && classData.gear.length > 0) {
     lines.push('## 🎒 Gear');
     lines.push('');
-    
-    // Separate base gear (first 3) and elective gear (last 3)
-    const baseGear = classData.gear.slice(0, 3);
-    const electiveGear = classData.gear.slice(3, 6);
-    
-    if (baseGear.length > 0) {
-      lines.push('### Base Gear');
+
+    const categorised = classData.gear.map((item, index) => ({
+      item,
+      category: gearCategory(typeof item === 'object' ? item.category : null, index),
+    }));
+    const column = (category) => categorised.filter((entry) => entry.category === category);
+
+    for (const [heading, category] of [['Base Gear', 'default'], ['Elective Gear', 'elective']]) {
+      const entries = column(category);
+      if (entries.length === 0) continue;
+      lines.push(`### ${heading}`);
       lines.push('');
-      for (const item of baseGear) {
-        const name = typeof item === 'string' ? item : item.name;
-        const description = typeof item === 'object' ? item.description : null;
-        lines.push(`**${name}**`);
-        if (description) {
-          lines.push('');
-          lines.push(`> ${description.replace(/\n/g, '\n> ')}`);
-        }
-        lines.push('');
-      }
-    }
-    
-    if (electiveGear.length > 0) {
-      lines.push('### Elective Gear');
-      lines.push('');
-      for (const item of electiveGear) {
-        const name = typeof item === 'string' ? item : item.name;
-        const description = typeof item === 'object' ? item.description : null;
-        lines.push(`**${name}**`);
-        if (description) {
-          lines.push('');
-          lines.push(`> ${description.replace(/\n/g, '\n> ')}`);
-        }
-        lines.push('');
+      for (const entry of entries) {
+        lines.push(...itemLines(entry.item));
       }
     }
   }
@@ -129,14 +184,7 @@ const exportToMarkdown = (classData) => {
     lines.push('## ⚔️ Abilities');
     lines.push('');
     for (const ability of classData.abilities) {
-      const name = typeof ability === 'string' ? ability : ability.name;
-      const description = typeof ability === 'object' ? ability.description : null;
-      lines.push(`**${name}**`);
-      if (description) {
-        lines.push('');
-        lines.push(`> ${description.replace(/\n/g, '\n> ')}`);
-      }
-      lines.push('');
+      lines.push(...itemLines(ability));
     }
   }
   
@@ -150,26 +198,55 @@ const exportToMarkdown = (classData) => {
   return lines.join('\n');
 };
 
+// Both structured columns export in the contract shape a save writes, so a
+// legacy two-field item and a freshly saved one export identically and an
+// export -> import cycle cannot change the row. util/class-export.test.js pins
+// the key set against util/class-import.js's schema rather than a literal list.
+const exportAbility = (entry) => {
+  const ability = typeof entry === 'string' ? { name: entry } : entry;
+  const exported = {
+    name: ability.name,
+    description: ability.description ?? '',
+    paired_action: ability.paired_action ?? '',
+    meters: ability.meters ?? [],
+    notes: ability.notes ?? [],
+  };
+  // Outside the contract: written through when the ability has one, never
+  // fabricated -- the same rule util/class-abilities.js applies on save.
+  if (ability.pronunciation) {
+    exported.pronunciation = ability.pronunciation;
+  }
+  return exported;
+};
+
+const exportGearItem = (entry, index) => {
+  const item = typeof entry === 'string' ? { name: entry } : entry;
+  return {
+    name: item.name,
+    description: item.description ?? '',
+    category: gearCategory(item.category, index),
+    meters: item.meters ?? [],
+    notes: item.notes ?? [],
+  };
+};
+
 /**
  * Export class to JSON format
  */
 const exportToJson = (classData) => {
   const exportData = {
     name: classData.name,
-    description: classData.description || '',
+    ...pickClassProse(classData),
     rules_edition: classData.rules_edition,
     rules_version: classData.rules_version,
     status: classData.status,
     is_public: classData.is_public,
     is_player_created: classData.is_player_created,
-    gear: (classData.gear || []).map(g => 
-      typeof g === 'string' ? { name: g } : { name: g.name, description: g.description }
-    ),
-    abilities: (classData.abilities || []).map(a => 
-      typeof a === 'string' ? { name: a } : { name: a.name, description: a.description }
-    ),
+    gear: (classData.gear || []).map(exportGearItem),
+    abilities: (classData.abilities || []).map(exportAbility),
     image_url: classData.image_url || null,
     image_crop: classData.image_crop || null,
+    teaser: classData.teaser || '',
     tips: classData.tips || '',
   };
   

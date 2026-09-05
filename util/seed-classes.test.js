@@ -97,3 +97,23 @@ test('player-created seed classes stay advent and carry no fixed id', () => {
     expect(row.id).toBeUndefined();
   }
 });
+
+test('the Aspirant roster names Witchfinder and keeps its class id', () => {
+  expect(CORE_CLASS_UNLOCKS.aspirant.Witchfinder)
+    .toBe('79721ac8-378e-4b3e-b1e3-8266689da89e');
+  expect(CORE_CLASS_UNLOCKS.aspirant.Witchhunter).toBeUndefined();
+});
+
+test('the seeded Witchfinder row lands on the roster id', () => {
+  const row = buildHardcodedClasses().find(c => c.name === 'Witchfinder');
+  expect(row.id).toBe('79721ac8-378e-4b3e-b1e3-8266689da89e');
+  expect(row.rules_edition).toBe('aspirant');
+});
+
+// Task 13: `classes.description` is gone. A seed row still carrying the key
+// makes every seeded insert a PostgREST schema error.
+test('no seeded class row carries a description column', () => {
+  for (const row of buildHardcodedClasses()) {
+    expect(row).not.toHaveProperty('description');
+  }
+});

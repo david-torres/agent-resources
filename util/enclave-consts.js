@@ -157,7 +157,7 @@ const classGearList = {
     'Nostrum',
     'Map'
   ],
-  Witchhunter: [
+  Witchfinder: [
     'Watchcoat',
     'Capotain',
     'Ballestrino',
@@ -248,7 +248,7 @@ const classAbilityList = {
     'By the Wayside',
     'Familiar Face'
   ],
-  Witchhunter: [
+  Witchfinder: [
     'Cloud of Suspicion',
     'Omoriori',
     'Malleus Maleficarum'
@@ -270,7 +270,7 @@ const aspirantPreviewClassList = [
   'Infiltrator',
   'Samaritan',
   'Vessel',
-  'Witchhunter'
+  'Witchfinder'
 ];
 
 const playerCreatedClassList = [
@@ -306,7 +306,7 @@ const classStatSpread = {
   Thunderbird: { arcane: 2, vigor: 1 },
   Vessel:      { spirit: 2, will: 1 },
   Wanderer:    { luck: 2, vitality: 1 },
-  Witchhunter: { will: 2, sensory: 1 }
+  Witchfinder: { will: 2, sensory: 1 }
 };
 
 const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];

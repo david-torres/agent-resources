@@ -101,9 +101,70 @@
     {{/if}}
     <div class="card">
       <div class="card-content">
+        {{!-- The prose columns are plain text lifted verbatim from the source
+              document, so every one of them is escaped -- except `overview`,
+              which is rendered as markdown. Printed order matches the
+              document's.
+
+              `overview` is the column that inherited the body of the dropped
+              `description` (20260904000002 backfills it before the drop), and
+              that text was authored AS markdown -- `**Class Stats:**`,
+              `## Class Overview` -- and was rendered through this same helper
+              before the branch. 31 of the 50 classes hold it, so escaping it
+              would print the asterisks and hashes on the page. The character
+              wizard has never escaped it either: routes/characters.js sends
+              `overview_html: renderMarkdown(c.overview || '')`, so this is the
+              surface that disagreed.
+
+              The cost, accepted deliberately by the owner rather than dodged
+              with a per-class conditional: the other 19 overviews ARE verbatim
+              source-document text, and an underscore, a leading dash or a
+              double hyphen in them can now display differently. One rule for
+              the column beats a rule that depends on which class you are
+              looking at. --}}
         <div class="content">
+          {{#or class.stat_line class.stat_note class.quote class.overview class.conduit_notes class.grounding class.examples_heading class.examples.length class.challenge_level class.designer}}
           <h3 class="title is-3">Description</h3>
-          <p>{{{markdown class.description}}}</p>
+          {{/or}}
+          {{#if class.stat_line}}
+          <p><strong>{{class.stat_line}}</strong></p>
+          {{/if}}
+          {{#if class.stat_note}}
+          <p class="is-size-7 has-text-grey">{{class.stat_note}}</p>
+          {{/if}}
+          {{#if class.quote}}
+          <blockquote>
+            <p>{{class.quote}}</p>
+            {{#if class.quote_source}}
+            <p class="is-size-7 has-text-grey">— {{class.quote_source}}</p>
+            {{/if}}
+          </blockquote>
+          {{/if}}
+          {{#if class.overview}}
+          {{{markdown class.overview}}}
+          {{/if}}
+          {{#if class.conduit_notes}}
+          <p>{{class.conduit_notes}}</p>
+          {{/if}}
+          {{#if class.grounding}}
+          <p>{{class.grounding}}</p>
+          {{/if}}
+          {{#if class.examples_heading}}
+          <p>{{class.examples_heading}}</p>
+          {{/if}}
+          {{#if class.examples.length}}
+          <ul>
+            {{#each class.examples}}
+            <li>{{this}}</li>
+            {{/each}}
+          </ul>
+          {{/if}}
+          {{#if class.challenge_level}}
+          <p><span class="tag is-info is-light">Challenge Level: {{class.challenge_level}}</span></p>
+          {{/if}}
+          {{#if class.designer}}
+          <p class="is-size-7 has-text-grey">Class by {{class.designer}}</p>
+          {{/if}}
         </div>
         <div class="content">
           <hr>
@@ -180,7 +241,7 @@
           <div class="columns">
             <div class="column is-half">
               <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
-            {{#each (first class.gear 3) as |gear|}}
+            {{#each (filterBy class.gear 'category' 'default') as |gear|}}
               <div class="card">
                 <div class="card-content">
                   <div class="content">
@@ -189,6 +250,8 @@
                       <span class="tag is-info is-light">Base</span>
                     </div>
                     {{{markdown gear.description}}}
+                    {{> class-meters meters=gear.meters}}
+                    {{> class-notes notes=gear.notes}}
                   </div>
                 </div>
               </div>
@@ -197,7 +260,7 @@
 
             <div class="column is-half">
               <p class="has-text-weight-semibold has-text-grey mb-2">Elective Gear</p>
-            {{#each (last class.gear 3) as |gear|}}
+            {{#each (filterBy class.gear 'category' 'elective') as |gear|}}
               <div class="card">
                 <div class="card-content">
                   <div class="content">
@@ -206,6 +269,8 @@
                       <span class="tag is-link is-light">Elective</span>
                     </div>
                     {{{markdown gear.description}}}
+                    {{> class-meters meters=gear.meters}}
+                    {{> class-notes notes=gear.notes}}
                   </div>
                 </div>
               </div>
@@ -226,6 +291,11 @@
               <div class="content">
                 <h4 class="title is-4">{{this.name}}</h4>
                 {{{markdown this.description}}}
+                {{> class-meters meters=this.meters}}
+                {{#if this.paired_action}}
+                <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
+                {{/if}}
+                {{> class-notes notes=this.notes}}
               </div>
             </div>
           </div>
