@@ -59,7 +59,10 @@ const makeAdapter = (calls, overrides = {}) => ({
     gearNameToClassId: new Map([['Rifle', 'class-1']]),
     gearNameToDescription: new Map(),
     abilityNameToClassId: new Map(),
-    abilityNameToDescription: new Map()
+    abilityNameToDescription: new Map(),
+    itemsByClassId: new Map(),
+    classesByName: new Map(),
+    classRows: []
   }),
   getRealMissions: async () => ok([]),
   listOffscreenMissions: async () => ok([]),
@@ -426,4 +429,147 @@ test('deleteOffscreenMission refuses a non-owner with AuthorizationError', async
   const svc = new CharacterService(offscreenAdapter());
   await expect(svc.deleteOffscreenMission(STRANGER, 'character-1', 'om-1'))
     .rejects.toBeInstanceOf(AuthorizationError);
+});
+
+// --- Class item resolution -------------------------------------------
+//
+// A character's gear/ability rows carry the class_id of the class the item
+// came from. The global name->class_id map is last-writer-wins across the
+// whole public catalogue, so a player-created class sharing an item name with
+// a canonical class poisons every other character's row. Resolution must
+// prefer the character's OWN class, then its version family, then the class
+// named by the submitted "ClassName::ItemName" value, and only then the
+// global map.
+
+// gunslinger-v2 is an in-family upgrade of gunslinger-v1 (same rules_edition);
+// pcc-class is an unrelated player-created class that happens to reuse both
+// Gunslinger gear names; haberdasher-class owns a name no Gunslinger defines.
+const CLASS_ROWS = [
+  { id: 'gunslinger-v1', name: 'Gunslinger', base_class_id: null, rules_edition: 'advent', rules_version: 'v1' },
+  { id: 'gunslinger-v2', name: 'Gunslinger', base_class_id: 'gunslinger-v1', rules_edition: 'advent', rules_version: 'v2' },
+  { id: 'pcc-class', name: 'Seamus McGlide — Gunslinger (PCC)', base_class_id: null, rules_edition: 'advent', rules_version: 'v2' },
+  { id: 'haberdasher-class', name: 'Haberdasher', base_class_id: null, rules_edition: 'advent', rules_version: 'v2' },
+  { id: 'wanderer-class', name: 'Wanderer', base_class_id: null, rules_edition: 'advent', rules_version: 'v2' }
+];
+
+const ITEMS_BY_CLASS_ID = new Map([
+  ['gunslinger-v1', {
+    gear: new Map([['Sharps Rifle', 'A long gun.']]),
+    abilities: new Map()
+  }],
+  ['gunslinger-v2', {
+    gear: new Map([['Revolver', 'A six-shooter.']]),
+    abilities: new Map()
+  }],
+  ['pcc-class', {
+    gear: new Map([['Revolver', 'A PCC six-shooter.'], ['Sharps Rifle', 'A PCC long gun.']]),
+    abilities: new Map()
+  }],
+  ['haberdasher-class', {
+    gear: new Map([['Borrowed Duster', 'A very fine coat.']]),
+    abilities: new Map()
+  }],
+  ['wanderer-class', {
+    gear: new Map([['Walking Stick', 'A road-worn stick.']]),
+    abilities: new Map()
+  }]
+]);
+
+// The class NAME the edit form submits as the "ClassName::ItemName" prefix,
+// trimmed and lower-cased, to every class id carrying that name. "Gunslinger"
+// is genuinely ambiguous in the real catalogue (advent/v1 and advent/v2).
+const CLASSES_BY_NAME = () => new Map([
+  ['gunslinger', ['gunslinger-v1', 'gunslinger-v2']],
+  ['seamus mcglide — gunslinger (pcc)', ['pcc-class']],
+  ['haberdasher', ['haberdasher-class']],
+  ['wanderer', ['wanderer-class']]
+]);
+
+// The production poisoning: the PCC is concatenated last, so it wins globally
+// for every name it shares with a canonical class.
+const POISONED_GLOBAL_MAPS = () => ({
+  gearNameToClassId: new Map([
+    ['Revolver', 'pcc-class'],
+    ['Sharps Rifle', 'pcc-class'],
+    ['Borrowed Duster', 'haberdasher-class']
+  ]),
+  gearNameToDescription: new Map(),
+  abilityNameToClassId: new Map(),
+  abilityNameToDescription: new Map(),
+  itemsByClassId: ITEMS_BY_CLASS_ID,
+  classesByName: CLASSES_BY_NAME(),
+  classRows: CLASS_ROWS
+});
+
+// Saves gear through updateCharacter for a character whose (immutable) stored
+// class is `classId`, reporting both the service result and whatever reached
+// adapter.saveCharacterAtomic (null when the save was refused before the write).
+const saveGearAsClass = async (classId, gear) => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [] }),
+    getClassContentLookupMaps: async () => POISONED_GLOBAL_MAPS(),
+    saveCharacterAtomic: async (args) => {
+      saved = args;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const result = await service.updateCharacter('character-1', { name: 'Hero', gear }, { id: 'profile-1' });
+  return { result, saved };
+};
+
+// Gear rows handed to saveCharacterAtomic for a character of `classId`.
+const saveGearForClass = async (classId, gear) => {
+  const { result, saved } = await saveGearAsClass(classId, gear);
+  expect(result.error).toBeNull();
+  return saved.gear;
+};
+
+const saveGearForGunslinger = gear => saveGearForClass('gunslinger-v2', gear);
+
+test('gear resolves to the character\'s own class, not a player-created class that reuses the name', async () => {
+  const gear = await saveGearForGunslinger(['Revolver']);
+  expect(gear).toEqual([{ name: 'Revolver', class_id: 'gunslinger-v2', description: 'A six-shooter.' }]);
+});
+
+test('gear the character\'s own class lacks resolves within its version family', async () => {
+  const gear = await saveGearForGunslinger(['Sharps Rifle']);
+  expect(gear[0].class_id).toBe('gunslinger-v1');
+});
+
+test('gear no class in the character\'s family defines still falls back to the global map', async () => {
+  const gear = await saveGearForGunslinger(['Borrowed Duster']);
+  expect(gear[0].class_id).toBe('haberdasher-class');
+});
+
+test('an explicit class_id on a gear item wins over every fallback', async () => {
+  const gear = await saveGearForGunslinger([{ name: 'Revolver', class_id: 'pcc-class' }]);
+  expect(gear[0].class_id).toBe('pcc-class');
+});
+
+test('borrowed gear resolves to the class the form named, not the player-created class the global map points at', async () => {
+  const gear = await saveGearForClass('wanderer-class', ['Gunslinger::Revolver']);
+  expect(gear).toEqual([{ name: 'Revolver', class_id: 'gunslinger-v2', description: 'A six-shooter.' }]);
+});
+
+test('a submitted class name that does not define the item falls through to the global map', async () => {
+  const gear = await saveGearForClass('wanderer-class', ['Haberdasher::Revolver']);
+  expect(gear[0].class_id).toBe('pcc-class');
+});
+
+test('an ambiguous class name resolves to the class id that defines the item', async () => {
+  const gear = await saveGearForClass('wanderer-class', ['Gunslinger::Sharps Rifle']);
+  expect(gear[0].class_id).toBe('gunslinger-v1');
+});
+
+test('gear no class defines any more falls back to the character\'s own class instead of failing the save', async () => {
+  const { result, saved } = await saveGearAsClass('gunslinger-v2', ['Renamed Peacemaker']);
+  expect(result.error).toBeNull();
+  expect(saved.gear).toEqual([{ name: 'Renamed Peacemaker', class_id: 'gunslinger-v2', description: null }]);
+});
+
+test('gear no class defines still fails the save when the character has no class to fall back to', async () => {
+  const { result, saved } = await saveGearAsClass(null, ['Renamed Peacemaker']);
+  expect(result.error).toBe('[setCharacterGear] Missing class_id for gear item "Renamed Peacemaker"');
+  expect(saved).toBeNull();
 });

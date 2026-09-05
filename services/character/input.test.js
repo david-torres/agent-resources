@@ -12,6 +12,19 @@ test('trims every string in a character payload, not just item names', () => {
   expect(normalizeGearItems(childData.classGear)[0].name).toBe('Training Weights');
 });
 
+test('normalizeGearItems keeps the class half of a "ClassName::ItemName" value as class_name', () => {
+  const [qualified, bare, padded] = normalizeGearItems([
+    'Gunslinger::Revolver',
+    'Revolver',
+    '  Gunslinger  ::  Revolver  '
+  ]);
+
+  expect(qualified).toEqual({ name: 'Revolver', class_name: 'Gunslinger' });
+  expect(bare).toEqual({ name: 'Revolver' });
+  expect(bare).not.toHaveProperty('class_name');
+  expect(padded).toEqual({ name: 'Revolver', class_name: 'Gunslinger' });
+});
+
 test('normalizes a v1 payload without mutating the submitted request', () => {
   const input = {
     name: '  Scout  ',

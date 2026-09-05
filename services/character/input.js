@@ -47,7 +47,9 @@ const normalizeClassItems = (items) => {
       if (!value) return null;
       const separator = value.indexOf('::');
       const name = separator === -1 ? value : value.slice(separator + 2).trim();
-      return name ? { name } : null;
+      if (!name) return null;
+      const className = separator === -1 ? '' : value.slice(0, separator).trim();
+      return className ? { name, class_name: className } : { name };
     }
     if (typeof item === 'object' && typeof item.name === 'string') {
       const name = item.name.trim();

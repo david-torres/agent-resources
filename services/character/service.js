@@ -10,6 +10,7 @@ const {
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
+const { computeVersionFamily } = require('../../util/class-family');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
@@ -282,15 +283,51 @@ class CharacterService {
       .filter(name => name != null && name !== '')
       .map(name => ({ name }));
     const maps = await this.adapter.getClassContentLookupMaps();
+    const itemsByClassId = maps.itemsByClassId ?? new Map();
+    const classesByName = maps.classesByName ?? new Map();
+    const ownClassId = characterInput.class_id ?? null;
+    const familyClassIds = ownClassId
+      ? computeVersionFamily(maps.classRows ?? [], ownClassId)
+      : new Set();
+    const resolveClassItem = (kind, item, nameToClassId, nameToDescription) => {
+      if (item.class_id) {
+        return {
+          class_id: item.class_id,
+          description: item.description ?? nameToDescription.get(item.name) ?? null
+        };
+      }
+      for (const classId of [ownClassId, ...familyClassIds].filter(Boolean)) {
+        const classItems = itemsByClassId.get(classId)?.[kind];
+        // The description has to come from the class that resolved the id, or a
+        // row gets one class's id paired with another class's text.
+        if (classItems?.has(item.name)) {
+          return {
+            class_id: classId,
+            description: item.description ?? classItems.get(item.name) ?? null
+          };
+        }
+      }
+      const namedCandidates = (classesByName.get(item.class_name?.trim().toLowerCase()) ?? [])
+        .filter(classId => itemsByClassId.get(classId)?.[kind]?.has(item.name));
+      const namedClassId = namedCandidates.find(classId => familyClassIds.has(classId)) ?? namedCandidates[0];
+      if (namedClassId) {
+        return {
+          class_id: namedClassId,
+          description: item.description ?? itemsByClassId.get(namedClassId)[kind].get(item.name) ?? null
+        };
+      }
+      return {
+        class_id: nameToClassId.get(item.name) ?? ownClassId ?? undefined,
+        description: item.description ?? nameToDescription.get(item.name) ?? null
+      };
+    };
     const gear = childData.classGear == null ? null : normalizeGearItems(childData.classGear).map(item => ({
       name: item.name,
-      class_id: item.class_id ?? maps.gearNameToClassId.get(item.name),
-      description: item.description ?? maps.gearNameToDescription.get(item.name) ?? null
+      ...resolveClassItem('gear', item, maps.gearNameToClassId, maps.gearNameToDescription)
     }));
     const abilities = childData.classAbilities == null ? null : normalizeAbilityItems(childData.classAbilities).map(item => ({
       name: item.name,
-      class_id: item.class_id ?? maps.abilityNameToClassId.get(item.name),
-      description: item.description ?? maps.abilityNameToDescription.get(item.name) ?? null
+      ...resolveClassItem('abilities', item, maps.abilityNameToClassId, maps.abilityNameToDescription)
     }));
     if ((gear || []).some(item => !item.class_id)) {
       const item = gear.find(row => !row.class_id);

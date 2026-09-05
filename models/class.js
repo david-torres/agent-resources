@@ -458,10 +458,11 @@ const deleteClass = async (actor, id) => classService.deleteClass(actor, id);
 // Build lookup maps from gear/ability name -> class_id and description
 const buildClassContentLookupMaps = async () => {
     try {
-      const [adventRes, aspirantRes, pccRes] = await Promise.all([
+      const [adventRes, aspirantRes, pccRes, familyRows] = await Promise.all([
         getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
         getClasses({ is_public: true, is_player_created: false, rules_edition: 'aspirant' }),
-        getClasses({ is_public: true, is_player_created: true })
+        getClasses({ is_public: true, is_player_created: true }),
+        fetchClassFamilyRows()
       ]);
 
       const advent = Array.isArray(adventRes?.data) ? adventRes.data : [];
@@ -473,13 +474,23 @@ const buildClassContentLookupMaps = async () => {
       const abilityNameToClassId = new Map();
       const gearNameToDescription = new Map();
       const abilityNameToDescription = new Map();
+      const itemsByClassId = new Map();
+      const classesByName = new Map();
 
       for (const cls of allClasses) {
+        if (!cls?.id) continue;
+        const classItems = { gear: new Map(), abilities: new Map() };
+        itemsByClassId.set(cls.id, classItems);
+        if (cls.name) {
+          const key = cls.name.trim().toLowerCase();
+          classesByName.set(key, [...(classesByName.get(key) ?? []), cls.id]);
+        }
         if (Array.isArray(cls?.gear)) {
           for (const g of cls.gear) {
-            if (g && g.name && cls.id) {
+            if (g && g.name) {
               const gearName = g.name.trim();
               gearNameToClassId.set(gearName, cls.id);
+              classItems.gear.set(gearName, g.description ?? null);
               if (g.description) {
                 gearNameToDescription.set(gearName, g.description);
               }
@@ -488,9 +499,10 @@ const buildClassContentLookupMaps = async () => {
         }
         if (Array.isArray(cls?.abilities)) {
           for (const a of cls.abilities) {
-            if (a && a.name && cls.id) {
+            if (a && a.name) {
               const abilityName = a.name.trim();
               abilityNameToClassId.set(abilityName, cls.id);
+              classItems.abilities.set(abilityName, a.description ?? null);
               if (a.description) {
                 abilityNameToDescription.set(abilityName, a.description);
               }
@@ -499,7 +511,15 @@ const buildClassContentLookupMaps = async () => {
         }
       }
 
-      return { gearNameToClassId, abilityNameToClassId, gearNameToDescription, abilityNameToDescription };
+      return {
+        gearNameToClassId,
+        abilityNameToClassId,
+        gearNameToDescription,
+        abilityNameToDescription,
+        itemsByClassId,
+        classesByName,
+        classRows: Array.isArray(familyRows) ? familyRows : []
+      };
     } catch (error) {
       throw error;
     }
