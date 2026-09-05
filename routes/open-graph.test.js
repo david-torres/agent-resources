@@ -37,6 +37,10 @@ mock.module('../models/class', () => ({
   getClass: async () => ({ data: classRecord, error: null }),
   getClasses: async () => ({ data: [], error: null }),
   getEffectiveClassUnlock: async () => ({ data: { unlocked: true, expiresAt: null } }),
+  getEffectiveClassAccess: async () => ({
+    data: { unlocked: true, productUnlocked: false, accessSource: 'free_prerelease', expiresAt: null },
+    error: null
+  }),
   canViewClassPdf: async () => ({ data: false, error: null })
 }));
 mock.module('../models/mission', () => ({

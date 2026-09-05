@@ -41,9 +41,7 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
       } catch (_) { /* ignore; hostingViaLfg remains false */ }
     }
 
-    if (!profile) {
-      blankAll(character);
-    } else if (!hostingViaLfg) {
+    if (!hostingViaLfg) {
       let unlockedClassIds = new Set();
       try {
         // Admin-backed lookup on purpose: the shared anon client no longer
@@ -57,14 +55,20 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
 
       if (Array.isArray(character.abilities)) {
         for (const ability of character.abilities) {
-          if (ability && ability.class_id && !unlockedClassIds.has(ability.class_id)) {
+          if (ability && (
+            (ability.class_id && !unlockedClassIds.has(ability.class_id)) ||
+            (!ability.class_id && !profile)
+          )) {
             ability.description = '';
           }
         }
       }
       if (Array.isArray(character.gear)) {
         for (const gear of character.gear) {
-          if (gear && gear.class_id && !unlockedClassIds.has(gear.class_id)) {
+          if (gear && (
+            (gear.class_id && !unlockedClassIds.has(gear.class_id)) ||
+            (!gear.class_id && !profile)
+          )) {
             gear.description = '';
           }
         }

@@ -56,9 +56,11 @@ mock.module('../services/class/repository', () => ({
 delete require.cache[require.resolve('./class')];
 const {
   getEffectiveClassUnlocks,
+  getEffectiveClassAccess,
   getUnlockedClasses,
   isClassUnlocked,
-  getUnlockedClassIdsForUser
+  getUnlockedClassIdsForUser,
+  canViewClassPdf
 } = require('./class');
 
 afterAll(() => {
@@ -73,6 +75,61 @@ const reset = () => {
   state.familyRows = classFamilyRows;
   state.rowsByIdsOptions = null;
 };
+
+test('a free pre-release row is playable without a user or product entitlement', async () => {
+  reset();
+  state.familyRows = classFamilyRows.map(row =>
+    row.id === PRIVATE_CLASS ? { ...row, free_play_access: true } : row);
+
+  const access = await getEffectiveClassUnlocks(null);
+
+  expect(access.ids.has(PRIVATE_CLASS)).toBe(true);
+  expect(access.productIds.has(PRIVATE_CLASS)).toBe(false);
+  expect(access.sourceById.get(PRIVATE_CLASS)).toEqual({ source: 'free_prerelease' });
+});
+
+test('free pre-release access does not spread to another row in its version family', async () => {
+  reset();
+  state.familyRows = classFamilyRows.map(row =>
+    row.id === ADVENT_LIBRARIAN ? { ...row, free_play_access: true } : row);
+
+  const access = await getEffectiveClassUnlocks(null);
+
+  expect(access.ids.has(ADVENT_LIBRARIAN)).toBe(true);
+  expect(access.ids.has(LIBRARIAN_V2)).toBe(false);
+});
+
+test('free pre-release plaintext does not grant the class PDF', async () => {
+  reset();
+  state.familyRows = classFamilyRows.map(row =>
+    row.id === PRIVATE_CLASS ? { ...row, free_play_access: true } : row);
+
+  expect(await getEffectiveClassAccess('u1', PRIVATE_CLASS)).toEqual({
+    data: {
+      unlocked: true,
+      productUnlocked: false,
+      accessSource: 'free_prerelease',
+      expiresAt: null
+    },
+    error: null
+  });
+  expect(await canViewClassPdf(
+    { userId: 'u1' },
+    { id: PRIVATE_CLASS, pdf_storage_path: 'classes/private.pdf' }
+  )).toEqual({ data: false, error: null });
+});
+
+test('a direct unlock still grants product access over the free fallback', async () => {
+  reset();
+  state.directIds = [PRIVATE_CLASS];
+  state.familyRows = classFamilyRows.map(row =>
+    row.id === PRIVATE_CLASS ? { ...row, free_play_access: true } : row);
+
+  const { data } = await getEffectiveClassAccess('u1', PRIVATE_CLASS);
+
+  expect(data.productUnlocked).toBe(true);
+  expect(data.accessSource).toBe('direct');
+});
 
 describe('book-derived class unlocks', () => {
   test('an Advent book unlocks an Advent core class with no direct unlock', async () => {

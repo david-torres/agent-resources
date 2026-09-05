@@ -93,13 +93,24 @@ const leastRestrictiveExpiry = (values) => {
 // (fail closed) but is surfaced via `error` so callers can tell an infra
 // failure apart from an authoritative "no access".
 const getEffectiveClassUnlocks = async (userId) => {
-    const empty = { ids: new Set(), sourceById: new Map(), expiryById: new Map(), directIds: new Set(), error: null };
-    if (!userId) return empty;
+    const empty = {
+        ids: new Set(),
+        productIds: new Set(),
+        sourceById: new Map(),
+        expiryById: new Map(),
+        directIds: new Set(),
+        error: null
+    };
 
     const nowIso = new Date().toISOString();
-    const [directResult, booksResult] = await Promise.all([
-        classRepository.unlockedClassIdRows({ userId, nowIso }),
-        rulesRepository.fetchActiveBooksForUser({ userId, nowIso })
+    const [directResult, booksResult, classRows] = await Promise.all([
+        userId
+            ? classRepository.unlockedClassIdRows({ userId, nowIso })
+            : Promise.resolve({ data: [], error: null }),
+        userId
+            ? rulesRepository.fetchActiveBooksForUser({ userId, nowIso })
+            : Promise.resolve({ data: [], error: null }),
+        fetchClassFamilyRows()
     ]);
     const readError = directResult?.error || booksResult?.error || null;
     // Attribution below is first-book-wins, and the repository read is
@@ -117,7 +128,14 @@ const getEffectiveClassUnlocks = async (userId) => {
     const directRows = (directResult?.error ? [] : (directResult?.data || []));
     const directIds = new Set(directRows.map(row => row.class_id));
 
-    const rawUnion = new Set(directIds);
+    // Free pre-release access applies to these exact rows. It is intentionally
+    // not family-expanded: a future published or Aspirant fork remains a real
+    // unlock unless it is explicitly marked free too.
+    const freeIds = new Set((classRows || [])
+        .filter(row => row.free_play_access === true)
+        .map(row => row.id));
+
+    const rawUnion = new Set([...directIds, ...freeIds]);
     for (const book of books || []) {
         for (const id of coreClassIdsForEditions([book.rules_edition])) rawUnion.add(id);
     }
@@ -125,7 +143,6 @@ const getEffectiveClassUnlocks = async (userId) => {
     // ids either — `empty` is the whole answer.
     if (rawUnion.size === 0) return { ...empty, error: readError };
 
-    const classRows = await fetchClassFamilyRows();
     const expand = (idSet) => (classRows ? expandIdsToFamilies(classRows, idSet) : new Set(idSet));
 
     // A fork inherits the source of whatever unlocked its seed id: expand
@@ -135,6 +152,7 @@ const getEffectiveClassUnlocks = async (userId) => {
     // earlier title for the same id; any owning book is a truthful badge.
     // Direct always wins when both an unlock and a book cover the same id.
     const sourceById = new Map();
+    for (const id of freeIds) sourceById.set(id, { source: 'free_prerelease' });
     // Every grant covering an id contributes a candidate expiry; the least
     // restrictive of them is that id's real expiry. A book-derived class is
     // only ever as durable as the book grant that confers it.
@@ -146,7 +164,11 @@ const getEffectiveClassUnlocks = async (userId) => {
 
     for (const book of books || []) {
         for (const id of expand(coreClassIdsForEditions([book.rules_edition]))) {
-            if (!sourceById.has(id)) sourceById.set(id, { source: 'book', title: book.title });
+            // A product entitlement is more informative than the public
+            // fallback when both cover the same row.
+            if (sourceById.get(id)?.source !== 'book') {
+                sourceById.set(id, { source: 'book', title: book.title });
+            }
             contribute(id, book.expires_at);
         }
     }
@@ -164,12 +186,23 @@ const getEffectiveClassUnlocks = async (userId) => {
     // directIds rides along raw (unexpanded): the hydration read needs to know
     // which ids came from an explicit class_unlocks row, so it can exempt
     // those — and only those — from its visibility filter.
-    return { ids: new Set(sourceById.keys()), sourceById, expiryById, directIds, error: readError };
+    const productIds = new Set([
+        ...expand(coreClassIdsForEditions(books.map(book => book.rules_edition))),
+        ...expand(directIds)
+    ]);
+    return {
+        ids: new Set(sourceById.keys()),
+        productIds,
+        sourceById,
+        expiryById,
+        directIds,
+        error: readError
+    };
 };
 
-const getEffectiveClassUnlock = async (userId, classId) => {
-    const none = { unlocked: false, expiresAt: null };
-    if (!userId || !classId) {
+const getEffectiveClassAccess = async (userId, classId) => {
+    const none = { unlocked: false, productUnlocked: false, accessSource: null, expiresAt: null };
+    if (!classId) {
         return { data: none, error: null };
     }
 
@@ -178,7 +211,7 @@ const getEffectiveClassUnlock = async (userId, classId) => {
     // expanding classId's own family here would just re-fetch the same
     // classes projection getEffectiveClassUnlocks already fetched. The
     // resolver reduced each id's grants to one effective expiry on the way.
-    const { ids, expiryById, error: readError } = await getEffectiveClassUnlocks(userId);
+    const { ids, productIds, sourceById, expiryById, error: readError } = await getEffectiveClassUnlocks(userId);
     if (readError) {
         return { data: none, error: readError };
     }
@@ -186,8 +219,24 @@ const getEffectiveClassUnlock = async (userId, classId) => {
         return { data: none, error: null };
     }
     return {
-        data: { unlocked: true, expiresAt: expiryById.get(classId) ?? null },
+        data: {
+            unlocked: true,
+            productUnlocked: productIds.has(classId),
+            accessSource: sourceById.get(classId)?.source || null,
+            expiresAt: expiryById.get(classId) ?? null
+        },
         error: null
+    };
+};
+
+// Compatibility shape used throughout the existing unlock UI. Product/PDF
+// access is intentionally kept out of this legacy boolean; callers that need
+// the distinction use getEffectiveClassAccess.
+const getEffectiveClassUnlock = async (userId, classId) => {
+    const { data, error } = await getEffectiveClassAccess(userId, classId);
+    return {
+        data: { unlocked: data.unlocked, expiresAt: data.expiresAt },
+        error
     };
 };
 
@@ -280,7 +329,12 @@ const getUnlockedClassIdsForUser = async (userId) => {
     return { data: ids, error: error || null };
 };
 
-const resolveClassAgentAccess = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
+const resolveClassAgentAccess = ({
+    classData,
+    actor = {},
+    unlockedClassIds = new Set(),
+    productUnlockedClassIds = new Set()
+}) => {
     if (!classData) return null;
 
     const isAdmin = actor.role === 'admin';
@@ -288,16 +342,22 @@ const resolveClassAgentAccess = ({ classData, actor = {}, unlockedClassIds = new
     const isVisible = classData.is_public === true || isOwner || isAdmin;
     if (!isVisible) return null;
 
-    const unlocked = !!actor.userId && unlockedClassIds.has(classData.id);
+    const unlocked = unlockedClassIds.has(classData.id);
+    const productUnlocked = productUnlockedClassIds.has(classData.id);
     const accessLevel = classData.status === 'release' && !isAdmin && !isOwner && !unlocked
         ? 'teaser_only'
         : 'full';
 
-    return { isAdmin, isOwner, unlocked, accessLevel };
+    return { isAdmin, isOwner, unlocked, productUnlocked, accessLevel };
 };
 
-const serializeClassSummaryForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
-    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds });
+const serializeClassSummaryForAgent = ({
+    classData,
+    actor = {},
+    unlockedClassIds = new Set(),
+    productUnlockedClassIds = new Set()
+}) => {
+    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds, productUnlockedClassIds });
     if (!access) return null;
 
     return {
@@ -316,11 +376,16 @@ const serializeClassSummaryForAgent = ({ classData, actor = {}, unlockedClassIds
     };
 };
 
-const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new Set() }) => {
-    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds });
+const serializeClassForAgent = ({
+    classData,
+    actor = {},
+    unlockedClassIds = new Set(),
+    productUnlockedClassIds = new Set()
+}) => {
+    const access = resolveClassAgentAccess({ classData, actor, unlockedClassIds, productUnlockedClassIds });
     if (!access) return null;
 
-    const { isAdmin, isOwner, unlocked, accessLevel } = access;
+    const { isAdmin, isOwner, unlocked, productUnlocked, accessLevel } = access;
 
     const serialized = {
         id: classData.id,
@@ -337,7 +402,7 @@ const serializeClassForAgent = ({ classData, actor = {}, unlockedClassIds = new 
         owner_profile_id: classData.created_by || null,
         access_level: accessLevel,
         unlocked,
-        pdf_available: accessLevel === 'full' && !!classData.pdf_storage_path,
+        pdf_available: !!classData.pdf_storage_path && (isAdmin || isOwner || productUnlocked),
         updated_at: classData.updated_at || null,
         created_at: classData.created_at || null
     };
@@ -357,14 +422,19 @@ const listClassesForAgent = async (filters = {}, actor = {}) => {
         return { data: null, error };
     }
 
-    const { data: unlockedClassIds, error: unlockedError } = await getUnlockedClassIdsForUser(actor.userId);
-    if (unlockedError) {
-        return { data: null, error: unlockedError };
+    const access = await getEffectiveClassUnlocks(actor.userId);
+    if (access.error) {
+        return { data: null, error: access.error };
     }
 
     return {
         data: (data || [])
-            .map((classData) => serializeClassSummaryForAgent({ classData, actor, unlockedClassIds }))
+            .map((classData) => serializeClassSummaryForAgent({
+                classData,
+                actor,
+                unlockedClassIds: access.ids,
+                productUnlockedClassIds: access.productIds
+            }))
             .filter(Boolean),
         error: null
     };
@@ -377,12 +447,17 @@ const getClassForAgent = async (id, actor = {}) => {
         return { data: null, error };
     }
 
-    const { data: unlockedClassIds, error: unlockedError } = await getUnlockedClassIdsForUser(actor.userId);
-    if (unlockedError) {
-        return { data: null, error: unlockedError };
+    const access = await getEffectiveClassUnlocks(actor.userId);
+    if (access.error) {
+        return { data: null, error: access.error };
     }
 
-    const serialized = serializeClassForAgent({ classData, actor, unlockedClassIds });
+    const serialized = serializeClassForAgent({
+        classData,
+        actor,
+        unlockedClassIds: access.ids,
+        productUnlockedClassIds: access.productIds
+    });
     if (!serialized) {
         return { data: null, error: null };
     }
@@ -394,7 +469,7 @@ const getClassForAgent = async (id, actor = {}) => {
 // hand it in rather than paying for a second resolve: getEffectiveClassUnlocks
 // costs three queries including a full classes projection, and the class-view
 // page would otherwise run it twice per request.
-const canViewClassPdf = async (userContext = {}, classData = {}, { unlocked = null } = {}) => {
+const canViewClassPdf = async (userContext = {}, classData = {}, { productUnlocked = null } = {}) => {
     const { userId = null, profileId = null, role = null } = userContext;
 
     if (!classData?.pdf_storage_path) {
@@ -413,12 +488,12 @@ const canViewClassPdf = async (userContext = {}, classData = {}, { unlocked = nu
         return { data: false, error: null };
     }
 
-    if (unlocked !== null) {
-        return { data: !!unlocked, error: null };
+    if (productUnlocked !== null) {
+        return { data: !!productUnlocked, error: null };
     }
 
-    const { data, error } = await isClassUnlocked(userId, classData.id);
-    return { data: !!data, error: error || null };
+    const { data, error } = await getEffectiveClassAccess(userId, classData.id);
+    return { data: !!data?.productUnlocked, error: error || null };
 };
 
 const unlockClass = async (userId, classId, expiresAt = null) => {
@@ -553,6 +628,7 @@ module.exports = {
     unlockClass,
     isClassUnlocked,
     getEffectiveClassUnlock,
+    getEffectiveClassAccess,
     getVersionHistory,
     createUnlockCodes,
     listUnlockCodes,

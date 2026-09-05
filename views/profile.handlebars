@@ -34,7 +34,7 @@
 
 {{#if unlockedClasses}}
 <div class="box">
-  <h3 class="title is-4">Unlocked Classes</h3>
+  <h3 class="title is-4">Available Classes</h3>
   {{#if unlockedClasses.length}}
   <div class="table-container">
     <table class="table is-fullwidth is-striped is-hoverable">
@@ -56,6 +56,9 @@
                     title="Access comes from your rulebook and ends when it does">
                 Included with {{this.unlock_book_title}}
               </span>
+            {{/if}}
+            {{#if (eq this.unlock_source 'free_prerelease')}}
+              <span class="tag is-info is-light ml-2">Free Pre-Release</span>
             {{/if}}
           </td>
           <td>

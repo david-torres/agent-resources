@@ -117,6 +117,7 @@ test('the payload carries the allowlist and nothing else', () => {
     expect(Object.keys(payload).sort()).toEqual([...FIELDS].sort());
     for (const field of FORBIDDEN) expect(payload).not.toHaveProperty(field);
     expect(payload).not.toHaveProperty('page_range');
+    expect(payload.free_play_access).toBe(true);
   }
 });
 

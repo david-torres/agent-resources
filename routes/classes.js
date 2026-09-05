@@ -10,6 +10,7 @@ const {
     updateClass,
     duplicateClass,
     getEffectiveClassUnlock,
+    getEffectiveClassAccess,
     unlockClass,
     getVersionHistory,
     createUnlockCodes,
@@ -454,12 +455,16 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     });
 
     let unlocked = false;
+    let productUnlocked = false;
     let unlockExpiresAt = null;
-    if (profile) {
-        const { data: access } = await getEffectiveClassUnlock(profile.user_id, id);
-        unlocked = access?.unlocked || false;
-        unlockExpiresAt = access?.expiresAt || null;
-    }
+    const viewerUserId = res.locals.user?.id || profile?.user_id || null;
+    // The fallback keeps lightweight route-test/data-layer adapters that only
+    // implement the legacy resolver working; production supplies the richer
+    // access shape so PDF entitlement stays separate from free play.
+    const { data: access } = await (getEffectiveClassAccess || getEffectiveClassUnlock)(viewerUserId, id);
+    unlocked = access?.unlocked || false;
+    productUnlocked = access?.productUnlocked || false;
+    unlockExpiresAt = access?.expiresAt || null;
 
     // Show teaser if Release and not unlocked for non-admins/non-creators
     if (
@@ -496,7 +501,6 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     let classPdfAccessible = false;
     let classPdfError = null;
     if (classData?.pdf_storage_path) {
-        const viewerUserId = res.locals.user?.id || null;
         const { data: canAccess, error: accessError } = await canViewClassPdf(
             {
                 userId: viewerUserId,
@@ -507,7 +511,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             // Reuse the unlock check already made above rather than resolving
             // the user's effective unlocks a second time — only when it was
             // resolved for this same viewer.
-            profile && profile.user_id === viewerUserId ? { unlocked } : {}
+            profile && profile.user_id === viewerUserId ? { productUnlocked } : {}
         );
         classPdfAccessible = !!canAccess;
         if (accessError) {

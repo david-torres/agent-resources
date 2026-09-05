@@ -94,6 +94,28 @@ test('serializeClassSummaryForAgent reports unlocked when id is in set', () => {
   expect(out.access_level).toBe('full');
 });
 
+test('free agent content access does not advertise the class PDF', () => {
+  const out = serializeClassForAgent({
+    classData: baseClass,
+    actor: { profileId: 'profile-other', role: 'player' },
+    unlockedClassIds: new Set([baseClass.id])
+  });
+
+  expect(out.access_level).toBe('full');
+  expect(out.pdf_available).toBe(false);
+});
+
+test('a product entitlement advertises the class PDF', () => {
+  const out = serializeClassForAgent({
+    classData: baseClass,
+    actor: { profileId: 'profile-other', role: 'player', userId: 'user-1' },
+    unlockedClassIds: new Set([baseClass.id]),
+    productUnlockedClassIds: new Set([baseClass.id])
+  });
+
+  expect(out.pdf_available).toBe(true);
+});
+
 test('serializeClassForAgent still returns full shape for detail endpoint', () => {
   const out = serializeClassForAgent({
     classData: baseClass,

@@ -35,6 +35,7 @@ const CLASS_ROW = {
 
 // How many times the effective-unlock resolver actually hit the database.
 const reads = { unlockRows: 0, familyRows: 0 };
+let freePlayAccess = false;
 
 const makeClient = () => ({
   from() {
@@ -79,7 +80,12 @@ mock.module('../services/class/repository', () => ({
   },
   fetchClassFamilyRows: async () => {
     reads.familyRows += 1;
-    return [{ id: CLASS_ID, base_class_id: null, rules_edition: 'advent' }];
+    return [{
+      id: CLASS_ID,
+      base_class_id: null,
+      rules_edition: 'advent',
+      free_play_access: freePlayAccess
+    }];
   }
 }));
 
@@ -119,6 +125,7 @@ afterAll(async () => {
 beforeEach(() => {
   reads.unlockRows = 0;
   reads.familyRows = 0;
+  freePlayAccess = false;
 });
 
 const viewClass = async () => {
@@ -143,4 +150,19 @@ test('reusing the resolved unlock state still gates the PDF correctly', async ()
   expect(view).toBe('class-view');
   expect(ctx.unlocked).toBe(true);
   expect(ctx.classPdfAccessible).toBe(true);
+});
+
+test('a signed-out visitor gets free plaintext but not the class PDF', async () => {
+  freePlayAccess = true;
+
+  const res = await fetch(`${baseUrl}/classes/${CLASS_ID}/Librarian`, {
+    headers: { Accept: 'application/json' }
+  });
+  const { view, ctx } = await res.json();
+
+  expect(view).toBe('class-view');
+  expect(ctx.unlocked).toBe(true);
+  expect(ctx.classPdfAccessible).toBe(false);
+  expect(reads.unlockRows).toBe(0);
+  expect(reads.familyRows).toBe(1);
 });

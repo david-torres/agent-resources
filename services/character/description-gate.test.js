@@ -57,6 +57,18 @@ test('signed out, every description is blanked — class-gated or not', async ()
   expect(descriptions(character)).toEqual({ abilities: ['', ''], gear: [''] });
 });
 
+test('signed out, a globally free class keeps its item descriptions', async () => {
+  state.unlockedIds = new Set(['class-a']);
+  const character = makeCharacter();
+
+  await applyDescriptionGate({ character, profile: null, userId: null, client: {} });
+
+  expect(descriptions(character)).toEqual({
+    abilities: ['ability secret', ''],
+    gear: ['gear secret']
+  });
+});
+
 test('an unlocked class family keeps its descriptions', async () => {
   state.unlockedIds = new Set(['class-a']);
   const character = makeCharacter();

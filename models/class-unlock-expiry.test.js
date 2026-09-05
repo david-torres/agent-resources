@@ -318,7 +318,7 @@ test('returns an empty list when the user has no active unlocks', async () => {
     fromCalls.length = 0;
     const { data } = await getUnlockedClasses('user-1');
     expect(data).toEqual([]);
-    // No unlocks means no family to resolve -- the classes projection must
-    // not be fetched at all.
-    expect(fromCalls).not.toContain('classes');
+    // The class projection is still required to discover global free-play
+    // rows, even when this user has no personal grants.
+    expect(fromCalls).toContain('classes');
 });

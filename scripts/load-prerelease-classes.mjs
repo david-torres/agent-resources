@@ -49,7 +49,7 @@ const SECTIONS = { PCCs: 'pcc', EXCLUSIVES: 'exclusive', 'ASPIRANT CLASSES': 'as
 
 export const FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
     'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples', 'tips_heading',
-    'tips', 'designer', 'prerelease_section', 'stat_spread', 'abilities', 'gear'];
+    'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear'];
 
 // `rules_version` is NOT NULL with no column default, so a new row cannot be
 // inserted without it. It is never part of an update payload -- an existing row
@@ -96,6 +96,7 @@ const tipsMarkdown = (tips) => tips.map((tip) => `- ${tip}`).join('\n');
 const DERIVED = {
   name: (record) => displayName(record.name),
   prerelease_section: (record) => sectionEnum(record.prerelease_section),
+  free_play_access: () => true,
   tips: (record) => tipsMarkdown(record.tips)
 };
 
