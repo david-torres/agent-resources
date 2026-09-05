@@ -415,6 +415,7 @@ const serializeClassForAgent = ({
         Object.assign(serialized, pickClassProseForAgent(classData));
         serialized.signature_gear = Array.isArray(classData.gear) ? classData.gear : [];
         serialized.abilities = Array.isArray(classData.abilities) ? classData.abilities : [];
+        serialized.advanced_abilities = Array.isArray(classData.advanced_abilities) ? classData.advanced_abilities : [];
     }
 
     return serialized;

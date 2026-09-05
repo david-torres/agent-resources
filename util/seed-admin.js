@@ -118,6 +118,36 @@ async function seedAdmin() {
       console.log("✓ Admin profile already exists");
     }
 
+    // Step 3: Grant the admin access to every public class so the dev
+    // environment has full coverage for the character wizard (kiosk and
+    // gear pool both filter by unlocks — see routes/characters.js#filterClassDataForUser).
+    // Production users still get only the 6 starter unlocks via
+    // models/profile.js#grantStarterUnlocks; this is dev-only.
+    const { data: allClasses, error: allClassesError } = await supabase
+      .from("classes")
+      .select("id")
+      .eq("is_public", true);
+
+    if (allClassesError) {
+      throw new Error(`Failed to list classes: ${allClassesError.message}`);
+    }
+
+    const classIds = (allClasses || []).map((c) => c.id);
+    if (classIds.length > 0) {
+      const adminUnlocks = classIds.map((cid) => ({
+        user_id: userId,
+        class_id: cid,
+        expires_at: null,
+      }));
+      const { error: unlocksError } = await supabase
+        .from("class_unlocks")
+        .upsert(adminUnlocks, { onConflict: "user_id,class_id" });
+      if (unlocksError) {
+        throw new Error(`Failed to grant admin class unlocks: ${unlocksError.message}`);
+      }
+      console.log(`✓ Granted admin unlocks for ${classIds.length} class(es)`);
+    }
+
     console.log("\n✓ Admin user seeding complete!");
     console.log(`Email: ${ADMIN_EMAIL}`);
     console.log(`Password: ${ADMIN_PASSWORD}`);

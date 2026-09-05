@@ -64,6 +64,7 @@ const buildRow = (cls, is_player_created, rules_edition = 'advent') => {
         stat_spread: classStatSpread[cls] || {},
         gear: (classGearList[cls] || []).map(name => ({ name, description: '' })),
         abilities: (classAbilityList[cls] || []).map(name => ({ name, description: '' })),
+        advanced_abilities: [],
         created_by: null
     };
     // Core roster rows must land on the exact id the book grant references.
