@@ -7,6 +7,8 @@
 // all. util/crop.js's applyImageCrop closed the write path and
 // 20260904000003_repair_image_crop.sql repaired the rows; this notices if a
 // third one reopens it.
+require('./require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
 const { Client } = require('pg');

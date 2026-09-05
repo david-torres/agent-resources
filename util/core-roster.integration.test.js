@@ -25,6 +25,8 @@
 // gate for every environment it runs against.
 //
 // Requires local Supabase to be running (http://127.0.0.1:54321).
+require('./require-local-supabase');
+
 const { describe, test, expect } = require('bun:test');
 const { supabaseAdmin } = require('../models/_base');
 const { CORE_CLASS_UNLOCKS } = require('./starter-content');

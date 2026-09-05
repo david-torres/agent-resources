@@ -1,6 +1,8 @@
 // Local-Supabase integration coverage for the transactional level-up RPC.
 // Proves the level-up terminal writes (owned-field update + perk insert/link
 // resolution) commit or roll back together via level_up_character_atomic.
+require('../util/require-local-supabase');
+
 const { test, expect, afterAll } = require('bun:test');
 const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');

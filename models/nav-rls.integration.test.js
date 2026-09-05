@@ -9,6 +9,8 @@
 // (USING (is_active = true)) makes the new row invisible the moment is_active
 // flips to false. Only a real database shows that; a fake client cannot.
 // Fixed by 20260815000000_nav_items_admin_select.sql.
+require('../util/require-local-supabase');
+
 const { test, expect, afterAll } = require('bun:test');
 const { Client } = require('pg');
 const { createClient } = require('@supabase/supabase-js');

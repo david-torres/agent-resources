@@ -1,4 +1,6 @@
 // Local-Supabase integration coverage for the transactional character RPC.
+require('../util/require-local-supabase');
+
 const { test, expect, afterAll } = require('bun:test');
 const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');

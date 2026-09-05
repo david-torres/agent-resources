@@ -20,6 +20,8 @@
 // unnoticed. This test is that pin.
 //
 // Requires local Supabase to be running (http://127.0.0.1:54321).
+require('./require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const { supabaseAdmin } = require('../models/_base');
 const { buildClassContentLookupMaps } = require('../models/class');

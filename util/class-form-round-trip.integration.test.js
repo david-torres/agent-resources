@@ -71,6 +71,8 @@
 // drop shows up in the output instead of hiding behind a green boolean. Every
 // count and every named value is keyed by row id: six class names are duplicated
 // in the corpus.
+require('./require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const path = require('path');
 const { JSDOM } = require('jsdom');

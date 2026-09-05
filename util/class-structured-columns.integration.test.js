@@ -7,6 +7,8 @@
 // CHECK constraint can enforce. A loader that writes a bad level would
 // otherwise fail silently at read time, long after the import.
 
+require('./require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
 

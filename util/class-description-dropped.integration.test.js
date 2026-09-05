@@ -12,6 +12,8 @@
 //     time -- and while it names its copy list explicitly, it omitted every
 //     structured prose column, silently dropping the entire pre-release import
 //     from any duplicate.
+require('./require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
 const { CLASS_PROSE_FIELDS } = require('./class-prose');

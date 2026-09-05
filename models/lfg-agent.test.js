@@ -1,6 +1,8 @@
 // models/lfg-agent.test.js
 // Integration tests for agent-scoped LFG model wrappers.
 // Requires local Supabase to be running (http://127.0.0.1:54321).
+require('../util/require-local-supabase');
+
 const { describe, test, expect, beforeEach, afterEach } = require('bun:test');
 const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');

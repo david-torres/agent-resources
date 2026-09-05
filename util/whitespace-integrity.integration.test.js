@@ -2,6 +2,8 @@
 // There is no CHECK constraint enforcing this -- normalization happens in the
 // application input layer only. That makes coverage the whole guard, and this
 // test the thing that notices a write path which skipped it.
+require('./require-local-supabase');
+
 const { test, expect, afterAll } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
 const { Client } = require('pg');

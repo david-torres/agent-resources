@@ -1,4 +1,6 @@
 // routes/bot-link.test.js
+require('../util/require-local-supabase');
+
 const { test, expect } = require('bun:test');
 const {
   createPendingLink,
