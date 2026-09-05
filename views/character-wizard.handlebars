@@ -53,6 +53,45 @@
 
 <!-- ====== Step panels ====== -->
 <section class="wizard-step" data-step-panel="1" hidden>
+  {{#if (eq mode 'aspiring')}}
+  <h3 class="title is-4">1. Build Your Class</h3>
+  <p class="has-text-grey is-size-7 mb-3">
+    Aspirant is class-less: name your custom class, then pick <strong>3 signature items</strong> from 3 different classes, plus <strong>2 core abilities</strong> and <strong>1 advanced ability</strong> from 3 different classes. This page only <em>selects</em> what your class owns — your budget is spent on the next pages: <strong>2 Merx</strong> for each picked item on the gear page, and <strong>Perks</strong> for the abilities (core = 1, advanced = 2). A class can appear in both lists, but at most once in each.
+  </p>
+
+  <div class="box mb-4 pseudo-class-header">
+    <div class="is-flex is-align-items-baseline is-flex-wrap-wrap mb-3" style="gap: 0.5rem;">
+      <span class="has-text-grey is-size-5">Aspiring</span>
+      <h2 id="pseudoClassNameDisplay" class="title is-3 mb-0">Unnamed</h2>
+    </div>
+    <div class="field">
+      <div class="control">
+        <input class="input" type="text" id="pseudoClassName" maxlength="76" placeholder="Tide-Turner, Sump-Runner, …" required>
+      </div>
+      <p class="help">Whatever you type becomes <em>Aspiring &lt;name&gt;</em> as the full class identity.</p>
+    </div>
+    <div class="field">
+      <label class="label is-small" for="pseudoClassTagline">Tagline (optional)</label>
+      <div class="control">
+        <input class="input is-small" type="text" id="pseudoClassTagline" maxlength="120" placeholder="A short one-liner shown on class cards">
+      </div>
+    </div>
+    <div class="field mb-0">
+      <label class="label is-small" for="pseudoClassDescription">Description (optional)</label>
+      <div class="control">
+        <textarea class="textarea is-small" id="pseudoClassDescription" rows="2" maxlength="2000" placeholder="Markdown allowed. Leave blank for a generic description."></textarea>
+      </div>
+    </div>
+  </div>
+
+  <div id="builderStep">
+    <!-- 6-slot builder injected by character-wizard.js. -->
+  </div>
+
+  <div class="field is-grouped is-grouped-right mt-4">
+    <p class="control"><button type="button" class="button is-primary" id="step1Next">Next: Personality &amp; Stats</button></p>
+  </div>
+  {{else}}
   <h3 class="title is-4">1. Class Selection</h3>
 
   <div class="field">
@@ -87,6 +126,7 @@
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button is-primary" id="step1Next">Next: Personality &amp; Stats</button></p>
   </div>
+  {{/if}}
 </section>
 
 <section class="wizard-step" data-step-panel="2" hidden>
@@ -96,12 +136,31 @@
   <div class="box">
     <h4 class="title is-5 mb-2">Personality</h4>
     <p class="has-text-grey is-size-7 mb-3">
-      Choose 3 personality traits. The first two come from your class's stat spread (two different stats). The third comes from any other stat.
+      {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
+        Pick a stat, then pick a trait (or type your own). Recognized names still denote their stat — the first two come from your class's spread (two different stats), the third comes from any other stat (and grants +1 to it). Custom names save as flavor with no stat bonus.
+      {{else}}
+        Choose 3 personality traits. The first two come from your class's stat spread (two different stats). The third comes from any other stat.
+      {{/if}}
     </p>
     <div class="columns is-multiline">
       <div class="column is-one-third">
         <div class="field">
           <label class="label" for="trait1Select">Trait 1 <span class="has-text-grey is-size-7" id="trait1StatLabel"></span></label>
+          {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
+          <div class="field has-addons mb-0">
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select id="trait1StatSelect" disabled>
+                  <option value="">— Stat —</option>
+                </select>
+              </div>
+            </div>
+            <div class="control is-expanded">
+              <input class="input" type="text" id="trait1Custom" list="trait1Datalist" maxlength="80" placeholder="Pick a trait or type your own" disabled>
+            </div>
+          </div>
+          <datalist id="trait1Datalist"></datalist>
+          {{else}}
           <div class="control">
             <div class="select is-fullwidth">
               <select id="trait1Select" disabled>
@@ -109,11 +168,27 @@
               </select>
             </div>
           </div>
+          {{/if}}
         </div>
       </div>
       <div class="column is-one-third">
         <div class="field">
           <label class="label" for="trait2Select">Trait 2 <span class="has-text-grey is-size-7" id="trait2StatLabel"></span></label>
+          {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
+          <div class="field has-addons mb-0">
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select id="trait2StatSelect" disabled>
+                  <option value="">— Stat —</option>
+                </select>
+              </div>
+            </div>
+            <div class="control is-expanded">
+              <input class="input" type="text" id="trait2Custom" list="trait2Datalist" maxlength="80" placeholder="Pick a trait or type your own" disabled>
+            </div>
+          </div>
+          <datalist id="trait2Datalist"></datalist>
+          {{else}}
           <div class="control">
             <div class="select is-fullwidth">
               <select id="trait2Select" disabled>
@@ -121,11 +196,27 @@
               </select>
             </div>
           </div>
+          {{/if}}
         </div>
       </div>
       <div class="column is-one-third">
         <div class="field">
           <label class="label" for="trait3Select">Trait 3 <span class="has-text-grey is-size-7">any other stat</span></label>
+          {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
+          <div class="field has-addons mb-0">
+            <div class="control is-expanded">
+              <div class="select is-fullwidth">
+                <select id="trait3StatSelect" disabled>
+                  <option value="">— Stat —</option>
+                </select>
+              </div>
+            </div>
+            <div class="control is-expanded">
+              <input class="input" type="text" id="trait3Custom" list="trait3Datalist" maxlength="80" placeholder="Pick a trait or type your own" disabled>
+            </div>
+          </div>
+          <datalist id="trait3Datalist"></datalist>
+          {{else}}
           <div class="control">
             <div class="select is-fullwidth">
               <select id="trait3Select" disabled>
@@ -133,6 +224,7 @@
               </select>
             </div>
           </div>
+          {{/if}}
         </div>
       </div>
     </div>
@@ -163,11 +255,18 @@
 <section class="wizard-step" data-step-panel="3" hidden>
   <h3 class="title is-4">3. Ability Primer</h3>
   <p class="has-text-grey is-size-7 mb-3">
-    A quick look at what your class can do. These come straight from the class rules.
+    {{#if (eq mode 'aspiring')}}
+      Your class's abilities — the ones you picked on the first page. This is where your <strong>Perks</strong> are spent: core abilities cost 1 Perk each, the advanced ability costs 2 (4 Perks total).
+    {{else if (eq mode 'aspirant')}}
+      A quick look at what your class can do. Tap <strong>+ Add Perk</strong> on one ability to spend your starting perk on it — that ability gets a small advantage written just for your character.
+    {{else}}
+      A quick look at what your class can do. These come straight from the class rules.
+    {{/if}}
   </p>
   <div id="abilityPrimerList">
-    <!-- Abilities injected by character-wizard.js (advent mode only) -->
+    <!-- Abilities injected by character-wizard.js (mode-aware: advent/aspirant use base abilities, aspiring uses advanced_abilities). In aspirant mode the perk editor is rendered inline inside the assigned ability's cartouche. -->
   </div>
+
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
     <p class="control"><button type="button" class="button is-primary" data-wizard-next>Next: Gear Selection</button></p>
@@ -177,23 +276,43 @@
 <section class="wizard-step" data-step-panel="4" hidden>
   <h3 class="title is-4">4. Gear Selection</h3>
   <p class="has-text-grey is-size-7 mb-3">
-    Your class's base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — pick any combination of common items (1 Merx) or elective signature items (2 Merx). Duplicates are allowed.
+    {{#if (eq mode 'aspiring')}}
+      Your picked items are sold here as your class's elective gear at <strong>2 Merx</strong> each. Spend your <strong>10 Merx</strong> across them and common items — duplicates are allowed.
+    {{else if (eq mode 'aspirant')}}
+      Aspirant mode: no starting gear. You have <strong>12 Merx</strong> to spend on any combination of common items (1 Merx) or signature items from any class (2 Merx). Duplicates are allowed.
+    {{else}}
+      Your class's base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — pick any combination of common items (1 Merx) or elective signature items (2 Merx). Duplicates are allowed.
+    {{/if}}
   </p>
 
   <div class="columns is-variable is-4">
+    {{#unless (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
     <div class="column is-half">
       <h4 class="title is-5">Base Gear <span class="tag is-success is-light ml-2">Free</span></h4>
       <div id="baseGearList">
         <!-- Auto-loaded base gear rendered by character-wizard.js -->
       </div>
     </div>
-    <div class="column is-half">
+    {{/unless}}
+    <div class="column {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}is-full{{else}}is-half{{/if}}">
       <h4 class="title is-5">
         Spend Merx
         <span class="tag is-warning is-light ml-2">
-          <span id="merxSpent">0</span> / <span id="merxBudget">2</span> Merx
+          <span id="merxSpent">0</span> / <span id="merxBudget">{{#if (eq mode 'aspiring')}}10{{else if (eq mode 'aspirant')}}12{{else}}2{{/if}}</span> Merx
         </span>
       </h4>
+      <div class="field is-grouped mb-2">
+        <p class="control is-expanded">
+          <input class="input is-small" type="search" id="gearSearch" placeholder="Search items by name…" autocomplete="off">
+        </p>
+        <p class="control" id="gearClassFilterWrap" hidden>
+          <span class="select is-small">
+            <select id="gearClassFilter">
+              <option value="">All classes</option>
+            </select>
+          </span>
+        </p>
+      </div>
       <div class="tabs is-small is-boxed mb-2">
         <ul>
           <li class="is-active" data-shop-tab="class"><a>Signature Items <span class="tag is-light ml-1" id="classCountBadge">0</span></a></li>
@@ -222,7 +341,6 @@
     <p class="control"><button type="button" class="button is-primary" data-wizard-next id="step4Next">Next: Finishing Touches</button></p>
   </div>
 </section>
-
 <section class="wizard-step" data-step-panel="5" hidden>
   <h3 class="title is-4">5. Finishing Touches</h3>
   <p class="has-text-grey is-size-7 mb-4">
@@ -242,6 +360,7 @@
       <textarea class="textarea" id="wizardAppearance" rows="8" placeholder="What do they look like? Distinctive features, gear, posture, expressions…">{{state.appearance}}</textarea>
     </div>
   </div>
+
   <div class="field">
     <label class="label" for="wizardBackground">Backstory</label>
     <div class="control">

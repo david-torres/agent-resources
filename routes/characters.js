@@ -184,7 +184,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   }
   const preselectedClassId = (req.query.class || '').toString() || null;
 
-  // Union class list (mode does not filter the class pool per requirements).
+// Union class list (mode does not filter the class pool per requirements).
   // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
   // and display fields for the slider card. Description and tips are stored
   // as markdown and rendered to safe HTML here so the client can drop them
@@ -213,6 +213,16 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       // primer can drop it in directly (consistent with class description).
       abilities_html: Array.isArray(c.abilities)
         ? c.abilities.map((a) => ({
+            name: a.name || '',
+            description_html: renderMarkdown(a.description || '')
+          }))
+        : [],
+      // Advanced abilities: rendered in the step 3 primer for aspirant and
+      // aspiring modes (advent mode keeps using the regular `abilities_html`
+      // list above). Same shape — {name, description_html}[].
+      advanced_abilities: Array.isArray(c.advanced_abilities) ? c.advanced_abilities : [],
+      advanced_abilities_html: Array.isArray(c.advanced_abilities)
+        ? c.advanced_abilities.map((a) => ({
             name: a.name || '',
             description_html: renderMarkdown(a.description || '')
           }))

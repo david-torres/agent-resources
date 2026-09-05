@@ -19,6 +19,7 @@
     "seed:rules": "bun run util/seed-rules-pdfs.js",
     "seed:admin": "bun run util/seed-admin.js",
     "seed:badges": "bun run scripts/seed-badges.js",
+    "seed:test:advanced-abilities": "bun run scripts/seed-test-advanced-abilities.js",
     "fetch:badges": "bun run scripts/fetch-badge-art.js",
     "db:backup": "sh scripts/db-backup.sh",
     "rehearse:migrations": "bash scripts/rehearse-migrations.sh"

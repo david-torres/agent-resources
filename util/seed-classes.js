@@ -65,6 +65,7 @@ const buildRow = (cls, is_player_created) => {
         stat_spread: classStatSpread[cls] || {},
         gear: (classGearList[cls] || []).map(name => ({ name, description: '' })),
         abilities: (classAbilityList[cls] || []).map(name => ({ name, description: '' })),
+        advanced_abilities: [],
         created_by: null
     };
     if (Object.prototype.hasOwnProperty.call(STARTER_CLASS_UNLOCKS, cls)) {
