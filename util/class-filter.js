@@ -44,4 +44,23 @@ const partitionClassGroups = (groups) => {
   return { released, pcc };
 };
 
-module.exports = { filterClassListsByIds, partitionProfileClasses, partitionClassGroups };
+// The catalog keeps differently shaped cards out of the same grid. Artwork is
+// release content and appears only for released classes covered by a book the
+// viewer owns; official previews and PCCs remain deliberately art-free.
+const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
+  const list = Array.isArray(groups) ? groups : [];
+  const ownedReleases = [];
+  const otherReleases = [];
+  const prerelease = [];
+  const pcc = [];
+  for (const group of list) {
+    const cls = group && group.primary;
+    if (isUnreleasedPcc(cls)) pcc.push(group);
+    else if (cls?.status !== 'release') prerelease.push(group);
+    else if (bookClassIds.has(cls.id)) ownedReleases.push(group);
+    else otherReleases.push(group);
+  }
+  return { ownedReleases, otherReleases, prerelease, pcc };
+};
+
+module.exports = { filterClassListsByIds, partitionProfileClasses, partitionClassGroups, partitionClassCatalog };

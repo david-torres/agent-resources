@@ -39,16 +39,18 @@ const group = (id, name, { image = false, status = 'release', previous = [] } = 
 const baseContext = (overrides = {}) => ({
   filters: { rules_edition: '', rules_version: '', status: '' },
   isAdmin: false,
-  releasedGroups: [],
+  ownedReleaseGroups: [],
+  otherReleaseGroups: [],
+  prereleaseGroups: [],
   pccGroups: [],
   ...overrides
 });
 
-test('released section renders its heading and thumbnail art', () => {
+test('owned release section renders its heading and thumbnail art', () => {
   const html = renderClasses(baseContext({
-    releasedGroups: [group('rel-1', 'Gunslinger', { image: true })]
+    ownedReleaseGroups: [group('rel-1', 'Gunslinger', { image: true })]
   }));
-  expect(html).toContain('Released Classes');
+  expect(html).toContain('Your Released Classes');
   expect(html).toContain('image-crop-render');
   expect(html).toContain('/classes/rel-1/Gunslinger');
 });
@@ -65,7 +67,7 @@ test('PCC cards render no image markup even when the class has art', () => {
 
 test('released section appears before the PCC section', () => {
   const html = renderClasses(baseContext({
-    releasedGroups: [group('rel-1', 'Gunslinger')],
+    otherReleaseGroups: [group('rel-1', 'Gunslinger')],
     pccGroups: [group('pcc-1', 'Homebrew', { status: 'beta' })]
   }));
   const releasedAt = html.indexOf('Released Classes');
@@ -76,7 +78,7 @@ test('released section appears before the PCC section', () => {
 
 test('an empty partition hides its whole section', () => {
   const onlyReleased = renderClasses(baseContext({
-    releasedGroups: [group('rel-1', 'Gunslinger')]
+    otherReleaseGroups: [group('rel-1', 'Gunslinger')]
   }));
   expect(onlyReleased).not.toContain('Player-Created Classes (PCCs)');
 
@@ -92,7 +94,7 @@ test('an empty partition hides its whole section', () => {
 
 test('previous-version links still render inside a card', () => {
   const html = renderClasses(baseContext({
-    releasedGroups: [group('rel-2', 'Librarian', {
+    otherReleaseGroups: [group('rel-2', 'Librarian', {
       previous: [{ id: 'rel-old', name: 'Librarian', rules_version: 'v1' }]
     })]
   }));
@@ -103,8 +105,18 @@ test('previous-version links still render inside a card', () => {
 test('admin-only Private tag renders only for admins on non-public classes', () => {
   const privateGroup = group('priv-1', 'Secret');
   privateGroup.primary.is_public = false;
-  const asAdmin = renderClasses(baseContext({ isAdmin: true, releasedGroups: [privateGroup] }));
+  const asAdmin = renderClasses(baseContext({ isAdmin: true, otherReleaseGroups: [privateGroup] }));
   expect(asAdmin).toContain('Private');
-  const asUser = renderClasses(baseContext({ isAdmin: false, releasedGroups: [privateGroup] }));
+  const asUser = renderClasses(baseContext({ isAdmin: false, otherReleaseGroups: [privateGroup] }));
   expect(asUser).not.toContain('Private');
+});
+
+test('unowned releases and prerelease classes never render art', () => {
+  const html = renderClasses(baseContext({
+    otherReleaseGroups: [group('rel-1', 'Gunslinger', { image: true })],
+    prereleaseGroups: [group('pre-1', 'Bogatyr', { image: true, status: 'beta' })]
+  }));
+  expect(html).toContain('Other Released Classes');
+  expect(html).toContain('Pre-release Classes');
+  expect(html).not.toContain('image-crop-render');
 });

@@ -11,6 +11,7 @@ const {
     duplicateClass,
     getEffectiveClassUnlock,
     getEffectiveClassAccess,
+    getEffectiveClassUnlocks,
     unlockClass,
     getVersionHistory,
     createUnlockCodes,
@@ -36,7 +37,7 @@ const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
-const { partitionClassGroups } = require('../util/class-filter');
+const { partitionClassCatalog } = require('../util/class-filter');
 const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
@@ -141,14 +142,22 @@ router.get('/', authOptional, async (req, res) => {
     const classGroups = versionFiltered
         ? (classes || []).map((c) => ({ primary: c, previous: [] }))
         : groupClassVersions(classes || []);
-    // Released classes (officials + graduated PCCs) lead the page; unreleased
-    // PCCs get their own art-free section below.
-    const { released: releasedGroups, pcc: pccGroups } = partitionClassGroups(classGroups);
+    const viewerUserId = res.locals.user?.id || profile?.user_id || null;
+    const access = await getEffectiveClassUnlocks(viewerUserId);
+    if (access.error) return sendError(req, res, access.error);
+    const {
+        ownedReleases: ownedReleaseGroups,
+        otherReleases: otherReleaseGroups,
+        prerelease: prereleaseGroups,
+        pcc: pccGroups
+    } = partitionClassCatalog(classGroups, access.bookIds);
 
     res.render('classes', {
         profile,
         title: 'Classes',
-        releasedGroups,
+        ownedReleaseGroups,
+        otherReleaseGroups,
+        prereleaseGroups,
         pccGroups,
         filters: filters,
         isAdmin,
@@ -450,12 +459,13 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             [capitalize(classData.rules_edition), classData.rules_version].filter(Boolean).join(' '),
             classData.teaser
         ].filter(Boolean).join(' · '),
-        image: classData.image_url,
+        image: classData.status === 'release' && bookUnlocked ? classData.image_url : null,
         suppress: classData.is_public === false
     });
 
     let unlocked = false;
     let productUnlocked = false;
+    let bookUnlocked = false;
     let unlockExpiresAt = null;
     const viewerUserId = res.locals.user?.id || profile?.user_id || null;
     // The fallback keeps lightweight route-test/data-layer adapters that only
@@ -464,6 +474,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     const { data: access } = await (getEffectiveClassAccess || getEffectiveClassUnlock)(viewerUserId, id);
     unlocked = access?.unlocked || false;
     productUnlocked = access?.productUnlocked || false;
+    bookUnlocked = access?.bookUnlocked || false;
     unlockExpiresAt = access?.expiresAt || null;
 
     // Show teaser if Release and not unlocked for non-admins/non-creators
@@ -478,6 +489,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
                 og: classCard(),
                 title: `${classData.name} - View Class`,
                 class: classData,
+                showClassArt: classData.status === 'release' && bookUnlocked,
                 activeNav: 'classes',
                 breadcrumbs: [
                     { label: 'Classes', href: '/classes' },
@@ -524,6 +536,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         og: classCard(),
         title: `${classData.name} - View Class`,
         class: classData,
+        showClassArt: classData.status === 'release' && bookUnlocked,
         unlocked,
         unlockExpiresAt,
         ownerProfile,

@@ -95,6 +95,7 @@ const leastRestrictiveExpiry = (values) => {
 const getEffectiveClassUnlocks = async (userId) => {
     const empty = {
         ids: new Set(),
+        bookIds: new Set(),
         productIds: new Set(),
         sourceById: new Map(),
         expiryById: new Map(),
@@ -186,12 +187,14 @@ const getEffectiveClassUnlocks = async (userId) => {
     // directIds rides along raw (unexpanded): the hydration read needs to know
     // which ids came from an explicit class_unlocks row, so it can exempt
     // those — and only those — from its visibility filter.
+    const bookIds = expand(coreClassIdsForEditions(books.map(book => book.rules_edition)));
     const productIds = new Set([
-        ...expand(coreClassIdsForEditions(books.map(book => book.rules_edition))),
+        ...bookIds,
         ...expand(directIds)
     ]);
     return {
         ids: new Set(sourceById.keys()),
+        bookIds,
         productIds,
         sourceById,
         expiryById,
@@ -201,7 +204,7 @@ const getEffectiveClassUnlocks = async (userId) => {
 };
 
 const getEffectiveClassAccess = async (userId, classId) => {
-    const none = { unlocked: false, productUnlocked: false, accessSource: null, expiresAt: null };
+    const none = { unlocked: false, bookUnlocked: false, productUnlocked: false, accessSource: null, expiresAt: null };
     if (!classId) {
         return { data: none, error: null };
     }
@@ -211,7 +214,7 @@ const getEffectiveClassAccess = async (userId, classId) => {
     // expanding classId's own family here would just re-fetch the same
     // classes projection getEffectiveClassUnlocks already fetched. The
     // resolver reduced each id's grants to one effective expiry on the way.
-    const { ids, productIds, sourceById, expiryById, error: readError } = await getEffectiveClassUnlocks(userId);
+    const { ids, bookIds, productIds, sourceById, expiryById, error: readError } = await getEffectiveClassUnlocks(userId);
     if (readError) {
         return { data: none, error: readError };
     }
@@ -221,6 +224,7 @@ const getEffectiveClassAccess = async (userId, classId) => {
     return {
         data: {
             unlocked: true,
+            bookUnlocked: bookIds.has(classId),
             productUnlocked: productIds.has(classId),
             accessSource: sourceById.get(classId)?.source || null,
             expiresAt: expiryById.get(classId) ?? null

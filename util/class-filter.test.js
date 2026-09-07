@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { filterClassListsByIds, partitionProfileClasses, partitionClassGroups } = require('./class-filter');
+const { filterClassListsByIds, partitionProfileClasses, partitionClassGroups, partitionClassCatalog } = require('./class-filter');
 
 const mk = (id, name, edition = 'advent') => ({ id, name, rules_edition: edition });
 
@@ -79,6 +79,25 @@ describe('partitionProfileClasses', () => {
   test('handles non-array input', () => {
     expect(partitionProfileClasses(null)).toEqual({ released: [], pcc: [] });
     expect(partitionProfileClasses(undefined)).toEqual({ released: [], pcc: [] });
+  });
+});
+
+describe('partitionClassCatalog', () => {
+  const group = (id, status = 'release', is_player_created = false) => ({
+    primary: { id, status, is_player_created }, previous: []
+  });
+
+  test('separates book-owned art cards from every art-free catalog section', () => {
+    const owned = group('owned');
+    const released = group('released');
+    const preview = group('preview', 'beta');
+    const pcc = group('pcc', 'alpha', true);
+    expect(partitionClassCatalog([owned, released, preview, pcc], new Set(['owned']))).toEqual({
+      ownedReleases: [owned],
+      otherReleases: [released],
+      prerelease: [preview],
+      pcc: [pcc]
+    });
   });
 });
 

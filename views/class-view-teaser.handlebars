@@ -3,7 +3,7 @@
 
 <div class="columns">
   <div class="column is-one-third">
-    {{#if class.image_url}}
+    {{#if (and showClassArt class.image_url)}}
     <div class="card mb-4">
       <div class="card-image">
         <div

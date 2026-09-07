@@ -91,11 +91,29 @@
 </div>
 
 <!-- Class List -->
-{{#if releasedGroups.length}}
-{{> section-heading tag="h2" class="title is-4" id="released-classes" title="Released Classes"}}
+{{#if ownedReleaseGroups.length}}
+{{> section-heading tag="h2" class="title is-4" id="owned-released-classes" title="Your Released Classes"}}
 <div class="columns is-multiline" id="classList">
-  {{#each releasedGroups}}
+  {{#each ownedReleaseGroups}}
   {{> class-group-card this showImage=true}}
+  {{/each}}
+</div>
+{{/if}}
+
+{{#if otherReleaseGroups.length}}
+{{> section-heading tag="h2" class="title is-4" id="released-classes" title="Other Released Classes"}}
+<div class="columns is-multiline" id="otherClassList">
+  {{#each otherReleaseGroups}}
+  {{> class-group-card this}}
+  {{/each}}
+</div>
+{{/if}}
+
+{{#if prereleaseGroups.length}}
+{{> section-heading tag="h2" class="title is-4" id="prerelease-classes" title="Pre-release Classes"}}
+<div class="columns is-multiline" id="prereleaseClassList">
+  {{#each prereleaseGroups}}
+  {{> class-group-card this}}
   {{/each}}
 </div>
 {{/if}}

@@ -107,6 +107,7 @@ test('free pre-release plaintext does not grant the class PDF', async () => {
   expect(await getEffectiveClassAccess('u1', PRIVATE_CLASS)).toEqual({
     data: {
       unlocked: true,
+      bookUnlocked: false,
       productUnlocked: false,
       accessSource: 'free_prerelease',
       expiresAt: null
@@ -128,6 +129,7 @@ test('a direct unlock still grants product access over the free fallback', async
   const { data } = await getEffectiveClassAccess('u1', PRIVATE_CLASS);
 
   expect(data.productUnlocked).toBe(true);
+  expect(data.bookUnlocked).toBe(false);
   expect(data.accessSource).toBe('direct');
 });
 
@@ -137,6 +139,8 @@ describe('book-derived class unlocks', () => {
     state.books = [{ rules_edition: 'advent', title: 'Enclave: Advent' }];
 
     expect(await isClassUnlocked('u1', ADVENT_LIBRARIAN)).toEqual({ data: true, error: null });
+    const { data } = await getEffectiveClassAccess('u1', ADVENT_LIBRARIAN);
+    expect(data.bookUnlocked).toBe(true);
   });
 
   test('an Advent book covers the v2 fork of a core class', async () => {
