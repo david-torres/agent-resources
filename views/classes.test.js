@@ -111,6 +111,20 @@ test('admin-only Private tag renders only for admins on non-public classes', () 
   expect(asUser).not.toContain('Private');
 });
 
+test('card renders the teaser blurb', () => {
+  const html = renderClasses(baseContext({
+    otherReleaseGroups: [group('rel-1', 'Gunslinger')]
+  }));
+  expect(html).toContain('Gunslinger teaser');
+});
+
+test('card omits the blurb paragraph when teaser is blank', () => {
+  const blankTeaser = group('rel-1', 'Gunslinger');
+  blankTeaser.primary.teaser = null;
+  const html = renderClasses(baseContext({ otherReleaseGroups: [blankTeaser] }));
+  expect(html).not.toContain('teaser');
+});
+
 test('unowned releases and prerelease classes never render art', () => {
   const html = renderClasses(baseContext({
     otherReleaseGroups: [group('rel-1', 'Gunslinger', { image: true })],

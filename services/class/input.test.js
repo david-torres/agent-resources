@@ -44,3 +44,38 @@ test('leaves LF line endings and interior text alone', () => {
   const out = normalizeClassInput({ name: 'X', overview: 'One\n\nTwo  ·  three — four' });
   expect(out.overview).toBe('One\n\nTwo  ·  three — four');
 });
+
+test('auto-fills a null teaser from overview and designer', () => {
+  const out = normalizeClassInput({
+    name: 'X',
+    teaser: null,
+    overview: 'A wandering healer.',
+    designer: 'Jane Doe',
+  });
+  expect(out.teaser).toBe('A wandering healer. Design by Jane Doe');
+});
+
+test('auto-fills an empty-string teaser from overview, treating it the same as blank', () => {
+  const out = normalizeClassInput({
+    name: 'X',
+    teaser: '',
+    overview: 'A wandering healer.',
+    designer: 'Jane Doe',
+  });
+  expect(out.teaser).toBe('A wandering healer. Design by Jane Doe');
+});
+
+test('leaves an existing non-blank teaser untouched, even when overview would derive something different', () => {
+  const out = normalizeClassInput({
+    name: 'X',
+    teaser: 'A hand-written teaser.',
+    overview: 'A wandering healer.',
+    designer: 'Jane Doe',
+  });
+  expect(out.teaser).toBe('A hand-written teaser.');
+});
+
+test('leaves teaser as null when both teaser and overview are blank or absent', () => {
+  const out = normalizeClassInput({ name: 'X' });
+  expect(out.teaser).toBeNull();
+});

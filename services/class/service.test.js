@@ -46,7 +46,7 @@ const PCC_ROW = {
 
 test('normalizes a class input copy without mutating the submitted payload', () => {
   const input = { name: 'Tinker', image_url: 'javascript:bad()' };
-  expect(normalizeClassInput(input)).toEqual({ name: 'Tinker', image_url: null });
+  expect(normalizeClassInput(input)).toEqual({ name: 'Tinker', image_url: null, teaser: null });
   expect(input).toEqual({ name: 'Tinker', image_url: 'javascript:bad()' });
 });
 
@@ -63,14 +63,14 @@ test('createClass derives created_by from the actor, ignoring any input value', 
   const repo = makeRepo();
   const service = new ClassService(repo);
   await service.createClass(OWNER_ACTOR, { name: 'Tinker', created_by: 'forged-id' });
-  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'owner-1' }]]);
+  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'owner-1', teaser: null }]]);
 });
 
 test('createClass respects an explicit created_by from the system actor', async () => {
   const repo = makeRepo();
   const service = new ClassService(repo);
   await service.createClass(SYSTEM_ACTOR, { name: 'Tinker', created_by: 'admin-profile' });
-  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'admin-profile' }]]);
+  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'admin-profile', teaser: null }]]);
 });
 
 test('the class owner may update their class; the write reaches the repository', async () => {
@@ -79,7 +79,7 @@ test('the class owner may update their class; the write reaches the repository',
   await service.updateClass(OWNER_ACTOR, 'class-1', { image_url: 'https://example.test/image.png' });
   expect(repo.calls).toEqual([
     ['fetchClassByIdAdmin', 'class-1'],
-    ['updateClass', 'class-1', { image_url: 'https://example.test/image.png' }]
+    ['updateClass', 'class-1', { image_url: 'https://example.test/image.png', teaser: null }]
   ]);
 });
 

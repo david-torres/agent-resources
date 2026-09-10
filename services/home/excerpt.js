@@ -16,6 +16,7 @@ const buildExcerpt = (markdown, maxLength = 160) => {
       .replace(/<[^>]+>/g, ' ')                // HTML tags
       .replace(/^\s*\[[^\]]+\]:\s*.+$/gm, '')  // reference-style link definitions
       .replace(/```[\s\S]*?```/g, ' ')         // fenced code blocks
+      .replace(/^\s*`{3,}[^\n]*$/gm, '')       // unpaired fence marker line (e.g. a lone ```)
       .replace(/`([^`]*)`/g, '$1')             // inline code
       .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')   // images
       .replace(/\[([^\]]*)\]\[[^\]]*\]/g, '$1')// reference-style links -> their text
