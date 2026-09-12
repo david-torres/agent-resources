@@ -24,6 +24,19 @@ const noteSchema = z.object({
     .nullable().optional().describe("Sub-bullets under this note"),
 });
 
+const perkSchema = z.object({
+  name: z.string().describe("Sample perk name"),
+  text: z.string().nullable().optional().describe("The perk's effect text"),
+  dedication: z.string().nullable().optional().describe("An 'In Honor of ...' line printed under the perk name, only if the writeup gives one"),
+  compound_text: z.string().nullable().optional().describe("The full text of the Compounded variant, restated in full rather than as a delta; only if the writeup prints one"),
+});
+
+const enchantmentSchema = z.object({
+  name: z.string().describe("Enchantment name"),
+  description: z.string().nullable().optional().describe("What the enchantment does"),
+  dedication: z.string().nullable().optional().describe("An 'In Honor of ...' line printed under the enchantment name, only if the writeup gives one"),
+});
+
 const abilitySchema = z.object({
   name: z.string().describe("Ability name"),
   description: z.string().nullable().optional().describe("Ability description"),
@@ -31,6 +44,7 @@ const abilitySchema = z.object({
   pronunciation: z.string().nullable().optional().describe("How the ability name is pronounced, only if the writeup gives one"),
   meters: z.array(meterSchema).nullable().optional().describe("Label/value pairs printed beside the ability"),
   notes: z.array(noteSchema).nullable().optional().describe("Bulleted notes under the ability"),
+  sample_perks: z.array(perkSchema).nullable().optional().describe("The two Sample Perks printed under the ability, if any"),
 });
 
 const gearSchema = z.object({
@@ -40,6 +54,7 @@ const gearSchema = z.object({
     .describe("Base gear ('default') or Elective gear ('elective'); the first three items are Base"),
   meters: z.array(meterSchema).nullable().optional().describe("Label/value pairs printed beside the item"),
   notes: z.array(noteSchema).nullable().optional().describe("Bulleted notes under the item"),
+  default_enchantment: enchantmentSchema.nullable().optional().describe("The item's Default Enchantment, if the writeup prints one"),
 });
 
 // The prose columns migration 20260904000000_class_structured_content split
@@ -65,6 +80,7 @@ const schema = z.object({
   image_url: z.string().url().nullable().optional().describe("Optional image URL for the class"),
   tips: z.string().nullable().optional().describe("Optional short gameplay tips shown under the description in the character creator"),
   abilities: z.array(abilitySchema).describe("List of class abilities (ideally three)"),
+  advanced_abilities: z.array(abilitySchema).nullable().optional().describe("The three Advanced Abilities of an Aspirant class, unlocked with Perks rather than started with"),
   gear: z.array(gearSchema).describe("List of class gear items (ideally six)"),
   status: z.enum(["alpha", "beta", "release"]).optional().describe("Class status; PCCs default to alpha"),
   is_public: z.boolean().optional().describe("Whether the PCC should be public"),
@@ -101,6 +117,26 @@ const normalizeNotes = (notes) => (Array.isArray(notes) ? notes : [])
       .map((child) => ({ text: text(child.text), children: [] })),
   }));
 
+// The form's rule, restated for the model's output: the name decides survival,
+// and the two optional halves are stored as null rather than omitted.
+const normalizePerks = (perks) => (Array.isArray(perks) ? perks : [])
+  .filter((perk) => perk && text(perk.name))
+  .map((perk) => ({
+    name: text(perk.name),
+    text: text(perk.text),
+    dedication: optionalText(perk.dedication),
+    compound_text: optionalText(perk.compound_text),
+  }));
+
+const normalizeEnchantment = (enchantment) => {
+  if (!enchantment || typeof enchantment !== "object" || !text(enchantment.name)) return null;
+  return {
+    name: text(enchantment.name),
+    description: text(enchantment.description),
+    dedication: optionalText(enchantment.dedication),
+  };
+};
+
 const normalizeAbilities = (abilities, limit = 3) => (Array.isArray(abilities) ? abilities : [])
   .filter((ability) => ability && text(ability.name))
   .map((ability) => {
@@ -110,6 +146,7 @@ const normalizeAbilities = (abilities, limit = 3) => (Array.isArray(abilities) ?
       paired_action: text(ability.paired_action),
       meters: normalizeMeters(ability.meters),
       notes: normalizeNotes(ability.notes),
+      sample_perks: normalizePerks(ability.sample_perks),
     };
     // Outside the contract, and only 2 of 150 live abilities carry one:
     // written through when the writeup gave it, never fabricated.
@@ -130,6 +167,13 @@ const normalizeAbilities = (abilities, limit = 3) => (Array.isArray(abilities) ?
 // silently moved items 4-6 to Elective.
 const BASE_GEAR_COUNT = 3;
 
+// Advent classes print six Signature Items; Aspirant classes print twelve
+// (ENCLAVE: Aspirant, pg. 8). The cap is per-edition because it is the only
+// guard against a model padding a six-item writeup out to twelve.
+const ADVENT_GEAR_LIMIT = 6;
+const ASPIRANT_GEAR_LIMIT = 12;
+const ADVANCED_ABILITY_LIMIT = 3;
+
 const normalizeGear = (gear, limit = 6) => (Array.isArray(gear) ? gear : [])
   .filter((item) => item && text(item.name))
   .map((item, index) => ({
@@ -140,6 +184,7 @@ const normalizeGear = (gear, limit = 6) => (Array.isArray(gear) ? gear : [])
       : (index < BASE_GEAR_COUNT ? "default" : "elective"),
     meters: normalizeMeters(item.meters),
     notes: normalizeNotes(item.notes),
+    default_enchantment: normalizeEnchantment(item.default_enchantment),
   }))
   .slice(0, limit);
 
@@ -160,6 +205,7 @@ JSON output:`;
 
   try {
     const parsed = schema.parse(result.data);
+    const edition = parsed.rules_edition || "advent";
     const classData = {
       ...parsed,
       teaser: text(parsed.teaser),
@@ -176,7 +222,8 @@ JSON output:`;
       image_url: parsed.image_url || null,
       tips: text(parsed.tips),
       abilities: normalizeAbilities(parsed.abilities),
-      gear: normalizeGear(parsed.gear),
+      advanced_abilities: normalizeAbilities(parsed.advanced_abilities, ADVANCED_ABILITY_LIMIT),
+      gear: normalizeGear(parsed.gear, edition === "aspirant" ? ASPIRANT_GEAR_LIMIT : ADVENT_GEAR_LIMIT),
       status: parsed.status || "alpha",
       is_public: parsed.is_public ?? false,
       rules_edition: parsed.rules_edition || "advent",

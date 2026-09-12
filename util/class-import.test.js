@@ -28,6 +28,16 @@ const BASE_RESPONSE = {
 let modelResponse = BASE_RESPONSE;
 const respondWith = (extra) => { modelResponse = { ...BASE_RESPONSE, ...extra }; };
 
+// Sets the mocked model's response, runs an import and hands back the object
+// passed to createClass -- the shape every test below actually cares about.
+const importClass = async (extra) => {
+  respondWith(extra);
+  await processClassImport('Beastmaster writeup', { profileId: 'p1' });
+  return created;
+};
+
+const twelveItems = () => Array.from({ length: 12 }, (_, i) => ({ name: `Item ${i}` }));
+
 mock.module('llm-api', () => ({ OpenAIChatApi: class { constructor() {} } }));
 mock.module('zod-gpt', () => ({
   completion: async (_api, _prompt, { schema }) => {
@@ -117,6 +127,7 @@ test('an imported ability carries its paired action, meters and notes', async ()
     pronunciation: 'seek em',
     meters: [{ label: 'Essence Cost', value: 'Low' }],
     notes: [{ text: 'Cooldown is prolonged on a miss.', children: [{ text: 'Only once per target.', children: [] }] }],
+    sample_perks: [],
   }]);
 });
 
@@ -127,7 +138,7 @@ test('an imported ability without extras still gets the full contract shape', as
   respondWith({ abilities: [{ name: 'Tame', description: 'Bonds a beast.' }] });
   await processClassImport('Beastmaster writeup', { profileId: 'p1' });
   expect(created.abilities).toEqual([
-    { name: 'Tame', description: 'Bonds a beast.', paired_action: '', meters: [], notes: [] },
+    { name: 'Tame', description: 'Bonds a beast.', paired_action: '', meters: [], notes: [], sample_perks: [] },
   ]);
 });
 
@@ -169,6 +180,7 @@ test('an imported gear item carries its meters and notes', async () => {
     category: 'default',
     meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
     notes: [{ text: 'Reach is Low.', children: [] }],
+    default_enchantment: null,
   }]);
 });
 
@@ -205,4 +217,51 @@ test('a teaser and tips the model gave are written through', async () => {
   await processClassImport('Beastmaster writeup', { profileId: 'p1' });
   expect(created.teaser).toBe('A domineering animal tamer.');
   expect(created.tips).toBe('Lead with the beast.');
+});
+
+// An Aspirant class has twelve Signature Items, not six, and three Advanced
+// Abilities on top of its three Core (ENCLAVE: Aspirant, pg. 11). The caps are
+// per-edition because an Advent writeup that yields twelve items is a
+// hallucination, while an Aspirant one that yields six is a truncation.
+test('an aspirant import keeps all twelve gear items', async () => {
+  const created = await importClass({ rules_edition: 'aspirant', gear: twelveItems() });
+
+  expect(created.gear).toHaveLength(12);
+});
+
+test('an advent import is still capped at six gear items', async () => {
+  const created = await importClass({ rules_edition: 'advent', gear: twelveItems() });
+
+  expect(created.gear).toHaveLength(6);
+});
+
+// Advanced Abilities carry the Core Ability contract unchanged (ENCLAVE:
+// Aspirant, pg. 7; routes/classes.js:671-673), so the importer reuses
+// normalizeAbilities rather than a second copy of the five-key shape.
+test('an import carries advanced abilities through in the ability contract', async () => {
+  const created = await importClass({
+    rules_edition: 'aspirant',
+    advanced_abilities: [{ name: 'High Noon', description: 'Pitch a Fizzle.' }]
+  });
+
+  expect(created.advanced_abilities).toEqual([
+    { name: 'High Noon', description: 'Pitch a Fizzle.', paired_action: '', meters: [], notes: [], sample_perks: [] }
+  ]);
+});
+
+// Sample Perks (ENCLAVE: Aspirant, pg. 7) and a Signature's Default
+// Enchantment (ENCLAVE: Aspirant, pg. 86) are the two pieces of an Aspirant
+// writeup the importer could not express before this task.
+test('an import carries sample perks and a default enchantment', async () => {
+  const created = await importClass({
+    abilities: [{ name: 'Trickshot', sample_perks: [{ name: 'Waco Kid', text: 'Improves hand speed.' }] }],
+    gear: [{ name: 'Cowboy Hat', default_enchantment: { name: 'Hats Off to You', description: 'Share an Expertise.' } }]
+  });
+
+  expect(created.abilities[0].sample_perks).toEqual([
+    { name: 'Waco Kid', text: 'Improves hand speed.', dedication: null, compound_text: null }
+  ]);
+  expect(created.gear[0].default_enchantment).toEqual({
+    name: 'Hats Off to You', description: 'Share an Expertise.', dedication: null
+  });
 });
