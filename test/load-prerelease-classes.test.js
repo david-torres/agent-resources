@@ -67,13 +67,13 @@ test('a name matching several rows is reported rather than silently picked', () 
   expect(plans[0].row).toBeNull();
 });
 
-test('the load resolves 16 updates and 3 creates against the pre-load catalogue', () => {
-  expect(split(namesBeforeLoad)).toEqual({ update: 16, create: 3, ambiguous: 0 });
+test('the load resolves 16 updates and 4 creates against the pre-load catalogue', () => {
+  expect(split(namesBeforeLoad)).toEqual({ update: 16, create: 4, ambiguous: 0 });
 });
 
 test('re-running after a load creates nothing', () => {
   const afterLoad = records.map((record) => displayName(record.name));
-  expect(split(afterLoad)).toEqual({ update: 19, create: 0, ambiguous: 0 });
+  expect(split(afterLoad)).toEqual({ update: 20, create: 0, ambiguous: 0 });
 });
 
 test('the document title casing reproduces the catalogue names', () => {
@@ -101,7 +101,7 @@ test('every record maps to one of the three enum values', () => {
     const value = sectionEnum(record.prerelease_section);
     counts[value] = (counts[value] || 0) + 1;
   }
-  expect(counts).toEqual({ pcc: 10, exclusive: 3, aspirant: 6 });
+  expect(counts).toEqual({ pcc: 11, exclusive: 3, aspirant: 6 });
 });
 
 test('trimming takes the ends only and leaves rich-text runs alone', () => {
@@ -221,10 +221,10 @@ test('a held name is grouped only when the import leaves it unresolvable', () =>
       .toEqual([['Toolbox', true, 2, 2], ['Neuralyzer', false, 1, 1]]);
 });
 
-// The owner authorised exactly these four to be made visible. Widening the set
+// The owner authorised exactly these classes to be made visible. Widening the set
 // publishes a class nobody approved, so the list is pinned rather than trusted.
-test('the load publishes the four classes the owner named and no others', () => {
-  expect(PUBLISHED_BY_LOAD).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter']);
+test('the load publishes the classes the owner authorised and no others', () => {
+  expect(PUBLISHED_BY_LOAD).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan']);
 });
 
 const createdPlan = (name, gear) => ({ row: null, matches: [], payload: { name, gear } });

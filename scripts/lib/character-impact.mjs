@@ -28,7 +28,7 @@ const CREATED_ROW_DEFAULTS = { is_public: false, is_player_created: false, rules
 // publishes enters the catalogue in that one run, and treating it as private
 // would drop its item names from the post-import catalogue and report names as
 // vanishing that never do.
-export const PUBLISHED_BY_LOAD = ['Ardent', 'Offdriver', 'Squire', 'Drachentöter'];
+export const PUBLISHED_BY_LOAD = ['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan'];
 
 const PAGE = 1000;
 

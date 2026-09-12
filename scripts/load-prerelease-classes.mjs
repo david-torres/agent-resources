@@ -187,6 +187,13 @@ const main = async (argv) => {
   const apply = argv.includes('--apply');
   const force = argv.includes('--force');
   const allowUnremapped = argv.includes('--allow-unremapped');
+  const onlyAt = argv.indexOf('--only');
+  const only = onlyAt === -1 ? null : argv[onlyAt + 1];
+
+  if (onlyAt !== -1 && (!only || only.startsWith('--'))) {
+    console.error('missing class name after --only');
+    return 1;
+  }
 
   const url = process.env.SUPABASE_URL || process.env.API_URL || '';
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SECRET_KEY || '';
@@ -217,7 +224,12 @@ const main = async (argv) => {
   const supabase = createClient(url, key,
       { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const records = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
+  const artifact = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
+  const records = only ? artifact.filter((record) => displayName(record.name) === only) : artifact;
+  if (only && !records.length) {
+    console.error(`no class named ${JSON.stringify(only)} in ${ARTIFACT}`);
+    return 1;
+  }
   const { data: rows, error } = await supabase.from('classes').select('*');
   if (error) {
     console.error(`\nfailed to read classes: ${error.message}`);
@@ -264,7 +276,8 @@ const main = async (argv) => {
 
   // A published class the document does not carry would be a silent no-op, so
   // the two lists are checked against each other rather than assumed to agree.
-  const unknownPublish = PUBLISHED_BY_LOAD.filter(
+  const published = PUBLISHED_BY_LOAD.filter((name) => !only || name === only);
+  const unknownPublish = published.filter(
       (name) => !plans.some((plan) => plan.payload.name === name));
   if (unknownPublish.length) {
     console.error(`\nABORTED - not in this document: ${unknownPublish.join(', ')}`);
@@ -365,7 +378,7 @@ const main = async (argv) => {
 
   const rowByName = new Map([...updates.map((plan) => [plan.payload.name, plan.row]),
     ...createdRows.map((row) => [row.name, row])]);
-  for (const name of PUBLISHED_BY_LOAD) {
+  for (const name of published) {
     const target = rowByName.get(name);
     if (target.is_public) {
       console.log(`already public: ${name} (${target.id})`);

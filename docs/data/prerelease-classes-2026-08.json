@@ -5065,5 +5065,137 @@
       77,
       80
     ]
+  },
+  {
+    "name": "CHARLATAN",
+    "prerelease_section": "PCCs",
+    "designer": "Tomáš Staněk",
+    "stat_line": "+Vigor, +Intelligence, +Vitality*",
+    "stat_note": "*Choose from among all three when determining your two Class-based Personality Traits (the final may come from any Stat).",
+    "stat_spread": {
+      "vigor": 1,
+      "intelligence": 1,
+      "vitality": 1
+    },
+    "quote": "“A fool and his money are soon parted.”",
+    "quote_source": "— Dr. John Bridges",
+    "overview": "You are a fast-talking conman, peddling dubious wares backed up only by empty promises. You have immense social influence, shaping others beliefs and leveraging them for personal gain, but you have a very high-risk and demanding playstyle requiring plenty of fast talking.",
+    "conduit_notes": "Conduits designing a mission for you should ensure there are plenty of manipulable bystanders, as well as a local economy for you to interface with. Smart enemies are obviously trickier for you to manipulate, though with enough time you can break down even the staunchest critics, so if the Conduit wants to really challenge you they could create aggressive enemies who don’t allow you as much time to talk as you need.",
+    "grounding": "Grounded in real-life scam artists, often selling bogus health products or services, as well as the many characters based on them.",
+    "examples_heading": "Examples from history and pop culture include:",
+    "examples": [
+      "Rasputin, Clark Stanley, Lydia Pinkham, and other conmen",
+      "Adolfo Pirelli (Sweeney Todd: The Demon Barber of Fleet Street)",
+      "Dr. Nick Riviera (The Simpsons)",
+      "Flim and Flam (My Little Pony: Friendship Is Magic)",
+      "Dr. Terminus (Pete’s Dragon)",
+      "Harold Hill (The Music Man)"
+    ],
+    "tips_heading": "Quick Tips",
+    "tips": [
+      "Stuck on what stats to give your Charlatan besides Vigor, Intelligence, and Vitality? Consider Spirit, Luck, and Reflex!",
+      "Make sure you understand Pitching before playing this Class.",
+      "Look for creative ways to convince NPCs of outlandish claims. You have many small tricks and manipulation tactics that can be used to build apparent credibility."
+    ],
+    "challenge_level": "High",
+    "abilities": [
+      {
+        "name": "Miracle Emporium",
+        "pronunciation": null,
+        "description": "Receive a shipment of your own health or novelty product line at a chosen location by means of Pitched local transportation.",
+        "paired_action": "Spend a Low Duration making fitting preparations for the shipment’s arrival.",
+        "meters": [
+          { "label": "Essence Cost", "value": "Low" },
+          { "label": "Cooldown", "value": "Mid" }
+        ],
+        "notes": [
+          { "text": "When used, choose how long of a delay (Low–Mid) it will take for the shipment to arrive; this proportionately scales the quantity of product acquired (from High to beyond High). The product’s properties, determined via Pitch, are limited to Low Impact and cannot have actual health benefits. Its appearance and branding, also Pitched, must be grounded in the user’s Backstory. Selling the product to locals will gradually reduce this Ability’s Cooldown (negating it after a Mid quantity is sold).", "children": [] }
+        ]
+      },
+      {
+        "name": "Quackery",
+        "pronunciation": null,
+        "description": "Falsely diagnose a target with a malady, real or contrived, causing them to actually become afflicted by it.",
+        "paired_action": "Express faux concern for your target as you explain and overexaggerate the malady. You must occasionally continue to do so or this Ability will end prematurely.",
+        "meters": [
+          { "label": "Essence Cost", "value": "Mid" },
+          { "label": "Max Duration", "value": "High" },
+          { "label": "Cooldown", "value": "Low" }
+        ],
+        "notes": [
+          { "text": "The malady’s onset is gradual, reaching High Impact after a Mid Duration. This will also render the target more credulous of the user, scaling as above. The malady’s symptoms may be physical, mental, or both, all Pitched as the Paired Action is performed. The target’s condition reverts to its original state almost instantly once this Ability expires.", "children": [] }
+        ]
+      },
+      {
+        "name": "Placebo Effect",
+        "pronunciation": null,
+        "description": "Temporarily heal or cure an injury or malady with a fake remedy (medical or otherwise).",
+        "paired_action": "Convince the target of the fake remedy’s effectiveness.",
+        "meters": [
+          { "label": "Essence Cost", "value": "Mid" },
+          { "label": "Duration", "value": "Low–High" },
+          { "label": "Cooldown", "value": "Mid" }
+        ],
+        "notes": [
+          { "text": "Duration scales on how convinced the target is. If the target is in good health, this Ability may instead enhance a single, Pitched attribute (strength, focus, beauty, etc.). Cooldown begins on use rather than on expiry; multiple instances can be active at once. The targeted injury or malady reverts to its former severity as soon as this Ability expires.", "children": [] }
+        ]
+      }
+    ],
+    "gear": [
+      {
+        "name": "Stuffed Wallet",
+        "description": null,
+        "category": "default",
+        "meters": [],
+        "notes": [
+          { "text": "Contains a beyond High amount of counterfeit local currency, the authenticity of which inversely scales on how much the owner is trying to spend at once. Any being who accepts a bribe from this wallet is rendered more unscrupulous, scaling with the size of the bribe.", "children": [] }
+        ]
+      },
+      {
+        "name": "Secret Spices",
+        "description": "Pouch of mysterious, exotic seasonings.",
+        "category": "default",
+        "meters": [ { "label": "Uses", "value": "Low" } ],
+        "notes": [
+          { "text": "When sprinkled on food, drink, or another imbibed substance, Pitch a Mid Impact change to its superficial properties (appearance, flavor, etc.) and a Low Impact change to a magical effect it conveys (if any).", "children": [] }
+        ]
+      },
+      {
+        "name": "Handbills",
+        "description": "Grandiloquent flyer promoting a product or service provided by the owner.",
+        "category": "default",
+        "meters": [ { "label": "Quantity", "value": "5x" } ],
+        "notes": [
+          { "text": "Whenever this item first becomes relevant on a mission, you may Pitch a completely new Reskin for it. Whenever one of these flyers is successfully handed out, a Low number of copies of it appear in the vicinity, distributed wherever fitting (in the hands of locals, spread across tables, pinned to bulletin boards, etc.). Once per mission, you may Pitch that a specific local has already read this flyer (does not yield copies).", "children": [] }
+        ]
+      },
+      {
+        "name": "Gladstone Bag",
+        "description": "Sturdy travel bag with numerous internal compartments.",
+        "category": "elective",
+        "meters": [],
+        "notes": [
+          { "text": "Contains medical implements, both real and contrived, determined via Pitch. Examining a being with such an implement while spouting medical technobabble will render them compliant with the examination for a Low Duration and increasingly prone to hypochondria.", "children": [] }
+        ]
+      },
+      {
+        "name": "Suspicious Crate",
+        "description": "Out-of-place shipping case plastered with handling instructions.",
+        "category": "elective",
+        "meters": [],
+        "notes": [
+          { "text": "Not brought onto the mission normally; instead summoned to a chosen location after a Low delay, delivered by Pitched local transportation. Open to reveal a sizable curio from distant lands, determined via Pitch, inspiring interest in locals scaling on how long the crate was left unopened for. Contains up to two small pieces of contraband secretly stashed within, also determined via Pitch.", "children": [] }
+        ]
+      },
+      {
+        "name": "Audience Plant",
+        "description": "Competent actor posing as a member of a local audience, professional but selfish.",
+        "category": "elective",
+        "meters": [],
+        "notes": [
+          { "text": "Not brought onto the mission normally; instead summoned into a crowd at will, convincingly disguised as a local (including basic props), as determined via Pitch. When summoned, may be mentally issued a Mid-length set of instructions outlining the role you need them to play. Instantly vanish when endangered or when the crowd disperses, resummonable only after a High Cooldown. This is reduced to Mid if the source character privately checks in with the actor, voluntarily dismissing them (at which point they vanish).", "children": [] }
+        ]
+      }
+    ]
   }
 ]
