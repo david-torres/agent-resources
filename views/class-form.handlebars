@@ -9,7 +9,7 @@
           <div class="select is-fullwidth">
             <select name="rules_edition" id="class-rules-edition">
               <option value="advent" {{#if (eq class.rules_edition "advent")}}selected{{/if}}>Advent</option>
-              <option value="aspirant" {{#if (eq class.rules_edition "aspirant")}}selected{{/if}} disabled>Aspirant</option>
+              <option value="aspirant" {{#if (eq class.rules_edition "aspirant")}}selected{{/if}}>Aspirant</option>
             </select>
           </div>
         </div>
@@ -353,6 +353,27 @@
       </div>
     </div>
     {{/inline}}
+    {{#*inline "abilityPerkRow"}}
+    <div class="box is-shadowless has-background-light mb-2" data-perk-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input is-small" type="text" data-perk-field="name" name="abilities[{{ai}}][sample_perks][{{pi}}][name]" value="{{perk.name}}" placeholder="Perk name" aria-label="Sample perk name">
+        </div>
+        <div class="control is-expanded">
+          <input class="input is-small" type="text" data-perk-field="dedication" name="abilities[{{ai}}][sample_perks][{{pi}}][dedication]" value="{{perk.dedication}}" placeholder="Dedication (optional)" aria-label="Sample perk dedication">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-small is-light" @click="removePerk($el)">Remove perk</button>
+        </div>
+      </div>
+      <div class="control mb-2">
+        <textarea class="textarea is-small" rows="2" data-perk-field="text" name="abilities[{{ai}}][sample_perks][{{pi}}][text]" placeholder="Perk text" aria-label="Sample perk text">{{perk.text}}</textarea>
+      </div>
+      <div class="control">
+        <textarea class="textarea is-small" rows="2" data-perk-field="compound_text" name="abilities[{{ai}}][sample_perks][{{pi}}][compound_text]" placeholder="Compounded variant (optional) — the full restated text, not just the addition" aria-label="Compounded perk text">{{perk.compound_text}}</textarea>
+      </div>
+    </div>
+    {{/inline}}
     {{#*inline "abilityRow"}}
     <div class="box" data-ability-row>
       <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
@@ -397,6 +418,13 @@
         </div>
         <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
       </div>
+      <div class="field">
+        <label class="label is-small">Sample Perks</label>
+        <div data-perk-list>
+          {{#each ability.sample_perks}}{{> abilityPerkRow perk=this ai=../ai pi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addPerk($el)">Add sample perk</button>
+      </div>
     </div>
     {{/inline}}
     <label class="label">Abilities</label>
@@ -418,6 +446,165 @@
     <template data-prototype="meter">{{> abilityMeterRow ai=0 mi=0}}</template>
     <template data-prototype="note">{{> abilityNoteRow ai=0 ni=0}}</template>
     <template data-prototype="child">{{> abilityNoteChildRow ai=0 ni=0 ci=0}}</template>
+    <template data-prototype="perk">{{> abilityPerkRow ai=0 pi=0}}</template>
+  </div>
+  {{!-- Repeatable advanced-ability editor: the ability editor's twin over
+        `advanced_abilities[...]` names, and every rule the ability editor's
+        comment above records applies here unchanged and for the same measured
+        reasons -- server-rendered rows, no Alpine-only source of truth, no
+        input the admin must fill before the server can drop the row, plain
+        textareas rather than ToastUI, and inert <template> prototypes.
+
+        It is a separate x-data root with its own partials rather than a
+        parameterised reuse of the ability partials, which hard-code the
+        `abilities[...]` prefix in every name. Because the two roots are
+        disjoint, the inner attribute names they share (data-meter-row,
+        data-note-row, data-child-row, data-perk-row) can never be reached
+        across a boundary -- the same argument renumberGearFields' comment in
+        public/js/alpine-components.js records. Only the row and
+        list markers differ, so that renumberAbilityFields and
+        renumberAdvancedAbilityFields select different rows, and only the ids
+        carry a distinct `advanced-ability-` prefix, since ids have to be
+        unique across the whole document rather than within a root.
+
+        routes/classes.js:675 and :747 run this column through the same
+        normalizeAbilities as `abilities`, so a nameless row is dropped on
+        save and an Advent class can leave all three blank. --}}
+  <div class="field" x-data="advancedAbilityEditor()">
+    {{#*inline "advancedAbilityMeterRow"}}
+    <div class="field is-grouped mb-2" data-meter-row>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="label" name="advanced_abilities[{{ai}}][meters][{{mi}}][label]" value="{{meter.label}}" placeholder="Label, e.g. Essence Cost" aria-label="Meter label">
+      </div>
+      <div class="control is-expanded">
+        <input class="input" type="text" data-meter-field="value" name="advanced_abilities[{{ai}}][meters][{{mi}}][value]" value="{{meter.value}}" placeholder="Value, e.g. Low" aria-label="Meter value">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-light" @click="removeMeter($el)">Remove meter</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "advancedAbilityNoteChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="advanced_abilities[{{ai}}][notes][{{ni}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildNote($el)">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "advancedAbilityNoteRow"}}
+    <div class="mb-3" data-note-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-note-field="text" name="advanced_abilities[{{ai}}][notes][{{ni}}][text]" value="{{note.text}}" placeholder="Note" aria-label="Note">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeNote($el)">Remove note</button>
+        </div>
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each note.children}}{{> advancedAbilityNoteChildRow child=this ai=../ai ni=../ni ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildNote($el)">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "advancedAbilityPerkRow"}}
+    <div class="box is-shadowless has-background-light mb-2" data-perk-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input is-small" type="text" data-perk-field="name" name="advanced_abilities[{{ai}}][sample_perks][{{pi}}][name]" value="{{perk.name}}" placeholder="Perk name" aria-label="Sample perk name">
+        </div>
+        <div class="control is-expanded">
+          <input class="input is-small" type="text" data-perk-field="dedication" name="advanced_abilities[{{ai}}][sample_perks][{{pi}}][dedication]" value="{{perk.dedication}}" placeholder="Dedication (optional)" aria-label="Sample perk dedication">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-small is-light" @click="removePerk($el)">Remove perk</button>
+        </div>
+      </div>
+      <div class="control mb-2">
+        <textarea class="textarea is-small" rows="2" data-perk-field="text" name="advanced_abilities[{{ai}}][sample_perks][{{pi}}][text]" placeholder="Perk text" aria-label="Sample perk text">{{perk.text}}</textarea>
+      </div>
+      <div class="control">
+        <textarea class="textarea is-small" rows="2" data-perk-field="compound_text" name="advanced_abilities[{{ai}}][sample_perks][{{pi}}][compound_text]" placeholder="Compounded variant (optional) — the full restated text, not just the addition" aria-label="Compounded perk text">{{perk.compound_text}}</textarea>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "advancedAbilityRow"}}
+    <div class="box" data-advanced-row>
+      <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
+        <span class="label mb-0" data-ability-heading>Advanced Ability {{add ai 1}}</span>
+        <button type="button" class="button is-small is-danger is-light" @click="removeAdvanced($el)">Remove advanced ability</button>
+      </div>
+      {{#if ability.pronunciation}}
+      {{!-- The core editor's hidden round-trip field, for the same reason:
+            normalizeAbilities echoes a pronunciation back only when the
+            request carried one, so a routine save from a form that dropped it
+            would delete it. --}}
+      <input type="hidden" data-field="pronunciation" name="advanced_abilities[{{ai}}][pronunciation]" value="{{ability.pronunciation}}">
+      {{/if}}
+      <div class="field">
+        <label class="label is-small" data-label-for="name" for="advanced-ability-name-{{ai}}">Name</label>
+        <div class="control">
+          <input class="input" type="text" id="advanced-ability-name-{{ai}}" data-field="name" name="advanced_abilities[{{ai}}][name]" value="{{ability.name}}" placeholder="Advanced ability name">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="description" for="advanced-ability-description-{{ai}}">Description</label>
+        <div class="control">
+          <textarea class="textarea" rows="4" id="advanced-ability-description-{{ai}}" data-field="description" name="advanced_abilities[{{ai}}][description]" placeholder="What the ability does">{{ability.description}}</textarea>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small" data-label-for="paired_action" for="advanced-ability-paired-action-{{ai}}">Paired Action</label>
+        <div class="control">
+          <input class="input" type="text" id="advanced-ability-paired-action-{{ai}}" data-field="paired_action" name="advanced_abilities[{{ai}}][paired_action]" value="{{ability.paired_action}}" placeholder="The action this ability pairs with (optional)">
+        </div>
+      </div>
+      <div class="field">
+        <label class="label is-small">Meters</label>
+        <div data-meter-list>
+          {{#each ability.meters}}{{> advancedAbilityMeterRow meter=this ai=../ai mi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addMeter($el)">Add meter</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Notes</label>
+        <div data-note-list>
+          {{#each ability.notes}}{{> advancedAbilityNoteRow note=this ai=../ai ni=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+      <div class="field">
+        <label class="label is-small">Sample Perks</label>
+        <div data-perk-list>
+          {{#each ability.sample_perks}}{{> advancedAbilityPerkRow perk=this ai=../ai pi=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addPerk($el)">Add sample perk</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Advanced Abilities</label>
+    <p class="help mb-3">Aspirant classes have three. Unlocked with Perks rather than started with, so an Advent class leaves these blank.</p>
+    <div data-advanced-list>
+      {{#if class.advanced_abilities.length}}
+        {{#each class.advanced_abilities}}{{> advancedAbilityRow ability=this ai=@index}}{{/each}}
+      {{else}}
+        {{#times 3}}{{> advancedAbilityRow ai=@index}}{{/times}}
+      {{/if}}
+    </div>
+    <button type="button" class="button" @click="addAdvanced()">Add advanced ability</button>
+    {{!-- Inert prototypes; see the ability editor's note. A plain <template>
+          keeps its children in a DocumentFragment, so Alpine's walker never
+          enters it and the browser renders nothing. --}}
+    <template data-prototype="ability">{{> advancedAbilityRow ai=0}}</template>
+    <template data-prototype="meter">{{> advancedAbilityMeterRow ai=0 mi=0}}</template>
+    <template data-prototype="note">{{> advancedAbilityNoteRow ai=0 ni=0}}</template>
+    <template data-prototype="child">{{> advancedAbilityNoteChildRow ai=0 ni=0 ci=0}}</template>
+    <template data-prototype="perk">{{> advancedAbilityPerkRow ai=0 pi=0}}</template>
   </div>
   {{!-- Repeatable gear editor: the ability editor's twin, and every rule its
         comment above records applies here unchanged and for the same measured
@@ -518,6 +705,24 @@
           {{#each gear.notes}}{{> gearNoteRow note=this gi=../gi ni=@index}}{{/each}}
         </div>
         <button type="button" class="button is-small" @click="addNote($el)">Add note</button>
+      </div>
+      {{!-- One object, not a list, so these carry data-enchantment-field
+            rather than data-field: the [data-field] loop in
+            renumberGearFields emits flat `gear[gi][key]` names, which would
+            collapse the nesting. They carry no id, so no [data-label-for]
+            pairing is needed. --}}
+      <div class="field">
+        <label class="label is-small">Default Enchantment</label>
+        <p class="help mb-2">A Signature may hold only one Enchantment. Leave the name blank if this item has none.</p>
+        <div class="control mb-2">
+          <input class="input" type="text" data-enchantment-field="name" name="gear[{{gi}}][default_enchantment][name]" value="{{gear.default_enchantment.name}}" placeholder="Enchantment name, e.g. Hats Off to You" aria-label="Enchantment name">
+        </div>
+        <div class="control mb-2">
+          <textarea class="textarea" rows="3" data-enchantment-field="description" name="gear[{{gi}}][default_enchantment][description]" placeholder="What the enchantment does" aria-label="Enchantment description">{{gear.default_enchantment.description}}</textarea>
+        </div>
+        <div class="control">
+          <input class="input is-small" type="text" data-enchantment-field="dedication" name="gear[{{gi}}][default_enchantment][dedication]" value="{{gear.default_enchantment.dedication}}" placeholder="Dedication, e.g. In Honor of Crow" aria-label="Enchantment dedication">
+        </div>
       </div>
     </div>
     {{/inline}}

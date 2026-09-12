@@ -126,6 +126,59 @@ const renumberAbilityFields = (root) => {
         });
       });
     });
+
+    abilityRow.querySelectorAll('[data-perk-row]').forEach((perkRow, pi) => {
+      perkRow.querySelectorAll('[data-perk-field]').forEach((field) => {
+        field.name = `abilities[${ai}][sample_perks][${pi}][${field.dataset.perkField}]`;
+      });
+    });
+  });
+};
+
+// Field naming for the advanced-ability editor -- renumberAbilityFields over
+// `advanced_abilities[...]` names and `[data-advanced-row]` rows.
+//
+// Each editor on the form is its own x-data root, so the inner attribute names
+// they share (data-meter-row, data-note-row, data-child-row, data-perk-row) can
+// never be reached across a boundary: every query below starts from the
+// advanced editor's own root. The ids are the exception -- those are unique per
+// document, not per root, so they carry their own `advanced-ability-` prefix.
+const renumberAdvancedAbilityFields = (root) => {
+  root.querySelectorAll('[data-advanced-row]').forEach((abilityRow, ai) => {
+    const heading = abilityRow.querySelector('[data-ability-heading]');
+    if (heading) heading.textContent = `Advanced Ability ${ai + 1}`;
+
+    abilityRow.querySelectorAll('[data-field]').forEach((field) => {
+      const key = field.dataset.field;
+      field.name = `advanced_abilities[${ai}][${key}]`;
+      if (!field.id) return;
+      field.id = `advanced-ability-${key.replace(/_/g, '-')}-${ai}`;
+      const label = abilityRow.querySelector(`[data-label-for="${key}"]`);
+      if (label) label.htmlFor = field.id;
+    });
+
+    abilityRow.querySelectorAll('[data-meter-row]').forEach((meterRow, mi) => {
+      meterRow.querySelectorAll('[data-meter-field]').forEach((field) => {
+        field.name = `advanced_abilities[${ai}][meters][${mi}][${field.dataset.meterField}]`;
+      });
+    });
+
+    abilityRow.querySelectorAll('[data-note-row]').forEach((noteRow, ni) => {
+      noteRow.querySelectorAll('[data-note-field]').forEach((field) => {
+        field.name = `advanced_abilities[${ai}][notes][${ni}][${field.dataset.noteField}]`;
+      });
+      noteRow.querySelectorAll('[data-child-row]').forEach((childRow, ci) => {
+        childRow.querySelectorAll('[data-child-field]').forEach((field) => {
+          field.name = `advanced_abilities[${ai}][notes][${ni}][children][${ci}][${field.dataset.childField}]`;
+        });
+      });
+    });
+
+    abilityRow.querySelectorAll('[data-perk-row]').forEach((perkRow, pi) => {
+      perkRow.querySelectorAll('[data-perk-field]').forEach((field) => {
+        field.name = `advanced_abilities[${ai}][sample_perks][${pi}][${field.dataset.perkField}]`;
+      });
+    });
   });
 };
 
@@ -133,9 +186,9 @@ const renumberAbilityFields = (root) => {
 // contract renumberAbilityFields implements, over `gear[...]` names and with a
 // category <select> among the row's [data-field] controls.
 //
-// The two editors are separate x-data roots, so the shared inner attribute
+// Each editor on the form is its own x-data root, so the shared inner attribute
 // names (data-meter-row, data-note-row, data-child-row) can never be reached
-// across the boundary: every query below starts from the gear editor's own
+// across a boundary: every query below starts from the gear editor's own
 // root.
 const renumberGearFields = (root) => {
   root.querySelectorAll('[data-gear-row]').forEach((gearRow, gi) => {
@@ -170,6 +223,14 @@ const renumberGearFields = (root) => {
           field.name = `gear[${gi}][notes][${ni}][children][${ci}][${field.dataset.childField}]`;
         });
       });
+    });
+
+    // The enchantment is one object, not a list, so there is no index to
+    // renumber -- only the item's own. It is kept out of the [data-field] loop
+    // above because that loop emits flat `gear[gi][key]` names, which would
+    // collapse the nesting.
+    gearRow.querySelectorAll('[data-enchantment-field]').forEach((field) => {
+      field.name = `gear[${gi}][default_enchantment][${field.dataset.enchantmentField}]`;
     });
   });
 };
@@ -514,6 +575,14 @@ document.addEventListener('alpine:init', () => {
       this.removeRow($el, '[data-child-row]');
     },
 
+    addPerk($el) {
+      this.appendRow($el.closest('[data-ability-row]'), 'perk', '[data-perk-list]');
+    },
+
+    removePerk($el) {
+      this.removeRow($el, '[data-perk-row]');
+    },
+
     // The prototypes live once at the editor root. Their contents are only
     // reachable through .content, so an inner list selector can never match
     // inside one by accident.
@@ -531,6 +600,71 @@ document.addEventListener('alpine:init', () => {
       const root = this.$root;
       $el.closest(rowSelector).remove();
       renumberAbilityFields(root);
+    }
+  }));
+
+  // The three Advanced Abilities on the admin class form -- abilityEditor over
+  // `advanced_abilities[...]` names. It is a second component rather than a
+  // parameterised one because the row markup it clones lives in its own
+  // prototypes under its own x-data root, which is also what keeps the two
+  // editors' shared inner attribute names from colliding.
+  Alpine.data('advancedAbilityEditor', () => ({
+    addAdvanced() {
+      this.appendRow(this.$root, 'ability', '[data-advanced-list]');
+    },
+
+    removeAdvanced($el) {
+      this.removeRow($el, '[data-advanced-row]');
+    },
+
+    addMeter($el) {
+      this.appendRow($el.closest('[data-advanced-row]'), 'meter', '[data-meter-list]');
+    },
+
+    removeMeter($el) {
+      this.removeRow($el, '[data-meter-row]');
+    },
+
+    addNote($el) {
+      this.appendRow($el.closest('[data-advanced-row]'), 'note', '[data-note-list]');
+    },
+
+    removeNote($el) {
+      this.removeRow($el, '[data-note-row]');
+    },
+
+    addChildNote($el) {
+      this.appendRow($el.closest('[data-note-row]'), 'child', '[data-child-list]');
+    },
+
+    removeChildNote($el) {
+      this.removeRow($el, '[data-child-row]');
+    },
+
+    addPerk($el) {
+      this.appendRow($el.closest('[data-advanced-row]'), 'perk', '[data-perk-list]');
+    },
+
+    removePerk($el) {
+      this.removeRow($el, '[data-perk-row]');
+    },
+
+    // The prototypes live once at the editor root -- this editor's own, not the
+    // ability editor's, since $root scopes the lookup. Their contents are only
+    // reachable through .content, so an inner list selector can never match
+    // inside one by accident.
+    appendRow(scope, prototype, listSelector) {
+      const template = this.$root.querySelector(`template[data-prototype="${prototype}"]`);
+      scope.querySelector(listSelector)
+        .appendChild(template.content.firstElementChild.cloneNode(true));
+      renumberAdvancedAbilityFields(this.$root);
+    },
+
+    // The root is read BEFORE the removal, for the reason abilityEditor records.
+    removeRow($el, rowSelector) {
+      const root = this.$root;
+      $el.closest(rowSelector).remove();
+      renumberAdvancedAbilityFields(root);
     }
   }));
 

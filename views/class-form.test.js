@@ -254,7 +254,7 @@ test('examples render one per line in the textarea', () => {
 // markup, and the interaction ones drive real DOM.
 const ABILITY_SECTION = SRC.slice(
   SRC.indexOf('<div class="field" x-data="abilityEditor('),
-  SRC.indexOf('{{!-- Repeatable gear editor:')
+  SRC.indexOf('{{!-- Repeatable advanced-ability editor:')
 );
 
 // Four of the assertions below are `not.toContain`, which an empty slice
@@ -264,12 +264,16 @@ const ABILITY_SECTION = SRC.slice(
 // guard it was supposed to enforce.
 test('the ability section slice is non-empty and bounded where it claims', () => {
   expect(SRC).toContain('<div class="field" x-data="abilityEditor(');
-  expect(SRC).toContain('{{!-- Repeatable gear editor:');
+  expect(SRC).toContain('{{!-- Repeatable advanced-ability editor:');
   expect(ABILITY_SECTION.length).toBeGreaterThan(1000);
-  // The whole editor, and nothing of the gear block that follows it.
+  // The whole editor, and nothing of the advanced or gear blocks that follow
+  // it. `advanced_abilities[{{ai}}]` would satisfy every `abilities[{{ai}}]`
+  // assertion above by substring, so the advanced editor is excluded by the
+  // slice rather than trusted not to interfere.
   expect(ABILITY_SECTION).toContain('name="abilities[{{ai}}][name]"');
   expect(ABILITY_SECTION).toContain('data-prototype="child"');
   expect(ABILITY_SECTION).not.toContain('gear[{{gi}}]');
+  expect(ABILITY_SECTION).not.toContain('advanced_abilities[{{ai}}]');
 });
 
 const renderAbilities = async (cls) => {
@@ -385,7 +389,8 @@ test('an existing class renders only the abilities it has', async () => {
 // contribute fields to the form, or every save would carry a phantom ability.
 test('the row prototypes post nothing', async () => {
   await renderAbilities(populatedClass);
-  expect(document.querySelectorAll('template[data-prototype]').length).toBe(4);
+  // ability, meter, note, child, perk.
+  expect(document.querySelectorAll('template[data-prototype]').length).toBe(5);
   expect(abilityNameFields()).toEqual(['abilities[0][name]']);
 });
 
@@ -806,4 +811,291 @@ test('the category select offers exactly the two values the class page renders',
     ['default', 'elective', 'default', 'elective', 'default', 'elective',
       'default', 'elective', 'default', 'elective', 'default', 'elective']
   );
+});
+
+// ---------------------------------------------------------------------------
+// Task 5: default enchantments, sample perks and advanced abilities.
+//
+// The admin form is the only authoring path for class content, so a key the
+// contract declares but the form cannot edit is a key that can only ever be
+// set by an import. util/class-gear.js:192 normalizes `default_enchantment`
+// and util/class-abilities.js:135 normalizes `sample_perks` on every save, and
+// routes/classes.js:675 and :747 run `advanced_abilities` through the ability
+// normalizer; these pin the inputs that feed them.
+
+test('the gear editor offers a default enchantment on every item', () => {
+  const html = renderForm('admin', { isNew: false, class: { gear: [{ name: 'Cowboy Hat' }] } });
+
+  expect(html).toContain('name="gear[0][default_enchantment][name]"');
+  expect(html).toContain('name="gear[0][default_enchantment][description]"');
+  expect(html).toContain('name="gear[0][default_enchantment][dedication]"');
+});
+
+// normalizeEnchantment (util/class-gear.js:158) drops an enchantment whose name
+// is blank, so a form that renders the stored object without its values would
+// delete a Signature's Enchantment on the next routine save.
+test('the gear editor prefills an existing default enchantment', () => {
+  const html = renderForm('admin', { isNew: false, class: { gear: [{
+    name: 'Cowboy Hat',
+    default_enchantment: { name: 'Hats Off to You', description: 'Share an Expertise.', dedication: null }
+  }] } });
+
+  expect(html).toContain('value="Hats Off to You"');
+  expect(html).toContain('Share an Expertise.');
+});
+
+// A Sample Perk is a list per ability, not a single object
+// (util/class-abilities.js:98), so the editor needs a sub-repeater: a row
+// partial, a list to append into, and an inert prototype to clone.
+test('the ability editor offers a sample perk repeater', () => {
+  const html = renderForm('admin', { isNew: false, class: {
+    abilities: [{ name: 'Trickshot', sample_perks: [{ name: 'Waco Kid' }] }]
+  } });
+
+  expect(html).toContain('name="abilities[0][sample_perks][0][name]"');
+  expect(html).toContain('name="abilities[0][sample_perks][0][text]"');
+  expect(html).toContain('name="abilities[0][sample_perks][0][compound_text]"');
+  expect(html).toContain('data-prototype="perk"');
+});
+
+// classes.advanced_abilities is NOT NULL as of
+// supabase/migrations/20260912000000_advanced_abilities_not_null.sql, and the
+// write handlers rewrite it from the request body on every save -- so without
+// an editor the column could only ever hold what an import put there.
+test('the form has an advanced ability editor', () => {
+  const html = renderForm('admin', { isNew: false, class: { advanced_abilities: [{ name: 'High Noon' }] } });
+
+  expect(html).toContain('name="advanced_abilities[0][name]"');
+  expect(html).toContain('value="High Noon"');
+});
+
+// An Aspirant class could not be authored at all while this option was
+// disabled: the form is the only path that sets rules_edition by hand.
+test('the Aspirant edition option is selectable', () => {
+  const html = renderForm('admin', { isNew: true, class: null });
+
+  expect(html).not.toMatch(/value="aspirant"[^>]*disabled/);
+});
+
+// The enchantment is one object, not a list, so its inputs are deliberately
+// outside the [data-field] loop in renumberGearFields -- that loop emits flat
+// `gear[gi][key]` names, which would collapse the nesting. They still have to
+// follow their item's index when a row above them is removed, or the surviving
+// item's enchantment posts under the removed item's index.
+test('removing a gear item renumbers the enchantment of the rows below it', async () => {
+  await renderGear({
+    gear: [
+      { name: 'First', category: 'default' },
+      { name: 'Second', category: 'default', default_enchantment: { name: 'Big Iron', description: 'Project a Vision.' } },
+    ],
+  });
+
+  await clickButton('Remove gear', 0);
+
+  expect(postedValue('gear[0][name]')).toBe('Second');
+  expect(postedValue('gear[0][default_enchantment][name]')).toBe('Big Iron');
+  expect(postedValue('gear[0][default_enchantment][description]')).toBe('Project a Vision.');
+  expect(postedGearNames().filter((name) => name.startsWith('gear[1]'))).toEqual([]);
+});
+
+// The posted index is the print order, the same rule the ability and gear rows
+// follow (public/js/alpine-components.js:86-90), so an added or removed perk
+// has to leave the survivors contiguous.
+test('sample perks can be added and removed, and renumber contiguously', async () => {
+  await renderAbilities(null);
+
+  await clickButton('Add sample perk');
+  await clickButton('Add sample perk');
+  expect(postedNames()).toContain('abilities[0][sample_perks][0][name]');
+  expect(postedNames()).toContain('abilities[0][sample_perks][1][name]');
+
+  document.querySelector('[name="abilities[0][sample_perks][1][name]"]').value = 'Second';
+  await clickButton('Remove perk', 0);
+
+  expect(postedValue('abilities[0][sample_perks][0][name]')).toBe('Second');
+  expect(postedNames()).not.toContain('abilities[0][sample_perks][1][name]');
+});
+
+// A perk belongs to the ability whose button was clicked, and it has to move
+// with that ability when an earlier one is removed.
+test('removing an ability renumbers its sample perks with it', async () => {
+  await renderAbilities({
+    abilities: [
+      { name: 'First', meters: [], notes: [], sample_perks: [] },
+      {
+        name: 'Second',
+        meters: [],
+        notes: [],
+        sample_perks: [{ name: 'Waco Kid', text: 'Disarm a drawn weapon.', compound_text: 'Disarm two.' }],
+      },
+    ],
+  });
+
+  await clickButton('Remove ability', 0);
+
+  expect(postedValue('abilities[0][name]')).toBe('Second');
+  expect(postedValue('abilities[0][sample_perks][0][name]')).toBe('Waco Kid');
+  expect(postedValue('abilities[0][sample_perks][0][text]')).toBe('Disarm a drawn weapon.');
+  expect(postedValue('abilities[0][sample_perks][0][compound_text]')).toBe('Disarm two.');
+  expect(postedNames().filter((name) => name.startsWith('abilities[1]'))).toEqual([]);
+});
+
+const ADVANCED_SECTION = SRC.slice(
+  SRC.indexOf('{{!-- Repeatable advanced-ability editor:'),
+  SRC.indexOf('{{!-- Repeatable gear editor:')
+);
+
+// Three of the assertions below are `not.toContain`, which an empty slice
+// satisfies for free. String.indexOf answers -1 for a boundary that has been
+// edited away, and slice(-1, -1) is ''. This runs first so that a moved
+// boundary fails as a missing section rather than silently passing every guard
+// it was supposed to enforce.
+test('the advanced ability section slice is non-empty and bounded where it claims', () => {
+  expect(SRC).toContain('{{!-- Repeatable advanced-ability editor:');
+  expect(SRC).toContain('{{!-- Repeatable gear editor:');
+  expect(ADVANCED_SECTION.length).toBeGreaterThan(1000);
+  expect(ADVANCED_SECTION).toContain('name="advanced_abilities[{{ai}}][name]"');
+  expect(ADVANCED_SECTION).toContain('data-prototype="perk"');
+  expect(ADVANCED_SECTION).not.toContain('gear[{{gi}}]');
+  // The whole editor, and no stray field still posting under the core list.
+  expect(ADVANCED_SECTION).not.toContain('name="abilities[{{ai}}]');
+});
+
+const renderAdvanced = async (cls) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  await render(hb.compile(ADVANCED_SECTION)({ class: cls }));
+  await tick();
+};
+
+const advancedNameFields = () => Array.from(document.querySelectorAll('[name^="advanced_abilities["]'))
+  .map((el) => el.name)
+  .filter((name) => /^advanced_abilities\[\d+\]\[name\]$/.test(name));
+
+const postedAdvancedNames = () => Array.from(document.querySelectorAll('[name^="advanced_abilities["]'))
+  .map((el) => el.name);
+
+// Same rule, same reason as the ability and gear rows: views/layouts/main.handlebars
+// puts hx-boost="true" on <body> and htmx snapshots the LIVE DOM into its
+// history cache, so x-for output comes back in the snapshot AND gets
+// regenerated on Back.
+test('the advanced ability rows are server-rendered, never x-for output', () => {
+  expect(ADVANCED_SECTION).not.toContain('x-for');
+  expect(ADVANCED_SECTION).not.toContain('x-model');
+  expect(ADVANCED_SECTION).toContain('value="{{ability.name}}"');
+});
+
+// A repeater's blank row is a normal intermediate state and normalizeAbilities
+// drops it server-side (util/class-abilities.js:142). `required` on a blank row
+// the admin just added blocks submission with no visible error near the field.
+test('no advanced ability input is required or carries a markdown editor', () => {
+  expect(ADVANCED_SECTION).not.toContain('required');
+  expect(ADVANCED_SECTION).not.toContain('data-toast-editor');
+});
+
+// ENCLAVE: Aspirant gives every class three Advanced Abilities, so a class with
+// none authored yet opens on three blank rows -- the same shape the ability
+// editor uses for a new class.
+test('a class with no advanced abilities starts on three blank rows', async () => {
+  await renderAdvanced(null);
+  expect(advancedNameFields()).toEqual([
+    'advanced_abilities[0][name]', 'advanced_abilities[1][name]', 'advanced_abilities[2][name]',
+  ]);
+  expect(postedValue('advanced_abilities[0][name]')).toBe('');
+});
+
+// An Advanced Ability carries the Core Ability contract unchanged
+// (routes/classes.js:671-675 runs both columns through one normalizer), so
+// every key the ability editor round-trips has to round-trip here too -- a
+// field the advanced editor omits is a field a save silently blanks.
+test('an existing advanced ability posts every nested field under its bracket name', async () => {
+  await renderAdvanced({
+    advanced_abilities: [{
+      name: 'High Noon',
+      description: 'Pitch a combat action made by an enemy under pressure.',
+      paired_action: 'Stare them down.',
+      meters: [{ label: 'Essence Cost', value: 'Mid' }],
+      notes: [{ text: 'Once per scene.', children: [{ text: 'Unless compounded.', children: [] }] }],
+      sample_perks: [{ name: 'Ecstasy of Gold', text: 'Untraceable music plays.', compound_text: 'And the crowd hears it.' }],
+    }],
+  });
+
+  expect(postedValue('advanced_abilities[0][name]')).toBe('High Noon');
+  expect(postedValue('advanced_abilities[0][description]'))
+    .toBe('Pitch a combat action made by an enemy under pressure.');
+  expect(postedValue('advanced_abilities[0][paired_action]')).toBe('Stare them down.');
+  expect(postedValue('advanced_abilities[0][meters][0][label]')).toBe('Essence Cost');
+  expect(postedValue('advanced_abilities[0][notes][0][text]')).toBe('Once per scene.');
+  expect(postedValue('advanced_abilities[0][notes][0][children][0][text]')).toBe('Unless compounded.');
+  expect(postedValue('advanced_abilities[0][sample_perks][0][name]')).toBe('Ecstasy of Gold');
+  expect(postedValue('advanced_abilities[0][sample_perks][0][compound_text]'))
+    .toBe('And the crowd hears it.');
+});
+
+// Proves the server-rendered rule rather than trusting it: htmx restores Back
+// from document.body.innerHTML, so re-rendering a live snapshot must give back
+// exactly the rows it captured.
+test('an hx-boost snapshot restores the same advanced rows, not twice as many', async () => {
+  await renderAdvanced({ advanced_abilities: [{ name: 'High Noon' }, { name: 'Surefire' }] });
+  const before = advancedNameFields();
+
+  await render(document.body.innerHTML);
+  await tick();
+
+  expect(advancedNameFields()).toEqual(before);
+});
+
+// The posted index is the print order, so a removal has to renumber the rows
+// after it -- including the meters, notes and perks nested inside them.
+test('advanced abilities and their nested rows add and remove contiguously', async () => {
+  await renderAdvanced({
+    advanced_abilities: [
+      { name: 'First' },
+      {
+        name: 'Second',
+        meters: [{ label: 'Essence Cost', value: 'High' }],
+        notes: [{ text: 'Parent.', children: [{ text: 'Child.', children: [] }] }],
+        sample_perks: [{ name: 'Ecstasy of Gold' }],
+      },
+    ],
+  });
+
+  await clickButton('Remove advanced ability', 0);
+
+  expect(postedValue('advanced_abilities[0][name]')).toBe('Second');
+  expect(postedValue('advanced_abilities[0][meters][0][label]')).toBe('Essence Cost');
+  expect(postedValue('advanced_abilities[0][notes][0][text]')).toBe('Parent.');
+  expect(postedValue('advanced_abilities[0][notes][0][children][0][text]')).toBe('Child.');
+  expect(postedValue('advanced_abilities[0][sample_perks][0][name]')).toBe('Ecstasy of Gold');
+  expect(postedAdvancedNames().filter((name) => name.startsWith('advanced_abilities[1]'))).toEqual([]);
+
+  await clickButton('Add advanced ability');
+  expect(advancedNameFields())
+    .toEqual(['advanced_abilities[0][name]', 'advanced_abilities[1][name]']);
+
+  await clickButton('Add sample perk', 1);
+  expect(postedAdvancedNames()).toContain('advanced_abilities[1][sample_perks][0][name]');
+  expect(postedAdvancedNames()).not.toContain('advanced_abilities[0][sample_perks][1][name]');
+});
+
+// A cloned row arrives carrying the prototype's ids. Two controls sharing an id
+// send every duplicated <label for> to whichever the browser finds first. The
+// advanced rows get their own `advanced-ability-` id prefix so they cannot
+// collide with the core ability rows on the same page.
+test('added advanced rows get unique ids and keep their labels pointed at them', async () => {
+  await renderAdvanced({ advanced_abilities: [{ name: 'High Noon' }] });
+  await clickButton('Add advanced ability');
+
+  const ids = Array.from(document.querySelectorAll('[data-field][id]')).map((el) => el.id);
+  expect(new Set(ids).size).toBe(ids.length);
+  expect(ids).toContain('advanced-ability-paired-action-1');
+
+  for (const row of document.querySelectorAll('[data-advanced-row]')) {
+    for (const label of row.querySelectorAll('[data-label-for]')) {
+      const field = row.querySelector(`[data-field="${label.dataset.labelFor}"]`);
+      expect(label.htmlFor).toBe(field.id);
+    }
+  }
 });
