@@ -31,8 +31,8 @@ const BEASTMASTER = {
   prerelease_section: 'pcc',
   teaser: 'A domineering animal tamer.',
   gear: [
-    { name: 'Whip', description: 'Cracks.', category: 'default', meters: [{ label: 'Reach', value: 'Mid' }], notes: [{ text: 'Cracks loudly.', children: [{ text: 'Startles beasts.', children: [] }] }] },
-    { name: 'Snare', description: 'Holds.', category: 'elective', meters: [], notes: [] },
+    { name: 'Whip', description: 'Cracks.', category: 'default', meters: [{ label: 'Reach', value: 'Mid' }], notes: [{ text: 'Cracks loudly.', children: [{ text: 'Startles beasts.', children: [] }] }], default_enchantment: { name: 'Barbed Lash', description: 'Adds bleed on a hit.', dedication: 'In Honor of Roy Horn' } },
+    { name: 'Snare', description: 'Holds.', category: 'elective', meters: [], notes: [], default_enchantment: null },
   ],
   abilities: [{
     name: 'Tame',
@@ -41,6 +41,15 @@ const BEASTMASTER = {
     pronunciation: 'taym',
     meters: [{ label: 'Essence Cost', value: 'Low' }],
     notes: [{ text: 'Bond lasts a Mid Duration.', children: [{ text: 'One beast at a time.', children: [] }] }],
+    sample_perks: [{ name: 'Pack Leader', text: 'Your bonded beasts act on your turn.', dedication: 'In Honor of Siegfried & Roy', compound_text: 'Compounded: all your bonded beasts act on your turn.' }],
+  }],
+  advanced_abilities: [{
+    name: 'Alpha Call',
+    description: 'Commands every bonded beast at once.',
+    paired_action: 'Raise a fist.',
+    meters: [{ label: 'Essence Cost', value: 'High' }],
+    notes: [{ text: 'Requires a Perk to unlock.', children: [] }],
+    sample_perks: [],
   }],
   image_url: null,
   image_crop: null,
@@ -56,6 +65,7 @@ test('the Markdown export carries the structured prose under an Overview section
     '## 💡 Tips',
     '## 🎒 Gear',
     '## ⚔️ Abilities',
+    '## ✨ Advanced Abilities',
   ]);
   expect(content).toContain('+Sensory, +Skill, +Vitality*');
   expect(content).toContain('Vitality is starred because your beasts share it.');
@@ -93,6 +103,7 @@ test('the JSON export carries every structured prose column and no description',
   expect(Object.keys(parsed)).not.toContain('description');
   expect(Object.keys(parsed).sort()).toEqual([
     'abilities',
+    'advanced_abilities',
     'challenge_level',
     'conduit_notes',
     'designer',
@@ -175,16 +186,16 @@ test('every gear key the importer can set survives the JSON export', () => {
   expect(gear[0]).toEqual(BEASTMASTER.gear[0]);
 });
 
-// A legacy two-field item exports in the same contract shape a save would
-// write, so a re-import cannot turn it into a different row.
+// The spec's success criterion, stated as a test: an Advent class round-trips
+// unchanged apart from picking up the two new keys at their absent values.
 test('the JSON export gives a legacy item the full contract shape', () => {
   const { content } = exportClass(
     { name: 'Legacy', gear: [{ name: 'Sword', description: 'Sharp.' }], abilities: [{ name: 'Swing', description: 'Hits.' }] },
     'json'
   );
   const parsed = JSON.parse(content);
-  expect(parsed.abilities[0]).toEqual({ name: 'Swing', description: 'Hits.', paired_action: '', meters: [], notes: [] });
-  expect(parsed.gear[0]).toEqual({ name: 'Sword', description: 'Sharp.', category: 'default', meters: [], notes: [] });
+  expect(parsed.abilities[0]).toEqual({ name: 'Swing', description: 'Hits.', paired_action: '', meters: [], notes: [], sample_perks: [] });
+  expect(parsed.gear[0]).toEqual({ name: 'Sword', description: 'Sharp.', category: 'default', meters: [], notes: [], default_enchantment: null });
 });
 
 test('the Markdown export prints ability paired actions, meters and notes', () => {

@@ -187,7 +187,18 @@ const exportToMarkdown = (classData) => {
       lines.push(...itemLines(ability));
     }
   }
-  
+
+  // Advanced Abilities: unlocked with Perks rather than started with
+  // (util/class-import.js normalizeAbilities, ADVANCED_ABILITY_LIMIT), but the
+  // same ability shape as Abilities, so they share itemLines.
+  if (classData.advanced_abilities && classData.advanced_abilities.length > 0) {
+    lines.push('## ✨ Advanced Abilities');
+    lines.push('');
+    for (const ability of classData.advanced_abilities) {
+      lines.push(...itemLines(ability));
+    }
+  }
+
   // Footer with metadata
   lines.push('---');
   lines.push('');
@@ -210,6 +221,7 @@ const exportAbility = (entry) => {
     paired_action: ability.paired_action ?? '',
     meters: ability.meters ?? [],
     notes: ability.notes ?? [],
+    sample_perks: ability.sample_perks ?? [],
   };
   // Outside the contract: written through when the ability has one, never
   // fabricated -- the same rule util/class-abilities.js applies on save.
@@ -227,6 +239,7 @@ const exportGearItem = (entry, index) => {
     category: gearCategory(item.category, index),
     meters: item.meters ?? [],
     notes: item.notes ?? [],
+    default_enchantment: item.default_enchantment ?? null,
   };
 };
 
@@ -244,6 +257,7 @@ const exportToJson = (classData) => {
     is_player_created: classData.is_player_created,
     gear: (classData.gear || []).map(exportGearItem),
     abilities: (classData.abilities || []).map(exportAbility),
+    advanced_abilities: (classData.advanced_abilities || []).map(exportAbility),
     image_url: classData.image_url || null,
     image_crop: classData.image_crop || null,
     teaser: classData.teaser || '',
