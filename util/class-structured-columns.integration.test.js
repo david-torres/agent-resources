@@ -56,8 +56,9 @@ test('prerelease_section rejects a value outside the normalized enum', async () 
 
 // 20260817000000 added the column nullable, which no other class-content
 // column is: `examples` and `stat_spread` are both NOT NULL with a default.
-// A null here reaches util/class-abilities.js as a non-array and normalizes to
-// [], so the null never surfaces -- which is exactly why nothing caught it.
+// A null here reaches models/class.js:418's `Array.isArray(...) ? ... : []`
+// and normalizes to [] on the way out, so the null never surfaces -- which is
+// exactly why nothing caught it.
 test('advanced_abilities is not null on any class', async () => {
   const { data, error } = await sb
     .from('classes')
@@ -78,5 +79,7 @@ test('advanced_abilities rejects an explicit null', async () => {
     .update({ advanced_abilities: null })
     .eq('id', existing[0].id);
 
+  // 23502 is not_null_violation. Asserting the code keeps a missing
+  // constraint (an update that silently succeeds) from passing as a rejection.
   expect(error?.code).toBe('23502');
 });
