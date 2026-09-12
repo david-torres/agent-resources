@@ -184,6 +184,9 @@ test('every gear key the importer can set survives the JSON export', () => {
   const importable = importableKeys(classImportSchema.shape.gear.element);
   expect(importable.filter((key) => !(key in gear[0]))).toEqual([]);
   expect(gear[0]).toEqual(BEASTMASTER.gear[0]);
+  // The absent case, not the populated one, is what almost every gear item on
+  // every Advent class hits -- so it is the branch most worth pinning here.
+  expect(gear[1].default_enchantment).toBeNull();
 });
 
 // The spec's success criterion, stated as a test: an Advent class round-trips
