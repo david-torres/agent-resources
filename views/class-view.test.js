@@ -214,6 +214,8 @@ function renderClassView(context) {
   hb.registerPartial('private-badge', '');
   hb.registerPartial('class-meters', fs.readFileSync(path.join(__dirname, 'partials', 'class-meters.handlebars'), 'utf8'));
   hb.registerPartial('class-notes', fs.readFileSync(path.join(__dirname, 'partials', 'class-notes.handlebars'), 'utf8'));
+  hb.registerPartial('class-enchantment', fs.readFileSync(path.join(__dirname, 'partials', 'class-enchantment.handlebars'), 'utf8'));
+  hb.registerPartial('class-sample-perks', fs.readFileSync(path.join(__dirname, 'partials', 'class-sample-perks.handlebars'), 'utf8'));
   return hb.compile(SRC)(context);
 }
 
@@ -603,4 +605,64 @@ test('the class page reads no description column', () => {
 test('a class with no prose renders no Description heading', () => {
   const html = renderClassView({ class: { name: 'Bare', abilities: [], gear: [] } });
   expect(html).not.toContain('Description');
+});
+
+// Nothing on this page is gated on rules_edition today (the only other
+// reference is the Duplicate modal's <option> at :362-363), and nothing needs
+// to be: an Advent item carries default_enchantment: null (util/class-gear.js:158-167
+// normalizeEnchantment returns null for a nameless enchantment) and an Advent
+// ability carries sample_perks: [], so both sections simply do not print.
+test('a gear item prints its default enchantment', () => {
+  const html = renderClassView({ class: { gear: [{
+    name: 'Cowboy Hat',
+    category: 'default',
+    default_enchantment: { name: 'Hats Off to You', description: 'Share an Expertise.', dedication: 'In Honor of Cowboy Will' }
+  }] } });
+
+  expect(html).toContain('Hats Off to You');
+  expect(html).toContain('Share an Expertise.');
+  expect(html).toContain('In Honor of Cowboy Will');
+});
+
+test('a gear item with no enchantment prints no enchantment block', () => {
+  const html = renderClassView({ class: { gear: [{ name: 'Visor', category: 'default', default_enchantment: null }] } });
+
+  expect(html).not.toContain('Default Enchantment');
+});
+
+// normalizePerk (util/class-abilities.js:90-94) always fills both `text` and
+// `compound_text`, storing the compounded variant as null rather than
+// omitting it -- so the partial must print both halves whenever they're
+// present, not just the base perk text.
+test('an ability prints its sample perks and the compounded variant', () => {
+  const html = renderClassView({ class: { abilities: [{
+    name: 'Trickshot',
+    sample_perks: [{ name: 'Waco Kid', text: 'Improves hand speed.', dedication: null, compound_text: 'Improves hand speed and teleports the weapon back.' }]
+  }] } });
+
+  expect(html).toContain('Waco Kid');
+  expect(html).toContain('Improves hand speed.');
+  expect(html).toContain('Improves hand speed and teleports the weapon back.');
+});
+
+// supabase/migrations/20260912000000_advanced_abilities_not_null.sql:6-9,16
+// makes advanced_abilities NOT NULL with the same {name, description, meters,
+// notes, sample_perks, paired_action} contract as `abilities`, populated by
+// every Aspirant class -- this section is the only place that contract is
+// rendered, so it needs its own guarded card the way Gear and Abilities have.
+test('advanced abilities print in their own section', () => {
+  const html = renderClassView({ class: { advanced_abilities: [{ name: 'High Noon', description: 'Pitch a Fizzle.' }] } });
+
+  expect(html).toContain('Advanced Abilities');
+  expect(html).toContain('High Noon');
+});
+
+// Every class created before this branch has advanced_abilities: [] (the
+// backfill in supabase/migrations/20260912000000_advanced_abilities_not_null.sql:10-12),
+// so an ungated heading would print "Advanced Abilities" over an empty card on
+// most of the site -- the same failure mode the "no prose" test above pins for
+// Description.
+test('a class with no advanced abilities prints no Advanced Abilities heading', () => {
+  const html = renderClassView({ class: { advanced_abilities: [] } });
+  expect(html).not.toContain('Advanced Abilities');
 });

@@ -255,6 +255,7 @@
                     {{{markdown gear.description}}}
                     {{> class-meters meters=gear.meters}}
                     {{> class-notes notes=gear.notes}}
+                    {{> class-enchantment enchantment=gear.default_enchantment}}
                   </div>
                 </div>
               </div>
@@ -274,6 +275,7 @@
                     {{{markdown gear.description}}}
                     {{> class-meters meters=gear.meters}}
                     {{> class-notes notes=gear.notes}}
+                    {{> class-enchantment enchantment=gear.default_enchantment}}
                   </div>
                 </div>
               </div>
@@ -299,6 +301,7 @@
                 <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
                 {{/if}}
                 {{> class-notes notes=this.notes}}
+                {{> class-sample-perks perks=this.sample_perks}}
               </div>
             </div>
           </div>
@@ -306,6 +309,31 @@
         </div>
       </div>
     </div>
+    {{#if class.advanced_abilities.length}}
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-3">Advanced Abilities</h3>
+          {{#each class.advanced_abilities}}
+          <div class="card">
+            <div class="card-content">
+              <div class="content">
+                <h4 class="title is-4">{{this.name}}</h4>
+                {{{markdown this.description}}}
+                {{> class-meters meters=this.meters}}
+                {{#if this.paired_action}}
+                <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
+                {{/if}}
+                {{> class-notes notes=this.notes}}
+                {{> class-sample-perks perks=this.sample_perks}}
+              </div>
+            </div>
+          </div>
+          {{/each}}
+        </div>
+      </div>
+    </div>
+    {{/if}}
   </div>
 </div>
 
