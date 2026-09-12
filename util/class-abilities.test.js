@@ -167,6 +167,10 @@ test('sample perks are ordered numerically when object-shaped', () => {
   expect(ability.sample_perks.map((perk) => perk.name)).toEqual(['Nine', 'TwentyOne']);
 });
 
+// The contrast with `pronunciation` (util/class-abilities.js:137-138): that key
+// is omitted entirely when the request never carried it, but `sample_perks` is
+// always present, empty or not, so every ability has the same shape a consumer
+// can map over without an `in` check.
 test('an ability with no sample perks gets an empty array', () => {
   expect(normalizeAbilities([named('Collar')])[0].sample_perks).toEqual([]);
 });

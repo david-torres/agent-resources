@@ -669,12 +669,12 @@ test('POST /classes sends a blanked pronunciation as NULL, keeping the key', asy
 });
 
 // The other half of that rule, and a deliberate difference from it. `name`,
-// `description`, `paired_action`, `meters` and `notes` are this task's declared
-// ability contract, so a legacy ability that only ever had a name and a
-// description picks up the other three on save -- the uniform shape the editor
-// renders and round-trips, and one both class-view partials already guard on.
-// That is normalization. Writing `pronunciation` onto those same rows would be
-// invention, which is why it is echoed rather than defaulted.
+// `description`, `paired_action`, `meters`, `notes` and `sample_perks` are this
+// task's declared ability contract, so a legacy ability that only ever had a
+// name and a description picks up the other four on save -- the uniform shape
+// the editor renders and round-trips, and one both class-view partials already
+// guard on. That is normalization. Writing `pronunciation` onto those same rows
+// would be invention, which is why it is echoed rather than defaulted.
 test('POST /classes gives a legacy two-field ability the full contract shape', async () => {
   const res = await post('/classes', {
     name: 'Test',
