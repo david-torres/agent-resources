@@ -122,7 +122,57 @@ test('a missing, null or scalar gear value yields an empty array', () => {
 test('a non-string field value is treated as blank', () => {
   expect(normalizeGear([{ name: ['Visor', 'Visor'] }])).toEqual([]);
   expect(normalizeGear([{ name: 'Visor', description: ['a', 'b'], category: ['default'] }]))
-    .toEqual([{ name: 'Visor', description: '', category: 'default', meters: [], notes: [] }]);
+    .toEqual([{ name: 'Visor', description: '', category: 'default', meters: [], notes: [], default_enchantment: null }]);
+});
+
+// Each of an Aspirant class's twelve Signature Items comes with a unique
+// Default Enchantment, unlocked with Merx (ENCLAVE: Aspirant, pg. 86). It is
+// one object, not a list -- a Signature may hold no more than one Enchantment.
+test('a default enchantment keeps its three fields', () => {
+  const [item] = normalizeGear([{
+    name: 'Cowboy Hat',
+    default_enchantment: {
+      name: 'Hats Off to You',
+      description: 'Instantly share an Expertise with an ally.',
+      dedication: 'In Honor of Cowboy Will'
+    }
+  }]);
+
+  expect(item.default_enchantment).toEqual({
+    name: 'Hats Off to You',
+    description: 'Instantly share an Expertise with an ally.',
+    dedication: 'In Honor of Cowboy Will'
+  });
+});
+
+// The dedication is optional -- not every Default Enchantment carries an
+// "In Honor of ..." line. It is stored as null rather than omitted so every
+// enchantment has one shape, the same choice util/class-abilities.js:90-94
+// makes for a Sample Perk's own optional dedication.
+test('a default enchantment with no dedication stores null', () => {
+  const [item] = normalizeGear([{
+    name: 'Revolver',
+    default_enchantment: { name: 'Big Iron', description: 'Project a Vision of past feats.' }
+  }]);
+
+  expect(item.default_enchantment)
+    .toEqual({ name: 'Big Iron', description: 'Project a Vision of past feats.', dedication: null });
+});
+
+// Every one of the fifty live Advent classes has gear with no enchantment, so
+// this is the overwhelmingly common case. It is a present null rather than an
+// absent key so that every item has one shape.
+test('an item with no enchantment gets a null', () => {
+  expect(normalizeGear([named('Visor')])[0].default_enchantment).toBeNull();
+});
+
+// The enchantment's name decides whether it survives, the same rule the item
+// itself follows -- an enchantment is not printable without one.
+test('an unnamed enchantment is dropped', () => {
+  for (const enchantment of [{ description: 'Orphaned.' }, { name: '   ' }, 'Big Iron', 42, null]) {
+    expect(normalizeGear([{ name: 'Visor', default_enchantment: enchantment }])[0].default_enchantment)
+      .toBeNull();
+  }
 });
 
 // The position the default is read from is the position in the SAVED list, with

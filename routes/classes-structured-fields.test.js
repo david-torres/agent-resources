@@ -750,6 +750,7 @@ const expectedNestedGear = {
     text: GEAR_NOTE_TEXT,
     children: [{ text: 'Replaced free of charge, once.', children: [] }],
   }],
+  default_enchantment: null,
 };
 
 test('POST /classes accepts nested gear metadata from the form', async () => {
@@ -788,6 +789,7 @@ test('POST /classes trims the ends of every gear string and nothing else', async
       text: GEAR_NOTE_TEXT,
       children: [{ text: 'Replaced free  of charge, once.', children: [] }],
     }],
+    default_enchantment: null,
   }]);
 });
 
@@ -980,14 +982,16 @@ test('POST /classes keeps gappy gear indices in ascending order', async () => {
     .toEqual(['Nine', 'TwentyOne', 'OneHundred']);
 });
 
-// `name`, `description`, `category`, `meters` and `notes` are this branch's
-// declared gear contract, so a legacy item that only ever had a name and a
-// description picks up the other three on save -- the uniform shape the editor
-// renders and round-trips, and the one both class-view partials guard on. That
-// is normalization, and unlike the abilities' `pronunciation` there is no gear
-// key outside the contract: a census of jsonb_object_keys over all 300 live
-// gear items answers exactly {category, description, name} and
-// {category, description, meters, name, notes}.
+// `name`, `description`, `category`, `meters`, `notes` and
+// `default_enchantment` are this branch's declared gear contract, so a legacy
+// item that only ever had a name and a description picks up the other four on
+// save -- the uniform shape the editor renders and round-trips, and the one
+// both class-view partials guard on. That is normalization, and unlike the
+// abilities' `pronunciation` there is no gear key outside the contract: the
+// pre-Aspirant census of jsonb_object_keys over all 300 live gear items
+// answered exactly {category, description, name} and
+// {category, description, meters, name, notes}, and every one of those items
+// now also carries `default_enchantment: null`.
 test('POST /classes gives a legacy two-field gear item the full contract shape', async () => {
   const res = await post('/classes', {
     name: 'Test',
@@ -1002,6 +1006,7 @@ test('POST /classes gives a legacy two-field gear item the full contract shape',
     category: 'default',
     meters: [],
     notes: [],
+    default_enchantment: null,
   }]);
 });
 

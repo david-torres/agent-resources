@@ -16,10 +16,11 @@
 // hand-built request that omits or misspells it. Both must land in one of the
 // two real columns rather than in neither.
 //
-// It mirrors util/class-abilities.js field for field, with `category` in place
-// of `paired_action`. The two are deliberately separate modules rather than one
-// parameterised normalizer: the ability contract was reviewed and settled in
-// Task 15 and is out of scope to touch here.
+// It mirrors util/class-abilities.js field for field, with `category` and
+// `default_enchantment` in place of `paired_action` and `sample_perks`. The
+// two are deliberately separate modules rather than one parameterised
+// normalizer: the ability contract was reviewed and settled in Task 15 and is
+// out of scope to touch here.
 //
 // It lives here rather than in routes/classes.js so that it can be tested
 // directly, the way util/crop.js's parseImageCrop is -- the object-shaped input
@@ -147,17 +148,35 @@ const normalizeNote = (row) => {
     };
 };
 
+// A Signature may hold no more than one Enchantment (ENCLAVE: Aspirant,
+// pg. 86), so this is one object rather than a list. The dedication is the
+// "In Honor of ..." line the book prints under some enchantment names.
+//
+// The name decides survival, the same rule the item itself follows: an
+// enchantment with no name cannot be referred to during play, and a
+// description with nothing to call it is not worth keeping the item's key for.
+const normalizeEnchantment = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+    const name = trimField(value.name);
+    if (!name) return null;
+    return {
+        name,
+        description: trimField(value.description),
+        dedication: trimField(value.dedication) || null
+    };
+};
+
 // The repeatable gear editor's counterpart. A blank row is a normal
 // intermediate state in a repeater -- the inputs carry no `required` -- so this
 // is the only thing that drops one.
 //
-// `name`, `description`, `category`, `meters` and `notes` are this branch's
-// declared gear contract, so every item gets all five: a legacy item that only
-// ever had a name and a description picks up `category`, `meters: []` and
-// `notes: []` on save. That is normalization, and unlike the abilities'
-// `pronunciation` there is no gear key outside the contract to preserve -- a
-// census of jsonb_object_keys over all 300 live gear items answers exactly
-// {category, description, name} and {category, description, meters, name, notes}.
+// `name`, `description`, `category`, `meters`, `notes` and
+// `default_enchantment` are this branch's declared gear contract, so every item
+// gets all six: a legacy item that only ever had a name and a description picks
+// up the rest on save. The pre-Aspirant census of jsonb_object_keys over the 300
+// live gear items answered {category, description, name} and
+// {category, description, meters, name, notes}; every one of them now also
+// carries `default_enchantment: null`, which is what an Advent Signature has.
 //
 // Blank rows are dropped BEFORE the items are numbered, so `index` is the
 // position in the saved array rather than in the submitted one -- see
@@ -169,7 +188,8 @@ const normalizeGear = (value) => indexedRows(value)
         description: trimField(row.description),
         category: gearCategory(row.category, index),
         meters: indexedRows(row.meters).map(normalizeMeter).filter(Boolean),
-        notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean)
+        notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean),
+        default_enchantment: normalizeEnchantment(row.default_enchantment)
     }));
 
 module.exports = { normalizeGear, gearCategory };
