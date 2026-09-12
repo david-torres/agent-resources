@@ -1089,3 +1089,48 @@ test('POST /classes never writes an unreadable crop into the column', async () =
   await post('/classes', { name: 'New Class', image_crop: '""' });
   expect(capturedCreate).not.toHaveProperty('image_crop');
 });
+
+// An Aspirant class's three Advanced Abilities use the Core Ability contract
+// unchanged, so they run through the same normalizer rather than a second copy
+// of it. The column is written on every save for the same reason `gear` and
+// `abilities` are: the form posts the full list, so an omitted list means an
+// emptied one.
+test('POST /classes normalizes advanced_abilities with the ability contract', async () => {
+  await post('/classes', {
+    name: 'Gunslinger',
+    'advanced_abilities[0][name]': 'High Noon',
+    'advanced_abilities[0][description]': 'Pitch a combat action made by an enemy under pressure.',
+    'advanced_abilities[0][meters][0][label]': 'Essence Cost',
+    'advanced_abilities[0][meters][0][value]': 'Mid',
+    'advanced_abilities[0][sample_perks][0][name]': 'Ecstasy of Gold',
+    'advanced_abilities[0][sample_perks][0][text]': 'Untraceable music plays during the Paired Action.'
+  });
+
+  expect(capturedCreate.advanced_abilities).toEqual([{
+    name: 'High Noon',
+    description: 'Pitch a combat action made by an enemy under pressure.',
+    paired_action: '',
+    meters: [{ label: 'Essence Cost', value: 'Mid' }],
+    notes: [],
+    sample_perks: [
+      { name: 'Ecstasy of Gold', text: 'Untraceable music plays during the Paired Action.', dedication: null, compound_text: null }
+    ]
+  }]);
+});
+
+test('PUT /classes/:id normalizes advanced_abilities with the ability contract', async () => {
+  await put(`/classes/${EXISTING_CLASS_ID}`, {
+    name: 'Gunslinger',
+    'advanced_abilities[0][name]': 'Surefire'
+  });
+
+  expect(capturedUpdate.advanced_abilities).toEqual([{
+    name: 'Surefire', description: '', paired_action: '', meters: [], notes: [], sample_perks: []
+  }]);
+});
+
+test('a save that posts no advanced_abilities empties the column', async () => {
+  await post('/classes', { name: 'Gunslinger' });
+
+  expect(capturedCreate.advanced_abilities).toEqual([]);
+});

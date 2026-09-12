@@ -668,6 +668,11 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     const actor = actorFromLocals(res.locals);
 
     req.body.abilities = normalizeAbilities(req.body.abilities);
+    // Aspirant's three Advanced Abilities carry the Core Ability contract
+    // unchanged (ENCLAVE: Aspirant, pg. 7), so one normalizer serves both
+    // columns. Like `gear` and `abilities`, the column is rewritten on every
+    // save: the form posts the whole list, so an absent list is an emptied one.
+    req.body.advanced_abilities = normalizeAbilities(req.body.advanced_abilities);
     dropRetiredAbilityFields(req.body);
 
     req.body.gear = normalizeGear(req.body.gear);
@@ -735,6 +740,11 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
     applyImageCrop(req.body);
 
     req.body.abilities = normalizeAbilities(req.body.abilities);
+    // Aspirant's three Advanced Abilities carry the Core Ability contract
+    // unchanged (ENCLAVE: Aspirant, pg. 7), so one normalizer serves both
+    // columns. Like `gear` and `abilities`, the column is rewritten on every
+    // save: the form posts the whole list, so an absent list is an emptied one.
+    req.body.advanced_abilities = normalizeAbilities(req.body.advanced_abilities);
     dropRetiredAbilityFields(req.body);
 
     req.body.gear = normalizeGear(req.body.gear);
