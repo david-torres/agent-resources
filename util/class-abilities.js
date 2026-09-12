@@ -3,13 +3,16 @@
 //
 // This is a different function with a different contract from the module-local
 // `normalizeAbilities` in util/class-import.js. Since `f4c5ffc` both emit the
-// same five-key contract -- `name`, `description`, `paired_action`, `meters`,
+// same five-key core -- `name`, `description`, `paired_action`, `meters`,
 // `notes` -- which is what makes an AI-imported class's first admin save a
-// no-op. They differ either side of that: the import one reads already-parsed
-// model output rather than a request body, caps the list at three abilities,
-// and adds `pronunciation` only when the writeup gave a value, where this one
-// echoes `pronunciation` back whenever the request carried the key at all.
-// Neither wraps the other.
+// no-op for those fields. This one also emits `sample_perks`, which
+// util/class-import.js's version does not yet, so that admin save adds an
+// empty `sample_perks: []` rather than being a byte-for-byte no-op. They
+// differ elsewhere too: the import one reads already-parsed model output
+// rather than a request body, caps the list at three abilities, and adds
+// `pronunciation` only when the writeup gave a value, where this one echoes
+// `pronunciation` back whenever the request carried the key at all. Neither
+// wraps the other.
 //
 // It lives here rather than in routes/classes.js so that it can be tested
 // directly, the way util/crop.js's parseImageCrop is -- the object-shaped input
@@ -84,15 +87,35 @@ const normalizeNote = (row) => {
     };
 };
 
+// A Sample Perk is a named piece of text with two optional halves: a
+// dedication ("In Honor of Crow") printed under the name, and the Compounded
+// variant. Both are stored as null rather than omitted so every perk has one
+// shape -- `pronunciation` is the only key in this file that is conditional,
+// and only because two live abilities carry one and nothing else may fabricate it.
+//
+// The name decides survival, matching the drop rule for abilities, gear items
+// and notes: a blank row is a normal intermediate state in the repeater.
+const normalizePerk = (row) => {
+    const name = trimField(row.name);
+    if (!name) return null;
+    return {
+        name,
+        text: trimField(row.text),
+        dedication: trimField(row.dedication) || null,
+        compound_text: trimField(row.compound_text) || null
+    };
+};
+
 // The repeatable ability editor's counterpart. A blank row is a normal
 // intermediate state in a repeater -- the inputs carry no `required` -- so this
 // is the only thing that drops one.
 //
-// `name`, `description`, `paired_action`, `meters` and `notes` are this
-// branch's declared ability contract, so every ability gets all five: a legacy
-// row that only ever had a name and a description picks up `paired_action: ''`,
-// `meters: []` and `notes: []` on save. That is normalization, and it is the
-// uniform shape the editor round-trips.
+// `name`, `description`, `paired_action`, `meters`, `notes` and `sample_perks`
+// are this branch's declared ability contract, so every ability gets all six:
+// a legacy row that only ever had a name and a description picks up
+// `paired_action: ''`, `meters: []`, `notes: []` and `sample_perks: []` on
+// save. That is normalization, and it is the uniform shape the editor
+// round-trips.
 //
 // `pronunciation` is deliberately NOT in that set. It has no input, no view
 // renders it, and of the 150 live abilities 57 carry the KEY while only 2 carry
@@ -108,7 +131,8 @@ const normalizeAbilities = (value) => indexedRows(value)
             description: trimField(row.description),
             paired_action: trimField(row.paired_action),
             meters: indexedRows(row.meters).map(normalizeMeter).filter(Boolean),
-            notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean)
+            notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean),
+            sample_perks: indexedRows(row.sample_perks).map(normalizePerk).filter(Boolean)
         };
         if (row.pronunciation !== undefined) {
             ability.pronunciation = trimField(row.pronunciation) || null;

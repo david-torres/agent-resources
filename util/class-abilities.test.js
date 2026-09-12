@@ -103,5 +103,70 @@ test('a missing, null or scalar abilities value yields an empty array', () => {
 test('a non-string field value is treated as blank', () => {
   expect(normalizeAbilities([{ name: ['Collar', 'Collar'] }])).toEqual([]);
   expect(normalizeAbilities([{ name: 'Collar', description: ['a', 'b'] }]))
-    .toEqual([{ name: 'Collar', description: '', paired_action: '', meters: [], notes: [] }]);
+    .toEqual([{ name: 'Collar', description: '', paired_action: '', meters: [], notes: [], sample_perks: [] }]);
+});
+
+// Every Aspirant ability prints two Sample Perks, one of which has a
+// Compounded variant printed as a complete restatement rather than a delta
+// (ENCLAVE: Aspirant, pg. 7). The book's own wording is what is being quoted,
+// so compound_text holds the whole compounded text and nothing recombines it
+// at render time.
+test('a sample perk keeps its four fields', () => {
+  const [ability] = normalizeAbilities([{
+    name: 'Trickshot',
+    sample_perks: [{
+      name: 'Smoke Off the Barrel',
+      text: 'Jauntily blowing smoke from the gun right after using this Ability will refund its Essence Cost.',
+      dedication: 'In Honor of Caroline',
+      compound_text: 'Refunds the Essence Cost and shortens the Cooldown.'
+    }]
+  }]);
+
+  expect(ability.sample_perks).toEqual([{
+    name: 'Smoke Off the Barrel',
+    text: 'Jauntily blowing smoke from the gun right after using this Ability will refund its Essence Cost.',
+    dedication: 'In Honor of Caroline',
+    compound_text: 'Refunds the Essence Cost and shortens the Cooldown.'
+  }]);
+});
+
+// dedication and compound_text are the two optional halves: most perks carry
+// neither. They are stored as null rather than omitted so that every perk has
+// the same shape, the rule the gear and ability contracts already follow.
+test('a sample perk with no dedication or compound stores nulls', () => {
+  const [ability] = normalizeAbilities([{
+    name: 'Trickshot',
+    sample_perks: [{ name: 'Waco Kid', text: 'Improves hand speed.' }]
+  }]);
+
+  expect(ability.sample_perks).toEqual([
+    { name: 'Waco Kid', text: 'Improves hand speed.', dedication: null, compound_text: null }
+  ]);
+});
+
+// The same rule every other row in this file follows: a blank row is a normal
+// intermediate state in a repeater, so the name is what decides whether it survives.
+test('a sample perk with no name is dropped', () => {
+  const [ability] = normalizeAbilities([{
+    name: 'Trickshot',
+    sample_perks: [{ name: '  ', text: 'Orphaned.' }, { name: 'Waco Kid', text: 'Kept.' }]
+  }]);
+
+  expect(ability.sample_perks.map((perk) => perk.name)).toEqual(['Waco Kid']);
+});
+
+// The shape qs produces past its arrayLimit, for the reason this file's header
+// records. Array order IS the print order.
+test('sample perks are ordered numerically when object-shaped', () => {
+  const sample_perks = {};
+  sample_perks['21'] = { name: 'TwentyOne', text: 't' };
+  sample_perks['9'] = { name: 'Nine', text: 't' };
+
+  const [ability] = normalizeAbilities({ 0: { name: 'Trickshot', sample_perks } });
+
+  expect(ability.sample_perks.map((perk) => perk.name)).toEqual(['Nine', 'TwentyOne']);
+});
+
+test('an ability with no sample perks gets an empty array', () => {
+  expect(normalizeAbilities([named('Collar')])[0].sample_perks).toEqual([]);
 });

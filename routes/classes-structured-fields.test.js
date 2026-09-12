@@ -386,6 +386,7 @@ const expectedNestedAbility = {
     text: NOTE_TEXT,
     children: [{ text: 'Ends early if the collar is destroyed.', children: [] }],
   }],
+  sample_perks: [],
 };
 
 test('POST /classes accepts nested ability metadata from the form', async () => {
@@ -427,6 +428,7 @@ test('POST /classes trims the ends of every ability string and nothing else', as
       text: NOTE_TEXT,
       children: [{ text: 'Ends early  if the collar is destroyed.', children: [] }],
     }],
+    sample_perks: [],
   }]);
 });
 
@@ -516,7 +518,7 @@ test('POST /classes gives every ability, meter list and note an array', async ()
 
   expect(res.status).toBe(200);
   expect(capturedCreate.abilities).toEqual([{
-    name: 'Collar', description: '', paired_action: '', meters: [], notes: [],
+    name: 'Collar', description: '', paired_action: '', meters: [], notes: [], sample_perks: [],
   }]);
 });
 
@@ -687,6 +689,7 @@ test('POST /classes gives a legacy two-field ability the full contract shape', a
     paired_action: '',
     meters: [],
     notes: [],
+    sample_perks: [],
   }]);
 });
 
