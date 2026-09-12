@@ -192,7 +192,8 @@
               "tips": { "type": ["string", "null"], "description": "Markdown bullet list" },
               "designer": { "type": ["string", "null"] },
               "signature_gear": { "type": "array", "items": { "type": "object" } },
-              "abilities": { "type": "array", "items": { "type": "object" } }
+              "abilities": { "type": "array", "items": { "type": "object" } },
+              "advanced_abilities": { "type": "array", "items": { "type": "object" } }
             }
           }
         ]
