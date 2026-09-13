@@ -52,8 +52,10 @@ const capitalize = (str) => {
 
 /**
  * One ability or gear item: everything the structured columns hold, since both
- * carry the same five-key contract (util/class-abilities.js, util/class-gear.js)
- * and an export that printed only name and description would lose the rest.
+ * carry a six-key contract (util/class-abilities.js, util/class-gear.js) and an
+ * export that printed only name and description would lose the rest. The two
+ * contracts differ in their last key alone -- `sample_perks` on an ability,
+ * `default_enchantment` on a gear item -- so one builder serves both.
  */
 const itemLines = (entry) => {
   const item = typeof entry === 'string' ? { name: entry } : entry;
@@ -80,6 +82,25 @@ const itemLines = (entry) => {
       lines.push(`- ${note.text}`);
       for (const child of note.children || []) {
         lines.push(`  - ${child.text}`);
+      }
+    }
+  }
+  // The dedication ("In Honor of Crow") is parenthesised the way `pronunciation`
+  // is above: it qualifies the name rather than standing as content of its own.
+  const dedicated = (row) => (row.dedication ? ` *(${row.dedication})*` : '');
+  if (item.default_enchantment && item.default_enchantment.name) {
+    const enchantment = item.default_enchantment;
+    lines.push('', `**Default Enchantment:** ${enchantment.name}${dedicated(enchantment)}`);
+    if (enchantment.description) {
+      lines.push('', quoted(enchantment.description));
+    }
+  }
+  if (item.sample_perks && item.sample_perks.length > 0) {
+    lines.push('', '**Sample Perks:**', '');
+    for (const perk of item.sample_perks) {
+      lines.push(`- **${perk.name}**${dedicated(perk)}${perk.text ? `: ${perk.text}` : ''}`);
+      if (perk.compound_text) {
+        lines.push(`  - *Compounded:* ${perk.compound_text}`);
       }
     }
   }

@@ -41,7 +41,7 @@ const BEASTMASTER = {
     pronunciation: 'taym',
     meters: [{ label: 'Essence Cost', value: 'Low' }],
     notes: [{ text: 'Bond lasts a Mid Duration.', children: [{ text: 'One beast at a time.', children: [] }] }],
-    sample_perks: [{ name: 'Pack Leader', text: 'Your bonded beasts act on your turn.', dedication: 'In Honor of Siegfried & Roy', compound_text: 'Compounded: all your bonded beasts act on your turn.' }],
+    sample_perks: [{ name: 'Pack Leader', text: 'Your bonded beasts act on your turn.', dedication: 'In Honor of Siegfried & Roy', compound_text: 'All your bonded beasts act on your turn, sighted or not.' }],
   }],
   advanced_abilities: [{
     name: 'Alpha Call',
@@ -49,7 +49,7 @@ const BEASTMASTER = {
     paired_action: 'Raise a fist.',
     meters: [{ label: 'Essence Cost', value: 'High' }],
     notes: [{ text: 'Requires a Perk to unlock.', children: [] }],
-    sample_perks: [],
+    sample_perks: [{ name: 'Herd Sense', text: 'The call reaches beasts out of sight.', dedication: null, compound_text: null }],
   }],
   image_url: null,
   image_crop: null,
@@ -214,6 +214,52 @@ test('the Markdown export prints gear meters and notes', () => {
   expect(content).toContain('Reach');
   expect(content).toContain('Cracks loudly.');
   expect(content).toContain('Startles beasts.');
+});
+
+/*
+ * Markdown is the default export format (routes/classes.js:416, behind the
+ * control at views/class-view.handlebars:68), so a key that renders only in the
+ * JSON export is a key the author who picks the default silently loses -- for
+ * an Aspirant class that is every one of its twelve Signature Items'
+ * Enchantments (ENCLAVE: Aspirant, pg. 8), with no error and no warning.
+ */
+test('the Markdown export prints a gear item default enchantment', () => {
+  const { content } = exportClass(BEASTMASTER, 'markdown');
+  expect(content).toContain('Barbed Lash');
+  expect(content).toContain('Adds bleed on a hit.');
+  expect(content).toContain('In Honor of Roy Horn');
+});
+
+test('the Markdown export prints ability sample perks with both optional halves', () => {
+  const { content } = exportClass(BEASTMASTER, 'markdown');
+  expect(content).toContain('Pack Leader');
+  expect(content).toContain('Your bonded beasts act on your turn.');
+  expect(content).toContain('In Honor of Siegfried & Roy');
+  expect(content).toContain('*Compounded:* All your bonded beasts act on your turn, sighted or not.');
+});
+
+// Advanced Abilities carry the ability contract whole, `sample_perks` included
+// (util/class-abilities.js), and print through the same item builder as the
+// Core Abilities -- asserted against the Advanced section alone so a builder
+// that only ever reached the Core Abilities cannot pass.
+test('the Markdown export prints sample perks on advanced abilities too', () => {
+  const { content } = exportClass(BEASTMASTER, 'markdown');
+  const advanced = content.slice(content.indexOf('## ✨ Advanced Abilities'));
+  expect(advanced).toContain('Alpha Call');
+  expect(advanced).toContain('Herd Sense');
+  expect(advanced).toContain('The call reaches beasts out of sight.');
+});
+
+// The absent values are what every Advent gear item and ability holds, and they
+// render nothing at all -- the rule empty `meters` and `notes` already follow.
+test('the Markdown export prints no enchantment or sample perk label when there is none', () => {
+  const { content } = exportClass({
+    name: 'Legacy',
+    gear: [{ name: 'Sword', description: 'Sharp.', default_enchantment: null }],
+    abilities: [{ name: 'Swing', description: 'Hits.', sample_perks: [] }],
+  }, 'markdown');
+  expect(content).not.toContain('Enchantment');
+  expect(content).not.toContain('Sample Perks');
 });
 
 // The columns are `category`, not position: an item stored as Elective prints
