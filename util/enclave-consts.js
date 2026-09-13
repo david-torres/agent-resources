@@ -167,14 +167,6 @@ const classGearList = {
   ],
 };
 
-const classAdvancedAbilityList = {
-  // Advanced abilities are shown in the character wizard's step 3 primer for
-  // aspirant and aspiring modes (advent mode keeps using classAbilityList
-  // above). Shape mirrors classAbilityList: { ClassName: ['Ability 1', ...] }.
-  // Empty until canonical content is added; backfill-class-advanced-abilities.js
-  // is a no-op against this empty map.
-};
-
 const classAbilityList = {
   Beastmaster: [
     'Sic \'Em!',
@@ -357,7 +349,6 @@ module.exports = {
   playerCreatedClassList,
   classGearList,
   classAbilityList,
-  classAdvancedAbilityList,
   classStatSpread,
   v1LevelingSequence,
   v2LevelingSequence,
