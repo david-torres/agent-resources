@@ -14,7 +14,7 @@
 // What it does, for EVERY class in the database -- not only the 19 imported
 // ones, because the legacy rows are where the shape surprises live:
 //
-//   1. read the stored row (read-only; this test never writes),
+//   1. read the stored row,
 //   2. render views/class-form.handlebars for it, through the real engine and
 //      the real helper set,
 //   3. serialize the rendered form the way a browser would, in jsdom, so
@@ -25,19 +25,38 @@
 //   4. parse that body the way the running app parses it -- the form posts
 //      multipart and the handlers mount `upload.single('class_pdf')`, so
 //      multer's `append-field` builds req.body, NOT qs -- and run it through
-//      the real normalizeAbilities, normalizeGear and parseExamples,
+//      the real normalizeAbilities (over both ability columns, as
+//      routes/classes.js:742 and :747 do), normalizeGear and parseExamples,
 //   5. compare against the stored value.
+//
+// The one row this test writes is its own fixture, inserted before the trip and
+// deleted after it; every other row is read and never written. The fixture
+// exists because the coverage guards at the bottom demand a class carrying a
+// meter, a note, a pronunciation, a sample perk, a default enchantment and an
+// advanced ability, and `bun run seed:local` produces none of them --
+// util/seed-classes.js:56 `buildRow` emits gear and abilities as bare
+// `{name, description: ''}` (:65-66) and `advanced_abilities: []` (:67). The
+// real pre-release corpus supplies all six, but a database that has only been
+// seeded must still prove the comparison compared something, and a guard that
+// can only pass on one operator's machine is a guard that gets deleted.
 //
 // The comparison is byte-exact, with an ENUMERATED allowlist. It deliberately
 // does not "ignore empty values": a fuzzy comparator is exactly how this guard
 // would pass while data was being lost. Every permitted difference below is
 // applied to the EXPECTED value first; anything else fails.
 //
-//   A. Legacy abilities gain `paired_action: ''`, `meters: []`, `notes: []`
-//      (the declared five-key ability contract, util/class-abilities.js).
-//   B. Legacy gear items gain `meters: []`, `notes: []`, and an absent or
-//      unrecognised `category` takes its positional default (util/class-gear.js
-//      `gearCategory`, matching the backfill migration).
+//   A. Legacy abilities gain `paired_action: ''`, `meters: []`, `notes: []` and
+//      `sample_perks: []` (the declared six-key ability contract,
+//      util/class-abilities.js), and a stored sample perk gains an explicit
+//      `dedication: null` and `compound_text: null` for each half it lacks; a
+//      perk with a blank name is dropped. `advanced_abilities` holds that same
+//      contract and is compared under this rule too.
+//   B. Legacy gear items gain `meters: []`, `notes: []` and
+//      `default_enchantment: null`, an absent or unrecognised `category` takes
+//      its positional default (util/class-gear.js `gearCategory`, matching the
+//      backfill migration), and a stored enchantment gains an explicit
+//      `dedication: null` when it has none; an enchantment with a blank name
+//      normalizes to `null` outright.
 //   C. An ability carrying an explicit `pronunciation: null` loses that key. A
 //      pronunciation with a real value MUST survive.
 //   D. Ends-only trimming may remove leading/trailing whitespace. Interior
@@ -66,14 +85,15 @@
 //      only: a stored NULL may never come back as ''. Like rule E it is counted
 //      and named, and may not touch an imported class's loader-written column.
 //
-// Counts (abilities, meters, notes, sub-notes, pronunciations, and every value
-// rules D, E, G and H adjust) are printed rather than only asserted, so a future
+// Counts (abilities, advanced abilities, meters, notes, sub-notes,
+// pronunciations, sample perks, default enchantments, and every value rules D,
+// E, G and H adjust) are printed rather than only asserted, so a future
 // drop shows up in the output instead of hiding behind a green boolean. Every
 // count and every named value is keyed by row id: six class names are duplicated
 // in the corpus.
 require('./require-local-supabase');
 
-const { test, expect } = require('bun:test');
+const { test, expect, beforeAll, afterAll } = require('bun:test');
 const path = require('path');
 const { JSDOM } = require('jsdom');
 const exphbs = require('express-handlebars');
@@ -122,6 +142,7 @@ const NOT_ROUND_TRIPPED = {
     updated_at: 'database timestamp',
     pdf_storage_path: 'written by the upload path, not posted by the form',
     pdf_updated_at: 'written by the upload path, not posted by the form',
+    free_play_access: 'granted by scripts/load-prerelease-classes.mjs and by migration 20260905000000, never by the form: no input renders it, so a save neither reads nor writes it',
     stat_spread: 'the hidden inputs carry Alpine\'s :value, so a static render has no value to read; pinned by routes/classes-stat-spread.test.js and views/class-form.test.js'
 };
 
@@ -146,7 +167,11 @@ const SELECT_FIELDS = [
     'challenge_level', 'prerelease_section', 'status', 'rules_edition', 'rules_version'
 ];
 
-const STRUCTURED_FIELDS = ['abilities', 'gear', 'examples'];
+// `advanced_abilities` belongs here rather than in NOT_ROUND_TRIPPED: the form
+// renders the column into its own repeatable editor and routes/classes.js:747
+// runs the posted rows back through normalizeAbilities, so a save reads and
+// rewrites it exactly as it does `abilities`.
+const STRUCTURED_FIELDS = ['abilities', 'advanced_abilities', 'gear', 'examples'];
 
 // jsonb, and the one column a save may legitimately omit (rule G).
 const CROP_FIELD = 'image_crop';
@@ -216,7 +241,8 @@ const label = (row) => `${row.name}#${row.id.slice(0, 8)}`;
 const counts = {
     classes: 0, imported: 0,
     abilities: 0, ability_meters: 0, ability_notes: 0, ability_sub_notes: 0, pronunciations: 0,
-    gear: 0, gear_meters: 0, gear_notes: 0, gear_sub_notes: 0,
+    advanced_abilities: 0, sample_perks: 0,
+    gear: 0, gear_meters: 0, gear_notes: 0, gear_sub_notes: 0, default_enchantments: 0,
     examples: 0,
     crops_written_back: 0, crops_left_untouched: 0,
     trimmed: [], line_endings_normalized: [], blanks_converged_to_null: []
@@ -252,17 +278,36 @@ const expectedNote = (note, ctx, path) => ({
     }))
 });
 
-// Allowlist A and C.
-const expectedAbilities = (row) => {
-    const ctx = { class: row.id, className: row.name, column: 'abilities' };
-    return (row.abilities || []).map((ability, index) => {
-        const path = `${label(row)}.abilities[${index}]`;
+// Allowlist A's sample-perk half, written out by hand for the reason R84
+// records above: importing normalizePerk to build the expected value would let
+// any change to normalizePerk agree with itself. The rules restated here are
+// that both optional halves are stored as null rather than omitted, so every
+// perk has one shape, and that a blank name drops the perk the way a blank name
+// drops an ability, a gear item or a note.
+const expectedPerks = (perks, ctx, path) => (perks || [])
+    .filter((perk) => trimEnds(String(perk.name ?? '')))
+    .map((perk, index) => ({
+        name: expectedText(perk.name, ctx, `${path}[${index}].name`),
+        text: expectedText(perk.text, ctx, `${path}[${index}].text`),
+        dedication: expectedText(perk.dedication, ctx, `${path}[${index}].dedication`) || null,
+        compound_text: expectedText(perk.compound_text, ctx, `${path}[${index}].compound_text`) || null
+    }));
+
+// Allowlist A and C. `column` is the jsonb column the list came from: the two
+// ability columns carry the identical contract (routes/classes.js:742 and :747
+// run both through the same normalizer), so one builder serves both and the
+// context records which one a reported value belongs to.
+const expectedAbilities = (row, column) => {
+    const ctx = { class: row.id, className: row.name, column };
+    return (row[column] || []).map((ability, index) => {
+        const path = `${label(row)}.${column}[${index}]`;
         const expected = {
             name: expectedText(ability.name, ctx, `${path}.name`),
             description: expectedText(ability.description, ctx, `${path}.description`),
             paired_action: expectedText(ability.paired_action, ctx, `${path}.paired_action`),
             meters: (ability.meters || []).map((meter, i) => expectedMeter(meter, ctx, `${path}.meters[${i}]`)),
-            notes: (ability.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`))
+            notes: (ability.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`)),
+            sample_perks: expectedPerks(ability.sample_perks, ctx, `${path}.sample_perks`)
         };
         // An explicit null loses the key; a real value must survive verbatim.
         if (ability.pronunciation !== undefined && ability.pronunciation !== null) {
@@ -283,6 +328,22 @@ const expectedCategory = (category, index) =>
         ? category
         : (index < BASE_GEAR_COUNT ? 'default' : 'elective'));
 
+// Allowlist B's enchantment half, restated here for the same R84 reason as
+// expectedCategory above rather than imported from normalizeEnchantment. The
+// rules: a Signature holds at most one Enchantment so this is an object and not
+// a list, the key is always present with `null` standing for "this item has
+// none", the name decides survival so a nameless enchantment is `null` whatever
+// else it carries, and a missing dedication is stored as an explicit null.
+const expectedEnchantment = (enchantment, ctx, path) => {
+    if (!enchantment || typeof enchantment !== 'object' || Array.isArray(enchantment)) return null;
+    if (!trimEnds(String(enchantment.name ?? ''))) return null;
+    return {
+        name: expectedText(enchantment.name, ctx, `${path}.name`),
+        description: expectedText(enchantment.description, ctx, `${path}.description`),
+        dedication: expectedText(enchantment.dedication, ctx, `${path}.dedication`) || null
+    };
+};
+
 const expectedGear = (row) => {
     const ctx = { class: row.id, className: row.name, column: 'gear' };
     return (row.gear || []).map((item, index) => {
@@ -292,7 +353,8 @@ const expectedGear = (row) => {
             description: expectedText(item.description, ctx, `${path}.description`),
             category: expectedCategory(item.category, index),
             meters: (item.meters || []).map((meter, i) => expectedMeter(meter, ctx, `${path}.meters[${i}]`)),
-            notes: (item.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`))
+            notes: (item.notes || []).map((note, i) => expectedNote(note, ctx, `${path}.notes[${i}]`)),
+            default_enchantment: expectedEnchantment(item.default_enchantment, ctx, `${path}.default_enchantment`)
         };
     });
 };
@@ -304,6 +366,7 @@ const tally = (row) => {
     for (const ability of row.abilities || []) {
         counts.abilities += 1;
         counts.ability_meters += (ability.meters || []).length;
+        counts.sample_perks += (ability.sample_perks || []).length;
         if (ability.pronunciation) counts.pronunciations += 1;
         if (isImported) {
             imported.abilities += 1;
@@ -319,9 +382,18 @@ const tally = (row) => {
             }
         }
     }
+    // The advanced list is counted apart from the core one so that a drop in
+    // either shows on its own line, and its perks join the same sample_perks
+    // total because the guard below only has to prove that some perk was
+    // compared.
+    for (const ability of row.advanced_abilities || []) {
+        counts.advanced_abilities += 1;
+        counts.sample_perks += (ability.sample_perks || []).length;
+    }
     for (const item of row.gear || []) {
         counts.gear += 1;
         counts.gear_meters += (item.meters || []).length;
+        if (item.default_enchantment) counts.default_enchantments += 1;
         for (const note of item.notes || []) {
             counts.gear_notes += 1;
             counts.gear_sub_notes += (note.children || []).length;
@@ -348,6 +420,7 @@ const roundTrip = async (row) => {
     const payload = {
         image_crop: body.image_crop,
         abilities: normalizeAbilities(body.abilities),
+        advanced_abilities: normalizeAbilities(body.advanced_abilities),
         gear: normalizeGear(body.gear),
         examples: parseExamples(body),
         is_public: body.is_public === 'on',
@@ -382,7 +455,8 @@ const expectedScalar = (row, field) => {
 
 const expectedFor = (row) => ({
     image_crop: row.image_crop,
-    abilities: expectedAbilities(row),
+    abilities: expectedAbilities(row, 'abilities'),
+    advanced_abilities: expectedAbilities(row, 'advanced_abilities'),
     gear: expectedGear(row),
     examples: (row.examples || []).map((example, index) => expectedText(
         example,
@@ -394,7 +468,114 @@ const expectedFor = (row) => ({
         .map((field) => [field, expectedScalar(row, field)]))
 });
 
+// The one row this test writes. It exists so the coverage guards at the bottom
+// can be honest on a database that has only been seeded: `bun run seed:local`
+// emits no meter, note, pronunciation, sample perk, enchantment or advanced
+// ability (util/seed-classes.js:56 `buildRow`), so without this the new keys
+// would be compared as empty on every row and the guards would be measuring
+// nothing. Every value is already in its normalized form -- ends trimmed, LF
+// only -- because the fixture is here to prove the keys survive a save, not to
+// re-test rules D and E.
+//
+// Every optional half is carried twice, once with a value and once without, so
+// the null branch of each rule is exercised rather than only the value branch:
+// an item with a `default_enchantment` and an item with none, an enchantment
+// with a dedication and one without, a perk carrying both optional halves and
+// one carrying neither.
+const FIXTURE_NAME_PREFIX = 'Round Trip Fixture';
+
+const fixtureRow = () => ({
+    name: `${FIXTURE_NAME_PREFIX} ${Date.now()}`,
+    rules_edition: 'aspirant',
+    rules_version: 'v1',
+    status: 'alpha',
+    is_public: false,
+    is_player_created: true,
+    stat_spread: {},
+    examples: [],
+    abilities: [{
+        name: 'Ember Tally',
+        description: 'Bank a spark now to spend it later.',
+        paired_action: 'Focus',
+        pronunciation: 'EM-ber TAL-ee',
+        meters: [{ label: 'Essence Cost', value: 'Low' }],
+        notes: [{ text: 'Sparks do not carry between sessions.', children: [{ text: 'Unless the Warden says so.', children: [] }] }],
+        sample_perks: [
+            {
+                name: 'Kindling',
+                text: 'Bank one extra spark.',
+                dedication: 'In Honor of Crow',
+                compound_text: 'Bank two extra sparks, and one of them burns cold.'
+            },
+            { name: 'Draft', text: 'Spend a spark to reroll.', dedication: null, compound_text: null }
+        ]
+    }],
+    advanced_abilities: [{
+        name: 'Ashfall',
+        description: 'Spend the whole tally at once.',
+        paired_action: 'Strike',
+        meters: [{ label: 'Essence Cost', value: 'High' }],
+        notes: [{ text: 'The tally empties whether or not the strike lands.', children: [] }],
+        sample_perks: [{ name: 'Cinder', text: 'Leave one spark behind.', dedication: null, compound_text: null }]
+    }],
+    gear: [
+        {
+            name: 'Tallow Lantern',
+            description: 'Burns a wick for every spark banked.',
+            category: 'default',
+            meters: [{ label: 'Range', value: 'Near' }],
+            notes: [{ text: 'The flame reads as ordinary firelight.', children: [] }],
+            default_enchantment: {
+                name: 'Hats Off to You',
+                description: 'The flame bows toward whoever last spoke your name.',
+                dedication: 'In Honor of Crow'
+            }
+        },
+        {
+            name: 'Snuffer Cap',
+            description: 'Caps the lantern without pinching the wick.',
+            category: 'default',
+            meters: [],
+            notes: [],
+            // No dedication: the stored null has to come back as null rather
+            // than as the '' the blank input posts, which is the half of the
+            // rule the item above cannot show.
+            default_enchantment: {
+                name: 'Quiet Hours',
+                description: 'The cap makes no sound when it seats.',
+                dedication: null
+            }
+        },
+        {
+            name: 'Wick Trimmer',
+            description: 'Plain iron, kept sharp.',
+            // Explicitly Elective at an index whose positional default is Base,
+            // so a stored category that disagrees with the position is shown to
+            // survive rather than being silently renumbered.
+            category: 'elective',
+            meters: [],
+            notes: [],
+            default_enchantment: null
+        }
+    ]
+});
+
+let fixtureId;
 let classes;
+
+beforeAll(async () => {
+    // A run killed between the insert and the delete leaves its fixture behind,
+    // and a stale one would keep satisfying the guards after the live one stopped
+    // being inserted. Clearing the prefix first means only this run's row counts.
+    await supabase.from('classes').delete().like('name', `${FIXTURE_NAME_PREFIX} %`);
+    const { data, error } = await supabase.from('classes').insert(fixtureRow()).select('id').single();
+    expect(error).toBeNull();
+    fixtureId = data.id;
+});
+
+afterAll(async () => {
+    if (fixtureId) await supabase.from('classes').delete().eq('id', fixtureId);
+});
 
 test('every class column is either round-tripped or listed as not round-tripped', async () => {
     ({ data: classes } = await supabase.from('classes').select('*').order('name'));
@@ -445,6 +626,12 @@ test('saving every class unchanged preserves every metadata field', async () => 
     expect(counts.ability_meters + counts.gear_meters).toBeGreaterThan(0);
     expect(counts.ability_notes + counts.gear_notes).toBeGreaterThan(0);
     expect(counts.pronunciations).toBeGreaterThan(0);
+    // Without these three the Aspirant keys would be compared as empty on every
+    // row and the comparison would prove nothing about them -- which is the
+    // exact failure the four guards above exist to prevent.
+    expect(counts.sample_perks).toBeGreaterThan(0);
+    expect(counts.default_enchantments).toBeGreaterThan(0);
+    expect(counts.advanced_abilities).toBeGreaterThan(0);
     // And rule G cannot quietly become the answer for every row.
     expect(counts.crops_written_back).toBeGreaterThan(0);
 
