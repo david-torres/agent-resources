@@ -84,7 +84,7 @@ test('the import schema asks the model for an overview, not a description', asyn
 
 // Task 13 renamed `description` to `overview` and added nothing else, so the AI
 // path kept emitting the two-field ability and gear items that predate the
-// structured columns. Tasks 14-16 gave both a five-key contract, and an
+// structured columns. Tasks 14-16 gave both a six-key contract, and an
 // importer that cannot express it produces a class whose first admin save
 // changes it.
 test('the import schema asks for the structured class columns', () => {
@@ -131,7 +131,7 @@ test('an imported ability carries its paired action, meters and notes', async ()
   }]);
 });
 
-// The five-key contract, not the model's output: an ability the model returns
+// The six-key contract, not the model's output: an ability the model returns
 // bare still reaches the database in the shape a form save would write, so the
 // first save changes nothing.
 test('an imported ability without extras still gets the full contract shape', async () => {
@@ -220,7 +220,7 @@ test('a teaser and tips the model gave are written through', async () => {
 });
 
 // An Aspirant class has twelve Signature Items, not six, and three Advanced
-// Abilities on top of its three Core (ENCLAVE: Aspirant, pg. 11). The caps are
+// Abilities on top of its three Core (ENCLAVE: Aspirant, pg. 8). The caps are
 // per-edition because an Advent writeup that yields twelve items is a
 // hallucination, while an Aspirant one that yields six is a truncation.
 test('an aspirant import keeps all twelve gear items', async () => {
@@ -237,7 +237,7 @@ test('an advent import is still capped at six gear items', async () => {
 
 // Advanced Abilities carry the Core Ability contract unchanged (ENCLAVE:
 // Aspirant, pg. 7; routes/classes.js:671-673), so the importer reuses
-// normalizeAbilities rather than a second copy of the five-key shape.
+// normalizeAbilities rather than a second copy of the six-key shape.
 test('an import carries advanced abilities through in the ability contract', async () => {
   const created = await importClass({
     rules_edition: 'aspirant',

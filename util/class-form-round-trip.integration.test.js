@@ -567,7 +567,8 @@ beforeAll(async () => {
     // A run killed between the insert and the delete leaves its fixture behind,
     // and a stale one would keep satisfying the guards after the live one stopped
     // being inserted. Clearing the prefix first means only this run's row counts.
-    await supabase.from('classes').delete().like('name', `${FIXTURE_NAME_PREFIX} %`);
+    const { error: cleared } = await supabase.from('classes').delete().like('name', `${FIXTURE_NAME_PREFIX} %`);
+    expect(cleared).toBeNull();
     const { data, error } = await supabase.from('classes').insert(fixtureRow()).select('id').single();
     expect(error).toBeNull();
     fixtureId = data.id;

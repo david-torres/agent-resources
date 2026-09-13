@@ -3,12 +3,10 @@
 //
 // This is a different function with a different contract from the module-local
 // `normalizeAbilities` in util/class-import.js. Since `f4c5ffc` both emit the
-// same five-key core -- `name`, `description`, `paired_action`, `meters`,
-// `notes` -- which is what makes an AI-imported class's first admin save a
-// no-op for those fields. This one also emits `sample_perks`, which
-// util/class-import.js's version does not yet, so that admin save adds an
-// empty `sample_perks: []` rather than being a byte-for-byte no-op. They
-// differ elsewhere too: the import one reads already-parsed model output
+// same six-key core -- `name`, `description`, `paired_action`, `meters`,
+// `notes`, `sample_perks` -- which is what makes an AI-imported class's first
+// admin save a byte-for-byte no-op for those fields. They differ elsewhere
+// though: the import one reads already-parsed model output
 // rather than a request body, caps the list at three abilities, and adds
 // `pronunciation` only when the writeup gave a value, where this one echoes
 // `pronunciation` back whenever the request carried the key at all. Neither

@@ -3,11 +3,11 @@
 //
 // This is a different function with a different contract from the module-local
 // `normalizeGear` in util/class-import.js. Since `f4c5ffc` both emit the same
-// five-key contract -- `name`, `description`, `category`, `meters`, `notes` --
-// and both apply the same positional `category` default (R79), which is what
-// makes an AI-imported class's first admin save a no-op. The import one reads
-// already-parsed model output rather than a request body and caps the list at
-// six items. Neither wraps the other.
+// six-key contract -- `name`, `description`, `category`, `meters`, `notes`,
+// `default_enchantment` -- and both apply the same positional `category`
+// default (R79), which is what makes an AI-imported class's first admin save a
+// no-op. The import one reads already-parsed model output rather than a request
+// body and caps the list per rules edition. Neither wraps the other.
 //
 // So the AI path is no longer why the positional default below has to keep
 // working: it now supplies its own. What keeps the default here is everything
@@ -173,10 +173,11 @@ const normalizeEnchantment = (value) => {
 // `name`, `description`, `category`, `meters`, `notes` and
 // `default_enchantment` are this branch's declared gear contract, so every item
 // gets all six: a legacy item that only ever had a name and a description picks
-// up the rest on save. The pre-Aspirant census of jsonb_object_keys over the 300
-// live gear items answered {category, description, name} and
-// {category, description, meters, name, notes}; every one of them now also
-// carries `default_enchantment: null`, which is what an Advent Signature has.
+// up the rest on save. A census of jsonb_object_keys over the 300 live gear
+// items answers {category, description, name} and
+// {category, description, meters, name, notes}: a stored item only picks
+// `default_enchantment: null` up on its next save, which is what an Advent
+// Signature has.
 //
 // Blank rows are dropped BEFORE the items are numbered, so `index` is the
 // position in the saved array rather than in the submitted one -- see

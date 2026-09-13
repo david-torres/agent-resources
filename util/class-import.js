@@ -89,7 +89,7 @@ const schema = z.object({
 });
 
 // Everything below emits the contract Tasks 15 and 16 settled for the admin
-// form -- five keys per ability, five per gear item -- rather than whatever
+// form -- six keys per ability, six per gear item -- rather than whatever
 // subset the model happened to return. A class imported in the canonical shape
 // is a class whose first admin save changes nothing, which is the whole point
 // of util/class-form-round-trip.integration.test.js.
