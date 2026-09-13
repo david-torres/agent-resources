@@ -117,3 +117,13 @@ test('no seeded class row carries a description column', () => {
     expect(row).not.toHaveProperty('description');
   }
 });
+
+// buildRow has emitted this since 8d5edaa and nothing pinned it, so a seed
+// that stopped emitting it would only surface as a NOT NULL violation from
+// 20260912000000_advanced_abilities_not_null.sql at insert time, long after
+// the change.
+test('every seeded class row carries an empty advanced_abilities array', () => {
+  for (const row of buildHardcodedClasses()) {
+    expect(row.advanced_abilities).toEqual([]);
+  }
+});

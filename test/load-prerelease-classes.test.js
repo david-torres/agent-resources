@@ -121,6 +121,17 @@ test('the payload carries the allowlist and nothing else', () => {
   }
 });
 
+// FIELDS and buildPayload are compared against each other above, so widening
+// FIELDS alone stays green while buildPayload silently omits the key for every
+// record. The column is NOT NULL as of
+// supabase/migrations/20260912000000_advanced_abilities_not_null.sql, so an
+// omitted key is an insert failure rather than a null row.
+test('every payload carries an advanced_abilities array', () => {
+  for (const record of records) {
+    expect(Array.isArray(buildPayload(record).advanced_abilities)).toBe(true);
+  }
+});
+
 test('tips are written as a markdown bullet list', () => {
   const payload = buildPayload(records[0]);
   expect(payload.tips.split('\n').every((line) => line.startsWith('- '))).toBe(true);

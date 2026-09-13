@@ -49,7 +49,8 @@ const SECTIONS = { PCCs: 'pcc', EXCLUSIVES: 'exclusive', 'ASPIRANT CLASSES': 'as
 
 export const FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
     'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples', 'tips_heading',
-    'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear'];
+    'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear',
+    'advanced_abilities'];
 
 // `rules_version` is NOT NULL with no column default, so a new row cannot be
 // inserted without it. It is never part of an update payload -- an existing row
@@ -97,7 +98,14 @@ const DERIVED = {
   name: (record) => displayName(record.name),
   prerelease_section: (record) => sectionEnum(record.prerelease_section),
   free_play_access: () => true,
-  tips: (record) => tipsMarkdown(record.tips)
+  tips: (record) => tipsMarkdown(record.tips),
+  // The August 2026 artifact predates Aspirant V1 and carries no advanced
+  // abilities, so every record loads []. The key is emitted unconditionally
+  // because the column is NOT NULL
+  // (supabase/migrations/20260912000000_advanced_abilities_not_null.sql) and
+  // because the allowlist test compares the payload's key set against FIELDS
+  // exactly.
+  advanced_abilities: (record) => record.advanced_abilities ?? []
 };
 
 // util/whitespace-integrity.integration.test.js fails the build on any stored
