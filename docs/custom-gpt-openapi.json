@@ -150,6 +150,74 @@
           "token": { "type": "object" }
         }
       },
+      "Meter": {
+        "type": "object",
+        "description": "A label/value pair printed beside an ability or item, e.g. Essence Cost / Mid.",
+        "properties": {
+          "label": { "type": "string" },
+          "value": { "type": "string" }
+        }
+      },
+      "Note": {
+        "type": "object",
+        "description": "A bulleted note. Nests exactly two levels: a note and its sub-bullets, no grandchildren.",
+        "properties": {
+          "text": { "type": "string" },
+          "children": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "text": { "type": "string" },
+                "children": { "type": "array", "items": {}, "description": "Always empty; the nesting stops here." }
+              }
+            }
+          }
+        }
+      },
+      "SignatureItem": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "category": { "type": "string", "enum": ["default", "elective"], "description": "Base or Elective roster. Advent only; Aspirant abolished the split." },
+          "meters": { "type": "array", "items": { "$ref": "#/components/schemas/Meter" } },
+          "notes": { "type": "array", "items": { "$ref": "#/components/schemas/Note" } },
+          "default_enchantment": {
+            "type": ["object", "null"],
+            "description": "The item's Default Enchantment, unlocked with Merx. Null on every Advent item; a Signature may hold only one.",
+            "properties": {
+              "name": { "type": "string" },
+              "description": { "type": "string" },
+              "dedication": { "type": ["string", "null"], "description": "An 'In Honor of ...' line printed under the name." }
+            }
+          }
+        }
+      },
+      "Ability": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "paired_action": { "type": "string" },
+          "pronunciation": { "type": "string", "description": "Present only on the few abilities whose writeup gives one." },
+          "meters": { "type": "array", "items": { "$ref": "#/components/schemas/Meter" } },
+          "notes": { "type": "array", "items": { "$ref": "#/components/schemas/Note" } },
+          "sample_perks": {
+            "type": "array",
+            "description": "The two Sample Perks printed under an Aspirant ability. Empty on every Advent ability.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "text": { "type": "string" },
+                "dedication": { "type": ["string", "null"] },
+                "compound_text": { "type": ["string", "null"], "description": "The Compounded variant, restated in full rather than as a delta. Null on the perk that has none." }
+              }
+            }
+          }
+        }
+      },
       "ClassSummary": {
         "type": "object",
         "properties": {
@@ -191,9 +259,9 @@
               "tips_heading": { "type": ["string", "null"] },
               "tips": { "type": ["string", "null"], "description": "Markdown bullet list" },
               "designer": { "type": ["string", "null"] },
-              "signature_gear": { "type": "array", "items": { "type": "object" } },
-              "abilities": { "type": "array", "items": { "type": "object" } },
-              "advanced_abilities": { "type": "array", "items": { "type": "object" } }
+              "signature_gear": { "type": "array", "items": { "$ref": "#/components/schemas/SignatureItem" } },
+              "abilities": { "type": "array", "items": { "$ref": "#/components/schemas/Ability" } },
+              "advanced_abilities": { "type": "array", "items": { "$ref": "#/components/schemas/Ability" } }
             }
           }
         ]
