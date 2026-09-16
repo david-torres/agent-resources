@@ -181,6 +181,8 @@
           "name": { "type": "string" },
           "description": { "type": "string" },
           "category": { "type": "string", "enum": ["default", "elective"], "description": "Base or Elective roster. Advent only; Aspirant abolished the split." },
+          "column": { "type": "integer", "description": "Which of the four Signature columns (1-4) this item prints in. Aspirant only." },
+          "position": { "type": "integer", "description": "Position within its column (1-3). Aspirant only." },
           "meters": { "type": "array", "items": { "$ref": "#/components/schemas/Meter" } },
           "notes": { "type": "array", "items": { "$ref": "#/components/schemas/Note" } },
           "default_enchantment": {
