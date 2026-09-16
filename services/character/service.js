@@ -78,9 +78,11 @@ const requireOwnedCharacterLean = async (adapter, actor, id) => {
   return character;
 };
 
-// An ability with no submitted tag is core: advent characters send no type at
-// all, and class_abilities.type is NOT NULL (20260913000000).
-const abilityType = (value) => (value === 'advanced' ? 'advanced' : 'core');
+// A submit that says nothing about type must not retag anything: the edit form
+// sends abilities as bare "Class::Ability" strings, so an absent tag means
+// "keep whatever is stored", not "core". Callers resolve the null themselves --
+// from the existing row, or from the 'core' default for a brand-new one.
+const submittedAbilityType = (value) => (value === 'advanced' || value === 'core' ? value : null);
 
 const resolveSubmittedGear = (gear, gearNameToClassId) => {
   const submitted = Array.isArray(gear) ? gear : (gear ? [gear] : []);
@@ -331,7 +333,7 @@ class CharacterService {
     }));
     const abilities = childData.classAbilities == null ? null : normalizeAbilityItems(childData.classAbilities).map(item => ({
       name: item.name,
-      type: abilityType(item.type),
+      type: submittedAbilityType(item.type),
       ...resolveClassItem('abilities', item, maps.abilityNameToClassId, maps.abilityNameToDescription)
     }));
     if ((gear || []).some(item => !item.class_id)) {
@@ -417,6 +419,14 @@ class CharacterService {
     const existing = await this.adapter.getChildRows('class_abilities', characterId);
     if (existing.error) return existing;
     const { abilityNameToClassId, abilityNameToDescription } = await this.adapter.getClassContentLookupMaps();
+    // Keyed the way diffChildRows keys these rows, so an untagged submit inherits
+    // the tag of the row it will match. First occurrence wins, matching the FIFO
+    // pairing diffChildRows uses for duplicate keys.
+    const storedTypes = new Map();
+    for (const row of existing.data ?? []) {
+      const key = `${row.class_id}:${row.name}`;
+      if (!storedTypes.has(key)) storedTypes.set(key, row.type);
+    }
     const desired = [];
     for (const item of normalizeAbilityItems(abilities)) {
       const classId = item.class_id ?? abilityNameToClassId.get(item.name);
@@ -425,7 +435,7 @@ class CharacterService {
         name: item.name,
         class_id: classId,
         description: item.description ?? abilityNameToDescription.get(item.name) ?? null,
-        type: abilityType(item.type)
+        type: submittedAbilityType(item.type) ?? storedTypes.get(`${classId}:${item.name}`) ?? 'core'
       });
     }
     const applied = await this.applyChildDiff('class_abilities', characterId, diffChildRows(existing.data, desired, {

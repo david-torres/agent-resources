@@ -618,3 +618,20 @@ test('retagging an ability updates the row instead of replacing it', async () =>
   const updated = calls.find(c => c[0] === 'updateChildRow');
   expect(updated[3]).toEqual({ type: 'advanced' });
 });
+
+// type is an attribute, not identity: the edit form submits abilities with no
+// type at all, so a save that says nothing about type must leave the stored tag
+// alone rather than silently retagging an advanced ability core.
+test('an ability submitted without a type keeps the stored type of an existing row', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getChildRows: async (table, id) => {
+      calls.push(['getChildRows', table, id]);
+      return ok([{ id: 'row-1', name: 'Dodge', class_id: 'class-a', description: null, type: 'advanced' }]);
+    }
+  }));
+  await service.reconcileAbilities('character-1', [{ name: 'Dodge', class_id: 'class-a' }]);
+  expect(calls.some(c => c[0] === 'updateChildRow' && c[3].type === 'core')).toBe(false);
+  expect(calls.some(c => c[0] === 'deleteChildRows' && c[3].length)).toBe(false);
+  expect(calls.some(c => c[0] === 'insertChildRows' && c[3].length)).toBe(false);
+});

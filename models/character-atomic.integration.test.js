@@ -406,3 +406,25 @@ test('save_character_atomic persists and updates the ability type', async () => 
   expect(second[0].id).toBe(first[0].id);
   expect(second[0].type).toBe('core');
 });
+
+// The edit form submits abilities with no type at all, so an absent type is not
+// an instruction to make the ability core -- it means "leave the tag alone".
+// Only a brand-new ability with no submitted type may default to 'core'.
+test('re-saving an ability without a type keeps its stored type and row id', async () => {
+  await setup();
+  const { data: created } = await createCharacter({
+    ...input(`Atomic Untyped ${suffix}`),
+    abilities: [{ name: 'Atomic Ability', class_id: characterClass.id, type: 'advanced' }]
+  }, profile);
+  const first = await childRows('class_abilities', created.id);
+  expect(first[0].type).toBe('advanced');
+
+  await updateCharacter(created.id, {
+    ...input(`Atomic Untyped ${suffix}`),
+    abilities: [{ name: 'Atomic Ability', class_id: characterClass.id }]
+  }, profile);
+  const second = await childRows('class_abilities', created.id);
+
+  expect(second[0].type).toBe('advanced');
+  expect(second[0].id).toBe(first[0].id);
+});
