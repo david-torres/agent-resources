@@ -24,7 +24,8 @@
 - **`type` is an attribute, never part of a row's identity.** The diff key stays `(class_id, name, occ)` in the RPC and `` `${row.class_id}:${row.name}` `` in `diffChildRows`. Do not add `type` to any `keyOf` or any `PARTITION BY`.
 - **No column stores the Merx or Perk spend.** If a task seems to need one, stop — the spend is derived from the picks by design.
 - Put schema changes in a **new** timestamped `supabase/migrations/` file. Never edit an applied migration. Latest applied is `20260912000001`; this plan's migrations are `20260913000000`, `20260913000001`, `20260913000002`.
-- **Migrations and any integration run target LOCAL Supabase only.** The checked-in `.env` points at the **production** project. `bun run test:unit` scrubs it; `supabase start` + `supabase db reset` is the local path.
+- **Migrations and any integration run target LOCAL Supabase only.** Read the `SUPABASE_URL` line in `.env` before running anything that writes — it is hand-switched between the local stack and the live project. `bun run test:unit` scrubs it.
+- **Apply migrations with `supabase migration up`. NEVER run `supabase db reset`.** The local database holds a restored production copy (hundreds of characters and auth users), not seed data; a reset destroys it and the restore needs a dump plus a privileged `auth.users` step. `migration up` applies pending migrations in place.
 - Tests use `bun:test` (`const { test, expect } = require('bun:test');`). No `describe()` blocks — flat `test('lowercase sentence describing the rule', ...)`. Every non-obvious test carries a block comment above it saying **why the rule exists**, citing a file:line or migration where one applies. This is the strongest convention in the repo.
 - A new test file lands in the unit bucket by default. If it boots Express add it to `httpFiles` in `scripts/run-tests.mjs`; if it needs Supabase add it to `integrationFiles` and start the file with `require('./require-local-supabase');`.
 - Run `bun run check` and `bun run test` before every commit.
@@ -160,7 +161,7 @@ WHERE a.class_id = c.id
 - [ ] **Step 5: Apply and re-run**
 
 ```bash
-supabase db reset
+supabase migration up
 bun run test:integration
 ```
 
@@ -426,7 +427,7 @@ The changed block:
 - [ ] **Step 4: Apply and re-run**
 
 ```bash
-supabase db reset
+supabase migration up
 bun run test:integration
 ```
 
@@ -469,7 +470,7 @@ ALTER TABLE public.characters
 - [ ] **Step 2: Apply and confirm nothing broke**
 
 ```bash
-supabase db reset
+supabase migration up
 bun run test
 ```
 

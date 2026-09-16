@@ -196,8 +196,9 @@ New coverage:
 - an e2e aspiring happy path, of which there is none today
 
 **Migrations and integration runs target local Supabase only.** The checked-in
-`.env` points at the production project. `bun run test:unit` scrubs it; the local
-path is `supabase start` + `supabase db reset`.
+`.env` points at the production project. `bun run test:unit` scrubs it; migrations
+are applied with `supabase migration up`. Never `supabase db reset` — the local
+database holds a restored production copy, not seed data.
 
 ## Success criteria
 
