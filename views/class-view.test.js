@@ -2,6 +2,7 @@ const { test, expect, beforeAll, beforeEach } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
 const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
+const { signatureColumns } = require('../util/class-gear');
 
 beforeAll(async () => {
   await setupAlpine();
@@ -92,9 +93,47 @@ test('paired_action renders through the power-ratings helper', () => {
   expect(SRC).not.toContain('{{this.paired_action}}');
 });
 
-test('class-view branches the signature layout on content_format', () => {
-  expect(SRC).toContain('class-signature-columns');
-  expect(SRC).toContain('class-expanded-tips');
+// Guards the actual `{{#if (eq class.content_format "aspirant")}}` branch --
+// asserting only that both partial names appear in source (the old version of
+// this test) passes even if the guard is deleted, inverted, or misspelled.
+// Renders both formats for real, the way `paired_action renders through the
+// power-ratings helper` above pins its own branch: a presence assertion for
+// the format under test and an absence assertion for the other format's markup.
+test('class-view renders the four signature-column layout for content_format aspirant, not the Advent Base/Elective split', () => {
+  const gear = Array.from({ length: 12 }, (_, i) => ({
+    name: `Item ${i + 1}`,
+    description: '',
+    category: i < 6 ? 'default' : 'elective',
+    column: Math.floor(i / 3) + 1,
+    position: (i % 3) + 1,
+    meters: [],
+    notes: [],
+    default_enchantment: null
+  }));
+  const html = renderClassView({
+    class: { id: 'c1', name: 'Test Class', content_format: 'aspirant', abilities: [], gear },
+    signatureColumns: signatureColumns(gear)
+  });
+  expect(html.match(/class="column signature-column"/g)).toHaveLength(4);
+  expect(html).not.toContain('Base Gear');
+  expect(html).not.toContain('Elective Gear');
+});
+
+test('class-view renders the Advent Base/Elective gear split for content_format advent, not signature columns', () => {
+  const gear = [
+    { name: 'Base One', description: '', category: 'default', meters: [], notes: [] },
+    { name: 'Base Two', description: '', category: 'default', meters: [], notes: [] },
+    { name: 'Base Three', description: '', category: 'default', meters: [], notes: [] },
+    { name: 'Elective One', description: '', category: 'elective', meters: [], notes: [] },
+    { name: 'Elective Two', description: '', category: 'elective', meters: [], notes: [] },
+    { name: 'Elective Three', description: '', category: 'elective', meters: [], notes: [] }
+  ];
+  const html = renderClassView({
+    class: { id: 'c1', name: 'Test Class', content_format: 'advent', abilities: [], gear }
+  });
+  expect(html).toContain('Base Gear');
+  expect(html).toContain('Elective Gear');
+  expect(html).not.toContain('signature-column');
 });
 
 // Mirrors the real duplicate-modal markup closely enough to exercise the
