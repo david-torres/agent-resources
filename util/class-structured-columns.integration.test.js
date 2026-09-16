@@ -84,6 +84,18 @@ test('advanced_abilities rejects an explicit null', async () => {
   expect(error?.code).toBe('23502');
 });
 
+test('expanded_tips is never null and rejects an explicit null', async () => {
+  const { data } = await sb.from('classes').select('id, expanded_tips');
+  expect(data.every((row) => row.expanded_tips !== null)).toBe(true);
+
+  const { error } = await sb
+    .from('classes')
+    .update({ expanded_tips: null })
+    .eq('name', 'Berserker');
+  expect(error).not.toBeNull();
+  expect(error.code).toBe('23502');
+});
+
 describe('classes.content_format', () => {
   test('defaults to advent and is never null', async () => {
     const { data, error } = await sb
