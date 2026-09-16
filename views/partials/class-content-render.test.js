@@ -82,7 +82,7 @@ describe('signature columns', () => {
     const html = renderPartial('class-signature-columns', {
       columns: signatureColumns(gear)
     });
-    expect(html.match(/class="signature-column"/g)).toHaveLength(4);
+    expect(html.match(/class="column signature-column"/g)).toHaveLength(4);
     for (let i = 1; i <= 12; i += 1) expect(html).toContain(`Item ${i}`);
   });
 });
