@@ -178,6 +178,25 @@ const normalizeStatsPayload = (body = {}) => {
   return out;
 };
 
+// Structural invariants only. The 10-Merx and 4-Perk budgets stay client-side
+// (public/js/character-wizard.js:1504-1510) -- mirroring the rules engine here
+// would give the economy two sources of truth that can drift.
+const validateAspiringBuild = (body) => {
+  const name = typeof body.pseudo_class?.name === 'string' ? body.pseudo_class.name.trim() : '';
+  if (!name) return 'An Aspiring character needs a class name.';
+
+  const gear = Array.isArray(body.gear) ? body.gear : [];
+  if (gear.length !== 3) return 'An Aspiring character needs exactly three gear picks.';
+
+  const abilities = Array.isArray(body.abilities) ? body.abilities : [];
+  const core = abilities.filter(a => a && a.type === 'core').length;
+  const advanced = abilities.filter(a => a && a.type === 'advanced').length;
+  if (abilities.length !== 3 || core !== 2 || advanced !== 1) {
+    return 'An Aspiring character needs two core abilities and one advanced ability.';
+  }
+  return null;
+};
+
 const normalizeWizardPayload = (rawBody) => {
   const body = trimStrings(cloneInput(rawBody));
 
@@ -189,6 +208,11 @@ const normalizeWizardPayload = (rawBody) => {
 
   if (body.creator_mode != null && body.creator_mode !== '' && !CREATOR_MODES.includes(body.creator_mode)) {
     return { data: null, error: `Invalid mode: ${body.creator_mode}` };
+  }
+
+  if (body.creator_mode === 'aspiring') {
+    const invalid = validateAspiringBuild(body);
+    if (invalid) return { data: null, error: invalid };
   }
 
   const knownStats = new Set(statList);

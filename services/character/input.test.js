@@ -258,3 +258,65 @@ test('a non-aspiring payload is untouched by the pseudo-class mapping', () => {
   expect(result.data).not.toHaveProperty('pseudo_class_tagline');
   expect(result.data).not.toHaveProperty('pseudo_class_description');
 });
+
+const aspiringBody = (overrides = {}) => ({
+  name: 'Vesper',
+  creator_mode: 'aspiring',
+  pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+  gear: [
+    { name: 'Knife', class_id: 'class-a' },
+    { name: 'Rope', class_id: 'class-b' },
+    { name: 'Lamp', class_id: 'class-c' }
+  ],
+  abilities: [
+    { name: 'Dodge', class_id: 'class-a', type: 'core' },
+    { name: 'Parry', class_id: 'class-b', type: 'core' },
+    { name: 'Overdrive', class_id: 'class-c', type: 'advanced' }
+  ],
+  ...overrides
+});
+
+// The builder fills exactly six slots (public/js/character-wizard.js:1489-1510).
+// POST /characters/wizard is otherwise mode-agnostic, so this is the only place
+// a malformed aspiring build is stopped before the insert.
+test('accepts a well-formed aspiring submit', () => {
+  const result = normalizeWizardPayload(aspiringBody());
+  expect(result.error).toBeNull();
+});
+
+test('rejects an aspiring submit without three gear picks', () => {
+  const result = normalizeWizardPayload(aspiringBody({
+    gear: [{ name: 'Knife', class_id: 'class-a' }]
+  }));
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/three gear/i);
+});
+
+test('rejects an aspiring submit without two core and one advanced ability', () => {
+  const result = normalizeWizardPayload(aspiringBody({
+    abilities: [
+      { name: 'Dodge', class_id: 'class-a', type: 'core' },
+      { name: 'Parry', class_id: 'class-b', type: 'core' },
+      { name: 'Guard', class_id: 'class-c', type: 'core' }
+    ]
+  }));
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/two core/i);
+});
+
+// Without a name there is nothing to put in characters.class, which is NOT NULL.
+test('rejects an aspiring submit with a blank pseudo-class name', () => {
+  const result = normalizeWizardPayload(aspiringBody({
+    pseudo_class: { name: '   ', tagline: '', description: '' }
+  }));
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/class name/i);
+});
+
+// Advent and aspirant submits must not be held to the aspiring build rules.
+test('leaves a non-aspiring submit unvalidated by the aspiring rules', () => {
+  const result = normalizeWizardPayload({
+    name: 'Kell', creator_mode: 'advent', class_id: 'class-a'
+  });
+  expect(result.error).toBeNull();
+});
