@@ -11,6 +11,7 @@ const integrationFiles = new Set([
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
   'routes/mcp-oauth.integration.test.js',
+  'util/class-ability-type.integration.test.js',
   'util/character-content-integrity.integration.test.js',
   'util/class-description-dropped.integration.test.js',
   'util/class-duplicate.integration.test.js',
