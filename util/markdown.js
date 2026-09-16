@@ -41,6 +41,9 @@ function renderMarkdown(input) {
 // markdown parser would start interpreting asterisks and underscores that have
 // been literal text until now. Permitting exactly one tag keeps the change to
 // the one thing it is for.
+//
+// Element text position only -- quotes are not escaped, so this must never be
+// used inside an attribute value.
 const renderPowerRatings = (input) => sanitizeHtml(String(input ?? ''), {
   allowedTags: ['sup'],
   allowedAttributes: {}

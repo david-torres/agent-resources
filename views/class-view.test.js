@@ -415,11 +415,9 @@ test('renders ability meters and notes through the real class-meters/class-notes
 
 // Pins the neutralized slots. Nothing previously stopped a `{{ }}` becoming a
 // `{{{ }}}` in class-meters, class-notes, or the ability card -- proven by
-// flipping each and re-running before writing these. Meters stay a plain
-// `{{ }}` escape; notes and paired_action now go through the powerRatings
-// sanitizer, which strips a `<script>` tag and its contents outright rather
-// than escaping it, so those two assert on the survival of trailing text
-// instead of on an escaped literal.
+// flipping each and re-running before writing these. Meters escape via
+// `{{ }}`; notes and paired_action are sanitized by `powerRatings`, which
+// strips `<script>` and its contents, so they assert on surviving text.
 const XSS = '<script>alert(1)</script>';
 
 test('meter labels and values are HTML-escaped', () => {
@@ -446,12 +444,13 @@ test('note text is sanitized, at the root and in a child', () => {
         description: 'g',
         category: 'default',
         meters: [],
-        notes: [{ text: `${XSS}root`, children: [{ text: `${XSS}child`, children: [] }] }],
+        notes: [{ text: `${XSS}root`, children: [{ text: `${XSS}child<img src=x onerror=alert(2)>`, children: [] }] }],
       }],
     },
   });
   expect(html).not.toContain(XSS);
   expect(html).not.toContain('<script>');
+  expect(html).not.toContain('onerror');
   expect(html).toContain('root');
   expect(html).toContain('child');
 });
@@ -462,11 +461,12 @@ test('an ability paired action is sanitized', () => {
       id: 'c1',
       name: 'Test Class',
       gear: [],
-      abilities: [{ name: 'A', description: 'd', paired_action: `${XSS}safe`, meters: [], notes: [] }],
+      abilities: [{ name: 'A', description: 'd', paired_action: `${XSS}safe<a href="javascript:alert(3)">c</a>`, meters: [], notes: [] }],
     },
   });
   expect(html).not.toContain(XSS);
   expect(html).not.toContain('<script>');
+  expect(html).not.toContain('javascript:');
   expect(html).toContain('safe');
 });
 
