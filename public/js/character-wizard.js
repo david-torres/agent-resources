@@ -848,11 +848,33 @@ const getMerxBudget = () => {
   // trait3 bonus if the typed value happens to match.
   const isSplitMode = () => DATA.mode === 'aspirant' || DATA.mode === 'aspiring';
 
+  // Aspiring is class-less, so trait slots 1 and 2 draw on the union of the
+  // stat spreads of the classes the builder borrowed its six slots from.
+  // Without this they get no options at all and fillStatSelect disables them.
+  const getAspiringSpreadStats = () => {
+    const build = state.classBuild || {};
+    const slots = []
+      .concat(build.classGear || [])
+      .concat(build.coreAbilities || [])
+      .concat(build.advancedAbility ? [build.advancedAbility] : []);
+    const stats = [];
+    slots.forEach((slot) => {
+      const cls = slot && slot.classId ? classesById[slot.classId] : null;
+      if (!cls || !cls.stat_spread) return;
+      Object.keys(cls.stat_spread).forEach((stat) => {
+        if (stats.indexOf(stat) === -1) stats.push(stat);
+      });
+    });
+    return stats;
+  };
+
   const statOptionsFor = (idx) => {
     // Slots 1 & 2 (idx 0, 1) are limited to the class's stat spread.
     // Slot 3 (idx 2) accepts any of the 12 stats.
     if (idx === 2) return DATA.statList.slice();
-    const spreadStats = getClassSpreadStats();
+    const spreadStats = DATA.mode === 'aspiring'
+      ? getAspiringSpreadStats()
+      : getClassSpreadStats();
     // Also exclude the stat the user picked for the previous slot, so
     // "two different class stats" stays enforceable.
     const prevIdx = idx - 1;
