@@ -42,6 +42,12 @@ const seedClass = async (prefix, {
     { name: `${prefix} E2E Ability Two`, description: 'Fixture ability two' }
   ],
   gear = [],
+  // The wizard's aspiring builder offers a class's advanced abilities only
+  // from this column (public/js/character-wizard.js's renderBuilderStep reads
+  // `advanced_abilities`), so a spec driving that mode has to override it.
+  // Default [] matches the column's own default (migration
+  // 20260817000004_classes_advanced_abilities).
+  advancedAbilities = [],
   // { stat: points }, mirrors the classes.stat_spread column (migration
   // 20260609_classes_stat_spread) that routes/classes.js's parseStatSpread
   // populates from the class-form UI. Left as the column's own default
@@ -55,6 +61,7 @@ const seedClass = async (prefix, {
     .from('classes')
     .insert({
       name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities,
+      advanced_abilities: advancedAbilities,
       created_by: createdBy, stat_spread: statSpread
     })
     .select()
