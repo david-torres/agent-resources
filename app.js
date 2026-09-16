@@ -2,7 +2,7 @@ const express = require('express');
 const exphbs = require('express-handlebars');
 const helpers = require('handlebars-helpers')();
 const customHelpers = require('./util/handlebars');
-const { renderMarkdown } = require('./util/markdown');
+const { renderMarkdown, renderPowerRatings } = require('./util/markdown');
 const { sendError } = require('./util/http-error');
 const range = require('handlebars-helper-range');
 const path = require('path');
@@ -37,7 +37,8 @@ const engineHelpers = {
   ...helpers,
   ...customHelpers,
   range,
-  markdown: renderMarkdown
+  markdown: renderMarkdown,
+  powerRatings: renderPowerRatings
 };
 
 const createApp = () => {

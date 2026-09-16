@@ -87,6 +87,11 @@ test('the delete button keeps hx-delete and hx-confirm but has no closest-tr hx-
   expect(SRC).not.toContain('hx-target="closest tr"');
 });
 
+test('paired_action renders through the power-ratings helper', () => {
+  expect(SRC).toContain('{{{powerRatings this.paired_action}}}');
+  expect(SRC).not.toContain('{{this.paired_action}}');
+});
+
 // Mirrors the real duplicate-modal markup closely enough to exercise the
 // shared shell: name-scoped open/close, Escape, and the body scroll lock.
 const DUPLICATE_MODAL = `
@@ -198,7 +203,7 @@ test('the duplicate modal opens and closes independently of the unlock-code moda
 
 const Handlebars = require('handlebars');
 const customHelpers = require('../util/handlebars');
-const { renderMarkdown } = require('../util/markdown');
+const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
 const handlebarsHelpers = require('handlebars-helpers')();
 
 // class-view.handlebars calls `markdown`, which app.js registers separately
@@ -210,6 +215,7 @@ function renderClassView(context) {
   hb.registerHelper(handlebarsHelpers);
   hb.registerHelper(customHelpers);
   hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
   hb.registerPartial('breadcrumbs', '');
   hb.registerPartial('private-badge', '');
   hb.registerPartial('class-meters', fs.readFileSync(path.join(__dirname, 'partials', 'class-meters.handlebars'), 'utf8'));
@@ -267,6 +273,7 @@ function renderPartial(name, context) {
   hb.registerHelper(handlebarsHelpers);
   hb.registerHelper(customHelpers);
   hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
   return hb.compile(partialSrc)(context);
 }
 
@@ -341,6 +348,34 @@ test('renders an ability paired action', () => {
   expect(html).toContain('Call a cowed animal to heel.');
 });
 
+test('a hostile string in a newly rendered field is neutralized', async () => {
+  const html = await renderClassView({
+    class: {
+      id: 'c1',
+      name: 'Test Class',
+      gear: [],
+      abilities: [{
+        name: 'Probe',
+        description: '',
+        paired_action: '<img src=x onerror=alert(1)>',
+        meters: [],
+        notes: [{ text: '<script>alert(2)</script>note', children: [] }],
+        sample_perks: [{
+          name: 'P',
+          text: 'Boosted <sup>L–H</sup>',
+          dedication: null,
+          compound_text: '<a href="javascript:alert(3)">c</a>'
+        }]
+      }]
+    },
+  });
+
+  expect(html).not.toContain('onerror');
+  expect(html).not.toContain('<script>');
+  expect(html).not.toContain('javascript:');
+  expect(html).toContain('<sup>L–H</sup>');
+});
+
 test('renders gear meters and notes through the real class-meters/class-notes partials', () => {
   const html = renderClassView({
     class: {
@@ -378,9 +413,13 @@ test('renders ability meters and notes through the real class-meters/class-notes
   expect(html).toContain('Works on cowed animals only.');
 });
 
-// Pins the escaped slots. Nothing previously stopped a `{{ }}` becoming a
+// Pins the neutralized slots. Nothing previously stopped a `{{ }}` becoming a
 // `{{{ }}}` in class-meters, class-notes, or the ability card -- proven by
-// flipping each and re-running before writing these.
+// flipping each and re-running before writing these. Meters stay a plain
+// `{{ }}` escape; notes and paired_action now go through the powerRatings
+// sanitizer, which strips a `<script>` tag and its contents outright rather
+// than escaping it, so those two assert on the survival of trailing text
+// instead of on an escaped literal.
 const XSS = '<script>alert(1)</script>';
 
 test('meter labels and values are HTML-escaped', () => {
@@ -396,7 +435,7 @@ test('meter labels and values are HTML-escaped', () => {
   expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
 });
 
-test('note text is HTML-escaped, at the root and in a child', () => {
+test('note text is sanitized, at the root and in a child', () => {
   const html = renderClassView({
     class: {
       id: 'c1',
@@ -407,25 +446,28 @@ test('note text is HTML-escaped, at the root and in a child', () => {
         description: 'g',
         category: 'default',
         meters: [],
-        notes: [{ text: XSS, children: [{ text: XSS, children: [] }] }],
+        notes: [{ text: `${XSS}root`, children: [{ text: `${XSS}child`, children: [] }] }],
       }],
     },
   });
   expect(html).not.toContain(XSS);
-  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(html).not.toContain('<script>');
+  expect(html).toContain('root');
+  expect(html).toContain('child');
 });
 
-test('an ability paired action is HTML-escaped', () => {
+test('an ability paired action is sanitized', () => {
   const html = renderClassView({
     class: {
       id: 'c1',
       name: 'Test Class',
       gear: [],
-      abilities: [{ name: 'A', description: 'd', paired_action: XSS, meters: [], notes: [] }],
+      abilities: [{ name: 'A', description: 'd', paired_action: `${XSS}safe`, meters: [], notes: [] }],
     },
   });
   expect(html).not.toContain(XSS);
-  expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(html).not.toContain('<script>');
+  expect(html).toContain('safe');
 });
 
 test('a childless note emits no inner list', () => {

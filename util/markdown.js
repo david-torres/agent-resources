@@ -32,4 +32,18 @@ function renderMarkdown(input) {
   return sanitizeHtml(rendered, sanitizeOpts);
 }
 
-module.exports = { renderMarkdown };
+// Power Ratings are printed as superscripts throughout Aspirant
+// (ENCLAVE: Aspirant, pg. 12) and are stored that way, because "Boosted L–H"
+// flattened into prose reads as an ordinary word.
+//
+// Deliberately not renderMarkdown: these fields hold content any signed-in user
+// can write through the class import endpoint, and running them through a full
+// markdown parser would start interpreting asterisks and underscores that have
+// been literal text until now. Permitting exactly one tag keeps the change to
+// the one thing it is for.
+const renderPowerRatings = (input) => sanitizeHtml(String(input ?? ''), {
+  allowedTags: ['sup'],
+  allowedAttributes: {}
+});
+
+module.exports = { renderMarkdown, renderPowerRatings };

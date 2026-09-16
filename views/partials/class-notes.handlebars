@@ -2,10 +2,10 @@
 <ul>
   {{#each notes}}
   <li>
-    {{this.text}}
+    {{{powerRatings this.text}}}
     {{#if this.children.length}}
     <ul>
-      {{#each this.children}}<li>{{this.text}}</li>{{/each}}
+      {{#each this.children}}<li>{{{powerRatings this.text}}}</li>{{/each}}
     </ul>
     {{/if}}
   </li>

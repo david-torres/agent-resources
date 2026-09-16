@@ -1,5 +1,5 @@
-const { test, expect } = require('bun:test');
-const { renderMarkdown } = require('./markdown');
+const { test, expect, describe } = require('bun:test');
+const { renderMarkdown, renderPowerRatings } = require('./markdown');
 
 test('renders basic markdown to HTML', () => {
   expect(renderMarkdown('**bold**')).toContain('<strong>bold</strong>');
@@ -53,4 +53,40 @@ test('strips style and srcset attributes', () => {
   const out = renderMarkdown('<img src="https://x/y" style="color:red" srcset="y">');
   expect(out).not.toContain('style=');
   expect(out).not.toContain('srcset=');
+});
+
+describe('renderPowerRatings', () => {
+  test('keeps a superscript power rating', () => {
+    expect(renderPowerRatings('are Boosted <sup>L–H</sup>'))
+      .toBe('are Boosted <sup>L–H</sup>');
+  });
+
+  test('strips a script tag and its contents', () => {
+    expect(renderPowerRatings('<script>alert(1)</script>tail')).toBe('tail');
+  });
+
+  test('strips an image with an event handler', () => {
+    expect(renderPowerRatings('<img src=x onerror=alert(1)>')).toBe('');
+  });
+
+  test('strips a javascript: link but keeps its text', () => {
+    expect(renderPowerRatings('<a href="javascript:alert(1)">x</a>')).toBe('x');
+  });
+
+  test('strips an event handler from the sup tag itself', () => {
+    expect(renderPowerRatings('<sup onclick="x">L</sup>')).toBe('<sup>L</sup>');
+  });
+
+  test('escapes stray angle brackets', () => {
+    expect(renderPowerRatings('5 < 6')).toBe('5 &lt; 6');
+  });
+
+  test('does not interpret markdown syntax', () => {
+    expect(renderPowerRatings('*not* _em_ # nor')).toBe('*not* _em_ # nor');
+  });
+
+  test('empty input yields an empty string', () => {
+    expect(renderPowerRatings(null)).toBe('');
+    expect(renderPowerRatings(undefined)).toBe('');
+  });
 });

@@ -4,9 +4,9 @@
   {{#each perks}}
   <div class="mb-2">
     <p class="mb-1"><strong>{{this.name}}</strong>{{#if this.dedication}} <span class="has-text-grey is-size-7">{{this.dedication}}</span>{{/if}}</p>
-    <p class="mb-1">{{this.text}}</p>
+    <p class="mb-1">{{{powerRatings this.text}}}</p>
     {{#if this.compound_text}}
-    <p class="pl-4 has-text-grey"><em>Compounded:</em> {{this.compound_text}}</p>
+    <p class="pl-4 has-text-grey"><em>Compounded:</em> {{{powerRatings this.compound_text}}}</p>
     {{/if}}
   </div>
   {{/each}}

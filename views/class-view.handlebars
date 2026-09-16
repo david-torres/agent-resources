@@ -298,7 +298,7 @@
                 {{{markdown this.description}}}
                 {{> class-meters meters=this.meters}}
                 {{#if this.paired_action}}
-                <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
+                <p><strong>Paired Action:</strong> {{{powerRatings this.paired_action}}}</p>
                 {{/if}}
                 {{> class-notes notes=this.notes}}
                 {{> class-sample-perks perks=this.sample_perks}}
@@ -322,7 +322,7 @@
                 {{{markdown this.description}}}
                 {{> class-meters meters=this.meters}}
                 {{#if this.paired_action}}
-                <p><strong>Paired Action:</strong> {{this.paired_action}}</p>
+                <p><strong>Paired Action:</strong> {{{powerRatings this.paired_action}}}</p>
                 {{/if}}
                 {{> class-notes notes=this.notes}}
                 {{> class-sample-perks perks=this.sample_perks}}
