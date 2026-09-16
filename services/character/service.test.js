@@ -573,3 +573,48 @@ test('gear no class defines still fails the save when the character has no class
   expect(result.error).toBe('[setCharacterGear] Missing class_id for gear item "Renamed Peacemaker"');
   expect(saved).toBeNull();
 });
+
+// The wizard sends type on every aspiring ability
+// (public/js/character-wizard.js:3225,3228), but both write paths projected
+// abilities down to {name, class_id, description}. A dropped tag makes an
+// aspiring character's abilities indistinguishable from any other's.
+test('reconcileAbilities persists the core/advanced tag', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls));
+  await service.reconcileAbilities('character-1', [
+    { name: 'Dodge', class_id: 'class-a', type: 'core' },
+    { name: 'Overdrive', class_id: 'class-b', type: 'advanced' }
+  ]);
+  const inserted = calls.find(c => c[0] === 'insertChildRows' && c[1] === 'class_abilities');
+  expect(inserted[3]).toEqual([
+    { name: 'Dodge', class_id: 'class-a', description: null, type: 'core' },
+    { name: 'Overdrive', class_id: 'class-b', description: null, type: 'advanced' }
+  ]);
+});
+
+// An untagged ability is core. Advent characters submit no type at all, and a
+// null would violate the NOT NULL added by 20260913000000.
+test('an ability submitted without a type defaults to core', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls));
+  await service.reconcileAbilities('character-1', [{ name: 'Dodge', class_id: 'class-a' }]);
+  const inserted = calls.find(c => c[0] === 'insertChildRows' && c[1] === 'class_abilities');
+  expect(inserted[3][0].type).toBe('core');
+});
+
+// type is an attribute, not identity: retagging an existing ability must update
+// the row in place rather than delete and reinsert it, or character_perks
+// (class_ability_id ON DELETE CASCADE) is destroyed.
+test('retagging an ability updates the row instead of replacing it', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getChildRows: async (table, id) => {
+      calls.push(['getChildRows', table, id]);
+      return ok([{ id: 'row-1', name: 'Dodge', class_id: 'class-a', description: null, type: 'core' }]);
+    }
+  }));
+  await service.reconcileAbilities('character-1', [{ name: 'Dodge', class_id: 'class-a', type: 'advanced' }]);
+  expect(calls.some(c => c[0] === 'deleteChildRows' && c[3].length)).toBe(false);
+  const updated = calls.find(c => c[0] === 'updateChildRow');
+  expect(updated[3]).toEqual({ type: 'advanced' });
+});

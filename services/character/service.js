@@ -78,6 +78,10 @@ const requireOwnedCharacterLean = async (adapter, actor, id) => {
   return character;
 };
 
+// An ability with no submitted tag is core: advent characters send no type at
+// all, and class_abilities.type is NOT NULL (20260913000000).
+const abilityType = (value) => (value === 'advanced' ? 'advanced' : 'core');
+
 const resolveSubmittedGear = (gear, gearNameToClassId) => {
   const submitted = Array.isArray(gear) ? gear : (gear ? [gear] : []);
   return submitted.map(item => {
@@ -327,6 +331,7 @@ class CharacterService {
     }));
     const abilities = childData.classAbilities == null ? null : normalizeAbilityItems(childData.classAbilities).map(item => ({
       name: item.name,
+      type: abilityType(item.type),
       ...resolveClassItem('abilities', item, maps.abilityNameToClassId, maps.abilityNameToDescription)
     }));
     if ((gear || []).some(item => !item.class_id)) {
@@ -416,11 +421,16 @@ class CharacterService {
     for (const item of normalizeAbilityItems(abilities)) {
       const classId = item.class_id ?? abilityNameToClassId.get(item.name);
       if (!classId) return { data: null, error: `[setCharacterAbilities] Missing class_id for ability "${item.name}"` };
-      desired.push({ name: item.name, class_id: classId, description: item.description ?? abilityNameToDescription.get(item.name) ?? null });
+      desired.push({
+        name: item.name,
+        class_id: classId,
+        description: item.description ?? abilityNameToDescription.get(item.name) ?? null,
+        type: abilityType(item.type)
+      });
     }
     const applied = await this.applyChildDiff('class_abilities', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => `${row.class_id}:${row.name}`,
-      rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
+      rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description, type: item.type })
     }));
     return applied.error ? applied : this.adapter.getChildRows('class_abilities', characterId);
   }

@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { normalizeCharacterInput, normalizeGearItems } = require('./input');
+const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems } = require('./input');
 
 test('trims every string in a character payload, not just item names', () => {
   const { data, childData } = normalizeCharacterInput({
@@ -191,4 +191,14 @@ test('normalizeCharacterInput leaves created_at absent when it was never submitt
   const { data, error } = normalizeCharacterInput({ name: 'Vex' }, {});
   expect(error).toBeNull();
   expect('created_at' in data).toBe(false);
+});
+
+// normalizeAbilityItems is normalizeClassItems, which spreads the submitted
+// object ({...item, name} at services/character/input.js:56). The tag survived
+// this far all along and was lost further downstream, so this is the boundary
+// worth pinning.
+test('normalizeAbilityItems keeps the submitted type', () => {
+  expect(normalizeAbilityItems([{ name: ' Overdrive ', type: 'advanced' }])).toEqual([
+    { name: 'Overdrive', type: 'advanced' }
+  ]);
 });
