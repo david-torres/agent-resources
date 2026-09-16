@@ -9,7 +9,7 @@
 
 require('./require-local-supabase');
 
-const { test, expect } = require('bun:test');
+const { describe, test, expect } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
@@ -82,4 +82,24 @@ test('advanced_abilities rejects an explicit null', async () => {
   // 23502 is not_null_violation. Asserting the code keeps a missing
   // constraint (an update that silently succeeds) from passing as a rejection.
   expect(error?.code).toBe('23502');
+});
+
+describe('classes.content_format', () => {
+  test('defaults to advent and is never null', async () => {
+    const { data, error } = await sb
+      .from('classes')
+      .select('id, content_format');
+    expect(error).toBeNull();
+    expect(data.length).toBeGreaterThan(0);
+    expect(data.every((row) => row.content_format === 'advent')).toBe(true);
+  });
+
+  test('rejects a value outside the enum', async () => {
+    const { error } = await sb
+      .from('classes')
+      .update({ content_format: 'aspirant-v1' })
+      .eq('name', 'Berserker');
+    expect(error).not.toBeNull();
+    expect(error.code).toBe('23514');
+  });
 });
