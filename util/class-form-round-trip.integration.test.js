@@ -165,7 +165,7 @@ const MARKDOWN_EDITOR_FIELDS = ['teaser', 'tips'];
 // <select>: an unset column renders the "Not set" option, posts '', and
 // applyConstrainedSelects in util/class-fields.js maps it back to NULL.
 const SELECT_FIELDS = [
-    'challenge_level', 'prerelease_section', 'status', 'rules_edition', 'rules_version'
+    'challenge_level', 'prerelease_section', 'status', 'rules_edition', 'rules_version', 'content_format'
 ];
 
 // `advanced_abilities` belongs here rather than in NOT_ROUND_TRIPPED: the form
@@ -425,10 +425,12 @@ const tally = (row) => {
 };
 
 // Rule H: the columns whose blank value the write path converges to NULL --
-// blankTextToNull for the prose columns, applyConstrainedSelects for the two
-// constrained selects, and the class service's sanitizeUrlFields for image_url.
-// Read from the real modules, so a column added to either list is covered here
-// without this file being edited.
+// blankTextToNull for the prose columns, applyConstrainedSelects for two of its
+// three constrained selects (the third, content_format, falls back to
+// 'advent' instead -- see CONSTRAINED_SELECTS in util/class-fields.js), and
+// the class service's sanitizeUrlFields for image_url. Read from the real
+// modules, so a column added to either list is covered here without this file
+// being edited.
 const COLUMNS_CONVERGING_TO_NULL = new Set([
     ...NULLABLE_TEXT_FIELDS, ...Object.keys(CONSTRAINED_SELECTS), 'image_url'
 ]);
