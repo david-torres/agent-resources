@@ -13,6 +13,11 @@ const candidateFamily = (candidate, classRows) => {
   };
   if (candidate.id) collect(candidate.id);
   const parent = classRows.find(row => row.id === candidate.base_class_id);
+  // Deliberately narrower than util/class-family.js's sameFamilyEdge, which also
+  // requires matching content_format: a format fork (e.g. a V1 class forked from
+  // a pre-release Aspirant class) restates its parent's Signature and Ability
+  // names verbatim by design, so it must inherit the parent's name space even
+  // though it starts a new unlock/version family.
   if (parent && parent.rules_edition === candidate.rules_edition) collect(parent.id);
   return family;
 };
