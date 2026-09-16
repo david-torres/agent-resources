@@ -77,7 +77,11 @@
       var classEl = document.getElementById('restoreDraftClass');
       if (modeEl) modeEl.textContent = draft.mode || '—';
       if (classEl) {
-        classEl.textContent = draft.classId ? 'class chosen' : 'class not yet chosen';
+        // Aspiring drafts never have a classId, so without the pseudo-class
+        // name every one of them reads "class not yet chosen".
+        var pseudoName = draft.pseudoClass && (draft.pseudoClass.name || '').trim();
+        classEl.textContent = pseudoName
+          || (draft.classId ? 'class chosen' : 'class not yet chosen');
       }
       modal.classList.add('is-active');
     }

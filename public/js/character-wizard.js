@@ -436,6 +436,12 @@ window.CharacterWizard = (function () {
         +     '<span class="wizard-kiosk-ribbon-edition">' + esc(editionLabel(c)) + '</span>'
         +   '</div>'
         + '</div>';
+    } else if (DATA.mode === 'aspiring' && (state.pseudoClass && state.pseudoClass.name || '').trim()) {
+      const pc = state.pseudoClass;
+      headerHtml += '<p class="is-size-7"><strong>' + esc(pc.name.trim()) + '</strong></p>';
+      if ((pc.tagline || '').trim()) {
+        headerHtml += '<p class="has-text-grey is-size-7">' + esc(pc.tagline.trim()) + '</p>';
+      }
     } else {
       headerHtml += '<p class="has-text-grey is-size-7">Step 1: pick a class to begin.</p>';
     }
@@ -1433,16 +1439,10 @@ const getMerxBudget = () => {
       return;
     }
     const c = selectedClass();
-    const useAdvanced = DATA.mode === 'aspiring';
-    const list = useAdvanced
-      ? (c && Array.isArray(c.advanced_abilities_html) ? c.advanced_abilities_html : [])
-      : (c && Array.isArray(c.abilities_html) ? c.abilities_html : []);
+    const list = c && Array.isArray(c.abilities_html) ? c.abilities_html : [];
     const showPerkButton = DATA.mode === 'aspirant';
     if (list.length === 0) {
-      const emptyMsg = useAdvanced
-        ? 'No advanced abilities to show for this class.'
-        : 'No abilities to show for this class.';
-      abilityPrimerList.innerHTML = '<p class="has-text-grey">' + emptyMsg + '</p>';
+      abilityPrimerList.innerHTML = '<p class="has-text-grey">No abilities to show for this class.</p>';
       return;
     }
     // Aspirant mode: the perk lives INSIDE the assigned ability's cartouche
@@ -1500,13 +1500,6 @@ const getMerxBudget = () => {
         + '</div>';
     }).join('');
   };
-
-  // No-op stub kept for callers that still invoke refreshStep3Perk — the
-  // perk state used to drive a separate preview paragraph and per-button
-  // label flips, but those are obsolete now that the editor is inline on
-  // the assigned card. Kept so the step-transition call (showStep) and the
-  // initial-load hydration still compose cleanly.
-  const refreshStep3Perk = () => {};
 
   // ---------- Step 1 (aspiring): Class Builder ----------
   // Aspirant-style class-building harness. Six slots the user fills by
@@ -2214,7 +2207,7 @@ const getMerxBudget = () => {
         });
         return;
       }
-      // ---- CLASS PICKER (still used for the 3 ability slots for now) ----
+      // ---- CLASS PICKER ----
       if (insideClass && !insideToggler) {
         const picker = insideClass;
         if (e.target.matches('.class-picker-input')) {
@@ -2966,7 +2959,7 @@ const getMerxBudget = () => {
       li.classList.toggle('is-done', s < n);
     });
     if (n === 2) refreshStep2();
-    if (n === 3) { renderAbilityPrimer(); refreshStep3Perk(); }
+    if (n === 3) renderAbilityPrimer();
     if (n === 4) refreshStep4();
     if (n === 5) refreshStep5();
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -3098,12 +3091,14 @@ const getMerxBudget = () => {
         nameDisplay.classList.toggle('is-set', !!state.pseudoClass.name);
       }
       updateBuilderGate();
+      renderSummary();
     });
   }
   if (pseudoClassTaglineEl) {
     pseudoClassTaglineEl.addEventListener('input', () => {
       if (!state.pseudoClass) state.pseudoClass = { name: '', tagline: '', description: '' };
       state.pseudoClass.tagline = pseudoClassTaglineEl.value;
+      renderSummary();
     });
   }
   if (pseudoClassDescriptionEl) {
