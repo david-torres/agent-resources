@@ -20,7 +20,7 @@ const buildFamilyIndex = (classes) => {
   const rows = Array.isArray(classes) ? classes.filter(c => c && c.id) : [];
   const byId = new Map(rows.map(c => [c.id, c]));
 
-  // Pre-index same-edition children so the BFS can walk down chains.
+  // Pre-index same-family children so the BFS can walk down chains.
   const childrenOf = new Map();
   for (const c of rows) {
     if (!c.base_class_id) continue;
@@ -50,7 +50,7 @@ const familyFromIndex = ({ byId, childrenOf }, classId) => {
   return family;
 };
 
-// classes: array of { id, base_class_id, rules_edition }
+// classes: array of { id, base_class_id, rules_edition, content_format }
 // Returns Set of class ids in classId's version family (always includes classId).
 const computeVersionFamily = (classes, classId) =>
   familyFromIndex(buildFamilyIndex(classes), classId);
