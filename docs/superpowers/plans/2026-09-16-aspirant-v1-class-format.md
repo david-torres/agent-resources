@@ -410,10 +410,14 @@ describe('format forks', () => {
 - [ ] **Step 2: Run the test and confirm it fails**
 
 Run: `bun run test:unit util/class-family.test.js`
-Expected: FAIL on the first three tests — each returns both ids because the edge
-rule still only compares `rules_edition`. The fourth passes already; it is there
-to pin the fail-closed behavior so a later refactor cannot turn it into
-fail-open.
+Expected: **exactly one failure** — `a format fork starts a new family`. It
+returns both ids because the current edge rule compares only `rules_edition`, and
+both rows are `'aspirant'`.
+
+The other three pass before the change and are regression guards, not red tests:
+the same-format fork must keep working, the edition fork is already excluded by
+the existing rule, and the untagged row already fails closed. If any of those
+three fails, stop — the existing behavior is not what this task assumes.
 
 - [ ] **Step 3: Change the edge rule**
 
@@ -1183,6 +1187,10 @@ In `util/class-import.js`:
   `conduit` arrays of the note shape already declared for `notes`.
 - Replace the `edition` local used for the cap with a `format` local:
   `const format = parsed.content_format || "advent";`
+  `edition` (`util/class-import.js:208`) has exactly one use, the cap at `:226`,
+  so **delete it** rather than leaving it beside `format`. The `rules_edition`
+  key emitted at `:229` reads `parsed.rules_edition` directly and does not use
+  the local.
 - Change the gear cap at `:226` to
   `format === "aspirant" ? ASPIRANT_GEAR_LIMIT : ADVENT_GEAR_LIMIT`.
 - Emit `content_format: format` and
@@ -1461,16 +1469,18 @@ git commit -m "feat: render four Signature columns and expanded tips"
 `util/class-export.test.js:100-131` pins the JSON export key set literally. Add
 `content_format` and `expanded_tips` to that expected set, and add:
 
+The fixture in that file is `BEASTMASTER` (`util/class-export.test.js:11`):
+
 ```js
 test('json export carries column and position on every gear item', () => {
-  const exported = JSON.parse(exportClass(beastmaster, 'json'));
+  const exported = JSON.parse(exportClass(BEASTMASTER, 'json'));
   expect(exported.gear.every((item) => typeof item.column === 'number')).toBe(true);
   expect(exported.gear.every((item) => typeof item.position === 'number')).toBe(true);
 });
 
 test('markdown export prints the expanded tips section', () => {
   const md = exportClass({
-    ...beastmaster,
+    ...BEASTMASTER,
     expanded_tips: {
       player: [{ text: 'Player guidance', children: [] }],
       conduit: [{ text: 'Conduit guidance', children: [] }]
@@ -1482,11 +1492,20 @@ test('markdown export prints the expanded tips section', () => {
 });
 ```
 
-Add to `models/class-agent.test.js`:
+`BEASTMASTER`'s gear items will need `column`/`position` added to the fixture for
+the first test to be meaningful — add them, matching what `normalizeGear` would
+produce for a six-item list.
+
+Add to `models/class-agent.test.js`. The fixture there is `baseClass`
+(`models/class-agent.test.js:7`); there is no `fullClass`:
 
 ```js
 test('full access carries content_format and expanded_tips', () => {
-  const serialized = serializeClassForAgent(fullClass, 'full');
+  const serialized = serializeClassForAgent({
+    ...baseClass,
+    content_format: 'advent',
+    expanded_tips: { player: [], conduit: [] }
+  }, 'full');
   expect(serialized.content_format).toBe('advent');
   expect(serialized.expanded_tips).toEqual({ player: [], conduit: [] });
 });
