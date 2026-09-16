@@ -109,8 +109,11 @@ const normalizeCharacterInput = (input, context = {}) => {
   // NOT NULL and already the display name every render path reads -- rather
   // than a pseudo_class_name column that would be a second copy of it. Left
   // nested, the object reaches jsonb_populate_record, which drops keys that are
-  // not columns without erroring.
-  if (data.pseudo_class && typeof data.pseudo_class === 'object') {
+  // not columns without erroring, so the delete stays unconditional: no payload
+  // shape may leak the nested key downstream. The mapping itself is gated on the
+  // mode, or a crafted advent/aspirant body could rename `class` out of sync
+  // with the catalog row its class_id still points at.
+  if (data.creator_mode === 'aspiring' && data.pseudo_class && typeof data.pseudo_class === 'object') {
     const pseudo = data.pseudo_class;
     const name = blankToNull(pseudo.name);
     if (name) data.class = name;

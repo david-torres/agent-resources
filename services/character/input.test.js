@@ -320,3 +320,36 @@ test('leaves a non-aspiring submit unvalidated by the aspiring rules', () => {
   });
   expect(result.error).toBeNull();
 });
+
+// Nothing upstream allowlists the wizard payload (routes/characters.js parses a
+// single client-supplied `payload` field), so a hand-crafted advent or aspirant
+// body can carry a pseudo_class object. Only aspiring is class-less; mapping it
+// in any other mode would overwrite the denormalized `class` display name while
+// class_id still points at the catalog row it no longer matches.
+test('an advent payload carrying a pseudo_class keeps its own class', () => {
+  const result = normalizeCharacterInput({
+    name: 'Kell', creator_mode: 'advent', class: 'Gunslinger', class_id: 'class-a',
+    pseudo_class: { name: 'Ashwalker', tagline: 'Walks the ash', description: 'A long tale.' }
+  }, { rulesVersion: 'v1' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.class).toBe('Gunslinger');
+  expect(result.data.class_id).toBe('class-a');
+  expect(result.data).not.toHaveProperty('pseudo_class_tagline');
+  expect(result.data).not.toHaveProperty('pseudo_class_description');
+  expect(result.data).not.toHaveProperty('pseudo_class');
+});
+
+test('an aspirant payload carrying a pseudo_class keeps its own class', () => {
+  const result = normalizeCharacterInput({
+    name: 'Kell', creator_mode: 'aspirant', class: 'Gunslinger', class_id: 'class-a',
+    pseudo_class: { name: 'Ashwalker', tagline: 'Walks the ash', description: 'A long tale.' }
+  }, { rulesVersion: 'v1' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.class).toBe('Gunslinger');
+  expect(result.data.class_id).toBe('class-a');
+  expect(result.data).not.toHaveProperty('pseudo_class_tagline');
+  expect(result.data).not.toHaveProperty('pseudo_class_description');
+  expect(result.data).not.toHaveProperty('pseudo_class');
+});
