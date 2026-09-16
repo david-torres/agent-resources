@@ -17,6 +17,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { tokenize } from '../util/prerelease-extract.js';
+import { coveredPages, maxCoveredPage } from '../util/prerelease-pages.js';
 
 const PDF = process.argv[2];
 const ARTIFACT = process.argv[3] || 'docs/data/prerelease-classes-2026-08.json';
@@ -384,13 +385,9 @@ const verifyEntryPage = (row, page, entries, chrome, review) => {
 // page_range. Finding those pages is what lets prerelease_section be checked against the
 // document instead of against itself.
 const sectionPages = (rows) => {
-  const covered = new Set();
-  for (const row of rows) {
-    const [first, last] = row.page_range;
-    for (let page = first; page <= last; page += 1) covered.add(page);
-  }
+  const covered = coveredPages(rows);
   const found = [];
-  for (let page = 1; page <= Math.max(...rows.map((row) => row.page_range[1])); page += 1) {
+  for (let page = 1; page <= maxCoveredPage(rows); page += 1) {
     if (covered.has(page)) continue;
     const heading = (pageLines(page).find((line) => line.trim()) || '').trim();
     if (SECTION_HEADINGS.includes(heading)) found.push({ page, heading });
@@ -412,6 +409,10 @@ const sectionAbove = (page) => sections.filter((entry) => entry.page < page).map
 let cleanClasses = 0;
 
 for (const row of rows) {
+  if (!Array.isArray(row.page_range)) {
+    console.log(`skip ${row.name} — no page_range, not locatable in the PDF`);
+    continue;
+  }
   const before = failures.length;
   const review = [`${row.name} -- pages ${row.page_range.join('-')} of ${PDF}`, ''];
   const [cover] = row.page_range;
