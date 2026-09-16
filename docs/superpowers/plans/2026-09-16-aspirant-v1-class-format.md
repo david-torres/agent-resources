@@ -1534,6 +1534,21 @@ git commit -m "feat: render four Signature columns and expanded tips"
 - Produces: JSON export and the agent serializer both emit `content_format`,
   `expanded_tips`, and `column`/`position` on every gear item.
 
+**Already done by Task 7 — do not redo it.** Widening the import schema broke an
+existing test asserting that every key the AI importer can set is a key the JSON
+export emits, so Task 7 added to `exportToJson`:
+
+```js
+    content_format: classData.content_format || 'advent',
+    expanded_tips: classData.expanded_tips || { player: [], conduit: [] },
+```
+
+and widened the JSON key-set pin in `util/class-export.test.js` to match. What
+remains for this task is: `column`/`position` on `exportGearItem`, the **markdown**
+Expanded Tips section, the agent serializer in `models/class.js`, and
+`docs/custom-gpt-openapi.json`. Verify the two JSON keys are present before
+adding them — if they are, that part of Step 3 is complete.
+
 - [ ] **Step 1: Write the failing test**
 
 `util/class-export.test.js:100-131` pins the JSON export key set literally. Add
