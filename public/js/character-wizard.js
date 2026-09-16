@@ -3162,10 +3162,9 @@ const getMerxBudget = () => {
     const payload = {
       name: (state.name || '').trim(),
       class_id: state.classId,
-      // Aspiring: pseudo-class metadata (the user-invented class name and
-      // description from step 1). Sent alongside the character payload; the
-      // server creates a player-created class row keyed to the user's
-      // profile, then links the new character to that class.
+      // Aspiring invents a one-off class rather than picking one, so there is
+      // no classes row to point at: class_id stays null and the name lands in
+      // characters.class, with the prose in the pseudo_class_* columns.
       pseudo_class: DATA.mode === 'aspiring' ? {
         name: (state.pseudoClass && state.pseudoClass.name || '').trim(),
         tagline: (state.pseudoClass && state.pseudoClass.tagline || '').trim(),
