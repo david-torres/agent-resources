@@ -2,10 +2,11 @@ const { test, expect, describe } = require('bun:test');
 const { computeVersionFamily, expandIdsToFamilies } = require('./class-family');
 
 // Minimal class row shape used by the family resolver.
-const cls = (id, base = null, edition = 'advent') => ({
+const cls = (id, base = null, edition = 'advent', format = 'advent') => ({
   id,
   base_class_id: base,
-  rules_edition: edition
+  rules_edition: edition,
+  content_format: format
 });
 
 describe('computeVersionFamily', () => {
@@ -89,5 +90,40 @@ describe('expandIdsToFamilies', () => {
 
   test('empty input set stays empty', () => {
     expect(expandIdsToFamilies([cls('a')], new Set())).toEqual(new Set());
+  });
+});
+
+describe('format forks', () => {
+  test('a format fork starts a new family', () => {
+    const classes = [
+      cls('prerelease', null, 'aspirant', 'advent'),
+      cls('v1', 'prerelease', 'aspirant', 'aspirant')
+    ];
+    expect(computeVersionFamily(classes, 'prerelease')).toEqual(new Set(['prerelease']));
+    expect(computeVersionFamily(classes, 'v1')).toEqual(new Set(['v1']));
+  });
+
+  test('a same-format fork stays one family', () => {
+    const classes = [
+      cls('v1', null, 'aspirant', 'aspirant'),
+      cls('v2', 'v1', 'aspirant', 'aspirant')
+    ];
+    expect(computeVersionFamily(classes, 'v1')).toEqual(new Set(['v1', 'v2']));
+  });
+
+  test('a fork differing on both edition and format starts a new family', () => {
+    const classes = [
+      cls('advent', null, 'advent', 'advent'),
+      cls('aspirant', 'advent', 'aspirant', 'aspirant')
+    ];
+    expect(computeVersionFamily(classes, 'advent')).toEqual(new Set(['advent']));
+  });
+
+  test('a row whose query omitted content_format fails closed against a tagged row', () => {
+    const classes = [
+      { id: 'untagged', base_class_id: null, rules_edition: 'aspirant' },
+      cls('v1', 'untagged', 'aspirant', 'aspirant')
+    ];
+    expect(computeVersionFamily(classes, 'v1')).toEqual(new Set(['v1']));
   });
 });

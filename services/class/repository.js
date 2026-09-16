@@ -44,7 +44,7 @@ module.exports = {
     try {
       const { data, error } = await supabaseAdmin
         .from('classes')
-        .select('id, base_class_id, rules_edition, free_play_access');
+        .select('id, base_class_id, rules_edition, content_format, free_play_access');
       if (error || !Array.isArray(data)) {
         if (error) console.error(error);
         return null;
@@ -59,7 +59,7 @@ module.exports = {
     try {
       const { data, error } = await supabaseAdmin
         .from('classes')
-        .select('id, name, is_public, base_class_id, rules_edition, gear, abilities');
+        .select('id, name, is_public, base_class_id, rules_edition, content_format, gear, abilities');
       if (error || !Array.isArray(data)) {
         if (error) console.error(error);
         return [];

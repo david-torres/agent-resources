@@ -1,10 +1,18 @@
 // Version families: classes linked via base_class_id form an upgrade chain
 // (v1 -> v2 forks). A family is the connected component over those links,
-// restricted to edges where parent and child share rules_edition — edition
-// forks (e.g. advent -> aspirant) start a new family. Unlocks apply to a
-// whole family, so this must never cross an edition boundary.
-
-const sameEditionEdge = (parent, child) => parent.rules_edition === child.rules_edition;
+// restricted to edges where parent and child share BOTH rules_edition and
+// content_format. An edition fork (advent -> aspirant) and a format fork
+// (six Signatures -> twelve) each start a new family.
+//
+// Unlocks apply to a whole family, so this must never cross either boundary.
+// Moving a character to a differently shaped class is a deliberate player
+// decision, and a family that bridged the two would make it happen silently.
+//
+// The comparison is strict, so a row from a query that forgot to select
+// content_format compares unequal to a tagged one and the edge is dropped.
+// That fails closed: a missed column splits a family rather than bridging two.
+const sameFamilyEdge = (parent, child) => parent.rules_edition === child.rules_edition
+  && parent.content_format === child.content_format;
 
 // Index the class graph once so repeated family walks don't rebuild the
 // maps per id — expandIdsToFamilies runs one walk per unlocked id.
@@ -17,7 +25,7 @@ const buildFamilyIndex = (classes) => {
   for (const c of rows) {
     if (!c.base_class_id) continue;
     const parent = byId.get(c.base_class_id);
-    if (!parent || !sameEditionEdge(parent, c)) continue;
+    if (!parent || !sameFamilyEdge(parent, c)) continue;
     if (!childrenOf.has(parent.id)) childrenOf.set(parent.id, []);
     childrenOf.get(parent.id).push(c.id);
   }
@@ -35,7 +43,7 @@ const familyFromIndex = ({ byId, childrenOf }, classId) => {
     if (!node) continue;
     if (node.base_class_id) {
       const parent = byId.get(node.base_class_id);
-      if (parent && sameEditionEdge(parent, node)) queue.push(parent.id);
+      if (parent && sameFamilyEdge(parent, node)) queue.push(parent.id);
     }
     for (const childId of childrenOf.get(id) || []) queue.push(childId);
   }

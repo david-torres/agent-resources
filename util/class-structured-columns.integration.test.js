@@ -102,4 +102,11 @@ describe('classes.content_format', () => {
     expect(error).not.toBeNull();
     expect(error.code).toBe('23514');
   });
+
+  test('the family projection carries content_format', async () => {
+    const rows = await require('../services/class/repository').fetchClassFamilyRows();
+    expect(Array.isArray(rows)).toBe(true);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((row) => typeof row.content_format === 'string')).toBe(true);
+  });
 });
