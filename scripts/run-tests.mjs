@@ -28,6 +28,7 @@ const httpFiles = new Set([
   'routes/character-details.test.js',
   'routes/character-level-up.test.js',
   'routes/character-offscreen.test.js',
+  'routes/character-wizard-aspiring.test.js',
   'routes/character-wizard.test.js',
   'routes/characters.test.js',
   'routes/class-view-unlock-resolution.test.js',
