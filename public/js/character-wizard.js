@@ -3228,8 +3228,10 @@ const getMerxBudget = () => {
     // Class abilities: the chosen class's ability list is auto-granted to the
     // character. Advent/aspiring use the base `abilities` array; aspirant uses
     // `advanced_abilities` (the same list shown in step 3). We send them as
-    // {name, class_id} so the server's normalizeAbilityItems +
-    // setCharacterAbilities writes rows into public.class_abilities.
+    // {name, class_id, type} so the server's normalizeAbilityItems +
+    // setCharacterAbilities writes rows into public.class_abilities. `type`
+    // must be explicit on every row: an absent one means "keep whatever is
+    // stored" to the reconcile path, not 'core'.
     // Aspiring is class-less: abilities come from state.classBuild.coreAbilities
     // + .advancedAbility, each potentially from a different unlocked class.
     const c = (typeof selectedClass === 'function') ? selectedClass() : null;
@@ -3245,12 +3247,13 @@ const getMerxBudget = () => {
       const abilityPicks = corePicks.concat(advPicks);
       if (abilityPicks.length) payload.abilities = abilityPicks;
     } else {
-      const abilityList = (c && DATA.mode === 'aspirant')
-        ? (Array.isArray(c.advanced_abilities) ? c.advanced_abilities : c.abilities)
-        : (c && c.abilities);
+      const useAdvanced = !!(c && DATA.mode === 'aspirant' && Array.isArray(c.advanced_abilities));
+      const abilityList = useAdvanced ? c.advanced_abilities : (c && c.abilities);
       if (c && Array.isArray(abilityList) && abilityList.length) {
         payload.abilities = abilityList
-          .map((a) => a && a.name ? { name: a.name, class_id: state.classId } : null)
+          .map((a) => (a && a.name
+            ? { name: a.name, class_id: state.classId, type: useAdvanced ? 'advanced' : 'core' }
+            : null))
           .filter(Boolean);
       }
     }
