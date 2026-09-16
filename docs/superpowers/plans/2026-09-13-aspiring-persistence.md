@@ -61,7 +61,7 @@ Task 1 Step 1 establishes the baseline. The `characters` column set and the `cla
 **Interfaces:**
 - Produces: `class_abilities.type` — `text NOT NULL DEFAULT 'core' CHECK (type IN ('core','advanced'))`. Tasks 2 and 3 write it; Task 7 asserts it.
 
-- [ ] **Step 1: Record the pre-existing baseline**
+- [x] **Step 1: Record the pre-existing baseline**
 
 Before touching anything, capture what is already red so later failures are attributable.
 
@@ -71,7 +71,7 @@ bun run test 2>&1 | tail -40
 
 Write the failing test names (if any) into the commit message of Step 6. If everything passes, say so there instead.
 
-- [ ] **Step 2: Write the failing test**
+- [x] **Step 2: Write the failing test**
 
 Create `util/class-ability-type.integration.test.js`:
 
@@ -121,7 +121,7 @@ test('class_abilities rejects a type outside core and advanced', async () => {
 });
 ```
 
-- [ ] **Step 3: Run the test to verify it fails**
+- [x] **Step 3: Run the test to verify it fails**
 
 Add `'util/class-ability-type.integration.test.js'` to the `integrationFiles` set in `scripts/run-tests.mjs:7-21`, then:
 
@@ -131,7 +131,7 @@ bun run test:integration
 
 Expected: FAIL — `column "type" does not exist`.
 
-- [ ] **Step 4: Write the migration**
+- [x] **Step 4: Write the migration**
 
 Create `supabase/migrations/20260913000000_class_abilities_type.sql`:
 
@@ -158,7 +158,7 @@ WHERE a.class_id = c.id
   );
 ```
 
-- [ ] **Step 5: Apply and re-run**
+- [x] **Step 5: Apply and re-run**
 
 ```bash
 supabase migration up
@@ -167,7 +167,7 @@ bun run test:integration
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add supabase/migrations/20260913000000_class_abilities_type.sql util/class-ability-type.integration.test.js scripts/run-tests.mjs
@@ -186,7 +186,7 @@ git commit -m "feat: tag class abilities core or advanced"
 - Consumes: `class_abilities.type` from Task 1.
 - Produces: ability row objects shaped `{ name, class_id, description, type }` on both paths. Task 3's RPC reads `type` off the same objects.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `services/character/service.test.js`:
 
@@ -256,7 +256,7 @@ test('normalizeAbilityItems keeps the submitted type', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 bun test services/character/service.test.js
@@ -264,7 +264,7 @@ bun test services/character/service.test.js
 
 Expected: FAIL — inserted rows lack `type`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add near the other normalizers at the top of `services/character/service.js`:
 
@@ -302,7 +302,7 @@ In `reconcileAbilities`, replace the `desired.push` at `services/character/servi
 
 `keyOf` is unchanged on purpose — see Global Constraints. `diffChildRows` compares every key of `rowFields` against the matched row (`util/reconcile.js:48-53`), so adding `type` there is what makes retagging an update rather than a delete-plus-insert.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 bun test services/character/service.test.js && bun run test:unit
@@ -310,7 +310,7 @@ bun test services/character/service.test.js && bun run test:unit
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/character/service.js services/character/service.test.js
@@ -328,7 +328,7 @@ git commit -m "feat: carry the ability type through both write paths"
 **Interfaces:**
 - Consumes: the `{ name, class_id, description, type }` ability objects from Task 2.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `models/character-atomic.integration.test.js`, using the helpers already
 defined there — `input()` (`:60`), `childRows()` (`:84`), `characterClass`, and
@@ -363,7 +363,7 @@ Match the `profile` argument and the create/update call signatures to the tests
 already in that file (`models/character-atomic.integration.test.js:96-160`) —
 `setup()` builds the fixtures those rely on.
 
-- [ ] **Step 2: Run the test to verify it fails**
+- [x] **Step 2: Run the test to verify it fails**
 
 ```bash
 bun run test:integration
@@ -371,7 +371,7 @@ bun run test:integration
 
 Expected: FAIL — `type` is `'core'` on the first read.
 
-- [ ] **Step 3: Write the migration**
+- [x] **Step 3: Write the migration**
 
 Create `supabase/migrations/20260913000001_save_character_atomic_ability_type.sql`. Copy the **entire** function body from `20260905000001_reconcile_character_child_rows.sql` — Postgres `CREATE OR REPLACE FUNCTION` has no partial form — and change only the `p_abilities` block. Head the file with:
 
@@ -424,7 +424,7 @@ The changed block:
   END IF;
 ```
 
-- [ ] **Step 4: Apply and re-run**
+- [x] **Step 4: Apply and re-run**
 
 ```bash
 supabase migration up
@@ -433,7 +433,7 @@ bun run test:integration
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add supabase/migrations/20260913000001_save_character_atomic_ability_type.sql models/character-atomic.integration.test.js
@@ -450,7 +450,7 @@ git commit -m "feat: carry the ability type through save_character_atomic"
 **Interfaces:**
 - Produces: `characters.pseudo_class_tagline`, `characters.pseudo_class_description` — both `text`, both nullable. Task 5 writes them.
 
-- [ ] **Step 1: Write the migration**
+- [x] **Step 1: Write the migration**
 
 There is no test step here: the columns carry no behavior of their own, and Task 5's tests fail without them. Create `supabase/migrations/20260913000002_character_pseudo_class.sql`:
 
@@ -467,7 +467,7 @@ ALTER TABLE public.characters
     ADD COLUMN pseudo_class_description text;
 ```
 
-- [ ] **Step 2: Apply and confirm nothing broke**
+- [x] **Step 2: Apply and confirm nothing broke**
 
 ```bash
 supabase migration up
@@ -476,7 +476,7 @@ bun run test
 
 Expected: the same result as the Task 1 Step 1 baseline. If a column-census test now fails because the `characters` key set widened, fix that census here.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add supabase/migrations/20260913000002_character_pseudo_class.sql
@@ -495,7 +495,7 @@ git commit -m "feat: add the pseudo-class columns to characters"
 - Consumes: the columns from Task 4.
 - Produces: `normalizeCharacterInput` maps `pseudo_class` to `class` + `pseudo_class_tagline` + `pseudo_class_description` and deletes the nested key. Task 6 validates the same payload; Task 7 exercises it over HTTP.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `services/character/input.test.js`:
 
@@ -557,7 +557,7 @@ test('a non-aspiring payload is untouched by the pseudo-class mapping', () => {
 });
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 bun test services/character/input.test.js
@@ -565,7 +565,7 @@ bun test services/character/input.test.js
 
 Expected: FAIL — `data.class` is undefined and `pseudo_class` is still present.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `services/character/input.js`, add above `normalizeCharacterInput`:
 
@@ -595,7 +595,7 @@ Then inside `normalizeCharacterInput`, immediately after the `delete data.abilit
 
 `trimStrings` at `:84` has already trimmed the nested strings; `blankToNull` exists to collapse the empties to null.
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 bun test services/character/input.test.js && bun run test:unit
@@ -603,7 +603,7 @@ bun test services/character/input.test.js && bun run test:unit
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/character/input.js services/character/input.test.js
@@ -624,7 +624,7 @@ git commit -m "feat: persist the aspiring pseudo-class"
 
 Structural invariants only, per the spec. Budget arithmetic stays in the wizard — do not port the Merx or Perk maths here.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `services/character/input.test.js`:
 
@@ -694,7 +694,7 @@ test('leaves a non-aspiring submit unvalidated by the aspiring rules', () => {
 
 Import `normalizeWizardPayload` at the top of the file alongside the existing imports.
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 ```bash
 bun test services/character/input.test.js
@@ -702,7 +702,7 @@ bun test services/character/input.test.js
 
 Expected: FAIL — every rejection case returns `error: null`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Add above `normalizeWizardPayload` in `services/character/input.js`:
 
@@ -736,7 +736,7 @@ Then inside `normalizeWizardPayload`, after the `creator_mode` check at `service
   }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 ```bash
 bun test services/character/input.test.js && bun run test:unit
@@ -744,7 +744,7 @@ bun test services/character/input.test.js && bun run test:unit
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add services/character/input.js services/character/input.test.js
@@ -774,7 +774,7 @@ Note the submit contract: the wizard POSTs a form-encoded `payload` field holdin
 a JSON string, and the handler replies with an `HX-Location` header and an
 **empty body** — not a 302 (`routes/character-wizard.test.js:1-12,118`).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Create `routes/character-wizard-aspiring.test.js`. Copy the module-mock block,
 `beforeAll`/`afterAll` and `startHttpServer` setup verbatim from
@@ -863,7 +863,7 @@ test('a malformed aspiring submit is rejected before createCharacter runs', asyn
 });
 ```
 
-- [ ] **Step 2: Run the test**
+- [x] **Step 2: Run the test**
 
 Add `'routes/character-wizard-aspiring.test.js'` to `httpFiles` in `scripts/run-tests.mjs:22`, then:
 
@@ -876,7 +876,7 @@ not a red-green cycle of its own — so a failure here means a defect in those
 tasks, and it gets fixed there rather than patched into this file. If you want to
 see it go red first, stash Task 6's `validateAspiringBuild` call and re-run.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add routes/character-wizard-aspiring.test.js scripts/run-tests.mjs
@@ -895,7 +895,7 @@ git commit -m "test: cover the aspiring submit end to end"
 
 `statOptionsFor` feeds trait slots 0 and 1 from `getClassSpreadStats()`, which returns `[]` with no selected class (`:708-712`); `fillStatSelect` then disables an empty select (`:892`). Aspiring players cannot set two of their three traits.
 
-- [ ] **Step 1: Add the union helper**
+- [x] **Step 1: Add the union helper**
 
 Insert directly above `statOptionsFor` in `public/js/character-wizard.js`:
 
@@ -921,7 +921,7 @@ Insert directly above `statOptionsFor` in `public/js/character-wizard.js`:
   };
 ```
 
-- [ ] **Step 2: Use it from `statOptionsFor`**
+- [x] **Step 2: Use it from `statOptionsFor`**
 
 Replace the `const spreadStats = getClassSpreadStats();` line inside `statOptionsFor`:
 
@@ -933,7 +933,7 @@ Replace the `const spreadStats = getClassSpreadStats();` line inside `statOption
 
 Leave the `idx === 2` early return and the previous-slot exclusion exactly as they are — the "two different class stats" rule applies to aspiring identically.
 
-- [ ] **Step 3: Verify in the browser**
+- [x] **Step 3: Verify in the browser**
 
 ```bash
 bun run dev
@@ -941,7 +941,7 @@ bun run dev
 
 Open `/characters/wizard?mode=aspiring&fresh=1`, complete the six builder slots on step 1, and confirm on step 2 that the trait 1 and trait 2 selects are enabled and list the union of the borrowed classes' spread stats. Confirm advent mode is unchanged.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add public/js/character-wizard.js
@@ -957,7 +957,7 @@ git commit -m "fix: offer trait stats to aspiring characters"
 - Modify: `views/character-new-selector.handlebars:80`
 - Modify: `views/character-wizard.handlebars:59`
 
-- [ ] **Step 1: Show the pseudo-class in the running summary**
+- [x] **Step 1: Show the pseudo-class in the running summary**
 
 `public/js/character-wizard.js:439-441` falls back to "Step 1: pick a class to begin." for aspiring, so the summary stays empty for the whole wizard. Replace that `else` branch:
 
@@ -973,7 +973,7 @@ git commit -m "fix: offer trait stats to aspiring characters"
     }
 ```
 
-- [ ] **Step 2: Name aspiring drafts in the restore modal**
+- [x] **Step 2: Name aspiring drafts in the restore modal**
 
 `views/character-new-selector.handlebars:80` prints "class not yet chosen" for
 every aspiring draft by construction, making saved drafts indistinguishable. The
@@ -991,17 +991,17 @@ the `if (classEl)` block:
       }
 ```
 
-- [ ] **Step 3: Fix the step-1 copy**
+- [x] **Step 3: Fix the step-1 copy**
 
 `views/character-wizard.handlebars:59` opens "Aspirant is class-less…" — the wrong mode name. It is Aspiring that is class-less.
 
-- [ ] **Step 4: Delete the dead code**
+- [x] **Step 4: Delete the dead code**
 
 - `public/js/character-wizard.js:1482-1487` — `refreshStep3Perk = () => {}`, an empty stub. Delete it and its call sites.
 - `public/js/character-wizard.js:1414` — `const useAdvanced = DATA.mode === 'aspiring';` sits after the `if (DATA.mode === 'aspiring') return;` at `:1364`, so it is always false. Delete the constant and collapse whatever branches on it.
 - `public/js/character-wizard.js:2195` — the stale "still used for the 3 ability slots for now" comment.
 
-- [ ] **Step 5: Verify**
+- [x] **Step 5: Verify**
 
 ```bash
 bun run check && bun run test
@@ -1009,7 +1009,7 @@ bun run check && bun run test
 
 Then in the browser: confirm the summary names the pseudo-class from step 1 onward, that two aspiring drafts are distinguishable in the restore modal, and that the step-1 blurb reads "Aspiring".
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add public/js/character-wizard.js views/character-new-selector.handlebars views/character-wizard.handlebars
@@ -1035,7 +1035,7 @@ drives the wizard end to end; read it first and reuse its login, navigation and
 cleanup helpers rather than writing new ones. Numbering follows the existing
 sequence (latest is `25-history-restore-blank.spec.js`).
 
-- [ ] **Step 1: Write the spec**
+- [x] **Step 1: Write the spec**
 
 One full pass, asserting at each point the slice changed something:
 
@@ -1051,7 +1051,7 @@ One full pass, asserting at each point the slice changed something:
 7. On the rendered character page, assert the pseudo-class name appears as the
    character's class and that three abilities are listed.
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**
 
 ```bash
 bun run test:e2e
@@ -1059,7 +1059,7 @@ bun run test:e2e
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add e2e/specs/26-aspiring-wizard.spec.js
@@ -1070,13 +1070,18 @@ git commit -m "test: e2e coverage for the aspiring wizard"
 
 ## Final verification
 
-- [ ] `bun run check`
-- [ ] `bun run test`
-- [ ] `bun run test:http`
-- [ ] `bun run test:integration` (local Supabase only)
-- [ ] `bun run test:e2e`
-- [ ] Compare against the Task 1 Step 1 baseline: no test failing now that was passing then.
-- [ ] Tick this plan's checkboxes as they complete — slice 1's plan shipped with all 76 unticked, which made its state unreadable from the file.
+- [x] `bun run check` — exit 0
+- [x] `bun run test` — unit 1617 pass / 0 fail, exit 0
+- [x] `bun run test:http` — 149 pass / 1 fail (pre-existing `open-graph`)
+- [~] `bun run test:integration` (local Supabase only) — NOT run as a suite: it halts on two
+  pre-existing reds (`character-content-integrity`, `image-crop-integrity`) that predate this
+  slice. The files this slice touches were run individually and pass:
+  `models/character-atomic` 15 pass, `util/class-ability-type` 2 pass.
+- [x] `bun run test:e2e` — 111 passed / 6 failed (the same six pre-existing)
+- [x] Compare against the Task 1 Step 1 baseline: no test failing now that was passing then.
+  Nine reds exist on this branch; all nine were verified pre-existing (1 http, 2 integration,
+  6 e2e). None was caused by this slice.
+- [x] Tick this plan's checkboxes as they complete — slice 1's plan shipped with all 76 unticked, which made its state unreadable from the file.
 
 ## Out of scope — do not add
 
