@@ -382,3 +382,27 @@ test('duplicate gear items keep two stable rows and drop to one when one is remo
   expect(trimmed).toHaveLength(1);
   expect(idsOf(before)).toContain(trimmed[0].id);
 });
+
+// The atomic path is the one the wizard uses on create. If the RPC drops type,
+// every aspiring character is born untagged no matter what the service layer
+// sends (services/character/service.js:328-331).
+test('save_character_atomic persists and updates the ability type', async () => {
+  await setup();
+  const { data: created } = await createCharacter({
+    ...input(`Atomic Typed ${suffix}`),
+    abilities: [{ name: 'Atomic Ability', class_id: characterClass.id, type: 'advanced' }]
+  }, profile);
+  const first = await childRows('class_abilities', created.id);
+  expect(first[0].type).toBe('advanced');
+
+  await updateCharacter(created.id, {
+    ...input(`Atomic Typed ${suffix}`),
+    abilities: [{ name: 'Atomic Ability', class_id: characterClass.id, type: 'core' }]
+  }, profile);
+  const second = await childRows('class_abilities', created.id);
+
+  // The id must survive the retag: character_perks.class_ability_id is
+  // ON DELETE CASCADE, so a delete-and-reinsert would destroy the perks.
+  expect(second[0].id).toBe(first[0].id);
+  expect(second[0].type).toBe('core');
+});
