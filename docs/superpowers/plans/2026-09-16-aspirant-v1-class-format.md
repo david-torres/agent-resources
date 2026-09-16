@@ -1163,6 +1163,15 @@ test('content_format defaults to advent', async () => {
   const result = await importWith({ gear: [{ name: 'One' }] });
   expect(result.content_format).toBe('advent');
 });
+
+test('imported gear carries column and position, matching class-gear', async () => {
+  const { gear } = await importWith({
+    content_format: 'aspirant',
+    gear: Array.from({ length: 12 }, (_, i) => ({ name: `Item ${i + 1}` }))
+  });
+  expect(gear.map((item) => item.column)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+  expect(gear.map((item) => item.position)).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]);
+});
 ```
 
 Use the file's existing stubbed-model helper rather than calling the real LLM;
@@ -1221,6 +1230,19 @@ In `util/class-import.js`:
   object.
 - Update the `ADVENT_GEAR_LIMIT` comment: the cap is per-format because format,
   not edition, is what says how many Signatures a class prints.
+- **Bring this file's module-local `normalizeGear` (`:177-189`) back to parity
+  with `util/class-gear.js`.** It emits its own six-key gear object and Task 4
+  widened the contract to eight. Add `column` and `position`, computed the same
+  way — import `gearColumn` and `gearPosition` from `util/class-gear.js` rather
+  than writing a third copy of the arithmetic, and replace this file's
+  `index < BASE_GEAR_COUNT` category expression with `gearColumn(index) === 1`
+  so there is one rule, not two. Delete the now-unused local `BASE_GEAR_COUNT`.
+
+  Why this matters rather than being tidiness: the two normalizers agreeing is
+  what makes an AI-imported class's first admin save a no-op. More concretely,
+  Task 7 lets an import set `content_format: 'aspirant'`, and Task 8 renders an
+  aspirant-format class by grouping its gear on `column`. An imported class whose
+  items carry no `column` would render **zero** Signatures.
 
 Keep `rules_edition` exactly as it is. It still defaults to `"advent"` and is
 still emitted.
@@ -1410,12 +1432,25 @@ unit-testable:
 // The class page renders Signatures in the book's four columns. Grouping here
 // rather than in the template keeps it testable and keeps the template free of
 // a group-by helper that would exist for one caller.
-const signatureColumns = (gear) => [1, 2, 3, 4]
-  .map((column) => (Array.isArray(gear) ? gear : []).filter((item) => item.column === column));
+//
+// A stored item only gains `column` on its next save -- a census of the 300 live
+// gear items answers {category, description, name} and
+// {category, description, meters, name, notes}, so none of them carry it yet.
+// Falling back to the position in the list means a class that has not been
+// re-saved still renders all of its Signatures instead of none of them.
+const signatureColumns = (gear) => {
+    const items = Array.isArray(gear) ? gear : [];
+    return [1, 2, 3, 4].map((column) => items.filter(
+        (item, index) => (item.column ?? gearColumn(index)) === column
+    ));
+};
 ```
 
-Add a unit test for it in `util/class-gear.test.js` covering a six-item class
-(two populated columns, two empty) and a twelve-item class (four populated).
+Add unit tests for it in `util/class-gear.test.js` covering: a six-item class
+(two populated columns, two empty); a twelve-item class (four populated); and
+**a list whose items carry no `column` key at all**, which must still group by
+position rather than returning four empty arrays. That last case is the one that
+matters — every one of the 300 gear items stored today is in exactly that shape.
 
 - [ ] **Step 4: Wire the partial into the page**
 
