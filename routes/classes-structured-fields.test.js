@@ -111,6 +111,28 @@ const send = (method, path, bodyObject) => fetch(`${baseUrl}${path}`, {
 const post = (path, bodyObject) => send('POST', path, bodyObject);
 const put = (path, bodyObject) => send('PUT', path, bodyObject);
 
+// Task 7's content_format and expanded_tips tests need a body carrying a
+// nested object (`expanded_tips: { player: [...], conduit: [...] }`), which
+// encodeBody's flat URLSearchParams cannot express. qs.stringify produces the
+// identical bracket-notation the browser posts and express.urlencoded parses,
+// so this sends the real nested shape rather than a hand-built flat one. The
+// create route responds with no body, so what "was saved" is the payload the
+// mocked model layer captured, not the HTTP response.
+const qs = require('qs');
+const postClass = async (bodyObject) => {
+  const res = await fetch(`${baseUrl}/classes`, {
+    method: 'POST',
+    headers: {
+      'Authorization': 'Bearer valid-jwt',
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Accept': 'application/json',
+    },
+    body: qs.stringify(bodyObject),
+  });
+  expect(res.status).toBe(200);
+  return capturedCreate;
+};
+
 beforeAll(async () => {
   delete require.cache[require.resolve('./classes')];
   const app = express();
@@ -800,8 +822,9 @@ test('POST /classes trims the ends of every gear string and nothing else', async
 // The same positional split
 // supabase/migrations/20260904000001_backfill_gear_category.sql applied to the
 // 31 pre-existing classes, so a legacy row and a backfilled row agree. The AI
-// import path applies the identical rule of its own (util/class-import.js
-// `BASE_GEAR_COUNT`), so what reaches this default is a legacy row re-saved
+// import path applies the identical rule -- util/class-import.js's own
+// normalizeGear imports `gearColumn` from util/class-gear.js rather than a
+// second copy of it -- so what reaches this default is a legacy row re-saved
 // through the form or a hand-built request that omits the key.
 test('POST /classes defaults the first three gear entries to default and the rest to elective', async () => {
   const body = { name: 'Test' };
@@ -1139,4 +1162,27 @@ test('a save that posts no advanced_abilities empties the column', async () => {
   await post('/classes', { name: 'Gunslinger' });
 
   expect(capturedCreate.advanced_abilities).toEqual([]);
+});
+
+// ---------------------------------------------------------------------------
+// Task 7: content_format and expanded_tips.
+test('create persists content_format and expanded_tips', async () => {
+  const body = {
+    name: 'Format Probe',
+    content_format: 'aspirant',
+    expanded_tips: { player: [{ text: 'P tip' }], conduit: [{ text: 'C tip' }] },
+    gear: [{ name: 'G' }],
+    abilities: [{ name: 'A' }],
+  };
+  const saved = await postClass(body);
+  expect(saved.content_format).toBe('aspirant');
+  expect(saved.expanded_tips).toEqual({
+    player: [{ text: 'P tip', children: [] }],
+    conduit: [{ text: 'C tip', children: [] }],
+  });
+});
+
+test('an unknown content_format falls back to advent', async () => {
+  const saved = await postClass({ name: 'Bad Format', content_format: 'aspirant-v1' });
+  expect(saved.content_format).toBe('advent');
 });

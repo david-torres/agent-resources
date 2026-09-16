@@ -111,6 +111,7 @@ const { engineHelpers } = require('../app');
 const { normalizeClassInput } = require('../services/class/input');
 const { normalizeAbilities } = require('./class-abilities');
 const { normalizeGear } = require('./class-gear');
+const { normalizeExpandedTips } = require('./class-expanded-tips');
 const { parseExamples } = require('./class-examples');
 const { applyImageCrop } = require('./crop');
 const {
@@ -171,7 +172,14 @@ const SELECT_FIELDS = [
 // renders the column into its own repeatable editor and routes/classes.js:747
 // runs the posted rows back through normalizeAbilities, so a save reads and
 // rewrites it exactly as it does `abilities`.
-const STRUCTURED_FIELDS = ['abilities', 'advanced_abilities', 'gear', 'examples'];
+//
+// `expanded_tips` gets no coverage floor alongside sample_perks,
+// default_enchantments and advanced_abilities below: no live class carries any
+// until plan 2 loads them, and a floor that cannot be met would fail the
+// build. It is still compared -- every live class's default `{player: [],
+// conduit: []}` round-trips through normalizeExpandedTips(undefined) to the
+// same shape, so the comparison passes without asserting anything was found.
+const STRUCTURED_FIELDS = ['abilities', 'advanced_abilities', 'gear', 'examples', 'expanded_tips'];
 
 // jsonb, and the one column a save may legitimately omit (rule G).
 const CROP_FIELD = 'image_crop';
@@ -344,6 +352,20 @@ const expectedEnchantment = (enchantment, ctx, path) => {
     };
 };
 
+// The Expanded Tips lists are note-shaped -- text plus optional sub-bullets --
+// the same contract util/class-expanded-tips.js normalizeExpandedTips enforces
+// over both audiences, so expectedNote (allowlist rules D and E) serves both
+// lists rather than a new builder per audience.
+const expectedExpandedTips = (row) => {
+  const ctx = { class: row.id, className: row.name, column: 'expanded_tips' };
+  const source = row.expanded_tips && typeof row.expanded_tips === 'object' ? row.expanded_tips : {};
+  return Object.fromEntries(['player', 'conduit'].map((audience) => [
+    audience,
+    (source[audience] || []).map((note, index) =>
+      expectedNote(note, ctx, `${label(row)}.expanded_tips.${audience}[${index}]`))
+  ]));
+};
+
 const expectedGear = (row) => {
     const ctx = { class: row.id, className: row.name, column: 'gear' };
     return (row.gear || []).map((item, index) => {
@@ -422,6 +444,7 @@ const roundTrip = async (row) => {
         abilities: normalizeAbilities(body.abilities),
         advanced_abilities: normalizeAbilities(body.advanced_abilities),
         gear: normalizeGear(body.gear),
+        expanded_tips: normalizeExpandedTips(body.expanded_tips),
         examples: parseExamples(body),
         is_public: body.is_public === 'on',
         is_player_created: body.is_player_created === 'true',
@@ -458,6 +481,7 @@ const expectedFor = (row) => ({
     abilities: expectedAbilities(row, 'abilities'),
     advanced_abilities: expectedAbilities(row, 'advanced_abilities'),
     gear: expectedGear(row),
+    expanded_tips: expectedExpandedTips(row),
     examples: (row.examples || []).map((example, index) => expectedText(
         example,
         { class: row.id, className: row.name, column: 'examples' },

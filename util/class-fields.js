@@ -4,19 +4,27 @@
 // a guard that reimplements a step of the path it claims to exercise is a guard
 // that cannot see that step drift.
 
-// Mirrors the CHECK constraints these two columns carry. Both accept NULL and
-// reject '', so an unselected option must land as NULL rather than as the empty
-// string the select submits, and anything outside the allowlist -- a typo from a
-// non-browser client -- must not reach Postgres as a raw constraint violation.
+// Mirrors the CHECK constraints these columns carry. challenge_level and
+// prerelease_section both accept NULL and reject '', so an unselected option
+// must land as NULL rather than as the empty string the select submits.
+// content_format is NOT NULL DEFAULT 'advent', so its unrecognised value has to
+// fall back to that same default rather than to NULL, which the column's own
+// NOT NULL constraint would reject. Whatever the fallback, anything outside the
+// allowlist -- a typo from a non-browser client -- must not reach Postgres as a
+// raw constraint violation.
+//
+// rules_edition and rules_version are deliberately absent: their fallback is a
+// separate decision, out of scope here.
 const CONSTRAINED_SELECTS = {
-    challenge_level: ['Low', 'Mid', 'High'],
-    prerelease_section: ['pcc', 'exclusive', 'aspirant']
+    challenge_level: { values: ['Low', 'Mid', 'High'], fallback: null },
+    prerelease_section: { values: ['pcc', 'exclusive', 'aspirant'], fallback: null },
+    content_format: { values: ['advent', 'aspirant'], fallback: 'advent' }
 };
 
 const applyConstrainedSelects = (body) => {
-    for (const [field, allowed] of Object.entries(CONSTRAINED_SELECTS)) {
+    for (const [field, { values, fallback }] of Object.entries(CONSTRAINED_SELECTS)) {
         if (body[field] !== undefined) {
-            body[field] = allowed.includes(body[field]) ? body[field] : null;
+            body[field] = values.includes(body[field]) ? body[field] : fallback;
         }
     }
 };

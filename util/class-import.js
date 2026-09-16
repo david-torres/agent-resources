@@ -4,6 +4,8 @@ const { completion } = require("zod-gpt");
 const { createClass } = require("../models/class");
 const { blankTextToNull } = require("./class-fields");
 const { assertNonEmptyImportText } = require("./validate");
+const { gearColumn, gearPosition } = require("./class-gear");
+const { normalizeExpandedTips } = require("./class-expanded-tips");
 
 const openai = new OpenAIChatApi(
   { apiKey: process.env.OPENAI_API_KEY },
@@ -86,6 +88,11 @@ const schema = z.object({
   is_public: z.boolean().optional().describe("Whether the PCC should be public"),
   rules_edition: z.enum(["advent", "aspirant"]).optional().describe("Rules edition; defaults to advent"),
   rules_version: z.enum(["v1", "v2"]).optional().describe("Rules version; defaults to v1"),
+  content_format: z.enum(["advent", "aspirant"]).optional().describe("Content format; defaults to advent"),
+  expanded_tips: z.object({
+    player: z.array(noteSchema).nullable().optional().describe("Tips addressed to the player"),
+    conduit: z.array(noteSchema).nullable().optional().describe("Tips addressed to the Conduit"),
+  }).nullable().optional().describe("The Expanded Tips page's player and Conduit tip lists"),
 });
 
 // Everything below emits the contract Tasks 15 and 16 settled for the admin
@@ -157,23 +164,24 @@ const normalizeAbilities = (abilities, limit = 3) => (Array.isArray(abilities) ?
   })
   .slice(0, limit);
 
-// The first three items are Base gear and the rest Elective -- the split
-// supabase/migrations/20260904000001_backfill_gear_category.sql wrote and
-// util/class-gear.js `gearCategory` reproduces.
-//
-// Emitting it here is what closes R79: views/class-view.handlebars renders a
-// blank category in the Base column whatever the item's position, so an import
-// with no category showed all six items under Base and the first admin save
-// silently moved items 4-6 to Elective.
-const BASE_GEAR_COUNT = 3;
-
 // Advent classes print six Signature Items; Aspirant classes print twelve
-// (ENCLAVE: Aspirant, pg. 8). The cap is per-edition because it is the only
-// guard against a model padding a six-item writeup out to twelve.
+// (ENCLAVE: Aspirant, pg. 8). The cap is per-format, not per-edition, because
+// format -- not rules_edition -- is what says how many Signatures a class
+// prints; it is the only guard against a model padding a six-item writeup out
+// to twelve.
 const ADVENT_GEAR_LIMIT = 6;
 const ASPIRANT_GEAR_LIMIT = 12;
 const ADVANCED_ABILITY_LIMIT = 3;
 
+// Column and position are computed the same way util/class-gear.js's
+// normalizeGear computes them for the admin form, imported rather than
+// reimplemented, so the two normalizers keep agreeing on an AI-imported
+// class's first admin save. category's positional default follows
+// `gearColumn(index) === 1` for the same reason: one rule, not two, and it is
+// what closes R79 -- views/class-view.handlebars renders a blank category in
+// the Base column whatever the item's position, so an import with no category
+// showed all six items under Base and the first admin save silently moved
+// items 4-6 to Elective.
 const normalizeGear = (gear, limit = 6) => (Array.isArray(gear) ? gear : [])
   .filter((item) => item && text(item.name))
   .map((item, index) => ({
@@ -181,10 +189,12 @@ const normalizeGear = (gear, limit = 6) => (Array.isArray(gear) ? gear : [])
     description: text(item.description),
     category: item.category === "elective" || item.category === "default"
       ? item.category
-      : (index < BASE_GEAR_COUNT ? "default" : "elective"),
+      : (gearColumn(index) === 1 ? "default" : "elective"),
     meters: normalizeMeters(item.meters),
     notes: normalizeNotes(item.notes),
     default_enchantment: normalizeEnchantment(item.default_enchantment),
+    column: gearColumn(index),
+    position: gearPosition(index),
   }))
   .slice(0, limit);
 
@@ -205,7 +215,7 @@ JSON output:`;
 
   try {
     const parsed = schema.parse(result.data);
-    const edition = parsed.rules_edition || "advent";
+    const format = parsed.content_format || "advent";
     const classData = {
       ...parsed,
       teaser: text(parsed.teaser),
@@ -223,11 +233,13 @@ JSON output:`;
       tips: text(parsed.tips),
       abilities: normalizeAbilities(parsed.abilities),
       advanced_abilities: normalizeAbilities(parsed.advanced_abilities, ADVANCED_ABILITY_LIMIT),
-      gear: normalizeGear(parsed.gear, edition === "aspirant" ? ASPIRANT_GEAR_LIMIT : ADVENT_GEAR_LIMIT),
+      gear: normalizeGear(parsed.gear, format === "aspirant" ? ASPIRANT_GEAR_LIMIT : ADVENT_GEAR_LIMIT),
       status: parsed.status || "alpha",
       is_public: parsed.is_public ?? false,
       rules_edition: parsed.rules_edition || "advent",
       rules_version: parsed.rules_version || "v1",
+      content_format: format,
+      expanded_tips: normalizeExpandedTips(parsed.expanded_tips),
       is_player_created: true,
     };
 

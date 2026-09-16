@@ -235,6 +235,29 @@ const renumberGearFields = (root) => {
   });
 };
 
+// Field naming for the class form's repeatable Expanded Tips editor -- two
+// note-shaped lists, `player` and `conduit`, sharing one x-data root and one
+// `expanded_tips[...]` column. Renumbering is scoped to the ONE audience's
+// list (`[data-tip-list="${audience}"]`) rather than the whole root: the two
+// lists share `[data-tip-row]`/`[data-child-row]` markers, so renumbering
+// unscoped would renumber the audience that did not change right along with
+// the one that did.
+const renumberExpandedTipsFields = (root, audience) => {
+  const list = root.querySelector(`[data-tip-list="${audience}"]`);
+  if (!list) return;
+
+  list.querySelectorAll('[data-tip-row]').forEach((tipRow, ti) => {
+    tipRow.querySelectorAll('[data-tip-field]').forEach((field) => {
+      field.name = `expanded_tips[${audience}][${ti}][${field.dataset.tipField}]`;
+    });
+    tipRow.querySelectorAll('[data-child-row]').forEach((childRow, ci) => {
+      childRow.querySelectorAll('[data-child-field]').forEach((field) => {
+        field.name = `expanded_tips[${audience}][${ti}][children][${ci}][${field.dataset.childField}]`;
+      });
+    });
+  });
+};
+
 document.addEventListener('alpine:init', () => {
   // Title -> slug sync for the page editor. Stops as soon as the slug is
   // edited by hand. On load, a slug that still matches its title is
@@ -815,6 +838,47 @@ document.addEventListener('alpine:init', () => {
       this.busy = false;
       this.state = 'error';
       this.error = message;
+    }
+  }));
+
+  // Repeatable Expanded Tips editor on the admin class form -- two note-shaped
+  // lists, `player` and `conduit`, under one x-data root. Owns no state: the
+  // rows are server-rendered with their real values and names, and this only
+  // clones a blank row in or takes one out, then renumbers the audience that
+  // changed.
+  Alpine.data('expandedTipsEditor', () => ({
+    addTip(audience) {
+      this.appendRow(this.$root, `tip-${audience}`, `[data-tip-list="${audience}"]`, audience);
+    },
+
+    removeTip($el, audience) {
+      this.removeRow($el, '[data-tip-row]', audience);
+    },
+
+    addChildTip($el, audience) {
+      this.appendRow($el.closest('[data-tip-row]'), `child-${audience}`, '[data-child-list]', audience);
+    },
+
+    removeChildTip($el, audience) {
+      this.removeRow($el, '[data-child-row]', audience);
+    },
+
+    // The prototypes live once at the editor root, one pair per audience since
+    // the audience is baked into the row's names rather than passed at clone
+    // time. Their contents are only reachable through .content, so an inner
+    // list selector can never match inside one by accident.
+    appendRow(scope, prototype, listSelector, audience) {
+      const template = this.$root.querySelector(`template[data-prototype="${prototype}"]`);
+      scope.querySelector(listSelector)
+        .appendChild(template.content.firstElementChild.cloneNode(true));
+      renumberExpandedTipsFields(this.$root, audience);
+    },
+
+    // The root is read BEFORE the removal, for the reason abilityEditor records.
+    removeRow($el, rowSelector, audience) {
+      const root = this.$root;
+      $el.closest(rowSelector).remove();
+      renumberExpandedTipsFields(root, audience);
     }
   }));
 

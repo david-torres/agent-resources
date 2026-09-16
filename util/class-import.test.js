@@ -181,6 +181,8 @@ test('an imported gear item carries its meters and notes', async () => {
     meters: [{ label: 'Accuracy Boost', value: 'Mid' }],
     notes: [{ text: 'Reach is Low.', children: [] }],
     default_enchantment: null,
+    column: 1,
+    position: 1,
   }]);
 });
 
@@ -221,18 +223,53 @@ test('a teaser and tips the model gave are written through', async () => {
 
 // An Aspirant class has twelve Signature Items, not six, and three Advanced
 // Abilities on top of its three Core (ENCLAVE: Aspirant, pg. 8). The caps are
-// per-edition because an Advent writeup that yields twelve items is a
+// per-format because an Advent writeup that yields twelve items is a
 // hallucination, while an Aspirant one that yields six is a truncation.
 test('an aspirant import keeps all twelve gear items', async () => {
-  const created = await importClass({ rules_edition: 'aspirant', gear: twelveItems() });
+  const created = await importClass({ content_format: 'aspirant', gear: twelveItems() });
 
   expect(created.gear).toHaveLength(12);
 });
 
 test('an advent import is still capped at six gear items', async () => {
-  const created = await importClass({ rules_edition: 'advent', gear: twelveItems() });
+  const created = await importClass({ content_format: 'advent', gear: twelveItems() });
 
   expect(created.gear).toHaveLength(6);
+});
+
+// The cap follows content_format, not rules_edition: a pre-release Aspirant
+// class tagged rules_edition 'aspirant' can still hold the Advent six-item
+// shape, and format -- not edition -- is what says how many Signatures print.
+test('the gear cap follows content_format, not rules_edition', async () => {
+  const twelve = Array.from({ length: 12 }, (_, i) => ({ name: `Item ${i + 1}` }));
+
+  const aspirantFormat = await importClass({
+    rules_edition: 'advent',
+    content_format: 'aspirant',
+    gear: twelve,
+  });
+  expect(aspirantFormat.gear).toHaveLength(12);
+
+  const adventFormat = await importClass({
+    rules_edition: 'aspirant',
+    content_format: 'advent',
+    gear: twelve,
+  });
+  expect(adventFormat.gear).toHaveLength(6);
+});
+
+test('content_format defaults to advent', async () => {
+  const result = await importClass({ gear: [{ name: 'One' }] });
+  expect(result.content_format).toBe('advent');
+});
+
+test('imported gear carries column and position, matching class-gear', async () => {
+  const { gear } = await importClass({
+    content_format: 'aspirant',
+    gear: Array.from({ length: 12 }, (_, i) => ({ name: `Item ${i + 1}` })),
+  });
+  expect(gear.map((item) => item.column)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+  expect(gear.map((item) => item.position)).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]);
 });
 
 // Advanced Abilities carry the Core Ability contract unchanged (ENCLAVE:

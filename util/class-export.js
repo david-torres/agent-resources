@@ -273,6 +273,8 @@ const exportToJson = (classData) => {
     ...pickClassProse(classData),
     rules_edition: classData.rules_edition,
     rules_version: classData.rules_version,
+    content_format: classData.content_format || 'advent',
+    expanded_tips: classData.expanded_tips || { player: [], conduit: [] },
     status: classData.status,
     is_public: classData.is_public,
     is_player_created: classData.is_player_created,

@@ -17,6 +17,20 @@
     </div>
     <div class="column is-one-third-tablet">
       <div class="field">
+        <label class="label" for="class-content-format">Content Format</label>
+        <div class="control">
+          <div class="select is-fullwidth">
+            <select name="content_format" id="class-content-format">
+              <option value="advent" {{#if (eq class.content_format "advent")}}selected{{/if}}>Advent</option>
+              <option value="aspirant" {{#if (eq class.content_format "aspirant")}}selected{{/if}}>Aspirant</option>
+            </select>
+          </div>
+        </div>
+        <p class="help">Advent classes print six Signatures and three Abilities; Aspirant classes print twelve Signatures, three Core and three Advanced.</p>
+      </div>
+    </div>
+    <div class="column is-one-third-tablet">
+      <div class="field">
         <label class="label" for="class-rules-version">Rules Version</label>
         <div class="control">
           <div class="select is-fullwidth">
@@ -268,6 +282,84 @@
       </label>
     </div>
     {{/if}}
+  </div>
+  {{!-- Repeatable Expanded Tips editor: two note-shaped lists, `player` and
+        `conduit`, under one `expanded_tips[...]` root. It is its own x-data
+        root and partial family rather than a parameterised reuse of the
+        ability editor's note partials, for the same reason
+        advanced_abilities is: the two roots' shared inner attribute names
+        (data-child-row) can never be reached across a boundary this way (see
+        renumberGearFields' comment in public/js/alpine-components.js), and
+        the audience ('player' or 'conduit') is baked into each side's own
+        prototype and list selector rather than threaded through a shared one.
+
+        A tip is note-shaped -- text plus optional sub-bullets -- because
+        util/class-expanded-tips.js normalizeExpandedTips runs every entry
+        through the same normalizeNote util/class-gear.js already exports, so
+        this editor is the ability/gear notes sub-editor promoted to a
+        top-level repeater, twice, rather than a new shape.
+
+        Unlike the ability, gear and advanced-ability lists there is no
+        "starts on N blank rows" default: those three counts come from the
+        source document (three Abilities, six or twelve Signatures, three
+        Advanced Abilities), and no such count exists for an open-ended tip
+        list. A class with none yet starts on zero rows in each list, with
+        "Add tip" to grow it -- and since every live class's expanded_tips is
+        still `{player: [], conduit: []}`, that also means the served markup
+        carries no expanded_tips input at all until an admin adds one. --}}
+  <div class="field" x-data="expandedTipsEditor()">
+    {{#*inline "tipChildRow"}}
+    <div class="field is-grouped mb-2" data-child-row>
+      <div class="control is-expanded">
+        <input class="input is-small" type="text" data-child-field="text" name="expanded_tips[{{audience}}][{{ti}}][children][{{ci}}][text]" value="{{child.text}}" placeholder="Sub-note" aria-label="Sub-note">
+      </div>
+      <div class="control">
+        <button type="button" class="button is-small is-light" @click="removeChildTip($el, '{{audience}}')">Remove sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    {{#*inline "tipRow"}}
+    <div class="mb-3" data-tip-row>
+      <div class="field is-grouped mb-2">
+        <div class="control is-expanded">
+          <input class="input" type="text" data-tip-field="text" name="expanded_tips[{{audience}}][{{ti}}][text]" value="{{tip.text}}" placeholder="Tip" aria-label="Tip">
+        </div>
+        <div class="control">
+          <button type="button" class="button is-light" @click="removeTip($el, '{{audience}}')">Remove tip</button>
+        </div>
+      </div>
+      <div class="pl-5">
+        <div data-child-list>
+          {{#each tip.children}}{{> tipChildRow child=this audience=../audience ti=../ti ci=@index}}{{/each}}
+        </div>
+        <button type="button" class="button is-small" @click="addChildTip($el, '{{audience}}')">Add sub-note</button>
+      </div>
+    </div>
+    {{/inline}}
+    <label class="label">Expanded Tips</label>
+    <p class="help mb-3">The Player and Conduit tip lists from the class's last page.</p>
+
+    <label class="label is-small">Player</label>
+    <div data-tip-list="player">
+      {{#each class.expanded_tips.player}}{{> tipRow tip=this audience="player" ti=@index}}{{/each}}
+    </div>
+    <button type="button" class="button is-small" @click="addTip('player')">Add player tip</button>
+
+    <label class="label is-small mt-4">Conduit</label>
+    <div data-tip-list="conduit">
+      {{#each class.expanded_tips.conduit}}{{> tipRow tip=this audience="conduit" ti=@index}}{{/each}}
+    </div>
+    <button type="button" class="button is-small" @click="addTip('conduit')">Add conduit tip</button>
+
+    {{!-- Inert prototypes; see the ability editor's note. A plain <template>
+          keeps its children in a DocumentFragment, so Alpine's walker never
+          enters it and the browser renders nothing. One prototype pair per
+          audience, since the audience is baked into the row's names rather
+          than passed at clone time. --}}
+    <template data-prototype="tip-player">{{> tipRow audience="player" ti=0}}</template>
+    <template data-prototype="tip-conduit">{{> tipRow audience="conduit" ti=0}}</template>
+    <template data-prototype="child-player">{{> tipChildRow audience="player" ti=0 ci=0}}</template>
+    <template data-prototype="child-conduit">{{> tipChildRow audience="conduit" ti=0 ci=0}}</template>
   </div>
   {{!-- Repeatable ability editor.
 
@@ -731,6 +823,8 @@
     <div data-gear-list>
       {{#if class.gear.length}}
         {{#each class.gear}}{{> gearRow gear=this gi=@index}}{{/each}}
+      {{else if (eq class.content_format "aspirant")}}
+        {{#times 12}}{{> gearRow gi=@index}}{{/times}}
       {{else}}
         {{#times 6}}{{> gearRow gi=@index}}{{/times}}
       {{/if}}

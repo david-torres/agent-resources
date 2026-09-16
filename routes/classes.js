@@ -33,6 +33,7 @@ const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/cl
 const { applyImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
 const { normalizeGear } = require('../util/class-gear');
+const { normalizeExpandedTips } = require('../util/class-expanded-tips');
 const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
@@ -678,6 +679,8 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     req.body.gear = normalizeGear(req.body.gear);
     dropRetiredGearFields(req.body);
 
+    req.body.expanded_tips = normalizeExpandedTips(req.body.expanded_tips);
+
     // Normalize is_public checkbox
     if (req.body.is_public === 'on') {
         req.body.is_public = true;
@@ -749,6 +752,8 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     req.body.gear = normalizeGear(req.body.gear);
     dropRetiredGearFields(req.body);
+
+    req.body.expanded_tips = normalizeExpandedTips(req.body.expanded_tips);
 
     if (req.body.is_public === 'on') {
         req.body.is_public = true;
