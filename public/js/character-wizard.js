@@ -95,10 +95,9 @@ window.CharacterWizard = (function () {
         advancedAbility: { classId: null, abilityName: null }
       },
       // Aspiring-mode pseudo-class metadata — what the user types in the
-      // "Name Your Class" form on step 1. Submitted as a player-created
-      // class row by the wizard route (aspiring is class-less: the player
-      // invents a one-off class for this character rather than picking
-      // from the catalog). Null in other modes.
+      // "Name Your Class" form on step 1. Aspiring is class-less: the player
+      // invents a one-off class rather than picking from the catalog, so this
+      // is persisted onto the character itself, not as a classes row.
       pseudoClass: {
         name: '',
         tagline: '',
