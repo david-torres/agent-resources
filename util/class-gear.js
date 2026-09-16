@@ -2,12 +2,13 @@
 // `classes.gear` holds.
 //
 // This is a different function with a different contract from the module-local
-// `normalizeGear` in util/class-import.js. Since `f4c5ffc` both emit the same
-// six-key contract -- `name`, `description`, `category`, `meters`, `notes`,
-// `default_enchantment` -- and both apply the same positional `category`
-// default (R79), which is what makes an AI-imported class's first admin save a
-// no-op. The import one reads already-parsed model output rather than a request
-// body and caps the list per rules edition. Neither wraps the other.
+// `normalizeGear` in util/class-import.js. Both apply the same positional
+// `category` default (R79) over the saved index, so an AI-imported class's
+// `category` values never change on the first admin save -- but the import
+// path emits six keys per item and this one emits eight, so that save adds
+// `column` and `position` to every item. The import one reads already-parsed
+// model output rather than a request body and caps the list per rules
+// edition. Neither wraps the other.
 //
 // So the AI path is no longer why the positional default below has to keep
 // working: it now supplies its own. What keeps the default here is everything
@@ -81,13 +82,27 @@ const trimField = (value) => (typeof value === 'string' ? value.trim() : '');
 // carrying anything else renders in neither.
 const GEAR_CATEGORIES = ['default', 'elective'];
 
-// Every one of the 50 live classes has exactly six gear items, three to a
-// column, and the class page split them by that position before `category`
-// existed.
-const BASE_GEAR_COUNT = 3;
+// The book prints a class's Signatures in four columns of three across a
+// two-page spread and gives the column meaning: "Each of a Class's four columns
+// of Signature Items are ordered by complexity and alignment with that Class's
+// general game plan" (ENCLAVE: Aspirant, pg. 11). Neither index is printed, so
+// both are derived from the item's position in the saved list.
+const ITEMS_PER_COLUMN = 3;
+const gearColumn = (index) => Math.floor(index / ITEMS_PER_COLUMN) + 1;
+const gearPosition = (index) => (index % ITEMS_PER_COLUMN) + 1;
 
-// The first three items of a six-item list are the Base gear and the last three
-// the Elective. That is the split
+// Under V1 Signatures are no longer split into Default and Elective rosters.
+// The book's backwards-compatibility rule (ENCLAVE: Aspirant, pg. 2) reads the
+// first column as the Default Roster and the second as the Elective, so
+// `category` survives as the compatibility view of a four-column roster rather
+// than as a fact about it: column 1 is Default, every other column Elective.
+//
+// With three items to a column that is arithmetically identical to the old
+// `index < 3` test, so all fifty live six-item classes keep the category they
+// have, and twelve items need no second branch.
+const DEFAULT_ROSTER_COLUMN = 1;
+
+// That column split is the one
 // supabase/migrations/20260904000001_backfill_gear_category.sql wrote onto the
 // 31 pre-existing classes, and it is reproduced here so a legacy row, a
 // backfilled row and a freshly saved one all agree.
@@ -116,7 +131,7 @@ const gearCategory = (category, index) => {
     const value = trimField(category);
     return GEAR_CATEGORIES.includes(value)
         ? value
-        : (index < BASE_GEAR_COUNT ? 'default' : 'elective');
+        : (gearColumn(index) === DEFAULT_ROSTER_COLUMN ? 'default' : 'elective');
 };
 
 // A meter is a label/value pair by definition -- partials/class-meters.handlebars
@@ -170,14 +185,13 @@ const normalizeEnchantment = (value) => {
 // intermediate state in a repeater -- the inputs carry no `required` -- so this
 // is the only thing that drops one.
 //
-// `name`, `description`, `category`, `meters`, `notes` and
-// `default_enchantment` are this branch's declared gear contract, so every item
-// gets all six: a legacy item that only ever had a name and a description picks
-// up the rest on save. A census of jsonb_object_keys over the 300 live gear
-// items answers {category, description, name} and
-// {category, description, meters, name, notes}: a stored item only picks
-// `default_enchantment: null` up on its next save, which is what an Advent
-// Signature has.
+// `name`, `description`, `category`, `meters`, `notes`, `default_enchantment`,
+// `column` and `position` are this branch's declared gear contract, so every
+// item gets all eight: a legacy item that only ever had a name and a
+// description picks up the rest on save. A census of jsonb_object_keys over the
+// 300 live gear items answers {category, description, name} and
+// {category, description, meters, name, notes}: a stored item picks up
+// `default_enchantment`, `column` and `position` on its next save.
 //
 // Blank rows are dropped BEFORE the items are numbered, so `index` is the
 // position in the saved array rather than in the submitted one -- see
@@ -190,7 +204,11 @@ const normalizeGear = (value) => indexedRows(value)
         category: gearCategory(row.category, index),
         meters: indexedRows(row.meters).map(normalizeMeter).filter(Boolean),
         notes: indexedRows(row.notes).map(normalizeNote).filter(Boolean),
-        default_enchantment: normalizeEnchantment(row.default_enchantment)
+        default_enchantment: normalizeEnchantment(row.default_enchantment),
+        column: gearColumn(index),
+        position: gearPosition(index)
     }));
 
-module.exports = { normalizeGear, gearCategory };
+module.exports = {
+    normalizeGear, gearCategory, gearColumn, gearPosition, indexedRows, normalizeNote
+};

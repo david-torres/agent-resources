@@ -19,7 +19,7 @@
 // branch is kept because a bare `qs.parse` at its default arrayLimit does
 // produce it, and it is pinned here instead of by an HTTP test pretending to
 // reach it.
-const { test, expect } = require('bun:test');
+const { test, expect, describe } = require('bun:test');
 const { normalizeGear, gearCategory } = require('./class-gear');
 
 const named = (name) => ({ name });
@@ -122,7 +122,10 @@ test('a missing, null or scalar gear value yields an empty array', () => {
 test('a non-string field value is treated as blank', () => {
   expect(normalizeGear([{ name: ['Visor', 'Visor'] }])).toEqual([]);
   expect(normalizeGear([{ name: 'Visor', description: ['a', 'b'], category: ['default'] }]))
-    .toEqual([{ name: 'Visor', description: '', category: 'default', meters: [], notes: [], default_enchantment: null }]);
+    .toEqual([{
+      name: 'Visor', description: '', category: 'default', meters: [], notes: [],
+      default_enchantment: null, column: 1, position: 1
+    }]);
 });
 
 // Each of an Aspirant class's twelve Signature Items comes with a unique
@@ -222,4 +225,43 @@ test('gearCategory answers the positional default for a missing or unknown value
 test('gearCategory honours a recognised value at any position', () => {
   expect(gearCategory('elective', 0)).toBe('elective');
   expect(gearCategory('  default  ', 5)).toBe('default');
+});
+
+const { gearColumn, gearPosition } = require('./class-gear');
+
+describe('gearColumn and gearPosition', () => {
+  test('three items fill a column before the next one starts', () => {
+    expect([0, 1, 2, 3, 4, 5].map(gearColumn)).toEqual([1, 1, 1, 2, 2, 2]);
+    expect([0, 1, 2, 3, 4, 5].map(gearPosition)).toEqual([1, 2, 3, 1, 2, 3]);
+  });
+
+  test('a twelve-item roster fills four columns', () => {
+    expect([6, 7, 8, 9, 10, 11].map(gearColumn)).toEqual([3, 3, 3, 4, 4, 4]);
+    expect([6, 7, 8, 9, 10, 11].map(gearPosition)).toEqual([1, 2, 3, 1, 2, 3]);
+  });
+});
+
+describe('normalizeGear column contract', () => {
+  test('every item carries column and position', () => {
+    const items = normalizeGear([{ name: 'A' }, { name: 'B' }, { name: 'C' }, { name: 'D' }]);
+    expect(items.map((item) => [item.column, item.position]))
+      .toEqual([[1, 1], [1, 2], [1, 3], [2, 1]]);
+  });
+
+  test('category still derives from the column: 1 is default, 2-4 are elective', () => {
+    const names = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'];
+    const items = normalizeGear(names.map((name) => ({ name })));
+    expect(items.map((item) => item.category)).toEqual([
+      'default', 'default', 'default',
+      'elective', 'elective', 'elective',
+      'elective', 'elective', 'elective',
+      'elective', 'elective', 'elective'
+    ]);
+  });
+
+  test('a stored category still wins over the positional default', () => {
+    const items = normalizeGear([{ name: 'A', category: 'elective' }]);
+    expect(items[0].category).toBe('elective');
+    expect(items[0].column).toBe(1);
+  });
 });
