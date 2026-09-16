@@ -209,6 +209,23 @@ const normalizeGear = (value) => indexedRows(value)
         position: gearPosition(index)
     }));
 
+// The class page renders Signatures in the book's four columns. Grouping here
+// rather than in the template keeps it testable and keeps the template free of
+// a group-by helper that would exist for one caller.
+//
+// A stored item only gains `column` on its next save -- a census of the 300 live
+// gear items answers {category, description, name} and
+// {category, description, meters, name, notes}, so none of them carry it yet.
+// Falling back to the position in the list means a class that has not been
+// re-saved still renders all of its Signatures instead of none of them.
+const signatureColumns = (gear) => {
+    const items = Array.isArray(gear) ? gear : [];
+    return [1, 2, 3, 4].map((column) => items.filter(
+        (item, index) => (item.column ?? gearColumn(index)) === column
+    ));
+};
+
 module.exports = {
-    normalizeGear, gearCategory, gearColumn, gearPosition, indexedRows, normalizeNote
+    normalizeGear, gearCategory, gearColumn, gearPosition, indexedRows, normalizeNote,
+    signatureColumns
 };

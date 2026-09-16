@@ -1,0 +1,19 @@
+<div class="columns">
+  {{#each columns}}
+  <div class="signature-column">
+    {{#each this}}
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h4 class="title is-4 mb-1">{{this.name}}</h4>
+          {{{markdown this.description}}}
+          {{> class-meters meters=this.meters}}
+          {{> class-notes notes=this.notes}}
+          {{> class-enchantment enchantment=this.default_enchantment}}
+        </div>
+      </div>
+    </div>
+    {{/each}}
+  </div>
+  {{/each}}
+</div>

@@ -265,3 +265,48 @@ describe('normalizeGear column contract', () => {
     expect(items[0].column).toBe(1);
   });
 });
+
+const { signatureColumns } = require('./class-gear');
+
+describe('signatureColumns', () => {
+  test('a six-item class fills two columns and leaves two empty', () => {
+    const items = ['A', 'B', 'C', 'D', 'E', 'F'].map(named);
+    const columns = signatureColumns(items);
+    expect(columns.map((column) => column.map((item) => item.name))).toEqual([
+      ['A', 'B', 'C'],
+      ['D', 'E', 'F'],
+      [],
+      []
+    ]);
+  });
+
+  test('a twelve-item class fills all four columns', () => {
+    const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map(named);
+    const columns = signatureColumns(items);
+    expect(columns.map((column) => column.length)).toEqual([3, 3, 3, 3]);
+    expect(columns[3].map((item) => item.name)).toEqual(['J', 'K', 'L']);
+  });
+
+  // Every one of the 300 live gear items answers {category, description,
+  // meters, name, notes} -- none carry `column` yet, since a stored item only
+  // gains it on its next save. A strict `item.column === n` filter would
+  // return four empty arrays for every class in the catalog; falling back to
+  // the item's position in the list is what keeps an unsaved class's
+  // Signatures on the page at all.
+  test('items with no column key group by their position in the list', () => {
+    const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
+      .map((name) => ({ category: 'default', description: '', meters: [], name, notes: [] }));
+    const columns = signatureColumns(items);
+    expect(columns.map((column) => column.map((item) => item.name))).toEqual([
+      ['A', 'B', 'C'],
+      ['D', 'E', 'F'],
+      ['G', 'H', 'I'],
+      ['J', 'K', 'L']
+    ]);
+  });
+
+  test('a non-array gear value yields four empty columns', () => {
+    expect(signatureColumns(undefined)).toEqual([[], [], [], []]);
+    expect(signatureColumns(null)).toEqual([[], [], [], []]);
+  });
+});

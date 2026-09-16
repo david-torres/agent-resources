@@ -92,6 +92,11 @@ test('paired_action renders through the power-ratings helper', () => {
   expect(SRC).not.toContain('{{this.paired_action}}');
 });
 
+test('class-view branches the signature layout on content_format', () => {
+  expect(SRC).toContain('class-signature-columns');
+  expect(SRC).toContain('class-expanded-tips');
+});
+
 // Mirrors the real duplicate-modal markup closely enough to exercise the
 // shared shell: name-scoped open/close, Escape, and the body scroll lock.
 const DUPLICATE_MODAL = `
@@ -222,6 +227,8 @@ function renderClassView(context) {
   hb.registerPartial('class-notes', fs.readFileSync(path.join(__dirname, 'partials', 'class-notes.handlebars'), 'utf8'));
   hb.registerPartial('class-enchantment', fs.readFileSync(path.join(__dirname, 'partials', 'class-enchantment.handlebars'), 'utf8'));
   hb.registerPartial('class-sample-perks', fs.readFileSync(path.join(__dirname, 'partials', 'class-sample-perks.handlebars'), 'utf8'));
+  hb.registerPartial('class-signature-columns', fs.readFileSync(path.join(__dirname, 'partials', 'class-signature-columns.handlebars'), 'utf8'));
+  hb.registerPartial('class-expanded-tips', fs.readFileSync(path.join(__dirname, 'partials', 'class-expanded-tips.handlebars'), 'utf8'));
   return hb.compile(SRC)(context);
 }
 

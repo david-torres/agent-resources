@@ -241,6 +241,9 @@
       <div class="card-content">
         <div class="content">
           <h3 class="title is-3">Signature Gear</h3>
+          {{#if (eq class.content_format "aspirant")}}
+          {{> class-signature-columns columns=signatureColumns}}
+          {{else}}
           <div class="columns">
             <div class="column is-half">
               <p class="has-text-weight-semibold has-text-grey mb-2">Base Gear</p>
@@ -283,6 +286,7 @@
             </div>
 
           </div>
+          {{/if}}
         </div>
       </div>
     </div>
@@ -334,6 +338,7 @@
       </div>
     </div>
     {{/if}}
+    {{> class-expanded-tips tips=class.expanded_tips hasExpandedTips=hasExpandedTips}}
   </div>
 </div>
 
