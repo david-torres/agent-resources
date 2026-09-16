@@ -42,10 +42,32 @@ rather than guessed ones.
   `SUPABASE_URL` to `https://test.invalid`. `bun test <file>` directly does NOT
   get those overrides.
 - Never read or restore anything under `backups/`.
-- **Nine test failures predate this branch and must not be mistaken for new
-  breakage:** 1 http (`routes/open-graph.test.js`), 2 integration
-  (`character-content-integrity`, `image-crop-integrity`), 6 e2e
+- **Ten test failures predate this branch and must not be mistaken for new
+  breakage:** 1 http (`routes/open-graph.test.js`), 3 integration
+  (`character-content-integrity`, `image-crop-integrity`, and
+  `class-form-round-trip` which reports 2 fail / 1 pass), 6 e2e
   (`22-classes-crud` ×5, `18-book-class-unlocks` ×1).
+- `util/class-form-round-trip.integration.test.js` sweeps every live class and
+  reports stored values that would change on their next save — trailing
+  whitespace, CRLF line endings, blank strings converging to NULL — across some
+  forty classes. That is drift in the restored production data, not a code
+  defect, and no task in this plan fixes it. Judge that file by whether your
+  change adds a NEW failure, never by whether it passes.
+
+**Running a single integration test file.** `bun run test:integration <file>`
+does NOT work — `scripts/run-tests.mjs:47` reads `argv[2]` as the *mode*, so a
+file argument is silently ignored and the whole integration set runs, exiting at
+the first pre-existing failure. Use this instead, which is safe because
+`supabase status -o env` reports the local stack by construction and every
+integration file also requires `util/require-local-supabase`:
+
+```bash
+eval "$(supabase status -o env)"
+SUPABASE_URL="$API_URL" SUPABASE_DB_URL="$DB_URL" \
+SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" SUPABASE_SECRET_KEY="$SECRET_KEY" \
+SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" bun test <file>
+```
+
 - `CREATE OR REPLACE FUNCTION` has no partial form. Every RPC revision restates
   the whole body.
 - **No dead code.** When you replace something, delete the thing it replaced.
@@ -260,7 +282,7 @@ eval "$(supabase status -o env)" && echo "$API_URL"
 ```
 Expected: `http://127.0.0.1:54321`. **If it is anything else, stop.**
 
-Run: `bun run test:integration util/class-structured-columns.integration.test.js`
+Run the single-file integration command from Global Constraints on `util/class-structured-columns.integration.test.js`
 Expected: FAIL — `column classes.content_format does not exist`.
 
 - [ ] **Step 3: Write the column migration**
@@ -286,7 +308,7 @@ ALTER TABLE public.classes
 - [ ] **Step 4: Apply it and confirm the test passes**
 
 Run: `supabase migration up`
-Then: `bun run test:integration util/class-structured-columns.integration.test.js`
+Then run the single-file integration command from Global Constraints on `util/class-structured-columns.integration.test.js`
 Expected: PASS.
 
 - [ ] **Step 5: Restate `dup_class`**
@@ -325,7 +347,7 @@ two hunks, you have changed something you did not intend to.**
 - [ ] **Step 7: Apply and confirm the fork carries the column**
 
 Run: `supabase migration up`
-Then: `bun run test:integration util/class-duplicate.integration.test.js`
+Then run the single-file integration command from Global Constraints on `util/class-duplicate.integration.test.js`
 Expected: PASS.
 
 - [ ] **Step 8: Commit**
@@ -471,7 +493,7 @@ test('the family projection carries content_format', async () => {
 });
 ```
 
-Run: `bun run test:integration util/class-structured-columns.integration.test.js`
+Run the single-file integration command from Global Constraints on `util/class-structured-columns.integration.test.js`
 Expected: PASS.
 
 - [ ] **Step 7: Run the four consumers' suites**
@@ -789,7 +811,7 @@ test('expanded_tips is never null and rejects an explicit null', async () => {
 });
 ```
 
-Run: `bun run test:integration util/class-structured-columns.integration.test.js util/class-duplicate.integration.test.js`
+Run the single-file integration command from Global Constraints on `util/class-structured-columns.integration.test.js util/class-duplicate.integration.test.js`
 Expected: PASS.
 
 - [ ] **Step 8: Commit**
@@ -1247,7 +1269,12 @@ Expected: PASS.
 - [ ] **Step 7: Prove the form round-trips**
 
 Run: `bun run test:unit views/class-form.test.js`
-Run: `bun run test:integration util/class-form-round-trip.integration.test.js`
+Run the single-file integration command from Global Constraints on `util/class-form-round-trip.integration.test.js`
+
+**Expect this file to fail with 2 fail / 1 pass before and after your change** —
+see Global Constraints. Capture its failure list before you touch anything, and
+compare after. Your change is correct if the two lists are identical. It is a
+regression only if a NEW class or field appears.
 
 `util/class-form-round-trip.integration.test.js:174` pins
 `STRUCTURED_FIELDS = ['abilities','advanced_abilities','gear','examples']`. Add
@@ -1256,7 +1283,8 @@ Run: `bun run test:integration util/class-form-round-trip.integration.test.js`
 classes; do not add an `expanded_tips` floor in this plan — no live class has any
 until plan 2 loads them, and a floor that cannot be met would fail the build.
 
-Expected: PASS.
+Expected: `views/class-form.test.js` passes; the round-trip file's failure list is
+unchanged from the baseline you captured.
 
 - [ ] **Step 8: Run everything**
 
