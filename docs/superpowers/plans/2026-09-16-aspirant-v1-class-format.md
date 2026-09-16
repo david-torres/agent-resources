@@ -1338,6 +1338,12 @@ git commit -m "feat: make the class write paths format-aware"
 **Interfaces:**
 - Consumes: `gear[i].column`/`position` from Task 4, `expanded_tips` from Task 5,
   `powerRatings` from Task 6.
+
+**Security constraint on the new partials.** `powerRatings` sanitizes for element
+*text* position only — `sanitize-html` escapes `<`, `>` and `&` but NOT quote
+characters. Every `{{{powerRatings …}}}` you write must be element content.
+Putting one inside an attribute value (`title="{{{powerRatings this.text}}}"`)
+allows attribute breakout and is XSS. Attributes take `{{ }}`, which escapes.
 - Produces: `signatureColumns(gear) -> [item[], item[], item[], item[]]` exported
   from `util/class-gear.js`. The class page renders four Signature columns for an
   Aspirant-format class and the existing two-column split for an Advent-format
