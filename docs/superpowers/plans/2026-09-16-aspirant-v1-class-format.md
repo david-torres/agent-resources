@@ -432,14 +432,15 @@ describe('format forks', () => {
 - [ ] **Step 2: Run the test and confirm it fails**
 
 Run: `bun run test:unit util/class-family.test.js`
-Expected: **exactly one failure** — `a format fork starts a new family`. It
-returns both ids because the current edge rule compares only `rules_edition`, and
-both rows are `'aspirant'`.
+Expected: **exactly two failures** — `a format fork starts a new family` and
+`a row whose query omitted content_format fails closed against a tagged row`.
+Both return two ids because the current edge rule compares only `rules_edition`
+and both rows in each case are `'aspirant'`, so the edge forms.
 
-The other three pass before the change and are regression guards, not red tests:
-the same-format fork must keep working, the edition fork is already excluded by
-the existing rule, and the untagged row already fails closed. If any of those
-three fails, stop — the existing behavior is not what this task assumes.
+The other two pass before the change and are regression guards, not red tests:
+the same-format fork must keep working, and the edition fork is already excluded
+by the existing rule. If either of those fails, stop — the existing behavior is
+not what this task assumes.
 
 - [ ] **Step 3: Change the edge rule**
 
