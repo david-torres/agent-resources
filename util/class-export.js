@@ -51,6 +51,21 @@ const capitalize = (str) => {
 };
 
 /**
+ * A note and its one level of children -- the shape shared by ability/gear
+ * notes and by Expanded Tips (util/class-expanded-tips.js).
+ */
+const noteLines = (notes) => {
+  const lines = [];
+  for (const note of notes) {
+    lines.push(`- ${note.text}`);
+    for (const child of note.children || []) {
+      lines.push(`  - ${child.text}`);
+    }
+  }
+  return lines;
+};
+
+/**
  * One ability or gear item: everything the structured columns hold, since both
  * carry a six-key contract (util/class-abilities.js, util/class-gear.js) and an
  * export that printed only name and description would lose the rest. The two
@@ -78,12 +93,7 @@ const itemLines = (entry) => {
   }
   if (item.notes && item.notes.length > 0) {
     lines.push('');
-    for (const note of item.notes) {
-      lines.push(`- ${note.text}`);
-      for (const child of note.children || []) {
-        lines.push(`  - ${child.text}`);
-      }
-    }
+    lines.push(...noteLines(item.notes));
   }
   // The dedication ("In Honor of Crow") is parenthesised the way `pronunciation`
   // is above: it qualifies the name rather than standing as content of its own.
@@ -220,6 +230,29 @@ const exportToMarkdown = (classData) => {
     }
   }
 
+  // Expanded Tips: player and conduit note trees (views/partials/class-expanded-tips.handlebars).
+  // Omitted entirely when both lists are empty, the way Advanced Abilities is
+  // above -- every one of the fifty live classes is in that state today.
+  const expandedTips = classData.expanded_tips || {};
+  const playerTips = expandedTips.player || [];
+  const conduitTips = expandedTips.conduit || [];
+  if (playerTips.length > 0 || conduitTips.length > 0) {
+    lines.push('## 💡 Expanded Tips');
+    lines.push('');
+    if (playerTips.length > 0) {
+      lines.push('### Player');
+      lines.push('');
+      lines.push(...noteLines(playerTips));
+      lines.push('');
+    }
+    if (conduitTips.length > 0) {
+      lines.push('### Conduit');
+      lines.push('');
+      lines.push(...noteLines(conduitTips));
+      lines.push('');
+    }
+  }
+
   // Footer with metadata
   lines.push('---');
   lines.push('');
@@ -261,6 +294,8 @@ const exportGearItem = (entry, index) => {
     meters: item.meters ?? [],
     notes: item.notes ?? [],
     default_enchantment: item.default_enchantment ?? null,
+    column: item.column ?? null,
+    position: item.position ?? null,
   };
 };
 

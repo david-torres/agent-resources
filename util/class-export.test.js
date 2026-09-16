@@ -31,8 +31,8 @@ const BEASTMASTER = {
   prerelease_section: 'pcc',
   teaser: 'A domineering animal tamer.',
   gear: [
-    { name: 'Whip', description: 'Cracks.', category: 'default', meters: [{ label: 'Reach', value: 'Mid' }], notes: [{ text: 'Cracks loudly.', children: [{ text: 'Startles beasts.', children: [] }] }], default_enchantment: { name: 'Barbed Lash', description: 'Adds bleed on a hit.', dedication: 'In Honor of Roy Horn' } },
-    { name: 'Snare', description: 'Holds.', category: 'elective', meters: [], notes: [], default_enchantment: null },
+    { name: 'Whip', description: 'Cracks.', category: 'default', meters: [{ label: 'Reach', value: 'Mid' }], notes: [{ text: 'Cracks loudly.', children: [{ text: 'Startles beasts.', children: [] }] }], default_enchantment: { name: 'Barbed Lash', description: 'Adds bleed on a hit.', dedication: 'In Honor of Roy Horn' }, column: 1, position: 1 },
+    { name: 'Snare', description: 'Holds.', category: 'elective', meters: [], notes: [], default_enchantment: null, column: 1, position: 2 },
   ],
   abilities: [{
     name: 'Tame',
@@ -200,7 +200,14 @@ test('the JSON export gives a legacy item the full contract shape', () => {
   );
   const parsed = JSON.parse(content);
   expect(parsed.abilities[0]).toEqual({ name: 'Swing', description: 'Hits.', paired_action: '', meters: [], notes: [], sample_perks: [] });
-  expect(parsed.gear[0]).toEqual({ name: 'Sword', description: 'Sharp.', category: 'default', meters: [], notes: [], default_enchantment: null });
+  expect(parsed.gear[0]).toEqual({ name: 'Sword', description: 'Sharp.', category: 'default', meters: [], notes: [], default_enchantment: null, column: null, position: null });
+});
+
+test('the JSON export carries column and position on every gear item', () => {
+  const { content } = exportClass(BEASTMASTER, 'json');
+  const exported = JSON.parse(content);
+  expect(exported.gear.every((item) => typeof item.column === 'number')).toBe(true);
+  expect(exported.gear.every((item) => typeof item.position === 'number')).toBe(true);
 });
 
 test('the Markdown export prints ability paired actions, meters and notes', () => {
@@ -280,4 +287,24 @@ test('the Markdown export splits gear by its stored category', () => {
   expect(content.indexOf('**Second**')).toBeGreaterThan(base);
   expect(content.indexOf('**Second**')).toBeLessThan(elective);
   expect(content.indexOf('**First**')).toBeGreaterThan(elective);
+});
+
+test('the Markdown export prints the Expanded Tips section', () => {
+  const { content } = exportClass({
+    ...BEASTMASTER,
+    expanded_tips: {
+      player: [{ text: 'Player guidance', children: [] }],
+      conduit: [{ text: 'Conduit guidance', children: [] }],
+    },
+  }, 'markdown');
+  expect(content).toContain('Expanded Tips');
+  expect(content).toContain('Player guidance');
+  expect(content).toContain('Conduit guidance');
+});
+
+// Every one of the fifty live classes has no Expanded Tips today, so an
+// unconditional heading would appear in every export in the catalog.
+test('the Markdown export omits the Expanded Tips section when both lists are empty', () => {
+  const { content } = exportClass(BEASTMASTER, 'markdown');
+  expect(content).not.toContain('Expanded Tips');
 });

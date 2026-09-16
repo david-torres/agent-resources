@@ -145,6 +145,31 @@ test('serializeClassForAgent still returns full shape for detail endpoint', () =
   expect(out.abilities).toEqual(baseClass.abilities);
 });
 
+test('full access carries content_format and expanded_tips', () => {
+  const out = serializeClassForAgent({
+    classData: {
+      ...baseClass,
+      content_format: 'aspirant',
+      expanded_tips: { player: [{ text: 'Bring spares.', children: [] }], conduit: [] }
+    },
+    actor: { profileId: 'profile-owner', role: 'player', userId: 'user-1' },
+    unlockedClassIds: new Set()
+  });
+
+  expect(out.content_format).toBe('aspirant');
+  expect(out.expanded_tips).toEqual({ player: [{ text: 'Bring spares.', children: [] }], conduit: [] });
+});
+
+test('serializeClassSummaryForAgent carries content_format', () => {
+  const out = serializeClassSummaryForAgent({
+    classData: { ...baseClass, content_format: 'aspirant' },
+    actor: { profileId: 'profile-other', role: 'player', userId: 'user-1' },
+    unlockedClassIds: new Set()
+  });
+
+  expect(out.content_format).toBe('aspirant');
+});
+
 // docs/custom-gpt-openapi.json is the Custom GPT integration's only contract:
 // a field the schema declares but the API never sends is a field the GPT asks
 // for and never gets. Nothing tied the two together, which is how

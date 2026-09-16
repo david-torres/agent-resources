@@ -226,6 +226,7 @@
           "teaser": { "type": "string" },
           "status": { "type": "string" },
           "rules_edition": { "type": "string" },
+          "content_format": { "type": "string", "enum": ["advent", "aspirant"], "description": "Advent's two-column Signature roster vs Aspirant's four-column one" },
           "rules_version": { "type": "string" },
           "is_public": { "type": "boolean" },
           "is_player_created": { "type": "boolean" },
@@ -261,7 +262,15 @@
               "designer": { "type": ["string", "null"] },
               "signature_gear": { "type": "array", "items": { "$ref": "#/components/schemas/SignatureItem" } },
               "abilities": { "type": "array", "items": { "$ref": "#/components/schemas/Ability" } },
-              "advanced_abilities": { "type": "array", "items": { "$ref": "#/components/schemas/Ability" } }
+              "advanced_abilities": { "type": "array", "items": { "$ref": "#/components/schemas/Ability" } },
+              "expanded_tips": {
+                "type": "object",
+                "description": "Player and Conduit note trees, addressed to each audience separately (ENCLAVE: Aspirant, pg. 11). Empty on every Advent class.",
+                "properties": {
+                  "player": { "type": "array", "items": { "$ref": "#/components/schemas/Note" } },
+                  "conduit": { "type": "array", "items": { "$ref": "#/components/schemas/Note" } }
+                }
+              }
             }
           }
         ]

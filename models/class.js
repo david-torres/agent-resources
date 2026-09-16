@@ -370,6 +370,7 @@ const serializeClassSummaryForAgent = ({
         teaser: classData.teaser || '',
         status: classData.status,
         rules_edition: classData.rules_edition,
+        content_format: classData.content_format || 'advent',
         rules_version: classData.rules_version,
         is_public: classData.is_public,
         is_player_created: classData.is_player_created,
@@ -416,6 +417,8 @@ const serializeClassForAgent = ({
         serialized.signature_gear = Array.isArray(classData.gear) ? classData.gear : [];
         serialized.abilities = Array.isArray(classData.abilities) ? classData.abilities : [];
         serialized.advanced_abilities = Array.isArray(classData.advanced_abilities) ? classData.advanced_abilities : [];
+        serialized.content_format = classData.content_format || 'advent';
+        serialized.expanded_tips = classData.expanded_tips || { player: [], conduit: [] };
     }
 
     return serialized;
