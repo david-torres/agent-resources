@@ -75,6 +75,11 @@ const normalizeAbilityPerks = (perks) => {
   }).filter(Boolean);
 };
 
+const blankToNull = (value) => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text || null;
+};
+
 /**
  * Prepare an input payload for the character persistence flow without doing
  * database access. Class id/name resolution belongs to the caller; pass its
@@ -99,6 +104,20 @@ const normalizeCharacterInput = (input, context = {}) => {
   delete data.ability_perks;
   delete data.gear;
   delete data.abilities;
+
+  // Aspiring is class-less. The invented class name goes in `class` -- already
+  // NOT NULL and already the display name every render path reads -- rather
+  // than a pseudo_class_name column that would be a second copy of it. Left
+  // nested, the object reaches jsonb_populate_record, which drops keys that are
+  // not columns without erroring.
+  if (data.pseudo_class && typeof data.pseudo_class === 'object') {
+    const pseudo = data.pseudo_class;
+    const name = blankToNull(pseudo.name);
+    if (name) data.class = name;
+    data.pseudo_class_tagline = blankToNull(pseudo.tagline);
+    data.pseudo_class_description = blankToNull(pseudo.description);
+  }
+  delete data.pseudo_class;
 
   if (rulesVersion === 'v2') {
     const validation = validateAbilityPerks(normalizeAbilityPerks(childData.abilityPerks));

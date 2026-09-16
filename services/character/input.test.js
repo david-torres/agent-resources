@@ -202,3 +202,59 @@ test('normalizeAbilityItems keeps the submitted type', () => {
     { name: 'Overdrive', type: 'advanced' }
   ]);
 });
+
+// pseudo_class used to ride through normalizeWizardPayload (no allowlist) into
+// jsonb_populate_record, which silently ignores keys that are not columns
+// (20260905000001:33-49). No error, no data -- the wizard comment at
+// public/js/character-wizard.js:3148-3156 described a server that never existed.
+test('maps an aspiring pseudo_class onto class and the pseudo-class columns', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vesper',
+    creator_mode: 'aspiring',
+    pseudo_class: { name: '  Ashwalker  ', tagline: ' Walks the ash ', description: ' A long tale. ' }
+  }, { rulesVersion: 'v1' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.class).toBe('Ashwalker');
+  expect(result.data.pseudo_class_tagline).toBe('Walks the ash');
+  expect(result.data.pseudo_class_description).toBe('A long tale.');
+  expect(result.data).not.toHaveProperty('pseudo_class');
+});
+
+// characters.class is TEXT NOT NULL with no default
+// (20240101000000_baseline_schema.sql:46) and resolveCharacterClassReference
+// (models/character.js:24-45) only fills class FROM a class_id. Aspiring has no
+// class_id, so without this mapping the insert fails outright.
+test('an aspiring character keeps a null class_id', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vesper', creator_mode: 'aspiring', class_id: null,
+    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' }
+  }, { rulesVersion: 'v1' });
+
+  expect(result.data.class_id).toBeNull();
+  expect(result.data.class).toBe('Ashwalker');
+});
+
+// Blank tagline and description are stored as null, not empty string, so the
+// column's nullability keeps meaning "this character has none".
+test('blank pseudo-class prose becomes null', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vesper', creator_mode: 'aspiring',
+    pseudo_class: { name: 'Ashwalker', tagline: '   ', description: '' }
+  }, { rulesVersion: 'v1' });
+
+  expect(result.data.pseudo_class_tagline).toBeNull();
+  expect(result.data.pseudo_class_description).toBeNull();
+});
+
+// Non-aspiring payloads must not grow the columns, or an advent character
+// round-trips with keys it never had.
+test('a non-aspiring payload is untouched by the pseudo-class mapping', () => {
+  const result = normalizeCharacterInput({
+    name: 'Kell', creator_mode: 'advent', class: 'Gunslinger'
+  }, { rulesVersion: 'v1' });
+
+  expect(result.data.class).toBe('Gunslinger');
+  expect(result.data).not.toHaveProperty('pseudo_class_tagline');
+  expect(result.data).not.toHaveProperty('pseudo_class_description');
+});
