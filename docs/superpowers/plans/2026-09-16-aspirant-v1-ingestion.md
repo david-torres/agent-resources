@@ -894,13 +894,13 @@ const NAME_MIN_HEIGHT = 18.0;
 // out by height before reflowing or it is spliced into the sentence.
 const DEDICATION_HEIGHT = 7.83;
 
-// A signature description's first lines are indented to clear a vector diamond
-// and share their baseline with the signature name printed to their left.
-const DESCRIPTION_INDENT = 91.2;
-
 // Entries start as high as yMin 40.77 (Samaritan p75) -- above the header band
 // -- and run to 742.66. A yMin > 60 filter silently loses eight entries.
 const CONTENT_MIN_Y = 39;
+
+// The folio is 18.27 tall at yMin 764.84 and is the tallest thing in the left
+// column, so without this bound it reads as a fourth item name on all 24 pages.
+const CONTENT_MAX_Y = 750;
 ```
 
 - [ ] **Step 1: Write the failing test**
@@ -933,11 +933,11 @@ Expected: FAIL — `signatureEntries is not a function`.
 2. Partition every line with `yMin > CONTENT_MIN_Y` on `COLUMN_SPLIT_X`. Process each side independently; **never pair by `yMin` across the split.**
 3. Within a side, find the three `Default Enchantment` divider lines and sort by `yMin`. Entry *n* runs from the previous entry's end to divider *n*'s own entry end — that is, each entry spans from its item name down to the line above the next entry's item name, with the divider inside it. Derive `colLeft` as the minimum `xMin` of the side's lines.
 4. Lift out every line whose height is within `0.5` of `DEDICATION_HEIGHT` — that is the `In Honor of` dedication, and it must be removed before any paragraph reflow.
-5. Item name: the tallest line above the divider with height `>= NAME_MIN_HEIGHT`. Item description: the line(s) at the same `xMin` as the name with height between `14.0` and `14.5`, if any.
-6. Meters: the lines in the right gutter of the column (`xMin` greater than `colLeft + 120`) in the band `name.yMin ± 20`, handed to `pairMeters` from `util/prerelease-extract.js`.
-7. Item notes: lines at `colLeft + 19.20 + shiftFor(page.page, 'signature-note')` and deeper, through `noteTree(lines, { step: BODY_NOTE_STEP, threshold: null })`.
-8. Signature name: the tallest line below the divider. It may be two lines in one block — join them with a space.
-9. Signature description: every remaining line below the divider, **dropping any line whose `xMin` falls inside the signature name's x-range**, sorted by `(yMin, xMin)`, joined with `markPowerRatings`. This is what keeps the name out of the sentence; the indent-based alternative fails because short descriptions step out only part-way (observed 79.79, 88.80, 365.28) rather than to the full width.
+5. Item name: the tallest line above the divider with height `>= NAME_MIN_HEIGHT`. Item description: the **block at `colLeft`** — **not** a height band. Measured counterexamples: p80R `Eerie mask, meant for the dead.` is height 13.05, outside any 14.0–14.5 window; and p57R `Chainblade`'s description is indented around its own item name, starting at x 444.00.
+6. Meters: selected **by x only**, never by a y-band around the item name. `Barded Destrier` (p38R) has a third meter row at `name.yMin + 24.29` while that entry's item description sits 1.26pt below it at +25.55, so any y-band wide enough for the meter swallows the description. Note also that `colLeft + 120` is too far right — p27R's label `Thrown Accuracy Boost` starts at `colLeft + 112.56` and would be truncated.
+7. Item notes: the depth-1 indent is `colLeft - shiftFor(page.page, 'body') + BODY_NOTE_STEP + shiftFor(page.page, 'signature-note')`. **`colLeft` already absorbs the 11.52 body shift**, so adding the note shift to it directly double-counts: that gives 60.00 verso / 87.84 recto against the measured 64.80 / 81.12. Feed the result to `noteTree(lines, { step: BODY_NOTE_STEP, threshold: null })`.
+8. Signature name: **the block at `colLeft - 2.40`** — not the tallest line. Height carries no signal here: p20's `Hats Off to You` is 11.745, identical to the divider and to every description line beside it. The x position is unique across all 144 entries (no other below-divider block lies within 4pt to the left of `colLeft`). A two-line name is two lines of that one block, so joining them falls out for free.
+9. Signature description: every remaining block below the divider, sorted by `(yMin, xMin)`, joined with `markPowerRatings`. **Do not drop lines whose `xMin` falls inside the signature name's x-range** — identifying the name by its own block (step 8) already keeps it out of the sentence, and an x-range drop destroys real content: measured, it deletes 30 description lines across 21 of the 144 entries. On p21 the name `Smokey Bandit` spans 331.20–387.92 and its own description's last line begins at 376.80, inside that range; the same rule also swallows the following entry's name and body.
 
 Every text value is produced through `markPowerRatings`, never a plain word join.
 
