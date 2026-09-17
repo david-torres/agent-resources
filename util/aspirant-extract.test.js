@@ -154,6 +154,19 @@ describe('Power Rating superscripts', () => {
     expect(isSuperscript(subscript, host)).toBe(false);
   });
 
+  test('p21 "Deadlier L–H": a rating set at a smaller body bucket than its host line is still a superscript', () => {
+    // Real measured values: host line yMin 581.820/yMax 594.870 (height
+    // 13.05), word yMin 583.609271/yMax 590.456606 (height 6.847335). That
+    // gives heightRatio 0.5247, outside a band pinned to 0.583, but topHang
+    // 0.6618 is well inside tolerance -- the source PDF set this one rating
+    // at the font size for the 11.75 body bucket, not the 13.05 line it's on.
+    const deadlierHost = { xMin: 81.12, yMin: 581.820, yMax: 594.870, words: [] };
+    const deadlierLH = {
+      xMin: 116.213, yMin: 583.609271, xMax: 126.880151, yMax: 590.456606, text: 'L–H',
+    };
+    expect(isSuperscript(deadlierLH, deadlierHost)).toBe(true);
+  });
+
   test('a detached rating in its own block rejoins its host line in reading order', () => {
     const page = { page: 20, blocks: [
       { xMin: 40, yMin: 200, yMax: 211.75, lines: [host] },

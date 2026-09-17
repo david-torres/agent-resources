@@ -540,8 +540,10 @@ Measured detail: `docs/superpowers/specs/2026-09-16-aspirant-v1-geometry.md` §7
 
 **The three facts this task encodes, all measured:**
 
-1. **Identification is a ratio, not a font list.** A word is a Power Rating superscript iff its height is `0.583 × lineHeight` of its host line, and `(word.yMax − line.yMin) / lineHeight ≈ 0.65`. The ratio 0.583 is exact in all 601 inline cases across six different body sizes — do not hardcode any absolute font height.
-2. **Re-threading is `yMin` proximity then `xMin` sort.** A detached rating's `yMin` is `host.yMin + 0.70..1.04`, so grouping lines whose `yMin` agrees within **±1.5** and re-sorting the merged word list by `xMin` recovers reading order. The same rule handles the two hard cases (p21 y≈649.3, p63) where pdftotext also splits the *host* line into two fragments around the gap.
+1. **Identification is a ratio, not a font list.** Never hardcode an absolute font height — the book uses six body sizes. A word is a Power Rating superscript iff its height is **at most 0.75** of its host line's (markedly smaller than body text) **and** `(word.yMax − line.yMin) / lineHeight` is `0.65 ± 0.05` (it hangs from the line top). The top-hang is the precise discriminator; the height is only a bound, because at least one rating in the book sits at ratio 0.525 rather than the usual 0.583 — p21 `Deadlier L–H`, see the geometry document's correction note in §7.
+2. **Re-threading is anchored on candidates, then `yMin` proximity, then `xMin` sort.** A detached rating's `yMin` is `host.yMin + 0.70..1.04`, so a ±1.5 `yMin` agreement identifies its host line, and re-sorting the merged word list by `xMin` recovers reading order. The same rule handles the two hard cases (p21 y≈649.3, p63) where pdftotext also splits the *host* line into two fragments around the gap.
+
+   **Grouping must be anchored on detached-rating candidates — a single-word line whose word is in `POWER_RATINGS` — and must additionally require x-adjacency to that candidate (gap ≤ 5pt).** Applying `yMin` proximity page-wide instead merges credits columns and table-of-contents rows that happen to share a baseline: measured, that produces ~1990 false merges book-wide and drops the rating tally to 557. The real inter-word gaps around a detached rating measure 1.3–2.1pt; the gaps to unrelated same-baseline lines are 79pt and up, so the bound separates them with room to spare.
 3. **The dash is U+2013.** `L–H`, not `L-H`.
 
 - [ ] **Step 1: Write the failing test**

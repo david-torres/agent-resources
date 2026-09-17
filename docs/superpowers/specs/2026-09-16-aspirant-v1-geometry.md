@@ -597,8 +597,21 @@ the line top while its `yMax` sits `0.35 × lineHeight` above the line bottom.**
 Equivalently and most simply: `(word.yMax − line.yMin) / lineHeight ≈ 0.65`.
 
 Font size, derived: body 13.05 → superscript 7.61, i.e. if body is nominally
-11 pt the superscript is 6.4 pt. The 0.583 ratio is exact in every one of the
-601 inline cases.
+11 pt the superscript is 6.4 pt.
+
+**Correction (2026-09-17, found during implementation):** the 0.583 ratio is
+*not* exact in every inline case. At least one counter-example exists — p21
+`Deadlier `<sup>`L–H`</sup>` when fired outside of active combat,` sets the
+rating at 6.847 on a line of height 13.050, a ratio of **0.5247**. 6.847 is the
+superscript height belonging to the *11.75* body bucket, so the book set this
+rating at the smaller size on a larger line. Confirmed against raw pdftotext
+output, not a parsing artifact.
+
+The top-hang measure is unaffected and remains the reliable discriminator:
+this word's `(yMax − line.yMin) / lineHeight` is 0.6618, inside the 0.65
+band. Identification should therefore bound the height ratio from above
+(≤ 0.75, i.e. "markedly smaller than its body text") rather than band it
+around 0.583, and rely on the top-hang for precision.
 
 ### Re-attaching the 21 detached ones
 

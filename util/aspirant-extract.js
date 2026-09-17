@@ -117,10 +117,16 @@ const EN = '–';
 const POWER_RATINGS = ['L', 'M', 'H', 'H+',
   `L${EN}M`, `L${EN}H`, `M${EN}H`, `L${EN}H+`, `M${EN}H+`, `H${EN}H+`];
 
-// A rating is printed at 58.3% of body size and hangs from the line top. The
-// ratio holds exactly across all six body sizes in the book, so matching on it
-// rather than on an absolute height survives the font changing per entry.
-const SUPERSCRIPT_RATIO = 0.583;
+// A rating is printed markedly smaller than the body text it hangs off, and
+// hangs from the line top. The top-hang ratio is exact (0.65) across all six
+// body sizes in the book, so matching on it rather than on an absolute height
+// survives the font changing per entry. Height is a loose upper bound, not a
+// band pinned to 0.583: on p21, "Deadlier L–H when fired..." sets its rating
+// at the font size for a *different*, smaller body bucket (11.75) than the
+// 13.05-tall line it actually sits in, giving heightRatio 0.5247 -- a real
+// inconsistency in the source PDF that a tight band around 0.583 rejects but
+// the top-hang check alone (0.6618) still correctly identifies as a superscript.
+const SUPERSCRIPT_MAX_RATIO = 0.75;
 const TOP_HANG_RATIO = 0.65;
 const RATIO_TOLERANCE = 0.05;
 
@@ -134,7 +140,7 @@ const isSuperscript = (word, line) => {
   if (lineHeight === 0) return false;
   const heightRatio = (word.yMax - word.yMin) / lineHeight;
   const hangRatio = (word.yMax - line.yMin) / lineHeight;
-  return Math.abs(heightRatio - SUPERSCRIPT_RATIO) <= RATIO_TOLERANCE
+  return heightRatio <= SUPERSCRIPT_MAX_RATIO
     && Math.abs(hangRatio - TOP_HANG_RATIO) <= RATIO_TOLERANCE;
 };
 
@@ -142,9 +148,10 @@ const lineHeightOf = (line) => line.yMax - line.yMin;
 
 // A detached rating arrives as a line pdftotext gave to no one else: exactly
 // one word, and that word is one of the ten known strings. Judged against its
-// own single-word line it reads as a normal-height line (ratio 1.0, not
-// 0.583) -- isSuperscript only sees the truth once it is next to its host --
-// so this is the one thing that can flag it before re-threading happens.
+// own single-word line it reads as a normal-height line (heightRatio 1.0,
+// over the bound) -- isSuperscript only sees the truth once it is next to
+// its host -- so this is the one thing that can flag it before re-threading
+// happens.
 const isDetachedRating = (line) =>
   line.words.length === 1 && POWER_RATINGS.includes(line.words[0].text);
 
