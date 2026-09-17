@@ -254,12 +254,20 @@ const rethreadSuperscripts = (page) => {
   return { ...page, blocks };
 };
 
-const markPowerRatings = (line) => line.words
-  .map((word) => {
-    const marked = isSuperscript(word, line) ? ratingIn(word.text) : null;
-    return marked ? `<sup>${marked.rating}</sup>${marked.mark}` : word.text;
-  })
-  .join(' ');
+// The book sets a mark hard against the word before it -- the full stop after a raised
+// rating, the comma after an italic title -- and pdftotext gives that mark a word of its own
+// whose box touches or overlaps its neighbour's. Measured over the whole book: 185 such pairs,
+// none further apart than 0.17, against a narrowest real inter-word gap of 0.86. So a space
+// belongs between two words exactly when their boxes stand apart.
+const WORD_GAP_MIN = 0.5;
+
+const joinWords = (words) => words.reduce((text, word, index) => (index === 0 ? word.text
+  : `${text}${word.xMin - words[index - 1].xMax >= WORD_GAP_MIN ? ' ' : ''}${word.text}`), '');
+
+const markPowerRatings = (line) => joinWords(line.words.map((word) => {
+  const marked = isSuperscript(word, line) ? ratingIn(word.text) : null;
+  return marked ? { ...word, text: `<sup>${marked.rating}</sup>${marked.mark}` } : word;
+}));
 
 // Expanded Tips indent 18.72 per level; signature and ability notes 19.20.
 // Measured separately and deliberately not unified (geometry doc, section 6).

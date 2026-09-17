@@ -338,6 +338,26 @@ describe('Power Rating superscripts', () => {
     ] };
     expect(markPowerRatings(line)).toBe('power <sup>L–H</sup>,');
   });
+
+  test('p21 "faster M.": a mark set against the rating takes no space before it', () => {
+    // The raised M is lifted out from between "faster" and the full stop, so the stop is a
+    // word of its own -- and its box overlaps the M's by 0.09.
+    const line = { xMin: 357.6, yMin: 153.49, yMax: 166.54, words: [
+      { xMin: 541.53, yMin: 153.49, xMax: 562.35, yMax: 166.54, text: 'faster' },
+      { xMin: 563.54, yMin: 154.36, xMax: 568.91, yMax: 161.97, text: 'M' },
+      { xMin: 568.82, yMin: 153.49, xMax: 571.18, yMax: 166.54, text: '.' },
+    ] };
+    expect(markPowerRatings(line)).toBe('faster <sup>M</sup>.');
+  });
+
+  test('p83 "Advent, pg.": a mark against an italic word takes no space either', () => {
+    const line = { xMin: 348.48, yMin: 507.27, yMax: 523.28, words: [
+      { xMin: 348.48, yMin: 507.27, xMax: 383.69, yMax: 523.28, text: 'Advent' },
+      { xMin: 383.58, yMin: 507.54, xMax: 386.16, yMax: 523.2, text: ',' },
+      { xMin: 388.34, yMin: 507.54, xMax: 400.96, yMax: 523.2, text: 'pg.' },
+    ] };
+    expect(markPowerRatings(line)).toBe('Advent, pg.');
+  });
 });
 
 const { noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP } =
@@ -2099,7 +2119,7 @@ describe('ability pages', () => {
     const [highNoon] = abilityEntries(pageAt(22, P22));
     expect(highNoon.description).toBe(
       'Pitch a combat action made by an enemy under pressure, including how that'
-      + ' action Fizzles <sup>H</sup> .');
+      + ' action Fizzles <sup>H</sup>.');
     const [trickshot] = abilityEntries(pageAt(19, P19));
     expect(trickshot.notes[0].text).toContain('significantly less <sup>H</sup> damage');
     expect(trickshot.sample_perks[1].text).toStartWith('Improves <sup>M</sup>');
