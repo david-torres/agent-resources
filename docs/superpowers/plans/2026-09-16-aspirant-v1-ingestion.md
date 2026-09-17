@@ -129,7 +129,7 @@ tips_heading, tips, challenge_level, abilities, advanced_abilities,
 gear, expanded_tips, page_range
 ```
 
-`prerelease_section` is absent — that column describes the other book's page sections and has no meaning here. `gear[i]` carries `name, description, category, meters, notes, default_enchantment, column, position`. `abilities[i]` and `advanced_abilities[i]` carry `name, pronunciation, description, paired_action, meters, notes, sample_perks`, where `sample_perks[j]` is `{ name, dedication, text, compound_text }`.
+`prerelease_section` is absent — that column describes the other book's page sections and has no meaning here. `gear[i]` carries `name, description, category, meters, notes, default_enchantment, column, position`. `abilities[i]` and `advanced_abilities[i]` carry `name, pronunciation, dedication, description, paired_action, meters, notes, sample_perks`, where `sample_perks[j]` is `{ name, dedication, text, compound_text }`. An **ability** carries its own `dedication` because one does: p64 `Gravity Check` prints an `In Honor of` line under the ability name, 60pt above its `Sample Perks` heading. Without that field the book's dedication count comes to 37 rather than 38.
 
 ---
 
@@ -983,7 +983,7 @@ Measured detail: `docs/superpowers/specs/2026-09-16-aspirant-v1-geometry.md` §8
 **Interfaces:**
 - Produces: `abilityEntries(page) -> [Ability]`, three per page, each:
   ```js
-  { name, pronunciation, description, paired_action, meters: [{label, value}],
+  { name, pronunciation, dedication, description, paired_action, meters: [{label, value}],
     notes: [note], sample_perks: [{ name, dedication, text, compound_text }] }
   ```
   `sample_perks` always has length 2. The second perk carries `compound_text`; the first carries `null`.
@@ -999,8 +999,8 @@ Measured detail: `docs/superpowers/specs/2026-09-16-aspirant-v1-geometry.md` §8
 Cover, with fixtures built from the p19 (recto) and p22 (verso) bboxes in §8:
 
 1. Three entries per page, anchored on the three `Paired Action:` lines.
-2. The ability name is the tallest line with `xMax < 210` in the 70pt above its `Paired Action:` line — assert it resolves at height 20.88 **and** at 19.57 (`Rally Point`, `Identity Theft`).
-3. A two-line ability name joins into one string (12 ability names in the book are two lines).
+2. The ability name is the tallest line in the 70pt above its `Paired Action:` line — assert it resolves at height 20.88 **and** at the auto-fitted sizes: `Identity Theft` is 19.57 and `Rally Point` is 19.58.
+3. A two-line ability name joins into one string (**16** of the 72 ability names are two lines).
 4. `paired_action` text is captured even though it begins slightly *above* its label's `yMin` (p19: text band `142.92`, label `147.41`).
 5. `sample_perks` has exactly two entries, and the second's `compound_text` is the `(Compounded)` body while the first's is `null`.
 6. A perk name and its body share a baseline and are not concatenated.
@@ -1020,7 +1020,11 @@ Expected: FAIL — `abilityEntries is not a function`.
 
 Follow the same shape as Task 5: re-thread superscripts, then segment on the three `Paired Action:` anchors, then read each entry's parts by `(yMin, xMin)` bands derived per entry — **never per book**, because notes are h 13.05 on p19 but h 11.75 on p40 and p31, and perks are h 11.75 on p19 but 10.44 on p31/p40.
 
-`pronunciation` is the parenthesised respelling some ability names carry; where the name line has no parenthesised trailing run, it is `null`. (The other book's artifact carries `pronunciation: null` for most abilities and two non-null — see `test/load-prerelease-classes.test.js:149-153`.)
+`pronunciation` is **not** a trailing run on the name line. It is its own line at height **7.83** — the same height as an `In Honor of` dedication — hanging 18.07 below the name. Exactly one occurs in the whole book (p61 `Dérive`). Any height rule that lifts out dedications must also account for it, or it is read as a third perk name. Where absent it is `null`.
+
+**Indents are measured from the entry's own `Paired Action:` label, never from an absolute page frame.** The geometry document's §3b recto/verso table is not exact on these pages: p37's first entry prints every structural x 10.56pt right of the tabulated frame (label at 82.86 rather than 72.30, notes at 106.08, perk body at 183.36), and two further frame offsets occur elsewhere. Classifying by absolute x mis-files 15 of the 72 entries. `shiftFor` is therefore not used on ability pages.
+
+§8's `xMax < 210` bound on the name lookup is **inert** — mutating it to 1e9 leaves all 24 pages byte-identical — so it is not carried. Tightening it to 150 destroys 15 pages.
 
 - [ ] **Step 4: Run the tests**
 
