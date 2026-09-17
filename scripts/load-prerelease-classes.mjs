@@ -25,23 +25,13 @@
 // exported so test/load-prerelease-classes.test.js can exercise it directly.
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
 
+import { bookFor } from './lib/books.mjs';
 import {
-  PUBLISHED_BY_LOAD, ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
+  ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
 } from './lib/character-impact.mjs';
-
-const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'data');
-const ARTIFACT = join(DATA, 'prerelease-classes-2026-08.json');
-const REMAP = join(DATA, 'prerelease-name-remap.json');
-
-// The document renames this class; the catalogue still holds the old spelling
-// until a load lands, and holds the new one afterwards. Resolution accepts
-// both, so a second run finds the row it renamed rather than creating another.
-const ALIASES = { Witchfinder: 'Witchhunter' };
 
 // `classes.prerelease_section` carries the normalized enum; the artifact
 // carries the headings the page prints above each block.
@@ -69,9 +59,10 @@ const REMAP_KIND = { ability: 'abilities', gear: 'gear' };
 
 // `classes.is_public` defaults to false, so a created row would land invisible:
 // absent from /classes for non-admins, from the character wizard, and from the
-// name map the save path resolves through. PUBLISHED_BY_LOAD is the owner's
-// named set, and it is the only thing here that may set a row's visibility --
-// is_public is deliberately absent from FIELDS so the general write path cannot.
+// name map the save path resolves through. `book.publishedByLoad` is the
+// owner's named set, and it is the only thing here that may set a row's
+// visibility -- is_public is deliberately absent from FIELDS so the general
+// write path cannot.
 
 const LOCAL_TARGET = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
 const PREVIEW_WIDTH = 140;
@@ -160,15 +151,15 @@ export const unremapped = (groups, remap) => {
 export const unresolvableTargets = (remap, after) =>
     remap.filter((entry) => !after[REMAP_KIND[entry.kind]].has(entry.to));
 
-export const resolveTarget = (payload, rows) => {
+export const resolveTarget = (payload, rows, book) => {
   const wanted = new Set([fold(payload.name)]);
-  if (ALIASES[payload.name]) wanted.add(fold(ALIASES[payload.name]));
+  if (book.aliases[payload.name]) wanted.add(fold(book.aliases[payload.name]));
   return rows.filter((row) => wanted.has(fold(row.name.trim())));
 };
 
-export const planLoad = (records, rows) => records.map((record) => {
+export const planLoad = (records, rows, book) => records.map((record) => {
   const payload = buildPayload(record);
-  const matches = resolveTarget(payload, rows);
+  const matches = resolveTarget(payload, rows, book);
   return { payload, matches, row: matches.length === 1 ? matches[0] : null };
 });
 
@@ -197,11 +188,18 @@ const main = async (argv) => {
   const allowUnremapped = argv.includes('--allow-unremapped');
   const onlyAt = argv.indexOf('--only');
   const only = onlyAt === -1 ? null : argv[onlyAt + 1];
+  const bookAt = argv.indexOf('--book');
+  const bookKey = bookAt === -1 ? 'prerelease' : argv[bookAt + 1];
 
   if (onlyAt !== -1 && (!only || only.startsWith('--'))) {
     console.error('missing class name after --only');
     return 1;
   }
+  if (bookAt !== -1 && (!bookKey || bookKey.startsWith('--'))) {
+    console.error('missing book key after --book');
+    return 1;
+  }
+  const book = bookFor(bookKey);
 
   const url = process.env.SUPABASE_URL || process.env.API_URL || '';
   const key = process.env.SUPABASE_SECRET_KEY || process.env.SECRET_KEY || '';
@@ -232,10 +230,10 @@ const main = async (argv) => {
   const supabase = createClient(url, key,
       { auth: { autoRefreshToken: false, persistSession: false } });
 
-  const artifact = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
+  const artifact = JSON.parse(readFileSync(book.artifact, 'utf8'));
   const records = only ? artifact.filter((record) => displayName(record.name) === only) : artifact;
   if (only && !records.length) {
-    console.error(`no class named ${JSON.stringify(only)} in ${ARTIFACT}`);
+    console.error(`no class named ${JSON.stringify(only)} in ${book.artifact}`);
     return 1;
   }
   const { data: rows, error } = await supabase.from('classes').select('*');
@@ -244,7 +242,7 @@ const main = async (argv) => {
     return 1;
   }
 
-  const plans = planLoad(records, rows);
+  const plans = planLoad(records, rows, book);
 
   // A partial load leaves the database in a state the next dry-run's diff can
   // no longer describe, so one ambiguous name stops everything before output.
@@ -280,11 +278,11 @@ const main = async (argv) => {
     return 0;
   }
 
-  const remap = JSON.parse(readFileSync(REMAP, 'utf8'));
+  const remap = book.remap ? JSON.parse(readFileSync(book.remap, 'utf8')) : [];
 
   // A published class the document does not carry would be a silent no-op, so
   // the two lists are checked against each other rather than assumed to agree.
-  const published = PUBLISHED_BY_LOAD.filter((name) => !only || name === only);
+  const published = book.publishedByLoad.filter((name) => !only || name === only);
   const unknownPublish = published.filter(
       (name) => !plans.some((plan) => plan.payload.name === name));
   if (unknownPublish.length) {
@@ -293,7 +291,7 @@ const main = async (argv) => {
     return 1;
   }
 
-  const after = catalogueNames(projectImport(rows, plans));
+  const after = catalogueNames(projectImport(rows, plans, book));
 
   // A `to` no class carries after the import renames live rows to a name that
   // resolves to nothing -- the very breakage the remap exists to prevent, dealt

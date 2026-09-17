@@ -18,9 +18,10 @@ import { join } from 'node:path';
 
 import { tokenize } from '../util/prerelease-extract.js';
 import { coveredPages, maxCoveredPage } from '../util/prerelease-pages.js';
+import { bookFor } from './lib/books.mjs';
 
 const PDF = process.argv[2];
-const ARTIFACT = process.argv[3] || 'docs/data/prerelease-classes-2026-08.json';
+const ARTIFACT = process.argv[3] || bookFor('prerelease').artifact;
 const REVIEW_DIR = '/tmp/prerelease-review';
 
 const BULLET_GLYPHS = '❖➢';

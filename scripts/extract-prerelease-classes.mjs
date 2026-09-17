@@ -5,9 +5,10 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 import { parseStatLine, clusterBands, pairMeters, buildNoteTree } from '../util/prerelease-extract.js';
+import { bookFor } from './lib/books.mjs';
 
 const PDF = process.argv[2];
-const OUT = process.argv[3] || 'docs/data/prerelease-classes-2026-08.json';
+const OUT = process.argv[3] || bookFor('prerelease').artifact;
 
 const readBoxes = (pdf) => execFileSync('pdftotext',
     ['-bbox-layout', pdf, '-'], { encoding: 'utf8', maxBuffer: 1 << 28 });

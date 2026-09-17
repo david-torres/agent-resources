@@ -4,22 +4,19 @@
 // -- the state before a load and the state after one.
 import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import {
   FIELDS, buildPayload, displayName, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
   trimEnds, unremapped, unresolvableTargets
 } from '../scripts/load-prerelease-classes.mjs';
+import { bookFor } from '../scripts/lib/books.mjs';
 import {
-  PUBLISHED_BY_LOAD, catalogueNames, groupUnresolvable, projectImport
+  catalogueNames, groupUnresolvable, projectImport
 } from '../scripts/lib/character-impact.mjs';
 
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const records = JSON.parse(
-    readFileSync(join(root, 'docs', 'data', 'prerelease-classes-2026-08.json'), 'utf8'));
-const remap = JSON.parse(
-    readFileSync(join(root, 'docs', 'data', 'prerelease-name-remap.json'), 'utf8'));
+const book = bookFor('prerelease');
+const records = JSON.parse(readFileSync(book.artifact, 'utf8'));
+const remap = JSON.parse(readFileSync(book.remap, 'utf8'));
 
 const ITEM_KEY = { ability: 'abilities', gear: 'gear' };
 const artifactNames = (kind) =>
@@ -37,7 +34,7 @@ const namesBeforeLoad = ['Beastmaster', 'Berserker', 'Bogatyr', 'Brainiac', 'Dra
   'Shonen', 'Vessel', 'Witchhunter', 'Zoologist'];
 
 const split = (rows) => {
-  const plans = planLoad(records, rows.map(row));
+  const plans = planLoad(records, rows.map(row), book);
   return {
     update: plans.filter((plan) => plan.row).length,
     create: plans.filter((plan) => !plan.row).length,
@@ -46,23 +43,23 @@ const split = (rows) => {
 };
 
 test('an aliased class resolves against the catalogue spelling', () => {
-  const matches = resolveTarget({ name: 'Witchfinder' }, [row('Witchhunter')]);
+  const matches = resolveTarget({ name: 'Witchfinder' }, [row('Witchhunter')], book);
   expect(matches.map((m) => m.name)).toEqual(['Witchhunter']);
 });
 
 test('an aliased class still resolves once it carries the document spelling', () => {
-  const matches = resolveTarget({ name: 'Witchfinder' }, [row('Witchfinder')]);
+  const matches = resolveTarget({ name: 'Witchfinder' }, [row('Witchfinder')], book);
   expect(matches.map((m) => m.name)).toEqual(['Witchfinder']);
 });
 
 test('resolution folds diacritics and trims stored whitespace', () => {
-  expect(resolveTarget({ name: 'Shōnen' }, [row('Shonen')])).toHaveLength(1);
-  expect(resolveTarget({ name: 'Zoologist' }, [row('Zoologist ')])).toHaveLength(1);
-  expect(resolveTarget({ name: 'Drachentöter' }, [row('Drachentöter')])).toHaveLength(1);
+  expect(resolveTarget({ name: 'Shōnen' }, [row('Shonen')], book)).toHaveLength(1);
+  expect(resolveTarget({ name: 'Zoologist' }, [row('Zoologist ')], book)).toHaveLength(1);
+  expect(resolveTarget({ name: 'Drachentöter' }, [row('Drachentöter')], book)).toHaveLength(1);
 });
 
 test('a name matching several rows is reported rather than silently picked', () => {
-  const plans = planLoad([records[0]], [row('Beastmaster'), row('beastmaster')]);
+  const plans = planLoad([records[0]], [row('Beastmaster'), row('beastmaster')], book);
   expect(plans[0].matches).toHaveLength(2);
   expect(plans[0].row).toBeNull();
 });
@@ -235,7 +232,7 @@ test('a held name is grouped only when the import leaves it unresolvable', () =>
 // The owner authorised exactly these classes to be made visible. Widening the set
 // publishes a class nobody approved, so the list is pinned rather than trusted.
 test('the load publishes the classes the owner authorised and no others', () => {
-  expect(PUBLISHED_BY_LOAD).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan']);
+  expect(book.publishedByLoad).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan']);
 });
 
 const createdPlan = (name, gear) => ({ row: null, matches: [], payload: { name, gear } });
@@ -244,7 +241,7 @@ test('a class the load publishes contributes its names to the post-import catalo
   const projected = projectImport([], [
     createdPlan('Ardent', [{ name: 'Reliquary' }]),
     createdPlan('Unapproved', [{ name: 'Contraband' }])
-  ]);
+  ], book);
   const names = catalogueNames(projected);
   expect([...names.gear]).toEqual(['Reliquary']);
 });
@@ -255,7 +252,7 @@ test('an existing private class the load publishes contributes its names too', (
     rules_edition: 'advent', gear: [{ name: 'Flask of Mead' }]
   };
   const plans = [{ row, matches: [row], payload: { name: 'Drachentöter', gear: [{ name: 'Ichor' }] } }];
-  expect([...catalogueNames(projectImport([row], plans)).gear]).toEqual(['Ichor']);
+  expect([...catalogueNames(projectImport([row], plans, book)).gear]).toEqual(['Ichor']);
 });
 
 // A `to` the import does not add renames live rows to a name that resolves to

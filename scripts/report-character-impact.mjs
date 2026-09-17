@@ -21,18 +21,16 @@
 import 'dotenv/config';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 import { createClient } from '@supabase/supabase-js';
 
+import { bookFor } from './lib/books.mjs';
 import { fold, planLoad } from './load-prerelease-classes.mjs';
 import {
   KINDS, catalogueNames, fetchAll, fetchHeldRows, groupUnresolvable, itemNames, projectImport
 } from './lib/character-impact.mjs';
 
-const ARTIFACT = join(dirname(fileURLToPath(import.meta.url)), '..', 'docs', 'data',
-    'prerelease-classes-2026-08.json');
+const book = bookFor('prerelease');
 
 const setDifference = (left, right) => [...left].filter((value) => !right.has(value));
 
@@ -121,9 +119,9 @@ const main = async () => {
   console.log(`target: ${url}`);
 
   const supabase = createClient(url, key, { auth: { autoRefreshToken: false, persistSession: false } });
-  const records = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
+  const records = JSON.parse(readFileSync(book.artifact, 'utf8'));
   const classes = await fetchAll(supabase, 'classes', '*');
-  const plans = planLoad(records, classes);
+  const plans = planLoad(records, classes, book);
 
   const ambiguous = plans.filter((plan) => plan.matches.length > 1);
   if (ambiguous.length) {
@@ -143,7 +141,7 @@ const main = async () => {
     return 1;
   }
 
-  const projected = projectImport(classes, plans);
+  const projected = projectImport(classes, plans, book);
   const before = catalogueNames(classes);
   const after = catalogueNames(projected);
   const classById = new Map(classes.map((cls) => [cls.id, cls]));
