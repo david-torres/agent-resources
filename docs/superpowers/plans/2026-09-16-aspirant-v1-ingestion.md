@@ -898,8 +898,10 @@ const DEDICATION_HEIGHT = 7.83;
 // -- and run to 742.66. A yMin > 60 filter silently loses eight entries.
 const CONTENT_MIN_Y = 39;
 
-// The folio is 18.27 tall at yMin 764.84 and is the tallest thing in the left
-// column, so without this bound it reads as a fourth item name on all 24 pages.
+// The folio sits at yMin 764.84, below all entry content. Without this bound it
+// is swept into the last entry and appended to its signature description --
+// "...onlookers (Mid Cooldown). 15". It does NOT read as an item name: name
+// blocks are matched on x against colLeft, and the folio is centred.
 const CONTENT_MAX_Y = 750;
 ```
 
