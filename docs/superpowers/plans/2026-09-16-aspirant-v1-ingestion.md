@@ -141,7 +141,7 @@ The artifact and remap paths are module constants repeated as literals across fi
 - Create: `scripts/lib/books.mjs`
 - Create: `test/books.test.js`
 - Modify: `scripts/load-prerelease-classes.mjs:37-39,44,225` (`DATA`, `ARTIFACT`, `REMAP`, `ALIASES`, the `readFileSync(ARTIFACT)` call)
-- Modify: `scripts/lib/character-impact.mjs:30` (`PUBLISHED_BY_LOAD` moves out; `projectImport` gains a `book` parameter)
+- Modify: `scripts/lib/character-impact.mjs:30,63` (`PUBLISHED_BY_LOAD` moves out; `projectImport` gains a `book` parameter; its call site is `scripts/load-prerelease-classes.mjs:296`)
 - Modify: `scripts/extract-prerelease-classes.mjs:10`
 - Modify: `scripts/verify-prerelease-extract.mjs:23`
 - Modify: `scripts/report-character-impact.mjs:35`
@@ -160,10 +160,11 @@ import { test, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { BOOKS, bookFor } from '../scripts/lib/books.mjs';
 
-test('every descriptor names an artifact that exists on disk', () => {
-  for (const book of Object.values(BOOKS)) {
-    expect(existsSync(book.artifact)).toBe(true);
-  }
+// Widened to every book by Task 8, which produces the second artifact. Scoped
+// here so the unit suite does not sit red through the seven extractor tasks,
+// where a standing failure would mask a new one.
+test('the pre-release descriptor names an artifact that exists on disk', () => {
+  expect(existsSync(BOOKS.prerelease.artifact)).toBe(true);
 });
 
 test('a remap path is either null or a file that exists', () => {
@@ -265,16 +266,14 @@ export const projectImport = (classes, plans, book) => {
 };
 ```
 
-Update the four call sites that break: `scripts/load-prerelease-classes.mjs:298`, `scripts/report-character-impact.mjs`, and `test/load-prerelease-classes.test.js:237-262` (which imports `PUBLISHED_BY_LOAD` at `:16` — it now imports `bookFor` and reads `bookFor('prerelease').publishedByLoad`).
-
-**Note:** `test/books.test.js` asserts `bookFor('aspirant-v1').artifact` exists on disk, and it does not exist until Task 9. Until then that one assertion fails. **This is deliberate and correct** — it is the same fail-closed shape as the rest of this branch. Do not weaken it to make the suite green; Task 9 turns it green by producing the artifact. Record it in the ledger as expected-red and re-check it at Task 9.
+Update the four call sites that break: `scripts/load-prerelease-classes.mjs:296`, `scripts/report-character-impact.mjs`, and `test/load-prerelease-classes.test.js:237-262` (which imports `PUBLISHED_BY_LOAD` at `:16` — it now imports `bookFor` and reads `bookFor('prerelease').publishedByLoad`).
 
 - [ ] **Step 5: Run the tests**
 
 ```bash
 bun run test:unit
 ```
-Expected: every test passes except the one `test/books.test.js` assertion above, and the known pre-existing failures.
+Expected: green apart from the known pre-existing failures. This task must not leave a new standing failure — every later task uses a green unit suite as its baseline.
 
 - [ ] **Step 6: Commit**
 
@@ -1221,12 +1220,22 @@ Then assert the shape of what came out:
 - [ ] **Step 7: Commit**
 
 ```bash
-git add util/aspirant-extract.js util/aspirant-extract.test.js \
+git add util/aspirant-extract.js util/aspirant-extract.test.js test/books.test.js \
         scripts/extract-aspirant-v1-classes.mjs docs/data/aspirant-v1-classes-2026-09.json
 git commit -m "feat: extract ENCLAVE: Aspirant V1 into a reviewable artifact"
 ```
 
-This turns the `test/books.test.js` assertion from Task 1 green. Re-run `bun test test/books.test.js` and confirm it passes.
+Now widen Task 1's scoped assertion in `test/books.test.js` to cover every book, since the second artifact exists from this commit on:
+
+```js
+test('every descriptor names an artifact that exists on disk', () => {
+  for (const book of Object.values(BOOKS)) {
+    expect(existsSync(book.artifact)).toBe(true);
+  }
+});
+```
+
+Delete the narrower `the pre-release descriptor names an artifact...` test it replaces. Re-run `bun test test/books.test.js` and confirm it passes.
 
 ---
 
@@ -1356,7 +1365,7 @@ parent        := name match AND content_format = 'advent'
 
 **`FORBIDDEN` moves.** `test/load-prerelease-classes.test.js:31` forbids `rules_edition`, `rules_version` and `base_class_id` in every payload. For **fork plans specifically** those three are now required. Split the assertion: non-fork payloads keep the full `FORBIDDEN` list; fork payloads assert the three are present and correct, and that `is_public`, `status`, `teaser`, `image_url` and `image_crop` are still absent.
 
-**A book with no remap file skips the remap machinery entirely.** `main` unconditionally does `JSON.parse(readFileSync(REMAP, 'utf8'))` (`:281`) and then runs `unresolvableTargets`, `fetchHeldRows`, `groupUnresolvable` and `unremapped` over it. With `book.remap === null` there is nothing to read: treat the remap as `[]` and skip the read, but **still run the orphan scan**. Forking orphans nothing by construction, so the scan should come back empty — and that is the point. A scan that is skipped cannot tell you the projection is wrong; a scan that runs and reports zero can.
+**A book with no remap file skips the remap machinery entirely.** `main` unconditionally does `JSON.parse(readFileSync(REMAP, 'utf8'))` (`:283`) and then runs `unresolvableTargets`, `fetchHeldRows`, `groupUnresolvable` and `unremapped` over it. With `book.remap === null` there is nothing to read: treat the remap as `[]` and skip the read, but **still run the orphan scan**. Forking orphans nothing by construction, so the scan should come back empty — and that is the point. A scan that is skipped cannot tell you the projection is wrong; a scan that runs and reports zero can.
 
 **`rowByName` goes ambiguous.** `:387-388` maps payload name to row for the publish step. Once a parent and its fork share a name, that map has two entries for `Berserker` and silently keeps one. Publishing must key on the **plan**, not the name — carry the created row back onto its plan after the insert and publish from `plan.row.id`.
 
@@ -1498,8 +1507,9 @@ git commit -m "feat: give the loader an explicit create/update/fork disposition"
 **Files:**
 - Modify: `util/starter-content.js`
 - Modify: `util/book-classes.js:13-17`
-- Modify: `util/seed-classes.js:71`
-- Modify: `util/book-classes.test.js:5-6,45`, `util/seed-classes.test.js:14,21,27,76,85,102`, `models/class-book-unlocks.test.js:8-9`, `util/core-roster.integration.test.js:44`
+- Modify: `util/seed-classes.js:71-74`
+- Modify: `util/book-classes.test.js:5-6,45`, `util/seed-classes.test.js:14,21,27,76,85,102`
+- **Unchanged:** `routes/library.js:48` reads only `Object.keys(CORE_CLASS_UNLOCKS)`, so the value reshape does not reach it — verified, `models/class-book-unlocks.test.js:8-9`, `util/core-roster.integration.test.js:44`
 - Modify: `e2e/specs/18-book-class-unlocks.spec.js:19,22,29,58`
 
 **Interfaces:**
@@ -1580,7 +1590,7 @@ module.exports = { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS, ASPIRANT_V1_CLASS_I
 
 The six Advent ids are unchanged — only their wrapping — and the six pre-release Aspirant ids are unchanged too. Every value in the file is now a list, so no consumer branches on the shape.
 
-Then fix every consumer. `util/book-classes.js:16` becomes `for (const id of Object.values(roster).flat()) ids.add(id);`. `util/seed-classes.js:71` reads `roster[name]?.[0]`. The five test files and the e2e spec follow the shape — `e2e/specs/18-book-class-unlocks.spec.js:22` destructures `Object.entries(CORE_CLASS_UNLOCKS.aspirant)[0]` and must take `ids[0]`.
+Then fix every consumer. `util/book-classes.js:15` becomes `for (const id of Object.values(roster).flat()) ids.add(id);`. `util/seed-classes.js:73` reads `row.id = roster[cls][0];` (the guard above it is a `hasOwnProperty` check, which still holds). The five test files and the e2e spec follow the shape — `e2e/specs/18-book-class-unlocks.spec.js:22` destructures `Object.entries(CORE_CLASS_UNLOCKS.aspirant)[0]` and must take `ids[0]`.
 
 - [ ] **Step 4: Run the tests**
 
