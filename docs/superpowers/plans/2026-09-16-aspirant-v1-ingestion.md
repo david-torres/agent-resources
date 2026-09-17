@@ -779,9 +779,20 @@ describe('glyphless note trees', () => {
     expect(notes.map((n) => n.text)).toEqual(['first wrapped', 'second']);
   });
 
-  test('a child with no parent is refused rather than silently promoted', () => {
-    expect(() => noteTree([ln(90.72, 100, 'orphan')],
-      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toThrow('orphan');
+  // The detectable orphan is a note deeper than anything before it. A lone line
+  // at a deep xMin is NOT detectable: baseX is the minimum over note-start
+  // lines, so a solitary note is always its own baseline and computes depth 0.
+  test('a note deeper than anything before it is refused rather than silently promoted', () => {
+    expect(() => noteTree([
+      ln(109.44, 100, 'orphan'),
+      ln(90.72, 120.39, 'parent')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toThrow('orphan');
+  });
+
+  test('a single top-level note on its own parses and does not throw', () => {
+    expect(noteTree([ln(72.0, 100, 'only')],
+      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD }))
+      .toEqual([{ text: 'only', children: [] }]);
   });
 
   test('no lines is no notes', () => {
@@ -820,7 +831,7 @@ const DERIVED_THRESHOLD_MARGIN = 2.0;
 - When `threshold` is `null`, derive it: the minimum consecutive `yMin` delta plus `DERIVED_THRESHOLD_MARGIN`. With fewer than two lines there is nothing to derive and every line is its own note.
 - Walk the lines. The first line starts a note; thereafter a line starts a new note when `yMin - previous.yMin > threshold`, and otherwise appends its text to the current note separated by a single space.
 - A note's depth is `Math.round((xMin - baseX) / step)` where `baseX` is the smallest `xMin` among note-**start** lines only. Wrapped lines never contribute to depth.
-- Depth 0 pushes to the root; depth *n* pushes to the last note at depth *n−1*. **Throw naming the note's text** when there is no such parent — a silently promoted orphan is a note that changes meaning, and this book's structure never produces one.
+- Depth 0 pushes to the root; depth *n* pushes to the last note at depth *n−1*. **Throw naming the note's text** when there is no such parent — a silently promoted orphan is a note that changes meaning, and this book's structure never produces one. Do **not** additionally refuse a batch for being short: a single top-level note is valid content (a class with one Conduit tip), and a line-count guard would reject it at extraction time.
 - Use `markPowerRatings(line)` (Task 3) rather than a plain word join, so a rating inside a note survives as markup.
 
 - [ ] **Step 4: Run the tests**
@@ -836,7 +847,7 @@ In the scratchpad, run `noteTree` over the note lines of all twelve `+5` pages (
 - every page yields a non-empty `player` and `conduit` list
 - **no note anywhere has depth > 1** (only two levels occur in the whole book)
 - no note text is empty or starts/ends with a space
-- the two known p83 outliers (wrapped leadings of 11.73 and 12.27) still resolve as wrapped, not as new notes
+- the two known p83 outliers (wrapped leadings of 11.73 and 12.27) still resolve as wrapped, not as new notes. **Check this per column.** Merging Player and Conduit into one y-sorted list first finds neither outlier, because a gap measured across two side-by-side columns is not a leading.
 
 **If any page produces a depth-2 note, stop and report it.**
 
