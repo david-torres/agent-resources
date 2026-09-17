@@ -511,9 +511,20 @@ find the boundary, exactly as the spec supposed. Good news: it works.
 
 ### Distinct rating strings — the complete set for the whole book
 
-622 tokens matched `^[LMH](–[LMH])?\+?$` book-wide; 621 are real superscripts
-(the one rejection is the credits line "Dennis L Finch Jr" on p171, where the
-`L` is at body size). 606 of the 621 are inside the class chapter (pages 18–89).
+**CORRECTION (2026-09-17, found during Task 8).** The census below was taken
+with the regex `^[LMH](–[LMH])?\+?$`, which **cannot match a zero-bounded
+rating** and so missed an entire family. The book defines them normatively on
+p17: *"If a range does not include a lower bound (“up to Mid”, or 0–M as a
+superscript), insufficiently fulfilling its scaling criteria will result in no
+effect."* `0` is the notation for *no lower bound* — these are printed ratings,
+not a glyph-decode fault, and three earlier tasks in this plan recorded them as
+one.
+
+622 tokens matched the old regex book-wide; 621 are real superscripts (the one
+rejection is the credits line "Dennis L Finch Jr" on p171, where the `L` is at
+body size). Re-swept without the regex, by superscript geometry alone, the
+class chapter (pages 18–89) carries **613** rating tokens across **thirteen**
+distinct strings.
 
 | rating | count |
 |---|---|
@@ -527,8 +538,17 @@ find the boundary, exactly as the spec supposed. Good news: it works.
 | `M–H+` | 7 |
 | `L–H+` | 3 |
 | `H–H+` | 3 |
+| `0–M` | 3 (2 on class pages, 1 in the p17 definition) |
+| `0–L` | 2 |
+| `0–H` | 2 |
 
-**Ten distinct strings. No `L+`, no `M+`, no `L–M+`.**
+**Thirteen distinct strings. No `L+`, no `M+`, no `L–M+`, and no `0–H+`.**
+
+One further token is superscript-height but is not a rating on its own: `L–H,`
+on p45, where the following comma is fused into the superscript word
+(x 548.25–561.49). The extractor matches the rating with a trailing mark
+stripped and emits the mark outside the tag. A fifteenth token, `(L–M–H)`, is
+the notation gloss in the p17 prose and is not on a class page.
 
 **The dash is U+2013 EN DASH** — verified by codepoint, not by eye:
 
@@ -575,7 +595,8 @@ Full list of detached instances (page, rating, bbox):
 | 81 | L–M | 92.81–104.13 | 274.66–281.51 | no |
 | 88 | M | 246.14–250.44 | 233.36–239.45 | yes |
 
-**Detach rate: 21 / 622 = 3.4 %.** They are not confined to any one page type
+**Detach rate: 22 detached single-word rating cells.** The table above lists 21;
+it omits p33's `0–M` at x 202.72 / y 440.86, which the old regex could not see. They are not confined to any one page type
 (they occur on offsets +1, +2, +3, +4 — never on +0 or +5, which have no ratings).
 
 ### The identification rule — exact, from measurement
