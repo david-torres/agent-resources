@@ -1316,9 +1316,11 @@ Plan 1 repaired `scripts/verify-prerelease-extract.mjs`. Confirm the repair hold
 
 ```bash
 bun scripts/verify-prerelease-extract.mjs \
-    "/home/dave/Documents/Enclave/_Beta_Release__ENCLAVE___Aspirant.pdf"
+    "/home/dave/Downloads/Current_Pre-Release_Classes__Aug__2026_.pdf"
 ```
-Expected: **19/19 classes, 180 entries, 0 token differences.**
+Expected: **19/20 classes, 180 entries, 0 token differences.** The twentieth is `CHARLATAN`, which was hand-appended to that artifact with no `page_range` and so cannot be located in the PDF; the repaired helper skips it rather than crashing. That is the defect plan 1 fixed.
+
+**The pre-release book is `~/Downloads/Current_Pre-Release_Classes__Aug__2026_.pdf`.** It is *not* `~/Documents/Enclave/_Beta_Release__ENCLAVE___Aspirant.pdf`, which is a different 172-page document containing none of those nineteen classes — running the verifier against it fails with `found 0 section-intro pages, expected 3`.
 
 - [ ] **Step 4: Commit**
 
@@ -1892,7 +1894,7 @@ Checked at the end, against the spec's list:
 
 - [ ] Twelve V1 classes exist as forks, each with twelve signatures across four columns, three core and three advanced abilities, every ability carrying two sample perks of which one has a Compounded variant, and every signature a Default Enchantment.
 - [ ] No existing class row is modified by the load — verified by unchanged `updated_at` on all 50 pre-existing rows — and every character on a pre-release Aspirant or Advent base class keeps its class, its picks and its rendered content.
-- [ ] The verifier passes token-for-token against the PDF for all twelve classes, and passes again for the pre-release artifact (19/19 classes, 180 entries, 0 differences).
+- [ ] The verifier passes token-for-token against the PDF for all twelve classes, and passes again for the pre-release artifact (19/20 classes — CHARLATAN has no `page_range` and is skipped — 180 entries, 0 differences).
 - [ ] A second `--apply` is a no-op.
 - [ ] `content_format` is `NOT NULL` with 50 rows `'advent'` and exactly the twelve new rows `'aspirant'`.
 - [ ] A format fork is in a different version family from its parent, in all four consumers.
