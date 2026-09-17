@@ -123,3 +123,73 @@ describe('per-side bands', () => {
     expect(shiftFor(20, 'signature-note')).toBe(0);
   });
 });
+
+const { POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings } =
+  require('./aspirant-extract');
+
+describe('Power Rating superscripts', () => {
+  // Measured host line: height 11.75, superscript height 6.85 (= 0.583 x).
+  const host = { xMin: 40, yMin: 200, yMax: 211.75, words: [
+    { xMin: 40, yMin: 200, xMax: 130.61, yMax: 211.75, text: 'Ward' },
+    { xMin: 139.54, yMin: 200, xMax: 200, yMax: 211.75, text: 'against' }
+  ] };
+  const rating = { xMin: 132.04, yMin: 200.78, xMax: 137.41, yMax: 207.63, text: 'M' };
+
+  test('the ten rating strings are the whole observed set, with en dashes', () => {
+    expect(POWER_RATINGS).toEqual(
+      ['L', 'M', 'H', 'H+', 'L–M', 'L–H', 'M–H', 'L–H+', 'M–H+', 'H–H+']);
+    expect(POWER_RATINGS.every((r) => !r.includes('-'))).toBe(true);
+  });
+
+  test('a word at 0.583 of the line height hanging at the line top is a superscript', () => {
+    expect(isSuperscript(rating, host)).toBe(true);
+  });
+
+  test('a full-height word on the same line is not', () => {
+    expect(isSuperscript(host.words[0], host)).toBe(false);
+  });
+
+  test('a small word sitting on the baseline is not a superscript', () => {
+    const subscript = { ...rating, yMin: 205, yMax: 211.75 };
+    expect(isSuperscript(subscript, host)).toBe(false);
+  });
+
+  test('a detached rating in its own block rejoins its host line in reading order', () => {
+    const page = { page: 20, blocks: [
+      { xMin: 40, yMin: 200, yMax: 211.75, lines: [host] },
+      { xMin: 132.04, yMin: 200.78, yMax: 207.63, lines: [{ ...rating, words: [rating] }] }
+    ] };
+    const [line] = rethreadSuperscripts(page).blocks[0].lines;
+    expect(line.words.map((w) => w.text)).toEqual(['Ward', 'M', 'against']);
+  });
+
+  test('a host line split in two around the gap is rejoined as one line', () => {
+    // p21 y~649.3: pdftotext emits three fragments at the same yMin.
+    const lineAt = (xMin, xMax, text, yMin = 649.3, yMax = 661.05) =>
+      ({ xMin, yMin, yMax, words: [{ xMin, yMin, xMax, yMax, text }] });
+    const page = { page: 21, blocks: [{ xMin: 328.8, yMin: 649.3, yMax: 661.05, lines: [
+      lineAt(328.8, 382.54, 'Happenstance'),
+      lineAt(383.82, 395.14, 'L–M', 650.08, 656.93),
+      lineAt(397.06, 528.06, 'and')
+    ] }] };
+    const lines = rethreadSuperscripts(page).blocks[0].lines;
+    expect(lines).toHaveLength(1);
+    expect(lines[0].words.map((w) => w.text)).toEqual(['Happenstance', 'L–M', 'and']);
+  });
+
+  test('re-threading leaves a page with no detached ratings untouched', () => {
+    const page = { page: 20, blocks: [{ xMin: 40, yMin: 200, yMax: 211.75, lines: [host] }] };
+    expect(rethreadSuperscripts(page)).toEqual(page);
+  });
+
+  test('markup wraps the rating and nothing else', () => {
+    const threaded = { ...host, words: [host.words[0], rating, host.words[1]] };
+    expect(markPowerRatings(threaded)).toBe('Ward <sup>M</sup> against');
+  });
+
+  test('a small word that is not a known rating is left as plain text', () => {
+    const footnote = { ...rating, text: '7' };
+    const threaded = { ...host, words: [host.words[0], footnote, host.words[1]] };
+    expect(markPowerRatings(threaded)).toBe('Ward 7 against');
+  });
+});
