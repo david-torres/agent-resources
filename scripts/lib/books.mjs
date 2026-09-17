@@ -4,9 +4,7 @@ import { fileURLToPath } from 'node:url';
 const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'data');
 
 // One book's ingestion in one place: where its artifact lives, what names it
-// resolves under, and what the load is authorised to make visible. The paths
-// were five separate literals across scripts/ and test/, so a second book meant
-// a sixth copy of each.
+// resolves under, and what the load is authorised to make visible.
 export const BOOKS = {
   prerelease: {
     key: 'prerelease',
