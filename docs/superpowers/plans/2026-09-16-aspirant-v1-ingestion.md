@@ -1487,7 +1487,15 @@ Then dry-run the **other** book and confirm the refactor did not disturb it:
 ```bash
 bun scripts/load-prerelease-classes.mjs
 ```
-Expected: `20 classes resolved (20 update, 0 create), 0 ambiguous` and `0 of 20 existing rows differ` — the pre-release load is already applied, so nothing should be pending.
+Expected, measured on this database on 2026-09-17, before any of this plan's work:
+
+```
+20 classes resolved (19 update, 1 create), 0 ambiguous
+CREATE Charlatan
+3 of 19 existing rows differ     # Ardent, Offdriver, Squire — each on `tips` and `abilities`
+```
+
+**This drift is pre-existing and is not yours to fix.** The pre-release load was never fully applied to this local database. **Do NOT run the pre-release loader with `--apply`** to make the numbers match — that writes content unrelated to this plan. The check here is only that the descriptor refactor did not *change* this output; compare against the three lines above.
 
 - [ ] **Step 7: Commit**
 
