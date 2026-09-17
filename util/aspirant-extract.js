@@ -1,3 +1,5 @@
+const { pairMeters } = require('./prerelease-extract');
+
 const NAMED_ENTITIES = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
 
 const decodeEntities = (text) => text
@@ -297,10 +299,204 @@ const noteTree = (lines, { step, threshold }) => {
   return roots;
 };
 
+// No line crosses x=306 on any of the 24 signature pages; the two columns are
+// laid out independently and share almost no baselines, so they are partitioned
+// here and read separately.
+const COLUMN_SPLIT_X = 306;
+
+// An item name is the tallest line in its entry. Never an absolute 20.88: the
+// book auto-fits a long name down to 19.57. No body line anywhere exceeds 14.36.
+const NAME_MIN_HEIGHT = 18.0;
+
+// "In Honor of" is printed smaller than every body font and lands inside the
+// signature description's y-range -- on p50 literally between its wrapped lines
+// at 371.83 and 380.83 -- so it is lifted out by height before any reflow.
+const DEDICATION_HEIGHT = 7.83;
+
+// Entries start as high as yMin 40.77 (Blank Check, Samaritan p75), above the
+// running-header band, and the last body line of a column reaches 742.66. The
+// folio stands alone at 764.84 and is 18.27 tall, so it reads as an item name
+// unless the content band is closed below it.
+const CONTENT_MIN_Y = 39;
+const CONTENT_MAX_Y = 750;
+
+const DIVIDER_TEXT = 'Default Enchantment';
+
+// Offsets from the column's text origin -- the item name's left edge -- which
+// is 45.60/57.12 in the left column and 322.08/333.60 in the right. Measured on
+// all 24 pages: the signature name outdents 2.40 and its description 4.80, so
+// 0.5 is all the room there is to tell those two apart. The meter gutter never
+// begins closer in than 112.56 while no note block begins further out than
+// 24.34, which leaves the widest gap on the page to separate meters from prose.
+const SIGNATURE_NAME_OUTDENT = 2.40;
+const SIGNATURE_NAME_TOLERANCE = 0.5;
+const COLUMN_X_TOLERANCE = 1.0;
+const METER_GUTTER_MIN = 100;
+
+// A two-row meter block starts 4.11 above its own item name's baseline, so an
+// entry begins slightly above the name that titles it.
+const ENTRY_LEAD = 6;
+
+// Within a meter row the words of one label are 2.13 apart and a value never
+// starts closer than 7.28 to its label's right edge.
+const METER_CELL_GAP = 5;
+const METER_LABEL_GAP = 6;
+
+// A label that wraps to two lines is centred against its value, 5.00 from it;
+// the next meter row down is 14.00 away at the closest.
+const METER_ROW_BAND = 7;
+
+const blockLeft = (block) => Math.min(...block.lines.map(lineXMin));
+const blockTop = (block) => Math.min(...block.lines.map((line) => line.yMin));
+const byTop = (a, b) => blockTop(a) - blockTop(b);
+
+// Sorting by xMin as well as yMin is what puts a detached rating back between
+// the words it interrupts, and what reads a description that wraps around the
+// name printed beside it in the order it is meant to be read.
+const joinLines = (lines) => [...lines]
+  .sort((a, b) => a.yMin - b.yMin || lineXMin(a) - lineXMin(b))
+  .map(markPowerRatings)
+  .join(' ');
+
+// Everything in an entry mirrors recto/verso at 11.52 except the note frame,
+// which mirrors at 16.32 (geometry doc, section 3a), so the column origin is
+// taken back to its verso coordinate before the note frame's own shift applies.
+const noteIndentFor = (pdfPage, colLeft) =>
+  colLeft - shiftFor(pdfPage, 'body') + BODY_NOTE_STEP + shiftFor(pdfPage, 'signature-note');
+
+const meterCells = (lines) => lines.flatMap((line) => line.words.reduce((cells, word) => {
+  const open = cells[cells.length - 1];
+  if (open && word.xMin - open.xMax <= METER_CELL_GAP) {
+    open.text = `${open.text} ${word.text}`;
+    open.xMax = word.xMax;
+    return cells;
+  }
+  return [...cells, { xMin: word.xMin, xMax: word.xMax, yMin: word.yMin, text: word.text }];
+}, []));
+
+// Labels are right-ragged, so they cannot be told from values by a left band;
+// what is constant is that the whole label group ends before any value begins.
+const splitAtGutter = (cells) => {
+  const sorted = [...cells].sort((a, b) => a.xMin - b.xMin);
+  let labelEdge = -Infinity;
+  for (let i = 0; i < sorted.length - 1; i += 1) {
+    labelEdge = Math.max(labelEdge, sorted[i].xMax);
+    if (sorted[i + 1].xMin - labelEdge >= METER_LABEL_GAP) {
+      return { labels: sorted.slice(0, i + 1), values: sorted.slice(i + 1) };
+    }
+  }
+  throw new Error(`meter cells with no label/value gap: ${sorted.map((c) => c.text).join(' ')}`);
+};
+
+const readMeters = (lines) => {
+  if (lines.length === 0) return [];
+  const { labels, values } = splitAtGutter(meterCells(lines));
+  return [...values].sort((a, b) => a.yMin - b.yMin).flatMap((value) => {
+    const rowLabels = labels
+      .filter((label) => Math.abs(label.yMin - value.yMin) <= METER_ROW_BAND)
+      .sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin);
+    if (rowLabels.length === 0) throw new Error(`meter value with no label: ${value.text}`);
+    // pairMeters reads a row off one baseline; a wrapped label has none of its
+    // own, so the row is presented on the value's.
+    return pairMeters([
+      {
+        xMin: Math.min(...rowLabels.map((label) => label.xMin)),
+        yMin: value.yMin,
+        text: rowLabels.map((label) => label.text).join(' '),
+      },
+      { xMin: value.xMin, yMin: value.yMin, text: value.text },
+    ]);
+  });
+};
+
+const entryFrom = (pdfPage, colLeft, nameBlock, ownBlocks) => {
+  const dividerBlock = ownBlocks.find((block) =>
+    block.lines.some((line) => markPowerRatings(line) === DIVIDER_TEXT));
+  if (!dividerBlock) {
+    throw new Error(`signature entry with no ${DIVIDER_TEXT}: ${joinLines(nameBlock.lines)}`);
+  }
+  const dividerY = blockTop(dividerBlock);
+  const body = ownBlocks.filter((block) => block !== dividerBlock);
+  const above = body.filter((block) => blockTop(block) < dividerY);
+  const below = body.filter((block) => blockTop(block) > dividerY);
+
+  const noteIndent = noteIndentFor(pdfPage, colLeft);
+  const meterBlocks = above.filter((block) => blockLeft(block) >= colLeft + METER_GUTTER_MIN);
+  const descriptionBlocks = above.filter((block) =>
+    Math.abs(blockLeft(block) - colLeft) <= COLUMN_X_TOLERANCE);
+  const noteBlocks = above.filter((block) => !meterBlocks.includes(block)
+    && blockLeft(block) >= noteIndent - COLUMN_X_TOLERANCE);
+  const unplaced = above.filter((block) => !meterBlocks.includes(block)
+    && !descriptionBlocks.includes(block) && !noteBlocks.includes(block));
+  if (unplaced.length > 0) {
+    throw new Error(`signature entry block at no known indent: ${joinLines(unplaced[0].lines)}`);
+  }
+
+  const signatureNameBlock = below.find((block) =>
+    Math.abs(blockLeft(block) - (colLeft - SIGNATURE_NAME_OUTDENT)) <= SIGNATURE_NAME_TOLERANCE);
+  if (!signatureNameBlock) {
+    throw new Error(`signature entry with no signature name: ${joinLines(nameBlock.lines)}`);
+  }
+  const signatureLines = below
+    .filter((block) => block !== signatureNameBlock)
+    .flatMap((block) => block.lines);
+  const isDedication = (line) =>
+    Math.abs(lineHeightOf(line) - DEDICATION_HEIGHT) <= HEIGHT_TOLERANCE;
+  const dedications = signatureLines.filter(isDedication);
+
+  return {
+    name: joinLines(nameBlock.lines.filter((line) => lineHeightOf(line) >= NAME_MIN_HEIGHT)),
+    description: joinLines(descriptionBlocks.flatMap((block) => block.lines)),
+    meters: readMeters(meterBlocks.flatMap((block) => block.lines)),
+    notes: noteTree(noteBlocks.flatMap((block) => block.lines),
+      { step: BODY_NOTE_STEP, threshold: null }),
+    default_enchantment: {
+      name: joinLines(signatureNameBlock.lines),
+      description: joinLines(signatureLines.filter((line) => !isDedication(line))),
+      dedication: dedications.length > 0 ? joinLines(dedications) : null,
+    },
+  };
+};
+
+const columnEntries = (pdfPage, blocks) => {
+  const nameLines = blocks.flatMap((block) => block.lines)
+    .filter((line) => lineHeightOf(line) >= NAME_MIN_HEIGHT);
+  if (nameLines.length === 0) return [];
+  const colLeft = Math.min(...nameLines.map(lineXMin));
+  const nameBlocks = blocks
+    .filter((block) => block.lines.some((line) => lineHeightOf(line) >= NAME_MIN_HEIGHT
+      && Math.abs(lineXMin(line) - colLeft) <= COLUMN_X_TOLERANCE))
+    .sort(byTop);
+
+  return nameBlocks.map((nameBlock, i) => {
+    const top = blockTop(nameBlock) - ENTRY_LEAD;
+    const bottom = nameBlocks[i + 1] ? blockTop(nameBlocks[i + 1]) - ENTRY_LEAD : Infinity;
+    const ownBlocks = blocks.filter((block) => block !== nameBlock
+      && blockTop(block) >= top && blockTop(block) < bottom);
+    return entryFrom(pdfPage, colLeft, nameBlock, ownBlocks);
+  });
+};
+
+// Re-threading runs first: a detached one-character cell sits in the middle of
+// the column and pollutes every x-band it is measured against.
+const signatureEntries = (page) => {
+  const blocks = rethreadSuperscripts(page).blocks
+    .map((block) => ({
+      ...block,
+      lines: block.lines.filter((line) => line.yMin > CONTENT_MIN_Y && line.yMin < CONTENT_MAX_Y),
+    }))
+    .filter((block) => block.lines.length > 0);
+  return [
+    ...columnEntries(page.page, blocks.filter((block) => blockLeft(block) < COLUMN_SPLIT_X)),
+    ...columnEntries(page.page, blocks.filter((block) => blockLeft(block) >= COLUMN_SPLIT_X)),
+  ];
+};
+
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
   classPageNumbers, isCoverPage, printedPage, headerName, isRecto, shiftFor,
   RECTO_SHIFT, SIGNATURE_NOTE_RECTO_SHIFT,
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
   noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
+  signatureEntries, COLUMN_SPLIT_X,
 };
