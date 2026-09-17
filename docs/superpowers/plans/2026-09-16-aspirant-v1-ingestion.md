@@ -39,6 +39,7 @@ Copied from the spec and from CLAUDE.md. Every task's requirements implicitly in
   - http: `routes/open-graph.test.js` (1)
   - integration: `character-content-integrity`, `image-crop-integrity` (2), and `util/class-form-round-trip.integration.test.js` (1 of 3 — the other 2 pass and must stay passing)
   - e2e: `22-classes-crud` (5), `18-book-class-unlocks` (1)
+- **Never debug a page with a single-page `pdftotext` extract.** `pdftotext -bbox-layout -f 20 -l 20` emits that page as page **1**, so `parseBboxPages` numbers it 1, which flips its recto/verso parity and with it every indent the extractor expects. The block count and coordinates are otherwise identical, so the failure looks like a code bug: page 20 parses correctly from a whole-book extract and throws `signature entry block at no known indent` from a single-page one. Parse the whole book and index into it, or set the page number explicitly on the fixture.
 - **The en dash in Power Ratings is U+2013**, verified by codepoint. U+2014 (em dash) occurs only as the quote-attribution dash. Do not normalize either.
 - The book spells it **Witchfinder**. The string `Witchhunter` does not occur in it.
 - PDF page = printed page + 5. The twelve class blocks start at PDF pages 18, 24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84.
