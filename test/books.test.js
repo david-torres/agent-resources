@@ -2,11 +2,10 @@ import { test, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { BOOKS, bookFor } from '../scripts/lib/books.mjs';
 
-// Widened to every book by Task 8, which produces the second artifact. Scoped
-// here so the unit suite does not sit red through the seven extractor tasks,
-// where a standing failure would mask a new one.
-test('the pre-release descriptor names an artifact that exists on disk', () => {
-  expect(existsSync(BOOKS.prerelease.artifact)).toBe(true);
+test('every descriptor names an artifact that exists on disk', () => {
+  for (const book of Object.values(BOOKS)) {
+    expect(existsSync(book.artifact)).toBe(true);
+  }
 });
 
 test('a remap path is either null or a file that exists', () => {

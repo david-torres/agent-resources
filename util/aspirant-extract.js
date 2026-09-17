@@ -495,7 +495,7 @@ const columnEntries = (pdfPage, blocks) => {
 
 // Re-threading runs first: a detached one-character cell sits in the middle of
 // the column and pollutes every x-band it is measured against.
-const signatureEntries = (page) => {
+const signatureColumns = (page) => {
   const blocks = rethreadSuperscripts(page).blocks
     .map((block) => ({
       ...block,
@@ -503,10 +503,12 @@ const signatureEntries = (page) => {
     }))
     .filter((block) => block.lines.length > 0);
   return [
-    ...columnEntries(page.page, blocks.filter((block) => blockLeft(block) < COLUMN_SPLIT_X)),
-    ...columnEntries(page.page, blocks.filter((block) => blockLeft(block) >= COLUMN_SPLIT_X)),
+    columnEntries(page.page, blocks.filter((block) => blockLeft(block) < COLUMN_SPLIT_X)),
+    columnEntries(page.page, blocks.filter((block) => blockLeft(block) >= COLUMN_SPLIT_X)),
   ];
 };
+
+const signatureEntries = (page) => signatureColumns(page).flat();
 
 // "Paired Action:", "Sample Perks" and "(Compounded)" each print exactly three
 // times on every one of the 24 ability pages. "Paired Action:" and
@@ -835,6 +837,89 @@ const expandedTips = (page) => {
   };
 };
 
+// A class is located by the six-page cadence and nothing else, so every page
+// that prints a running header is checked against the roster name before
+// anything is read off it. Four of the six print one: the cover's title is
+// outlined art, and the signature spread heads its left page only.
+const HEADER_PAGES = ['core', 'sigLeft', 'advanced', 'tips'];
+
+const pageIn = (pages, pdfPage, className) => {
+  const page = pages[pdfPage - 1];
+  if (!page) throw new Error(`${className} page ${pdfPage} is not in the parse`);
+  return page;
+};
+
+// V1 prints no roster heading over a Signature column. What assigns `category`
+// is the backwards-compatibility rule on printed page 2, which reads the first
+// column of the spread as the Class's Default Roster and the second as its
+// Elective one. Columns 3 and 4 are new to V1 and that rule names no roster for
+// them; they follow column 2. util/class-gear.js holds the same constant for
+// the same reason, and over six items both come to the `index < 3` split the
+// fifty live classes were backfilled on.
+const DEFAULT_ROSTER_COLUMN = 1;
+
+// Three items down each of the spread's four columns, on all 24 signature
+// pages. A column reads short when an entry loses the name block that opens it:
+// the rest of that entry is then read into the entry above, or dropped where it
+// opened the column, and no count downstream of here can see either.
+const ENTRIES_PER_COLUMN = 3;
+
+const gearFrom = (entry, column, position) => ({
+  name: entry.name,
+  description: entry.description,
+  category: column === DEFAULT_ROSTER_COLUMN ? 'default' : 'elective',
+  meters: entry.meters,
+  notes: entry.notes,
+  default_enchantment: entry.default_enchantment,
+  column,
+  position,
+});
+
+// The spread reads as four columns: the left page carries 1 and 2, the right 3
+// and 4. Neither page says which pair it holds -- that is its place in the
+// cadence -- so the two arrive already ordered.
+const spreadGear = (leftPage, rightPage) =>
+  [leftPage, rightPage]
+    .flatMap((page) => signatureColumns(page).map((entries) => ({ page, entries })))
+    .flatMap(({ page, entries }, index) => {
+      if (entries.length !== ENTRIES_PER_COLUMN) {
+        throw new Error(`${entries.length} signature entries in column ${index + 1}`
+          + ` of the spread, on page ${page.page}`);
+      }
+      return entries.map((entry, position) => gearFrom(entry, index + 1, position + 1));
+    });
+
+const extractClass = (pages, index) => {
+  const className = CLASS_NAMES[index];
+  const numbers = classPageNumbers(index);
+  const pageOf = (offset) => pageIn(pages, numbers[offset], className);
+
+  for (const offset of HEADER_PAGES) {
+    const header = headerName(pageOf(offset));
+    if (header !== className) {
+      throw new Error(`page ${numbers[offset]} heads ${JSON.stringify(header)}`
+        + ` where the cadence expects ${className}`);
+    }
+  }
+
+  return {
+    name: headerName(pageOf('core')),
+    // The book credits its contributors once, on a book-wide Credits page; the
+    // "Design by" line the other book prints on each cover appears nowhere.
+    designer: null,
+    // coverFields returns the cover's thirteen fields in the artifact's own key
+    // order, so spreading it here is what places them.
+    ...coverFields(pageOf('cover')),
+    abilities: abilityEntries(pageOf('core')),
+    advanced_abilities: abilityEntries(pageOf('advanced')),
+    gear: spreadGear(pageOf('sigLeft'), pageOf('sigRight')),
+    expanded_tips: expandedTips(pageOf('tips')),
+    page_range: [printedPage(numbers.cover), printedPage(numbers.tips)],
+  };
+};
+
+const extractBook = (pages) => CLASS_NAMES.map((_, index) => extractClass(pages, index));
+
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
   classPageNumbers, isCoverPage, printedPage, headerName, isRecto, shiftFor,
@@ -842,4 +927,5 @@ module.exports = {
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
   noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
   signatureEntries, COLUMN_SPLIT_X, abilityEntries, coverFields, expandedTips,
+  extractClass, extractBook,
 };

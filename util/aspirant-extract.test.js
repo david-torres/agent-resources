@@ -2809,3 +2809,231 @@ describe('the Expanded Tips spread', () => {
     expect(gunslinger.player.map((note) => note.text).join(' ')).not.toContain('Gunslinger');
   });
 });
+
+const { extractClass, extractBook } = require('./aspirant-extract');
+
+// PDF page 21, Gunslinger recto: columns 3 and 4 of the signature spread, and
+// the one page kind in a class that prints no running header. Every block that
+// carries content, in pdftotext's own emission order, which is not y-order.
+const P21 = [
+  [57.120, 117.568, [[57.120, 117.568, 123.248, 20.880, 'Wild Rag']]],
+  [333.600, 117.568, [[333.600, 117.568, 418.304, 20.880, 'Bowie Knife']]],
+  [81.120, 162.693, [
+    [81.120, 162.693, 286.445, 13.050, [[81.120, 146.930, 'Provides a Ward'], [148.358, 151.775, 'L', 163.562, 7.608], [153.905, 286.445, 'against breathable hazards such as']]],
+    [81.120, 172.693, 137.520, 13.050, 'dust or fumes.'],
+    [81.120, 187.020, 275.330, 13.050, 'While the owner’s face is mostly concealed by this'],
+    [81.120, 197.020, 287.990, 13.050, 'item, they may be Recognized (under a pseudonym)'],
+    [81.120, 207.020, 242.170, 13.050, 'as a famous gunfighter (Mid Cooldown).']]],
+  [412.965, 202.928, [[412.965, 202.928, 487.035, 11.745, 'Default Enchantment']]],
+  [376.800, 216.882, [
+    [424.800, 216.882, 555.642, 11.745, 'Show off this knife while denigrating'],
+    [424.800, 225.882, 551.538, 11.745, 'someone else’s weapon to make that'],
+    [376.800, 234.882, 568.462, 11.745, [[376.800, 431.583, 'weapon smaller'], [432.869, 437.701, 'M', 235.664, 6.847], [439.618, 568.462, 'and this knife proportionately larger']]],
+    [376.800, 243.882, 495.681, 11.745, '(Mid Duration, Mid Cooldown).']]],
+  [331.200, 216.896, [[331.200, 216.896, 405.315, 11.745, 'Now That\'s a Knife']]],
+  [136.485, 222.128, [[136.485, 222.128, 210.555, 11.745, 'Default Enchantment']]],
+  [148.320, 236.082, [
+    [148.320, 236.082, 279.294, 11.745, [[148.320, 208.944, 'Greatly improves'], [210.230, 214.422, 'H', 236.864, 6.847], [216.339, 279.294, 'Defiances against']]],
+    [148.320, 245.082, 266.085, 11.745, 'pain; doing so will also Stabilize a'],
+    [148.320, 254.082, 273.303, 11.745, 'relevant injury for a Low Duration.']]],
+  [333.600, 293.242, [[333.600, 293.242, 386.752, 20.880, 'Rollups']]],
+  [57.120, 303.568, [[57.120, 303.568, 104.096, 20.880, 'Duster']]],
+  [474.890, 303.529, [[474.890, 303.529, 511.200, 13.050, 'Quantity']]],
+  [357.600, 347.967, [
+    [357.600, 347.967, 545.555, 13.050, [[357.600, 402.350, 'Galvanizes'], [403.778, 407.195, 'L', 348.836, 7.608], [409.325, 545.555, 'the smoker towards being cool and']]],
+    [357.600, 357.967, 394.310, 13.050, 'collected.'],
+    [357.600, 372.294, 571.080, 13.050, 'A fitting local ingredient may be added to this cigarette'],
+    [357.600, 382.294, 569.121, 13.050, [[357.600, 457.610, 'to grant the user Affinity'], [458.975, 464.344, 'M', 383.163, 7.608], [466.411, 569.121, 'with locals while smoking,']]],
+    [357.600, 392.294, 569.598, 13.050, [[357.600, 467.270, 'but you must Pitch a minor'], [468.635, 472.051, 'L', 393.163, 7.608], [474.118, 569.598, 'thematic downside to be']]],
+    [357.600, 402.294, 553.790, 13.050, 'incurred in the process such as incessant coughing,'],
+    [357.600, 412.294, 526.150, 13.050, 'ringing in ears, lips turning blue, or similar.']]],
+  [136.485, 414.128, [[136.485, 414.128, 210.555, 11.745, 'Default Enchantment']]],
+  [412.965, 427.801, [[412.965, 427.801, 487.035, 11.745, 'Default Enchantment']]],
+  [54.720, 428.082, [[54.720, 428.082, 131.895, 11.745, 'Man With No Name']]],
+  [52.320, 428.082, [
+    [148.320, 428.082, 267.273, 11.745, 'Coolly rebuffing a non-ally\'s social'],
+    [148.320, 437.082, 279.702, 11.745, 'advances will steadily Galvanize them'],
+    [52.320, 446.082, 275.117, 11.745, [[52.320, 144.138, 'towards being increasingly'], [145.295, 155.878, 'L–H', 446.864, 6.847], [157.667, 275.117, 'curious about the owner but leave']]],
+    [52.320, 455.082, 294.231, 11.745, 'them proportionately less able to recall the owner once they part ways.']]],
+  [182.180, 513.055, [[182.180, 513.055, 234.720, 13.050, 'Ammunition']]],
+  [534.285, 303.529, [[534.285, 303.529, 552.915, 13.050, 'Low']]],
+  [333.600, 318.992, [
+    [333.600, 318.992, 570.463, 14.355, 'Handmade cigarettes, assembled from loose tobacco and'],
+    [333.600, 329.992, 391.691, 14.355, 'rolling paper.']]],
+  [81.120, 329.493, [
+    [81.120, 329.493, 289.568, 13.050, [[81.120, 146.930, 'Provides a Ward'], [148.358, 153.728, 'M', 330.362, 7.608], [155.858, 289.568, 'against all environmental hazards,']]],
+    [81.120, 339.493, 288.780, 13.050, 'including water, grit, inclement weather, and similar.'],
+    [100.320, 353.820, 255.210, 13.050, 'This Ward extends to the owner’s other'],
+    [100.320, 363.820, 267.057, 13.050, [[100.320, 258.610, 'Equipment, for which it is even stronger'], [260.038, 264.697, 'H', 364.689, 7.608], [264.697, 267.057, '.']]],
+    [81.120, 378.147, 283.910, 13.050, 'While acting menacing, the owner will appear more'],
+    [81.120, 388.147, 292.488, 13.050, [[81.120, 192.180, 'armed than they actually are'], [193.608, 198.978, 'M', 389.016, 7.608], [201.108, 292.488, 'to non-allies, as though']]],
+    [81.120, 398.147, 270.340, 13.050, 'this Duster were concealing additional weapons.']]],
+  [57.120, 502.768, [[57.120, 502.768, 125.840, 20.880, 'Derringer']]],
+  [538.075, 127.855, [[538.075, 127.855, 559.955, 13.050, 'High']]],
+  [357.600, 143.493, [
+    [357.600, 143.493, 559.640, 13.050, 'Non-combat survivalist activities this knife is used for'],
+    [357.600, 153.493, 571.183, 13.050, [[357.600, 562.350, '(such as skinning or whittling) are accomplished faster'], [563.541, 568.910, 'M', 154.362, 7.608], [568.823, 571.183, '.']]],
+    [376.800, 167.820, 562.260, 13.050, 'This knife\'s deadliness improves as it is used for'],
+    [376.800, 177.820, 559.120, 13.050, 'such activities by its owner (up to High after a'],
+    [376.800, 187.820, 439.350, 13.050, 'Mid Duration).']]],
+  [57.120, 144.018, [[57.120, 144.018, 292.619, 14.355, 'Kerchief worn on the face, covering the nose and mouth.']]],
+  [54.720, 236.082, [[54.720, 236.082, 109.269, 11.745, 'Bite the Bullet']]],
+  [455.590, 127.855, [[455.590, 127.855, 522.030, 13.050, 'Durability Boost']]],
+  [331.200, 441.756, [[331.200, 441.756, 387.918, 11.745, 'Smokey Bandit']]],
+  [376.800, 441.756, [
+    [424.800, 441.756, 551.079, 11.745, 'The owner may take a massive drag,'],
+    [424.800, 450.756, 566.649, 11.745, 'using up an entire cigarette in one go, to'],
+    [424.800, 459.756, 563.821, 11.745, [[424.800, 534.258, 'exhale a thick cloud of choking'], [535.544, 540.376, 'M', 460.538, 6.847], [542.293, 563.821, 'fumes']]],
+    [376.800, 468.756, 569.463, 11.745, '(to which they are immune), enough to fill a Low area.']]],
+  [342.870, 451.777, [[342.870, 451.777, 403.530, 7.830, 'In Honor of Cowboy Will']]],
+  [261.815, 513.055, [[261.815, 513.055, 272.425, 13.050, '4x']]],
+  [333.600, 518.116, [[333.600, 518.116, 399.760, 20.880, 'Hip Flask']]],
+  [57.120, 528.518, [
+    [57.120, 528.518, 293.532, 14.355, 'Tiny, double-barreled pistol; surprisingly loud, very low'],
+    [57.120, 539.518, 120.249, 14.355, 'effective range.']]],
+  [493.200, 528.403, [[493.200, 528.403, 511.200, 13.050, 'Uses']]],
+  [538.295, 528.403, [[538.295, 528.403, 548.905, 13.050, '3x']]],
+  [357.600, 544.041, [
+    [357.600, 544.041, 554.057, 13.050, [[357.600, 389.240, 'Rapidly'], [397.457, 554.057, 'inebriates any drinker besides the owner,']]],
+    [357.600, 554.041, 566.760, 13.050, 'though they will sober up after only a Mid Duration.'],
+    [376.800, 568.368, 552.590, 13.050, 'A Use is only spent if this inebriation occurs.'],
+    [357.600, 582.695, 568.920, 13.050, 'After taking a swig, the owner may offer this flask to a'],
+    [357.600, 592.695, 537.548, 13.050, [[357.600, 420.520, 'rival to Compel'], [421.948, 427.318, 'M', 593.564, 7.608], [429.448, 537.548, 'that target to drink in turn.']]]]],
+  [390.668, 544.910, [[390.668, 544.910, 395.327, 7.608, 'H']]],
+  [81.120, 557.493, [
+    [81.120, 557.493, 253.628, 13.050, [[81.120, 139.980, 'You may Pitch'], [141.408, 146.778, 'M', 558.362, 7.608], [148.908, 253.628, 'this gun’s location on your']]],
+    [81.120, 567.493, 199.780, 13.050, 'character’s person at any time.'],
+    [81.120, 581.820, 270.604, 13.050, [[81.120, 114.800, 'Deadlier'], [116.213, 126.880, 'L–H', 583.609, 6.847], [128.994, 270.604, 'when fired outside of active combat,']]],
+    [81.120, 591.820, 294.210, 13.050, 'scaling on how tense the situation is (Mid Cooldown).']]],
+  [136.485, 607.327, [[136.485, 607.327, 210.555, 11.745, 'Default Enchantment']]],
+  [412.965, 608.275, [[412.965, 608.275, 487.035, 11.745, 'Default Enchantment']]],
+  [54.720, 621.282, [[54.720, 621.282, 121.761, 11.745, 'Pocket Advantage']]],
+  [52.320, 621.282, [
+    [148.320, 621.282, 288.558, 11.745, 'Firing this weapon through the owner’s'],
+    [148.320, 630.282, 294.219, 11.745, 'own clothing will almost perfectly silence'],
+    [52.320, 639.282, 262.614, 11.745, 'the shot. Anyone hit by this shot outside of active combat is'],
+    [52.320, 648.282, 97.651, 11.745, [[52.320, 89.409, 'Disarmed'], [90.695, 95.527, 'M', 649.064, 6.847], [95.527, 97.651, '.']]]]],
+  [331.200, 622.230, [[331.200, 622.230, 413.136, 11.745, 'I’m Your Huckleberry']]],
+  [328.800, 622.258, [
+    [424.800, 622.258, 552.600, 11.745, 'You may choose for your character to'],
+    [424.800, 631.258, 562.815, 11.745, 'get drunk from this flask. Acting cocky'],
+    [328.800, 640.258, 551.235, 11.745, 'while obviously drunk in this way will empower the character’s'],
+    [383.825, 650.040, 395.142, 6.847, 'L–M'],
+    [328.800, 649.258, 382.539, 11.745, 'Happenstance'],
+    [397.059, 649.258, 528.058, 11.745, [[397.059, 449.232, 'and Galvanize'], [450.518, 461.835, 'L–M', 650.040, 6.847], [463.753, 528.058, 'non-allies towards']]],
+    [328.800, 658.258, 542.064, 11.745, 'underestimating them, scaling on believable portrayal of this'],
+    [328.800, 667.258, 377.112, 11.745, 'Altered State.']]],
+  [304.818, 764.837, [[304.818, 764.837, 319.182, 18.270, '16']]],
+];
+
+// A record is found by its place in the six-page cadence, so a fixture class
+// has to arrive at its own PDF page numbers: the pages before it are empty.
+const bookPages = (blocksByPage) => parseBboxPages(doc(
+  ...Array(FIRST_CLASS_PAGE - 1).fill(''),
+  ...blocksByPage.map((blocks) => blocks.map(sigBlock).join(''))));
+
+const GUNSLINGER = [P18, P19, [...P20_LEFT, ...P20_RIGHT], P21, P22, P23];
+const fixturePages = bookPages(GUNSLINGER);
+
+// The running header is the only line in the measured band, so a page heading
+// the wrong class is the real page with that one line's text replaced.
+const headed = (blocks, name) => blocks.map(([x, y, lines]) => [x, y, lines.map((ln) =>
+  (Math.abs(ln[1] - 23.233) <= 0.5 ? [ln[0], ln[1], ln[2], ln[3], name] : ln))]);
+
+describe('assembling a class record', () => {
+  test('the right half of the signature spread prints no running header', () => {
+    // Which is why the cadence is checked on four pages per class and not six:
+    // the header stands once over the spread, and the cover's title is art.
+    expect(headerName(pageAt(21, P21))).toBeNull();
+    expect(headerName(pageAt(20, P20_LEFT))).toBe('Gunslinger');
+  });
+
+  test('column and position span the four columns across the two pages', () => {
+    const gear = extractClass(fixturePages, 0).gear;
+    expect(gear).toHaveLength(12);
+    expect(gear.map((item) => item.column)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+    expect(gear.map((item) => item.position)).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]);
+    expect(gear.map((item) => item.name)).toEqual(['Cowboy Hat', 'Bandolier', 'Revolver',
+      'Sharps Rifle', 'Coach Gun', 'Saddler', 'Wild Rag', 'Duster', 'Derringer',
+      'Bowie Knife', 'Rollups', 'Hip Flask']);
+  });
+
+  test('category is derived from the column: 1 is default, 2 to 4 elective', () => {
+    const gear = extractClass(fixturePages, 0).gear;
+    expect(gear.slice(0, 3).map((item) => item.category)).toEqual(['default', 'default', 'default']);
+    expect(gear.slice(3).every((item) => item.category === 'elective')).toBe(true);
+  });
+
+  test('a gear item carries the eight keys the loader reads, in order', () => {
+    expect(Object.keys(extractClass(fixturePages, 0).gear[0])).toEqual([
+      'name', 'description', 'category', 'meters', 'notes', 'default_enchantment',
+      'column', 'position'
+    ]);
+  });
+
+  test('a column that does not print three items is refused', () => {
+    // Column 4's first item name, removed, and nothing else: `Rollups` and
+    // `Hip Flask` still read correctly, and everything the Bowie Knife prints
+    // vanishes with no other trace. Silently shipping an eleven-item class is
+    // the failure this guard exists to make loud.
+    const shortened = P21.filter((blk) => blk[2][0][4] !== 'Bowie Knife');
+    const pages = bookPages([P18, P19, [...P20_LEFT, ...P20_RIGHT], shortened, P22, P23]);
+    expect(() => extractClass(pages, 0)).toThrow('column 4');
+  });
+
+  test('core abilities come from offset +1 and advanced from offset +4', () => {
+    const record = extractClass(fixturePages, 0);
+    expect(record.abilities).toHaveLength(3);
+    expect(record.advanced_abilities).toHaveLength(3);
+    expect(record.abilities.map((ability) => ability.name))
+      .toEqual(['Trickshot', 'Standoff', 'Shootout']);
+    expect(record.advanced_abilities.map((ability) => ability.name))
+      .toEqual(['High Noon', 'Stick ‘Em Up', 'Surefire']);
+  });
+
+  test('the class name comes from the running header, not the cover', () => {
+    expect(extractClass(fixturePages, 0).name).toBe('Gunslinger');
+  });
+
+  test('page_range is printed pages, not PDF pages', () => {
+    expect(extractClass(fixturePages, 0).page_range).toEqual([13, 18]);
+  });
+
+  test('the record carries no designer, the book crediting none per class', () => {
+    // Page 3 credits the book's contributors as one list. No class page prints
+    // a "Design by" line, which the other book's covers do.
+    expect(extractClass(fixturePages, 0).designer).toBeNull();
+  });
+
+  test('a header that disagrees with the expected roster name is refused', () => {
+    const pages = bookPages([P18, headed(P19, 'Gunfighter'),
+      [...P20_LEFT, ...P20_RIGHT], P21, P22, P23]);
+    expect(() => extractClass(pages, 0)).toThrow('Gunslinger');
+    expect(() => extractClass(pages, 0)).toThrow('Gunfighter');
+  });
+
+  test('a header that disagrees on the spread or the tips is refused too', () => {
+    for (const offset of [2, 4, 5]) {
+      const drifted = GUNSLINGER.map((blocks, index) =>
+        (index === offset ? headed(blocks, 'Gunfighter') : blocks));
+      expect(() => extractClass(bookPages(drifted), 0)).toThrow('Gunslinger');
+    }
+  });
+
+  test('every record carries the full key set in a stable order', () => {
+    expect(Object.keys(extractClass(fixturePages, 0))).toEqual([
+      'name', 'designer', 'stat_line', 'stat_note', 'stat_spread', 'quote', 'quote_source',
+      'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples',
+      'tips_heading', 'tips', 'challenge_level', 'abilities', 'advanced_abilities',
+      'gear', 'expanded_tips', 'page_range'
+    ]);
+  });
+
+  test('the whole book is read by the cadence, class by class', () => {
+    // The fixture holds one class, so the second one's pages are missing: what
+    // this pins is that extractBook walks all twelve and names the class it
+    // could not find rather than reading eleven and stopping quietly.
+    expect(() => extractBook(fixturePages)).toThrow('Illusionist');
+    expect(() => extractBook(fixturePages)).toThrow('page 25');
+  });
+});
