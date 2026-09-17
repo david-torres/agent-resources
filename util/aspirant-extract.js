@@ -277,11 +277,6 @@ const noteTree = (lines, { step, threshold }) => {
     previous = line;
   }
 
-  // A single line with nothing else on the page to compare it against can't
-  // be confirmed as genuinely depth 0 rather than an indent whose parent is
-  // simply missing from this call -- refuse instead of guessing.
-  if (sorted.length < 2) throw new Error(`no parent for note: "${notes[0].text}"`);
-
   const baseX = Math.min(...startLines.map((line) => lineXMin(line)));
   const roots = [];
   const lastAtDepth = [];

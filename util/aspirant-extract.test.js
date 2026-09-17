@@ -351,9 +351,17 @@ describe('glyphless note trees', () => {
     expect(notes.map((n) => n.text)).toEqual(['first wrapped', 'second']);
   });
 
-  test('a child with no parent is refused rather than silently promoted', () => {
-    expect(() => noteTree([ln(90.72, 100, 'orphan')],
-      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toThrow('orphan');
+  test('a note deeper than anything before it is refused rather than silently promoted', () => {
+    expect(() => noteTree([
+      ln(109.44, 100, 'orphan'),
+      ln(90.72, 120.39, 'parent')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toThrow('orphan');
+  });
+
+  test('a single top-level note is not mistaken for an orphan', () => {
+    const notes = noteTree([ln(90.72, 100, 'alone')],
+      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([{ text: 'alone', children: [] }]);
   });
 
   test('no lines is no notes', () => {
