@@ -2629,13 +2629,36 @@ describe('cover pages', () => {
 
   test('a paragraph that does not open as the book opens it throws, naming the class', () => {
     // A silently mis-assigned paragraph would put the Conduit's guidance into
-    // the player-facing overview, which no count would catch.
-    const reworded = P18.map((blk) => (blk[1] === 262.98
-      ? [blk[0], blk[1], blk[2].map((ln, i) => (i === 0
-        ? [...ln.slice(0, 4), 'Conduits running a mission for you should try to give you'] : ln))]
+    // the player-facing overview, which neither a count nor a token check would
+    // catch, so all three openings are asserted. Each rewording below still
+    // matches a loosened form of its own rule -- /^You /, /^Conduits / and
+    // /^Grounded / -- so the test fails if any of the three is weakened.
+    const reworded = (yMin, opening) => P18.map((blk) => (blk[1] === yMin
+      ? [blk[0], blk[1], blk[2].map((ln, i) => (i === 0 ? [...ln.slice(0, 4), opening] : ln))]
       : blk));
-    expect(() => coverFields(pageAt(18, reworded)))
-      .toThrow(/Gunslinger cover paragraph 2 opens "Conduits running a mission/);
+    const cases = [
+      [206.98, 1, 'You play a jaunty gunman whose cool-headed gravitas is'],
+      [262.98, 2, 'Conduits running a mission for you should try to give you'],
+      [328.98, 3, 'Grounded within classic gunfighting stories and legends,'],
+    ];
+    for (const [yMin, index, opening] of cases) {
+      expect(() => coverFields(pageAt(18, reworded(yMin, opening))))
+        .toThrow(`Gunslinger cover paragraph ${index} opens "${opening.slice(0, 40)}"`);
+    }
+  });
+
+  test('a list line at an unknown indent throws rather than being dropped', () => {
+    // Examples set at 355.68 and Quick Tips at 60.48 on all twelve covers, and
+    // between each list's heading and the heading that closes it there is
+    // nothing else. A line off its list's indent is a line the record would
+    // otherwise lose in silence, the way the prose band already refuses to.
+    const shifted = (yMin, dx) => P18.map((blk) => (blk[1] === yMin
+      ? [blk[0] + dx, blk[1], blk[2].map((ln) => [ln[0] + dx, ...ln.slice(1)])]
+      : blk));
+    expect(() => coverFields(pageAt(18, shifted(417.634, TIPS_NOTE_STEP))))
+      .toThrow('Gunslinger cover list line at no known indent: Roland Deschain (The Dark Tower)');
+    expect(() => coverFields(pageAt(18, shifted(651.463, RECTO_SHIFT))))
+      .toThrow(/Gunslinger cover list line at no known indent: You aren/);
   });
 
   test('the attribution is split off the quote and the em dash is dropped', () => {

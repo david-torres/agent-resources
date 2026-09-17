@@ -714,10 +714,10 @@ const PROSE_OPENINGS = [
 ];
 
 // Examples hang 19.68 inside the prose frame; Quick Tips sit out at the left
-// margin. A wrapped line returns to the x its own item started at, so x picks
-// each list out but cannot cut it into items -- and nothing else below either
-// heading sets at these, which is what keeps the Challenge Level line and the
-// folio out of them.
+// margin. A wrapped line returns to the x its own item started at, so x cuts
+// neither list into items -- what it does is assert that every line the band
+// holds belongs to the list, since a line at any other indent would be read by
+// no field at all.
 const EXAMPLES_ITEM_X = 355.68;
 const QUICK_TIPS_ITEM_X = 60.48;
 
@@ -759,11 +759,20 @@ const coverFields = (page) => {
     return text;
   });
 
-  // Every item of either list sets at the same x, so both come back flat.
-  const listUnder = (heading, itemX, options) => noteTree(
-    lines.filter((line) => line.yMin > heading.yMin
-      && Math.abs(lineXMin(line) - itemX) <= COLUMN_X_TOLERANCE), options)
-    .map((item) => item.text);
+  // Each list is closed by the heading below it -- the Examples by "Quick Tips",
+  // the Quick Tips by the Challenge Level, which clears the last tip by 14.33
+  // at the tightest -- so the band holds the list and nothing else, and every
+  // line in it must be at the list's own indent. Every item then sets at that
+  // one x, which is why noteTree returns both lists flat.
+  const listBetween = (top, bottom, itemX, options) => {
+    const band = between(top, bottom);
+    const outdented = band.find((line) =>
+      Math.abs(lineXMin(line) - itemX) > COLUMN_X_TOLERANCE);
+    if (outdented) {
+      throw new Error(`${className} cover list line at no known indent: ${textOf(outdented)}`);
+    }
+    return noteTree(band, options).map((item) => item.text);
+  };
 
   const statLine = joinLines(statBlock.lines);
   // The other book marks a stat whose allocation is footnoted with a trailing
@@ -791,9 +800,10 @@ const coverFields = (page) => {
     // Examples lead 10.00 wrapped against 18.33 to the next item, which the
     // per-line-height rule separates; the Quick Tips are set in the same body
     // as the Expanded Tips page and lead the same 12.00 against 20.39.
-    examples: listUnder(examplesHeading, EXAMPLES_ITEM_X, { step: TIPS_NOTE_STEP, threshold: null }),
+    examples: listBetween(examplesHeading, tipsHeading, EXAMPLES_ITEM_X,
+      { step: TIPS_NOTE_STEP, threshold: null }),
     tips_heading: textOf(tipsHeading),
-    tips: listUnder(tipsHeading, QUICK_TIPS_ITEM_X,
+    tips: listBetween(tipsHeading, challenge, QUICK_TIPS_ITEM_X,
       { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD }),
     challenge_level: challengeLevel,
   };
