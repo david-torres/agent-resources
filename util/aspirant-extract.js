@@ -231,9 +231,81 @@ const markPowerRatings = (line) => line.words
     : word.text))
   .join(' ');
 
+// Expanded Tips indent 18.72 per level; signature and ability notes 19.20.
+// Measured separately and deliberately not unified (geometry doc, section 6).
+const TIPS_NOTE_STEP = 18.72;
+const BODY_NOTE_STEP = 19.2;
+
+// Wrapped leading 12.00 against a new note's 20.39, with 8.1pt of clear air
+// and zero overlap across 871 measured lines.
+const TIPS_NOTE_THRESHOLD = 16.0;
+
+// Signature and ability entries change font size per entry, so their
+// boundary is derived from the entry's own lines: wrapped leading is
+// 0.766 x lineHeight and a new note adds ~4.30, which leaves ~2.3pt of
+// margin either side of the derived threshold at every observed font size.
+const DERIVED_THRESHOLD_MARGIN = 2.0;
+
+const deriveThreshold = (lines) => {
+  if (lines.length < 2) return null;
+  const gaps = lines.slice(1).map((current, i) => current.yMin - lines[i].yMin);
+  return Math.min(...gaps) + DERIVED_THRESHOLD_MARGIN;
+};
+
+// A wrapped continuation line shares its parent's xMin exactly, so depth
+// cannot be read from x-indent alone; only note-start lines anchor baseX
+// and contribute to depth (geometry doc, section 6, "the important caveat").
+const noteTree = (lines, { step, threshold }) => {
+  if (lines.length === 0) return [];
+
+  const sorted = [...lines].sort((a, b) => a.yMin - b.yMin);
+  const effectiveThreshold = threshold ?? deriveThreshold(sorted);
+
+  const startLines = [];
+  const notes = [];
+  let previous = null;
+
+  for (const line of sorted) {
+    const isNewNote = previous === null || (line.yMin - previous.yMin) > effectiveThreshold;
+    if (isNewNote) {
+      startLines.push(line);
+      notes.push({ text: markPowerRatings(line), children: [] });
+    } else {
+      const current = notes[notes.length - 1];
+      current.text = `${current.text} ${markPowerRatings(line)}`;
+    }
+    previous = line;
+  }
+
+  // A single line with nothing else on the page to compare it against can't
+  // be confirmed as genuinely depth 0 rather than an indent whose parent is
+  // simply missing from this call -- refuse instead of guessing.
+  if (sorted.length < 2) throw new Error(`no parent for note: "${notes[0].text}"`);
+
+  const baseX = Math.min(...startLines.map((line) => lineXMin(line)));
+  const roots = [];
+  const lastAtDepth = [];
+
+  notes.forEach((note, i) => {
+    const depth = Math.round((lineXMin(startLines[i]) - baseX) / step);
+    if (depth === 0) {
+      roots.push(note);
+    } else {
+      const parent = lastAtDepth[depth - 1];
+      if (!parent) throw new Error(`no parent for note: "${note.text}"`);
+      parent.children.push(note);
+    }
+    lastAtDepth[depth] = note;
+    lastAtDepth.length = depth + 1;
+  });
+
+  return roots;
+};
+
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
   classPageNumbers, isCoverPage, printedPage, headerName, isRecto, shiftFor,
   RECTO_SHIFT, SIGNATURE_NOTE_RECTO_SHIFT,
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
+  noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
 };

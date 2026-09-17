@@ -279,3 +279,84 @@ describe('Power Rating superscripts', () => {
     expect(markPowerRatings(threaded)).toBe('Ward 7 against');
   });
 });
+
+const { noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP } =
+  require('./aspirant-extract');
+
+describe('glyphless note trees', () => {
+  const ln = (xMin, yMin, text, height = 12) =>
+    ({ xMin, yMin, yMax: yMin + height, words: [{ xMin, yMin, xMax: xMin + 100, yMax: yMin + height, text }] });
+
+  test('the measured constants', () => {
+    expect(TIPS_NOTE_STEP).toBe(18.72);
+    expect(TIPS_NOTE_THRESHOLD).toBe(16.0);
+    expect(BODY_NOTE_STEP).toBe(19.2);
+  });
+
+  test('lines at one indent and new-note leading are siblings', () => {
+    const notes = noteTree([
+      ln(72.0, 100, 'first'), ln(72.0, 120.39, 'second')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([
+      { text: 'first', children: [] }, { text: 'second', children: [] }
+    ]);
+  });
+
+  test('a wrapped line joins the note above it instead of starting a new one', () => {
+    // Measured Expanded Tips leadings: wrapped 12.00, new note 20.39.
+    const notes = noteTree([
+      ln(72.0, 100, 'a note that'), ln(72.0, 112.0, 'wraps here')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([{ text: 'a note that wraps here', children: [] }]);
+  });
+
+  test('the indent step makes a child, and the child may itself wrap', () => {
+    const notes = noteTree([
+      ln(72.0, 100, 'parent'),
+      ln(90.72, 120.39, 'child'),
+      ln(90.72, 132.39, 'wrapped')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([
+      { text: 'parent', children: [{ text: 'child wrapped', children: [] }] }
+    ]);
+  });
+
+  test('a wrapped child line shares its parent xMin and is still not a new note', () => {
+    // The caveat that makes the leading load-bearing: x-indent alone cannot
+    // tell these apart (geometry doc, section 6, "The important caveat").
+    const notes = noteTree([
+      ln(90.72, 100, 'child one'), ln(90.72, 112.0, 'continues')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toHaveLength(1);
+    expect(notes[0].text).toBe('child one continues');
+  });
+
+  test('a null threshold is derived from the lines, for pages whose font varies', () => {
+    // Measured body pair: lineHeight 11.75 -> wrapped 9.00, new note 13.29.
+    const notes = noteTree([
+      ln(64.8, 100, 'first', 11.75),
+      ln(64.8, 109.0, 'wrapped', 11.75),
+      ln(64.8, 122.29, 'second', 11.75)
+    ], { step: BODY_NOTE_STEP, threshold: null });
+    expect(notes.map((n) => n.text)).toEqual(['first wrapped', 'second']);
+  });
+
+  test('the other measured body font size resolves the same way', () => {
+    // lineHeight 13.05 -> wrapped 10.00, new note 14.33.
+    const notes = noteTree([
+      ln(64.8, 100, 'first', 13.05),
+      ln(64.8, 110.0, 'wrapped', 13.05),
+      ln(64.8, 124.33, 'second', 13.05)
+    ], { step: BODY_NOTE_STEP, threshold: null });
+    expect(notes.map((n) => n.text)).toEqual(['first wrapped', 'second']);
+  });
+
+  test('a child with no parent is refused rather than silently promoted', () => {
+    expect(() => noteTree([ln(90.72, 100, 'orphan')],
+      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toThrow('orphan');
+  });
+
+  test('no lines is no notes', () => {
+    expect(noteTree([], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD })).toEqual([]);
+  });
+});
