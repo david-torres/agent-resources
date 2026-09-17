@@ -315,8 +315,9 @@ const DEDICATION_HEIGHT = 7.83;
 
 // Entries start as high as yMin 40.77 (Blank Check, Samaritan p75), above the
 // running-header band, and the last body line of a column reaches 742.66. The
-// folio stands alone at 764.84 and is 18.27 tall, so it reads as an item name
-// unless the content band is closed below it.
+// folio stands alone at 764.84, centred at x 292.82 -- inside the left column
+// and below its last entry's last line -- so unless the band is closed below
+// it, it is appended to that entry's signature description on every page.
 const CONTENT_MIN_Y = 39;
 const CONTENT_MAX_Y = 750;
 
@@ -350,11 +351,24 @@ const blockLeft = (block) => Math.min(...block.lines.map(lineXMin));
 const blockTop = (block) => Math.min(...block.lines.map((line) => line.yMin));
 const byTop = (a, b) => blockTop(a) - blockTop(b);
 
-// Sorting by xMin as well as yMin is what puts a detached rating back between
-// the words it interrupts, and what reads a description that wraps around the
-// name printed beside it in the order it is meant to be read.
-const joinLines = (lines) => [...lines]
-  .sort((a, b) => a.yMin - b.yMin || lineXMin(a) - lineXMin(b))
+// A description wraps around the name printed beside it, and pdftotext splits
+// a line a superscript interrupts into fragments that do not share a yMin: a
+// detached cell sits ~0.78 BELOW both halves of its host. Ordering strictly by
+// yMin therefore sorts any cell re-threading did not claim -- a rating string
+// the book prints that POWER_RATINGS does not list -- past the words it
+// interrupts. Gathering one visual line on the tolerance that identifies a
+// split line, then ordering within it by xMin, reads them all in place.
+const visualLines = (lines) => [...lines]
+  .sort((a, b) => a.yMin - b.yMin)
+  .reduce((bands, line) => {
+    const open = bands[bands.length - 1];
+    if (open && line.yMin - open[0].yMin <= SAME_LINE_Y) open.push(line);
+    else bands.push([line]);
+    return bands;
+  }, []);
+
+const joinLines = (lines) => visualLines(lines)
+  .flatMap((band) => band.sort((a, b) => lineXMin(a) - lineXMin(b)))
   .map(markPowerRatings)
   .join(' ');
 

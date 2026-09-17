@@ -395,6 +395,7 @@ const pageAt = (pdfPage, blocks) => parseBboxPages(
 // PDF page 20, Gunslinger verso, columns 1-2: every block that carries
 // content, in pdftotext's own emission order, which is not y-order.
 const P20_LEFT = [
+  [259.851, 23.233, [[259.851, 23.233, 340.621, 15.630, 'Gunslinger']]],
   [45.600, 117.568, [[45.600, 117.568, 131.584, 20.880, 'Cowboy Hat']]],
   [64.800, 143.493, [
     [64.800, 143.493, 248.968, 13.050, [[64.800, 130.610, 'Provides a Ward'],
@@ -437,8 +438,10 @@ const P20_LEFT = [
     [136.800, 543.096, 283.140, 11.745, 'Outside of combat, the owner may subtly'],
     [136.800, 552.096, 257.391, 11.745, 'show off this Revolver to project a'],
     [66.773, 561.878, 71.605, 6.847, 'M'],
-    [40.800, 561.096, 251.686, 11.745, 'Vision of their past feats with it into the minds of curious'],
+    [40.800, 561.096, 251.686, 11.745, [[40.800, 65.487, 'Vision'],
+      [73.522, 251.686, 'of their past feats with it into the minds of curious']]],
     [40.800, 570.096, 140.898, 11.745, 'onlookers (Mid Cooldown).']]],
+  [292.818, 764.837, [[292.818, 764.837, 307.182, 18.270, '15']]],
 ];
 
 const P20_RIGHT = [
@@ -489,8 +492,12 @@ const P20_RIGHT = [
 ];
 
 describe('the signature spread', () => {
-  test('the columns are split at the measured x, which no line crosses', () => {
-    expect(COLUMN_SPLIT_X).toBe(306);
+  test('the split sits inside the measured gutter on both parities', () => {
+    // The gutter runs 283.14 -> 317.28 on verso and 294.86 -> 328.80 on recto
+    // (geometry doc, section 4), so only 294.86 < x < 317.28 separates the two
+    // columns on every one of the 24 pages.
+    expect(COLUMN_SPLIT_X).toBeGreaterThan(294.86);
+    expect(COLUMN_SPLIT_X).toBeLessThan(317.28);
   });
 
   test('six entries come back, the left column first, in reading order', () => {
@@ -517,7 +524,7 @@ describe('the signature spread', () => {
     }
   });
 
-  test('a column with three centred dividers yields exactly three entries', () => {
+  test('one column read on its own yields its own three entries', () => {
     const entries = signatureEntries(pageAt(20, P20_LEFT));
     expect(entries).toHaveLength(3);
     expect(entries.map((entry) => entry.name)).toEqual(['Cowboy Hat', 'Bandolier', 'Revolver']);
@@ -604,6 +611,199 @@ describe('the signature spread', () => {
     const entries = signatureEntries(pageAt(20, P20_LEFT));
     expect(entries[2].meters).toEqual([{ label: 'Ammunition', value: 'Mid' }]);
     expect(entries[0].meters).toEqual([]);
+  });
+
+  test('the folio is cut out of the content band, not read as body text', () => {
+    // The page number stands alone at yMin 764.84. It is centred at x 292.82,
+    // inside the left column, and lands below the last entry's last line, so
+    // without the upper bound it is appended to that entry's signature
+    // description -- "...onlookers (Mid Cooldown). 15".
+    const entries = signatureEntries(pageAt(20, P20_LEFT));
+    expect(entries[2].default_enchantment.description).toBe(
+      'Outside of combat, the owner may subtly show off this Revolver to project'
+      + ' a Vision <sup>M</sup> of their past feats with it into the minds of'
+      + ' curious onlookers (Mid Cooldown).');
+  });
+
+  test('a long meter label reaching in past the gutter is read whole', () => {
+    // p27 right, Wild Cards. `Thrown Accuracy Boost` begins at colLeft +
+    // 112.56, so a gutter starting at colLeft + 120 truncates it to
+    // `Accuracy Boost`. Its first meter row also starts 4.11 ABOVE the item
+    // name's own baseline, so an entry that began exactly at its name would
+    // lose the whole block.
+    const [wildCards] = signatureEntries(pageAt(27, [
+      [446.162, 383.929, [
+        [506.352, 383.929, 564.636, 13.050, [[506.352, 542.662, 'Quantity'],
+          [554.026, 564.636, '4x']]],
+        [446.162, 398.329, 568.281, 13.050, [[446.162, 542.662, 'Thrown Accuracy Boost'],
+          [550.381, 568.281, 'Mid']]]]],
+      [333.600, 388.042, [[333.600, 388.042, 411.856, 20.880, 'Wild Cards']]],
+      [333.600, 414.492, [
+        [333.600, 414.492, 569.880, 14.355, 'Magical playing cards, hidden within a standard deck.']]],
+      [357.600, 433.167, [
+        [357.600, 433.167, 566.950, 13.050, 'May be Teleported anywhere within the deck or into'],
+        [357.600, 443.167, 454.140, 13.050, 'the owner’s hand at will.']]],
+      [412.965, 492.607, [[412.965, 492.607, 487.035, 11.745, 'Default Enchantment']]],
+      [331.200, 506.562, [[331.200, 506.562, 369.432, 11.745, '52 Pickup']]],
+      [376.800, 506.598, [
+        [424.800, 506.598, 567.819, 11.745, 'Throw the entire deck in a wide flurry to'],
+        [376.800, 524.598, 470.859, 11.745, 'remaining mundane cards.']]],
+    ]));
+    expect(wildCards.meters).toEqual([
+      { label: 'Quantity', value: '4x' },
+      { label: 'Thrown Accuracy Boost', value: 'Mid' },
+    ]);
+  });
+
+  test('three meter rows stay three, each with its own label', () => {
+    // p38 right, Barded Destrier: rows at name.yMin -3.71, +10.29 and +24.29,
+    // 14.00 apart. Widening the row band to swallow a wrapped label would give
+    // the first value all three labels; and the third row sits 1.26 pt ABOVE
+    // this entry's own item description, so no y band separates them either.
+    const [destrier] = signatureEntries(pageAt(38, [
+      [322.080, 481.145, [[322.080, 481.145, 431.104, 20.880, 'Barded Destrier']]],
+      [446.202, 477.432, [
+        [453.992, 477.432, 513.132, 13.050, 'Strength Boost'],
+        [446.202, 491.432, 513.132, 13.050, 'Toughness Boost'],
+        [453.712, 505.432, 513.132, 13.050, 'Armor Quality']]],
+      [529.491, 477.432, [
+        [529.491, 477.432, 548.121, 13.050, 'Low'],
+        [529.491, 491.432, 548.121, 13.050, 'Low'],
+        [529.856, 505.432, 547.756, 13.050, 'Mid']]],
+      [322.080, 506.695, [
+        [322.080, 506.695, 397.397, 14.355, 'Fierce, courageous'],
+        [322.080, 517.695, 495.000, 14.355, 'warhorse, armored across its entire body.']]],
+      [341.280, 535.670, [
+        [341.280, 535.670, 546.670, 13.050, 'Strength and toughness Boosts are improved to Mid'],
+        [341.280, 545.670, 512.680, 13.050, 'along with speed while charging into battle.']]],
+      [401.445, 561.505, [[401.445, 561.505, 475.515, 11.745, 'Default Enchantment']]],
+      [319.680, 575.459, [[319.680, 575.459, 353.556, 11.745, 'Logistica']]],
+      [365.280, 575.459, [
+        [413.280, 575.459, 549.621, 11.745, 'While charging into battle, this horse’s'],
+        [365.280, 593.459, 525.714, 11.745, 'Mid Range to shake, barely perceptible at the']]],
+    ]));
+    expect(destrier.meters).toEqual([
+      { label: 'Strength Boost', value: 'Low' },
+      { label: 'Toughness Boost', value: 'Low' },
+      { label: 'Armor Quality', value: 'Mid' },
+    ]);
+    expect(destrier.description).toBe(
+      'Fierce, courageous warhorse, armored across its entire body.');
+  });
+
+  test('a meter label that wraps keeps the value centred between its lines', () => {
+    // p44 left, Thunder Hammer. pdftotext puts `Durability` and the value
+    // `High+` on one line with a 7.64 gap between them -- wide enough to read
+    // as two cells, where the words of a label are 2.13 apart -- and wraps
+    // `Boost` onto the next. The value's own baseline (297.80) belongs to
+    // neither label line; it sits 5.00 from each.
+    const [thunderHammer] = signatureEntries(pageAt(44, [
+      [203.170, 292.804, [
+        [203.170, 292.804, 280.360, 18.050, [[203.170, 244.800, 'Durability'],
+          [252.400, 280.360, 'High+', 297.804, 13.050]]],
+        [222.120, 302.804, 244.800, 13.050, 'Boost']]],
+      [45.600, 292.317, [[45.600, 292.317, 169.920, 20.880, 'Thunder Hammer']]],
+      [45.600, 318.767, [
+        [45.600, 318.767, 229.366, 14.355, 'Ceremonial warhammer, heavy for its size.']]],
+      [64.800, 337.442, [
+        [64.800, 337.442, 282.870, 13.050, 'The owner may briefly hold this hammer aloft to infuse'],
+        [64.800, 347.442, 259.720, 13.050, 'their next immediate strike with notable electrical']]],
+      [124.965, 372.877, [[124.965, 372.877, 199.035, 11.745, 'Default Enchantment']]],
+      [43.200, 386.831, [[43.200, 386.831, 127.215, 11.745, 'Smasher of Thousands']]],
+      [40.800, 386.831, [
+        [136.800, 386.831, 265.131, 11.745, 'Purposefully hurl this hammer at an'],
+        [40.800, 404.831, 268.572, 11.745, 'Low Duration, hovering around the target and fiercely battering']]],
+    ]));
+    expect(thunderHammer.meters).toEqual([{ label: 'Durability Boost', value: 'High+' }]);
+    expect(thunderHammer.name).toBe('Thunder Hammer');
+  });
+
+  test('right-ragged labels are not clustered by their left edge', () => {
+    // p27 left, Magician's Wand: labels at 180.52 and 216.53, 36 pt apart, one
+    // above the other, each with its value on its own line. Reading the rows
+    // together makes `Range` look like a value; reading a row with too wide a
+    // band gives the first value both labels.
+    const [wand] = signatureEntries(pageAt(27, [
+      [57.120, 325.168, [[57.120, 325.168, 166.160, 20.880, 'Magician’s Wand']]],
+      [180.521, 321.055, [
+        [180.521, 321.055, 292.236, 13.050, [[180.521, 241.930, 'Essence Burden'],
+          [249.210, 292.236, 'Low–Mid']]],
+        [216.531, 335.455, 292.236, 13.050, [[216.531, 241.930, 'Range'],
+          [249.210, 292.236, 'Low–Mid']]]]],
+      [57.120, 350.918, [
+        [57.120, 350.918, 294.016, 14.355, 'Small, polished wand producing shimmering ribbons of']]],
+      [81.120, 379.893, [
+        [81.120, 379.893, 280.600, 13.050, 'Range scales and Essence Burden inversely scales on'],
+        [81.120, 389.893, 267.850, 13.050, 'how much attention the owner currently holds.']]],
+      [136.485, 429.728, [[136.485, 429.728, 210.555, 11.745, 'Default Enchantment']]],
+      [54.720, 443.682, [[54.720, 443.682, 116.010, 11.745, 'Tontus Talontus']]],
+      [52.320, 443.682, [
+        [148.320, 443.682, 285.543, 11.745, 'Speaking complex magical words while'],
+        [52.320, 461.682, 270.300, 11.745, 'non-allies who hear them, ending only after that magic is cast.']]],
+    ]));
+    expect(wand.meters).toEqual([
+      { label: 'Essence Burden', value: 'Low–Mid' },
+      { label: 'Range', value: 'Low–Mid' },
+    ]);
+  });
+
+  test('the signature name is told from its description by 2.40 pt', () => {
+    // p50 right, Nostrum: the name sits at colLeft - 2.40 (319.68) and the
+    // description's full-width lines at colLeft - 4.80 (317.28), and here
+    // pdftotext emits the description FIRST, so anything looser than 2.40
+    // takes the paragraph for the name and the name for the paragraph.
+    const [nostrum] = signatureEntries(pageAt(50, [
+      [322.080, 268.768, [[322.080, 268.768, 383.600, 20.880, 'Nostrum']]],
+      [481.680, 279.055, [[481.680, 279.055, 499.680, 13.050, 'Uses']]],
+      [526.775, 279.055, [[526.775, 279.055, 537.385, 13.050, '3x']]],
+      [322.080, 295.218, [
+        [322.080, 295.218, 481.558, 14.355, 'Unmarked bottle of suspicious liquid.']]],
+      [341.280, 313.893, [
+        [341.280, 313.893, 558.963, 13.050, 'Heals L the drinker and Cures M their physical maladies,'],
+        [341.280, 323.893, 544.570, 13.050, 'but the owner must Pitch a negative side-effect that']]],
+      [401.445, 349.327, [[401.445, 349.327, 475.515, 11.745, 'Default Enchantment']]],
+      [317.280, 363.282, [
+        [413.280, 363.282, 533.115, 11.745, 'Warning another being about this'],
+        [317.280, 381.282, 558.696, 11.745, 'wanting to drink it more. If they then do so, the Pitched downside is']]],
+      [319.680, 363.282, [[319.680, 363.282, 395.820, 11.745, 'Drink At Own Peril']]],
+    ]));
+    expect(nostrum.default_enchantment.name).toBe('Drink At Own Peril');
+    expect(nostrum.default_enchantment.description).toBe(
+      'Warning another being about this wanting to drink it more. If they then do'
+      + ' so, the Pitched downside is');
+  });
+
+  test('a detached cell no rating rule recognises still reads in place', () => {
+    // p33 left, Coffee Cup. pdftotext splits `Grants a Ward <0-M> against
+    // those` into two fragments at y 440.08 and drops the superscript between
+    // them at y 440.86 -- 0.78 BELOW both. `0–M` is not one of the ten strings
+    // in POWER_RATINGS, so re-threading leaves it where it is, and ordering by
+    // yMin before xMin sorts it past the words it interrupts.
+    const [coffeeCup] = signatureEntries(pageAt(33, [
+      [57.120, 315.568, [[57.120, 315.568, 133.456, 20.880, 'Coffee Cup']]],
+      [182.594, 325.855, [[182.594, 325.855, 261.414, 13.050, 'Full Refill Duration']]],
+      [271.517, 325.855, [[271.517, 325.855, 289.417, 13.050, 'Mid']]],
+      [81.120, 341.493, [
+        [81.120, 341.493, 215.670, 13.050, 'Gradually refills of its own accord.'],
+        [81.120, 355.820, 278.142, 13.050, 'Galvanizes L–H the drinker either towards alertness'],
+        [100.320, 390.147, 280.020, 13.050, 'Anyone the owner interacts with while in this']]],
+      [136.485, 426.127, [[136.485, 426.127, 210.555, 11.745, 'Default Enchantment']]],
+      [54.720, 440.082, [
+        [54.720, 440.082, 113.247, 11.745, 'Good Morning,'],
+        [61.920, 449.082, 96.192, 11.745, 'Sunshine']]],
+      [100.320, 440.082, [
+        [148.320, 440.082, 201.438, 11.745, 'Grants a Ward'],
+        [215.717, 440.082, 261.365, 11.745, 'against those'],
+        [148.320, 449.082, 281.547, 11.745, 'dispositionally opposite to the owner’s'],
+        [148.320, 458.082, 278.379, 11.745, 'current coffee-induced Altered State,'],
+        [100.320, 467.082, 279.384, 11.745, 'scaling as above on your effective portrayal thereof.']]],
+      [202.724, 440.864, [[202.724, 440.864, 213.800, 6.847, '0–M']]],
+    ]));
+    expect(coffeeCup.default_enchantment.name).toBe('Good Morning, Sunshine');
+    expect(coffeeCup.default_enchantment.description).toBe(
+      'Grants a Ward 0–M against those dispositionally opposite to the owner’s'
+      + ' current coffee-induced Altered State, scaling as above on your'
+      + ' effective portrayal thereof.');
   });
 
   test('an entry that starts above the running-header band is not dropped', () => {
