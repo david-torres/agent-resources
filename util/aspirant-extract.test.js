@@ -307,8 +307,7 @@ describe('Power Rating superscripts', () => {
 
   test('p33 "Grants a Ward 0–M against": the detached 0–M rejoins its host', () => {
     // Its host is split in two around the gap the rating sits in, and the
-    // rating is its own block. Before 0–M was one of the known strings this
-    // merge did not happen at all, and the token read after "those".
+    // rating is its own block, 0.78 below both halves.
     const fragment = (xMin, xMax, ...words) => ({ xMin, yMin: 440.082, yMax: 451.827,
       words: words.map(([wordXMin, wordXMax, text]) =>
         ({ xMin: wordXMin, yMin: 440.082, xMax: wordXMax, yMax: 451.827, text })) });
@@ -850,37 +849,57 @@ describe('the signature spread', () => {
       + ' so, the Pitched downside is');
   });
 
+  // p33 left, Coffee Cup. pdftotext splits `Grants a Ward <0-M> against those`
+  // into two fragments at y 440.08 and drops the superscript between them at
+  // y 440.86 -- 0.78 BELOW both. The cell's text is the only thing these two
+  // tests vary, and it decides which mechanism puts it back in reading order.
+  const coffeeCupWith = (detached) => signatureEntries(pageAt(33, [
+    [57.120, 315.568, [[57.120, 315.568, 133.456, 20.880, 'Coffee Cup']]],
+    [182.594, 325.855, [[182.594, 325.855, 261.414, 13.050, 'Full Refill Duration']]],
+    [271.517, 325.855, [[271.517, 325.855, 289.417, 13.050, 'Mid']]],
+    [81.120, 341.493, [
+      [81.120, 341.493, 215.670, 13.050, 'Gradually refills of its own accord.'],
+      [81.120, 355.820, 278.142, 13.050, 'Galvanizes L–H the drinker either towards alertness'],
+      [100.320, 390.147, 280.020, 13.050, 'Anyone the owner interacts with while in this']]],
+    [136.485, 426.127, [[136.485, 426.127, 210.555, 11.745, 'Default Enchantment']]],
+    [54.720, 440.082, [
+      [54.720, 440.082, 113.247, 11.745, 'Good Morning,'],
+      [61.920, 449.082, 96.192, 11.745, 'Sunshine']]],
+    [100.320, 440.082, [
+      [148.320, 440.082, 201.438, 11.745, 'Grants a Ward'],
+      [215.717, 440.082, 261.365, 11.745, 'against those'],
+      [148.320, 449.082, 281.547, 11.745, 'dispositionally opposite to the owner’s'],
+      [148.320, 458.082, 278.379, 11.745, 'current coffee-induced Altered State,'],
+      [100.320, 467.082, 279.384, 11.745, 'scaling as above on your effective portrayal thereof.']]],
+    [202.724, 440.864, [[202.724, 440.864, 213.800, 6.847, detached]]],
+  ]))[0];
+
+  const coffeeCupTail = ' dispositionally opposite to the owner’s current'
+    + ' coffee-induced Altered State, scaling as above on your effective'
+    + ' portrayal thereof.';
+
   test('a rating dropped between two fragments of its host reads in place', () => {
-    // p33 left, Coffee Cup. pdftotext splits `Grants a Ward <0-M> against
-    // those` into two fragments at y 440.08 and drops the superscript between
-    // them at y 440.86 -- 0.78 BELOW both. Re-threading claims it, since 0–M is
-    // one of the known strings, and the merge orders the three by x; ordering
-    // by yMin alone would sort the rating past the words it interrupts.
-    const [coffeeCup] = signatureEntries(pageAt(33, [
-      [57.120, 315.568, [[57.120, 315.568, 133.456, 20.880, 'Coffee Cup']]],
-      [182.594, 325.855, [[182.594, 325.855, 261.414, 13.050, 'Full Refill Duration']]],
-      [271.517, 325.855, [[271.517, 325.855, 289.417, 13.050, 'Mid']]],
-      [81.120, 341.493, [
-        [81.120, 341.493, 215.670, 13.050, 'Gradually refills of its own accord.'],
-        [81.120, 355.820, 278.142, 13.050, 'Galvanizes L–H the drinker either towards alertness'],
-        [100.320, 390.147, 280.020, 13.050, 'Anyone the owner interacts with while in this']]],
-      [136.485, 426.127, [[136.485, 426.127, 210.555, 11.745, 'Default Enchantment']]],
-      [54.720, 440.082, [
-        [54.720, 440.082, 113.247, 11.745, 'Good Morning,'],
-        [61.920, 449.082, 96.192, 11.745, 'Sunshine']]],
-      [100.320, 440.082, [
-        [148.320, 440.082, 201.438, 11.745, 'Grants a Ward'],
-        [215.717, 440.082, 261.365, 11.745, 'against those'],
-        [148.320, 449.082, 281.547, 11.745, 'dispositionally opposite to the owner’s'],
-        [148.320, 458.082, 278.379, 11.745, 'current coffee-induced Altered State,'],
-        [100.320, 467.082, 279.384, 11.745, 'scaling as above on your effective portrayal thereof.']]],
-      [202.724, 440.864, [[202.724, 440.864, 213.800, 6.847, '0–M']]],
-    ]));
+    // 0–M is one of the known strings, so re-threading claims the cell and the
+    // merge orders the three fragments by x.
+    const coffeeCup = coffeeCupWith('0–M');
     expect(coffeeCup.default_enchantment.name).toBe('Good Morning, Sunshine');
-    expect(coffeeCup.default_enchantment.description).toBe(
-      'Grants a Ward <sup>0–M</sup> against those dispositionally opposite to the owner’s'
-      + ' current coffee-induced Altered State, scaling as above on your'
-      + ' effective portrayal thereof.');
+    expect(coffeeCup.default_enchantment.description)
+      .toBe(`Grants a Ward <sup>0–M</sup> against those${coffeeCupTail}`);
+  });
+
+  test('a superscript the rating set does not hold reads in place too', () => {
+    // The same cell carrying a token no rating rule claims: `(L–M–H)`, which
+    // the book prints on p17 as the notation gloss, at superscript height
+    // inside a body line. Re-threading leaves a cell like this where it is, so
+    // nothing but joinLines' banding puts it back in order -- the cell's yMin
+    // sits below both fragments of its host, and a plain yMin sort reads it
+    // after `against those`.
+    //
+    // The book prints no such cell today: every detached one is a known
+    // rating. That is what this test stands in for, and it is why the
+    // combination is assembled rather than lifted from a page.
+    expect(coffeeCupWith('(L–M–H)').default_enchantment.description)
+      .toBe(`Grants a Ward (L–M–H) against those${coffeeCupTail}`);
   });
 
   test('an entry that starts above the running-header band is not dropped', () => {

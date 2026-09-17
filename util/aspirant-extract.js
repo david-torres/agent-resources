@@ -116,9 +116,11 @@ const headerName = (page) => {
 };
 
 const EN = '–';
-// The complete observed set, whole book: M 221, L 108, H 106, L-H 61, L-M 60,
-// M-H 32, H+ 20, M-H+ 7, L-H+ 3, H-H+ 3, 0-M 2, 0-L 2, 0-H 2. No L+, M+ or
-// L-M+ occurs, and neither does a 0-H+.
+// The complete observed set, counted over the whole book after re-threading:
+// M 221, L 108, H 106, L-H 61, L-M 60, M-H 32, H+ 20, M-H+ 7, 0-M 3, L-H+ 3,
+// H-H+ 3, 0-L 2, 0-H 2, plus one further L-H with a comma fused to it (below).
+// Two of the three 0-M are class pages, p33 and p88; the third is the
+// definition quoted below. No L+, M+, L-M+ or 0-H+ occurs.
 //
 // The 0 forms are ranges with no lower bound, not mis-decoded Ls. Printed page
 // 12 defines them: "If a range does not include a lower bound (\"up to Mid\", or
@@ -384,10 +386,12 @@ const byTop = (a, b) => blockTop(a) - blockTop(b);
 // interrupts. Gathering one visual line on the tolerance that identifies a
 // split line, then ordering within it by xMin, reads them all in place.
 //
-// Every detached cell in this book is now a known rating and so is claimed by
-// re-threading, which leaves this ordering changing no output here. It stays
-// because a token multiset -- what the verifier compares -- cannot see a word
-// that reads in the wrong place inside its own paragraph.
+// Every detached cell in this book is a known rating, so re-threading claims
+// them all and this ordering changes no output here. It stays for two reasons:
+// a token multiset -- what the verifier compares -- cannot see a word that
+// reads in the wrong place inside its own paragraph, and the coincidence holds
+// only while POWER_RATINGS enumerates every cell the book prints, which is a
+// property of the set rather than of the layout.
 const visualLines = (lines) => [...lines]
   .sort((a, b) => a.yMin - b.yMin)
   .reduce((bands, line) => {
