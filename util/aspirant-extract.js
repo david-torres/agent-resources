@@ -117,9 +117,32 @@ const headerName = (page) => {
 
 const EN = '–';
 // The complete observed set, whole book: M 221, L 108, H 106, L-H 61, L-M 60,
-// M-H 32, H+ 20, M-H+ 7, L-H+ 3, H-H+ 3. No L+, M+ or L-M+ occurs.
+// M-H 32, H+ 20, M-H+ 7, L-H+ 3, H-H+ 3, 0-M 2, 0-L 2, 0-H 2. No L+, M+ or
+// L-M+ occurs, and neither does a 0-H+.
+//
+// The 0 forms are ranges with no lower bound, not mis-decoded Ls. Printed page
+// 12 defines them: "If a range does not include a lower bound (\"up to Mid\", or
+// 0-M as a superscript), insufficiently fulfilling its scaling criteria will
+// result in no effect."
 const POWER_RATINGS = ['L', 'M', 'H', 'H+',
-  `L${EN}M`, `L${EN}H`, `M${EN}H`, `L${EN}H+`, `M${EN}H+`, `H${EN}H+`];
+  `L${EN}M`, `L${EN}H`, `M${EN}H`, `L${EN}H+`, `M${EN}H+`, `H${EN}H+`,
+  `0${EN}L`, `0${EN}M`, `0${EN}H`];
+
+// p45 sets one rating with its sentence's comma inside the word -- the whole
+// token 548.25-561.49 at rating height -- and it is the only mark any rating
+// fuses to anywhere in the book, so it is enumerated rather than widened to a
+// class of punctuation. The rating is matched with the mark stripped and the
+// mark printed outside the tag, which leaves the joined text reading exactly
+// as the page does.
+const FUSED_RATING_MARK = ',';
+
+const ratingIn = (text) => {
+  if (POWER_RATINGS.includes(text)) return { rating: text, mark: '' };
+  const stripped = text.endsWith(FUSED_RATING_MARK) ? text.slice(0, -1) : null;
+  return stripped !== null && POWER_RATINGS.includes(stripped)
+    ? { rating: stripped, mark: FUSED_RATING_MARK }
+    : null;
+};
 
 // A rating is printed markedly smaller than the body text it hangs off, and
 // hangs from the line top. The top-hang ratio is exact (0.65) across all six
@@ -230,9 +253,10 @@ const rethreadSuperscripts = (page) => {
 };
 
 const markPowerRatings = (line) => line.words
-  .map((word) => (isSuperscript(word, line) && POWER_RATINGS.includes(word.text)
-    ? `<sup>${word.text}</sup>`
-    : word.text))
+  .map((word) => {
+    const marked = isSuperscript(word, line) ? ratingIn(word.text) : null;
+    return marked ? `<sup>${marked.rating}</sup>${marked.mark}` : word.text;
+  })
   .join(' ');
 
 // Expanded Tips indent 18.72 per level; signature and ability notes 19.20.
@@ -356,10 +380,14 @@ const byTop = (a, b) => blockTop(a) - blockTop(b);
 // A description wraps around the name printed beside it, and pdftotext splits
 // a line a superscript interrupts into fragments that do not share a yMin: a
 // detached cell sits ~0.78 BELOW both halves of its host. Ordering strictly by
-// yMin therefore sorts any cell re-threading did not claim -- a rating string
-// the book prints that POWER_RATINGS does not list -- past the words it
+// yMin therefore sorts any cell re-threading did not claim past the words it
 // interrupts. Gathering one visual line on the tolerance that identifies a
 // split line, then ordering within it by xMin, reads them all in place.
+//
+// Every detached cell in this book is now a known rating and so is claimed by
+// re-threading, which leaves this ordering changing no output here. It stays
+// because a token multiset -- what the verifier compares -- cannot see a word
+// that reads in the wrong place inside its own paragraph.
 const visualLines = (lines) => [...lines]
   .sort((a, b) => a.yMin - b.yMin)
   .reduce((bands, line) => {

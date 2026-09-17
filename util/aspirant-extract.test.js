@@ -135,9 +135,10 @@ describe('Power Rating superscripts', () => {
   ] };
   const rating = { xMin: 132.04, yMin: 200.78, xMax: 137.41, yMax: 207.63, text: 'M' };
 
-  test('the ten rating strings are the whole observed set, with en dashes', () => {
+  test('the thirteen rating strings are the whole observed set, with en dashes', () => {
     expect(POWER_RATINGS).toEqual(
-      ['L', 'M', 'H', 'H+', 'L–M', 'L–H', 'M–H', 'L–H+', 'M–H+', 'H–H+']);
+      ['L', 'M', 'H', 'H+', 'L–M', 'L–H', 'M–H', 'L–H+', 'M–H+', 'H–H+',
+        '0–L', '0–M', '0–H']);
     expect(POWER_RATINGS.every((r) => !r.includes('-'))).toBe(true);
   });
 
@@ -277,6 +278,66 @@ describe('Power Rating superscripts', () => {
     const footnote = { ...rating, text: '7' };
     const threaded = { ...host, words: [host.words[0], footnote, host.words[1]] };
     expect(markPowerRatings(threaded)).toBe('Ward 7 against');
+  });
+
+  // Printed page 12 defines the form these three take: "If a range does not
+  // include a lower bound ("up to Mid", or 0–M as a superscript), insufficiently
+  // fulfilling its scaling criteria will result in no effect." The 0 is the
+  // book's notation for an absent lower bound, not a mis-decoded L.
+  const p81Line = { xMin: 357.6, yMin: 401.784, yMax: 413.529, words: [
+    { xMin: 357.6, yMin: 401.784, xMax: 374.169, yMax: 413.529, text: 'both' },
+    { xMin: 375.816, yMin: 401.784, xMax: 398.946, yMax: 413.529, text: 'scaling' },
+    { xMin: 400.01781, yMin: 402.566271, xMax: 410.296683, yMax: 409.413606, text: '0–H' },
+    { xMin: 412, yMin: 401.784, xMax: 421.216, yMax: 413.529, text: 'on' },
+    { xMin: 422.863, yMin: 401.784, xMax: 438.1, yMax: 413.529, text: 'how' },
+  ] };
+
+  test('p81 "scaling 0–H": a rating with no lower bound is marked like any other', () => {
+    expect(markPowerRatings(p81Line)).toBe('both scaling <sup>0–H</sup> on how');
+  });
+
+  test('a rating form the book never prints is left as plain text', () => {
+    // 0–H+ is the shape a pattern would admit and the book does not print: the
+    // set is enumerated from the page, so this reads as ordinary text.
+    const speculative = p81Line.words.map((word) =>
+      (word.text === '0–H' ? { ...word, text: '0–H+' } : word));
+    expect(markPowerRatings({ ...p81Line, words: speculative }))
+      .toBe('both scaling 0–H+ on how');
+  });
+
+  test('p33 "Grants a Ward 0–M against": the detached 0–M rejoins its host', () => {
+    // Its host is split in two around the gap the rating sits in, and the
+    // rating is its own block. Before 0–M was one of the known strings this
+    // merge did not happen at all, and the token read after "those".
+    const fragment = (xMin, xMax, ...words) => ({ xMin, yMin: 440.082, yMax: 451.827,
+      words: words.map(([wordXMin, wordXMax, text]) =>
+        ({ xMin: wordXMin, yMin: 440.082, xMax: wordXMax, yMax: 451.827, text })) });
+    const page = { page: 33, blocks: [
+      { xMin: 148.32, yMin: 440.082, yMax: 451.827, lines: [
+        fragment(148.32, 201.438, [148.32, 172.647, 'Grants'], [174.564, 178.281, 'a'],
+          [180.198, 201.438, 'Ward']),
+        fragment(215.717, 261.365, [215.717, 240.548, 'against'], [242.465, 261.365, 'those']),
+      ] },
+      { xMin: 202.723515, yMin: 440.864271, yMax: 447.711606, lines: [
+        { xMin: 202.723515, yMin: 440.864271, yMax: 447.711606, words: [
+          { xMin: 202.723515, yMin: 440.864271, xMax: 213.799932, yMax: 447.711606, text: '0–M' },
+        ] },
+      ] },
+    ] };
+    const lines = rethreadSuperscripts(page).blocks.flatMap((block) => block.lines);
+    expect(lines).toHaveLength(1);
+    expect(markPowerRatings(lines[0])).toBe('Grants a Ward <sup>0–M</sup> against those');
+  });
+
+  test('p45 "power L–H,": a comma fused to the rating is marked outside the tag', () => {
+    // pdftotext gives the comma inside the superscript word, which spans
+    // 548.25-561.49 entirely at rating height. The rating is L–H; the comma
+    // belongs to the sentence.
+    const line = { xMin: 376.8, yMin: 665.82, yMax: 678.87, words: [
+      { xMin: 522.48, yMin: 665.82, xMax: 546.9, yMax: 678.87, text: 'power' },
+      { xMin: 548.2492, yMin: 666.68919, xMax: 561.48913, yMax: 674.29734, text: 'L–H,' },
+    ] };
+    expect(markPowerRatings(line)).toBe('power <sup>L–H</sup>,');
   });
 });
 
@@ -789,12 +850,12 @@ describe('the signature spread', () => {
       + ' so, the Pitched downside is');
   });
 
-  test('a detached cell no rating rule recognises still reads in place', () => {
+  test('a rating dropped between two fragments of its host reads in place', () => {
     // p33 left, Coffee Cup. pdftotext splits `Grants a Ward <0-M> against
     // those` into two fragments at y 440.08 and drops the superscript between
-    // them at y 440.86 -- 0.78 BELOW both. `0–M` is not one of the ten strings
-    // in POWER_RATINGS, so re-threading leaves it where it is, and ordering by
-    // yMin before xMin sorts it past the words it interrupts.
+    // them at y 440.86 -- 0.78 BELOW both. Re-threading claims it, since 0–M is
+    // one of the known strings, and the merge orders the three by x; ordering
+    // by yMin alone would sort the rating past the words it interrupts.
     const [coffeeCup] = signatureEntries(pageAt(33, [
       [57.120, 315.568, [[57.120, 315.568, 133.456, 20.880, 'Coffee Cup']]],
       [182.594, 325.855, [[182.594, 325.855, 261.414, 13.050, 'Full Refill Duration']]],
@@ -817,7 +878,7 @@ describe('the signature spread', () => {
     ]));
     expect(coffeeCup.default_enchantment.name).toBe('Good Morning, Sunshine');
     expect(coffeeCup.default_enchantment.description).toBe(
-      'Grants a Ward 0–M against those dispositionally opposite to the owner’s'
+      'Grants a Ward <sup>0–M</sup> against those dispositionally opposite to the owner’s'
       + ' current coffee-induced Altered State, scaling as above on your'
       + ' effective portrayal thereof.');
   });
