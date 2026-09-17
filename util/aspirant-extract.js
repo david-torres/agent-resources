@@ -1,4 +1,4 @@
-const { pairMeters } = require('./prerelease-extract');
+const { pairMeters, parseStatLine } = require('./prerelease-extract');
 
 const NAMED_ENTITIES = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
 
@@ -672,11 +672,164 @@ const abilityEntries = (page) => {
   });
 };
 
+// A cover carries no class name -- the title is outlined art -- and no running
+// header, so the only thing that says whose cover it is, for an error message,
+// is its place in the six-page cadence.
+const classOnPage = (pdfPage) =>
+  CLASS_NAMES[Math.floor((pdfPage - FIRST_CLASS_PAGE) / PAGES_PER_CLASS)];
+
+const soleLine = (lines, predicate, what, page) => {
+  const found = lines.filter(predicate);
+  if (found.length !== 1) {
+    throw new Error(`${found.length} ${what} lines on ${classOnPage(page.page)} page ${page.page}`);
+  }
+  return found[0];
+};
+
+// The heading over the examples is six different strings, differing in which
+// traditions the class is drawn from, so it is matched by shape and stored as
+// printed.
+const EXAMPLES_HEADING = /^Examples from .+ include:$/;
+const QUICK_TIPS_HEADING = 'Quick Tips';
+const CHALLENGE_LEVEL_LABEL = 'Challenge Level:';
+const CHALLENGE_LEVELS = ['Low', 'Mid', 'High'];
+
+// The attribution is the only line on a cover that opens with an em dash, and
+// it is what closes the quote's band. The class view prints the dash itself, so
+// what is stored is the name that follows it.
+const ATTRIBUTION_DASH = '—';
+
+// All three prose paragraphs set to 336.00 and paragraphs 2 and 3 open on a
+// 3.84 pt first-line indent, which is the only thing that tells them apart.
+// Their block box does not: 336.00-565.20 at line height 13.05 fits the
+// Examples heading too on the Freerunner cover, whose heading is long enough
+// to reach the right margin.
+const PROSE_LEFT_X = 336.0;
+const PROSE_INDENT_X = 339.84;
+
+const PROSE_OPENINGS = [
+  /^You are an? /,
+  /^Conduits designing a mission for you /,
+  /^Grounded in /,
+];
+
+// Examples hang 19.68 inside the prose frame; Quick Tips sit out at the left
+// margin. A wrapped line returns to the x its own item started at, so x picks
+// each list out but cannot cut it into items -- and nothing else below either
+// heading sets at these, which is what keeps the Challenge Level line and the
+// folio out of them.
+const EXAMPLES_ITEM_X = 355.68;
+const QUICK_TIPS_ITEM_X = 60.48;
+
+const coverFields = (page) => {
+  const className = classOnPage(page.page);
+  const lines = page.blocks.flatMap((block) => block.lines).sort((a, b) => a.yMin - b.yMin);
+  const sole = (predicate, what) => soleLine(lines, predicate, what, page);
+
+  const statBlock = page.blocks.find(isStatLine);
+  if (!statBlock) throw new Error(`no stat line on ${className} page ${page.page}`);
+  const attribution = sole((line) => textOf(line).startsWith(ATTRIBUTION_DASH), 'quote attribution');
+  const examplesHeading = sole((line) => EXAMPLES_HEADING.test(textOf(line)), 'Examples heading');
+  const tipsHeading = sole((line) => textOf(line) === QUICK_TIPS_HEADING, 'Quick Tips heading');
+  const challenge = sole((line) => textOf(line).startsWith(CHALLENGE_LEVEL_LABEL), 'Challenge Level');
+
+  const between = (top, bottom) =>
+    lines.filter((line) => line.yMin > top.yMin && line.yMin < bottom.yMin);
+
+  const isIndented = (line) => Math.abs(lineXMin(line) - PROSE_INDENT_X) <= COLUMN_X_TOLERANCE;
+  const proseLines = between(attribution, examplesHeading);
+  const outdented = proseLines.find((line) => !isIndented(line)
+    && Math.abs(lineXMin(line) - PROSE_LEFT_X) > COLUMN_X_TOLERANCE);
+  if (outdented) {
+    throw new Error(`${className} cover prose line at no known indent: ${textOf(outdented)}`);
+  }
+  const paragraphs = proseLines.reduce((grouped, line) => {
+    if (grouped.length === 0 || isIndented(line)) return [...grouped, [line]];
+    grouped[grouped.length - 1].push(line);
+    return grouped;
+  }, []);
+  if (paragraphs.length !== PROSE_OPENINGS.length) {
+    throw new Error(`${paragraphs.length} prose paragraphs on the ${className} cover`);
+  }
+  const [overview, conduitNotes, grounding] = paragraphs.map((paragraph, index) => {
+    const text = joinLines(paragraph);
+    if (!PROSE_OPENINGS[index].test(text)) {
+      throw new Error(`${className} cover paragraph ${index + 1} opens "${text.slice(0, 40)}"`);
+    }
+    return text;
+  });
+
+  // Every item of either list sets at the same x, so both come back flat.
+  const listUnder = (heading, itemX, options) => noteTree(
+    lines.filter((line) => line.yMin > heading.yMin
+      && Math.abs(lineXMin(line) - itemX) <= COLUMN_X_TOLERANCE), options)
+    .map((item) => item.text);
+
+  const statLine = joinLines(statBlock.lines);
+  // The other book marks a stat whose allocation is footnoted with a trailing
+  // "*" and prints the note below the stat line. No Aspirant cover prints
+  // either, which is why stat_note is null; the marker is what would say
+  // otherwise.
+  if (statLine.includes('*')) {
+    throw new Error(`${className} stat line carries a note marker: ${statLine}`);
+  }
+  const challengeLevel = textOf(challenge).slice(CHALLENGE_LEVEL_LABEL.length).trim();
+  if (!CHALLENGE_LEVELS.includes(challengeLevel)) {
+    throw new Error(`${className} challenge level "${challengeLevel}"`);
+  }
+
+  return {
+    stat_line: statLine,
+    stat_note: null,
+    stat_spread: parseStatLine(statLine),
+    quote: joinLines(between(statBlock.lines[0], attribution)),
+    quote_source: textOf(attribution).slice(ATTRIBUTION_DASH.length).trim(),
+    overview,
+    conduit_notes: conduitNotes,
+    grounding,
+    examples_heading: textOf(examplesHeading),
+    // Examples lead 10.00 wrapped against 18.33 to the next item, which the
+    // per-line-height rule separates; the Quick Tips are set in the same body
+    // as the Expanded Tips page and lead the same 12.00 against 20.39.
+    examples: listUnder(examplesHeading, EXAMPLES_ITEM_X, { step: TIPS_NOTE_STEP, threshold: null }),
+    tips_heading: textOf(tipsHeading),
+    tips: listUnder(tipsHeading, QUICK_TIPS_ITEM_X,
+      { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD }),
+    challenge_level: challengeLevel,
+  };
+};
+
+// The headings are centred over their columns -- 134.45 and 397.94 against
+// lists that start at 72.00 and 348.48 -- so they cannot partition the lists by
+// x. What they give is each column's top edge, below the running header.
+const TIPS_PLAYER_HEADING = 'Player';
+const TIPS_CONDUIT_HEADING = 'Conduit';
+
+const expandedTips = (page) => {
+  const lines = page.blocks.flatMap((block) => block.lines);
+  const heading = (text) => soleLine(lines, (line) => textOf(line) === text, text, page);
+
+  // The two lists interleave down the page and share no baselines, so one
+  // y-sorted list of both reads the 12.00 pt step across the gutter as a
+  // wrapped line and collapses the whole page into a single tip. The folio sets
+  // at x 304.82-319.18, straddling the split, so it is the content band rather
+  // than the split that keeps it out of the Player list.
+  const column = (top, isLeft) => noteTree(
+    lines.filter((line) => line.yMin > top.yMin && line.yMin < CONTENT_MAX_Y
+      && (lineXMin(line) < COLUMN_SPLIT_X) === isLeft),
+    { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+
+  return {
+    player: column(heading(TIPS_PLAYER_HEADING), true),
+    conduit: column(heading(TIPS_CONDUIT_HEADING), false),
+  };
+};
+
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
   classPageNumbers, isCoverPage, printedPage, headerName, isRecto, shiftFor,
   RECTO_SHIFT, SIGNATURE_NOTE_RECTO_SHIFT,
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
   noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
-  signatureEntries, COLUMN_SPLIT_X, abilityEntries,
+  signatureEntries, COLUMN_SPLIT_X, abilityEntries, coverFields, expandedTips,
 };

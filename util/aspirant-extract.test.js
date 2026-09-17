@@ -2102,3 +2102,687 @@ describe('ability pages', () => {
     expect(payItForwards.notes).toHaveLength(2);
   });
 });
+
+const { coverFields, expandedTips } = require('./aspirant-extract');
+const { parseStatLine } = require('./prerelease-extract');
+const { CONSTRAINED_SELECTS } = require('./class-fields');
+
+// Whole cover and Expanded Tips pages, every coordinate lifted from `pdftotext
+// -bbox-layout` over the real book (geometry doc, sections 9 and 10). A cover
+// is read ordinally -- the quote lies between the stat line and the
+// attribution, the prose between the attribution and the Examples heading --
+// so nothing short of a whole page exercises it, and the traps are fractions
+// of a point wide: the three prose paragraphs are told apart by a 3.84 pt
+// first-line indent, and a quote line on the Wanderer cover sets 1.02 pt from
+// the examples' own indent.
+//
+// p18 Gunslinger: the baseline cover -- a two-line quote, six examples of
+//   which one wraps, three plain Quick Tips, Challenge Level: Low.
+// p24 Illusionist: a verse quote, whose lines the book joins with a literal
+//   "|"; five examples; a Quick Tip that is itself an attributed quote.
+// p30 Librarian: Challenge Level: Mid, the "from myth" heading variant, and a
+//   quote whose second line is centred rather than flush left.
+// p78 Vessel: Challenge Level: High and the shortest heading variant,
+//   "Examples from pop culture include:".
+// p23 Gunslinger Tips: one nested tip in each column, and a folio at x
+//   304.82-319.18 that straddles the column split.
+// p83 Vessel Tips: the two leadings in the book that deviate from 12.00 --
+//   11.73 and 12.27, either side of an italic run -- which must read as
+//   wrapped lines against the 16.00 threshold.
+const P18 = [
+  [202.486, 76.727, [
+    [202.486, 76.727, 397.994, 24.000, '++Skill, +Sensory']]],
+  [349.940, 164.755, [
+    [349.940, 164.755, 551.285, 13.342, '"There\'s two kinds of people, my friend: those with'],
+    [387.311, 174.755, 513.900, 13.342, 'loaded guns and those who dig."']]],
+  [387.850, 190.756, [
+    [387.850, 190.756, 565.200, 13.342, '— Blondie, The Good, the Bad, and the Ugly']]],
+  [336.000, 206.980, [
+    [336.000, 206.980, 565.200, 13.050, 'You are a jaunty gunman whose cool-headed gravitas is'],
+    [336.000, 216.980, 565.202, 13.050, 'backed up by deadly firepower. You pose an immediate'],
+    [336.000, 226.980, 565.200, 13.050, 'threat, effortlessly controlling the pace of any fight you are in,'],
+    [336.000, 236.980, 565.196, 13.050, 'but are dependent on good positioning and vulnerable if'],
+    [336.000, 246.980, 402.530, 13.050, 'taken by surprise.']]],
+  [336.000, 262.980, [
+    [339.840, 262.980, 565.200, 13.050, 'Conduits designing a mission for you should try to give you'],
+    [336.000, 272.980, 565.200, 13.050, 'plenty of combat but add intermittent lulls for you to reload'],
+    [336.000, 282.980, 565.200, 13.050, 'and flex your social muscles. You can take on almost any'],
+    [336.000, 292.980, 565.204, 13.050, 'number of mundane enemies, so if the Conduit wants to'],
+    [336.000, 302.980, 565.202, 13.050, 'really challenge you, they could try upping the speed, stealth,'],
+    [336.000, 312.980, 444.220, 13.050, 'or durability of their threats.']]],
+  [336.000, 328.980, [
+    [339.840, 328.980, 565.200, 13.050, 'Grounded in classic gunfighting stories and legends,'],
+    [336.000, 338.980, 565.202, 13.050, 'particularly those of the American Wild West and the'],
+    [336.000, 348.980, 558.140, 13.050, 'countless films, books, and video games they have inspired.']]],
+  [336.000, 370.980, [
+    [336.000, 370.980, 517.980, 13.050, 'Examples from history and pop culture include:']]],
+  [355.680, 389.307, [
+    [355.680, 389.307, 565.200, 13.050, 'Wyatt Earp, Annie Oakley, Ned Kelly, and similar'],
+    [355.680, 399.307, 417.970, 13.050, 'historical figures']]],
+  [355.680, 417.634, [
+    [355.680, 417.634, 493.870, 13.050, 'Roland Deschain (The Dark Tower)']]],
+  [355.680, 435.961, [
+    [355.680, 435.961, 519.070, 13.050, 'Arthur Morgan (Red Dead Redemption 2)']]],
+  [355.680, 454.289, [
+    [355.680, 454.289, 477.140, 13.050, 'Din Djarin (The Mandalorian)']]],
+  [355.680, 472.616, [
+    [355.680, 472.616, 495.030, 13.050, 'Hol Horse (JoJo’s Bizarre Adventure)']]],
+  [355.680, 490.943, [
+    [355.680, 490.943, 430.610, 13.050, 'Rango (eponymous)']]],
+  [154.257, 588.551, [
+    [154.257, 588.551, 276.129, 26.208, 'Quick Tips']]],
+  [60.480, 619.070, [
+    [60.480, 619.070, 352.908, 15.660, 'Stuck on which Stats to give your Gunslinger besides Skill and'],
+    [60.480, 631.070, 266.316, 15.660, 'Sensory? Consider Reflex, Luck, or Vitality.']]],
+  [60.480, 651.463, [
+    [60.480, 651.463, 349.608, 15.660, 'You aren’t worthless in close-quarters, but you should still try'],
+    [60.480, 663.463, 251.892, 15.660, 'to keep foes at a range wherever possible.']]],
+  [60.480, 683.855, [
+    [60.480, 683.855, 333.912, 15.660, 'Try to demonstrate good shooting form in-character: guns'],
+    [60.480, 695.855, 356.496, 15.660, 'have heavy recoil, and their accuracy depends a lot on handling.']]],
+  [99.321, 722.707, [
+    [99.321, 722.707, 331.065, 26.208, 'Challenge Level: Low']]],
+  [292.818, 764.837, [
+    [292.818, 764.837, 307.182, 18.270, '13']]],
+];
+
+const P24 = [
+  [185.134, 76.727, [
+    [185.134, 76.727, 415.346, 24.000, '++Sensory, +Arcane']]],
+  [339.376, 164.755, [
+    [339.376, 164.755, 561.845, 13.342, '"Is all that we see or seem | But a dream within a dream?"']]],
+  [480.001, 180.756, [
+    [480.001, 180.756, 554.740, 13.342, '— Edgar Allen Poe']]],
+  [336.000, 196.980, [
+    [336.000, 196.980, 565.200, 13.050, 'You are a poised deceiver whose subtle enchantments warp'],
+    [336.000, 206.980, 565.199, 13.050, 'others’ view of reality. Stealth, manipulation, and controlling'],
+    [336.000, 216.980, 565.198, 13.050, 'attention are your specialties, though smart, unpredictable'],
+    [336.000, 226.980, 488.660, 13.050, 'enemies can pose a serious threat to you.']]],
+  [336.000, 242.980, [
+    [339.840, 242.980, 565.197, 13.050, 'Conduits designing a mission for you should try to provide'],
+    [336.000, 252.980, 565.200, 13.050, 'you with plenty of deceivable foes. You will thrive in classic'],
+    [336.000, 262.980, 565.200, 13.050, 'stealth scenarios but have enough utility to contribute to'],
+    [336.000, 272.980, 565.200, 13.050, 'most styles of mission, so if the Conduit wants to really'],
+    [336.000, 282.980, 565.202, 13.050, 'challenge you, they could try making enemies who are much'],
+    [336.000, 292.980, 390.250, 13.050, 'harder to fool.']]],
+  [336.000, 308.980, [
+    [339.840, 308.980, 565.201, 13.050, 'Grounded in the classic tropes of illusory spellcraft found in'],
+    [336.000, 318.980, 565.200, 13.050, 'myth, folklore, and fantasy as well as real-life stage magic and'],
+    [336.000, 328.980, 386.170, 13.050, 'trompe-l\'œil.']]],
+  [336.000, 350.980, [
+    [336.000, 350.980, 517.980, 13.050, 'Examples from history and pop culture include:']]],
+  [355.680, 369.307, [
+    [355.680, 369.307, 550.010, 13.050, 'Jean-Eugène Robert-Houdin, David Copperfield,'],
+    [355.680, 379.307, 511.500, 13.050, 'Penn & Teller, and other stage magicians']]],
+  [355.680, 397.634, [
+    [355.680, 397.634, 536.880, 13.050, 'Oz, the Great and Terrible (The Wizard of Oz)']]],
+  [355.680, 415.961, [
+    [355.680, 415.961, 456.250, 13.050, 'Mysterio (Marvel Comics)']]],
+  [355.680, 434.289, [
+    [355.680, 434.289, 430.280, 13.050, 'Zoroark (Pokémon)']]],
+  [355.680, 452.616, [
+    [355.680, 452.616, 450.290, 13.050, 'Queen Iris (Xanth series)']]],
+  [154.257, 588.032, [
+    [154.257, 588.032, 276.129, 26.208, 'Quick Tips']]],
+  [60.480, 618.551, [
+    [60.480, 618.551, 363.372, 15.660, 'Stuck on which Stats to give your Illusionist besides Sensory and'],
+    [60.480, 630.551, 265.656, 15.660, 'Arcane? Consider Reflex, Vitality, or Spirit.']]],
+  [60.480, 650.944, [
+    [60.480, 650.944, 352.500, 15.660, 'Consider the psychology of your targets: what do they expect?'],
+    [60.480, 662.944, 278.808, 15.660, 'Want? Know? How can you capitalize on this?']]],
+  [60.480, 683.337, [
+    [60.480, 683.337, 352.560, 15.660, '“Use your Abilities to distract enemies; a Phantasm of yourself'],
+    [60.480, 695.337, 356.400, 15.660, 'running away while you hide is always a solid move.” — Alex D.']]],
+  [99.321, 722.188, [
+    [99.321, 722.188, 331.065, 26.208, 'Challenge Level: Low']]],
+  [292.818, 764.837, [
+    [292.818, 764.837, 307.182, 18.270, '19']]],
+];
+
+const P30 = [
+  [171.058, 76.727, [
+    [171.058, 76.727, 429.422, 24.000, '++Intelligence, +Spirit']]],
+  [348.626, 164.755, [
+    [348.626, 164.755, 552.599, 13.342, '“When you absolutely positively have to know, ask a'],
+    [430.301, 174.755, 470.901, 13.342, 'librarian.”']]],
+  [435.101, 190.756, [
+    [435.101, 190.756, 565.209, 13.342, '— American Library Association']]],
+  [336.000, 206.980, [
+    [336.000, 206.980, 565.198, 13.050, 'You are a resourceful bibliophile with troves of knowledge at'],
+    [336.000, 216.980, 565.200, 13.050, 'your fingertips. You are great at fact-finding and empowering'],
+    [336.000, 226.980, 565.200, 13.050, 'allies but tend to play quite slowly and are largely helpless in'],
+    [336.000, 236.980, 525.410, 13.050, 'a fight, using social tools as your primary defenses.']]],
+  [336.000, 252.980, [
+    [339.840, 252.980, 565.200, 13.050, 'Conduits designing a mission for you should try to have a'],
+    [336.000, 262.980, 565.200, 13.050, 'rich and interesting world for you to interact with. You can'],
+    [336.000, 272.980, 565.202, 13.050, 'complete some missions single-handed if your huge'],
+    [336.000, 282.980, 565.199, 13.050, 'information- gathering capabilities aren’t accounted for, so if'],
+    [336.000, 292.980, 565.201, 13.050, 'the Conduit wants to really challenge you, they could try'],
+    [336.000, 302.980, 565.200, 13.050, 'adding hidden threats to their setting to force you to play'],
+    [336.000, 312.980, 392.350, 13.050, 'more carefully.']]],
+  [336.000, 328.980, [
+    [339.840, 328.980, 565.202, 13.050, 'Grounded in myths and clichés surrounding libraries,'],
+    [336.000, 338.980, 470.060, 13.050, 'books, and the “magic of learning”.']]],
+  [336.000, 360.980, [
+    [336.000, 360.980, 511.390, 13.050, 'Examples from myth and pop culture include:']]],
+  [355.680, 379.307, [
+    [355.680, 379.307, 564.140, 13.050, 'Thoth, Tenjin, Kui Xing, Nidaba, and other deities of'],
+    [355.680, 389.307, 426.910, 13.050, 'written knowledge']]],
+  [355.680, 407.634, [
+    [355.680, 407.634, 466.790, 13.050, 'The Pagemaster (eponymous)']]],
+  [355.680, 425.961, [
+    [355.680, 425.961, 428.980, 13.050, 'Lucien (Sandman)']]],
+  [355.680, 444.289, [
+    [355.680, 444.289, 519.630, 13.050, 'Commodore Guff (Magic: The Gathering)']]],
+  [355.680, 462.616, [
+    [355.680, 462.616, 519.540, 13.050, 'Theo, Cleo, and family (Between the Lions)']]],
+  [154.257, 588.032, [
+    [154.257, 588.032, 276.129, 26.208, 'Quick Tips']]],
+  [60.480, 618.551, [
+    [60.480, 618.551, 378.696, 15.660, 'Stuck on which Stats to give your Librarian besides Intelligence and'],
+    [60.480, 630.551, 257.064, 15.660, 'Spirit? Consider Arcane, Sensory, or Will.']]],
+  [60.480, 650.944, [
+    [60.480, 650.944, 356.772, 15.660, 'Be sure you understand how to Pitch before playing this Class.']]],
+  [60.480, 671.336, [
+    [60.480, 671.336, 330.492, 15.660, '“Fun Fact can save you in even the most dire situations. It'],
+    [60.480, 683.337, 341.880, 15.660, 'doesn\'t have to be true until you make it true.” — Jennine C.']]],
+  [101.517, 710.188, [
+    [101.517, 710.188, 328.869, 26.208, 'Challenge Level: Mid']]],
+  [292.818, 764.837, [
+    [292.818, 764.837, 307.182, 18.270, '25']]],
+];
+
+const P78 = [
+  [217.138, 76.727, [
+    [217.138, 76.727, 383.342, 24.000, '++Spirit, +Will']]],
+  [342.246, 164.755, [
+    [342.246, 164.755, 558.981, 13.342, '“The battleline between good and evil cuts through the'],
+    [410.810, 174.755, 490.396, 13.342, 'heart of every man.”']]],
+  [461.110, 190.756, [
+    [461.110, 190.756, 565.212, 13.342, '— Aleksandr Solzhenitsyn']]],
+  [336.000, 206.980, [
+    [336.000, 206.980, 565.200, 13.050, 'You are an unassuming host to a baleful supernatural entity,'],
+    [336.000, 216.980, 565.203, 13.050, 'which occasionally escapes to sow chaos and reap'],
+    [336.000, 226.980, 565.203, 13.050, 'destruction. While normally your playstyle is social and'],
+    [336.000, 236.980, 565.196, 13.050, 'supportive, you can become a devastating magical threat to'],
+    [336.000, 246.980, 537.990, 13.050, 'everyone (including your allies) at a moment’s notice.']]],
+  [336.000, 262.980, [
+    [339.840, 262.980, 565.200, 13.050, 'Conduits designing a mission for you should try to give you'],
+    [336.000, 272.980, 565.200, 13.050, 'plenty of strong emotional hooks in their plot and NPCs,'],
+    [336.000, 282.980, 565.204, 13.050, 'which you will need to unlock the full potential of your kit.'],
+    [336.000, 292.980, 565.203, 13.050, 'You tend to function best when given time to build'],
+    [336.000, 302.980, 565.200, 13.050, 'investment and set up future plays, so if the Conduit wants'],
+    [336.000, 312.980, 565.203, 13.050, 'to really challenge you they could try increasing the mission’s'],
+    [336.000, 322.980, 388.970, 13.050, 'time pressure.']]],
+  [336.000, 338.980, [
+    [339.840, 338.980, 565.196, 13.050, 'Grounded in the trope of evil sealed within an innocent,'],
+    [336.000, 348.980, 529.310, 13.050, 'particularly pervasive across modern fantasy media.']]],
+  [336.000, 370.980, [
+    [336.000, 370.980, 473.010, 13.050, 'Examples from pop culture include:']]],
+  [355.680, 389.307, [
+    [355.680, 389.307, 484.630, 13.050, 'Raven (Teen Titans/DC Universe)']]],
+  [355.680, 407.634, [
+    [355.680, 407.634, 519.080, 13.050, 'Tokoyami Fumikage (My Hero Academia)']]],
+  [355.680, 425.961, [
+    [355.680, 425.961, 498.150, 13.050, 'The Hollow Knight (Hollow Knight)']]],
+  [355.680, 444.289, [
+    [355.680, 444.289, 494.820, 13.050, 'Number 6 (The Umbrella Academy)']]],
+  [355.680, 462.616, [
+    [355.680, 462.616, 437.040, 13.050, 'Midoriko (Inuyasha)']]],
+  [355.680, 480.943, [
+    [355.680, 480.943, 495.400, 13.050, 'Tia Dalma (Pirates of the Caribbean)']]],
+  [154.257, 588.032, [
+    [154.257, 588.032, 276.129, 26.208, 'Quick Tips']]],
+  [60.480, 618.551, [
+    [60.480, 618.551, 353.916, 15.660, 'Stuck on what stats to give your Vessel besides Spirit and Will?'],
+    [60.480, 630.551, 238.776, 15.660, 'Consider Arcane, Luck, or Resilience.']]],
+  [60.480, 650.944, [
+    [60.480, 650.944, 347.436, 15.660, 'This is a complicated Class: be sure you understand Turning'],
+    [60.480, 662.944, 313.332, 15.660, 'Points, Altered States, & Defiance before playing it.']]],
+  [60.480, 683.337, [
+    [60.480, 683.337, 331.008, 15.660, '“Friendly fire is a real danger with Embrace the Darkness:'],
+    [60.480, 695.337, 305.352, 15.660, 'Fill the Void can only spare one person.” — Kadrien']]],
+  [95.385, 722.188, [
+    [95.385, 722.188, 335.001, 26.208, 'Challenge Level: High']]],
+  [292.818, 764.837, [
+    [292.818, 764.837, 307.182, 18.270, '73']]],
+];
+
+const P23 = [
+  [271.371, 23.233, [
+    [271.371, 23.233, 352.141, 15.630, 'Gunslinger']]],
+  [134.448, 98.291, [
+    [134.448, 98.291, 212.592, 26.208, 'Player']]],
+  [397.944, 98.291, [
+    [397.944, 98.291, 502.056, 26.208, 'Conduit']]],
+  [72.000, 132.008, [
+    [72.000, 132.008, 257.496, 15.660, 'You can be surprisingly functional even'],
+    [72.000, 144.008, 271.992, 15.660, 'without a gun. Trickshot, for example, can'],
+    [72.000, 156.008, 179.148, 15.660, 'apply to any projectile.']]],
+  [348.480, 132.008, [
+    [348.480, 132.008, 546.048, 15.660, 'Topography is important for Gunslingers.'],
+    [348.480, 144.008, 561.576, 15.660, 'They can be effective in a cramped apartment'],
+    [348.480, 156.008, 570.624, 15.660, 'building or a big, open field, but each will push'],
+    [348.480, 168.008, 506.700, 15.660, 'them towards different playstyles.']]],
+  [72.000, 176.400, [
+    [72.000, 176.400, 268.212, 15.660, 'Always be looking for potential Trickshot'],
+    [72.000, 188.400, 274.752, 15.660, 'angles to get around enemy armor or cover.']]],
+  [348.480, 188.400, [
+    [348.480, 188.400, 561.648, 15.660, 'Force Gunslingers to reposition! They will be'],
+    [348.480, 200.400, 564.060, 15.660, 'perfectly happy to camp out in a safe spot and'],
+    [348.480, 212.400, 549.072, 15.660, 'take potshots the entire mission if you give'],
+    [348.480, 224.400, 464.436, 15.660, 'them no reason to move.']]],
+  [72.000, 208.793, [
+    [72.000, 208.793, 287.724, 15.660, '“Consider your environment: check for cover,'],
+    [72.000, 220.793, 282.744, 15.660, 'choke points, and verticality options, and try'],
+    [72.000, 232.793, 272.148, 15.660, 'to keep your sight lines open.” — David T.']]],
+  [348.480, 244.793, [
+    [348.480, 244.793, 570.600, 15.660, 'Environmental hazards can play hell with guns.'],
+    [348.480, 256.793, 562.176, 15.660, 'Don’t hesitate to rule that one has jammed or'],
+    [348.480, 268.793, 565.836, 15.660, 'misfired if used right after getting wet or filled'],
+    [348.480, 280.793, 551.148, 15.660, 'with sand. Prompt the user to actually take'],
+    [348.480, 292.793, 448.512, 15.660, 'some time to clean it.']]],
+  [72.000, 253.186, [
+    [72.000, 253.186, 263.964, 15.660, '“You will often be the most combat-ready'],
+    [72.000, 265.186, 294.456, 15.660, 'character in your squad. Be aware of the security'],
+    [72.000, 277.186, 257.004, 15.660, 'you afford your fellow agents.” — Dippy']]],
+  [72.000, 297.578, [
+    [72.000, 297.578, 264.384, 15.660, '“Guns are loud, and you don\'t have great'],
+    [72.000, 309.578, 278.052, 15.660, 'escape options. Be careful to not reveal your'],
+    [72.000, 321.578, 256.020, 15.660, 'position with gunfire, or you might get'],
+    [72.000, 333.578, 193.320, 15.660, 'swarmed.” — Shadowsong']]],
+  [348.480, 313.186, [
+    [348.480, 313.186, 570.768, 15.660, 'Scarier for a Gunslinger than a powerful enemy'],
+    [348.480, 325.186, 549.348, 15.660, 'is an unknown one. If you keep them in the'],
+    [348.480, 337.186, 563.748, 15.660, 'dark about what they are up against, they will'],
+    [348.480, 349.186, 483.888, 15.660, 'have to play more cautiously.']]],
+  [72.000, 353.971, [
+    [72.000, 353.971, 275.184, 15.660, '“Do not discount the power of suppressing'],
+    [72.000, 365.971, 274.656, 15.660, 'fire. Even if you can’t land a hit, keeping an'],
+    [72.000, 377.971, 281.760, 15.660, 'enemy\'s head down can buy enough time for'],
+    [72.000, 389.971, 256.332, 15.660, 'you or someone else to act.” — Tim M.']]],
+  [367.200, 369.578, [
+    [367.200, 369.578, 548.796, 15.660, '"Keeping the number of enemies vague'],
+    [367.200, 381.578, 517.320, 15.660, 'helps a lot with pacing." — Xela']]],
+  [348.480, 401.971, [
+    [348.480, 401.971, 569.508, 15.660, 'Standoff can ruin tempo if you’re not ready for'],
+    [348.480, 413.971, 567.648, 15.660, 'it. Leave extra room in your designs to account'],
+    [348.480, 425.971, 546.744, 15.660, 'for a Gunslinger slowing everything down'],
+    [348.480, 437.971, 413.952, 15.660, 'once or twice.']]],
+  [72.000, 410.363, [
+    [72.000, 410.363, 291.576, 15.660, '“A gun does not need to be fired to hold power'],
+    [72.000, 422.363, 214.848, 15.660, 'in a social situation.” — Dippy']]],
+  [72.000, 442.756, [
+    [72.000, 442.756, 281.076, 15.660, '“Your core gameplan is not particularly Stat-'],
+    [72.000, 454.756, 279.732, 15.660, 'reliant: your two pluses in Skill will often be'],
+    [72.000, 466.756, 287.856, 15.660, 'good enough to facilitate gunplay, leaving you'],
+    [72.000, 478.756, 294.612, 15.660, 'with more pluses to put elsewhere.” — Reece D.']]],
+  [348.480, 458.363, [
+    [348.480, 458.363, 526.752, 15.660, '"An obvious weak point is trivial for a'],
+    [348.480, 470.363, 562.128, 15.660, 'Gunslinger to hit; present them with enemies'],
+    [348.480, 482.363, 564.228, 15.660, 'without clear weaknesses so they have to learn'],
+    [348.480, 494.363, 509.604, 15.660, 'about the target first." — Tomáš S.']]],
+  [72.000, 499.148, [
+    [72.000, 499.148, 283.968, 15.660, '“With the right Pitch, Trickshot can ricochet'],
+    [72.000, 511.148, 254.772, 15.660, 'off of non-solid surfaces.” — Gemini S.']]],
+  [348.480, 514.756, [
+    [348.480, 514.756, 569.088, 15.660, '"Organized, militarily competent enemies with'],
+    [348.480, 526.756, 557.256, 15.660, 'good positioning are a really engaging threat'],
+    [348.480, 538.756, 486.132, 15.660, 'for Gunslingers." — Tomáš S.']]],
+  [72.000, 531.541, [
+    [72.000, 531.541, 267.648, 15.660, '“You can Energywork Shootout to affect'],
+    [72.000, 543.541, 275.160, 15.660, 'weapons you find on-mission.” — David T.']]],
+  [348.480, 559.148, [
+    [348.480, 559.148, 565.308, 15.660, '“Give a Gunslinger interesting things to shoot'],
+    [348.480, 571.148, 566.688, 15.660, 'other than people — a precarious chandelier, a'],
+    [348.480, 583.148, 530.880, 15.660, 'security camera, or similar.” — Rich D.']]],
+  [72.000, 563.934, [
+    [72.000, 563.934, 294.972, 15.660, '“Guns can overheat during Shootout.” — Tim M.']]],
+  [72.000, 584.326, [
+    [72.000, 584.326, 270.936, 15.660, '“Cross-Class a communication item if you'],
+    [72.000, 596.326, 265.704, 15.660, 'often split from your squad to take up an'],
+    [72.000, 608.326, 227.880, 15.660, 'overwatch position.” — David T.']]],
+  [348.480, 603.541, [
+    [348.480, 603.541, 558.384, 15.660, '“Allow a Gunslinger to be a threat outside of'],
+    [348.480, 615.541, 564.240, 15.660, 'combat. They don’t even need to fire a shot to'],
+    [348.480, 627.541, 517.968, 15.660, 'be intimidating and cool.” — Lee H.']]],
+  [90.720, 628.719, [
+    [90.720, 628.719, 273.648, 15.660, '“Don’t go running off unless you warn'],
+    [90.720, 640.719, 226.320, 15.660, 'your squad first.” — Tim M.']]],
+  [304.818, 764.837, [
+    [304.818, 764.837, 319.182, 18.270, '18']]],
+];
+
+const P83 = [
+  [291.923, 23.233, [
+    [291.923, 23.233, 331.593, 15.630, 'Vessel']]],
+  [134.448, 98.291, [
+    [134.448, 98.291, 212.592, 26.208, 'Player']]],
+  [397.944, 98.291, [
+    [397.944, 98.291, 502.056, 26.208, 'Conduit']]],
+  [72.000, 132.008, [
+    [72.000, 132.008, 287.844, 15.660, 'This Class’s mere presence can warp a mission'],
+    [72.000, 144.008, 289.020, 15.660, 'more than most others. Be sure to review your'],
+    [72.000, 156.008, 255.276, 15.660, 'powers with your playgroup before the'],
+    [72.000, 168.008, 291.432, 15.660, 'mission, discussing strategy and contingencies.']]],
+  [348.480, 132.008, [
+    [348.480, 132.008, 541.560, 15.660, 'Be ready to enforce Altered States when'],
+    [348.480, 144.008, 457.800, 15.660, 'conduiting for a Vessel.']]],
+  [348.480, 164.400, [
+    [348.480, 164.400, 564.156, 15.660, 'A Vessel functions best when they care. Try to'],
+    [348.480, 176.400, 532.692, 15.660, 'invest them in the mission as quickly as'],
+    [348.480, 188.400, 567.192, 15.660, 'possible with punchy plot hooks or leave room'],
+    [348.480, 200.400, 558.708, 15.660, 'for meaningful interactions with teammates.']]],
+  [72.000, 188.400, [
+    [72.000, 188.400, 287.472, 15.660, 'This is a very acting-heavy class and fluctuates'],
+    [72.000, 200.400, 267.216, 15.660, 'dramatically between moods — always be'],
+    [72.000, 212.400, 270.060, 15.660, 'looking for ways to prime your character’s'],
+    [72.000, 224.400, 223.716, 15.660, 'feelings for future Ability usage.']]],
+  [348.480, 220.793, [
+    [348.480, 220.793, 552.396, 15.660, 'If a player desperately needs a Defiance but'],
+    [348.480, 232.793, 557.868, 15.660, 'can’t quite imagine how to do so themselves,'],
+    [348.480, 244.793, 562.788, 15.660, 'walk them through their character’s thoughts'],
+    [348.480, 256.793, 569.064, 15.660, 'and feelings. Use simple questions to ease them'],
+    [348.480, 268.793, 562.680, 15.660, 'into their character’s mindset (e.g. “When was'],
+    [348.480, 280.793, 536.532, 15.660, 'the last time your character felt this way?”)']]],
+  [90.720, 244.793, [
+    [90.720, 244.793, 277.692, 15.660, '“Your character’s emotional nature may'],
+    [90.720, 256.793, 287.796, 15.660, 'lead them to very different ideas of how to'],
+    [90.720, 268.793, 263.976, 15.660, 'proceed during a mission, sometimes'],
+    [90.720, 280.793, 288.444, 15.660, 'directly orthogonal to those of their team.'],
+    [90.720, 292.793, 247.464, 15.660, 'Proceed with caution.” — Guy A.']]],
+  [348.480, 301.186, [
+    [348.480, 301.186, 554.004, 15.660, 'Remember that you can ask to use Insidious'],
+    [348.480, 313.186, 452.232, 15.660, 'Whispers on an NPC.']]],
+  [72.000, 313.186, [
+    [72.000, 313.186, 260.976, 15.660, 'While it’s not mandatory, detailing your'],
+    [72.000, 325.186, 285.864, 15.660, 'Vessel’s entity in broad strokes as part of their'],
+    [72.000, 337.186, 273.180, 15.660, 'Backstory is often a good idea to give you a'],
+    [72.000, 349.186, 218.544, 15.660, 'thematic basis for your powers.']]],
+  [367.200, 333.578, [
+    [367.200, 333.578, 571.008, 15.660, '“This can be an ideal plot driver.” — Vera C.']]],
+  [348.480, 353.971, [
+    [348.480, 353.971, 560.340, 15.660, '“Be sure you understand Galvanizing before'],
+    [348.480, 365.971, 509.496, 15.660, 'conduiting for this Class.” — Xela']]],
+  [72.000, 369.578, [
+    [72.000, 369.578, 279.312, 15.660, 'You can Corrupt enemies by sharing secrets'],
+    [72.000, 381.578, 243.588, 15.660, 'from Insidious Whispers with them.']]],
+  [348.480, 386.363, [
+    [348.480, 386.363, 570.816, 15.660, '“Be ready to remind players about Corruption,'],
+    [348.480, 398.363, 553.596, 15.660, 'especially if new to the Vessel.” — Jennine C.']]],
+  [90.720, 401.971, [
+    [90.720, 401.971, 269.772, 15.660, 'Be careful of sharing secrets with your'],
+    [90.720, 413.971, 244.608, 15.660, 'team, weighing the downsides of'],
+    [90.720, 425.971, 285.840, 15.660, 'Corruption before doing so.” — Tomáš S.']]],
+  [367.200, 418.756, [
+    [367.200, 418.756, 557.952, 15.660, '“Corruption does not go away; in fact, it'],
+    [367.200, 430.756, 514.968, 15.660, 'intensifies over time.” — Lee H.']]],
+  [72.000, 446.363, [
+    [72.000, 446.363, 290.592, 15.660, 'Make good use of Assembly (pg. 126)! It could'],
+    [72.000, 458.363, 288.048, 15.660, 'lay the character groundwork for a critical Fill'],
+    [72.000, 470.363, 206.232, 15.660, 'the Void during the mission.']]],
+  [348.480, 451.148, [
+    [348.480, 451.148, 561.708, 15.660, '“Have a rough idea of what Corruption might'],
+    [348.480, 463.148, 509.832, 15.660, 'look like for key NPCs.” — Vera C.']]],
+  [348.480, 483.541, [
+    [348.480, 483.541, 560.772, 15.660, 'Player-vs-Player scenarios are all but inevitable'],
+    [348.480, 495.541, 559.056, 15.660, 'with this Class (see “Inter-Player Resolution” in'],
+    [348.483, 507.272, 570.840, 16.010, 'Advent , pg. 63). If your playgroup isn’t ready for'],
+    [348.480, 519.541, 559.968, 15.660, 'this, do not let the Vessel be played.” — Lee H.']]],
+  [72.000, 490.756, [
+    [72.000, 490.756, 291.732, 15.660, '“This Class has one of the most synergized kits'],
+    [72.000, 502.756, 270.288, 15.660, 'in the game. Look for combos and ways to'],
+    [72.000, 514.756, 203.724, 15.660, 'blend your powers!" — Xela']]],
+  [72.000, 535.148, [
+    [72.000, 535.148, 268.140, 15.660, '“Remind your fellow players that they can'],
+    [72.000, 547.148, 264.876, 15.660, 'activate Insidious Whispers on their own'],
+    [72.000, 559.148, 178.980, 15.660, 'characters.” — Rich D.']]],
+  [348.480, 539.934, [
+    [348.480, 539.934, 567.036, 15.660, '“This Class depends on Turning Points more'],
+    [348.480, 551.934, 560.580, 15.660, 'than most, so don’t be afraid to pump up the'],
+    [348.480, 563.934, 435.216, 15.660, 'drama.” — Lacara']]],
+  [72.000, 579.541, [
+    [72.000, 579.541, 258.024, 15.660, '“While Corruption must be negative, it'],
+    [72.000, 591.541, 253.188, 15.660, 'doesn’t necessarily need to be evil. Any'],
+    [72.000, 603.541, 229.620, 15.660, 'emotion taken to its extremes can'],
+    [72.000, 615.541, 211.284, 15.660, 'hypothetically work.” — Xela']]],
+  [348.480, 584.326, [
+    [348.480, 584.326, 566.352, 15.660, '“Before you conduit for a Vessel, chat with the'],
+    [348.480, 596.326, 552.240, 15.660, 'player a bit: ask about the character’s entity'],
+    [348.480, 608.326, 538.284, 15.660, 'and figure out the player’s veterancy and'],
+    [348.480, 620.326, 515.220, 15.660, 'comfort levels with acting.” — Xela']]],
+  [72.000, 635.934, [
+    [72.000, 635.934, 294.276, 15.660, '“Be mindful of positioning and communication.'],
+    [72.000, 647.934, 258.924, 15.660, 'They are important for all your Abilities,'],
+    [72.000, 659.934, 280.104, 15.660, 'especially Embrace the Darkness.” — Tim M.']]],
+  [348.480, 640.719, [
+    [348.480, 640.719, 533.436, 15.660, '“Even though Insidious Whispers must'],
+    [348.480, 652.719, 570.660, 15.660, 'truthfully convey a secret, you can make it more'],
+    [348.480, 664.719, 554.100, 15.660, 'tricky and interesting by adding incomplete'],
+    [348.480, 676.719, 540.816, 15.660, 'truths, playing to biases, or similar twists'],
+    [348.480, 688.719, 546.312, 15.660, 'wherever you feel a player is asking for too'],
+    [348.480, 700.719, 470.328, 15.660, 'much out of it.” — Lee H.']]],
+  [72.000, 680.326, [
+    [72.000, 680.326, 266.508, 15.660, '“While you can be terrifying, you aren’t a'],
+    [72.000, 692.326, 285.096, 15.660, 'conventional fighter. Find other characters to'],
+    [72.000, 704.326, 292.356, 15.660, 'shield you from danger and use Fill the Void to'],
+    [72.000, 716.326, 234.420, 15.660, 'protect them in turn.” — Tomáš S.']]],
+  [304.818, 764.837, [
+    [304.818, 764.837, 319.182, 18.270, '78']]],
+];
+
+// The Examples heading prints six different strings across the twelve covers;
+// every one is stored as printed, so the pattern is what identifies it.
+const EXAMPLES_HEADINGS = [
+  'Examples from history and pop culture include:',
+  'Examples from myth and pop culture include:',
+  'Examples from folklore and pop culture include:',
+  'Examples from pop culture & contemporary history include:',
+  'Examples from pop culture include:',
+  'Examples from history & pop culture include:',
+];
+
+const proseBlocks = (cover) => cover.filter((blk) => blk[0] === 336.0 && blk[2].length > 1);
+
+describe('cover pages', () => {
+  test('the stat line the book prints needs no change to parseStatLine', () => {
+    // "++Skill, +Sensory" is comma-separated where the other book uses "/";
+    // the shared splitter already accepts both, and this is the guard that
+    // says so, since editing it would alter a token-verified artifact.
+    expect(parseStatLine('++Skill, +Sensory')).toEqual({ skill: 2, sensory: 1 });
+    expect(coverFields(pageAt(18, P18)).stat_spread).toEqual({ skill: 2, sensory: 1 });
+    expect(coverFields(pageAt(18, P18)).stat_line).toBe('++Skill, +Sensory');
+  });
+
+  test('a stat line carrying a footnote marker is refused rather than dropped', () => {
+    // The other book marks a footnoted stat with a trailing "*" and prints the
+    // note under the stat line. No Aspirant cover prints either, which is why
+    // stat_note is null; the marker is what would say otherwise.
+    expect(coverFields(pageAt(18, P18)).stat_note).toBeNull();
+    const starred = P18.map((blk) => (blk[1] === 76.727
+      ? [blk[0], blk[1], [[...blk[2][0].slice(0, 4), '++Skill*, +Sensory']]]
+      : blk));
+    expect(() => coverFields(pageAt(18, starred))).toThrow(/Gunslinger/);
+  });
+
+  test('the three prose paragraphs split on the 3.84 first-line indent', () => {
+    const gunslinger = coverFields(pageAt(18, P18));
+    expect(gunslinger.overview).toStartWith('You are a jaunty gunman whose cool-headed gravitas');
+    expect(gunslinger.overview).toEndWith('vulnerable if taken by surprise.');
+    expect(gunslinger.conduit_notes).toStartWith('Conduits designing a mission for you should try');
+    expect(gunslinger.conduit_notes).toEndWith('or durability of their threats.');
+    expect(gunslinger.grounding).toBe('Grounded in classic gunfighting stories and legends,'
+      + ' particularly those of the American Wild West and the countless films, books, and'
+      + ' video games they have inspired.');
+  });
+
+  test('the paragraphs split on the indent, not on pdftotext’s block grouping', () => {
+    // The blocks agree with the indent on all twelve covers, but the box they
+    // agree on -- 336.00-565.20 at line height 13.05 -- also fits the Examples
+    // heading on the Freerunner cover, so the indent is what is read.
+    const prose = proseBlocks(P18);
+    expect(prose).toHaveLength(3);
+    const merged = [...P18.filter((blk) => !prose.includes(blk)),
+      [336.0, prose[0][1], prose.flatMap((blk) => blk[2])]];
+    expect(coverFields(pageAt(18, merged))).toEqual(coverFields(pageAt(18, P18)));
+  });
+
+  test('a paragraph that does not open as the book opens it throws, naming the class', () => {
+    // A silently mis-assigned paragraph would put the Conduit's guidance into
+    // the player-facing overview, which no count would catch.
+    const reworded = P18.map((blk) => (blk[1] === 262.98
+      ? [blk[0], blk[1], blk[2].map((ln, i) => (i === 0
+        ? [...ln.slice(0, 4), 'Conduits running a mission for you should try to give you'] : ln))]
+      : blk));
+    expect(() => coverFields(pageAt(18, reworded)))
+      .toThrow(/Gunslinger cover paragraph 2 opens "Conduits running a mission/);
+  });
+
+  test('the attribution is split off the quote and the em dash is dropped', () => {
+    // The class view prints the dash itself, so storing it would double it.
+    const gunslinger = coverFields(pageAt(18, P18));
+    expect(gunslinger.quote).toBe('"There\'s two kinds of people, my friend: those with'
+      + ' loaded guns and those who dig."');
+    expect(gunslinger.quote_source).toBe('Blondie, The Good, the Bad, and the Ugly');
+    expect(coverFields(pageAt(30, P30)).quote)
+      .toBe('“When you absolutely positively have to know, ask a librarian.”');
+    expect(coverFields(pageAt(30, P30)).quote_source).toBe('American Library Association');
+  });
+
+  test('a verse quote keeps the literal "|" the book sets between its lines', () => {
+    const illusionist = coverFields(pageAt(24, P24));
+    expect(illusionist.quote).toBe('"Is all that we see or seem | But a dream within a dream?"');
+    expect(illusionist.quote_source).toBe('Edgar Allen Poe');
+  });
+
+  test('examples_heading is stored as printed, and all six variants match the pattern', () => {
+    expect(coverFields(pageAt(18, P18)).examples_heading)
+      .toBe('Examples from history and pop culture include:');
+    expect(coverFields(pageAt(30, P30)).examples_heading)
+      .toBe('Examples from myth and pop culture include:');
+    expect(coverFields(pageAt(78, P78)).examples_heading)
+      .toBe('Examples from pop culture include:');
+    for (const heading of EXAMPLES_HEADINGS) {
+      expect(heading).toMatch(/^Examples from .+ include:$/);
+    }
+  });
+
+  test('the examples are one entry each, however many lines the entry wraps to', () => {
+    // Items sit 18.33 apart and wrap at 10.00, so the list is cut on the same
+    // leading rule the notes use rather than on pdftotext's blocks.
+    expect(coverFields(pageAt(18, P18)).examples).toEqual([
+      'Wyatt Earp, Annie Oakley, Ned Kelly, and similar historical figures',
+      'Roland Deschain (The Dark Tower)',
+      'Arthur Morgan (Red Dead Redemption 2)',
+      'Din Djarin (The Mandalorian)',
+      'Hol Horse (JoJo’s Bizarre Adventure)',
+      'Rango (eponymous)',
+    ]);
+    expect(coverFields(pageAt(24, P24)).examples).toEqual([
+      'Jean-Eugène Robert-Houdin, David Copperfield, Penn & Teller, and other stage magicians',
+      'Oz, the Great and Terrible (The Wizard of Oz)',
+      'Mysterio (Marvel Comics)',
+      'Zoroark (Pokémon)',
+      'Queen Iris (Xanth series)',
+    ]);
+  });
+
+  test('challenge_level parses to one of the three values the column accepts', () => {
+    expect(coverFields(pageAt(18, P18)).challenge_level).toBe('Low');
+    expect(coverFields(pageAt(30, P30)).challenge_level).toBe('Mid');
+    expect(coverFields(pageAt(78, P78)).challenge_level).toBe('High');
+    for (const [pdfPage, cover] of [[18, P18], [30, P30], [78, P78]]) {
+      expect(CONSTRAINED_SELECTS.challenge_level.values)
+        .toContain(coverFields(pageAt(pdfPage, cover)).challenge_level);
+    }
+  });
+
+  test('the three Quick Tips come back as a list under the heading the book prints', () => {
+    const gunslinger = coverFields(pageAt(18, P18));
+    expect(gunslinger.tips_heading).toBe('Quick Tips');
+    expect(gunslinger.tips).toEqual([
+      'Stuck on which Stats to give your Gunslinger besides Skill and Sensory?'
+        + ' Consider Reflex, Luck, or Vitality.',
+      'You aren’t worthless in close-quarters, but you should still try to keep foes'
+        + ' at a range wherever possible.',
+      'Try to demonstrate good shooting form in-character: guns have heavy recoil,'
+        + ' and their accuracy depends a lot on handling.',
+    ]);
+  });
+
+  test('a Quick Tip that is an attributed quote stays one tip', () => {
+    // Nothing marks an editorial tip off from a contributor's quote; the em
+    // dash is inside the same run of lines.
+    expect(coverFields(pageAt(30, P30)).tips[2])
+      .toBe('“Fun Fact can save you in even the most dire situations. It doesn\'t have'
+        + ' to be true until you make it true.” — Jennine C.');
+    expect(coverFields(pageAt(30, P30)).tips).toHaveLength(3);
+  });
+
+  test('the folio and the Challenge Level line are not read as Quick Tips', () => {
+    // Both sit below the Quick Tips heading; only the tips set at x 60.48.
+    const vessel = coverFields(pageAt(78, P78));
+    expect(vessel.tips).toHaveLength(3);
+    expect(vessel.tips.join(' ')).not.toContain('Challenge');
+    expect(vessel.tips.join(' ')).not.toContain('73');
+  });
+});
+
+describe('the Expanded Tips spread', () => {
+  test('the page splits into a Player list and a Conduit list', () => {
+    const gunslinger = expandedTips(pageAt(23, P23));
+    expect(gunslinger.player).toHaveLength(12);
+    expect(gunslinger.conduit).toHaveLength(9);
+    expect(gunslinger.player[0].text).toBe('You can be surprisingly functional even without a gun.'
+      + ' Trickshot, for example, can apply to any projectile.');
+    expect(gunslinger.conduit[0].text).toBe('Topography is important for Gunslingers. They can be'
+      + ' effective in a cramped apartment building or a big, open field, but each will push them'
+      + ' towards different playstyles.');
+  });
+
+  test('a tip indented 18.72 becomes a child of the tip above it', () => {
+    const gunslinger = expandedTips(pageAt(23, P23));
+    expect(gunslinger.player.map((note) => note.children.map((child) => child.text)))
+      .toEqual([[], [], [], [], [], [], [], [], [], [], [],
+        ['“Don’t go running off unless you warn your squad first.” — Tim M.']]);
+    expect(gunslinger.conduit[3].children.map((child) => child.text))
+      .toEqual(['"Keeping the number of enemies vague helps a lot with pacing." — Xela']);
+  });
+
+  test('an attributed quote stays one tip, dash and all', () => {
+    expect(expandedTips(pageAt(23, P23)).player[10].text)
+      .toBe('“Guns can overheat during Shootout.” — Tim M.');
+  });
+
+  test('each column is cut on its own leadings, not on one list of both', () => {
+    // The two columns interleave down the page and share no baselines. Sorting
+    // both into one list puts a 12.00 pt step across the gutter wherever a tip
+    // ends, which reads as a wrapped line: p23 and p83 each collapse to a
+    // single note.
+    const vessel = expandedTips(pageAt(83, P83));
+    expect(vessel.player).toHaveLength(10);
+    expect(vessel.conduit).toHaveLength(11);
+    const everyLine = pageAt(83, P83).blocks.flatMap((blk) => blk.lines)
+      .filter((ln) => ln.yMin > 124 && ln.yMin < 750);
+    expect(noteTree(everyLine, { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD }))
+      .toHaveLength(1);
+  });
+
+  test('the two leadings that deviate from 12.00 still read as wrapped lines', () => {
+    // p83's Conduit column sets an italic book title mid-note, and the lines
+    // either side of it lead 11.73 and 12.27 rather than 12.00. Both are a long
+    // way below the 16.00 threshold, so the note stays whole.
+    expect(expandedTips(pageAt(83, P83)).conduit[7].text)
+      .toBe('Player-vs-Player scenarios are all but inevitable with this Class (see'
+        + ' “Inter-Player Resolution” in Advent , pg. 63). If your playgroup isn’t ready'
+        + ' for this, do not let the Vessel be played.” — Lee H.');
+  });
+
+  test('the folio is not read as a tip', () => {
+    // It sets at x 304.82-319.18, straddling the column split, and 124 pt below
+    // the last tip -- so only the content band keeps it out of the Player list.
+    const gunslinger = expandedTips(pageAt(23, P23));
+    expect(gunslinger.player[11].text).not.toContain('18');
+    expect(gunslinger.player.map((note) => note.text).join(' ')).not.toContain('Gunslinger');
+  });
+});
