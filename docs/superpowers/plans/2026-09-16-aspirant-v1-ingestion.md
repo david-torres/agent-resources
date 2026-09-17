@@ -821,15 +821,16 @@ const BODY_NOTE_STEP = 19.2;
 const TIPS_NOTE_THRESHOLD = 16.0;
 
 // Signature and ability entries change font size per entry, so their boundary
-// is derived from the entry's own lines: wrapped leading is 0.766 x lineHeight
-// and a new note adds ~4.30, which leaves ~2.3pt of margin either side.
-const DERIVED_THRESHOLD_MARGIN = 2.0;
+// is a ratio of each line's own height rather than a figure derived from the
+// run: measured over 944 pairs, a wrapped continuation leads at 0.766 x
+// lineHeight and a new note at 1.098-1.132, with no overlap.
+const NOTE_LEADING_RATIO = 0.93;
 ```
 
 `noteTree(lines, { step, threshold })`:
 - Return `[]` for no lines.
 - Sort by `yMin`.
-- When `threshold` is `null`, derive it: the minimum consecutive `yMin` delta plus `DERIVED_THRESHOLD_MARGIN`. With fewer than two lines there is nothing to derive and every line is its own note.
+- When `threshold` is `null`, a line starts a new note when its leading exceeds `NOTE_LEADING_RATIO × lineHeight`. **Do not derive a threshold from the run's minimum leading**: 11 of the 70 ability entries that carry notes print no wrapped line at all, so the minimum gap is already a new-note gap and the whole run collapses into a single note (p22 `Stick 'Em Up`: four notes become one).
 - Walk the lines. The first line starts a note; thereafter a line starts a new note when `yMin - previous.yMin > threshold`, and otherwise appends its text to the current note separated by a single space.
 - A note's depth is `Math.round((xMin - baseX) / step)` where `baseX` is the smallest `xMin` among note-**start** lines only. Wrapped lines never contribute to depth.
 - Depth 0 pushes to the root; depth *n* pushes to the last note at depth *n−1*. **Throw naming the note's text** when there is no such parent — a silently promoted orphan is a note that changes meaning, and this book's structure never produces one. Do **not** additionally refuse a batch for being short: a single top-level note is valid content (a class with one Conduit tip), and a line-count guard would reject it at extraction time.
