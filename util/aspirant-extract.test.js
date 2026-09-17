@@ -331,7 +331,7 @@ describe('glyphless note trees', () => {
     expect(notes[0].text).toBe('child one continues');
   });
 
-  test('a null threshold is derived from the lines, for pages whose font varies', () => {
+  test('a null threshold reads the boundary off the line height, per entry', () => {
     // Measured body pair: lineHeight 11.75 -> wrapped 9.00, new note 13.29.
     const notes = noteTree([
       ln(64.8, 100, 'first', 11.75),
@@ -1858,8 +1858,8 @@ describe('ability pages', () => {
   });
 
   test('the ability name is the tallest line above its label, at 19.57 as well as 20.88', () => {
-    // Trickshot is 20.88; Identity Theft is one of the 15 names the book
-    // auto-fits down to 19.57/19.58. Nothing may key on 20.88.
+    // Trickshot is 20.88; Identity Theft is one of the 11 names the book
+    // auto-fits down to 19.57 (6 names) or 19.58 (5). Nothing may key on 20.88.
     expect(abilityEntries(pageAt(19, P19))[0].name).toBe('Trickshot');
     expect(abilityEntries(pageAt(67, P67))[0].name).toBe('Identity Theft');
   });

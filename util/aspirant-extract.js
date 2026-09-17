@@ -509,9 +509,12 @@ const signatureEntries = (page) => {
 };
 
 // "Paired Action:", "Sample Perks" and "(Compounded)" each print exactly three
-// times on every one of the 24 ability pages, and only there. "Essence Cost"
-// does not: pdftotext gives it 4 lines on p22/p28/p46/p55 and 2 on p82, so it
-// cannot anchor an entry (geometry doc, section 8).
+// times on every one of the 24 ability pages. "Paired Action:" and
+// "(Compounded)" are also exclusive to them, at 72 whole lines apiece
+// book-wide; "Sample Perks" prints 73, the extra being a rules heading on p12
+// at yMin 557.68. The anchor is "Paired Action:" and not "Essence Cost", which
+// pdftotext gives 4 lines on p22/p28/p46/p55 and 2 on p82 (geometry doc,
+// section 8).
 const PAIRED_ACTION_LABEL = 'Paired Action:';
 const SAMPLE_PERKS_HEADING = 'Sample Perks';
 const COMPOUNDED_LABEL = '(Compounded)';
@@ -520,9 +523,12 @@ const ABILITIES_PER_PAGE = 3;
 const SAMPLE_PERKS_PER_ABILITY = 2;
 
 // An ability name's first line sits 26.24-46.94 above its own label and is the
-// tallest line in that window; the entry above it is over 200pt further up.
-// Height is the only signal available: the book auto-fits long names from 20.88
-// down to 19.57, and 16 of the 72 are two lines.
+// tallest line in that window. The window must also stop short of the entry
+// above, whose last name line is 180.14 above the label at the tightest (p55,
+// the label above Bloodlust reaching back to Warp Spasm) -- so 70 has 23.06 pt
+// of margin below and 110.14 above. Height is the only signal available: the
+// book auto-fits 11 of the 72 names from 20.88 down to 19.57 or 19.58, and 16
+// of the 88 name lines are the second line of a two-line name.
 const ABILITY_NAME_LOOKBACK = 70;
 
 // An entry opens above the name that titles it, because its meter table starts
@@ -544,7 +550,10 @@ const ABILITY_TEXT_FRAME = 50;
 
 // A label and the text it introduces share a band without sharing a baseline:
 // the paired-action text opens up to 4.49 ABOVE its own label, the compounded
-// body up to 0.03 below. Nothing else comes nearer than 13.88 to either label.
+// body 0.02 to 0.89 below. This bound partitions prose, and no other prose line
+// comes nearer than 15.42 to either label; the nearest line of any kind is a
+// dedication 13.88 above a "(Compounded)", and those are lifted out by height
+// before the split.
 const LABEL_BAND_LEAD = 10;
 
 const abilityNameLines = (lines, label) => {
@@ -611,6 +620,9 @@ const abilityFrom = (ownLines, label, nameLines) => {
     || (hostOf(line) !== abilityHost && !textOf(line).startsWith(DEDICATION_PREFIX)));
   if (stray) throw new Error(`hanging line under no name: ${joinLines([stray])}`);
 
+  // A perk body opens 0.13 to 4.64 below its own name -- never above it, but by
+  // as little as 0.13 (p19 One Bullet Left) -- while the next perk name is
+  // 15.60 further down at the closest, so the split is on the names' baselines.
   const perkAt = (index) => {
     const nameLine = perkNameLines[index];
     const next = perkNameLines[index + 1];
