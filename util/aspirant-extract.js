@@ -14,6 +14,8 @@ const WORD = /<word xMin="([\d.eE+-]+)" yMin="([\d.eE+-]+)" xMax="([\d.eE+-]+)" 
 
 const lowest = (boxes) => Math.max(...boxes.map((box) => box.yMax));
 
+const textOf = (line) => line.words.map((word) => word.text).join(' ');
+
 // pdftotext -bbox-layout gives every page in document order, so the 1-based
 // PDF page number is just a running count of <page> matches.
 const parseBboxPages = (xhtml) => {
@@ -106,7 +108,7 @@ const headerName = (page) => {
     for (const line of block.lines) {
       if (Math.abs(line.yMin - HEADER_Y_MIN) <= HEADER_BAND_TOLERANCE
         && Math.abs(line.yMax - HEADER_Y_MAX) <= HEADER_BAND_TOLERANCE) {
-        return line.words.map((word) => word.text).join(' ');
+        return textOf(line);
       }
     }
   }
@@ -242,16 +244,18 @@ const BODY_NOTE_STEP = 19.2;
 // and zero overlap across 871 measured lines.
 const TIPS_NOTE_THRESHOLD = 16.0;
 
-// Signature and ability entries change font size per entry, so their
-// boundary is derived from the entry's own lines: wrapped leading is
-// 0.766 x lineHeight and a new note adds ~4.30, which leaves ~2.3pt of
-// margin either side of the derived threshold at every observed font size.
-const DERIVED_THRESHOLD_MARGIN = 2.0;
+// Signature and ability entries change font size per entry, so their boundary
+// is read off each line's own height rather than off a fixed leading: measured
+// over 944 line pairs, a wrapped continuation follows at 0.766 x lineHeight and
+// the next note at 1.098-1.132 x, with no overlap at either body size. The
+// smallest leading an entry happens to print cannot stand in for it -- 11 of
+// the 70 ability entries that carry notes print no wrapped line at all, and
+// their whole run then reads as a single note.
+const NOTE_LEADING_RATIO = 0.93;
 
-const deriveThreshold = (lines) => {
-  if (lines.length < 2) return null;
-  const gaps = lines.slice(1).map((current, i) => current.yMin - lines[i].yMin);
-  return Math.min(...gaps) + DERIVED_THRESHOLD_MARGIN;
+const startsNewNote = (line, previous, threshold) => {
+  if (previous === null) return true;
+  return (line.yMin - previous.yMin) > (threshold ?? NOTE_LEADING_RATIO * lineHeightOf(previous));
 };
 
 // A wrapped continuation line shares its parent's xMin exactly, so depth
@@ -261,15 +265,13 @@ const noteTree = (lines, { step, threshold }) => {
   if (lines.length === 0) return [];
 
   const sorted = [...lines].sort((a, b) => a.yMin - b.yMin);
-  const effectiveThreshold = threshold ?? deriveThreshold(sorted);
 
   const startLines = [];
   const notes = [];
   let previous = null;
 
   for (const line of sorted) {
-    const isNewNote = previous === null || (line.yMin - previous.yMin) > effectiveThreshold;
-    if (isNewNote) {
+    if (startsNewNote(line, previous, threshold)) {
       startLines.push(line);
       notes.push({ text: markPowerRatings(line), children: [] });
     } else {
@@ -506,11 +508,163 @@ const signatureEntries = (page) => {
   ];
 };
 
+// "Paired Action:", "Sample Perks" and "(Compounded)" each print exactly three
+// times on every one of the 24 ability pages, and only there. "Essence Cost"
+// does not: pdftotext gives it 4 lines on p22/p28/p46/p55 and 2 on p82, so it
+// cannot anchor an entry (geometry doc, section 8).
+const PAIRED_ACTION_LABEL = 'Paired Action:';
+const SAMPLE_PERKS_HEADING = 'Sample Perks';
+const COMPOUNDED_LABEL = '(Compounded)';
+const DEDICATION_PREFIX = 'In Honor of';
+const ABILITIES_PER_PAGE = 3;
+const SAMPLE_PERKS_PER_ABILITY = 2;
+
+// An ability name's first line sits 26.24-46.94 above its own label and is the
+// tallest line in that window; the entry above it is over 200pt further up.
+// Height is the only signal available: the book auto-fits long names from 20.88
+// down to 19.57, and 16 of the 72 are two lines.
+const ABILITY_NAME_LOOKBACK = 70;
+
+// An entry opens above the name that titles it, because its meter table starts
+// as much as 9.93 higher. The next name is never nearer than 39.59 below the
+// line that closes the entry above it.
+const ABILITY_ENTRY_LEAD = 12;
+
+// Both offsets are measured from the entry's own "Paired Action:" label, not
+// from the page margin: p37's first entry prints every part of itself 10.56 pt
+// right of the frame section 3b tabulates, so absolute x classifies it wrongly.
+//
+// Meters: no prose line reaches further than 139.38 past the label and no meter
+// label starts nearer than 382.01 -- the widest gap on the page.
+// Text frame: notes and perk names stay within 43.20 of the label while the
+// paired-action text, description, perk bodies and compounded body all start at
+// 63.84 or beyond.
+const ABILITY_METER_GUTTER = 200;
+const ABILITY_TEXT_FRAME = 50;
+
+// A label and the text it introduces share a band without sharing a baseline:
+// the paired-action text opens up to 4.49 ABOVE its own label, the compounded
+// body up to 0.03 below. Nothing else comes nearer than 13.88 to either label.
+const LABEL_BAND_LEAD = 10;
+
+const abilityNameLines = (lines, label) => {
+  const window = lines.filter((line) =>
+    line.yMin >= label.yMin - ABILITY_NAME_LOOKBACK && line.yMin < label.yMin);
+  if (window.length === 0) throw new Error(`no ability name above yMin ${label.yMin}`);
+  const tallest = Math.max(...window.map(lineHeightOf));
+  return window
+    .filter((line) => Math.abs(lineHeightOf(line) - tallest) <= HEIGHT_TOLERANCE)
+    .sort((a, b) => a.yMin - b.yMin);
+};
+
+const abilityFrom = (ownLines, label, nameLines) => {
+  const labelLeft = lineXMin(label);
+  const soleLine = (text) => {
+    const found = ownLines.filter((line) => textOf(line) === text);
+    if (found.length !== 1) {
+      throw new Error(`${found.length} "${text}" lines in ability: ${joinLines(nameLines)}`);
+    }
+    return found[0];
+  };
+  const perksHeading = soleLine(SAMPLE_PERKS_HEADING);
+  const compounded = soleLine(COMPOUNDED_LABEL);
+
+  // "In Honor of ..." and the one respelling the book prints are both set
+  // smaller than every body font and both hang under the name they belong to,
+  // so they are lifted out by height before any reflow.
+  const isHanging = (line) =>
+    Math.abs(lineHeightOf(line) - DEDICATION_HEIGHT) <= HEIGHT_TOLERANCE;
+  const hanging = ownLines.filter(isHanging);
+  const structural = new Set([label, perksHeading, compounded, ...nameLines]);
+  const content = ownLines.filter((line) => !structural.has(line) && !isHanging(line));
+  const meterLines = content.filter((line) => lineXMin(line) - labelLeft >= ABILITY_METER_GUTTER);
+  const prose = content.filter((line) => !meterLines.includes(line));
+  const inTextFrame = (line) => lineXMin(line) - labelLeft >= ABILITY_TEXT_FRAME;
+
+  const descriptionLines = prose.filter((line) => line.yMin < label.yMin - LABEL_BAND_LEAD);
+  const pairedBand = prose.filter((line) =>
+    line.yMin >= label.yMin - LABEL_BAND_LEAD && line.yMin < perksHeading.yMin);
+  const perkBand = prose.filter((line) =>
+    line.yMin >= perksHeading.yMin && line.yMin < compounded.yMin - LABEL_BAND_LEAD);
+  const compoundLines = prose.filter((line) => line.yMin >= compounded.yMin - LABEL_BAND_LEAD);
+
+  const outdented = [...descriptionLines, ...compoundLines].filter((line) => !inTextFrame(line));
+  if (outdented.length > 0) {
+    throw new Error(`ability line at no known indent: ${joinLines([outdented[0]])}`);
+  }
+  const perkNameLines = perkBand.filter((line) => !inTextFrame(line)).sort((a, b) => a.yMin - b.yMin);
+  if (perkNameLines.length !== SAMPLE_PERKS_PER_ABILITY) {
+    throw new Error(`${perkNameLines.length} sample perks in ability: ${joinLines(nameLines)}`);
+  }
+
+  const abilityHost = nameLines[nameLines.length - 1];
+  const hosts = [...nameLines, ...perkNameLines].sort((a, b) => a.yMin - b.yMin);
+  const hostOf = (line) => hosts.filter((host) => host.yMin < line.yMin).pop();
+  const hangingUnder = (host, dedication) => {
+    const found = hanging.filter((line) => hostOf(line) === host
+      && textOf(line).startsWith(DEDICATION_PREFIX) === dedication);
+    return found.length > 0 ? joinLines(found) : null;
+  };
+  // Only a dedication hangs under a perk name, and only the ability carries a
+  // respelling, so anything else set at this size would be read by no field.
+  const stray = hanging.find((line) => hostOf(line) === undefined
+    || (hostOf(line) !== abilityHost && !textOf(line).startsWith(DEDICATION_PREFIX)));
+  if (stray) throw new Error(`hanging line under no name: ${joinLines([stray])}`);
+
+  const perkAt = (index) => {
+    const nameLine = perkNameLines[index];
+    const next = perkNameLines[index + 1];
+    return {
+      name: joinLines([nameLine]),
+      dedication: hangingUnder(nameLine, true),
+      text: joinLines(perkBand.filter((line) => inTextFrame(line)
+        && line.yMin >= nameLine.yMin && (!next || line.yMin < next.yMin))),
+      compound_text: next ? null : joinLines(compoundLines),
+    };
+  };
+
+  return {
+    name: joinLines(nameLines),
+    pronunciation: hangingUnder(abilityHost, false),
+    dedication: hangingUnder(abilityHost, true),
+    description: joinLines(descriptionLines),
+    paired_action: joinLines(pairedBand.filter(inTextFrame)),
+    meters: readMeters(meterLines),
+    notes: noteTree(pairedBand.filter((line) => !inTextFrame(line)),
+      { step: BODY_NOTE_STEP, threshold: null }),
+    sample_perks: perkNameLines.map((_, index) => perkAt(index)),
+  };
+};
+
+// pdftotext's block grouping carries nothing here -- on p37 the meter table,
+// the label, its text and every note arrive as one block spanning x
+// 72.30-511.20 -- so the page is flattened to lines and read by (yMin, xMin).
+const abilityEntries = (page) => {
+  const lines = rethreadSuperscripts(page).blocks
+    .flatMap((block) => block.lines)
+    .filter((line) => line.yMin > CONTENT_MIN_Y && line.yMin < CONTENT_MAX_Y)
+    .sort((a, b) => a.yMin - b.yMin);
+
+  const labels = lines.filter((line) => textOf(line) === PAIRED_ACTION_LABEL);
+  if (labels.length !== ABILITIES_PER_PAGE) {
+    throw new Error(`${labels.length} "${PAIRED_ACTION_LABEL}" lines on page ${page.page}`);
+  }
+  const names = labels.map((label) => abilityNameLines(lines, label));
+
+  return labels.map((label, index) => {
+    const top = names[index][0].yMin - ABILITY_ENTRY_LEAD;
+    const next = names[index + 1];
+    const bottom = next ? next[0].yMin - ABILITY_ENTRY_LEAD : Infinity;
+    return abilityFrom(lines.filter((line) => line.yMin >= top && line.yMin < bottom),
+      label, names[index]);
+  });
+};
+
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
   classPageNumbers, isCoverPage, printedPage, headerName, isRecto, shiftFor,
   RECTO_SHIFT, SIGNATURE_NOTE_RECTO_SHIFT,
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
   noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
-  signatureEntries, COLUMN_SPLIT_X,
+  signatureEntries, COLUMN_SPLIT_X, abilityEntries,
 };
