@@ -1078,7 +1078,7 @@ Measured detail: `docs/superpowers/specs/2026-09-16-aspirant-v1-geometry.md` §9
 
 **How the three prose paragraphs are told apart — all three rules verified on all twelve covers:**
 
-1. They are the only three blocks whose box is exactly `336.00 – 565.20` at line height 13.05, and they are contiguous.
+1. ~~They are the only three blocks whose box is exactly `336.00 – 565.20` at line height 13.05, and they are contiguous.~~ **This rule is false in both directions and must not be used.** On p60 (Freerunner) the Examples heading has that exact box and is the contiguous next block, so the rule selects four; on p42 paragraph 3 and p54 paragraphs 1–2 the right edge is **565.21**, so an exact match drops real paragraphs. Close the band on the quote attribution above and the pattern-matched Examples heading below instead.
 2. **Paragraph 1 has no first-line indent (`336.00`); paragraphs 2 and 3 indent 3.84 (`339.84`).**
 3. Paragraph 1 opens `You are a` / `You are an`; paragraph 2 opens `Conduits designing a mission for you`; paragraph 3 opens `Grounded in`.
 
@@ -1093,7 +1093,10 @@ Implement rule 2 as the discriminator and **assert rule 3** — if an opening do
 // Examples: 5 or 6 items, every item xMin 355.68, one <block> each, no glyphs.
 // Quote attribution: always its own block, always begins "— " (U+2014).
 // Verse lines inside a quote are joined by a literal "|" (Illusionist, Berserker).
-const PROSE_BLOCK_X = [336.0, 565.2];
+// There is deliberately no right-edge constant: the prose right edge is 565.20
+// on most covers but 565.21 on p42 and p54, and matching it exactly drops real
+// paragraphs while admitting p60's Examples heading.
+const PROSE_LEFT_X = 336.0;
 const PROSE_INDENT_X = 339.84;
 const EXAMPLES_ITEM_X = 355.68;
 const QUICK_TIPS_ITEM_X = 60.48;
@@ -1119,7 +1122,7 @@ Cover:
 6. `examples_heading` stores the printed string, and all six observed variants match the pattern.
 7. `challenge_level` parses to `'Low'`, `'Mid'` or `'High'` — the three values `util/class-fields.js`'s `CONSTRAINED_SELECTS.challenge_level` accepts.
 8. `tips` is the three Quick Tips as a list.
-9. `expandedTips` splits on the `Player` and `Conduit` headings by `xMin`, and each list goes through `noteTree` at `TIPS_NOTE_STEP` / `TIPS_NOTE_THRESHOLD`.
+9. `expandedTips` partitions on `COLUMN_SPLIT_X` (306), **not** on the headings' `xMin`. The headings are centred over their columns — `Player` at 134.45 above a list at 72.00, `Conduit` at 397.94 above one at 348.48 — so splitting on their own x puts every Player line in neither column. The headings mark each column's top edge; the split is the same 306 the signature pages use (Player's widest line ends 294.97, Conduit begins 348.48, on all twelve). Each list then goes through `noteTree` at `TIPS_NOTE_STEP` / `TIPS_NOTE_THRESHOLD`.
 10. A tip that is an attributed quote (`"…" — Tim M.`) stays one note — there is no marker separating editorial tips from quotes, and the em dash is inside the same block.
 
 - [ ] **Step 2–4: red, implement, green**

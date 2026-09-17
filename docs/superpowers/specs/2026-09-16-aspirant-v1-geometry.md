@@ -706,7 +706,7 @@ y-ordering is rigidly consistent across all twelve covers. Bands from p18
 |---|---|---|---|---|---|
 | 1 | **stat line** | `76.73 – 100.73` (identical on all 12) | centred on **300.24** | **24.00** | e.g. `++Skill, +Sensory`, `++Intelligence, +Spirit` |
 | 2 | **quote** | starts `164.76` on all 12; 1–3 lines | `336.32 .. 375.40` start, right edge ≤ 565.21 | **13.34** | verse lines are joined by a literal `|` (Illusionist, Berserker) |
-| 3 | **quote attribution** | `180.76` / `190.76` / `200.76` depending on quote length | right-ranged, `xMin` 435.10..480.00 | **13.34** | **always a separate block, always begins `— ` (U+2014)** |
+| 3 | **quote attribution** | `180.76` / `190.76` / `200.76` depending on quote length | right-ranged, `xMin` **387.85**..480.00 (p18 Gunslinger is the low end; an earlier draft of this row said 435.10) | **13.34** | **always a separate block, always begins `— ` (U+2014)** |
 | 4 | **prose 1 — overview** | quote block yMax + 2.88 | block `336.00 – 565.20`, **first line xMin = 336.00** | 13.05 | 4–5 lines |
 | 5 | **prose 2 — conduit_notes** | +2.95 below prose 1 | block `336.00 – 565.20`, **first line xMin = 339.84** | 13.05 | 6–7 lines; **always opens "Conduits designing a mission for you …"** on all 12 |
 | 6 | **prose 3 — grounding** | +2.95 below prose 2 | block `336.00 – 565.20`, **first line xMin = 339.84** | 13.05 | 2–4 lines; **always opens "Grounded in …"** on all 12 |
