@@ -719,8 +719,16 @@ y-ordering is rigidly consistent across all twelve covers. Bands from p18
 
 ### How to tell the three prose paragraphs apart
 
-1. They are the only three blocks whose block box is exactly `336.00 – 565.20`
-   with line height 13.05, and they are contiguous.
+1. ~~They are the only three blocks whose block box is exactly `336.00 – 565.20`
+   with line height 13.05, and they are contiguous.~~ **CORRECTION (2026-09-17,
+   found during implementation): this rule is false in both directions and must
+   not be used.** On p60 (Freerunner) the Examples heading block is
+   `336.000–565.199` at h 13.050 and is the contiguous next block, so the rule
+   selects four paragraphs; and on p42 ¶1/¶3 and p54 ¶1/¶2 the right edge sets
+   at `565.201–565.205`, so an exact match drops real paragraphs. The separation
+   is 0.001 pt. Use rule 2 (the 3.84 first-line indent) and rule 3 (the opening
+   phrases), and close the band on the quote attribution above and the
+   pattern-matched Examples heading below.
 2. **Paragraph 1 has no first-line indent (`336.00`); paragraphs 2 and 3 have a
    3.84 pt first-line indent (`339.84`).** True on all twelve covers.
 3. Paragraph 2 always begins `Conduits designing a mission for you`;
