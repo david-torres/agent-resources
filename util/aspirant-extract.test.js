@@ -190,9 +190,82 @@ describe('Power Rating superscripts', () => {
     expect(lines[0].words.map((w) => w.text)).toEqual(['Happenstance', 'L–M', 'and']);
   });
 
+  test('a host line split in two around the gap is rejoined as one line (p63)', () => {
+    // Measured directly via `pdftotext -bbox-layout -f 63 -l 63`, since the
+    // geometry doc's §7 table only records the H+ candidate's own bbox for
+    // p63, not the host fragments -- unlike p21, which it spells out. Here
+    // the three fragments aren't even siblings in one block, as in the p21
+    // case: "perfectly" and "H+" are each their own single-line block, and
+    // "copy ... notwithstanding)." is one line inside a taller multi-line
+    // block (that block's other two lines, an unrelated preceding sentence,
+    // are omitted here since they take no part in the merge).
+    const page = { page: 63, blocks: [
+      { xMin: 328.8, yMin: 741.282, yMax: 753.027, lines: [
+        { xMin: 328.8, yMin: 741.282, yMax: 753.027, words: [
+          { xMin: 328.8, yMin: 741.282, xMax: 359.769, yMax: 753.027, text: 'perfectly' },
+        ] },
+      ] },
+      { xMin: 361.054515, yMin: 742.064271, yMax: 748.911606, lines: [
+        { xMin: 361.054515, yMin: 742.064271, yMax: 748.911606, words: [
+          { xMin: 361.054515, yMin: 742.064271, xMax: 368.416056, yMax: 748.911606, text: 'H+' },
+        ] },
+      ] },
+      { xMin: 370.333, yMin: 741.282, yMax: 753.027, lines: [
+        { xMin: 370.333, yMin: 741.282, yMax: 753.027, words: [
+          { xMin: 370.333, yMin: 741.282, xMax: 387.010, yMax: 753.027, text: 'copy' },
+          { xMin: 388.927, yMin: 741.282, xMax: 405.946, yMax: 753.027, text: 'their' },
+          { xMin: 407.863, yMin: 741.282, xMax: 425.737, yMax: 753.027, text: 'exact' },
+          { xMin: 427.654, yMin: 741.282, xMax: 452.800, yMax: 753.027, text: 'actions' },
+          { xMin: 454.717, yMin: 741.282, xMax: 474.562, yMax: 753.027, text: '(Stats' },
+          { xMin: 476.479, yMin: 741.282, xMax: 540.973, yMax: 753.027, text: 'notwithstanding).' },
+        ] },
+      ] },
+    ] };
+    const rethreaded = rethreadSuperscripts(page);
+    const lines = rethreaded.blocks.flatMap((block) => block.lines);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].words.map((w) => w.text)).toEqual(
+      ['perfectly', 'H+', 'copy', 'their', 'exact', 'actions', '(Stats', 'notwithstanding).']);
+  });
+
   test('re-threading leaves a page with no detached ratings untouched', () => {
     const page = { page: 20, blocks: [{ xMin: 40, yMin: 200, yMax: 211.75, lines: [host] }] };
     expect(rethreadSuperscripts(page)).toEqual(page);
+  });
+
+  test('rethreading does not mutate its input, even where a real merge happens', () => {
+    const page = { page: 20, blocks: [
+      { xMin: 40, yMin: 200, yMax: 211.75, lines: [
+        { xMin: 40, yMin: 200, yMax: 211.75, words: [
+          { xMin: 40, yMin: 200, xMax: 130.61, yMax: 211.75, text: 'Ward' },
+          { xMin: 139.54, yMin: 200, xMax: 200, yMax: 211.75, text: 'against' },
+        ] },
+      ] },
+      { xMin: 132.04, yMin: 200.78, yMax: 207.63, lines: [
+        { xMin: 132.04, yMin: 200.78, yMax: 207.63, words: [
+          { xMin: 132.04, yMin: 200.78, xMax: 137.41, yMax: 207.63, text: 'M' },
+        ] },
+      ] },
+    ] };
+    const pristine = JSON.parse(JSON.stringify(page));
+
+    // Freeze every level so an in-place mutation -- e.g. a regression that
+    // sorts or assigns into the original words array instead of building a
+    // new one -- throws at the mutation site (Array.prototype.sort on a
+    // frozen array always throws, independent of the caller's strict mode)
+    // rather than only being caught later, and only if someone thinks to
+    // compare against a clone.
+    const freezeDeep = (value) => {
+      if (Array.isArray(value)) value.forEach(freezeDeep);
+      else if (value !== null && typeof value === 'object') Object.values(value).forEach(freezeDeep);
+      return Object.freeze(value);
+    };
+    freezeDeep(page);
+
+    const result = rethreadSuperscripts(page);
+
+    expect(page).toEqual(pristine);
+    expect(result.blocks[0].lines[0].words.map((w) => w.text)).toEqual(['Ward', 'M', 'against']);
   });
 
   test('markup wraps the rating and nothing else', () => {
