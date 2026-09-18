@@ -18,8 +18,10 @@ const CATALOGUE_FILTERS = [
 ];
 
 // `classes.is_public` defaults to false, `is_player_created` to false and
-// `rules_edition` to 'advent' (baseline schema), and the loader's field
-// allowlist sets none of the three, so an inserted row starts from these.
+// `rules_edition` to 'advent' (baseline schema). These stand in for whatever a
+// payload does not itself carry -- `plan.payload` is spread after this object
+// below, so a fork's payload, which does carry `rules_edition`, wins over the
+// default.
 const CREATED_ROW_DEFAULTS = { is_public: false, is_player_created: false, rules_edition: 'advent' };
 
 const PAGE = 1000;
@@ -47,20 +49,22 @@ export const catalogueNames = (classes) => {
 // that one run, and treating it as private would drop its item names from the
 // post-import catalogue and report names as vanishing that never do.
 export const projectImport = (classes, plans, book) => {
-  // Keyed on the plan rather than on the name: a fork and the parent it descends
-  // from carry the same name, and only the fork is this load's to publish.
-  const publish = (cls, plan) =>
-      (book.publishedByLoad.includes(plan.payload.name) ? { ...cls, is_public: true } : cls);
+  // What keeps a fork's parent unpublished is not this check -- it is which
+  // rows ever reach `publish` at all. `planByRowId` is keyed on `plan.row.id`,
+  // and a fork plan's `row` is null, so a fork's parent has no plan of its own
+  // and is never considered for publication below.
+  const publish = (cls) =>
+      (book.publishedByLoad.includes(cls.name) ? { ...cls, is_public: true } : cls);
   const planByRowId = new Map(plans.filter((plan) => plan.row).map((plan) => [plan.row.id, plan]));
   const updated = classes.map((cls) => {
     const plan = planByRowId.get(cls.id);
-    return plan ? publish({ ...cls, ...plan.payload }, plan) : cls;
+    return plan ? publish({ ...cls, ...plan.payload }) : cls;
   });
   // buildClassContentLookupMaps skips a class with no id. A fork carries the id
   // it will be inserted under; a create is stood in for by a placeholder until
   // Postgres mints one.
   const created = plans.filter((plan) => !plan.row).map((plan) => publish(
-      { ...CREATED_ROW_DEFAULTS, id: `pending:${plan.payload.name}`, ...plan.payload }, plan));
+      { ...CREATED_ROW_DEFAULTS, id: `pending:${plan.payload.name}`, ...plan.payload }));
   return [...updated, ...created];
 };
 
