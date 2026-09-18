@@ -255,7 +255,9 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       // `idx < 3` is a third hardcoded copy of the column-1-is-Default rule,
       // after util/class-gear.js gearCategory and util/aspirant-extract.js
       // gearFrom, and it is the one that reads a position rather than the
-      // stored column. Over six items the two agree; over twelve they do not.
+      // stored column. The two agree only because normalizeGear derives
+      // `column` from that same position on every save; a slice that lets a
+      // column be set independently of array order breaks this copy alone.
       // The plan defers making this route column-aware to slices 4-5.
       class_gear: Array.isArray(c.gear)
         ? c.gear.slice(0, 6).map((g, idx) => ({

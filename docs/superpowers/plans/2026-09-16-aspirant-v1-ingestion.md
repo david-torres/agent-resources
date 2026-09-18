@@ -1918,16 +1918,31 @@ git commit -m "test: cover the rendered Aspirant V1 class page in both formats"
 
 ## Success criteria
 
-Checked at the end, against the spec's list:
+Checked at the end against the spec's list, measured at the merge commit
+against the loaded local database (a restored production copy):
 
-- [ ] Twelve V1 classes exist as forks, each with twelve signatures across four columns, three core and three advanced abilities, every ability carrying two sample perks of which one has a Compounded variant, and every signature a Default Enchantment.
-- [ ] No existing class row is modified by the load — verified by unchanged `updated_at` on all 50 pre-existing rows — and every character on a pre-release Aspirant or Advent base class keeps its class, its picks and its rendered content.
-- [ ] The verifier passes token-for-token against the PDF for all twelve classes, and passes again for the pre-release artifact (19/20 classes — CHARLATAN has no `page_range` and is skipped — 180 entries, 0 differences).
-- [ ] A second `--apply` is a no-op.
-- [ ] `content_format` is `NOT NULL` with 50 rows `'advent'` and exactly the twelve new rows `'aspirant'`.
-- [ ] A format fork is in a different version family from its parent, in all four consumers.
-- [ ] `class_abilities.type` reads `'advanced'` for every pick drawn from a class's advanced list, and `'core'` otherwise.
-- [ ] Power Ratings render as superscripts everywhere they appear.
+- [x] Twelve V1 classes exist as forks, each with twelve signatures across four columns, three core and three advanced abilities, every ability carrying two sample perks of which one has a Compounded variant, and every signature a Default Enchantment.
+- [x] No existing class row is modified by the load — verified by unchanged `updated_at` on all 50 pre-existing rows — and every character on a pre-release Aspirant or Advent base class keeps its class, its picks and its rendered content.
+- [x] The verifier passes token-for-token against the PDF for all twelve classes, and passes again for the pre-release artifact (19/20 classes — CHARLATAN has no `page_range` and is skipped — 180 entries, 0 differences).
+- [x] A second `--apply` is a no-op.
+- [x] `content_format` is `NOT NULL` with 50 rows `'advent'` and exactly the twelve new rows `'aspirant'`.
+- [x] A format fork is in a different version family from its parent, in all four consumers.
+- [x] `class_abilities.type` reads `'advanced'` for every pick drawn from a class's advanced list, and `'core'` otherwise.
+- [x] Power Ratings render as superscripts everywhere they appear.
+
+Two of these do not mean quite what ticking them suggests, and the record
+should say so:
+
+- **`class_abilities.type` is satisfied vacuously.** All 916 live rows read
+  `'core'` and every one matches a name in its class's core list; none draws
+  from an advanced list, because no character is on a V1 class yet. What
+  actually holds the rule is `util/class-ability-type.integration.test.js`
+  over real rows and `routes/character-wizard-aspiring.test.js`'s assertion
+  on the wizard's core/advanced mapping.
+- **Power Ratings survive both render helpers, not only the one built for
+  them.** Four class-content sites still render through `{{{markdown}}}`;
+  `sanitize-html`'s default `allowedTags` already contains `sup`, so the tag
+  passes `renderMarkdown` untouched.
 
 ## Deliberately not in this plan
 
