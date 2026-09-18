@@ -226,7 +226,8 @@ setup` once or apply `supabase/seed.sql` manually.
 
 For a local stack, `bun run seed:local` seeds everything `supabase db reset`
 doesn't — an admin user, class definitions, and the badge catalog — in
-dependency order and idempotently. It's the recommended one-command path.
+dependency order and idempotently. It's the recommended one-command path, but it
+does not cover `load:aspirant-v1` below, which is a required step of its own.
 
 The individual seeds can also be run directly:
 
@@ -235,11 +236,21 @@ bun run seed:admin      # dummy@testing.com / dummypassword admin (dev only)
 bun run seed:classes    # class definitions — requires an admin profile first
 bun run fetch:badges    # download badge art from the public prod bucket
 bun run seed:badges     # upload art to the badges bucket + upsert catalog rows
+bun run load:aspirant-v1 # the twelve ENCLAVE: Aspirant V1 classes
 ```
 
 `seed:classes` sets each class's `created_by` to the admin profile, so
 `seed:admin` (or an existing admin) must run first. `seed:badges` reads art
 from `public/img/badges/`, which `fetch:badges` populates.
+
+`load:aspirant-v1` is a required step, not an optional extra: `seed:classes`
+does not create the twelve Aspirant V1 classes, and they hold 12 of the 24 class
+ids in `CORE_CLASS_UNLOCKS` (`util/starter-content.js`), so
+`util/core-roster.integration.test.js` fails until it has run. It loads the
+committed extraction artifact and forks each class off the same-named row, which
+must therefore already exist — run it after `seed:classes`. It is idempotent: a
+second run resolves the same twelve rows as updates and, finding nothing
+changed, issues no statement.
 
 ### Checking the schema and tables
 
