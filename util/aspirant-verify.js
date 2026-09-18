@@ -182,5 +182,5 @@ const gutterOf = (fail, where, lines) => {
 module.exports = {
   tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
   gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, unlocatable,
-  RAISED_NOTATION, STRANDED_MARK, COLUMN_GAP, MIN_GUTTER_WIDTH,
+  RAISED_NOTATION, STRANDED_MARK, MIN_GUTTER_WIDTH,
 };
