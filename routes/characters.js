@@ -237,11 +237,16 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             description_html: renderMarkdown(a.description || '')
           }))
         : [],
-      // Step 4 gear: all 6 class items are available on the right-hand shop
-      // at 2 merx each (duplicates allowed, so the user can re-pick a base
+      // Step 4 gear: the first 6 class items are offered on the right-hand
+      // shop at 2 merx each (duplicates allowed, so the user can re-pick a base
       // item from the left list). The first 3 ("base") are also auto-loaded
       // for free on the left. The JS uses `subtype` to badge each card so
       // the user can see which is which.
+      //
+      // 6 is a cap here, not the size of a class: an ENCLAVE: Aspirant V1 class
+      // carries 12 Signatures across four columns, and this deliberately shows
+      // only the first 6 of them. Offering the rest needs the Merx and column
+      // rules that arrive with the later Aspirant slices.
       class_gear: Array.isArray(c.gear)
         ? c.gear.slice(0, 6).map((g, idx) => ({
             name: g.name || '',
