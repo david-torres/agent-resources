@@ -6,8 +6,7 @@ const { CORE_CLASS_UNLOCKS } = require('./starter-content');
 
 // editions: iterable of ruleset strings ('advent' | 'aspirant').
 // Returns Set of class ids granted by holding books in those rulesets.
-// Unknown rulesets contribute nothing. A roster name grants a list of ids, so
-// every id under every name is collected.
+// Unknown rulesets contribute nothing.
 const coreClassIdsForEditions = (editions) => {
   const ids = new Set();
   for (const edition of editions || []) {

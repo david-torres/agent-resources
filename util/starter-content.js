@@ -1,9 +1,10 @@
 // Core class rosters and starter content (see models/profile.js and
 // models/class.js).
 //
-// This module is the single source of truth for these ids: the id assigned
-// to a class row in util/seed-classes.js must be exactly the id the core
-// roster references, or a book grant resolves to classes that do not exist.
+// This module is the single source of truth for these ids: every id a roster
+// lists must be the id some real class row carries -- the one
+// util/seed-classes.js assigns, or the one the loader inserts -- or a book
+// grant resolves to classes that do not exist.
 
 const STARTER_RULES_PDF_ID = 'a10948ac-5f78-481f-9e53-c582b59926cd'; // Enclave: Advent v1
 
