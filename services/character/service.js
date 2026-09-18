@@ -278,25 +278,16 @@ class CharacterService {
     // Merx budget is NOT -- see validateEconomyLimits's own comment for why
     // (an edit's real budget needs mission-earned Merx this path does not
     // fetch outside auto_calculate, and checking the bare grant would refuse
-    // a purchase the character can actually afford). The cap still needs
-    // gear resolved to real class_ids (bare "ClassName::Item" strings carry
-    // no class_id, so an unresolved list would undercount cross-class picks
-    // exactly as it would at creation) -- but only a non-advent economy can
-    // ever fail the cap, so the catalogue lookup that resolution needs is
-    // gated on that: an advent update (all 327 characters that exist today)
-    // costs nothing extra beyond what it already paid.
-    const economy = economyFor({ contentFormat, creatorMode: prepared.creator_mode });
-    let economyGear;
-    if (economy !== 'advent') {
-      const { gearNameToClassId } = await this.adapter.getClassContentLookupMaps();
-      economyGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
-    }
-
+    // a purchase the character can actually afford). The cap is class-id
+    // agnostic -- it counts Signatures and Enchantments (signatureSlotsUsed),
+    // never class_id -- so an edit needs no catalogue lookup to enforce it.
+    // The create path below resolves gear because the Merx budget IT
+    // enforces prices cross-class items differently (equipmentSpend reads
+    // class_id); nothing here does the equivalent, so nothing here resolves.
     const normalized = normalizeCharacterInput(prepared, {
       rulesVersion,
       normalizeAutoCalculate: true,
       contentFormat,
-      economyGear,
       enforceMerxBudget: false
     });
     if (normalized.error) return { data: null, error: normalized.error };

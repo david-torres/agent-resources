@@ -917,18 +917,20 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
   expect(result.error).toBeNull();
 });
 
-// saveCharacterAtomic ALWAYS fetches the catalogue once, for its own gear/
-// ability class-id resolution -- that call predates this task and is not
-// what's under test. What's under test is whether the NEW Signature-Cap gear
-// resolution adds a second one for an economy that can never fail the cap.
-// So this pins the call COUNT at the atomic path's existing baseline (1),
-// not at 0 -- 0 would be a false pass on the wrong path if saveCharacterAtomic
-// stopped fetching the catalogue for some unrelated reason.
-test('an advent update never fetches the class catalogue an extra time for the Signature Cap check', async () => {
+// The Signature Cap is class-id agnostic (signatureSlotsUsed counts entries
+// and Enchantment presence, never class_id), so an update's cap check needs
+// no gear resolution and no catalogue lookup at all -- see the comment on
+// updateCharacter in service.js. The only getClassContentLookupMaps call an
+// update ever makes is saveCharacterAtomic's own, for its unrelated gear/
+// ability class-id resolution, and it happens exactly once regardless of
+// gear count or economy. Pinning the count at 1 (not 0) for BOTH an advent
+// and an aspirant-content update, rather than checking just one economy,
+// proves no economy triggers a second, economy-gated read.
+const expectExactlyOneCatalogueFetch = async (contentFormat, classId) => {
   const calls = [];
   const adapter = makeAdapter(calls, {
-    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, abilities: [] }),
-    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [] }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat, error: null }),
     getClassContentLookupMaps: async () => {
       calls.push(['getClassContentLookupMaps']);
       return {
@@ -944,14 +946,20 @@ test('an advent update never fetches the class catalogue an extra time for the S
     saveCharacterAtomic: async () => ok({ id: 'character-1' })
   });
   const service = new CharacterService(adapter);
-  // Twenty Signatures would fail the aspirant/aspiring cap outright, so this
-  // also proves advent really is uncapped, not merely under-checked.
-  const gear = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: ADVENT_CLASS_ID }));
+  const gear = Array.from({ length: 5 }, (_, i) => ({ name: `S${i}`, class_id: classId }));
   const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ADVENT_CLASS_ID, gear
+    name: 'Hero', class_id: classId, gear
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
   expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
+};
+
+test('an advent update fetches the class catalogue exactly once, never a second time for the cap', async () => {
+  await expectExactlyOneCatalogueFetch('advent', ADVENT_CLASS_ID);
+});
+
+test('an aspirant-content update fetches the class catalogue exactly once too', async () => {
+  await expectExactlyOneCatalogueFetch('aspirant', ASPIRANT_CLASS_ID);
 });
 
 // The wizard sends type on every aspiring ability
