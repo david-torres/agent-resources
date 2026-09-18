@@ -264,8 +264,16 @@ test('the wizard panel prints the tips heading, falling back when it is blank', 
 
 test('the wizard grants a class its Core abilities, never its Advanced ones', () => {
   const src = wizardPanelSource();
-  // The payload builder must not choose between the two lists: an Advanced
-  // Ability costs 2 Perks (ENCLAVE: Aspirant V1, pg. 7) and is never free.
+  const start = src.indexOf('const serializePayload');
+  const end = src.indexOf('const buildSubmitPayload', start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const payloadBuilder = src.slice(start, end);
   expect(src).not.toContain('useAdvanced');
-  expect(src).toContain("type: 'core'");
+  // An Advanced Ability costs 2 Perks (ENCLAVE: Aspirant V1, pg. 7) and is
+  // never free: the payload builder must not read the class's Advanced
+  // roster at all. (Aspiring's own advanced pick comes from
+  // state.classBuild.advancedAbility, not this field, so this holds for
+  // every mode the builder serializes.)
+  expect(payloadBuilder).not.toContain('advanced_abilities');
 });

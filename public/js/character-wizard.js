@@ -1378,8 +1378,9 @@ const getMerxBudget = () => {
   //   - 'advent'    -> class.abilities_html (the 3 base abilities)
   //   - 'aspirant'  -> class.abilities_html (the 3 base abilities) — the
   //                    aspirant's single free-form perk attaches to one of
-  //                    these, so the + buttons must live on cards that
-  //                    always exist (advanced_abilities is empty by default).
+  //                    these, so the + buttons live on the Core cards: every
+  //                    class has three Core Abilities, but not every class
+  //                    has a populated Advanced roster to attach to instead.
   //   - 'aspiring'  -> the class-build's picked abilities, rendered as the
   //                    Perk spend step below.
   // Aspiring mode renders the class-build's picked abilities as the Perk
@@ -3225,11 +3226,12 @@ const getMerxBudget = () => {
         .map((i) => i && i.name ? i.name : null)
         .filter(Boolean);
     }
-    // Class abilities: the chosen class's three Core Abilities are auto-granted
-    // to the character. Advanced Abilities are not: one costs 2 Perks
-    // (ENCLAVE: Aspirant V1, pg. 7), and a new character has a single Perk.
-    // Step 3 shows a class's Advanced roster as a primer; showing it is not
-    // granting it. We send them as {name, class_id, type} so the server's
+    // Class abilities: the chosen class's three Core Abilities are what a
+    // character starts with. Advanced Abilities are not auto-granted: one
+    // costs 2 Perks (ENCLAVE: Aspirant V1, pg. 7), and a new character has a
+    // single Perk. A class's Advanced roster is surfaced only in the
+    // aspiring class-builder and its step 3 summary, never here. We send
+    // abilities as {name, class_id, type} so the server's
     // normalizeAbilityItems + setCharacterAbilities writes rows into
     // public.class_abilities. `type` must be explicit on every row: an absent
     // one means "keep whatever is stored" to the reconcile path, not 'core'.
