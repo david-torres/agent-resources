@@ -8,6 +8,7 @@ const {
   normalizeStatsPayload
 } = require('./input');
 const { deriveCharacterTotals } = require('../../util/character-derived');
+const { economyFor } = require('../../util/merx-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
@@ -226,7 +227,8 @@ class CharacterService {
     const { data: characterInput, childData } = normalized;
 
     if (characterInput.auto_calculate) {
-      const { gearNameToClassId } = await this.adapter.getClassContentLookupMaps();
+      const { gearNameToClassId, classRows } = await this.adapter.getClassContentLookupMaps();
+      const classRow = (classRows || []).find(row => row.id === characterInput.class_id);
       const [missions, offscreenMissions] = await Promise.all([
         this.adapter.getRealMissions(id),
         this.adapter.listOffscreenMissions(id)
@@ -242,7 +244,11 @@ class CharacterService {
         },
         realMissions: missions.data || [],
         offscreenMissions: offscreenMissions.data || [],
-        rulesVersion
+        rulesVersion,
+        economy: economyFor({
+          contentFormat: classRow && classRow.content_format,
+          creatorMode: characterInput.creator_mode
+        })
       });
       characterInput.level = derived.level;
       characterInput.completed_missions = derived.completed_missions;
@@ -600,14 +606,18 @@ class CharacterService {
 
     const rulesVersionResult = character.class_id
       ? await this.adapter.getClassRulesVersion(character.class_id)
-      : { data: 'v1' };
+      : { data: 'v1', contentFormat: null };
     const rulesVersion = rulesVersionResult.data || 'v1';
 
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
-      rulesVersion
+      rulesVersion,
+      economy: economyFor({
+        contentFormat: rulesVersionResult.contentFormat,
+        creatorMode: character.creator_mode
+      })
     });
 
     const stats = normalizeStatsPayload(body.stats || body);

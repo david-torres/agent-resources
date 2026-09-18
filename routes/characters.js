@@ -31,6 +31,7 @@ const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
+const { economyFor } = require('../util/merx-economy');
 const { filterClassListsByIds } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
@@ -432,7 +433,11 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
-      rulesVersion: effectiveVersion
+      rulesVersion: effectiveVersion,
+      economy: economyFor({
+        contentFormat: characterClass && characterClass.content_format,
+        creatorMode: character.creator_mode
+      })
     });
 
     let upgradeTargets = [];
@@ -486,11 +491,15 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   if (error || !character) return sendError(req, res, error, { message: 'Character not found' });
   if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
+  let classRow = null;
   let effectiveVersion = 'v1';
   if (character.class_id) {
     try {
       const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-      if (cls && cls.rules_version === 'v2') effectiveVersion = 'v2';
+      if (cls) {
+        classRow = cls;
+        if (cls.rules_version === 'v2') effectiveVersion = 'v2';
+      }
     } catch (_) {}
   }
 
@@ -507,7 +516,11 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
-      rulesVersion: effectiveVersion
+      rulesVersion: effectiveVersion,
+      economy: economyFor({
+        contentFormat: classRow && classRow.content_format,
+        creatorMode: character.creator_mode
+      })
     });
   }
 

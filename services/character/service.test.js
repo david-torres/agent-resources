@@ -615,6 +615,72 @@ test('gear no class defines still fails the save when the character has no class
   expect(saved).toBeNull();
 });
 
+// --- Auto-calculate economy -------------------------------------------
+//
+// deriveCharacterTotals prices gear differently depending on which economy
+// the character's class belongs to (util/merx-economy.js#economyFor), keyed
+// on the stored class's content_format. The service must resolve that economy
+// itself rather than let deriveCharacterTotals default to advent.
+//
+// Reuses GUNSLINGER_FAMILY_AND_FORK's two ends: gunslinger-v1 (content_format
+// advent) and gunslinger-aspirant-v1 (content_format aspirant).
+const ASPIRANT_CLASS_ID = 'gunslinger-aspirant-v1';
+const ADVENT_CLASS_ID = 'gunslinger-v1';
+
+// Saves gear through updateCharacter with auto_calculate on, for a character
+// whose (immutable) stored class is `classId`. Mirrors saveGearAsClass above,
+// but exercises the derived Merx totals rather than gear-resolution.
+const autoCalculateOnClass = async (classId, gear) => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [] }),
+    getClassContentLookupMaps: async () => ({
+      gearNameToClassId: new Map(),
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map(),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map(),
+      classesByName: new Map(),
+      classRows: GUNSLINGER_FAMILY_AND_FORK
+    }),
+    saveCharacterAtomic: async (args) => {
+      saved = args.character;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const result = await service.updateCharacter('character-1', { name: 'Hero', gear, auto_calculate: true }, { id: 'profile-1' });
+  return { result, saved };
+};
+
+test('auto-calculate prices a V1 character under the aspirant economy', async () => {
+  const gear = [
+    { name: 'S0', class_id: ASPIRANT_CLASS_ID },
+    { name: 'S1', class_id: ASPIRANT_CLASS_ID }
+  ];
+  const { result, saved } = await autoCalculateOnClass(ASPIRANT_CLASS_ID, gear);
+  expect(result.error).toBeNull();
+  // Aspirant grants 12 Merx at creation and charges 2 Merx per own-class
+  // Signature with no free allotment, so two Signatures (4 spent) leave an
+  // 8 Merx reward. Misresolved to advent -- which grants 0 Merx but gives the
+  // first four Signatures free -- this same character would show 0 instead.
+  expect(saved.commissary_reward).toBe(8);
+});
+
+test('auto-calculate leaves an Advent character on the advent economy', async () => {
+  const gear = [
+    { name: 'S0', class_id: ADVENT_CLASS_ID },
+    { name: 'S1', class_id: ADVENT_CLASS_ID },
+    { name: 'S2', class_id: ADVENT_CLASS_ID },
+    { name: 'S3', class_id: ADVENT_CLASS_ID }
+  ];
+  const { result, saved } = await autoCalculateOnClass(ADVENT_CLASS_ID, gear);
+  expect(result.error).toBeNull();
+  // Four own-class Signatures sit inside Advent's four-item free allotment,
+  // so nothing is charged and the reward stays 0 -- unchanged from before
+  // this task, since Advent was always the default economy.
+  expect(saved.commissary_reward).toBe(0);
+});
+
 // The wizard sends type on every aspiring ability
 // (public/js/character-wizard.js:3225,3228), but both write paths projected
 // abilities down to {name, class_id, description}. A dropped tag makes an

@@ -173,14 +173,17 @@ const getRealMissions = async (characterId) => {
   return { data: (data || []).map(mc => mc.missions).filter(Boolean), error: null };
 };
 
+// `contentFormat` rides alongside `data` (the rules version) rather than
+// replacing it, so the one class row this already fetches also answers
+// economyFor's question -- levelUp is the only caller and needs both.
 const getClassRulesVersion = async (classId) => {
-  if (!classId) return { data: 'v1', error: null };
+  if (!classId) return { data: 'v1', contentFormat: null, error: null };
   try {
-    const { data, error } = await supabaseAdmin.from('classes').select('rules_version').eq('id', classId).maybeSingle();
-    if (error || !data) return { data: 'v1', error: null };
-    return { data: data.rules_version === 'v2' ? 'v2' : 'v1', error: null };
+    const { data, error } = await supabaseAdmin.from('classes').select('rules_version, content_format').eq('id', classId).maybeSingle();
+    if (error || !data) return { data: 'v1', contentFormat: null, error: null };
+    return { data: data.rules_version === 'v2' ? 'v2' : 'v1', contentFormat: data.content_format || null, error: null };
   } catch (_) {
-    return { data: 'v1', error: null };
+    return { data: 'v1', contentFormat: null, error: null };
   }
 };
 
