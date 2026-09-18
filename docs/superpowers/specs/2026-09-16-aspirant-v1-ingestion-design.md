@@ -169,9 +169,14 @@ Four consumers change behavior and must each be covered: unlock expansion
 
 **Unlock consequence.** `CORE_CLASS_UNLOCKS.aspirant`
 (`util/starter-content.js`) names the six pre-release ids and reaches nothing
-else once expansion stops crossing the format boundary. The roster gains the six
-V1 Aspirant-class ids alongside the existing six, so nobody loses access to a
-class they already have characters on. `util/core-roster.integration.test.js`
+else once expansion stops crossing the format boundary. The roster gains **all
+twelve** V1 class ids alongside the existing six: the book contains twelve
+classes and an owner should get what the book contains, including the V1
+Gunslinger, Illusionist, Librarian, Thane, Thunderbird and Wanderer, whose
+parents belong to the Advent roster rather than this one. The pre-release six
+stay, so nobody loses access to a class they already have characters on. Each
+value therefore becomes a list of ids, and the roster ends at eighteen ids under
+twelve names. `util/core-roster.integration.test.js`
 pins this map against real rows and moves with it.
 
 ### The twelve rows are forks
@@ -374,7 +379,7 @@ between the load and this migration are the rows it exists to correct.
 | Expanded tips column | new migration | `expanded_tips` jsonb NOT NULL |
 | Admin fork/duplicate | new migration replacing `dup_class` | both new columns in the column list and the SELECT; distinct from the loader's fork creation, which inserts directly |
 | Family firewall | `util/class-family.js:7` | edge requires matching `content_format` |
-| Unlock roster | `util/starter-content.js` | six V1 ids added to `CORE_CLASS_UNLOCKS.aspirant` |
+| Unlock roster | `util/starter-content.js` | all twelve V1 ids added to `CORE_CLASS_UNLOCKS.aspirant`; every value becomes a list, eighteen ids under twelve names |
 | Gear normalization | `util/class-gear.js` | `column`, `position`; census restated |
 | Tips normalization | new `util/class-expanded-tips.js` | Player/Conduit note trees |
 | Admin write handlers | `routes/classes.js:662,729` | accept and persist `expanded_tips`, `content_format` |
