@@ -1,0 +1,142 @@
+// The pure readings the Aspirant V1 verifier makes of a `pdftotext -layout` page, and the
+// constants that decide them. They live here rather than in scripts/verify-aspirant-v1-extract.mjs
+// because scripts/run-tests.mjs scans models, routes, services, test, util and views, so nothing
+// under scripts/ can carry a unit test -- and these constants decide what the project's
+// correctness gate is willing to call a match.
+//
+// This shares a directory with util/aspirant-extract.js and must never require it. The
+// verifier's whole value is that it reads the book in a different pdftotext mode and segments
+// on different evidence, so neither side can borrow the other's mistake. Sharing a directory
+// costs that nothing; sharing the extractor's code would cost all of it.
+const { tokenize } = require('./prerelease-extract');
+
+const indentOf = (line) => line.search(/\S/);
+
+const tally = (tokens) => tokens.reduce((seen, token) => seen.set(token, (seen.get(token) || 0) + 1), new Map());
+
+const surplus = (tokens, against) => {
+  const held = tally(against);
+  const over = [];
+  for (const [token, count] of tally(tokens)) {
+    const excess = count - (held.get(token) || 0);
+    if (excess > 0) over.push(`${token} x${excess}`);
+  }
+  return over.sort();
+};
+
+// The allowance only covers the tags, so what stops it covering anything else is this: every
+// tag must belong to a pair that wraps one unbroken run of characters.
+const WRAPPED = /<sup>([^<]*)<\/sup>/g;
+const STRAY_TAG = /<\/?sup>/;
+
+// Printed page 12 gives the notation: a bound, optionally a range to a second bound, and
+// optionally a plus. 0 is defined there as a range with no lower bound, so it only ever stands
+// as the lower end of one -- `0–M` is a rating and a bare `0` is not. The en dash is U+2013,
+// which is the character the book sets; the attribution dash on a cover is U+2014 and is a
+// different character. `-layout` carries no type size, so what the page prints raised cannot be
+// checked from it; what can be checked is that the markup wraps a rating and not a word of the
+// sentence.
+const RAISED_NOTATION = /^(0–[LMH]|[LMH](–[LMH])?)\+?$/;
+
+const checkSupMarkup = (fail, where, texts) => {
+  for (const text of texts) {
+    const wrapped = [...String(text).matchAll(WRAPPED)];
+    const stray = String(text).replace(WRAPPED, '');
+    if (STRAY_TAG.test(stray)) {
+      fail(where, `<sup> markup that wraps no single word: ${JSON.stringify(text)}`);
+    }
+    for (const [, rating] of wrapped) {
+      if (!RAISED_NOTATION.test(rating)) {
+        fail(where, `<sup> markup around "${rating}", which is not a Power Rating`);
+      }
+    }
+  }
+};
+
+// pdftotext -layout gives a raised rating an output line of its own when the line it
+// interrupts leaves it no room, at a left edge no other line uses; and the mark the book sets
+// hard against that rating -- it prints no space before one -- is left behind on that line as
+// a word by itself. Putting the rating back in front of the mark, and closing the space,
+// restores the word the page prints. Gluing two printed words together can only widen the
+// difference from the record, so a repair in the wrong place fails here rather than passing.
+const STRANDED_MARK = /^[.,;:]$/;
+
+// `at` is the row's place among the page's own printed lines, which is what lets a band be
+// read back off those lines after a raised rating has been folded out of this reading.
+const rowsOf = (lines) => lines
+  .filter((line) => line.trim())
+  .map((line, at) => ({ line, at, indent: indentOf(line), tokens: tokenize(line), text: line.trim() }));
+
+// The book's rating notation runs to four characters at most, which is what keeps a short line
+// of the page's own -- a one-word perk name, a label on a line by itself -- out of this.
+const RAISED_MAX_LENGTH = 4;
+
+const repairRaisedRatings = (rows) => {
+  const raised = [];
+  const kept = [];
+  rows.forEach((row) => {
+    const alone = row.tokens.length === 1 && row.tokens[0].length <= RAISED_MAX_LENGTH
+      && !STRANDED_MARK.test(row.tokens[0])
+      && rows.filter((other) => other.indent === row.indent).length === 1;
+    if (alone && kept.length) raised.push({ token: row.tokens[0], line: kept.length - 1 });
+    else kept.push({ ...row, tokens: [...row.tokens] });
+  });
+
+  const merged = [];
+  for (const cell of kept.flatMap((row, line) => row.tokens.map((token) => ({ line, token })))) {
+    // The rating is set on the very next output line, so the one a mark belongs to is the one
+    // that follows the line the mark was stranded on, never some other line's.
+    const at = raised.findIndex((glyph) => glyph.line === cell.line);
+    if (!STRANDED_MARK.test(cell.token) || !merged.length) {
+      merged.push({ ...cell });
+    } else if (at !== -1) {
+      merged.push({ line: cell.line, token: `${raised.splice(at, 1)[0].token}${cell.token}` });
+    } else {
+      merged[merged.length - 1].token += cell.token;
+    }
+  }
+  for (const glyph of raised) merged.push(glyph);
+
+  return kept.map((row, line) => ({ ...row,
+    tokens: merged.filter((cell) => cell.line === line).map((cell) => cell.token) }));
+};
+
+// A meter row is printed in a column down the right of the entry and lands on the same output
+// line as a note whenever the two share a baseline. Nothing within a line of prose is set more
+// than one space apart, so the run of spaces between them is what separates the two columns --
+// and a cut in the wrong place leaves a note short, which fails here rather than passing.
+const COLUMN_GAP = / {3,}\S/;
+
+const untilNextColumn = (line) => {
+  const indent = indentOf(line);
+  const at = line.slice(indent).search(COLUMN_GAP);
+  return at === -1 ? line : line.slice(0, indent + at);
+};
+
+// The two columns are separated by a channel of blank character cells running the whole
+// height of the content. Requiring it to be the only such channel is what makes the split a
+// reading of the page rather than an assumed coordinate.
+const MIN_GUTTER_WIDTH = 2;
+
+const gutterOf = (fail, where, lines) => {
+  const width = Math.max(...lines.map((line) => line.trimEnd().length));
+  const runs = [];
+  for (let column = 0; column < width; column += 1) {
+    if (lines.some((line) => (line[column] ?? ' ') !== ' ')) continue;
+    const open = runs[runs.length - 1];
+    if (open && open.end === column - 1) open.end = column;
+    else runs.push({ start: column, end: column });
+  }
+  const channels = runs.filter((run) => run.end - run.start + 1 >= MIN_GUTTER_WIDTH);
+  if (channels.length !== 1) {
+    fail(where, `${channels.length} blank column channels across the content, expected 1`);
+    return null;
+  }
+  return channels[0].start;
+};
+
+module.exports = {
+  tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
+  gutterOf, checkSupMarkup,
+  RAISED_NOTATION, STRANDED_MARK, COLUMN_GAP, MIN_GUTTER_WIDTH,
+};

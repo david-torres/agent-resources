@@ -19,6 +19,13 @@
 // read from without depending on word order within a line, which `-layout` does not always
 // preserve -- a raised Power Rating can be emitted on an output line of its own.
 //
+// The pure readings of a page, and the constants that decide them, are in
+// util/aspirant-verify.js so that a unit test can pin them: scripts/run-tests.mjs scans
+// models, routes, services, test, util and views, so nothing under scripts/ can carry one.
+// This file is the CLI around them -- arguments, the PDF, the allowances, the report and the
+// exit code. That module must never require util/aspirant-extract.js, and does not: the
+// independence this gate rests on is from the extractor, not from util/.
+//
 // Two things `-layout` cannot settle, and this therefore does not claim: which words the book
 // sets raised, because the mode carries no type size (the markup is checked for shape only);
 // and where one note ends and the next begins when the two are at the same depth, because the
@@ -27,7 +34,10 @@ import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { tokenize } from '../util/prerelease-extract.js';
+import {
+  checkSupMarkup, gutterOf, indentOf, repairRaisedRatings, rowsOf, surplus, tokenize,
+  untilNextColumn,
+} from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
 
 const PDF = process.argv[2];
@@ -44,11 +54,6 @@ const HEADER_OFFSETS = [CORE, SIGNATURE_LEFT, ADVANCED, TIPS];
 
 const ENTRIES_PER_COLUMN = 3;
 const COLUMNS_PER_PAGE = 2;
-
-// The spread and the Expanded Tips page each print two columns with a clear vertical channel
-// between them. Requiring the channel to be the page's only one is what makes finding it a
-// reading of the layout rather than a guess at a coordinate.
-const MIN_GUTTER_WIDTH = 2;
 
 const PAIRED_ACTION_LABEL = 'Paired Action:';
 const SAMPLE_PERKS_HEADING = 'Sample Perks';
@@ -81,8 +86,6 @@ const pageLines = (page) => execFileSync('pdftotext',
   .replace(/\f/g, '')
   .split('\n');
 
-const indentOf = (line) => line.search(/\S/);
-
 const textOf = (value) => {
   if (typeof value === 'string') return [value];
   if (Array.isArray(value)) return value.flatMap(textOf);
@@ -106,18 +109,6 @@ const tokensOf = (texts) => [
   ...texts.flatMap((text) => String(text).match(SUP_MARKUP) ?? []),
 ];
 
-const tally = (tokens) => tokens.reduce((seen, token) => seen.set(token, (seen.get(token) || 0) + 1), new Map());
-
-const surplus = (tokens, against) => {
-  const held = tally(against);
-  const over = [];
-  for (const [token, count] of tally(tokens)) {
-    const excess = count - (held.get(token) || 0);
-    if (excess > 0) over.push(`${token} x${excess}`);
-  }
-  return over.sort();
-};
-
 const flattenNotes = (notes, depth = 0) => notes.flatMap((note) =>
   [{ depth, text: note.text }, ...flattenNotes(note.children, depth + 1)]);
 
@@ -140,32 +131,6 @@ const supAllowance = (tokens) => allow('record',
   tokens.filter((token) => token === SUP_OPEN || token === SUP_CLOSE),
   'the <sup> markup, which the page sets as a raised smaller glyph rather than as text');
 
-// The allowance only covers the tags, so what stops it covering anything else is this: every
-// tag must belong to a pair that wraps one unbroken run of characters.
-const WRAPPED = /<sup>([^<]*)<\/sup>/g;
-const STRAY_TAG = /<\/?sup>/;
-
-// Printed page 12 gives the notation: a bound, optionally a range to a second bound, and
-// optionally a plus, with 0 standing for a range with no lower bound at all. `-layout` carries
-// no type size, so what the page prints raised cannot be checked from it; what can be checked
-// is that the markup wraps a rating and not a word of the sentence.
-const RAISED_NOTATION = /^(0|[LMH])(–[LMH])?\+?$/;
-
-const checkSupMarkup = (where, texts) => {
-  for (const text of texts) {
-    const wrapped = [...String(text).matchAll(WRAPPED)];
-    const stray = String(text).replace(WRAPPED, '');
-    if (STRAY_TAG.test(stray)) {
-      fail(where, `<sup> markup that wraps no single word: ${JSON.stringify(text)}`);
-    }
-    for (const [, rating] of wrapped) {
-      if (!RAISED_NOTATION.test(rating)) {
-        fail(where, `<sup> markup around "${rating}", which is not a Power Rating`);
-      }
-    }
-  }
-};
-
 const compare = (where, pdfTokens, recordTokens, allowances) => {
   const allowedMissing = allowances.filter((entry) => entry.side === 'pdf').flatMap((entry) => entry.tokens);
   const allowedExtra = allowances.filter((entry) => entry.side === 'record').flatMap((entry) => entry.tokens);
@@ -179,64 +144,6 @@ const compare = (where, pdfTokens, recordTokens, allowances) => {
   if (extra.join(' | ') !== expectedExtra.join(' | ')) {
     fail(where, `in the record but not the PDF: [${extra.join(' | ')}], allowed [${expectedExtra.join(' | ')}]`);
   }
-};
-
-// pdftotext -layout gives a raised rating an output line of its own when the line it
-// interrupts leaves it no room, at a left edge no other line uses; and the mark the book sets
-// hard against that rating -- it prints no space before one -- is left behind on that line as
-// a word by itself. Putting the rating back in front of the mark, and closing the space,
-// restores the word the page prints. Gluing two printed words together can only widen the
-// difference from the record, so a repair in the wrong place fails here rather than passing.
-const STRANDED_MARK = /^[.,;:]$/;
-
-// `at` is the row's place among the page's own printed lines, which is what lets a band be
-// read back off those lines after a raised rating has been folded out of this reading.
-const rowsOf = (lines) => lines
-  .filter((line) => line.trim())
-  .map((line, at) => ({ line, at, indent: indentOf(line), tokens: tokenize(line), text: line.trim() }));
-
-// The book's rating notation runs to four characters at most, which is what keeps a short line
-// of the page's own -- a one-word perk name, a label on a line by itself -- out of this.
-const RAISED_MAX_LENGTH = 4;
-
-const repairRaisedRatings = (rows) => {
-  const raised = [];
-  const kept = [];
-  rows.forEach((row) => {
-    const alone = row.tokens.length === 1 && row.tokens[0].length <= RAISED_MAX_LENGTH
-      && !STRANDED_MARK.test(row.tokens[0])
-      && rows.filter((other) => other.indent === row.indent).length === 1;
-    if (alone && kept.length) raised.push({ token: row.tokens[0], line: kept.length - 1 });
-    else kept.push({ ...row, tokens: [...row.tokens] });
-  });
-
-  const merged = [];
-  for (const cell of kept.flatMap((row, line) => row.tokens.map((token) => ({ line, token })))) {
-    // The rating is set on the very next output line, so the one a mark belongs to is the one
-    // that follows the line the mark was stranded on, never some other line's.
-    const at = raised.findIndex((glyph) => glyph.line === cell.line);
-    if (!STRANDED_MARK.test(cell.token) || !merged.length) {
-      merged.push({ ...cell });
-    } else if (at !== -1) {
-      merged.push({ line: cell.line, token: `${raised.splice(at, 1)[0].token}${cell.token}` });
-    } else {
-      merged[merged.length - 1].token += cell.token;
-    }
-  }
-  for (const glyph of raised) merged.push(glyph);
-
-  return kept.map((row, line) => ({ ...row,
-    tokens: merged.filter((cell) => cell.line === line).map((cell) => cell.token) }));
-};
-
-// A meter row is printed in a column down the right of the entry and lands on the same output
-// line as a note whenever the two share a baseline. Nothing within a line of prose is set more
-// than one space apart, so the run of spaces between them is what separates the two columns --
-// and a cut in the wrong place leaves a note short, which fails here rather than passing.
-const untilNextColumn = (line) => {
-  const indent = indentOf(line);
-  const at = line.slice(indent).search(/ {3,}\S/);
-  return at === -1 ? line : line.slice(0, indent + at);
 };
 
 const bandOf = (lines) => repairRaisedRatings(rowsOf(lines.map(untilNextColumn)));
@@ -341,28 +248,8 @@ const rowIndexes = (rows, matches) => rows
   .filter(({ row }) => matches(row.text))
   .map(({ index }) => index);
 
-// The two columns are separated by a channel of blank character cells running the whole
-// height of the content. Requiring it to be the only such channel is what makes the split a
-// reading of the page rather than an assumed coordinate.
-const gutterOf = (where, lines) => {
-  const width = Math.max(...lines.map((line) => line.trimEnd().length));
-  const runs = [];
-  for (let column = 0; column < width; column += 1) {
-    if (lines.some((line) => (line[column] ?? ' ') !== ' ')) continue;
-    const open = runs[runs.length - 1];
-    if (open && open.end === column - 1) open.end = column;
-    else runs.push({ start: column, end: column });
-  }
-  const channels = runs.filter((run) => run.end - run.start + 1 >= MIN_GUTTER_WIDTH);
-  if (channels.length !== 1) {
-    fail(where, `${channels.length} blank column channels across the content, expected 1`);
-    return null;
-  }
-  return channels[0].start;
-};
-
 const columnsOf = (where, lines) => {
-  const gutter = gutterOf(where, lines);
+  const gutter = gutterOf(fail, where, lines);
   if (gutter === null) return null;
   return [lines.map((line) => line.slice(0, gutter)), lines.map((line) => line.slice(gutter))];
 };
@@ -491,7 +378,7 @@ const verifyCover = (row, lines, review) => {
   const { abilities, advanced_abilities: advanced, gear, expanded_tips: expanded, ...cover } = row;
   // `name` comes from the running header, which is compared against it page by page.
   const recordTexts = textsExcept(cover, ['name']);
-  checkSupMarkup(where, recordTexts);
+  checkSupMarkup(fail, where, recordTexts);
   const recordTokens = tokensOf(recordTexts);
   allowances.push(supAllowance(recordTokens));
   compare(where, tokensIn(readingOf(lines)), recordTokens, allowances);
@@ -580,7 +467,7 @@ const verifyAbilityPage = (row, printed, lines, entries, review) => {
     const region = rows.slice(anchor.start, anchor.end);
     const spot = `${where} ability ${index + 1} (${entry.name})`;
     const recordTexts = textsExcept(entry, []);
-    checkSupMarkup(spot, recordTexts);
+    checkSupMarkup(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(PAIRED_ACTION_LABEL), 'a structural label; its text is in paired_action'),
@@ -667,7 +554,7 @@ const verifySignatureColumn = (row, printed, lines, column, entries, review) => 
     }
 
     const recordTexts = textsExcept(entry, ['category']);
-    checkSupMarkup(spot, recordTexts);
+    checkSupMarkup(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(ENCHANTMENT_DIVIDER),
@@ -710,7 +597,7 @@ const verifyTipsPage = (row, printed, lines, review) => {
     }
     const body = printedLines.slice(1);
     const recordTexts = textsExcept({ notes }, []);
-    checkSupMarkup(spot, recordTexts);
+    checkSupMarkup(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(heading), 'the column heading; it is the expanded_tips key, not a value'),
