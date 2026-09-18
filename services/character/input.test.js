@@ -630,6 +630,18 @@ test('aspiring is capped at eight slots and granted ten Merx', () => {
   expect(result.errors.join(' ')).toMatch(/Signature Cap|8/);
 });
 
+// Review round 1, Finding 3: the aspiring cap's passing side (exactly at the
+// boundary, not comfortably under it) was never asserted, so a `>` that
+// regressed to `>=` would reject a legal 8-slot build and nothing would catch
+// it. earnedMerx is generous enough that only the cap, not the budget, could
+// be doing the rejecting.
+test('exactly eight Signatures fit the aspiring cap', () => {
+  const eight = Array.from({ length: 8 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
+  expect(validateEconomyLimits({
+    economy: 'aspiring', characterClassId: null, earnedMerx: 100, gear: eight, commonItems: []
+  })).toEqual({ ok: true });
+});
+
 // 327 characters were built with no budget and no measurement says they pass.
 test('the advent economy enforces nothing', () => {
   const twenty = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: 'advent' }));

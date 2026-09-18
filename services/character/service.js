@@ -85,6 +85,12 @@ const requireOwnedCharacterLean = async (adapter, actor, id) => {
 // from the existing row, or from the 'core' default for a brand-new one.
 const submittedAbilityType = (value) => (value === 'advanced' || value === 'core' ? value : null);
 
+// An object item keeps every field it submitted (spread first, name/class_id
+// pinned after) -- not just name/class_id -- so a resolved item still carries
+// its enchantment/mods. Both deriveCharacterTotals (equipmentSpend) and
+// validateEconomyLimits (signatureSlotsUsed) price an Enchantment as part of
+// this same item, and dropping it here would silently zero that cost for any
+// caller that resolves gear through this function.
 const resolveSubmittedGear = (gear, gearNameToClassId) => {
   const submitted = Array.isArray(gear) ? gear : (gear ? [gear] : []);
   return submitted.map(item => {
@@ -96,7 +102,7 @@ const resolveSubmittedGear = (gear, gearNameToClassId) => {
       return name ? { name, class_id: gearNameToClassId.get(name) || null } : null;
     }
     if (typeof item === 'object' && item.name) {
-      return { name: item.name, class_id: item.class_id || gearNameToClassId.get(item.name) || null };
+      return { ...item, name: item.name, class_id: item.class_id || gearNameToClassId.get(item.name) || null };
     }
     return null;
   }).filter(Boolean);
@@ -121,15 +127,25 @@ class CharacterService {
     // class-name lookup may populate class_id.
     const rulesVersion = await this.adapter.getRulesVersion(input.class_id);
     const prepared = await this.adapter.resolveClassReference(input);
-    // content_format is what economyFor needs to tell an aspirant-content
-    // class from an advent one; resolveClassReference above only fills in
-    // class_id/class, so it is looked up here rather than adding a second,
-    // differently-shaped resolution inside the normalizer.
-    const { gearNameToClassId, classRows } = await this.adapter.getClassContentLookupMaps();
+    // One catalogue lookup covers three needs that would otherwise each cost
+    // their own round of sub-queries: content_format (economyFor), resolving
+    // bare "ClassName::Item" gear strings to a real class_id (below), and the
+    // maps saveCharacterAtomic needs for its own class-item resolution --
+    // handed straight through so it does not fetch the same four sub-queries
+    // a second time on every creation.
+    const maps = await this.adapter.getClassContentLookupMaps();
+    const { gearNameToClassId, classRows } = maps;
     const classRow = (classRows || []).find(row => row.id === prepared.class_id);
     const contentFormat = classRow && classRow.content_format;
+    // The classic/expert create form submits gear as bare "ClassName::Item"
+    // strings with no class_id at all (views/partials/character-class-gear.
+    // handlebars), and isCrossClass (util/merx-economy.js) reads a missing
+    // class_id as "not cross-class" -- so pricing the unresolved list, as
+    // both the economy check and the reward derivation below now avoid doing,
+    // would price every cross-class Signature as if it were own-class.
+    const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
     const normalized = normalizeCharacterInput(prepared, {
-      rulesVersion, creatorId: actor.id, contentFormat
+      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear
     });
     if (normalized.error) return { data: null, error: normalized.error };
 
@@ -145,7 +161,7 @@ class CharacterService {
       const derived = deriveCharacterTotals({
         character: {
           class_id: characterInput.class_id,
-          gear: resolveSubmittedGear(childData.classGear, gearNameToClassId),
+          gear: resolvedGear,
           common_items: characterInput.common_items
         },
         realMissions: [],
@@ -158,7 +174,7 @@ class CharacterService {
 
     if (typeof this.adapter.saveCharacterAtomic === 'function') {
       return this.saveCharacterAtomic({
-        id: null, actor, characterInput, childData, rulesVersion, previousAbilities: []
+        id: null, actor, characterInput, childData, rulesVersion, previousAbilities: [], maps
       });
     }
     const created = await this.adapter.createCharacterRow(characterInput);
@@ -244,7 +260,15 @@ class CharacterService {
 
     // Resolved from the stored class, never the submitted one: this gates both
     // the v2-only field strip below and the perk rebuild in saveCharacterAtomic.
-    const rulesVersion = await this.adapter.getRulesVersion(storedClassId);
+    // content_format rides alongside rulesVersion from the same one-row query
+    // (services/character/repository.js#getClassRulesVersion, the method
+    // levelUp already uses for the same reason) so the economy check just
+    // below is not left resolving to 'advent' on every edit for want of it --
+    // this is the one query updateCharacter already pays unconditionally, not
+    // a new one, and it is not the auto_calculate-only catalogue lookup below.
+    const rulesVersionResult = await this.adapter.getClassRulesVersion(storedClassId);
+    const rulesVersion = rulesVersionResult.data || 'v1';
+    const contentFormat = rulesVersionResult.contentFormat;
     if (rulesVersion !== 'v2') {
       for (const field of V2_ONLY_FIELDS) delete prepared[field];
     }
@@ -252,7 +276,8 @@ class CharacterService {
 
     const normalized = normalizeCharacterInput(prepared, {
       rulesVersion,
-      normalizeAutoCalculate: true
+      normalizeAutoCalculate: true,
+      contentFormat
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
@@ -321,11 +346,14 @@ class CharacterService {
     return { data: character, error: updated.error };
   }
 
-  async saveCharacterAtomic({ id, actor, characterInput, childData, rulesVersion, previousAbilities }) {
+  async saveCharacterAtomic({ id, actor, characterInput, childData, rulesVersion, previousAbilities, maps: providedMaps }) {
     const traits = (Array.isArray(childData.traits) ? childData.traits : [])
       .filter(name => name != null && name !== '')
       .map(name => ({ name }));
-    const maps = await this.adapter.getClassContentLookupMaps();
+    // A caller that already fetched the catalogue (createCharacter, to
+    // resolve content_format/gear before this ever runs) hands it in rather
+    // than paying for the same four sub-queries again.
+    const maps = providedMaps ?? await this.adapter.getClassContentLookupMaps();
     const itemsByClassId = maps.itemsByClassId ?? new Map();
     const classesByName = maps.classesByName ?? new Map();
     const ownClassId = characterInput.class_id ?? null;

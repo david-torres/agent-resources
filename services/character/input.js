@@ -328,10 +328,20 @@ const normalizeCharacterInput = (input, context = {}) => {
   // Resolved the same way every other consumer resolves it (economyFor, fed
   // by context.contentFormat -- the class row the caller already looked up --
   // and this character's own creator_mode), rather than re-deriving it here.
+  //
+  // Priced on context.economyGear, not the raw childData.classGear, when the
+  // caller supplies it: the classic/expert create form submits gear as bare
+  // "ClassName::ItemName" strings with no class_id at all, and isCrossClass
+  // (util/merx-economy.js) reads a missing class_id as "not cross-class" --
+  // so pricing the unresolved list would price every cross-class Signature
+  // as if it were own-class. The caller (CharacterService) already has
+  // gearNameToClassId from the same catalogue lookup it uses for content_format,
+  // so it resolves this once with resolveSubmittedGear and hands the result
+  // in, rather than this module re-implementing that resolution.
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
   const economyValidation = validateEconomyLimits({
     economy,
-    gear: childData.classGear,
+    gear: context.economyGear ?? childData.classGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null
   });
@@ -381,11 +391,12 @@ const normalizeStatsPayload = (body = {}) => {
 
 // Structural invariants only -- picks/counts, not price. The Perk budget this
 // function does not check stays client-side only
-// (public/js/character-wizard.js:1521-1522 hardcodes its own copy; this task
-// does not give it a server-side counterpart). The Merx budget and Signature
-// Cap are a different matter: normalizeCharacterInput's validateEconomyLimits
-// call below enforces util/merx-economy.js's figures directly, so a build
-// that clears this structural check still answers to that one.
+// (public/js/character-wizard.js:1525 hardcodes its own ASPIRING_PERKS_BUDGET;
+// this task does not give it a server-side counterpart). The Merx budget and
+// Signature Cap are a different matter: normalizeCharacterInput runs
+// validateEconomyLimits on every submission after this structural check
+// passes, enforcing util/merx-economy.js's figures directly, so a build that
+// clears this structural check still answers to that one.
 const validateAspiringBuild = (body) => {
   const name = typeof body.pseudo_class?.name === 'string' ? body.pseudo_class.name.trim() : '';
   if (!name) return 'An Aspiring character needs a class name.';

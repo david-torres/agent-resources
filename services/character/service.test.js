@@ -828,6 +828,66 @@ test('a created Advent character keeps the reward it submitted', async () => {
   expect(saved.commissary_reward).toBe(7);
 });
 
+// Review round 1, Finding 1: the classic/expert create form submits gear as
+// bare "ClassName::Item" strings with no class_id at all
+// (views/partials/character-class-gear.handlebars:9), and a string has no
+// `.class_id` for isCrossClass to read, so an unresolved string always priced
+// as own-class -- 3 own-class (6 Merx) + 3 cross-class (which should be 9,
+// not 6, at 3 each) would wrongly total 12 instead of 15 and slide under the
+// 12-Merx grant. createCharacter must resolve gear to real class_ids (the
+// same way saveCharacterAtomic and the reward derivation already do) before
+// the economy gate ever sees it.
+test('string-format gear is resolved to its real class before the economy gate prices it', async () => {
+  const calls = [];
+  const gearNameToClassId = new Map([
+    ['Own0', ASPIRANT_CLASS_ID], ['Own1', ASPIRANT_CLASS_ID], ['Own2', ASPIRANT_CLASS_ID],
+    ['Cross0', 'other-class'], ['Cross1', 'other-class'], ['Cross2', 'other-class']
+  ]);
+  const adapter = makeAdapter(calls, {
+    getClassContentLookupMaps: async () => ({
+      gearNameToClassId,
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map(),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map(),
+      classesByName: new Map(),
+      classRows: GUNSLINGER_FAMILY_AND_FORK
+    })
+  });
+  const service = new CharacterService(adapter);
+  const result = await service.createCharacter({
+    name: 'Mixed', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+    gear: ['A::Own0', 'A::Own1', 'A::Own2', 'B::Cross0', 'B::Cross1', 'B::Cross2'],
+    commissary_reward: 0
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Merx/);
+});
+
+// Review round 1, Finding 2: updateCharacter threaded no contentFormat into
+// normalizeCharacterInput at all, so economyFor always fell back to 'advent'
+// for any class-bearing (non-aspiring) character on every edit, no matter its
+// class's content_format -- an aspirant-content character's edits went
+// unenforced even though its creation is. Content_format now rides alongside
+// rulesVersion on the one getClassRulesVersion query updateCharacter already
+// makes unconditionally (mirroring how levelUp resolves the same pair), so
+// this fires without adding a query to every update.
+test('an aspirant-content character edited past its budget is rejected', async () => {
+  const calls = [];
+  const adapter = makeAdapter(calls, {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
+  });
+  const service = new CharacterService(adapter);
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID,
+    // Seven own-class Signatures at 2 Merx each spend 14 against the 12-Merx grant.
+    gear: Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }))
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Merx/);
+});
+
 // The wizard sends type on every aspiring ability
 // (public/js/character-wizard.js:3225,3228), but both write paths projected
 // abilities down to {name, class_id, description}. A dropped tag makes an
