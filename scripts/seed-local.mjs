@@ -9,6 +9,7 @@
 //   nav_items  -> supabase/seed.sql            (if empty)
 //   admin      -> seed:admin                   (if no admin profile)
 //   classes    -> seed:classes                 (needs admin; if empty)
+//   Aspirant V1 -> load:aspirant-v1            (needs classes; if none loaded)
 //   rules_pdfs -> seed:rules                    (needs admin; if empty)
 //   badges     -> fetch-badge-art + seed-badges (if empty)
 //   news       -> 2 published news pages      (needs admin; if empty)
@@ -119,6 +120,19 @@ async function main() {
       skip("classes already seeded");
     } else {
       run("seeding classes", ["bun", "run", "seed:classes"]);
+    }
+
+    // ENCLAVE: Aspirant V1 — twelve classes the loader forks off the rows
+    // seed:classes just created, so it has to follow them. Twelve of the
+    // twenty-four ids in CORE_CLASS_UNLOCKS exist only once this has run, and
+    // util/core-roster.integration.test.js fails until they do.
+    const aspirantV1 = (
+      await client.query("select count(*)::int as n from classes where content_format = 'aspirant'")
+    ).rows[0].n;
+    if (aspirantV1 > 0) {
+      skip(`Aspirant V1 classes already loaded (${aspirantV1})`);
+    } else {
+      run("loading ENCLAVE: Aspirant V1 classes", ["bun", "run", "load:aspirant-v1"]);
     }
 
     // rules PDFs — needs admin (created_by); the starter rules-PDF unlock
