@@ -22,18 +22,23 @@ test('classes carries the structured pre-release columns', async () => {
   expect(Array.isArray(data)).toBe(true);
 });
 
+// A name alone is no longer a key: ENCLAVE: Aspirant V1 forks a catalogue row
+// under its own name, so the same name can now match a parent and its fork.
+// is_player_created picks out this fixture, which no book writes.
+const BEASTMASTER = { name: 'Beastmaster', is_player_created: true };
+
 test('challenge_level rejects a value outside Low/Mid/High', async () => {
   // PostgREST reports no error when an UPDATE matches no row, so asserting the
   // target exists is what keeps this from passing without touching the CHECK.
   const { data: existing, error: selectError } = await sb.from('classes')
     .select('id')
-    .eq('name', 'Beastmaster');
+    .match(BEASTMASTER);
   expect(selectError).toBeNull();
   expect(existing).toHaveLength(1);
 
   const { error } = await sb.from('classes')
     .update({ challenge_level: 'Extreme' })
-    .eq('name', 'Beastmaster');
+    .match(BEASTMASTER);
   // 23514 is check_violation. Asserting the code keeps a missing column from
   // standing in for a working constraint.
   expect(error?.code).toBe('23514');
@@ -42,7 +47,7 @@ test('challenge_level rejects a value outside Low/Mid/High', async () => {
 test('prerelease_section rejects a value outside the normalized enum', async () => {
   const { data: existing, error: selectError } = await sb.from('classes')
     .select('id')
-    .eq('name', 'Beastmaster');
+    .match(BEASTMASTER);
   expect(selectError).toBeNull();
   expect(existing).toHaveLength(1);
 
@@ -50,7 +55,7 @@ test('prerelease_section rejects a value outside the normalized enum', async () 
   // 'pcc'; the raw heading must not reach the column.
   const { error } = await sb.from('classes')
     .update({ prerelease_section: 'PCCs' })
-    .eq('name', 'Beastmaster');
+    .match(BEASTMASTER);
   expect(error?.code).toBe('23514');
 });
 
@@ -88,10 +93,12 @@ test('expanded_tips is never null and rejects an explicit null', async () => {
   const { data } = await sb.from('classes').select('id, expanded_tips');
   expect(data.every((row) => row.expanded_tips !== null)).toBe(true);
 
+  // ENCLAVE: Aspirant V1 forks Berserker under its own name, so `name` alone
+  // now matches two rows; content_format picks out the Advent parent.
   const { error } = await sb
     .from('classes')
     .update({ expanded_tips: null })
-    .eq('name', 'Berserker');
+    .match({ name: 'Berserker', content_format: 'advent' });
   expect(error).not.toBeNull();
   expect(error.code).toBe('23502');
 });
@@ -116,10 +123,12 @@ describe('classes.content_format', () => {
   });
 
   test('rejects a value outside the enum', async () => {
+    // `name` alone now matches Berserker's Advent parent and its Aspirant V1
+    // fork; content_format picks out the parent.
     const { error } = await sb
       .from('classes')
       .update({ content_format: 'aspirant-v1' })
-      .eq('name', 'Berserker');
+      .match({ name: 'Berserker', content_format: 'advent' });
     expect(error).not.toBeNull();
     expect(error.code).toBe('23514');
   });

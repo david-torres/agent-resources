@@ -32,9 +32,12 @@ test('classes no longer has a description column', async () => {
 });
 
 test('dup_class copies the prose columns and the four non-prose fields to the fork', async () => {
+  // A name alone is no longer a key: ENCLAVE: Aspirant V1 forks a catalogue row
+  // under its own name, so the same name can now match a parent and its fork.
+  // is_player_created picks out this fixture, which no book writes.
   const { data: source, error: sourceError } = await sb.from('classes')
     .select('*')
-    .eq('name', 'Beastmaster')
+    .match({ name: 'Beastmaster', is_player_created: true })
     .single();
   expect(sourceError).toBeNull();
   // Guards against a vacuously green diff: a source with no prose set would
