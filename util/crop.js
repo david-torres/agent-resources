@@ -108,11 +108,12 @@ function parseImageCrop(value) {
 //
 // Writing NULL for the second would let a malformed field wipe a stored crop,
 // and leaving the raw string in req.body -- what happened before -- writes it
-// into the jsonb column: that is how 17 of the 50 live rows came to hold a jsonb
-// string (`""` or a double-encoded object) instead of an object or NULL. Neither
-// is acceptable, so an unreadable value drops the key and the stored value is
-// left exactly as it is, the same way dropAdminOnlyFields leaves a column alone
-// by removing it from the payload.
+// into the jsonb column: that is how 12 of 327 live `characters` rows came to
+// hold a jsonb string (`""` or a double-encoded object) instead of an object or
+// NULL (no `classes` row holds one). Neither is acceptable, so an unreadable
+// value drops the key and the stored value is left exactly as it is, the same
+// way dropAdminOnlyFields leaves a column alone by removing it from the
+// payload.
 const CLEARED_CROP_VALUES = ['', 'null', 'undefined'];
 
 const applyImageCrop = (body) => {

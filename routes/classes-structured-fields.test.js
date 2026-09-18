@@ -1086,8 +1086,9 @@ test('POST /classes accepts nested gear metadata over multipart/form-data', asyn
 // so a class with no crop posts the literal string `null`, and a class whose
 // column already holds a jsonb string posts that string quoted -- neither of
 // which parseImageCrop can read, and both of which used to be left in req.body
-// and written straight into the column. 17 of the 50 live rows hold a jsonb
-// string because of it.
+// and written straight into the column. No `classes` row holds a jsonb string
+// today (0 of 62), but the shape is live elsewhere: 12 of 327 `characters` rows
+// do.
 const VALID_CROP = { x: 0.1, y: 0.2, width: 0.5, height: 0.5, naturalWidth: 800, naturalHeight: 600 };
 
 test('PUT /classes/:id stores a parsed crop object', async () => {
