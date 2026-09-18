@@ -1,7 +1,7 @@
 const { describe, test, expect } = require('bun:test');
 const {
   indentOf, rowsOf, untilNextColumn, repairRaisedRatings, surplus,
-  gutterOf, checkSupMarkup, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
+  gutterOf, checkSupMarkup, checkBareRatings, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
 } = require('./aspirant-verify');
 
 // The verifier reads the book in a different pdftotext mode from the extractor, so these
@@ -95,6 +95,50 @@ describe('checkSupMarkup', () => {
     checkSupMarkup(fail, 'Vessel p73', ['Galvanizes <sup>M on a hit.']);
     expect(found).toEqual(['Vessel p73: <sup> markup that wraps no single word:'
       + ' "Galvanizes <sup>M on a hit."']);
+  });
+});
+
+describe('checkBareRatings', () => {
+  test('reports a rating left outside the markup mid-sentence', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Vessel p73', ['Galvanizes M on a hit and Wards after.']);
+    expect(found).toEqual(['Vessel p73: "M" reads as a Power Rating but is outside <sup>:'
+      + ' "Galvanizes M on a hit and Wards after."']);
+  });
+
+  test('reports a rating left outside the markup with the page\'s own mark on it', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Vessel p73', ['The strike Galvanizes 0–M.']);
+    expect(found.length).toBe(1);
+    expect(found[0]).toContain('"0–M."');
+  });
+
+  test('passes a rating that is inside the markup', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Vessel p73', ['The strike Galvanizes <sup>0–M</sup>.']);
+    expect(found).toEqual([]);
+  });
+
+  // The quoted advice names its contributor and the attribution ends in an initial, so the
+  // last token of "... — Tim M." is rating-shaped without any markup having been lost.
+  test('excuses the initial that closes an attributed quote', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Gunslinger p13', ['“Let someone else to act.” — Tim M.',
+      '“Keep it intimidating and cool.” — Lee H.', '“Never draw on a drawn weapon.” — Julian M.']);
+    expect(found).toEqual([]);
+  });
+
+  test('excuses only the last token, and only under an attribution', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Gunslinger p13', ['“Galvanize M and run.” — Tim M.']);
+    expect(found.length).toBe(1);
+    expect(found[0]).toContain('"M"');
+  });
+
+  test('does not excuse a bare name that never opens with the attribution dash', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Gunslinger p13', ['Tim M.']);
+    expect(found.length).toBe(1);
   });
 });
 

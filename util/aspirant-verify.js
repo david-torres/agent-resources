@@ -53,6 +53,33 @@ const checkSupMarkup = (fail, where, texts) => {
   }
 };
 
+// `-layout` carries no type size, so the PDF side cannot say which words the book sets raised
+// and a removed <sup> pair leaves no trace there. The record side can say it: the record holds
+// every rating inside the markup, so a rating-shaped token outside it is a pair that went
+// missing. A rating carries the sentence's own mark closed up against it, so the mark is part of
+// the shape looked for here.
+const BARE_RATING = /^(0–[LMH]|[LMH](–[LMH])?)\+?[.,;:]?$/;
+
+// One shape is excused: the quoted advice names its contributor and the attribution ends in an
+// initial, so "— Tim M." closes the string with a rating-shaped token. Run over the committed
+// artifact, this excuses 37 tokens and leaves none unexcused; all 37 are the final token of a
+// string that ends in an em-dash attribution, 36 of them in expanded_tips and one in tips, and
+// none in an ability, a signature or a cover field. The dash is U+2014, which the book uses for
+// nothing else -- a Power Rating range is set with U+2013.
+const ATTRIBUTED_INITIAL = /— (?:\S+ )+[A-Z]\.$/;
+
+const checkBareRatings = (fail, where, texts) => {
+  for (const text of texts) {
+    const attributed = ATTRIBUTED_INITIAL.test(String(text).trim());
+    const tokens = tokenize(String(text).replace(WRAPPED, ' '));
+    tokens.forEach((token, at) => {
+      if (!BARE_RATING.test(token)) return;
+      if (attributed && at === tokens.length - 1) return;
+      fail(where, `"${token}" reads as a Power Rating but is outside <sup>: ${JSON.stringify(text)}`);
+    });
+  }
+};
+
 // pdftotext -layout gives a raised rating an output line of its own when the line it
 // interrupts leaves it no room, at a left edge no other line uses; and the mark the book sets
 // hard against that rating -- it prints no space before one -- is left behind on that line as
@@ -136,6 +163,6 @@ const gutterOf = (fail, where, lines) => {
 
 module.exports = {
   tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
-  gutterOf, checkSupMarkup,
+  gutterOf, checkSupMarkup, checkBareRatings,
   RAISED_NOTATION, STRANDED_MARK, COLUMN_GAP, MIN_GUTTER_WIDTH,
 };

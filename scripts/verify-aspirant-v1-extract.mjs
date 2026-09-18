@@ -26,16 +26,28 @@
 // exit code. That module must never require util/aspirant-extract.js, and does not: the
 // independence this gate rests on is from the extractor, not from util/.
 //
-// Two things `-layout` cannot settle, and this therefore does not claim: which words the book
-// sets raised, because the mode carries no type size (the markup is checked for shape only);
-// and where one note ends and the next begins when the two are at the same depth, because the
-// book prints no bullet, no rule and no leading the mode preserves between them.
+// Two things `-layout` cannot settle from the page.
+//
+// (a) Which words the book sets raised: the mode carries no type size, so a <sup> pair the
+// extractor dropped leaves no trace on the PDF side. The record side closes this: every rating
+// the record holds is inside the markup, so a rating-shaped token outside it is a pair that went
+// missing, and every field is checked for one. One residual stays invisible -- a removal that
+// lands on the final initial of an attributed quote, because "— Tim M." ends in a rating-shaped
+// token of its own and is therefore excused.
+//
+// (b) Where one note ends and the next begins when the two are at the same depth, because the
+// book prints no bullet, no rule and no leading the mode preserves between them. Run-matching
+// pins each note to a whole number of consecutive printed lines instead, which is as far as the
+// page goes. Two rules to close this have been written and measured against the whole book and
+// both were rejected: a per-depth reflow rule and a sentence-end-at-line-break rule each call
+// correctly printed pages defects, by hundreds and by tens respectively. The counts are in the
+// plan's fix-round record; do not pay for this a fourth time.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  checkSupMarkup, gutterOf, indentOf, repairRaisedRatings, rowsOf, surplus, tokenize,
+  checkBareRatings, checkSupMarkup, gutterOf, indentOf, repairRaisedRatings, rowsOf, surplus, tokenize,
   untilNextColumn,
 } from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
@@ -379,6 +391,7 @@ const verifyCover = (row, lines, review) => {
   // `name` comes from the running header, which is compared against it page by page.
   const recordTexts = textsExcept(cover, ['name']);
   checkSupMarkup(fail, where, recordTexts);
+  checkBareRatings(fail, where, recordTexts);
   const recordTokens = tokensOf(recordTexts);
   allowances.push(supAllowance(recordTokens));
   compare(where, tokensIn(readingOf(lines)), recordTokens, allowances);
@@ -468,6 +481,7 @@ const verifyAbilityPage = (row, printed, lines, entries, review) => {
     const spot = `${where} ability ${index + 1} (${entry.name})`;
     const recordTexts = textsExcept(entry, []);
     checkSupMarkup(fail, spot, recordTexts);
+    checkBareRatings(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(PAIRED_ACTION_LABEL), 'a structural label; its text is in paired_action'),
@@ -555,6 +569,7 @@ const verifySignatureColumn = (row, printed, lines, column, entries, review) => 
 
     const recordTexts = textsExcept(entry, ['category']);
     checkSupMarkup(fail, spot, recordTexts);
+    checkBareRatings(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(ENCHANTMENT_DIVIDER),
@@ -598,6 +613,7 @@ const verifyTipsPage = (row, printed, lines, review) => {
     const body = printedLines.slice(1);
     const recordTexts = textsExcept({ notes }, []);
     checkSupMarkup(fail, spot, recordTexts);
+    checkBareRatings(fail, spot, recordTexts);
     const recordTokens = tokensOf(recordTexts);
     const allowances = [
       allow('pdf', tokenize(heading), 'the column heading; it is the expanded_tips key, not a value'),
