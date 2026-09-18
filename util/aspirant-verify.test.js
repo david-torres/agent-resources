@@ -143,9 +143,9 @@ describe('checkBareRatings', () => {
 });
 
 describe('repairRaisedRatings', () => {
-  // Read off printed page 20 (Illusionist, Shadow Blade): the book sets "Glamer<sup>H</sup>,"
-  // and -layout emits the H on an output line of its own at a left edge no other line uses,
-  // leaving the comma behind on the line it interrupted as a word by itself.
+  // Read off PDF page 80, printed page 75 (Vessel, Shadow Blade): the book sets
+  // "Glamer <sup>H</sup>," and -layout emits the H on an output line of its own at a left edge
+  // no other line uses, leaving the comma behind on the line it interrupted as a word by itself.
   const shadowBlade = [
     '           Streak of dark, eerie Glamer , materializing around the',
     '                                                H',
