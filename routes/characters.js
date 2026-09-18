@@ -238,10 +238,12 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
           }))
         : [],
       // Step 4 gear: the first 6 class items are offered on the right-hand
-      // shop at 2 merx each (duplicates allowed, so the user can re-pick a base
-      // item from the left list). The first 3 ("base") are also auto-loaded
-      // for free on the left. The JS uses `subtype` to badge each card so
-      // the user can see which is which.
+      // shop at 2 merx each, duplicates allowed. In advent mode only, the
+      // first 3 ("base") are also auto-loaded for free on the left, so a
+      // duplicate pick there re-buys an item the user already has for free;
+      // aspirant and aspiring modes have no free left-hand list and charge
+      // for every pick. The JS uses `subtype` to badge each card so the
+      // user can see which is which.
       //
       // 6 is a cap here, not the size of a class: an ENCLAVE: Aspirant V1 class
       // carries 12 Signatures across four columns, and this deliberately shows
