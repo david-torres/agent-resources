@@ -65,6 +65,11 @@ test('a Signature holds at most two Mods (pg. 87)', () => {
   expect(MODS_PER_SIGNATURE).toBe(2);
 });
 
+test('a Mod beyond the two-Mod cap is priced at the dearest tier, never free', () => {
+  expect(priceOfMod({ index: 2, crossClass: false })).toBe(2);
+  expect(priceOfMod({ index: 2, crossClass: true })).toBe(3);
+});
+
 test('word limits are 40 for a Custom Enchantment and 10 for a Mod (pp. 86, 87)', () => {
   expect(ENCHANTMENT_WORD_LIMIT).toBe(40);
   expect(MOD_WORD_LIMIT).toBe(10);
@@ -98,6 +103,14 @@ test('a Power Rating superscript is not a word', () => {
 test('an empty or absent description counts zero words', () => {
   expect(countWordsExcludingRatings('')).toBe(0);
   expect(countWordsExcludingRatings(null)).toBe(0);
+});
+
+test('a Power Rating immediately followed by punctuation leaves no bare-punctuation word', () => {
+  expect(countWordsExcludingRatings('Deals damage<sup>M</sup>.')).toBe(2);
+});
+
+test('a Power Rating inside parentheses or before a comma behaves the same', () => {
+  expect(countWordsExcludingRatings('Deals damage (<sup>M</sup>), then burns')).toBe(4);
 });
 
 // pg. 90: an aspiring character's picks "are treated as belonging to your

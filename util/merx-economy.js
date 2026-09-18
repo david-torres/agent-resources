@@ -29,8 +29,8 @@ const CREATION_GRANT = { advent: 0, aspirant: 12, aspiring: 10 };
 // than four total Abilities". Advent has no cap in the rules the app models,
 // so null means "not capped" rather than zero.
 const SIGNATURE_CAP = { advent: null, aspirant: 12, aspiring: 8 };
-// pg. 92: aspiring may never have more than four total Abilities. The
-// Aspirant-tier figure of six is recorded here for parity across tiers.
+// pg. 7: "A character may never have more than six total Abilities, and this
+// cap cannot be increased". pg. 92: aspiring may never have more than four.
 const ABILITY_CAP = { advent: null, aspirant: 6, aspiring: 4 };
 
 // pg. 87: "A given Signature may hold up to two Mods".
@@ -49,11 +49,13 @@ const priceOfEnchantment = ({ source, crossClass } = {}) => {
     return 0;
 };
 
-// `index` is 0-based: a Signature's first Mod is index 0. A Signature cannot
-// hold more than MODS_PER_SIGNATURE, so an index past the table is priced 0
-// rather than throwing -- the count is rejected by validation, and a pricing
-// function that throws would turn a validation error into a 500.
-const priceOfMod = ({ index, crossClass } = {}) => MOD_PRICE[tier(crossClass)][index] ?? 0;
+// `index` is 0-based: a Signature's first Mod is index 0. A Signature holds
+// at most MODS_PER_SIGNATURE Mods; an index past the table prices at that
+// tier's dearest rate rather than 0, so an impossible third Mod is never free.
+const priceOfMod = ({ index, crossClass } = {}) => {
+    const prices = MOD_PRICE[tier(crossClass)];
+    return index in prices ? prices[index] : prices[prices.length - 1];
+};
 
 // pg. 90: an aspiring character's chosen Signatures "are treated as belonging
 // to your Class for the purposes of acquisition and improvement", so it never
@@ -92,12 +94,16 @@ const signatureSlotsUsed = (gear) => {
 
 // pg. 86: a Custom Enchantment is "no more than 40 words long, minus Power
 // Rating Superscripts". A rating is stored as a <sup> span, so the spans come
-// out before the words are counted.
+// out before the words are counted. Stripping a span to a bare space can
+// leave adjacent punctuation (e.g. "damage<sup>M</sup>." becomes "damage .");
+// a token is only counted as a word when it has a letter or digit in it.
 const RATING_SPAN = /<sup>[\s\S]*?<\/sup>/g;
+const WORD_WITH_ALPHANUMERIC = /[\p{L}\p{N}]/u;
 
 const countWordsExcludingRatings = (text) => {
     const stripped = String(text ?? '').replace(RATING_SPAN, ' ').trim();
-    return stripped ? stripped.split(/\s+/).length : 0;
+    if (!stripped) return 0;
+    return stripped.split(/\s+/).filter((token) => WORD_WITH_ALPHANUMERIC.test(token)).length;
 };
 
 // Which economy a character is under. An aspiring character is class-less,
