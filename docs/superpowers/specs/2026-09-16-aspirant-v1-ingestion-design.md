@@ -371,6 +371,22 @@ It only tags rows on classes that have advanced abilities, so it is a no-op for
 every character on an Advent-format class. Characters created against a V1 class
 between the load and this migration are the rows it exists to correct.
 
+**Dropped: the migration is a no-op in every environment.** The premise above is
+that the load gives the backfill rows it can resolve. It does not, because
+`class_abilities` holds a *character's* ability picks, not a class's catalogue.
+Measured against the loaded local database (a restored production copy): 916
+`class_abilities` rows, all `core`; exactly 12 classes carry a non-empty
+`advanced_abilities` list and all 12 are the new Aspirant V1 forks; **0 of 327
+characters is on one of those 12**, so 0 `class_abilities` rows point at a class
+with an advanced list and the `UPDATE` matches 0 rows. That is not a timing
+problem the load fixes — it is the same no-op slice 2 already paid for, and it
+stays a no-op until characters exist on V1 classes, which needs the character
+wizard work deferred to slices 4-5.
+
+The core/advanced distinction therefore remains unrecoverable from the database,
+and slice 4 still has to establish it. Whatever does that has to tag the picks as
+they are made; a retroactive backfill has nothing to key on.
+
 ### Wiring
 
 | Path | File | Change |
@@ -385,7 +401,7 @@ between the load and this migration are the rows it exists to correct.
 | Admin write handlers | `routes/classes.js:662,729` | accept and persist `expanded_tips`, `content_format` |
 | Admin form | `views/class-form.handlebars` | format select; gear rows follow format; expanded-tips repeaters |
 | Class page | `views/class-view.handlebars` | four-column Signature layout; expanded tips; markdown on the newly-rendered fields |
-| Partials | `views/partials/class-sample-perks.handlebars`, `class-enchantment.handlebars` | `{{{markdown …}}}` |
+| Partials | `views/partials/class-sample-perks.handlebars`, `class-enchantment.handlebars` | `{{{powerRatings …}}}` — deliberately not `markdown`: these fields are user-writable through the class import endpoint, so `util/markdown.js:38-44` permits `<sup>` alone rather than running them through a full parser |
 | AI import | `util/class-import.js:173-174,226` | caps key on `content_format`; `expanded_tips` in the schema |
 | Export | `util/class-export.js` | markdown and JSON emit the new keys |
 | Agent serializer | `models/class.js:382-421` | `expanded_tips`, `content_format` |

@@ -1,3 +1,18 @@
+// Reads ENCLAVE: Aspirant V1's twelve class spreads out of a pdftotext -bbox
+// parse. Pure: no I/O, no database, no PDF library.
+//
+// The wide export surface is deliberate. Only scripts/extract-aspirant-v1-classes.mjs
+// consumes this module in production, and it uses two of the 28 exports
+// (parseBboxPages, extractBook); the other 26 exist so util/aspirant-extract.test.js
+// can test each seam of the geometry directly -- page shift, column split, note
+// threading, superscript rethreading -- against the page it came from. The
+// alternative is asserting twelve classes' geometry through extractBook alone,
+// where a failure names the class and not the rule that broke, and where the one
+// off-by-one that matters is invisible among the 216 entries that did not change.
+//
+// So these are test seams, not an unused API: a reader should expect no non-test
+// caller for most of them, and should not read the absence as dead code.
+
 const { pairMeters, parseStatLine } = require('./prerelease-extract');
 const { DEFAULT_ROSTER_COLUMN } = require('./class-gear');
 

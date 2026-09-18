@@ -49,14 +49,14 @@ Copied from the spec and from CLAUDE.md. Every task's requirements implicitly in
 ## File Structure
 
 **Created:**
-- `util/aspirant-extract.js` — all extraction logic, pure, CommonJS, unit-tested. Deliberately a sibling of `util/prerelease-extract.js` rather than an extension of it, so a change made for this book cannot silently alter the artifact the other book already produced.
+- `util/aspirant-extract.js` — all extraction logic, pure, CommonJS, unit-tested. A separate module rather than an extension of `util/prerelease-extract.js`, so a change made for this book cannot silently alter the artifact the other book already produced. Not a sibling of it, though: `aspirant-extract.js:1` imports `pairMeters` and `parseStatLine` from it, so it is a dependant, and a change to either of those two does reach this book.
 - `util/aspirant-extract.test.js` — its unit cover.
 - `scripts/lib/books.mjs` — the per-book descriptor.
 - `test/books.test.js` — its cover.
 - `scripts/extract-aspirant-v1-classes.mjs` — thin CLI wrapper.
 - `scripts/verify-aspirant-v1-extract.mjs` — the gate.
 - `docs/data/aspirant-v1-classes-2026-09.json` — the artifact (generated, committed).
-- `supabase/migrations/20260917000000_retag_class_abilities_advanced.sql` — the re-run backfill.
+- ~~`supabase/migrations/20260917000000_retag_class_abilities_advanced.sql` — the re-run backfill.~~ **Dropped, see Task 13: it matches 0 rows in every environment.**
 - `e2e/specs/27-aspirant-v1-class-page.spec.js` — the rendered-page pass.
 
 **Modified:**
@@ -1761,7 +1761,35 @@ The load itself writes only to the database. Record the before/after counts in t
 
 ---
 
-### Task 13: Re-tag `class_abilities`
+### Task 13: Re-tag `class_abilities` — DROPPED, do not implement
+
+**This task was dropped by ruling. Its migration matches zero rows in every
+environment, so writing it adds a migration that does nothing.** The steps below
+are kept as the record of what was ordered and why it was wrong; do not work
+through them.
+
+Measured against the loaded local database (a restored production copy), and
+re-measured independently by the final reviewer:
+
+| Measurement | Value |
+| --- | --- |
+| `class_abilities` rows | 916, every one `core` |
+| Classes with a non-empty `advanced_abilities` list | 12 — all of them the new Aspirant V1 forks |
+| Characters (of 327) on one of those 12 classes | **0** |
+| `class_abilities` rows the Step 2 `UPDATE` matches | **0** |
+
+The reason is that `class_abilities` holds a **character's** ability picks, not a
+class's catalogue. Loading twelve classes that carry advanced abilities gives the
+backfill nothing to resolve against, because no character has picked from them —
+and none can until the character wizard offers V1 content, which the spec defers
+to slices 4-5. "It must run after the load, not before" was the right ordering
+for the wrong premise: after the load is still zero rows.
+
+So the core/advanced distinction stays unrecoverable from the database and slice 4
+still has to establish it. What it needs is tagging at pick time; a retroactive
+backfill has nothing to key on, whenever it runs.
+
+---
 
 Ruling 23 from slice 2's ledger. `class_abilities.type` was added with a corrective backfill keyed on `classes.advanced_abilities` (`supabase/migrations/20260913000000_class_abilities_type.sql`), which matched **zero** rows because no class had any advanced abilities. All 916 rows read `core` today, so the core/advanced distinction — and with it the 4-Perk economy slice 4 depends on — is not recoverable from the database.
 
@@ -1907,5 +1935,25 @@ Carried forward from the spec, and two found during plan 1:
 
 - **Upgrading a character to an Aspirant class.** Moving a character between families is a player decision with rules consequences — stat caps, the Merx and Perk economies — none of which land before slices 4 and 5. This slice makes the destination exist; it does not build the road.
 - **Retiring the pre-release rows.** They stay public and playable.
-- **`routes/characters.js:245-250`** slices gear to 6 and hardcodes a third copy of the column-1-is-default rule, so the character wizard will show only 6 of a 12-signature class. The spec defers this to slices 4–5. **The comment above it says "all 6 class items" and will read as correct to whoever picks up slice 4.**
+- **`routes/characters.js`** slices gear to 6 and hardcodes a third copy of the column-1-is-default rule (`idx < 3`, after `util/class-gear.js` `gearCategory` and `util/aspirant-extract.js` `gearFrom`), so the character wizard will show only 6 of a 12-signature class. The spec defers this to slices 4–5. The comment above the slice now names both the cap and the duplicated rule, so it no longer reads as correct to whoever picks up slice 4.
 - **`views/character-wizard.handlebars:2`** emits `{{{json wizardData}}}` through a stringifier that does not escape `</script`, and that data carries user-writable class content. Pre-existing and untouched by this work.
+
+Found by the whole-branch review, after the load landed. All figures measured
+against the loaded local database (a restored production copy): 62 classes, 327
+characters, 1492 `class_gear` rows, 916 `class_abilities` rows.
+
+- **No V1 class's content can be created or imported as a new public class.** `services/class/item-uniqueness.js` rejects a public class whose gear or ability names are already defined by a public class in a **different** version family, and a format fork is a different family by design. Each of the twelve V1 classes restates its parent's Signature and Ability names verbatim, so a candidate carrying a V1 class's content collides: **7–10 names per class** when it keeps its parent's `rules_edition` (`candidateFamily` grandfathers the parent on an edition match), rising to **15 per class** when it changes edition, and **all 12 of 12** are rejected either way.
+
+  Two things keep this from being a live bug, and both are why it is recorded rather than fixed. Updates are fine — names the row already stores are grandfathered, and re-running the check over each of the twelve rows and over a hypothetical fork of each gives **0 of 12 rejected**. And the admin fork button does not reach the check at all: `routes/classes.js:578` calls `duplicateClass`, which is the `dup_class` RPC (`models/class.js:280`), so the insert bypasses `ClassService` entirely.
+
+  That leaves a real and deliberate product limitation — a V1 class's content cannot enter through the create or class-import path — sitting next to an inconsistency: the fork path produces a row the service would have refused. Whichever way slice 4 resolves it, the rule and the two paths should agree, and the decision should be made rather than discovered.
+
+- **A character save stamps an ambiguous `class_id` for any item name more than one class carries.** This corrects an earlier note that recorded the exposure as a count (565 gear rows before the load, +416 after). It is not a count, because it is not reproducible: `models/class.js:12` `getClasses` issues **no `.order()`**, and `buildClassContentLookupMaps` (`:568-590`) is last-wins over `[...advent, ...aspirant, ...pcc]`, so which class a name resolves to depends on the order PostgREST happens to return within each bucket.
+
+  Measured over one catalogue read, twice, reversing each bucket the second time: **981 vs 757** `class_gear` rows and **638 vs 474** `class_abilities` rows whose stored `class_id` disagrees with what the map would stamp. **73 of 332** distinct gear names are carried by more than one class.
+
+  The honest statement is therefore a property, not a number: *for a name carried by more than one class, which class a save stamps is unspecified, and two saves can stamp different ids.*
+
+  The earlier note also omitted half the surface. `routes/characters.js:79-80` builds the character form's gear and ability dropdowns from the same name-keyed shape, so the ambiguity is not confined to what a save writes — an Advent-only player can be offered a fork's items by name.
+
+- **`util/aspirant-extract.js` exports its test seams.** 26 of its 28 exports have no non-test consumer; `scripts/extract-aspirant-v1-classes.mjs` is the only production importer and uses `parseBboxPages` and `extractBook`. Recorded as a decision in the module's header: testing twelve classes' geometry through one entry point names the class rather than the rule when it breaks. Not to be "cleaned up" without replacing the tests it exists for.
