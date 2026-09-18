@@ -7,14 +7,31 @@
 // omitted field is null -- treat them as equal.
 //
 // A jsonb column arrives as a fresh object on every read, so identity would
-// report a change on every save. Compare those by serialization: key order is
-// stable because both sides are built by this codebase, and a false "changed"
-// here costs a needless UPDATE while a false "same" would lose a write.
+// report a change on every save. Object-valued fields are compared by
+// serializing a canonical (keys sorted at every level) form of each side
+// instead: Postgres jsonb does not preserve key insertion order -- it orders
+// keys by length then bytes -- so the same logical value can come back from
+// the database with a different key order than this codebase builds it in.
+// Sorting first makes the comparison depend only on the value, not on which
+// side wrote it. A false "changed" here costs a needless UPDATE; a false
+// "same" would silently lose a write, so undefined and null still collapse
+// to the same canonical value for scalars.
 const isStructured = (value) => value !== null && typeof value === 'object';
+
+const canonicalize = (value) => {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (isStructured(value)) {
+    return Object.keys(value).sort().reduce((sorted, key) => {
+      sorted[key] = canonicalize(value[key]);
+      return sorted;
+    }, {});
+  }
+  return value;
+};
 
 const fieldEqual = (a, b) => {
   if (isStructured(a) || isStructured(b)) {
-    return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+    return JSON.stringify(canonicalize(a ?? null)) === JSON.stringify(canonicalize(b ?? null));
   }
   return (a ?? null) === (b ?? null);
 };

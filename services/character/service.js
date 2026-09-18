@@ -471,14 +471,13 @@ class CharacterService {
       if ('mods' in item) row.mods = item.mods;
       desired.push(row);
     }
+    // Each `desired` row above is already exactly the insert/update payload
+    // shape -- name, class_id, description, and enchantment/mods only when
+    // the submitted item carried them -- so rowFields just hands it back
+    // rather than rebuilding it field-by-field with the same 'in' checks.
     return this.applyChildDiff('class_gear', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => `${row.class_id}:${row.name}`,
-      rowFields: item => {
-        const fields = { name: item.name, class_id: item.class_id, description: item.description };
-        if ('enchantment' in item) fields.enchantment = item.enchantment;
-        if ('mods' in item) fields.mods = item.mods;
-        return fields;
-      }
+      rowFields: item => item
     }));
   }
 

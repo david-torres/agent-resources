@@ -135,6 +135,28 @@ describe('diffChildRows', () => {
     expect(diff.toDelete).toEqual([]);
   });
 
+  // Postgres jsonb reorders object keys by length then bytes, so a Custom
+  // Enchantment read back from a real jsonb column serializes as
+  // {name, source, description} even though the app builds the identical
+  // value as {source, name, description}. A comparison that trusted key
+  // order (e.g. plain JSON.stringify on each side) would see two different
+  // strings here and report a change that never happened.
+  test('an object-valued field compares equal regardless of jsonb key order', () => {
+    const existing = [{
+      id: 'row-1', name: 'Hat',
+      enchantment: { name: 'Ported', source: 'custom', description: 'Retooled.' }
+    }];
+    const desired = [{
+      name: 'Hat',
+      enchantment: { source: 'custom', name: 'Ported', description: 'Retooled.' }
+    }];
+    const diff = diffChildRows(existing, desired, {
+      keyOf: (r) => r.name,
+      rowFields: (i) => ({ name: i.name, enchantment: i.enchantment })
+    });
+    expect(diff.toUpdate).toEqual([]);
+  });
+
   test('an object-valued field that differs produces one update', () => {
     const existing = [{ id: 'row-1', name: 'Hat', enchantment: { source: 'default' } }];
     const desired = [{ name: 'Hat', enchantment: { source: 'custom', name: 'Ported' } }];
