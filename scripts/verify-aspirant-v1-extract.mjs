@@ -48,7 +48,7 @@ import { join } from 'node:path';
 
 import {
   checkBareRatings, checkSupMarkup, gutterOf, indentOf, misdeclaredChrome, repairRaisedRatings,
-  rowsOf, surplus, tokenize,
+  rowsOf, surplus, tokenize, unlocatable,
   untilNextColumn,
 } from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
@@ -630,6 +630,14 @@ const verifyTipsPage = (row, printed, lines, review) => {
   });
 };
 
+// A record the artifact carries but the PDF cannot be asked about is a failure, not a note:
+// this gate is what nothing may be written to a database past, and a run that reports 11 of 12
+// classes verified and exits 0 fails at that whole purpose. There is no opt-out flag, because
+// there is no sanctioned skip -- all twelve Aspirant V1 records carry a page_range, and this
+// script cannot be pointed at the pre-release artifact instead (its segmentation keys on Paired
+// Action, Sample Perks, (Compounded) and Default Enchantment, none of which that book prints).
+// The pre-release book's own gate is scripts/verify-prerelease-extract.mjs, which is where the
+// one sanctioned skip -- hand-appended CHARLATAN, no page_range -- lives and is expected.
 if (!PDF) throw new Error('usage: verify-aspirant-v1-extract.mjs <pdf> [artifact.json]');
 
 const rows = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
@@ -637,9 +645,11 @@ mkdirSync(REVIEW_DIR, { recursive: true });
 
 let cleanClasses = 0;
 
+const unread = unlocatable(rows);
+
 for (const row of rows) {
-  if (!Array.isArray(row.page_range)) {
-    console.log(`skip ${row.name} — no page_range, not locatable in the PDF`);
+  if (unread.includes(row.name)) {
+    report.push(`SKIP  ${row.name} (no page_range)`);
     continue;
   }
   const before = failures.length;
@@ -680,5 +690,9 @@ const entries = rows.reduce((total, row) =>
   total + row.abilities.length + row.advanced_abilities.length + row.gear.length, 0);
 console.log(`${cleanClasses}/${rows.length} classes verified, `
   + `${entries} entries compared, ${failures.length} token differences`);
+if (unread.length) {
+  console.log(`${unread.length} record(s) carry no page_range and so were not read from the PDF`
+    + ` at all: ${unread.join(', ')}`);
+}
 console.log(`review files in ${REVIEW_DIR}`);
-process.exitCode = failures.length ? 1 : 0;
+process.exitCode = failures.length || unread.length ? 1 : 0;

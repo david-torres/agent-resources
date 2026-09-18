@@ -139,6 +139,14 @@ const untilNextColumn = (line) => {
   return at === -1 ? line : line.slice(0, indent + at);
 };
 
+// A record with no page_range cannot be located in the PDF, so not one of its values is
+// verified. This gate's whole purpose is to be the thing nothing gets written past, so a record
+// it could not read is a failure rather than a line of output: the alternative is a run that
+// reports 11/12 classes and still exits 0.
+const unlocatable = (rows) => rows
+  .filter((row) => !Array.isArray(row.page_range))
+  .map((row) => row.name);
+
 // The chrome step takes the running header and the printed folio out of a page so that no entry
 // has to account for them, and both are printed words the record holds as a name and a number
 // rather than as text. So a chrome allowance can only be on the pdf side; one declared against
@@ -172,6 +180,6 @@ const gutterOf = (fail, where, lines) => {
 
 module.exports = {
   tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
-  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome,
+  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, unlocatable,
   RAISED_NOTATION, STRANDED_MARK, COLUMN_GAP, MIN_GUTTER_WIDTH,
 };

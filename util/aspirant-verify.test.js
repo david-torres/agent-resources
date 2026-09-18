@@ -1,7 +1,7 @@
 const { describe, test, expect } = require('bun:test');
 const {
   indentOf, rowsOf, untilNextColumn, repairRaisedRatings, surplus,
-  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
+  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, unlocatable, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
 } = require('./aspirant-verify');
 
 // The verifier reads the book in a different pdftotext mode from the extractor, so these
@@ -231,5 +231,21 @@ describe('misdeclaredChrome', () => {
       { side: 'pdf', tokens: ['13'], why: 'the printed page number in the footer' },
       { side: 'record', tokens: ['Gunslinger'], why: 'the running header' },
     ])).toEqual(['a chrome allowance declared on the record side: the running header']);
+  });
+});
+
+describe('unlocatable', () => {
+  // A record carrying no page_range cannot be found in the PDF, so nothing about it is verified.
+  // The gate's job is to say so loudly: this is what the exit code is taken from.
+  test('names every record that carries no page range', () => {
+    expect(unlocatable([
+      { name: 'Gunslinger', page_range: [13, 18] },
+      { name: 'Charlatan' },
+      { name: 'Wanderer', page_range: null },
+    ])).toEqual(['Charlatan', 'Wanderer']);
+  });
+
+  test('names none when every record carries one', () => {
+    expect(unlocatable([{ name: 'Gunslinger', page_range: [13, 18] }])).toEqual([]);
   });
 });
