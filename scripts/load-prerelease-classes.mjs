@@ -56,14 +56,20 @@ export const fieldsFor = (book) => CONTENT_FIELDS
     .filter((field) => field !== 'prerelease_section' || book.key === 'prerelease');
 
 // The row a fork descends from: the same name in the Advent content format, at
-// v1, and not somebody's own class.
+// v1, and not somebody's own class. `content_format` and `is_player_created`
+// guard against data a user can create at any time -- a player naming their
+// own class 'Berserker' is an ordinary event, and this is what stops it being
+// taken as a parent -- but neither clause is doing any work against today's
+// catalogue: all 50 rows are content_format 'advent', and no player-created
+// row shares one of the twelve names.
 const FORK_PARENT = { content_format: 'advent', rules_version: 'v1', is_player_created: false };
 
 // `rules_version` is NOT NULL with no column default, so a new row cannot be
 // inserted without it. It is never part of an update payload -- an existing row
-// keeps whatever the owner set. All 16 classes in this document that the
-// catalogue already holds are 'v1', and so is every fork: the parent rule
-// accepts none but a v1 row.
+// keeps whatever the owner set. This constant supplies 'v1' unconditionally to
+// every insert, create or fork alike, regardless of what a fork's parent row
+// carries; the parent-resolution rule's own 'v1' requirement is a separate
+// fact, stated where FORK_PARENT is defined.
 const NEW_ROW_RULES_VERSION = 'v1';
 
 // Rich-text trees whose `text` leaves are runs within a line rather than whole
@@ -107,8 +113,8 @@ const DERIVED = {
   name: (record) => displayName(record.name),
   prerelease_section: (record) => sectionEnum(record.prerelease_section),
   // The pre-release book was given away, so its classes are free to play. The
-  // Aspirant book grants its twelve through CORE_CLASS_UNLOCKS instead, and
-  // free-play access on top of that would make the roster meaningless.
+  // Aspirant book's grant lives in the class-unlock roster instead, so
+  // free-play access on top of the roster would make the roster meaningless.
   free_play_access: (record, book) => book.key === 'prerelease',
   tips: (record) => tipsMarkdown(record.tips),
   // The August 2026 artifact predates Aspirant V1 and carries neither key, so
@@ -213,9 +219,13 @@ const forkPlan = (payload, matches, book) => {
     throw new Error(`no fork parent for ${JSON.stringify(payload.name)}: the catalogue holds no ` +
         `${FORK_PARENT.content_format} ${FORK_PARENT.rules_version} row of that name`);
   }
-  // A fork names its own identity, its parent and the two axes that separate it
-  // from that parent. Every other disposition leaves all four to the row's own
-  // column defaults.
+  // A fork states its own identity, its parent and the two axes that separate
+  // it from that parent, because it must not inherit any of the four. The pair
+  // that separates fork from parent is `content_format` always, and
+  // `rules_edition` only for the six Advent parents (Gunslinger, Illusionist,
+  // Librarian, Thane, Thunderbird, Wanderer) -- the other six already carry
+  // 'aspirant'. A create takes the four from the row's column defaults; an
+  // update leaves the columns alone entirely.
   const parent = parents.length === 1 ? parents[0] : null;
   const forked = (row) => ({
     ...payload, id: mintedId(payload.name), base_class_id: row.id,
