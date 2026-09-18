@@ -201,14 +201,28 @@ despite its name (`supabase/migrations/20240101000000_baseline_schema.sql:165-17
 - `mods jsonb NOT NULL DEFAULT '[]'` — zero to two `{"name":…,"description":…}`.
 
 **Columns rather than a child table.** The book states both cardinalities as hard
-caps, so neither is an open-ended list. A child table keyed to `class_gear.id`
-would be cascade-deleted whenever reconciliation drops a Signature row, and
-reconciliation is name-keyed: `class_id + name` with an occurrence index
+caps — one Enchantment, at most two Mods — so neither is an open-ended list, and
+a table would buy flexibility the rules forbid.
+
+What columns do *not* buy is rename safety, and the distinction matters enough to
+state plainly. Reconciliation is name-keyed: `class_id + name` with an occurrence
+index
 (`supabase/migrations/20260913000004_save_character_atomic_preserve_ability_type.sql`,
 CTEs `desired`/`existing`/`matched`/`deleted`/`updated`). A rename is a delete
-plus an insert, which would silently destroy a paid-for Enchantment.
-`character_perks` pays exactly this cost for perks and is tolerable only because
-a perk is re-enterable text; an Enchantment is a purchase.
+plus an insert, so the row is destroyed either way — a column on it dies with it
+exactly as a child row would. Renaming a Signature is therefore acquiring a
+different Signature, and the new one arrives unenchanted. That is the correct
+reading of the rules (a Signature's Enchantment belongs to that Signature) but it
+is a behaviour to test for, not one to assume.
+
+What columns buy is the *surviving* case, which is the common one: a save that
+changes a Signature's description, or omits its equipment entirely, matches the
+row in place and the two columns ride along under `COALESCE` — the same
+preserve-on-absent rule `class_abilities.type` already uses. A child table would
+need a second reconciliation pass keyed to a gear-row id that is only stable when
+the name did not change. `character_perks` pays exactly that cost, and it is
+tolerable there only because a perk is re-enterable text; an Enchantment is a
+purchase.
 
 **`{"source":"default"}` stores no text.** The Default Enchantment's name and
 description are already on the class
@@ -353,12 +367,16 @@ the app has no approval machinery to hang it on.
   character holding twelve own-class Signatures with no missions is **not** in
   deficit (today: 16), and the Advent four-free rule is unchanged to the digit.
 - `models/character-atomic.integration.test.js` — the new columns survive a save
-  that omits them, and a Signature renamed in place keeps its Enchantment.
+  that omits them, a submitted Enchantment replaces a stored one, and a renamed
+  Signature arrives unenchanted rather than inheriting the old row's purchase.
 - `services/character/input.test.js` — each rejection: over budget, 13th slot,
   second Enchantment, third Mod, 41-word Custom, 11-word Mod.
 - A word-count test for the superscript-excluding rule, run against real V1
   enchantment text from `docs/data/aspirant-v1-classes-2026-09.json`, so the rule
-  is measured against content that exists rather than a fixture.
+  is measured against content that exists rather than a fixture. The book's
+  40-word limit governs a *player's* Custom Enchantment, not the book's own
+  Defaults, so the test's job is to prove the counter reads real rated prose —
+  not to assert the printed Defaults come in under 40 words.
 - e2e — buy a Default Enchantment, replace it with a Custom, add two Mods, and
   watch the cap arithmetic; then assert an over-budget save is refused.
 - The existing V1 class-page e2e (`e2e/specs/27-aspirant-v1-class-page.spec.js`)
