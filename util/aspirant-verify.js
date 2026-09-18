@@ -95,9 +95,10 @@ const rowsOf = (lines) => lines
   .map((line, at) => ({ line, at, indent: indentOf(line), tokens: tokenize(line), text: line.trim() }));
 
 // A line of the page's own can have this same shape -- a one-word perk name, a column heading,
-// the last word of a quote -- and being at a left edge nothing else uses does not tell it from
-// a rating: measured over the book, 45 lines hold a single token at an indent no other line on
-// their page shares, and only 16 of them are ratings. What tells them apart is the notation.
+// the last word of a quote -- so a left edge nothing else uses does not tell it from a rating.
+// Across every reading this gate makes of the book's twelve classes, 45 rows hold a single token
+// at an indent no other row in the same reading uses, and only 16 of them are ratings. What
+// tells them apart is the notation.
 const repairRaisedRatings = (rows) => {
   const raised = [];
   const kept = [];
