@@ -64,12 +64,13 @@ mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
 }));
 
+let captured = null;
 mock.module('../models/character', () => ({
   // The route under test:
-  createCharacter: async (payload, profile) => ({
-    data: { id: CHAR_ID, name: payload.name },
-    error: null,
-  }),
+  createCharacter: async (payload, profile) => {
+    captured = payload;
+    return { data: { id: CHAR_ID, name: payload.name }, error: null };
+  },
 }));
 
 mock.module('../models/offscreen-mission', () => ({
@@ -115,7 +116,21 @@ afterAll(async () => {
   delete require.cache[require.resolve('./characters')];
 });
 
+const postWizard = (payload) => fetch(`${baseUrl}/characters/wizard`, {
+  method: 'POST',
+  headers: {
+    'Authorization': 'Bearer valid-jwt',
+    'Content-Type': 'application/x-www-form-urlencoded',
+    // Force sendError's JSON branch (mirrors badges.test.js) so a current
+    // failure surfaces as a status/assertion mismatch rather than a
+    // view-engine crash on the old handler's req.body.name 400 path.
+    'Accept': 'application/json',
+  },
+  body: new URLSearchParams({ payload: JSON.stringify(payload) }),
+});
+
 test('POST /characters/wizard responds with HX-Location and empty body', async () => {
+  captured = null;
   const payload = {
     name: 'Hero',
     class_id: 'c1',
@@ -131,22 +146,33 @@ test('POST /characters/wizard responds with HX-Location and empty body', async (
     trait2: null,
   };
 
-  const body = new URLSearchParams({ payload: JSON.stringify(payload) });
-
-  const res = await fetch(`${baseUrl}/characters/wizard`, {
-    method: 'POST',
-    headers: {
-      'Authorization': 'Bearer valid-jwt',
-      'Content-Type': 'application/x-www-form-urlencoded',
-      // Force sendError's JSON branch (mirrors badges.test.js) so a current
-      // failure surfaces as a status/assertion mismatch rather than a
-      // view-engine crash on the old handler's req.body.name 400 path.
-      'Accept': 'application/json',
-    },
-    body,
-  });
+  const res = await postWizard(payload);
 
   expect(res.status).toBe(200);
   expect(res.headers.get('HX-Location')).toBe(`/characters/${CHAR_ID}/Hero`);
   expect(await res.text()).toBe('');
+});
+
+const V1_CLASS_ID = '55555555-5555-4555-8555-555555555555';
+
+// The client-side guard against sending Advanced abilities lives in
+// routes/character-wizard-classes.test.js (it reads the wizard source); this
+// test pins the server-side half of the same contract: whatever the client
+// sends as core is stored as core, regardless of mode.
+test('a wizard submit for an Aspirant V1 class stores its three Core abilities as core', async () => {
+  captured = null;
+  const res = await postWizard({
+    name: 'Core Only',
+    class_id: V1_CLASS_ID,
+    creator_mode: 'aspirant',
+    abilities: [
+      { name: 'Phantasm', class_id: V1_CLASS_ID, type: 'core' },
+      { name: 'Mirror Walk', class_id: V1_CLASS_ID, type: 'core' },
+      { name: 'Veil', class_id: V1_CLASS_ID, type: 'core' }
+    ]
+  });
+  expect(res.status).toBe(200);
+  expect(captured.abilities.map((a) => a.name).sort())
+    .toEqual(['Mirror Walk', 'Phantasm', 'Veil']);
+  expect(captured.abilities.every((a) => a.type === 'core')).toBe(true);
 });

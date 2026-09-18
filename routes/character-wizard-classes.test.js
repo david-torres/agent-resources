@@ -261,3 +261,11 @@ test('the wizard panel prints the tips heading, falling back when it is blank', 
   expect(src).toContain("const tipsHeading = (c.tips_heading || '').trim() || 'Tips';");
   expect(src).toContain('esc(tipsHeading)');
 });
+
+test('the wizard grants a class its Core abilities, never its Advanced ones', () => {
+  const src = wizardPanelSource();
+  // The payload builder must not choose between the two lists: an Advanced
+  // Ability costs 2 Perks (ENCLAVE: Aspirant V1, pg. 7) and is never free.
+  expect(src).not.toContain('useAdvanced');
+  expect(src).toContain("type: 'core'");
+});
