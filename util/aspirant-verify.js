@@ -67,16 +67,15 @@ const rowsOf = (lines) => lines
   .filter((line) => line.trim())
   .map((line, at) => ({ line, at, indent: indentOf(line), tokens: tokenize(line), text: line.trim() }));
 
-// The book's rating notation runs to four characters at most, which is what keeps a short line
-// of the page's own -- a one-word perk name, a label on a line by itself -- out of this.
-const RAISED_MAX_LENGTH = 4;
-
+// A line of the page's own can have this same shape -- a one-word perk name, a column heading,
+// the last word of a quote -- and being at a left edge nothing else uses does not tell it from
+// a rating: measured over the book, 45 lines hold a single token at an indent no other line on
+// their page shares, and only 16 of them are ratings. What tells them apart is the notation.
 const repairRaisedRatings = (rows) => {
   const raised = [];
   const kept = [];
   rows.forEach((row) => {
-    const alone = row.tokens.length === 1 && row.tokens[0].length <= RAISED_MAX_LENGTH
-      && !STRANDED_MARK.test(row.tokens[0])
+    const alone = row.tokens.length === 1 && RAISED_NOTATION.test(row.tokens[0])
       && rows.filter((other) => other.indent === row.indent).length === 1;
     if (alone && kept.length) raised.push({ token: row.tokens[0], line: kept.length - 1 });
     else kept.push({ ...row, tokens: [...row.tokens] });

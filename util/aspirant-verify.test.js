@@ -124,6 +124,39 @@ describe('repairRaisedRatings', () => {
     expect(rows[0].tokens).not.toContain('H!');
   });
 
+  // The book sets a perk or signature name on a line of its own at an indent no other line on
+  // the page uses -- "Alarum" on printed page 32, "Dropkick" on printed page 56 -- which is the
+  // same shape a stranded rating has. What tells the two apart is the notation, not the length:
+  // the book prints no name of four characters or fewer on a line of its own, so this fixture
+  // shortens one to the length a bound of four could not rule out.
+  test('does not take a short word on a line of its own for a rating', () => {
+    const rows = repairRaisedRatings(rowsOf([
+      shadowBlade[0], shadowBlade[1].replace('H', 'Ally'), shadowBlade[2],
+    ]));
+    expect(rows.length).toBe(3);
+    expect(rows[1].tokens).toEqual(['Ally']);
+    expect(rows[0].tokens).not.toContain('Ally,');
+    // With no rating to claim it, the stranded mark closes up against the word it was split
+    // from, which is what the page prints when nothing is raised.
+    expect(rows[0].tokens).toContain('Glamer,');
+  });
+
+  test('does not take a longer name on a line of its own for a rating', () => {
+    const rows = repairRaisedRatings(rowsOf([
+      shadowBlade[0], shadowBlade[1].replace('H', 'Alarum'), shadowBlade[2],
+    ]));
+    expect(rows.length).toBe(3);
+    expect(rows[1].tokens).toEqual(['Alarum']);
+  });
+
+  test('takes a zero-bounded rating on a line of its own for a rating', () => {
+    const rows = repairRaisedRatings(rowsOf([
+      shadowBlade[0], shadowBlade[1].replace('H', '0–M'), shadowBlade[2],
+    ]));
+    expect(rows.length).toBe(2);
+    expect(rows[0].tokens).toContain('0–M,');
+  });
+
   test('treats the marks the book sets hard against a word as stranded', () => {
     expect(['.', ',', ';', ':'].filter((mark) => !STRANDED_MARK.test(mark))).toEqual([]);
     expect(['!', '?', '…', 'H.', ''].filter((text) => STRANDED_MARK.test(text))).toEqual([]);
