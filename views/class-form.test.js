@@ -107,10 +107,10 @@ test('every class-level structured column has an input', () => {
   }
 });
 
-// 31 of the 50 live classes have a NULL overview. A required prose input would
-// stop an admin opening one of them to toggle is_public from saving at all
-// without inventing text, on a branch whose whole point is that the class prose
-// is a verbatim copy of a source document. Every structured column is nullable.
+// A required prose input would stop an admin opening a class with a NULL
+// column from toggling is_public and saving without inventing text, on a
+// branch whose whole point is that the class prose is a verbatim copy of a
+// source document. Every structured column is nullable.
 test('no prose input is required', () => {
   for (const field of ['overview', 'conduit_notes', 'grounding', 'examples', 'quote']) {
     const tag = SRC.match(new RegExp(`<(?:textarea|input)[^>]*name="${field}"[^>]*>`))[0];

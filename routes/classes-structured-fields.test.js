@@ -316,11 +316,9 @@ test('PUT /classes/:id ignores the admin-only class metadata from a non-admin', 
   }
 });
 
-// 31 of the 50 live classes have a NULL overview. The form renders a NULL
-// column as an empty textarea, so an admin toggling is_public and saving posts
-// every prose field blank -- which must leave the columns NULL rather than
-// rewrite ten of them to ''. NULL means "no such field"; '' asserts someone set
-// it to nothing.
+// A NULL overview must render as an empty textarea, and a no-op admin save
+// (toggling is_public) must leave a NULL column NULL rather than rewrite it to
+// ''. NULL means "no such field"; '' asserts someone set it to nothing.
 //
 // `teaser` and `tips` were carved out of this list at first, to leave
 // pre-branch behaviour alone. R84 reversed that: three imported classes
