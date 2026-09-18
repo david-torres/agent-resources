@@ -93,6 +93,32 @@ const idsOf = (rows) => rows.map(row => row.id).sort();
 
 const gearItem = (name, extra = {}) => ({ name, class_id: characterClass.id, ...extra });
 
+const GEAR_NAME = `Atomic Enchant Gear ${suffix}`;
+const OTHER_GEAR_NAME = `Atomic Enchant Gear Renamed ${suffix}`;
+
+const gearRows = (characterId) => childRows('class_gear', characterId);
+
+// Drives save_character_atomic directly (like the "raises rather than
+// updating" test above) instead of through createCharacter/updateCharacter:
+// the service layer's saveCharacterAtomic() does not yet forward a gear
+// item's enchantment/mods fields into p_gear, so routing through it would
+// test the service, not the RPC this task changes. p_character: {} keeps
+// every stored character field as-is; p_abilities/p_perks: null skip those
+// blocks entirely, leaving abilities and perks untouched.
+const rpcSaveGear = async (characterId, gear) => {
+  const { data, error } = await supabaseAdmin.rpc('save_character_atomic', {
+    p_character_id: characterId,
+    p_creator_id: profile.id,
+    p_character: {},
+    p_traits: [],
+    p_gear: gear,
+    p_abilities: null,
+    p_perks: null
+  });
+  if (error) throw error;
+  return data;
+};
+
 test('atomic character create writes parent and children together', async () => {
   await setup();
   const { data, error } = await createCharacter(input(`Atomic success ${suffix}`), profile);
@@ -427,4 +453,62 @@ test('re-saving an ability without a type keeps its stored type and row id', asy
 
   expect(second[0].type).toBe('advanced');
   expect(second[0].id).toBe(first[0].id);
+});
+
+// The edit form submits gear as bare "Class::Item" strings with no
+// equipment fields at all -- an absent enchantment/mods key must mean "leave
+// the stored value alone", never "reset to unenchanted", or a resave through
+// that form silently spends the player's Merx for them.
+test('a gear row keeps its Enchantment and Mods across a save that omits them', async () => {
+  await setup();
+  const { data: created, error: createError } = await createCharacter(
+    input(`Atomic gear enchant keep ${suffix}`), profile
+  );
+  expect(createError).toBeNull();
+
+  await rpcSaveGear(created.id, [{
+    name: GEAR_NAME, class_id: characterClass.id,
+    enchantment: { source: 'custom', name: 'Sorcerer’s Apprentice', description: 'Boosts an ally.' },
+    mods: [{ name: 'Lined', description: 'Warm.' }]
+  }]);
+  const before = await gearRows(created.id);
+  expect(before).toHaveLength(1);
+  expect(before[0].enchantment.source).toBe('custom');
+  expect(before[0].mods).toHaveLength(1);
+
+  await rpcSaveGear(created.id, [{ name: GEAR_NAME, class_id: characterClass.id }]);
+  const after = await gearRows(created.id);
+  expect(after[0].id).toBe(before[0].id);
+  expect(after[0].enchantment).toEqual(before[0].enchantment);
+  expect(after[0].mods).toEqual(before[0].mods);
+});
+
+test('a submitted Enchantment replaces the stored one', async () => {
+  await setup();
+  const { data: created } = await createCharacter(
+    input(`Atomic gear enchant replace ${suffix}`), profile
+  );
+  await rpcSaveGear(created.id, [{ name: GEAR_NAME, class_id: characterClass.id, enchantment: { source: 'default' } }]);
+  await rpcSaveGear(created.id, [{
+    name: GEAR_NAME, class_id: characterClass.id,
+    enchantment: { source: 'custom', name: 'Ported', description: 'Retooled.' }
+  }]);
+  const rows = await gearRows(created.id);
+  expect(rows[0].enchantment.source).toBe('custom');
+  expect(rows[0].enchantment.name).toBe('Ported');
+});
+
+// Reconciliation keys on class_id + name, so a rename is a delete plus an
+// insert. The new Signature is a different purchase and starts unenchanted.
+test('a renamed Signature does not carry its Enchantment to the new name', async () => {
+  await setup();
+  const { data: created } = await createCharacter(
+    input(`Atomic gear enchant rename ${suffix}`), profile
+  );
+  await rpcSaveGear(created.id, [{ name: GEAR_NAME, class_id: characterClass.id, enchantment: { source: 'default' } }]);
+  await rpcSaveGear(created.id, [{ name: OTHER_GEAR_NAME, class_id: characterClass.id }]);
+  const rows = await gearRows(created.id);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].name).toBe(OTHER_GEAR_NAME);
+  expect(rows[0].enchantment).toBeNull();
 });
