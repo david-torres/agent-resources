@@ -21,6 +21,7 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 const realBase = require('../models/_base');
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
+const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
@@ -64,6 +65,14 @@ mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
 }));
 
+// GET /wizard renders the class kiosk via filterClassDataForUser; the kiosk
+// contents are irrelevant to the copy this file checks, so the pool is empty.
+mock.module('../models/class', () => ({
+  ...realClass,
+  getClasses: async () => ({ data: [], error: null }),
+  getUnlockedClassIdsForUser: async () => ({ data: new Set(), error: null }),
+}));
+
 mock.module('../models/character', () => ({
   // The route under test:
   createCharacter: async (payload, profile) => ({
@@ -89,6 +98,16 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const exphbs = require('express-handlebars');
+const hbsHelpers = require('handlebars-helpers')();
+const range = require('handlebars-helper-range');
+const path = require('path');
+const {
+  times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
+  setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
+  substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
+} = require('../util/handlebars');
+const { renderMarkdown } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
@@ -98,6 +117,46 @@ beforeAll(async () => {
   const app = express();
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
+
+  // Harness mirrors routes/character-wizard-classes.test.js: mocked data
+  // layer, real Express app with the full Handlebars engine, so GET /wizard
+  // renders actual view copy rather than a stub.
+  app.engine('handlebars', exphbs.engine({
+    layoutsDir: path.join(__dirname, '..', 'views', 'layouts'),
+    partialsDir: path.join(__dirname, '..', 'views', 'partials'),
+    defaultLayout: 'main',
+    helpers: {
+      ...hbsHelpers,
+      times,
+      range,
+      date_tz,
+      calendar_link,
+      encodeURIComponentH,
+      getTotalV1MissionsNeeded,
+      getTotalV2MissionsNeeded,
+      setVariable,
+      dump,
+      videoEmbed,
+      isSupportedVideoUrl,
+      substring,
+      concat,
+      effectiveRulesVersion,
+      wordCount,
+      perksForAbility,
+      nextPerkPosition,
+      json,
+      markdown: renderMarkdown,
+    },
+  }));
+  app.set('view engine', 'handlebars');
+  app.set('views', path.join(__dirname, '..', 'views'));
+
+  app.use((req, res, next) => {
+    res.locals.supabaseUrl = process.env.SUPABASE_URL;
+    res.locals.supabaseKey = process.env.SUPABASE_PUBLISHABLE_KEY;
+    next();
+  });
+
   app.use('/characters', require('./characters'));
   ({ server, baseUrl } = await startHttpServer(app));
 });
@@ -107,6 +166,7 @@ afterAll(async () => {
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
+  mock.module('../models/class', () => realClass);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
@@ -114,6 +174,14 @@ afterAll(async () => {
   mock.module('../models/character', () => realCharacter);
   delete require.cache[require.resolve('./characters')];
 });
+
+const getWizard = async (query = '') => {
+  const res = await fetch(`${baseUrl}/characters/wizard${query}`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer valid-jwt' },
+  });
+  expect(res.status).toBe(200);
+  return res.text();
+};
 
 const postWizard = (payload) => fetch(`${baseUrl}/characters/wizard`, {
   method: 'POST',
@@ -149,4 +217,12 @@ test('POST /characters/wizard responds with HX-Location and empty body', async (
   expect(res.status).toBe(200);
   expect(res.headers.get('HX-Location')).toBe(`/characters/${CHAR_ID}/Hero`);
   expect(await res.text()).toBe('');
+});
+
+test('the aspirant gear step names both Signature prices', async () => {
+  const body = await getWizard('?mode=aspirant');
+  // pg. 85: 2 Merx for your own Class's Signature, 3 for a Cross-Class one.
+  // public/js/character-wizard.js charges both; the copy has to say both.
+  expect(body).toContain('3 Merx');
+  expect(body).not.toMatch(/signature items from any class \(2 Merx\)/i);
 });
