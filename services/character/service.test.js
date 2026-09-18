@@ -872,20 +872,86 @@ test('string-format gear is resolved to its real class before the economy gate p
 // rulesVersion on the one getClassRulesVersion query updateCharacter already
 // makes unconditionally (mirroring how levelUp resolves the same pair), so
 // this fires without adding a query to every update.
-test('an aspirant-content character edited past its budget is rejected', async () => {
+//
+// Review round 2: enforcing the bare Merx grant on every edit was ruled out --
+// validateEconomyLimits has no caller that supplies earnedMerx, so an edit
+// checked against the grant alone would refuse a purchase a character's real
+// mission income could fund, and that false rejection is worse than not
+// checking at all. So an edit enforces ONLY the Signature Cap, which needs no
+// mission data; the Merx budget is deliberately left unenforced on update
+// (context.enforceMerxBudget: false in normalizeCharacterInput) until a
+// caller exists that can supply real earned Merx. The two tests below are
+// the two halves of that split, and the third confirms the cap's gear
+// resolution costs an advent update nothing it did not already pay.
+const aspirantUpdateAdapter = (calls) => makeAdapter(calls, {
+  getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
+  getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
+});
+
+test('an aspirant-content character edited past the Signature Cap is rejected', async () => {
   const calls = [];
-  const adapter = makeAdapter(calls, {
-    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
-    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
-  });
-  const service = new CharacterService(adapter);
+  const service = new CharacterService(aspirantUpdateAdapter(calls));
+  // 13 own-class Signatures fill 13 of the 12 aspirant slots -- Merx is not
+  // the issue (26 spent against a 12-Merx grant would fail the budget too,
+  // but the budget is not what's being checked here).
+  const gear = Array.from({ length: 13 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
   const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ASPIRANT_CLASS_ID,
-    // Seven own-class Signatures at 2 Merx each spend 14 against the 12-Merx grant.
-    gear: Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }))
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
   }, { id: 'profile-1' });
   expect(result.data).toBeNull();
-  expect(result.error).toMatch(/Merx/);
+  expect(result.error).toMatch(/Signature Cap|12/);
+});
+
+test('an update does not refuse a purchase earned Merx could fund', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantUpdateAdapter(calls));
+  // 7 own-class Signatures spend 14 Merx -- over the bare 12-Merx grant, which
+  // would fail if the budget were enforced here -- but only 7 of the 12
+  // Signature Cap slots, so the save must go through. A character can only
+  // ever reach 7 real Signatures on a save by having earned Merx from
+  // missions; refusing this save would refuse a purchase that Merx paid for.
+  const gear = Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// saveCharacterAtomic ALWAYS fetches the catalogue once, for its own gear/
+// ability class-id resolution -- that call predates this task and is not
+// what's under test. What's under test is whether the NEW Signature-Cap gear
+// resolution adds a second one for an economy that can never fail the cap.
+// So this pins the call COUNT at the atomic path's existing baseline (1),
+// not at 0 -- 0 would be a false pass on the wrong path if saveCharacterAtomic
+// stopped fetching the catalogue for some unrelated reason.
+test('an advent update never fetches the class catalogue an extra time for the Signature Cap check', async () => {
+  const calls = [];
+  const adapter = makeAdapter(calls, {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, abilities: [] }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    getClassContentLookupMaps: async () => {
+      calls.push(['getClassContentLookupMaps']);
+      return {
+        gearNameToClassId: new Map(),
+        gearNameToDescription: new Map(),
+        abilityNameToClassId: new Map(),
+        abilityNameToDescription: new Map(),
+        itemsByClassId: new Map(),
+        classesByName: new Map(),
+        classRows: GUNSLINGER_FAMILY_AND_FORK
+      };
+    },
+    saveCharacterAtomic: async () => ok({ id: 'character-1' })
+  });
+  const service = new CharacterService(adapter);
+  // Twenty Signatures would fail the aspirant/aspiring cap outright, so this
+  // also proves advent really is uncapped, not merely under-checked.
+  const gear = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: ADVENT_CLASS_ID }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ADVENT_CLASS_ID, gear
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
 });
 
 // The wizard sends type on every aspiring ability

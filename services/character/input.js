@@ -128,21 +128,35 @@ const shapeMods = (value) => {
 const normalizeEnchantment = (value) => shapeEnchantment(value).value ?? null;
 const normalizeMods = (value) => shapeMods(value).value ?? [];
 
-// Judges a character's Merx spend and Signature Cap against util/merx-economy.js
-// -- the single definition of every figure -- and reports both the same way
-// validateGearEquipment does: `{ ok: true }` or `{ ok: false, errors }`, never
-// a throw. A throw here would reach `POST /characters/wizard` and
-// `POST /characters` as an unhandled promise rejection (neither route has an
-// asyncHandler wrapper, so the request just hangs) and `PUT /characters/:id`
-// as a generic "unexpected error" (a bare Error has no `.code`, so
-// util/http-error.js classifyError drops the message in production).
+// Judges a character's Merx spend and/or Signature Cap against
+// util/merx-economy.js -- the single definition of every figure -- and
+// reports both the same way validateGearEquipment does: `{ ok: true }` or
+// `{ ok: false, errors }`, never a throw. A throw here would reach
+// `POST /characters/wizard` and `POST /characters` as an unhandled promise
+// rejection (neither route has an asyncHandler wrapper, so the request just
+// hangs) and `PUT /characters/:id` as a generic "unexpected error" (a bare
+// Error has no `.code`, so util/http-error.js classifyError drops the message
+// in production).
 //
 // The Advent economy is deliberately unenforced: every character that exists
 // today predates any budget, and no measurement says it would pass one, so
 // enforcing it now would retroactively invalidate real data. Aspirant and
 // Aspiring are both empty populations, which is what makes hard rejection
 // safe for them.
-const validateEconomyLimits = ({ economy, gear, commonItems, characterClassId, earnedMerx = 0 }) => {
+//
+// `enforceMerxBudget` (default true) exists because the Signature Cap and the
+// Merx budget need different information: the cap is a fixed number that any
+// caller can check, but the budget is CREATION_GRANT plus whatever Merx a
+// character has earned from missions, and updateCharacter has no mission data
+// in hand outside its auto_calculate branch. Passing `earnedMerx: 0` there
+// instead of `enforceMerxBudget: false` would not "skip" the budget -- it
+// would enforce it against a budget of 0-plus-grant, refusing a purchase a
+// character's real (unfetched) earnings could afford. That false rejection
+// is worse than not checking at all, so the two rules are split explicitly
+// rather than left to whatever earnedMerx a caller happens to pass.
+const validateEconomyLimits = ({
+  economy, gear, commonItems, characterClassId, earnedMerx = 0, enforceMerxBudget = true
+}) => {
   if (economy === 'advent') return { ok: true };
 
   const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
@@ -160,12 +174,14 @@ const validateEconomyLimits = ({ economy, gear, commonItems, characterClassId, e
     );
   }
 
-  const budget = CREATION_GRANT[economy] + Math.max(0, Number(earnedMerx) || 0);
-  const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
-  const spend = equipmentSpend(items, { economy, characterClassId })
-    + itemCount * COMMON_ITEM_PRICE;
-  if (spend > budget) {
-    errors.push(`This character spends ${spend} Merx of ${budget}.`);
+  if (enforceMerxBudget) {
+    const budget = CREATION_GRANT[economy] + Math.max(0, Number(earnedMerx) || 0);
+    const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
+    const spend = equipmentSpend(items, { economy, characterClassId })
+      + itemCount * COMMON_ITEM_PRICE;
+    if (spend > budget) {
+      errors.push(`This character spends ${spend} Merx of ${budget}.`);
+    }
   }
 
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
@@ -338,12 +354,19 @@ const normalizeCharacterInput = (input, context = {}) => {
   // gearNameToClassId from the same catalogue lookup it uses for content_format,
   // so it resolves this once with resolveSubmittedGear and hands the result
   // in, rather than this module re-implementing that resolution.
+  // context.enforceMerxBudget defaults to true (creation: a brand-new
+  // character has no missions, so CREATION_GRANT alone IS its budget) and is
+  // passed false by updateCharacter (an edit may have mission-earned Merx
+  // this call has no way to know, and checking the bare grant would refuse a
+  // purchase the character can actually afford). The Signature Cap needs no
+  // such data and always runs for a non-advent economy either way.
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
   const economyValidation = validateEconomyLimits({
     economy,
     gear: context.economyGear ?? childData.classGear,
     commonItems: data.common_items,
-    characterClassId: data.class_id ?? null
+    characterClassId: data.class_id ?? null,
+    enforceMerxBudget: context.enforceMerxBudget ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };
 
