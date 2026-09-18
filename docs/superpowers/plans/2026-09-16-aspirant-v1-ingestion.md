@@ -1524,7 +1524,7 @@ CREATE Charlatan
 - [ ] **Step 7: Commit**
 
 ```bash
-git add scripts/load-prerelease-classes.mjs scripts/lib/character-impact.mjs test/load-prerelease-classes.test.js
+git add scripts/load-prerelease-classes.mjs scripts/lib/character-impact.mjs util/starter-content.js test/load-prerelease-classes.test.js
 git commit -m "feat: give the loader an explicit create/update/fork disposition"
 ```
 
