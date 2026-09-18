@@ -1,7 +1,7 @@
 const { describe, test, expect } = require('bun:test');
 const {
   indentOf, rowsOf, untilNextColumn, repairRaisedRatings, surplus,
-  gutterOf, checkSupMarkup, checkBareRatings, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
+  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
 } = require('./aspirant-verify');
 
 // The verifier reads the book in a different pdftotext mode from the extractor, so these
@@ -211,5 +211,25 @@ describe('surplus', () => {
   test('counts by multiplicity, not by membership', () => {
     expect(surplus(['M', 'M', 'H'], ['M'])).toEqual(['H x1', 'M x1']);
     expect(surplus(['M'], ['M', 'M'])).toEqual([]);
+  });
+});
+
+describe('misdeclaredChrome', () => {
+  // The running header and the printed folio are the only two things the chrome step takes out
+  // of a page, and both are printed words the record holds as a name and a number rather than as
+  // text. So a chrome allowance belongs on the pdf side, and one on the record side would excuse
+  // a record token that no printed word accounts for.
+  test('passes allowances declared against what the page prints', () => {
+    expect(misdeclaredChrome([
+      { side: 'pdf', tokens: ['13'], why: 'the printed page number in the footer' },
+      { side: 'pdf', tokens: ['Gunslinger'], why: 'the running header' },
+    ])).toEqual([]);
+  });
+
+  test('reports an allowance declared against the record', () => {
+    expect(misdeclaredChrome([
+      { side: 'pdf', tokens: ['13'], why: 'the printed page number in the footer' },
+      { side: 'record', tokens: ['Gunslinger'], why: 'the running header' },
+    ])).toEqual(['a chrome allowance declared on the record side: the running header']);
   });
 });

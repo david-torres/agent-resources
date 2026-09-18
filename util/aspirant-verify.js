@@ -139,6 +139,15 @@ const untilNextColumn = (line) => {
   return at === -1 ? line : line.slice(0, indent + at);
 };
 
+// The chrome step takes the running header and the printed folio out of a page so that no entry
+// has to account for them, and both are printed words the record holds as a name and a number
+// rather than as text. So a chrome allowance can only be on the pdf side; one declared against
+// the record would excuse a record token that no printed word accounts for, and the chrome step
+// compares nothing that would notice.
+const misdeclaredChrome = (allowances) => allowances
+  .filter((allowance) => allowance.side !== 'pdf')
+  .map((allowance) => `a chrome allowance declared on the ${allowance.side} side: ${allowance.why}`);
+
 // The two columns are separated by a channel of blank character cells running the whole
 // height of the content. Requiring it to be the only such channel is what makes the split a
 // reading of the page rather than an assumed coordinate.
@@ -163,6 +172,6 @@ const gutterOf = (fail, where, lines) => {
 
 module.exports = {
   tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
-  gutterOf, checkSupMarkup, checkBareRatings,
+  gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome,
   RAISED_NOTATION, STRANDED_MARK, COLUMN_GAP, MIN_GUTTER_WIDTH,
 };

@@ -47,7 +47,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  checkBareRatings, checkSupMarkup, gutterOf, indentOf, repairRaisedRatings, rowsOf, surplus, tokenize,
+  checkBareRatings, checkSupMarkup, gutterOf, indentOf, misdeclaredChrome, repairRaisedRatings,
+  rowsOf, surplus, tokenize,
   untilNextColumn,
 } from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
@@ -333,7 +334,7 @@ const chromeOf = (where, lines, className, printed, hasHeader, review) => {
   } else if (head.text.trim() === className) {
     fail(where, 'a running header is printed on a page the cadence heads with none');
   }
-  compare(`${where} chrome`, allowances.flatMap((allowance) => allowance.tokens), [], allowances);
+  for (const detail of misdeclaredChrome(allowances)) fail(`${where} chrome`, detail);
   review.push(...allowances.map((allowance) =>
     `   allowed (${allowance.side}): ${allowance.tokens.join(' ')} -- ${allowance.why}`));
   return lines.slice(first, folio.index);
