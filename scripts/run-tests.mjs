@@ -13,6 +13,7 @@ const integrationFiles = new Set([
   'routes/mcp-oauth.integration.test.js',
   'util/class-ability-type.integration.test.js',
   'util/character-content-integrity.integration.test.js',
+  'util/character-equipment.integration.test.js',
   'util/class-description-dropped.integration.test.js',
   'util/class-duplicate.integration.test.js',
   'util/class-form-round-trip.integration.test.js',
