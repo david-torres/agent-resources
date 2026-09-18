@@ -20,6 +20,7 @@
 // admin. Admin is the one of those three that needs no fixture unlock.
 const { test, expect } = require('@playwright/test');
 const { ASPIRANT_V1_CLASS_IDS, CORE_CLASS_UNLOCKS } = require('../../util/starter-content');
+const { RAISED_NOTATION } = require('../../util/aspirant-verify');
 const { ADMIN_STATE } = require('../global-setup');
 
 test.use({
@@ -30,6 +31,7 @@ test.use({
 });
 
 const V1_GUNSLINGER = ASPIRANT_V1_CLASS_IDS.Gunslinger;
+const V1_VESSEL = ASPIRANT_V1_CLASS_IDS.Vessel;
 const PRERELEASE_BERSERKER = CORE_CLASS_UNLOCKS.aspirant.Berserker[0];
 
 // Each top-level block of the class page is a `.card` whose `.content` opens
@@ -65,11 +67,22 @@ test.describe('the V1 fork', () => {
 
     const gear = section(page, 'Signature Gear');
     const columns = gear.locator('.column.signature-column');
+    // signatureColumns always returns four arrays, so this count can only ever
+    // be 0 or 4 -- it is a smoke check that the aspirant column wrapper
+    // rendered at all. The per-column length assertions below are what
+    // actually pin the book's four-column layout.
     await expect(
       columns,
-      'an aspirant class renders its Signature Gear in the four columns of the book page'
+      'signature-column wrapper must be present (smoke check; see per-column checks below for the four-column layout)'
     ).toHaveCount(4);
 
+    // The 3/3/3/3 split checked here can't tell a stored `column` value from
+    // list order, because the route falls back to list position when a
+    // column isn't set, and, measured now, 0 of the 144 stored Signature
+    // items in the local catalogue disagree with their array order. What
+    // actually pins the stored column/position is the artifact verifier
+    // (util/aspirant-verify.js), which re-derived all 144 items' column and
+    // position from the PDF's raw coordinates.
     const seen = [];
     for (let column = 1; column <= 4; column++) {
       const titles = await cardTitles(columns.nth(column - 1));
@@ -78,6 +91,11 @@ test.describe('the V1 fork', () => {
     }
     expect(seen, 'Gunslinger V1 Signatures, in column order').toHaveLength(12);
     expect(new Set(seen).size, `twelve distinct Signatures, got ${seen.join(', ')}`).toBe(12);
+    // Book fidelity (the other 10 names, and every other class) is the PDF
+    // verifier's job; these two anchor that this page is Gunslinger's own
+    // row and not some other class's.
+    expect(seen[0], 'Gunslinger V1 first Signature').toBe('Cowboy Hat');
+    expect(seen[11], 'Gunslinger V1 twelfth Signature').toBe('Hip Flask');
 
     const cards = gear.locator('.column.signature-column .card');
     for (let i = 0; i < 12; i++) {
@@ -102,6 +120,17 @@ test.describe('the V1 fork', () => {
 
       const titles = await cardTitles(block);
       expect(titles, `Gunslinger V1 "${heading}"`).toHaveLength(3);
+      // Anchors this block to Gunslinger's own row: a template that rendered
+      // the wrong class's abilities would still satisfy every count check
+      // above.
+      if (heading === 'Abilities') {
+        expect(titles, 'Gunslinger V1 core abilities').toEqual(['Trickshot', 'Standoff', 'Shootout']);
+      } else {
+        expect(titles[0], 'Gunslinger V1 first advanced ability').toBe('High Noon');
+        // The artifact stores this with a curly apostrophe (U+2018), not '.
+        expect(titles[1], 'Gunslinger V1 second advanced ability').toBe('Stick ‘Em Up');
+        expect(titles[2], 'Gunslinger V1 third advanced ability').toBe('Surefire');
+      }
 
       const cards = block.locator('.card');
       for (let i = 0; i < 3; i++) {
@@ -158,19 +187,76 @@ test.describe('the V1 fork', () => {
       'the class page must emit at least one <sup> element for a Power Rating'
     ).toBeGreaterThan(0);
 
-    const notARating = ratings.filter((text) => !/^[LMH](–[LMH])?$/.test(text.trim()));
+    await expect(
+      page.locator('body'),
+      'an escaped Power Rating would put the literal text "<sup>" on screen'
+    ).not.toContainText('<sup>');
+
+    // Power Ratings reach the page through two independent sanitisers, and a
+    // page-wide sup count cannot fail when only one of them breaks: the
+    // other keeps emitting sups into the same page. Scoping each check to a
+    // spot only one sanitiser writes to is what makes each break fail on its
+    // own.
+    //
+    // An ability's own description is rendered by `renderMarkdown`
+    // (views/class-view.handlebars:302/326) as the first <p> inside its
+    // card -- before class-meters/paired_action/notes/sample_perks, which
+    // are all `renderPowerRatings` and would otherwise leave a sup behind in
+    // the same section even with renderMarkdown broken.
+    const abilityDescriptionSupCounts = await Promise.all(
+      ['Abilities', 'Advanced Abilities'].map((heading) => section(page, heading)
+        .locator('.card .content > p:first-of-type sup')
+        .count())
+    );
+    expect(
+      abilityDescriptionSupCounts.reduce((a, b) => a + b, 0),
+      'an ability description (the renderMarkdown path) must render at least one Power Rating as a <sup>'
+    ).toBeGreaterThan(0);
+
+    // .class-sample-perks and .class-enchantment are rendered entirely
+    // through `renderPowerRatings` (views/partials/class-sample-perks.handlebars,
+    // views/partials/class-enchantment.handlebars) -- neither partial calls
+    // `renderMarkdown`, so these two are clean of the other path.
+    await expect(
+      page.locator('.class-sample-perks sup').first(),
+      'a sample perk (the renderPowerRatings path) must render at least one Power Rating as a <sup>'
+    ).toBeAttached();
+    await expect(
+      page.locator('.class-enchantment sup').first(),
+      'a Default Enchantment (the renderPowerRatings path) must render at least one Power Rating as a <sup>'
+    ).toBeAttached();
+  });
+
+  test('renders zero-bounded and plus-suffixed Power Ratings in the book\'s notation', async ({ page }) => {
+    // Gunslinger's own <sup> contents are exactly H, M, L, L-H, L-M -- the one
+    // shape a naive /^[LMH](-[LMH])?$/ regex allows, which is why that regex
+    // read as passing while rejecting most of the book's real ratings.
+    // Vessel's <sup> contents include a zero-bounded rating, a plus-suffixed
+    // one, and a plus-suffixed range, so asserting RAISED_NOTATION here (and
+    // not on Gunslinger) is what makes the assertion capable of failing.
+    await openClass(page, V1_VESSEL);
+
+    const ratings = await page.locator('sup').allTextContents();
+    expect(ratings.length, 'Vessel must render at least one Power Rating').toBeGreaterThan(0);
+
+    const notARating = ratings.filter((text) => !RAISED_NOTATION.test(text.trim()));
     expect(
       notARating,
       `every <sup> on the page should hold a Power Rating; these did not: ${notARating.join(' | ')}`
     ).toEqual([]);
 
-    await expect(
-      page.locator('body'),
-      'an escaped Power Rating would put the literal text "<sup>" on screen'
-    ).not.toContainText('<sup>');
+    // Proves the run above wasn't vacuous: Vessel's page must actually
+    // exercise the notation shapes a bare /^[LMH](-[LMH])?$/ regex rejects.
+    const trimmed = ratings.map((text) => text.trim());
+    expect(trimmed.some((text) => text.startsWith('0–')), `no zero-bounded rating seen: ${trimmed.join(' | ')}`).toBe(true);
+    expect(trimmed.some((text) => text.endsWith('+')), `no plus-suffixed rating seen: ${trimmed.join(' | ')}`).toBe(true);
   });
 
   test('does not scroll sideways at 1280px', async ({ page }) => {
+    // This has about 3px of headroom at 1280px, measured against the
+    // current copy. An editorial text change to a Signature or ability can
+    // turn this red without any layout regression -- read a future failure
+    // here as that content warning first, not as a broken assertion.
     await openClass(page, V1_GUNSLINGER);
 
     const overflow = await page.evaluate(() => {
@@ -225,10 +311,18 @@ test.describe('the pre-release parent it forked from', () => {
       labelled.map(([label]) => label),
       'the two halves are Base Gear then Elective Gear'
     ).toEqual(['Base Gear', 'Elective Gear']);
+    const allTitles = labelled.flatMap(([, titles]) => titles);
+    expect(allTitles, 'six Signatures in total, as before the load').toHaveLength(6);
+    // The pre-release parent's six Signatures are the V1 fork's first six --
+    // a subset, not a disjoint set -- so there is no name the parent carries
+    // that the fork doesn't. The only name that distinguishes the two rows
+    // runs the other way: `Skull Helm` is one of the six the fork added and
+    // the parent never had. A template that rendered the fork's row here
+    // instead of the parent's would leak it in.
     expect(
-      labelled.flatMap(([, titles]) => titles),
-      'six Signatures in total, as before the load'
-    ).toHaveLength(6);
+      allTitles,
+      'the pre-release parent must not carry a Signature the V1 fork added'
+    ).not.toContain('Skull Helm');
 
     const abilities = await cardTitles(section(page, 'Abilities'));
     expect(abilities, 'pre-release Berserker abilities').toHaveLength(3);
