@@ -33,7 +33,7 @@ require('./require-local-supabase');
 
 const { describe, test, expect } = require('bun:test');
 const { supabaseAdmin } = require('../models/_base');
-const { CORE_CLASS_UNLOCKS } = require('./starter-content');
+const { CORE_CLASS_UNLOCKS, ASPIRANT_V1_CLASS_IDS } = require('./starter-content');
 
 // One [name, id] pair per granted id, so a name granting two ids is checked
 // twice and the failure message still names the class.
@@ -88,3 +88,31 @@ for (const [ruleset, roster] of Object.entries(CORE_CLASS_UNLOCKS)) {
     });
   });
 }
+
+// rules_edition and name are not enough on their own. util/class-family.js
+// walks a base_class_id edge only where parent and child agree on
+// rules_edition AND content_format, so a V1 fork carrying its parent's
+// content_format joins the parent's family and a grant of the parent reaches
+// it -- the one leak forking exists to prevent. The six forks of pre-release
+// parents already share their parent's rules_edition, which leaves
+// content_format as the only column holding them apart, and nothing above
+// reads it.
+describe('aspirant V1 forks', () => {
+  test("every minted V1 id carries content_format 'aspirant'", async () => {
+    const minted = Object.entries(ASPIRANT_V1_CLASS_IDS);
+
+    const { data, error } = await supabaseAdmin
+      .from('classes')
+      .select('id, content_format')
+      .in('id', minted.map(([, id]) => id));
+
+    expect(error).toBeNull();
+    const byId = new Map((data || []).map(row => [row.id, row]));
+
+    const wrong = minted
+      .filter(([, id]) => byId.get(id)?.content_format !== 'aspirant')
+      .map(([name, id]) => `${name} -> ${id} is ${byId.get(id)?.content_format ?? 'absent'}`);
+
+    expect(wrong).toEqual([]);
+  });
+});

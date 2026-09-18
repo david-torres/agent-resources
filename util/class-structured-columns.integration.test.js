@@ -97,13 +97,22 @@ test('expanded_tips is never null and rejects an explicit null', async () => {
 });
 
 describe('classes.content_format', () => {
-  test('defaults to advent and is never null', async () => {
+  // The CHECK in the sibling test below guards writes; this reads what is
+  // stored, which is what a row written before the constraint existed would
+  // violate. Both formats are live: the Advent catalogue and the twelve
+  // ENCLAVE: Aspirant V1 forks.
+  test("is never null and holds only 'advent' or 'aspirant'", async () => {
     const { data, error } = await sb
       .from('classes')
       .select('id, content_format');
     expect(error).toBeNull();
     expect(data.length).toBeGreaterThan(0);
-    expect(data.every((row) => row.content_format === 'advent')).toBe(true);
+
+    const outside = data
+      .filter((row) => row.content_format !== 'advent' && row.content_format !== 'aspirant')
+      .map((row) => `${row.id} is ${row.content_format ?? 'null'}`);
+
+    expect(outside).toEqual([]);
   });
 
   test('rejects a value outside the enum', async () => {
