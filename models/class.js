@@ -1,6 +1,6 @@
 const { supabase } = require('./_base');
 const crypto = require('crypto');
-const { expandIdsToFamilies } = require('../util/class-family');
+const { expandIdsToFamilies, computeVersionFamily } = require('../util/class-family');
 const { coreClassIdsForEditions } = require('../util/book-classes');
 const { applyClassFilters } = require('../util/class-filters');
 const { trimStrings } = require('../util/trim-input');
@@ -522,6 +522,9 @@ const unlockClass = async (userId, classId, expiresAt = null) => {
     return { data, error: null };
 };
 
+// History is the class plus its children WITHIN its version family, so a fork
+// onto a different edition or content shape is not listed as derived from the
+// row it forked off.
 const getVersionHistory = async (classId) => {
     const { data, error } = await supabase
         .from('classes')
@@ -533,7 +536,9 @@ const getVersionHistory = async (classId) => {
         console.error(error);
         return { data: null, error };
     }
-    return { data, error };
+    const rows = Array.isArray(data) ? data : [];
+    const family = computeVersionFamily(rows, classId);
+    return { data: rows.filter(row => family.has(row.id)), error };
 };
 
 const deleteClass = async (actor, id) => classService.deleteClass(actor, id);
