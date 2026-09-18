@@ -7,7 +7,13 @@ const {
   countWordsExcludingRatings,
   ENCHANTMENT_WORD_LIMIT,
   MOD_WORD_LIMIT,
-  MODS_PER_SIGNATURE
+  MODS_PER_SIGNATURE,
+  economyFor,
+  equipmentSpend,
+  signatureSlotsUsed,
+  CREATION_GRANT,
+  SIGNATURE_CAP,
+  COMMON_ITEM_PRICE
 } = require('../../util/merx-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
@@ -121,6 +127,49 @@ const shapeMods = (value) => {
 // atomic save path reach this, the submission has already been judged.
 const normalizeEnchantment = (value) => shapeEnchantment(value).value ?? null;
 const normalizeMods = (value) => shapeMods(value).value ?? [];
+
+// Judges a character's Merx spend and Signature Cap against util/merx-economy.js
+// -- the single definition of every figure -- and reports both the same way
+// validateGearEquipment does: `{ ok: true }` or `{ ok: false, errors }`, never
+// a throw. A throw here would reach `POST /characters/wizard` and
+// `POST /characters` as an unhandled promise rejection (neither route has an
+// asyncHandler wrapper, so the request just hangs) and `PUT /characters/:id`
+// as a generic "unexpected error" (a bare Error has no `.code`, so
+// util/http-error.js classifyError drops the message in production).
+//
+// The Advent economy is deliberately unenforced: every character that exists
+// today predates any budget, and no measurement says it would pass one, so
+// enforcing it now would retroactively invalidate real data. Aspirant and
+// Aspiring are both empty populations, which is what makes hard rejection
+// safe for them.
+const validateEconomyLimits = ({ economy, gear, commonItems, characterClassId, earnedMerx = 0 }) => {
+  if (economy === 'advent') return { ok: true };
+
+  const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
+  const errors = [];
+
+  // pg. 8: an Enchantment counts as a second slot toward the Signature Cap.
+  // This is checked independently of Merx -- a character who can afford a
+  // seventh enchanted Signature may still not carry it if the slots are full.
+  const cap = SIGNATURE_CAP[economy];
+  const slots = signatureSlotsUsed(items);
+  if (cap !== null && slots > cap) {
+    errors.push(
+      `Signature Cap is ${cap}; this character carries ${slots} `
+      + '(an Enchantment counts as a Signature).'
+    );
+  }
+
+  const budget = CREATION_GRANT[economy] + Math.max(0, Number(earnedMerx) || 0);
+  const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
+  const spend = equipmentSpend(items, { economy, characterClassId })
+    + itemCount * COMMON_ITEM_PRICE;
+  if (spend > budget) {
+    errors.push(`This character spends ${spend} Merx of ${budget}.`);
+  }
+
+  return errors.length === 0 ? { ok: true } : { ok: false, errors };
+};
 
 // Validates the Enchantment/Mods a submitted gear or ability list carries,
 // mirroring util/validate.js validateAbilityPerks's `{ ok }` / `{ ok: false,
@@ -276,6 +325,18 @@ const normalizeCharacterInput = (input, context = {}) => {
     return { data: null, childData: null, error: `Invalid creator_mode: ${data.creator_mode}` };
   }
 
+  // Resolved the same way every other consumer resolves it (economyFor, fed
+  // by context.contentFormat -- the class row the caller already looked up --
+  // and this character's own creator_mode), rather than re-deriving it here.
+  const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
+  const economyValidation = validateEconomyLimits({
+    economy,
+    gear: childData.classGear,
+    commonItems: data.common_items,
+    characterClassId: data.class_id ?? null
+  });
+  if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };
+
   if (context.normalizeAutoCalculate) data.auto_calculate = data.auto_calculate === 'on' || data.auto_calculate === true;
   if ('image_url' in data) data.image_url = data.image_url ? sanitizeHttpUrl(data.image_url) : null;
 
@@ -318,9 +379,13 @@ const normalizeStatsPayload = (body = {}) => {
   return out;
 };
 
-// Structural invariants only. The 10-Merx and 4-Perk budgets stay client-side
-// (public/js/character-wizard.js:1504-1510) -- mirroring the rules engine here
-// would give the economy two sources of truth that can drift.
+// Structural invariants only -- picks/counts, not price. The Perk budget this
+// function does not check stays client-side only
+// (public/js/character-wizard.js:1521-1522 hardcodes its own copy; this task
+// does not give it a server-side counterpart). The Merx budget and Signature
+// Cap are a different matter: normalizeCharacterInput's validateEconomyLimits
+// call below enforces util/merx-economy.js's figures directly, so a build
+// that clears this structural check still answers to that one.
 const validateAspiringBuild = (body) => {
   const name = typeof body.pseudo_class?.name === 'string' ? body.pseudo_class.name.trim() : '';
   if (!name) return 'An Aspiring character needs a class name.';
@@ -429,6 +494,7 @@ module.exports = {
   normalizeAbilityItems: normalizeClassItems,
   normalizeGearEquipment,
   validateGearEquipment,
+  validateEconomyLimits,
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,

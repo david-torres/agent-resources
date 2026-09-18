@@ -1,5 +1,8 @@
 const { test, expect } = require('bun:test');
-const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment, validateGearEquipment } = require('./input');
+const {
+  normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment,
+  validateGearEquipment, validateEconomyLimits
+} = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 
 test('trims every string in a character payload, not just item names', () => {
@@ -549,4 +552,120 @@ test('counting Power Rating superscripts as words would breach the limit five ti
   const breaches = everyDefaultEnchantment()
     .filter((e) => naiveCount(e.description) > ENCHANTMENT_WORD_LIMIT);
   expect(breaches).toHaveLength(5);
+});
+
+// --- validateEconomyLimits: the Merx budget and Signature Cap -----------
+//
+// Reports like validateGearEquipment -- `{ ok: true }` or `{ ok: false,
+// errors }` -- never a throw. See the function's own comment in input.js for
+// why: a throw here would hang POST /characters/wizard and POST /characters
+// (neither route has an asyncHandler wrapper) and would lose its message on
+// PUT /characters/:id (classifyError's generic "unexpected error" text).
+
+const ASPIRANT = { economy: 'aspirant', characterClassId: 'v1', earnedMerx: 0 };
+const own = (n) => Array.from({ length: n }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
+
+test('six own-class Signatures fit the 12-Merx grant', () => {
+  expect(validateEconomyLimits({ ...ASPIRANT, gear: own(6), commonItems: [] })).toEqual({ ok: true });
+});
+
+test('a seventh own-class Signature is over budget', () => {
+  const result = validateEconomyLimits({ ...ASPIRANT, gear: own(7), commonItems: [] });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Merx/);
+});
+
+test('mission earnings raise the budget', () => {
+  expect(validateEconomyLimits({
+    ...ASPIRANT, gear: own(7), commonItems: [], earnedMerx: 2
+  })).toEqual({ ok: true });
+});
+
+test('an Enchantment is charged against the budget', () => {
+  const gear = own(5);
+  gear[0].enchantment = { source: 'default' };
+  // 5 Signatures (10) + one Default Enchantment (2) = 12, exactly the grant.
+  expect(validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [] })).toEqual({ ok: true });
+  gear[1].enchantment = { source: 'default' };
+  const result = validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [] });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Merx/);
+});
+
+test('common items are charged against the budget', () => {
+  const result = validateEconomyLimits({ ...ASPIRANT, gear: own(6), commonItems: ['Bedroll'] });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Merx/);
+});
+
+// pg. 8: six enchanted Signatures fill the cap of twelve, so a seventh
+// Signature cannot be carried at all -- independent of Merx.
+test('the Signature Cap counts an Enchantment as a slot', () => {
+  const gear = own(6).map((g) => ({ ...g, enchantment: { source: 'default' } }));
+  expect(validateEconomyLimits({
+    ...ASPIRANT, gear, commonItems: [], earnedMerx: 100
+  })).toEqual({ ok: true });
+  const result = validateEconomyLimits({
+    ...ASPIRANT, gear: [...gear, { name: 'One More', class_id: 'v1' }],
+    commonItems: [], earnedMerx: 100
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Signature Cap|12/);
+});
+
+test('aspiring is capped at eight slots and granted ten Merx', () => {
+  const picks = [
+    { name: 'A', class_id: 'class-a' },
+    { name: 'B', class_id: 'class-b' },
+    { name: 'C', class_id: 'class-c' }
+  ];
+  expect(validateEconomyLimits({
+    economy: 'aspiring', characterClassId: null, earnedMerx: 0, gear: picks, commonItems: []
+  })).toEqual({ ok: true });
+  const nine = Array.from({ length: 9 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
+  const result = validateEconomyLimits({
+    economy: 'aspiring', characterClassId: null, earnedMerx: 100, gear: nine, commonItems: []
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Signature Cap|8/);
+});
+
+// 327 characters were built with no budget and no measurement says they pass.
+test('the advent economy enforces nothing', () => {
+  const twenty = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: 'advent' }));
+  expect(validateEconomyLimits({
+    economy: 'advent', characterClassId: 'advent', earnedMerx: 0, gear: twenty, commonItems: []
+  })).toEqual({ ok: true });
+});
+
+// --- normalizeCharacterInput wires validateEconomyLimits in -------------
+//
+// context.contentFormat is what the caller (CharacterService.createCharacter)
+// threads in after resolving the class -- economyFor needs it to tell an
+// aspirant-content class from an advent one, since creator_mode alone cannot.
+
+test('normalizeCharacterInput rejects an aspirant character over its Merx budget', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1',
+    gear: own(7)
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.data).toBeNull();
+  expect(result.childData).toBeNull();
+  expect(result.error).toMatch(/Merx/);
+});
+
+test('normalizeCharacterInput accepts an aspirant character within its Merx budget', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1',
+    gear: own(6)
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.error).toBeNull();
+});
+
+test('normalizeCharacterInput leaves an advent character unenforced', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'advent', class_id: 'class-a',
+    gear: Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }))
+  }, { rulesVersion: 'v1', contentFormat: 'advent' });
+  expect(result.error).toBeNull();
 });

@@ -777,6 +777,57 @@ test('auto-calculate leaves an Advent character on the advent economy', async ()
   expect(saved.commissary_reward).toBe(0);
 });
 
+// --- commissary_reward derived at creation -----------------------------
+//
+// The wizard hardcodes commissary_reward: 0 in its create payload. For the
+// two V1 economies createCharacter now knows the right answer -- the Merx
+// grant minus what the submitted gear spends, with no missions yet to add
+// to it -- so it computes that rather than trusting the client's number.
+// Advent keeps trusting the submitted value: nothing here recalculates a
+// budget-less character's reward.
+const makeServiceOnClass = () => {
+  const saved = {};
+  const adapter = makeAdapter([], {
+    getClassContentLookupMaps: async () => ({
+      gearNameToClassId: new Map(),
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map(),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map(),
+      classesByName: new Map(),
+      classRows: GUNSLINGER_FAMILY_AND_FORK
+    }),
+    saveCharacterAtomic: async (args) => {
+      Object.assign(saved, args.character);
+      return ok({ id: 'character-1', ...args.character });
+    }
+  });
+  return { service: new CharacterService(adapter), saved };
+};
+
+const makeServiceOnAspirantClass = makeServiceOnClass;
+const makeServiceOnAdventClass = makeServiceOnClass;
+
+test('a created V1 character keeps the Merx it did not spend', async () => {
+  // Four own-class Signatures cost 8 of the 12-Merx grant.
+  const { service, saved } = makeServiceOnAspirantClass({});
+  await service.createCharacter({
+    name: 'Thrifty', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+    gear: Array.from({ length: 4 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID })),
+    commissary_reward: 0
+  }, { id: 'profile-1' });
+  expect(saved.commissary_reward).toBe(4);
+});
+
+test('a created Advent character keeps the reward it submitted', async () => {
+  const { service, saved } = makeServiceOnAdventClass({});
+  await service.createCharacter({
+    name: 'Legacy', class_id: ADVENT_CLASS_ID, creator_mode: 'advent',
+    gear: [], commissary_reward: 7
+  }, { id: 'profile-1' });
+  expect(saved.commissary_reward).toBe(7);
+});
+
 // The wizard sends type on every aspiring ability
 // (public/js/character-wizard.js:3225,3228), but both write paths projected
 // abilities down to {name, class_id, description}. A dropped tag makes an

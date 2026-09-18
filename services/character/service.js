@@ -121,10 +121,41 @@ class CharacterService {
     // class-name lookup may populate class_id.
     const rulesVersion = await this.adapter.getRulesVersion(input.class_id);
     const prepared = await this.adapter.resolveClassReference(input);
-    const normalized = normalizeCharacterInput(prepared, { rulesVersion, creatorId: actor.id });
+    // content_format is what economyFor needs to tell an aspirant-content
+    // class from an advent one; resolveClassReference above only fills in
+    // class_id/class, so it is looked up here rather than adding a second,
+    // differently-shaped resolution inside the normalizer.
+    const { gearNameToClassId, classRows } = await this.adapter.getClassContentLookupMaps();
+    const classRow = (classRows || []).find(row => row.id === prepared.class_id);
+    const contentFormat = classRow && classRow.content_format;
+    const normalized = normalizeCharacterInput(prepared, {
+      rulesVersion, creatorId: actor.id, contentFormat
+    });
     if (normalized.error) return { data: null, error: normalized.error };
 
     const { data: characterInput, childData } = normalized;
+
+    // The wizard hardcodes commissary_reward: 0 in its payload; the server
+    // now knows the right answer for the two V1 economies, so it overrides
+    // the client's number rather than trusting it. A brand-new character has
+    // no missions yet, so this is purely "grant minus spend" -- the same
+    // reward deriveCharacterTotals would compute once missions exist.
+    const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
+    if (economy !== 'advent') {
+      const derived = deriveCharacterTotals({
+        character: {
+          class_id: characterInput.class_id,
+          gear: resolveSubmittedGear(childData.classGear, gearNameToClassId),
+          common_items: characterInput.common_items
+        },
+        realMissions: [],
+        offscreenMissions: [],
+        rulesVersion,
+        economy
+      });
+      characterInput.commissary_reward = derived.commissary_reward;
+    }
+
     if (typeof this.adapter.saveCharacterAtomic === 'function') {
       return this.saveCharacterAtomic({
         id: null, actor, characterInput, childData, rulesVersion, previousAbilities: []
