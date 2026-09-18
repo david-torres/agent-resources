@@ -237,18 +237,26 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             description_html: renderMarkdown(a.description || '')
           }))
         : [],
-      // Step 4 gear: the first 6 class items are offered on the right-hand
-      // shop at 2 merx each, duplicates allowed. In advent mode only, the
-      // first 3 ("base") are also auto-loaded for free on the left, so a
-      // duplicate pick there re-buys an item the user already has for free;
-      // aspirant and aspiring modes have no free left-hand list and charge
-      // for every pick. The JS uses `subtype` to badge each card so the
-      // user can see which is which.
+      // Step 4 gear: the first 6 class items go to the right-hand shop and the
+      // first 3 of those to `base_gear` for the left-hand list, with `subtype`
+      // badging each card. Both slices are the same in every wizard mode -- what
+      // an item costs and whether the left list renders at all is decided in
+      // public/js/character-wizard.js, which is the only place the mode matrix
+      // should live. In outline: own-class items are CLASS_GEAR_COST (2) and
+      // cross-class items CROSS_CLASS_GEAR_COST (3, aspirant only), and the
+      // free auto-loaded allotment is advent's alone -- effectiveFreeBaseCount()
+      // is 0 in aspirant and aspiring modes.
       //
       // 6 is a cap here, not the size of a class: an ENCLAVE: Aspirant V1 class
       // carries 12 Signatures across four columns, and this deliberately shows
       // only the first 6 of them. Offering the rest needs the Merx and column
       // rules that arrive with the later Aspirant slices.
+      //
+      // `idx < 3` is a third hardcoded copy of the column-1-is-Default rule,
+      // after util/class-gear.js gearCategory and util/aspirant-extract.js
+      // gearFrom, and it is the one that reads a position rather than the
+      // stored column. Over six items the two agree; over twelve they do not.
+      // The plan defers making this route column-aware to slices 4-5.
       class_gear: Array.isArray(c.gear)
         ? c.gear.slice(0, 6).map((g, idx) => ({
             name: g.name || '',
