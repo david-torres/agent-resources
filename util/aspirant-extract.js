@@ -1,4 +1,5 @@
 const { pairMeters, parseStatLine } = require('./prerelease-extract');
+const { DEFAULT_ROSTER_COLUMN } = require('./class-gear');
 
 const NAMED_ENTITIES = { quot: '"', apos: "'", lt: '<', gt: '>', amp: '&' };
 
@@ -901,10 +902,9 @@ const pageIn = (pages, pdfPage, className) => {
 // is the backwards-compatibility rule on printed page 2, which reads the first
 // column of the spread as the Class's Default Roster and the second as its
 // Elective one. Columns 3 and 4 are new to V1 and that rule names no roster for
-// them; they follow column 2. util/class-gear.js holds the same constant for
-// the same reason, and over six items both come to the `index < 3` split the
-// fifty live classes were backfilled on.
-const DEFAULT_ROSTER_COLUMN = 1;
+// them; they follow column 2. The constant is util/class-gear.js's, which
+// applies the same rule on the save path, so the extractor and the normalizer
+// cannot disagree about which column is Default.
 
 // Three items down each of the spread's four columns, on all 24 signature
 // pages. A column reads short when an entry loses the name block that opens it:

@@ -230,5 +230,5 @@ const signatureColumns = (gear) => {
 
 module.exports = {
     normalizeGear, gearCategory, gearColumn, gearPosition, indexedRows, normalizeNote,
-    signatureColumns
+    signatureColumns, DEFAULT_ROSTER_COLUMN
 };
