@@ -287,12 +287,12 @@ describe('signatureColumns', () => {
     expect(columns[3].map((item) => item.name)).toEqual(['J', 'K', 'L']);
   });
 
-  // Every one of the 300 live gear items answers {category, description,
-  // meters, name, notes} -- none carry `column` yet, since a stored item only
-  // gains it on its next save. A strict `item.column === n` filter would
-  // return four empty arrays for every class in the catalog; falling back to
-  // the item's position in the list is what keeps an unsaved class's
-  // Signatures on the page at all.
+  // Of the 444 live gear items, the 300 answering {category, description,
+  // name} or {category, description, meters, name, notes} carry no `column`,
+  // and only the 144 ENCLAVE: Aspirant V1 items do. A strict `item.column ===
+  // n` filter would return four empty arrays for every unsaved class in the
+  // catalog; falling back to the item's position in the list is what keeps an
+  // unsaved class's Signatures on the page at all.
   test('items with no column key group by their position in the list', () => {
     const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
       .map((name) => ({ category: 'default', description: '', meters: [], name, notes: [] }));
