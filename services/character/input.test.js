@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment } = require('./input');
+const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment, validateGearEquipment } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 
 test('trims every string in a character payload, not just item names', () => {
@@ -412,49 +412,75 @@ test('submitted mods normalize to the mods array and stay present', () => {
     .toEqual({ mods: [{ name: 'Lined', description: '' }] });
 });
 
+// A thrown Error here would hang POST /characters/wizard and POST /characters
+// (no asyncHandler wraps either) and would lose its message on PUT
+// /characters/:id (a bare Error has no `.code`, so util/http-error.js
+// classifyError falls to its generic "unexpected error" text in production).
+// So every rejection below is asserted through validateGearEquipment's
+// returned errors, never through a throw.
+
 test('a custom enchantment at the 40-word limit is accepted', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat',
-    enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT) }
-  })).not.toThrow();
+  const item = { name: 'Hat', enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT) } };
+  expect(validateGearEquipment([item])).toEqual({ ok: true });
 });
 
 test('a custom enchantment over 40 words is rejected', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat',
-    enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT + 1) }
-  })).toThrow(/40 words/);
+  const item = { name: 'Hat', enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT + 1) } };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/40 words/);
 });
 
 test('Power Rating superscripts do not count against the 40 words', () => {
   const description = `${words(ENCHANTMENT_WORD_LIMIT)} <sup>L–H</sup> <sup>M</sup>`;
-  expect(() => normalizeGearEquipment({
-    name: 'Hat', enchantment: { source: 'custom', name: 'Rated', description }
-  })).not.toThrow();
+  const item = { name: 'Hat', enchantment: { source: 'custom', name: 'Rated', description } };
+  expect(validateGearEquipment([item])).toEqual({ ok: true });
 });
 
 test('a custom enchantment with no name is rejected', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat', enchantment: { source: 'custom', name: '  ', description: 'x' }
-  })).toThrow(/name/i);
+  const item = { name: 'Hat', enchantment: { source: 'custom', name: '  ', description: 'x' } };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/name/i);
 });
 
 test('an unknown enchantment source is rejected', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat', enchantment: { source: 'legendary' }
-  })).toThrow(/default|custom/);
+  const item = { name: 'Hat', enchantment: { source: 'legendary' } };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/default|custom/);
+});
+
+// A present-but-wrong-typed source (not a string, not null/absent) is a
+// malformed payload, not a cleared field -- it must be reported the same way
+// a wrong string is, not silently collapsed to "no enchantment submitted".
+test('a non-string enchantment source is rejected rather than silently dropped', () => {
+  const item = { name: 'Hat', enchantment: { source: 5 } };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/default|custom/);
+});
+
+// Shaping alone never throws or rejects -- it shapes an invalid submission to
+// "no enchantment" and leaves judging it to validateGearEquipment, which
+// normalizeCharacterInput always calls first.
+test('normalizeGearEquipment shapes an invalid enchantment to null rather than throwing', () => {
+  expect(() => normalizeGearEquipment({ name: 'Hat', enchantment: { source: 'legendary' } })).not.toThrow();
+  expect(normalizeGearEquipment({ name: 'Hat', enchantment: { source: 'legendary' } }).enchantment).toBeNull();
 });
 
 test('a mod over 10 words is rejected', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat', mods: [{ name: 'Big', description: words(MOD_WORD_LIMIT + 1) }]
-  })).toThrow(/10 words/);
+  const item = { name: 'Hat', mods: [{ name: 'Big', description: words(MOD_WORD_LIMIT + 1) }] };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/10 words/);
 });
 
 test('a third mod on one Signature is rejected', () => {
-  expect(() => normalizeGearEquipment({
-    name: 'Hat', mods: [{ name: 'a' }, { name: 'b' }, { name: 'c' }]
-  })).toThrow(/two Mods/i);
+  const item = { name: 'Hat', mods: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] };
+  const result = validateGearEquipment([item]);
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/two Mods/i);
 });
 
 test('an unnamed mod is dropped rather than stored nameless', () => {
@@ -463,6 +489,35 @@ test('an unnamed mod is dropped rather than stored nameless', () => {
   // util/class-gear.js gives a blank note.
   expect(normalizeGearEquipment({ name: 'Hat', mods: [{ name: '  ' }, { name: 'Lined' }] }).mods)
     .toEqual([{ name: 'Lined', description: '' }]);
+});
+
+// End to end through the one place both createCharacter and updateCharacter
+// funnel gear/abilities before reconcileGear/reconcileAbilities or the atomic
+// save ever see them, returning the established { data: null, error } shape
+// rather than throwing or rejecting the promise.
+test('normalizeCharacterInput rejects a submitted gear item with an over-limit Custom Enchantment', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vex',
+    gear: [{
+      name: 'Hat', class_id: 'class-a',
+      enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT + 1) }
+    }]
+  }, { rulesVersion: 'v1' });
+  expect(result.data).toBeNull();
+  expect(result.childData).toBeNull();
+  expect(result.error).toMatch(/40 words/);
+});
+
+// Abilities never carry equipment in the shipped UI, but normalizeClassItems
+// runs the same shaping/validation for both, so a crafted ability payload is
+// held to the same rules rather than passing through unchecked.
+test('normalizeCharacterInput rejects a submitted ability item with a third Mod', () => {
+  const result = normalizeCharacterInput({
+    name: 'Vex',
+    abilities: [{ name: 'Dodge', class_id: 'class-a', mods: [{ name: 'a' }, { name: 'b' }, { name: 'c' }] }]
+  }, { rulesVersion: 'v1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/two Mods/i);
 });
 
 const V1_ARTIFACT = require('../../docs/data/aspirant-v1-classes-2026-09.json');

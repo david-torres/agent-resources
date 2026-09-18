@@ -45,36 +45,57 @@ const normalizeNamedJsonbList = (input) => {
   }).filter(Boolean);
 };
 
+// Shapes and judges a submitted Enchantment in one pass, returning both what
+// to store and, on a rejection, the player-readable message for it -- never
+// throwing, so a caller decides for itself whether the message needs to
+// surface. A throw here would reach `POST /characters/wizard` and
+// `POST /characters` as an unhandled promise rejection (neither route has an
+// `asyncHandler` wrapper) and `PUT /characters/:id` as a generic "unexpected
+// error" (a bare Error has no `.code`, so util/http-error.js classifyError
+// takes its default branch and drops the message in production).
+//
 // A Default Enchantment stores only its source: its text belongs to the class
 // (classes.gear[].default_enchantment) and services/character/repository.js
 // mergeClassItems already merges it onto the character row at read time, so a
 // copy stored here could drift from the class page and would hide an errata
 // from a character who unlocked it.
 //
-// A Custom Enchantment is Self-Made Content, so it is bounded but not judged:
-// the book's "a Custom Enchantment may never be stronger than the Default"
-// (pg. 86) is the playgroup's call, and nothing here can measure it.
-const normalizeEnchantment = (value) => {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const source = typeof value.source === 'string' ? value.source.trim() : '';
-  if (!source) return null;
-  if (!ENCHANTMENT_SOURCES.includes(source)) {
-    throw new Error(`Enchantment source must be default or custom, not "${source}".`);
+// A Custom Enchantment is Self-Made Content, so it is bounded but not judged
+// on power: the book's "a Custom Enchantment may never be stronger than the
+// Default" (pg. 86) is the playgroup's call, and nothing here can measure it.
+//
+// `source` must be a string to be treated as "no source submitted" (missing,
+// or blank/whitespace) versus "a source was submitted and it's wrong": a
+// present non-string/non-null value (e.g. `5`, `true`) is a malformed
+// payload, not a cleared field, so it is rejected rather than silently
+// treated as absent.
+const shapeEnchantment = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return { value: null, error: null };
+  const rawSource = value.source;
+  if (rawSource != null && typeof rawSource !== 'string') {
+    return { value: undefined, error: `Enchantment source must be default or custom, not "${rawSource}".` };
   }
-  if (source === 'default') return { source };
+  const source = typeof rawSource === 'string' ? rawSource.trim() : '';
+  if (!source) return { value: null, error: null };
+  if (!ENCHANTMENT_SOURCES.includes(source)) {
+    return { value: undefined, error: `Enchantment source must be default or custom, not "${source}".` };
+  }
+  if (source === 'default') return { value: { source }, error: null };
   const name = typeof value.name === 'string' ? value.name.trim() : '';
-  if (!name) throw new Error('A Custom Enchantment needs a name.');
+  if (!name) return { value: undefined, error: 'A Custom Enchantment needs a name.' };
   const description = typeof value.description === 'string' ? value.description.trim() : '';
   if (countWordsExcludingRatings(description) > ENCHANTMENT_WORD_LIMIT) {
-    throw new Error(`A Custom Enchantment may be no more than ${ENCHANTMENT_WORD_LIMIT} words.`);
+    return { value: undefined, error: `A Custom Enchantment may be no more than ${ENCHANTMENT_WORD_LIMIT} words.` };
   }
-  return { source, name, description };
+  return { value: { source, name, description }, error: null };
 };
 
 // pg. 87: a Mod "should be named for easy reference during play". A blank
-// name is a UI artifact rather than a purchase, so it is dropped -- the same
-// treatment util/class-gear.js gives a blank note.
-const normalizeMods = (value) => {
+// name is a UI artifact rather than a purchase, so it is dropped rather than
+// reported -- the same treatment util/class-gear.js gives a blank note. The
+// 10-word limit and two-Mod cap are judged, though, and reported like
+// shapeEnchantment's rejections: returned, never thrown.
+const shapeMods = (value) => {
   const rows = Array.isArray(value) ? value : [];
   const mods = [];
   for (const row of rows) {
@@ -83,27 +104,53 @@ const normalizeMods = (value) => {
     if (!name) continue;
     const description = typeof row.description === 'string' ? row.description.trim() : '';
     if (countWordsExcludingRatings(description) > MOD_WORD_LIMIT) {
-      throw new Error(`A Mod may be no more than ${MOD_WORD_LIMIT} words.`);
+      return { value: undefined, error: `A Mod may be no more than ${MOD_WORD_LIMIT} words.` };
     }
     mods.push({ name, description });
   }
   if (mods.length > MODS_PER_SIGNATURE) {
-    throw new Error('A Signature may hold no more than two Mods.');
+    return { value: undefined, error: 'A Signature may hold no more than two Mods.' };
   }
-  return mods;
+  return { value: mods, error: null };
 };
 
-// Bounds a Signature's player-authored equipment before it reaches
-// reconcileGear and the atomic save's p_gear payload. A key the submitted
-// item never mentioned stays absent here -- checked with `in`, since `??`
-// cannot tell "missing" from "explicitly null" -- so a save that says nothing
-// about equipment leaves a stored Enchantment or Mods alone downstream. A key
-// the item did submit, including an explicit `null`, is normalized and kept
-// present, which downstream reads as "remove the Enchantment". Abilities
-// never carry equipment, so normalizeClassItems runs this for ability items
-// too; reconcileAbilities and the atomic path's ability mapping name their
-// columns explicitly, so any keys this produces for an ability are dropped
-// before a write.
+// Permissive shaping only: an invalid submission shapes to "no equipment"
+// (null / []) rather than being rejected here. Rejecting it is
+// validateGearEquipment's job, and normalizeCharacterInput calls that before
+// this ever runs, so by the time reconcileGear/reconcileAbilities and the
+// atomic save path reach this, the submission has already been judged.
+const normalizeEnchantment = (value) => shapeEnchantment(value).value ?? null;
+const normalizeMods = (value) => shapeMods(value).value ?? [];
+
+// Validates the Enchantment/Mods a submitted gear or ability list carries,
+// mirroring util/validate.js validateAbilityPerks's `{ ok }` / `{ ok: false,
+// errors }` contract so normalizeCharacterInput's existing "return an error
+// string" convention (see its validateAbilityPerks call) can surface a
+// rejection the same way everywhere it's called, rather than throwing.
+// String items ("Class::Item") never carry equipment, so only object items
+// are checked.
+const validateGearEquipment = (items) => {
+  const errors = [];
+  for (const item of Array.isArray(items) ? items : []) {
+    if (!item || typeof item !== 'object') continue;
+    const enchantmentResult = shapeEnchantment(item.enchantment);
+    if (enchantmentResult.error) errors.push(enchantmentResult.error);
+    const modsResult = shapeMods(item.mods);
+    if (modsResult.error) errors.push(modsResult.error);
+  }
+  return errors.length === 0 ? { ok: true } : { ok: false, errors };
+};
+
+// Shapes a Signature's player-authored equipment for storage. A key the
+// submitted item never mentioned stays absent here -- checked with `in`,
+// since `??` cannot tell "missing" from "explicitly null" -- so a save that
+// says nothing about equipment leaves a stored Enchantment or Mods alone
+// downstream. A key the item did submit, including an explicit `null`, is
+// normalized and kept present, which downstream reads as "remove the
+// Enchantment". Abilities never carry equipment, so normalizeClassItems runs
+// this for ability items too; reconcileAbilities and the atomic path's
+// ability mapping name their columns explicitly, so any keys this produces
+// for an ability are dropped before a write.
 const normalizeGearEquipment = (item) => {
   const result = {};
   if (item && typeof item === 'object' && 'enchantment' in item) {
@@ -182,6 +229,18 @@ const normalizeCharacterInput = (input, context = {}) => {
   delete data.ability_perks;
   delete data.gear;
   delete data.abilities;
+
+  // Applies to every rules version -- Enchantments/Mods are a class_gear
+  // concept, not an ability-perks (v1/v2) one -- and runs before the
+  // pseudo_class/rulesVersion handling below since it only concerns
+  // childData.classGear/classAbilities. Both createCharacter and
+  // updateCharacter call normalizeCharacterInput before ever touching
+  // reconcileGear/reconcileAbilities or the atomic save's p_gear payload, so
+  // this is the one place a bad submission needs to be caught.
+  const gearValidation = validateGearEquipment(childData.classGear);
+  if (!gearValidation.ok) return { data: null, childData: null, error: gearValidation.errors.join(' ') };
+  const abilityValidation = validateGearEquipment(childData.classAbilities);
+  if (!abilityValidation.ok) return { data: null, childData: null, error: abilityValidation.errors.join(' ') };
 
   // Aspiring is class-less. The invented class name goes in `class` -- already
   // NOT NULL and already the display name every render path reads -- rather
@@ -369,6 +428,7 @@ module.exports = {
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,
   normalizeGearEquipment,
+  validateGearEquipment,
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,
