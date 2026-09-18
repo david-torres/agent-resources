@@ -1014,11 +1014,12 @@ test('POST /classes keeps gappy gear indices in ascending order', async () => {
 // legacy item that only ever had a name and a description picks up the other
 // six on save -- the uniform shape the editor renders and round-trips, and the
 // one both class-view partials guard on. That is normalization, and unlike the
-// abilities' `pronunciation` there is no gear key outside the contract: the
-// pre-Aspirant census of jsonb_object_keys over all 300 live gear items
-// answered exactly {category, description, name} and
-// {category, description, meters, name, notes}, and every one of those items
-// now also carries `default_enchantment: null`, `column` and `position`.
+// abilities' `pronunciation` there is no gear key outside the contract: a
+// census of jsonb_object_keys over all 444 live gear items answers
+// {category, description, name} (162), {category, description, meters, name,
+// notes} (138) and all eight keys (144, the ENCLAVE: Aspirant V1 classes). The
+// 300 items in the first two shapes each gain `default_enchantment: null`,
+// `column` and `position` on their next save.
 test('POST /classes gives a legacy two-field gear item the full contract shape', async () => {
   const res = await post('/classes', {
     name: 'Test',

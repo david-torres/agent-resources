@@ -189,9 +189,11 @@ const normalizeEnchantment = (value) => {
 // `column` and `position` are this branch's declared gear contract, so every
 // item gets all eight: a legacy item that only ever had a name and a
 // description picks up the rest on save. A census of jsonb_object_keys over the
-// 300 live gear items answers {category, description, name} and
-// {category, description, meters, name, notes}: a stored item picks up
-// `default_enchantment`, `column` and `position` on its next save.
+// 444 live gear items answers three shapes -- {category, description, name}
+// (162), {category, description, meters, name, notes} (138), and all eight keys
+// (144, the ENCLAVE: Aspirant V1 classes). The 300 items in the first two
+// shapes pick up `default_enchantment`, `column` and `position` on their next
+// save.
 //
 // Blank rows are dropped BEFORE the items are numbered, so `index` is the
 // position in the saved array rather than in the submitted one -- see
@@ -213,11 +215,12 @@ const normalizeGear = (value) => indexedRows(value)
 // rather than in the template keeps it testable and keeps the template free of
 // a group-by helper that would exist for one caller.
 //
-// A stored item only gains `column` on its next save -- a census of the 300 live
-// gear items answers {category, description, name} and
-// {category, description, meters, name, notes}, so none of them carry it yet.
-// Falling back to the position in the list means a class that has not been
-// re-saved still renders all of its Signatures instead of none of them.
+// A stored item only gains `column` on its next save -- of the 444 live gear
+// items, the 300 answering {category, description, name} or
+// {category, description, meters, name, notes} carry none, and only the 144
+// ENCLAVE: Aspirant V1 items carry it. Falling back to the position in the list
+// means a class that has not been re-saved still renders all of its Signatures
+// instead of none of them.
 const signatureColumns = (gear) => {
     const items = Array.isArray(gear) ? gear : [];
     return [1, 2, 3, 4].map((column) => items.filter(
