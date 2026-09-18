@@ -266,7 +266,7 @@ const joinWords = (words) => words.reduce((text, word, index) => (index === 0 ? 
 // The whole line as the page prints it, for the labels and headings the cadence is read off and
 // for the four cover values that are a single printed line. Measured over the book, the gap-aware
 // join and a join that spaces every pair differ on 178 lines, none of them on any of the twelve
-// cover pages and none of them one of the 549 lines a predicate here matches -- and they cannot
+// cover pages and none of them a line any predicate here matches -- and they cannot
 // differ on a predicate's line, because fusing only ever closes a space that pdftotext opened
 // inside one printed word, never one the book set: the narrowest genuine inter-word gap in the
 // book is 0.8641 against this threshold of 0.5.
