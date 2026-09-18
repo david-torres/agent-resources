@@ -1,8 +1,8 @@
 -- A character's Enchantment and Mods on a Signature it owns
--- (ENCLAVE: Aspirant V1, pp. 86, 87).
+-- (ENCLAVE: Aspirant V1, pp. 8, 86, 87).
 --
 -- Columns rather than a child table because the book caps both: "A Signature
--- may only hold one Enchantment" (pg. 86) and "up to two Mods" (pg. 87).
+-- may only hold one Enchantment" (pg. 8) and "up to two Mods" (pg. 87).
 -- Reconciliation matches a class_gear row by class_id + name, so a rename is a
 -- delete plus an insert; a child table keyed on class_gear.id would lose a
 -- paid-for Enchantment to a rename.

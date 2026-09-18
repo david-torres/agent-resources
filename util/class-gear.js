@@ -164,7 +164,7 @@ const normalizeNote = (row) => {
 };
 
 // A Signature may hold no more than one Enchantment (ENCLAVE: Aspirant,
-// pg. 86), so this is one object rather than a list. The dedication is the
+// pg. 8), so this is one object rather than a list. The dedication is the
 // "In Honor of ..." line the book prints under some enchantment names.
 //
 // The name decides survival, the same rule the item itself follows: an
