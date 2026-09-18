@@ -3,10 +3,17 @@ const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
 const { statList } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
+const {
+  countWordsExcludingRatings,
+  ENCHANTMENT_WORD_LIMIT,
+  MOD_WORD_LIMIT,
+  MODS_PER_SIGNATURE
+} = require('../../util/merx-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
 const CREATOR_MODES = ['advent', 'aspiring', 'aspirant'];
+const ENCHANTMENT_SOURCES = ['default', 'custom'];
 
 // Submitted character payloads are ordinary JSON-like data. Clone them before
 // transforming so route callers (and import callers) retain their request body.
@@ -38,6 +45,63 @@ const normalizeNamedJsonbList = (input) => {
   }).filter(Boolean);
 };
 
+// A Default Enchantment stores only its source: its text belongs to the class
+// (classes.gear[].default_enchantment) and services/character/repository.js
+// mergeClassItems already merges it onto the character row at read time, so a
+// copy stored here could drift from the class page and would hide an errata
+// from a character who unlocked it.
+//
+// A Custom Enchantment is Self-Made Content, so it is bounded but not judged:
+// the book's "a Custom Enchantment may never be stronger than the Default"
+// (pg. 86) is the playgroup's call, and nothing here can measure it.
+const normalizeEnchantment = (value) => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const source = typeof value.source === 'string' ? value.source.trim() : '';
+  if (!source) return null;
+  if (!ENCHANTMENT_SOURCES.includes(source)) {
+    throw new Error(`Enchantment source must be default or custom, not "${source}".`);
+  }
+  if (source === 'default') return { source };
+  const name = typeof value.name === 'string' ? value.name.trim() : '';
+  if (!name) throw new Error('A Custom Enchantment needs a name.');
+  const description = typeof value.description === 'string' ? value.description.trim() : '';
+  if (countWordsExcludingRatings(description) > ENCHANTMENT_WORD_LIMIT) {
+    throw new Error(`A Custom Enchantment may be no more than ${ENCHANTMENT_WORD_LIMIT} words.`);
+  }
+  return { source, name, description };
+};
+
+// pg. 87: a Mod "should be named for easy reference during play". A blank
+// name is a UI artifact rather than a purchase, so it is dropped -- the same
+// treatment util/class-gear.js gives a blank note.
+const normalizeMods = (value) => {
+  const rows = Array.isArray(value) ? value : [];
+  const mods = [];
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const name = typeof row.name === 'string' ? row.name.trim() : '';
+    if (!name) continue;
+    const description = typeof row.description === 'string' ? row.description.trim() : '';
+    if (countWordsExcludingRatings(description) > MOD_WORD_LIMIT) {
+      throw new Error(`A Mod may be no more than ${MOD_WORD_LIMIT} words.`);
+    }
+    mods.push({ name, description });
+  }
+  if (mods.length > MODS_PER_SIGNATURE) {
+    throw new Error('A Signature may hold no more than two Mods.');
+  }
+  return mods;
+};
+
+// Bounds a Signature's player-authored equipment before it reaches
+// reconcileGear. Abilities never carry equipment, so both fields normalize to
+// the empty case for them; reconcileAbilities names its columns explicitly,
+// so the extra keys are dropped before any write.
+const normalizeGearEquipment = (item) => ({
+  enchantment: normalizeEnchantment(item && item.enchantment),
+  mods: normalizeMods(item && item.mods)
+});
+
 const normalizeClassItems = (items) => {
   if (!Array.isArray(items)) return [];
   return items.map(item => {
@@ -53,7 +117,8 @@ const normalizeClassItems = (items) => {
     }
     if (typeof item === 'object' && typeof item.name === 'string') {
       const name = item.name.trim();
-      return name ? { ...item, name } : null;
+      if (!name) return null;
+      return { ...item, name, ...normalizeGearEquipment(item) };
     }
     return null;
   }).filter(Boolean);
@@ -290,6 +355,7 @@ module.exports = {
   normalizeNamedJsonbList,
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,
+  normalizeGearEquipment,
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,

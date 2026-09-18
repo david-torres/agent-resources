@@ -1,5 +1,6 @@
 const { test, expect } = require('bun:test');
-const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems } = require('./input');
+const { normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment } = require('./input');
+const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 
 test('trims every string in a character payload, not just item names', () => {
   const { data, childData } = normalizeCharacterInput({
@@ -196,10 +197,13 @@ test('normalizeCharacterInput leaves created_at absent when it was never submitt
 // normalizeAbilityItems is normalizeClassItems, which spreads the submitted
 // object ({...item, name} at services/character/input.js:56). The tag survived
 // this far all along and was lost further downstream, so this is the boundary
-// worth pinning.
+// worth pinning. Abilities never carry equipment, so normalizeGearEquipment
+// also runs here and adds the empty case (enchantment: null, mods: []);
+// reconcileAbilities names its columns explicitly, so those keys never reach
+// a write.
 test('normalizeAbilityItems keeps the submitted type', () => {
   expect(normalizeAbilityItems([{ name: ' Overdrive ', type: 'advanced' }])).toEqual([
-    { name: 'Overdrive', type: 'advanced' }
+    { name: 'Overdrive', type: 'advanced', enchantment: null, mods: [] }
   ]);
 });
 
@@ -352,4 +356,117 @@ test('an aspirant payload carrying a pseudo_class keeps its own class', () => {
   expect(result.data).not.toHaveProperty('pseudo_class_tagline');
   expect(result.data).not.toHaveProperty('pseudo_class_description');
   expect(result.data).not.toHaveProperty('pseudo_class');
+});
+
+const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
+
+test('a default enchantment normalizes to its source alone', () => {
+  expect(normalizeGearEquipment({ name: 'Hat', enchantment: { source: 'default' } }).enchantment)
+    .toEqual({ source: 'default' });
+});
+
+test('a default enchantment does not keep a submitted name or description', () => {
+  // The text lives on the class; storing a copy would let it drift from the
+  // class page and would make an errata invisible to the character.
+  const { enchantment } = normalizeGearEquipment({
+    name: 'Hat',
+    enchantment: { source: 'default', name: 'Whatever', description: 'Made up.' }
+  });
+  expect(enchantment).toEqual({ source: 'default' });
+});
+
+test('a custom enchantment keeps its trimmed name and description', () => {
+  const { enchantment } = normalizeGearEquipment({
+    name: 'Hat',
+    enchantment: { source: 'custom', name: '  Ported  ', description: '  Retooled.  ' }
+  });
+  expect(enchantment).toEqual({ source: 'custom', name: 'Ported', description: 'Retooled.' });
+});
+
+test('an absent enchantment is null and absent mods are an empty array', () => {
+  expect(normalizeGearEquipment({ name: 'Hat' })).toEqual({ enchantment: null, mods: [] });
+});
+
+test('a custom enchantment at the 40-word limit is accepted', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat',
+    enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT) }
+  })).not.toThrow();
+});
+
+test('a custom enchantment over 40 words is rejected', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat',
+    enchantment: { source: 'custom', name: 'Long', description: words(ENCHANTMENT_WORD_LIMIT + 1) }
+  })).toThrow(/40 words/);
+});
+
+test('Power Rating superscripts do not count against the 40 words', () => {
+  const description = `${words(ENCHANTMENT_WORD_LIMIT)} <sup>L–H</sup> <sup>M</sup>`;
+  expect(() => normalizeGearEquipment({
+    name: 'Hat', enchantment: { source: 'custom', name: 'Rated', description }
+  })).not.toThrow();
+});
+
+test('a custom enchantment with no name is rejected', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat', enchantment: { source: 'custom', name: '  ', description: 'x' }
+  })).toThrow(/name/i);
+});
+
+test('an unknown enchantment source is rejected', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat', enchantment: { source: 'legendary' }
+  })).toThrow(/default|custom/);
+});
+
+test('a mod over 10 words is rejected', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat', mods: [{ name: 'Big', description: words(MOD_WORD_LIMIT + 1) }]
+  })).toThrow(/10 words/);
+});
+
+test('a third mod on one Signature is rejected', () => {
+  expect(() => normalizeGearEquipment({
+    name: 'Hat', mods: [{ name: 'a' }, { name: 'b' }, { name: 'c' }]
+  })).toThrow(/two Mods/i);
+});
+
+test('an unnamed mod is dropped rather than stored nameless', () => {
+  // A Mod "should be named for easy reference during play" (pg. 87), and a
+  // blank row is a UI artifact, not a purchase -- the same treatment
+  // util/class-gear.js gives a blank note.
+  expect(normalizeGearEquipment({ name: 'Hat', mods: [{ name: '  ' }, { name: 'Lined' }] }).mods)
+    .toEqual([{ name: 'Lined', description: '' }]);
+});
+
+const V1_ARTIFACT = require('../../docs/data/aspirant-v1-classes-2026-09.json');
+
+const everyDefaultEnchantment = () => {
+  const classes = Array.isArray(V1_ARTIFACT) ? V1_ARTIFACT : V1_ARTIFACT.classes;
+  return classes.flatMap((cls) => (cls.gear || [])
+    .map((item) => item.default_enchantment)
+    .filter(Boolean));
+};
+
+// The 40-word limit governs a player's Custom Enchantment, not the book's
+// printed Defaults -- but the Defaults are the only rated prose of this kind
+// that exists, so they are what the counter can be measured against.
+test('every printed Default Enchantment counts within 40 words once ratings are excluded', () => {
+  const enchantments = everyDefaultEnchantment();
+  expect(enchantments).toHaveLength(144);
+  const over = enchantments.filter(
+    (e) => countWordsExcludingRatings(e.description) > ENCHANTMENT_WORD_LIMIT
+  );
+  expect(over).toEqual([]);
+});
+
+// This is the case that makes the exclusion rule load-bearing rather than
+// decorative. Counting a <sup>L-H</sup> as a word puts five of the book's own
+// Enchantments over the book's own limit -- Thane's Billhook at 41 against 40.
+test('counting Power Rating superscripts as words would breach the limit five times', () => {
+  const naiveCount = (text) => String(text ?? '').trim().split(/\s+/).length;
+  const breaches = everyDefaultEnchantment()
+    .filter((e) => naiveCount(e.description) > ENCHANTMENT_WORD_LIMIT);
+  expect(breaches).toHaveLength(5);
 });
