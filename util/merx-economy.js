@@ -1,0 +1,129 @@
+// The Merx economy ENCLAVE: Aspirant V1 prints on page 85, with the grants,
+// caps and word limits from pages 3, 8, 86, 87, 90 and 92.
+//
+// This is the only place these figures are written down, so that every
+// consumer -- an extractor, a verifier, a derivation, a browser view --
+// reads the same numbers instead of keeping its own copy.
+//
+// Pure by design: no requires, no I/O. Every consumer passes what it knows.
+
+// pg. 85. Cross-Class is uniformly +1 at every tier, but it is written out
+// rather than expressed as `own + 1` so a future edition can break the pattern
+// without a rewrite.
+const SIGNATURE_PRICE = { own: 2, cross: 3 };
+const DEFAULT_ENCHANTMENT_PRICE = { own: 2, cross: 3 };
+const CUSTOM_ENCHANTMENT_PRICE = { own: 3, cross: 4 };
+// "the second costing more" -- indexed by how many Mods the Signature already
+// holds, so the first Mod reads index 0.
+const MOD_PRICE = { own: [1, 2], cross: [2, 3] };
+const COMMON_ITEM_PRICE = 1;
+
+// pg. 3: "Instead of four Signature Items (three Default and one Elective),
+// characters start with 12 Merx". pg. 90: aspiring starts with 10.
+// Advent grants no Merx -- it grants the four Signatures the Aspirant rule
+// replaces, which its own consumer still needs to honour separately.
+const CREATION_GRANT = { advent: 0, aspirant: 12, aspiring: 10 };
+
+// pg. 85: "you can never bring more than 12 Signature Items on a mission".
+// pg. 92: aspiring "Signature Cap is set at 8, and they may never have more
+// than four total Abilities". Advent has no cap in the rules the app models,
+// so null means "not capped" rather than zero.
+const SIGNATURE_CAP = { advent: null, aspirant: 12, aspiring: 8 };
+// pg. 92: aspiring may never have more than four total Abilities. The
+// Aspirant-tier figure of six is recorded here for parity across tiers.
+const ABILITY_CAP = { advent: null, aspirant: 6, aspiring: 4 };
+
+// pg. 87: "A given Signature may hold up to two Mods".
+const MODS_PER_SIGNATURE = 2;
+// pg. 86 and pg. 87.
+const ENCHANTMENT_WORD_LIMIT = 40;
+const MOD_WORD_LIMIT = 10;
+
+const tier = (crossClass) => (crossClass ? 'cross' : 'own');
+
+const priceOfSignature = ({ crossClass } = {}) => SIGNATURE_PRICE[tier(crossClass)];
+
+const priceOfEnchantment = ({ source, crossClass } = {}) => {
+    if (source === 'custom') return CUSTOM_ENCHANTMENT_PRICE[tier(crossClass)];
+    if (source === 'default') return DEFAULT_ENCHANTMENT_PRICE[tier(crossClass)];
+    return 0;
+};
+
+// `index` is 0-based: a Signature's first Mod is index 0. A Signature cannot
+// hold more than MODS_PER_SIGNATURE, so an index past the table is priced 0
+// rather than throwing -- the count is rejected by validation, and a pricing
+// function that throws would turn a validation error into a 500.
+const priceOfMod = ({ index, crossClass } = {}) => MOD_PRICE[tier(crossClass)][index] ?? 0;
+
+// pg. 90: an aspiring character's chosen Signatures "are treated as belonging
+// to your Class for the purposes of acquisition and improvement", so it never
+// pays the surcharge. It also has no class_id to compare against, which would
+// otherwise make every one of its items read as cross-class.
+const isCrossClass = (item, { economy, characterClassId }) => {
+    if (economy === 'aspiring') return false;
+    return !!characterClassId && !!item.class_id && item.class_id !== characterClassId;
+};
+
+const modsOf = (item) => (Array.isArray(item.mods) ? item.mods : []);
+
+const equipmentSpend = (gear, { economy, characterClassId } = {}) => {
+    const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
+    return items.reduce((total, item) => {
+        const crossClass = isCrossClass(item, { economy, characterClassId });
+        const enchantment = item.enchantment || null;
+        const mods = modsOf(item);
+        const modSpend = mods.reduce(
+            (sum, _mod, index) => sum + priceOfMod({ index, crossClass }), 0
+        );
+        return total
+            + priceOfSignature({ crossClass })
+            + priceOfEnchantment({ source: enchantment && enchantment.source, crossClass })
+            + modSpend;
+    }, 0);
+};
+
+// pg. 8: an Enchantment "counts towards the Signature Cap of 12", so an
+// enchanted Signature occupies two slots; Mods "do not count towards the
+// Signature cap" and occupy none.
+const signatureSlotsUsed = (gear) => {
+    const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
+    return items.reduce((slots, item) => slots + 1 + (item.enchantment ? 1 : 0), 0);
+};
+
+// pg. 86: a Custom Enchantment is "no more than 40 words long, minus Power
+// Rating Superscripts". A rating is stored as a <sup> span, so the spans come
+// out before the words are counted.
+const RATING_SPAN = /<sup>[\s\S]*?<\/sup>/g;
+
+const countWordsExcludingRatings = (text) => {
+    const stripped = String(text ?? '').replace(RATING_SPAN, ' ').trim();
+    return stripped ? stripped.split(/\s+/).length : 0;
+};
+
+// Which economy a character is under. An aspiring character is class-less,
+// so there is no content_format to read and creator_mode is the only signal.
+// Everything else reads content_format, which is the shape of the class's
+// content. rules_edition is deliberately NOT consulted: the six pre-release
+// Aspirant classes are rules_edition 'aspirant' with content_format 'advent'
+// and are priced as Advent content, because that is the shape they carry.
+const economyFor = ({ contentFormat, creatorMode } = {}) => {
+    if (creatorMode === 'aspiring') return 'aspiring';
+    return contentFormat === 'aspirant' ? 'aspirant' : 'advent';
+};
+
+module.exports = {
+    economyFor,
+    priceOfSignature,
+    priceOfEnchantment,
+    priceOfMod,
+    equipmentSpend,
+    signatureSlotsUsed,
+    countWordsExcludingRatings,
+    COMMON_ITEM_PRICE,
+    CREATION_GRANT,
+    SIGNATURE_CAP,
+    ABILITY_CAP,
+    MODS_PER_SIGNATURE,
+    ENCHANTMENT_WORD_LIMIT,
+    MOD_WORD_LIMIT
+};
