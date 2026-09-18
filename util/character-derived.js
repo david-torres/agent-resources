@@ -1,9 +1,19 @@
 const {
   v1LevelingSequence,
   v2LevelingSequence,
-  MERX_PER_MISSION_SUCCESS,
-  STARTING_ON_CLASS_GEAR_ALLOTMENT
+  MERX_PER_MISSION_SUCCESS
 } = require('./enclave-consts');
+const {
+  equipmentSpend,
+  priceOfSignature,
+  COMMON_ITEM_PRICE,
+  CREATION_GRANT
+} = require('./merx-economy');
+
+// Number of on-class Signatures Advent grants for free at creation (pg. 3's
+// four Signature Items). The Aspirant editions replaced this gift with the
+// CREATION_GRANT Merx grant, so only the advent branch still needs it.
+const STARTING_ON_CLASS_GEAR_ALLOTMENT = 4;
 
 const COUNTABLE_OUTCOMES = new Set(['success', 'failure']);
 
@@ -32,29 +42,21 @@ const deriveLevel = (completedMissions, rulesVersion) => {
   return Math.min(level, MAX_LEVEL);
 };
 
-const COMMON_ITEM_COST = 1;
-const GEAR_ON_CLASS_COST = 2;
-const GEAR_OFF_CLASS_COST = 3;
-
 const coerceMerx = (raw) => {
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
 };
 
-const deriveMerxBreakdown = ({ realMissions, offscreenMissions, gear, commonItems, characterClassId }) => {
-  const real = Array.isArray(realMissions) ? realMissions : [];
-  const offscreen = Array.isArray(offscreenMissions) ? offscreenMissions : [];
-  const gearList = Array.isArray(gear) ? gear : [];
-  const itemList = Array.isArray(commonItems) ? commonItems : [];
-
-  const successes = real.filter(m => m && m.outcome === 'success').length;
-  const earnedFromReal = successes * MERX_PER_MISSION_SUCCESS;
-  const earnedFromOffscreen = offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
-  const earned = earnedFromReal + earnedFromOffscreen;
-
-  const itemSpend = itemList.length * COMMON_ITEM_COST;
-  // Count on-class and off-class gear separately so we can grant the
-  // STARTING_ON_CLASS_GEAR_ALLOTMENT (creation gift) before charging merx.
+// Advent grants four on-class Signatures at creation and charges for the rest;
+// the Aspirant editions replaced that gift with a Merx grant (pg. 3), so every
+// Signature is bought and the grant is income rather than a discount.
+//
+// It reads its two prices from the same table as the Aspirant branch because
+// they are the same two numbers (2 on-class, 3 off-class) and always have been.
+// If a future edition moves the Aspirant prices and Advent's must not follow,
+// that is the moment to give Advent its own entries -- not now, when a second
+// copy would only be a copy that can drift.
+const adventGearSpend = (gearList, characterClassId) => {
   let onClassCount = 0;
   let offClassCount = 0;
   for (const g of gearList) {
@@ -64,8 +66,29 @@ const deriveMerxBreakdown = ({ realMissions, offscreenMissions, gear, commonItem
     else offClassCount++;
   }
   const chargedOnClass = Math.max(0, onClassCount - STARTING_ON_CLASS_GEAR_ALLOTMENT);
-  const gearSpend = chargedOnClass * GEAR_ON_CLASS_COST + offClassCount * GEAR_OFF_CLASS_COST;
-  const spend = itemSpend + gearSpend;
+  return chargedOnClass * priceOfSignature({ crossClass: false })
+    + offClassCount * priceOfSignature({ crossClass: true });
+};
+
+const gearSpendFor = (economy, gearList, characterClassId) => (economy === 'advent'
+  ? adventGearSpend(gearList, characterClassId)
+  : equipmentSpend(gearList, { economy, characterClassId }));
+
+const deriveMerxBreakdown = ({
+  realMissions, offscreenMissions, gear, commonItems, characterClassId, economy = 'advent'
+}) => {
+  const real = Array.isArray(realMissions) ? realMissions : [];
+  const offscreen = Array.isArray(offscreenMissions) ? offscreenMissions : [];
+  const gearList = Array.isArray(gear) ? gear : [];
+  const itemList = Array.isArray(commonItems) ? commonItems : [];
+
+  const successes = real.filter(m => m && m.outcome === 'success').length;
+  const earnedFromReal = successes * MERX_PER_MISSION_SUCCESS;
+  const earnedFromOffscreen = offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
+  const earned = CREATION_GRANT[economy] + earnedFromReal + earnedFromOffscreen;
+
+  const itemSpend = itemList.length * COMMON_ITEM_PRICE;
+  const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId);
 
   return {
     earned,
@@ -77,14 +100,15 @@ const deriveMerxBreakdown = ({ realMissions, offscreenMissions, gear, commonItem
 
 const deriveMerx = (args) => deriveMerxBreakdown(args).reward;
 
-const deriveCharacterTotals = ({ character, realMissions, offscreenMissions, rulesVersion }) => {
+const deriveCharacterTotals = ({ character, realMissions, offscreenMissions, rulesVersion, economy }) => {
   const completed_missions = deriveCompletedMissions(realMissions, offscreenMissions);
   const merxParts = deriveMerxBreakdown({
     realMissions,
     offscreenMissions,
     gear: character && character.gear,
     commonItems: character && character.common_items,
-    characterClassId: character && character.class_id
+    characterClassId: character && character.class_id,
+    economy
   });
   const level = deriveLevel(completed_missions, rulesVersion);
   return {

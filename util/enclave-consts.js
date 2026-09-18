@@ -318,10 +318,6 @@ const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6];
 // of (character, mission) and update util/character-derived.js accordingly.
 const MERX_PER_MISSION_SUCCESS = 1;
 
-// Number of on-class signature gear items character creation grants for free.
-// On-class gear beyond this count costs merx like any other purchase.
-const STARTING_ON_CLASS_GEAR_ALLOTMENT = 4;
-
 // Common items available to every character during the wizard's gear step.
 // Each entry has a name and a short markdown description. The wizard offers
 // these on the right-hand "spend your 2 merx" list at 1 merx each. This is
@@ -353,6 +349,5 @@ module.exports = {
   v1LevelingSequence,
   v2LevelingSequence,
   MERX_PER_MISSION_SUCCESS,
-  STARTING_ON_CLASS_GEAR_ALLOTMENT,
   commonItemList
 };

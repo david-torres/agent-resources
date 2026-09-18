@@ -314,3 +314,114 @@ test('deriveMerx allotment does not apply to off-class gear', () => {
   // 15 earned - 4*3 = 15 - 12 = 3
   expect(result).toBe(3);
 });
+
+const { deriveMerxBreakdown } = require('./character-derived');
+const { CREATION_GRANT } = require('./merx-economy');
+
+const twelveOwn = (classId) => Array.from({ length: 12 }, (_, i) => ({
+  name: `Signature ${i}`, class_id: classId
+}));
+
+// The defect: before the aspirant branch existed, this returned
+// { spend: 16, deficit: 16 } -- eight Signatures past the Advent four-item
+// allotment at 2 Merx each -- and any player who ticked auto-calculate on a
+// freshly created V1 character was shown a 16-Merx debt.
+test('a V1 character owning twelve own-class Signatures is charged 24 against a grant of 12', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: twelveOwn('v1-class'), commonItems: [],
+    characterClassId: 'v1-class', economy: 'aspirant'
+  });
+  expect(parts.earned).toBe(12);
+  expect(parts.spend).toBe(24);
+  expect(parts.deficit).toBe(12);
+});
+
+// 12 Merx at 2 Merx each. The Signature Cap of 12 is a carry limit reached
+// over a campaign, not a creation target.
+test('the 12-Merx grant buys exactly six own-class Signatures', () => {
+  const six = twelveOwn('v1-class').slice(0, 6);
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: six, commonItems: [],
+    characterClassId: 'v1-class', economy: 'aspirant'
+  });
+  expect(parts.spend).toBe(CREATION_GRANT.aspirant);
+  expect(parts.deficit).toBe(0);
+  expect(parts.reward).toBe(0);
+});
+
+test('an Enchantment and two Mods are charged on top of the Signature', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: [{
+      name: 'Wizarding Hat', class_id: 'v1-class',
+      enchantment: { source: 'default' },
+      mods: [{ name: 'Lined' }, { name: 'Weighted' }]
+    }],
+    commonItems: [], characterClassId: 'v1-class', economy: 'aspirant'
+  });
+  // 2 Signature + 2 Default Enchantment + 1 first Mod + 2 second Mod
+  expect(parts.spend).toBe(7);
+});
+
+// pg. 90 treats an aspiring character's three picks as its own Class's, and it
+// has no class_id at all -- without the rule every pick would read as
+// cross-class and cost 3, overcharging a 10-Merx grant by 3.
+test('an aspiring character pays own-class price for picks from three classes', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: [
+      { name: 'A', class_id: 'class-a' },
+      { name: 'B', class_id: 'class-b' },
+      { name: 'C', class_id: 'class-c' }
+    ],
+    commonItems: [], characterClassId: null, economy: 'aspiring'
+  });
+  expect(parts.earned).toBe(10);
+  expect(parts.spend).toBe(6);
+  expect(parts.reward).toBe(4);
+});
+
+// All 327 existing characters are in this branch. Any movement here is a
+// defect, not an improvement.
+test('the advent branch is unchanged: four on-class Signatures are free', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: twelveOwn('advent-class').slice(0, 4), commonItems: [],
+    characterClassId: 'advent-class'
+  });
+  expect(parts.earned).toBe(0);
+  expect(parts.spend).toBe(0);
+  expect(parts.deficit).toBe(0);
+});
+
+test('the advent branch still charges the fifth on-class Signature 2 Merx', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [], offscreenMissions: [],
+    gear: twelveOwn('advent-class').slice(0, 5), commonItems: [],
+    characterClassId: 'advent-class'
+  });
+  expect(parts.spend).toBe(2);
+});
+
+test('an omitted economy is advent, so existing callers keep their answer', () => {
+  const args = {
+    realMissions: [], offscreenMissions: [],
+    gear: twelveOwn('advent-class').slice(0, 4), commonItems: [],
+    characterClassId: 'advent-class'
+  };
+  expect(deriveMerxBreakdown(args)).toEqual(
+    deriveMerxBreakdown({ ...args, economy: 'advent' })
+  );
+});
+
+test('a V1 character still earns Merx from missions on top of the grant', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [{ outcome: 'success' }, { outcome: 'success' }],
+    offscreenMissions: [{ merx_gained: 3 }],
+    gear: [], commonItems: [],
+    characterClassId: 'v1-class', economy: 'aspirant'
+  });
+  expect(parts.earned).toBe(12 + 2 + 3);
+});
