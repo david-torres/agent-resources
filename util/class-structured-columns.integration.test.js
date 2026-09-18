@@ -11,6 +11,7 @@ require('./require-local-supabase');
 
 const { describe, test, expect } = require('bun:test');
 const { createClient } = require('@supabase/supabase-js');
+const { Client } = require('pg');
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
 
@@ -120,6 +121,27 @@ describe('classes.content_format', () => {
       .map((row) => `${row.id} is ${row.content_format ?? 'null'}`);
 
     expect(outside).toEqual([]);
+  });
+
+  // The population above cannot outlive the next book, but the column default
+  // itself is readable without writing anything, straight from
+  // information_schema.
+  test("defaults to 'advent'", async () => {
+    const db = new Client({
+      connectionString: process.env.SUPABASE_DB_URL || 'postgresql://postgres:postgres@127.0.0.1:54322/postgres'
+    });
+    await db.connect();
+    try {
+      const { rows } = await db.query(
+        `select column_default from information_schema.columns
+         where table_schema = $1 and table_name = $2 and column_name = $3`,
+        ['public', 'classes', 'content_format']
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].column_default).toBe("'advent'::text");
+    } finally {
+      await db.end();
+    }
   });
 
   test('rejects a value outside the enum', async () => {
