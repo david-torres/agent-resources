@@ -6,8 +6,8 @@ import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import {
-  buildPayload, displayName, fieldsFor, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
-  trimEnds, unremapped, unresolvableTargets
+  buildPayload, diffFields, displayName, fieldsFor, fold, isLocalTarget, planLoad, reportPlan,
+  resolveTarget, sectionEnum, trimEnds, unremapped, unresolvableTargets
 } from '../scripts/load-prerelease-classes.mjs';
 import { bookFor } from '../scripts/lib/books.mjs';
 import {
@@ -168,6 +168,26 @@ test('every V1 class has one minted id of its own', () => {
   }
 });
 
+// These ids are referenced by a roster, by the loader and by production rows,
+// so they are data, not an implementation detail -- an accidental edit to a
+// single character has to fail this test, not just the shape checks above.
+test('the twelve minted ids are pinned to their exact values', () => {
+  expect(ASPIRANT_V1_CLASS_IDS).toEqual({
+    Gunslinger: '3311fb69-4f9a-45f1-88d1-529bd8870a4c',
+    Illusionist: '84543c7f-bb35-45e6-af5a-899b954bdc95',
+    Librarian: '3667c568-616f-4910-a89a-e576e197c862',
+    Thane: '0f8bbc56-90e7-4997-9356-a7aecaaecb21',
+    Thunderbird: '4837502d-6595-44a9-8488-86e125a4bab3',
+    Wanderer: '00e706bd-fe35-478c-b817-3ce65c7ff91a',
+    Berserker: 'cd56fcba-10b5-41af-9bbd-3c882377ac9d',
+    Freerunner: 'c8b18cea-b8c9-4433-aa93-545eb28dcf66',
+    Infiltrator: 'a8b0d13d-280b-48b1-b410-37b34bfc1a81',
+    Samaritan: 'fa42bce0-431c-4d00-a9f4-a21a1be0e519',
+    Vessel: 'e293cb3a-98b0-492c-bf32-6311413574e4',
+    Witchfinder: '81bccc24-a7f3-4217-8bf8-de65d1ae4633'
+  });
+});
+
 test('the document title casing reproduces the catalogue names', () => {
   expect(displayName('BEASTMASTER')).toBe('Beastmaster');
   expect(displayName('SHŌNEN')).toBe('Shōnen');
@@ -225,6 +245,16 @@ test('a fork payload carries the allowlist plus the four fields it mints', () =>
     expect(plan.payload).not.toHaveProperty('page_range');
     expect(plan.payload.id).toBe(ASPIRANT_V1_CLASS_IDS[plan.payload.name]);
   }
+});
+
+// A fork payload carries four keys (id, base_class_id, rules_edition,
+// content_format) the row's own field list does not, and if diffFields walked
+// the row's keys instead of the payload's, every one of those four would be
+// reported as "differing" against a row that simply lacks the key.
+test('diffFields compares only the keys the payload itself carries', () => {
+  const payload = { name: 'Berserker', rules_edition: 'aspirant' };
+  const row = { name: 'Berserker', rules_edition: 'advent', overview: 'a row-only field' };
+  expect(diffFields(payload, row).map((change) => change.field)).toEqual(['rules_edition']);
 });
 
 // `prerelease_section` is the pre-release document's own sectioning. The V1
@@ -445,4 +475,23 @@ test('every committed remap target survives the import into its own kind', () =>
     gear: new Set(artifactNames('gear'))
   };
   expect(unresolvableTargets(remap, after)).toEqual([]);
+});
+
+// The FORK heading is how a human running the dry run confirms the twelve
+// parents before the next task writes anything -- it names both the class and
+// the parent id it is about to descend from.
+test('reportPlan prints the FORK heading with the class name and parent id', () => {
+  const plan = {
+    payload: { name: 'Berserker' }, row: null, parent: { id: 'parent-id-1' },
+    disposition: 'fork', changes: []
+  };
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    reportPlan([plan]);
+  } finally {
+    console.log = originalLog;
+  }
+  expect(lines).toContain('\nFORK Berserker from parent-id-1');
 });

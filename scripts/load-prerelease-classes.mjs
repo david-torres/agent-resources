@@ -251,7 +251,7 @@ const reportInsert = (plan, heading) => {
   console.log(`  + rules_version: ${JSON.stringify(NEW_ROW_RULES_VERSION)}`);
 };
 
-const reportPlan = (plans) => {
+export const reportPlan = (plans) => {
   for (const plan of plans) {
     const { payload, row, parent, disposition } = plan;
     if (disposition === 'create') {
