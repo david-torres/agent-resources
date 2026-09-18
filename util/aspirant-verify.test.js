@@ -140,6 +140,16 @@ describe('checkBareRatings', () => {
     checkBareRatings(fail, 'Gunslinger p13', ['Tim M.']);
     expect(found.length).toBe(1);
   });
+
+  // The attribution dash is U+2014; a Power Rating range is set with U+2013. A string that opens
+  // its last token with U+2013 instead must still be flagged, or the exclusion would also cover
+  // the range notation the bare-rating check exists to catch.
+  test('does not excuse an initial introduced by the en dash a rating range uses', () => {
+    const { found, fail } = collect();
+    checkBareRatings(fail, 'Gunslinger p13', ['“Keep it intimidating and cool.” – Lee H.']);
+    expect(found.length).toBe(1);
+    expect(found[0]).toContain('"H."');
+  });
 });
 
 describe('repairRaisedRatings', () => {
