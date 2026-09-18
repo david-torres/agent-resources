@@ -1,11 +1,15 @@
 // util/core-roster.integration.test.js
 //
 // The whole book-unlock design rests on an invariant nothing enforces at
-// runtime: for each id in CORE_CLASS_UNLOCKS[r], a `classes` row with that id
-// must exist and carry rules_edition = r. util/seed-classes.test.js only
-// checks the pure builder's output; util/book-classes.test.js only checks set
-// arithmetic over the constant. Neither ever looks at the database, so both
-// stay green while the constant points at nothing.
+// runtime: for each id CORE_CLASS_UNLOCKS[r] grants under a name, a `classes`
+// row with that id must exist, carry rules_edition = r, and carry that name.
+// A name grants a list of ids -- the pre-release row and its V1 fork share one
+// name -- so every id under every name is checked.
+//
+// util/seed-classes.test.js only checks the pure builder's output;
+// util/book-classes.test.js only checks set arithmetic over the constant.
+// Neither ever looks at the database, so both stay green while the constant
+// points at nothing.
 //
 // Two silent failure modes this closes:
 //
@@ -31,11 +35,16 @@ const { describe, test, expect } = require('bun:test');
 const { supabaseAdmin } = require('../models/_base');
 const { CORE_CLASS_UNLOCKS } = require('./starter-content');
 
+// One [name, id] pair per granted id, so a name granting two ids is checked
+// twice and the failure message still names the class.
+const rosterPairs = (roster) =>
+  Object.entries(roster).flatMap(([name, ids]) => ids.map(id => [name, id]));
+
 const rosterRows = async (roster) => {
   const { data, error } = await supabaseAdmin
     .from('classes')
     .select('id, name, rules_edition')
-    .in('id', Object.values(roster));
+    .in('id', rosterPairs(roster).map(([, id]) => id));
 
   expect(error).toBeNull();
   return new Map((data || []).map(row => [row.id, row]));
@@ -46,7 +55,7 @@ for (const [ruleset, roster] of Object.entries(CORE_CLASS_UNLOCKS)) {
     test('every roster id resolves to a real class row', async () => {
       const byId = await rosterRows(roster);
 
-      const missing = Object.entries(roster)
+      const missing = rosterPairs(roster)
         .filter(([, id]) => !byId.has(id))
         .map(([name, id]) => `${name} -> ${id}`);
 
@@ -56,7 +65,7 @@ for (const [ruleset, roster] of Object.entries(CORE_CLASS_UNLOCKS)) {
     test(`every roster row carries rules_edition '${ruleset}'`, async () => {
       const byId = await rosterRows(roster);
 
-      const mismatched = Object.entries(roster)
+      const mismatched = rosterPairs(roster)
         .filter(([, id]) => byId.has(id) && byId.get(id).rules_edition !== ruleset)
         .map(([name, id]) => `${name} -> ${id} is ${byId.get(id).rules_edition}`);
 
@@ -66,11 +75,12 @@ for (const [ruleset, roster] of Object.entries(CORE_CLASS_UNLOCKS)) {
     // An id that exists with the right ruleset can still be the WRONG class —
     // point Berserker's entry at Freerunner's id and both tests above stay
     // green while the roster silently grants a class nobody chose. The
-    // constant is a name -> id map, so the name is part of the contract.
+    // constant keys its ids by class name, so the name is part of the
+    // contract.
     test('every roster id resolves to the class the roster names', async () => {
       const byId = await rosterRows(roster);
 
-      const misnamed = Object.entries(roster)
+      const misnamed = rosterPairs(roster)
         .filter(([name, id]) => byId.has(id) && byId.get(id).name !== name)
         .map(([name, id]) => `${name} -> ${id} is named ${byId.get(id).name}`);
 

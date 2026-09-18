@@ -18,8 +18,11 @@ test.use({ storageState: PLAYER_STATE });
 
 const adventClassNames = Object.keys(CORE_CLASS_UNLOCKS.advent);
 // Any single aspirant core class proves cross-ruleset isolation; Berserker is
-// simply the first entry in the roster.
-const [aspirantClassName, aspirantClassId] = Object.entries(CORE_CLASS_UNLOCKS.aspirant)[0];
+// simply the first entry in the roster. A roster name grants a list of ids, and
+// [0] is deliberate: it is the pre-release row, which the local seed creates,
+// so the teaser under test renders instead of a 404 for a missing row.
+const [aspirantClassName, aspirantClassIds] = Object.entries(CORE_CLASS_UNLOCKS.aspirant)[0];
+const aspirantClassId = aspirantClassIds[0];
 
 // Librarian specifically (per the task brief) proves the wizard consults
 // CORE_CLASS_UNLOCKS.advent, not some other list -- looked up by key rather
@@ -55,7 +58,7 @@ let preexistingUnlockCaptured = false;
 // this database. Restored verbatim in afterAll.
 let preexistingClassUnlocks = [];
 let classUnlocksCaptured = false;
-const adventClassIds = Object.values(CORE_CLASS_UNLOCKS.advent);
+const adventClassIds = Object.values(CORE_CLASS_UNLOCKS.advent).flat();
 
 test.beforeAll(async () => {
   db = await connect();

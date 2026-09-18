@@ -1,7 +1,7 @@
 const { test, expect } = require('bun:test');
 const { buildHardcodedClasses } = require('./seed-classes');
-const { CORE_CLASS_UNLOCKS } = require('./starter-content');
-const { classGearList, classAbilityList } = require('./enclave-consts');
+const { CORE_CLASS_UNLOCKS, ASPIRANT_V1_CLASS_IDS } = require('./starter-content');
+const { aspirantPreviewClassList, classGearList, classAbilityList } = require('./enclave-consts');
 
 // The starter-unlock grant (models/profile.js) and the seed's class rows
 // must never drift apart, or every new profile gets a foreign-key violation
@@ -18,13 +18,13 @@ test('the seed assigns each starter class exactly the id its starter-unlock cons
 
   for (const name of STARTER_CLASS_NAMES) {
     expect(rowsByName[name]).toBeDefined();
-    expect(rowsByName[name].id).toBe(CORE_CLASS_UNLOCKS.advent[name]);
+    expect(rowsByName[name].id).toBe(CORE_CLASS_UNLOCKS.advent[name][0]);
   }
 
   // Same invariant, checked as a set comparison rather than restating the
   // ids a third time: the ids the starter-unlock logic grants must be
   // exactly the ids the seed assigned to those six named rows.
-  const idsGrantedByStarterUnlock = Object.values(CORE_CLASS_UNLOCKS.advent).sort();
+  const idsGrantedByStarterUnlock = Object.values(CORE_CLASS_UNLOCKS.advent).flat().sort();
   const idsAssignedBySeed = STARTER_CLASS_NAMES.map(name => rowsByName[name] && rowsByName[name].id).sort();
   expect(idsAssignedBySeed).toEqual(idsGrantedByStarterUnlock);
 
@@ -73,19 +73,45 @@ const byName = () => {
 // different id — or the wrong ruleset — the grant resolves to nothing.
 test('seeded advent core classes use the advent roster ids and ruleset', () => {
   const rows = byName();
-  for (const [name, id] of Object.entries(CORE_CLASS_UNLOCKS.advent)) {
+  for (const [name, ids] of Object.entries(CORE_CLASS_UNLOCKS.advent)) {
     expect(rows.get(name)).toBeDefined();
-    expect(rows.get(name).id).toBe(id);
+    expect(rows.get(name).id).toBe(ids[0]);
     expect(rows.get(name).rules_edition).toBe('advent');
   }
 });
 
+// Only the six pre-release names: the Aspirant roster also grants the V1 forks
+// of the six Advent classes, and `byName` keys on name alone, so iterating the
+// whole roster would compare the Advent Gunslinger row against an Aspirant id.
 test('seeded aspirant core classes use the aspirant roster ids and ruleset', () => {
   const rows = byName();
-  for (const [name, id] of Object.entries(CORE_CLASS_UNLOCKS.aspirant)) {
+  for (const name of aspirantPreviewClassList) {
     expect(rows.get(name)).toBeDefined();
-    expect(rows.get(name).id).toBe(id);
+    expect(rows.get(name).id).toBe(CORE_CLASS_UNLOCKS.aspirant[name][0]);
     expect(rows.get(name).rules_edition).toBe('aspirant');
+  }
+});
+
+// Pins the [0] in buildRow: a seeded row is the pre-release class, so it must
+// take the pre-release id. Taking its V1 fork's id instead would make the
+// seeded row and the forked row fight over one id, and would leave the
+// pre-release id granted by the roster but owned by nothing.
+test('a seeded aspirant row never takes its V1 fork id', () => {
+  const rows = byName();
+  for (const name of aspirantPreviewClassList) {
+    expect(rows.get(name).id).not.toBe(ASPIRANT_V1_CLASS_IDS[name]);
+  }
+});
+
+// The six V1-only names in the Aspirant roster belong to forked rows the
+// loader creates (scripts/load-prerelease-classes.mjs), not to anything the
+// seed builds -- the seed's rows of those names are the Advent originals.
+test('the seed leaves the V1-only aspirant roster names to the loader', () => {
+  const rows = byName();
+  for (const [name, ids] of Object.entries(CORE_CLASS_UNLOCKS.aspirant)) {
+    if (ids.length > 1) continue;
+    expect(rows.get(name).rules_edition).toBe('advent');
+    expect(rows.get(name).id).toBe(CORE_CLASS_UNLOCKS.advent[name][0]);
   }
 });
 
@@ -99,7 +125,7 @@ test('player-created seed classes stay advent and carry no fixed id', () => {
 });
 
 test('the Aspirant roster names Witchfinder and keeps its class id', () => {
-  expect(CORE_CLASS_UNLOCKS.aspirant.Witchfinder)
+  expect(CORE_CLASS_UNLOCKS.aspirant.Witchfinder[0])
     .toBe('79721ac8-378e-4b3e-b1e3-8266689da89e');
   expect(CORE_CLASS_UNLOCKS.aspirant.Witchhunter).toBeUndefined();
 });

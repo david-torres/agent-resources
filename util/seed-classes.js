@@ -68,9 +68,11 @@ const buildRow = (cls, is_player_created, rules_edition = 'advent') => {
         created_by: null
     };
     // Core roster rows must land on the exact id the book grant references.
+    // [0] is the id of the row the seed builds; the later ids under a name
+    // belong to forks scripts/load-prerelease-classes.mjs inserts, not here.
     const roster = CORE_CLASS_UNLOCKS[rules_edition] || {};
     if (Object.prototype.hasOwnProperty.call(roster, cls)) {
-        row.id = roster[cls];
+        row.id = roster[cls][0];
     }
     return row;
 };

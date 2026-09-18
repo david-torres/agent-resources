@@ -5,8 +5,9 @@ const realRulesRepo = require('../services/rules/repository');
 const realClassRepo = require('../services/class/repository');
 const { CORE_CLASS_UNLOCKS } = require('../util/starter-content');
 
-const ADVENT_LIBRARIAN = CORE_CLASS_UNLOCKS.advent.Librarian;
-const ASPIRANT_VESSEL = CORE_CLASS_UNLOCKS.aspirant.Vessel;
+// A roster name grants a list of ids; [0] is the row already in the catalogue.
+const ADVENT_LIBRARIAN = CORE_CLASS_UNLOCKS.advent.Librarian[0];
+const ASPIRANT_VESSEL = CORE_CLASS_UNLOCKS.aspirant.Vessel[0];
 const LIBRARIAN_V2 = 'librarian-v2-fork';
 const PRIVATE_CLASS = 'some-other-class';
 
