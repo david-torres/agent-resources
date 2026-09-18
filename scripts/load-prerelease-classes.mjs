@@ -237,12 +237,22 @@ const forkPlan = (payload, matches, book) => {
   };
 };
 
+// A load resolves only against content of its own format -- the boundary
+// util/class-family.js draws when it refuses an edge whose ends disagree on
+// `content_format`. A name shared across formats names two different classes,
+// so the scoped list is what decides the disposition and what the ambiguity
+// report prints. A forking book is deliberately not scoped here: forkPlan does
+// its own two-way scoping, and a fork's parent is by definition in another
+// format.
 export const planLoad = (records, rows, book) => records.map((record) => {
   const payload = buildPayload(record, book);
   const matches = resolveTarget(payload, rows, book);
   if (book.forks) return forkPlan(payload, matches, book);
-  const row = matches.length === 1 ? matches[0] : null;
-  return { payload, matches, row, parent: null, disposition: row ? 'update' : 'create' };
+  const ownFormat = matches.filter((row) => row.content_format === book.contentFormat);
+  const row = ownFormat.length === 1 ? ownFormat[0] : null;
+  return {
+    payload, matches: ownFormat, row, parent: null, disposition: row ? 'update' : 'create'
+  };
 });
 
 const reportInsert = (plan, heading) => {

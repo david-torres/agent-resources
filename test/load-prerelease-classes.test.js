@@ -82,6 +82,43 @@ test('a name matching several rows is reported rather than silently picked', () 
   expect(plans[0].row).toBeNull();
 });
 
+// A name shared across content formats names two different classes: this
+// document describes the Advent-shaped one, and the Aspirant-shaped row of the
+// same name is not its to update.
+test('a name shared with another content format resolves within this format', () => {
+  const rows = [row('Beastmaster'),
+    row('Beastmaster', { id: 'id-aspirant', content_format: 'aspirant', rules_edition: 'aspirant' })];
+  const [plan] = planLoad([records[0]], rows, book);
+  expect(plan.disposition).toBe('update');
+  expect(plan.row.id).toBe('id-Beastmaster');
+});
+
+// The ambiguity report prints `plan.matches`, so the scoping has to reach it
+// too: a row the disposition ignored must never be offered as a reason the name
+// could not be resolved.
+test("the matches a plan carries hold only rows of the book's own format", () => {
+  const aspirant = (id) =>
+      row('Beastmaster', { id, content_format: 'aspirant', rules_edition: 'aspirant' });
+  const [plan] = planLoad([records[0]], [row('Beastmaster'), aspirant('a1'), aspirant('a2')], book);
+  expect(plan.matches.map((match) => match.id)).toEqual(['id-Beastmaster']);
+});
+
+test("two rows of the book's own format are ambiguous as they always were", () => {
+  const rows = [row('Beastmaster'), row('Beastmaster', { id: 'id-other' })];
+  const [plan] = planLoad([records[0]], rows, book);
+  expect(plan.matches).toHaveLength(2);
+  expect(plan.row).toBeNull();
+});
+
+// Charlatan's case: the document carries a class the catalogue does not. A row
+// of that name in another format is still not a row this book may write.
+test('a name no row of this format carries is created', () => {
+  const charlatan = records.find((record) => displayName(record.name) === 'Charlatan');
+  expect(planLoad([charlatan], [], book)[0].disposition).toBe('create');
+  const elsewhere = [row('Charlatan', { content_format: 'aspirant', rules_edition: 'aspirant' })];
+  expect(planLoad([charlatan], elsewhere, book)[0].disposition).toBe('create');
+});
+
 test('the load resolves 16 updates and 4 creates against the pre-load catalogue', () => {
   expect(split(namesBeforeLoad)).toEqual({ update: 16, create: 4, ambiguous: 0 });
 });
