@@ -42,6 +42,33 @@ test('an enchantment source outside default/custom is rejected', async () => {
   expect(error?.code).toBe('23514');
 });
 
+test('an enchantment with no source key is rejected', async () => {
+  const id = await anyGearRow();
+  const { error } = await sb.from('class_gear')
+    .update({ enchantment: {} })
+    .eq('id', id);
+  // enchantment->>'source' is SQL NULL here, and a bare `IN` comparison
+  // against NULL is also NULL -- which a CHECK treats as satisfied unless the
+  // constraint coalesces it first. This guards that the constraint does.
+  expect(error?.code).toBe('23514');
+});
+
+test('an enchantment with an unrelated key but no source is rejected', async () => {
+  const id = await anyGearRow();
+  const { error } = await sb.from('class_gear')
+    .update({ enchantment: { name: 'Foo' } })
+    .eq('id', id);
+  expect(error?.code).toBe('23514');
+});
+
+test('an explicit JSON null source is rejected', async () => {
+  const id = await anyGearRow();
+  const { error } = await sb.from('class_gear')
+    .update({ enchantment: { source: null } })
+    .eq('id', id);
+  expect(error?.code).toBe('23514');
+});
+
 test('a custom enchantment with no name is rejected', async () => {
   const id = await anyGearRow();
   const { error } = await sb.from('class_gear')
