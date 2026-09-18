@@ -333,10 +333,24 @@ class CharacterService {
         description: item.description ?? nameToDescription.get(item.name) ?? null
       };
     };
-    const gear = childData.classGear == null ? null : normalizeGearItems(childData.classGear).map(item => ({
-      name: item.name,
-      ...resolveClassItem('gear', item, maps.gearNameToClassId, maps.gearNameToDescription)
-    }));
+    // save_character_atomic reads an absent 'enchantment'/'mods' key on a
+    // p_gear item as "keep what is stored" and an explicit JSON null as
+    // "remove the Enchantment" (20260918000001_save_character_atomic_gear_
+    // equipment.sql). normalizeGearItems has already normalized the item by
+    // this point, leaving the key off entirely when the submission never
+    // mentioned it, so passing through only what the item carries -- never
+    // defaulting a missing key to null -- is what keeps an ordinary save from
+    // the edit form (bare "Class::Item" strings, no equipment keys at all)
+    // from spending a player's Merx for them.
+    const gear = childData.classGear == null ? null : normalizeGearItems(childData.classGear).map(item => {
+      const row = {
+        name: item.name,
+        ...resolveClassItem('gear', item, maps.gearNameToClassId, maps.gearNameToDescription)
+      };
+      if ('enchantment' in item) row.enchantment = item.enchantment;
+      if ('mods' in item) row.mods = item.mods;
+      return row;
+    });
     const abilities = childData.classAbilities == null ? null : normalizeAbilityItems(childData.classAbilities).map(item => ({
       name: item.name,
       type: submittedAbilityType(item.type),
@@ -413,11 +427,27 @@ class CharacterService {
     for (const item of normalizeGearItems(gear)) {
       const classId = item.class_id ?? gearNameToClassId.get(item.name);
       if (!classId) return { data: null, error: `[setCharacterGear] Missing class_id for gear item "${item.name}"` };
-      desired.push({ name: item.name, class_id: classId, description: item.description ?? gearNameToDescription.get(item.name) ?? null });
+      const row = { name: item.name, class_id: classId, description: item.description ?? gearNameToDescription.get(item.name) ?? null };
+      // normalizeGearItems (via normalizeGearEquipment) leaves 'enchantment'/
+      // 'mods' off an item that never mentioned them, and diffChildRows only
+      // ever compares the fields rowFields() returns -- so carrying that same
+      // absence here, rather than defaulting to null/[], is what keeps a save
+      // that says nothing about equipment from clearing a stored purchase. A
+      // brand-new row that omits these keys on insert takes the column's own
+      // default (enchantment NULL, mods '[]'), which is the same "no
+      // equipment" state.
+      if ('enchantment' in item) row.enchantment = item.enchantment;
+      if ('mods' in item) row.mods = item.mods;
+      desired.push(row);
     }
     return this.applyChildDiff('class_gear', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => `${row.class_id}:${row.name}`,
-      rowFields: item => ({ name: item.name, class_id: item.class_id, description: item.description })
+      rowFields: item => {
+        const fields = { name: item.name, class_id: item.class_id, description: item.description };
+        if ('enchantment' in item) fields.enchantment = item.enchantment;
+        if ('mods' in item) fields.mods = item.mods;
+        return fields;
+      }
     }));
   }
 

@@ -4,8 +4,20 @@
 // See docs/superpowers/specs/2026-06-07-child-table-reconciliation-design.md.
 
 // Desired items omit optional fields (undefined); the persisted value for an
-// omitted field is null — treat them as equal.
-const fieldEqual = (a, b) => (a ?? null) === (b ?? null);
+// omitted field is null -- treat them as equal.
+//
+// A jsonb column arrives as a fresh object on every read, so identity would
+// report a change on every save. Compare those by serialization: key order is
+// stable because both sides are built by this codebase, and a false "changed"
+// here costs a needless UPDATE while a false "same" would lose a write.
+const isStructured = (value) => value !== null && typeof value === 'object';
+
+const fieldEqual = (a, b) => {
+  if (isStructured(a) || isStructured(b)) {
+    return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  }
+  return (a ?? null) === (b ?? null);
+};
 
 /**
  * Greedy multiset diff between existing child rows and desired items.

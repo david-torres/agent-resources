@@ -99,10 +99,11 @@ const OTHER_GEAR_NAME = `Atomic Enchant Gear Renamed ${suffix}`;
 const gearRows = (characterId) => childRows('class_gear', characterId);
 
 // Drives save_character_atomic directly (like the "raises rather than
-// updating" test above) instead of through createCharacter/updateCharacter:
-// the service layer's saveCharacterAtomic() does not yet forward a gear
-// item's enchantment/mods fields into p_gear, so routing through it would
-// test the service, not the RPC this task changes. p_character: {} keeps
+// updating" test above) instead of through createCharacter/updateCharacter,
+// to isolate the RPC's own preserve/replace/remove contract from the service
+// layer's item resolution and normalization. The service's forwarding of
+// enchantment/mods into p_gear is covered separately, through
+// createCharacter/updateCharacter, further below. p_character: {} keeps
 // every stored character field as-is; p_abilities/p_perks: null skip those
 // blocks entirely, leaving abilities and perks untouched.
 const rpcSaveGear = async (characterId, gear) => {
@@ -511,4 +512,56 @@ test('a renamed Signature does not carry its Enchantment to the new name', async
   expect(rows).toHaveLength(1);
   expect(rows[0].name).toBe(OTHER_GEAR_NAME);
   expect(rows[0].enchantment).toBeNull();
+});
+
+// The RPC's preserve/replace/remove contract, pinned directly above, only
+// protects a player's Merx if CharacterService actually forwards a gear
+// item's Enchantment and Mods into p_gear. It used to build that payload as
+// { name, class_id, description } only, silently dropping both fields before
+// the RPC ever saw them (services/character/service.js's saveCharacterAtomic).
+test('createCharacter forwards a gear item\'s Enchantment and Mods to the stored row', async () => {
+  await setup();
+  const { data: created, error } = await createCharacter({
+    ...input(`Atomic service enchant ${suffix}`),
+    gear: [{
+      name: GEAR_NAME, class_id: characterClass.id,
+      enchantment: { source: 'custom', name: 'Service Ported', description: 'Through the service.' },
+      mods: [{ name: 'Reinforced', description: 'Tougher.' }]
+    }]
+  }, profile);
+  expect(error).toBeNull();
+
+  const rows = await gearRows(created.id);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].enchantment).toEqual({ source: 'custom', name: 'Service Ported', description: 'Through the service.' });
+  expect(rows[0].mods).toEqual([{ name: 'Reinforced', description: 'Tougher.' }]);
+});
+
+// The edit form submits gear as bare "Class::Item" strings with no equipment
+// fields at all -- the case that would actually cost a player Merx if
+// CharacterService defaulted an absent key to null instead of omitting it.
+test('updateCharacter through the edit form\'s bare gear string preserves a stored Enchantment and Mods', async () => {
+  await setup();
+  const { data: created } = await createCharacter({
+    ...input(`Atomic service enchant keep ${suffix}`),
+    gear: [{
+      name: GEAR_NAME, class_id: characterClass.id,
+      enchantment: { source: 'custom', name: 'Kept Enchant', description: 'Should survive.' },
+      mods: [{ name: 'Kept Mod', description: 'Also survives.' }]
+    }]
+  }, profile);
+  const before = await gearRows(created.id);
+  expect(before[0].enchantment.name).toBe('Kept Enchant');
+
+  const { error } = await updateCharacter(created.id, {
+    ...input(`Atomic service enchant kept ${suffix}`),
+    id: created.id,
+    gear: [`${characterClass.name}::${GEAR_NAME}`]
+  }, profile);
+  expect(error).toBeFalsy();
+
+  const after = await gearRows(created.id);
+  expect(after[0].id).toBe(before[0].id);
+  expect(after[0].enchantment).toEqual(before[0].enchantment);
+  expect(after[0].mods).toEqual(before[0].mods);
 });

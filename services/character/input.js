@@ -94,13 +94,26 @@ const normalizeMods = (value) => {
 };
 
 // Bounds a Signature's player-authored equipment before it reaches
-// reconcileGear. Abilities never carry equipment, so both fields normalize to
-// the empty case for them; reconcileAbilities names its columns explicitly,
-// so the extra keys are dropped before any write.
-const normalizeGearEquipment = (item) => ({
-  enchantment: normalizeEnchantment(item && item.enchantment),
-  mods: normalizeMods(item && item.mods)
-});
+// reconcileGear and the atomic save's p_gear payload. A key the submitted
+// item never mentioned stays absent here -- checked with `in`, since `??`
+// cannot tell "missing" from "explicitly null" -- so a save that says nothing
+// about equipment leaves a stored Enchantment or Mods alone downstream. A key
+// the item did submit, including an explicit `null`, is normalized and kept
+// present, which downstream reads as "remove the Enchantment". Abilities
+// never carry equipment, so normalizeClassItems runs this for ability items
+// too; reconcileAbilities and the atomic path's ability mapping name their
+// columns explicitly, so any keys this produces for an ability are dropped
+// before a write.
+const normalizeGearEquipment = (item) => {
+  const result = {};
+  if (item && typeof item === 'object' && 'enchantment' in item) {
+    result.enchantment = normalizeEnchantment(item.enchantment);
+  }
+  if (item && typeof item === 'object' && 'mods' in item) {
+    result.mods = normalizeMods(item.mods);
+  }
+  return result;
+};
 
 const normalizeClassItems = (items) => {
   if (!Array.isArray(items)) return [];

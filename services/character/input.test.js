@@ -195,15 +195,16 @@ test('normalizeCharacterInput leaves created_at absent when it was never submitt
 });
 
 // normalizeAbilityItems is normalizeClassItems, which spreads the submitted
-// object ({...item, name} at services/character/input.js:56). The tag survived
-// this far all along and was lost further downstream, so this is the boundary
-// worth pinning. Abilities never carry equipment, so normalizeGearEquipment
-// also runs here and adds the empty case (enchantment: null, mods: []);
-// reconcileAbilities names its columns explicitly, so those keys never reach
-// a write.
+// object ({...item, name} at services/character/input.js:134). The tag
+// survived this far all along and was lost further downstream, so this is the
+// boundary worth pinning. Abilities never carry equipment, and this submitted
+// item mentions none, so normalizeGearEquipment (which also runs here) adds
+// no equipment keys at all; reconcileAbilities and the atomic path's ability
+// mapping name their columns explicitly, so an ability item could not reach a
+// write with equipment keys regardless.
 test('normalizeAbilityItems keeps the submitted type', () => {
   expect(normalizeAbilityItems([{ name: ' Overdrive ', type: 'advanced' }])).toEqual([
-    { name: 'Overdrive', type: 'advanced', enchantment: null, mods: [] }
+    { name: 'Overdrive', type: 'advanced' }
   ]);
 });
 
@@ -383,8 +384,32 @@ test('a custom enchantment keeps its trimmed name and description', () => {
   expect(enchantment).toEqual({ source: 'custom', name: 'Ported', description: 'Retooled.' });
 });
 
-test('an absent enchantment is null and absent mods are an empty array', () => {
-  expect(normalizeGearEquipment({ name: 'Hat' })).toEqual({ enchantment: null, mods: [] });
+// Three submission states must stay distinguishable end to end: no key means
+// "say nothing about equipment" (a resave must leave a stored purchase
+// alone), an explicit null means "remove it", and an object means "set it".
+// `?? null` cannot tell the first two apart, which is what let an ordinary
+// object submission wipe a paid-for Enchantment before this normalizer used
+// an `in` check.
+test('an item that mentions no equipment produces no equipment keys', () => {
+  expect(normalizeGearEquipment({ name: 'Hat' })).toEqual({});
+});
+
+test('an explicit null enchantment normalizes to null and stays present', () => {
+  expect(normalizeGearEquipment({ name: 'Hat', enchantment: null })).toEqual({ enchantment: null });
+});
+
+test('a submitted enchantment object normalizes to the enchantment and stays present', () => {
+  expect(normalizeGearEquipment({ name: 'Hat', enchantment: { source: 'default' } }))
+    .toEqual({ enchantment: { source: 'default' } });
+});
+
+test('an explicit null mods normalizes to an empty array and stays present', () => {
+  expect(normalizeGearEquipment({ name: 'Hat', mods: null })).toEqual({ mods: [] });
+});
+
+test('submitted mods normalize to the mods array and stay present', () => {
+  expect(normalizeGearEquipment({ name: 'Hat', mods: [{ name: 'Lined' }] }))
+    .toEqual({ mods: [{ name: 'Lined', description: '' }] });
 });
 
 test('a custom enchantment at the 40-word limit is accepted', () => {

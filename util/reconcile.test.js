@@ -122,6 +122,53 @@ describe('diffChildRows', () => {
       toDelete: []
     });
   });
+
+  test('an object-valued field that is deep-equal produces no update', () => {
+    const existing = [{ id: 'row-1', name: 'Hat', enchantment: { source: 'default' } }];
+    const desired = [{ name: 'Hat', enchantment: { source: 'default' } }];
+    const diff = diffChildRows(existing, desired, {
+      keyOf: (r) => r.name,
+      rowFields: (i) => ({ name: i.name, enchantment: i.enchantment })
+    });
+    expect(diff.toUpdate).toEqual([]);
+    expect(diff.toInsert).toEqual([]);
+    expect(diff.toDelete).toEqual([]);
+  });
+
+  test('an object-valued field that differs produces one update', () => {
+    const existing = [{ id: 'row-1', name: 'Hat', enchantment: { source: 'default' } }];
+    const desired = [{ name: 'Hat', enchantment: { source: 'custom', name: 'Ported' } }];
+    const diff = diffChildRows(existing, desired, {
+      keyOf: (r) => r.name,
+      rowFields: (i) => ({ name: i.name, enchantment: i.enchantment })
+    });
+    expect(diff.toUpdate).toEqual([
+      { id: 'row-1', enchantment: { source: 'custom', name: 'Ported' } }
+    ]);
+  });
+
+  test('an array-valued field compares by contents and by order', () => {
+    const existing = [{ id: 'row-1', name: 'Hat', mods: [{ name: 'a' }, { name: 'b' }] }];
+    const same = diffChildRows(existing, [{ name: 'Hat', mods: [{ name: 'a' }, { name: 'b' }] }], {
+      keyOf: (r) => r.name, rowFields: (i) => ({ name: i.name, mods: i.mods })
+    });
+    expect(same.toUpdate).toEqual([]);
+    const reordered = diffChildRows(existing, [{ name: 'Hat', mods: [{ name: 'b' }, { name: 'a' }] }], {
+      keyOf: (r) => r.name, rowFields: (i) => ({ name: i.name, mods: i.mods })
+    });
+    // Order is priced: pg. 85 charges more for the second Mod, so a reorder is a
+    // real change.
+    expect(reordered.toUpdate).toHaveLength(1);
+  });
+
+  test('a scalar field still compares undefined and null as equal', () => {
+    const existing = [{ id: 'row-1', name: 'Hat', description: null }];
+    const diff = diffChildRows(existing, [{ name: 'Hat' }], {
+      keyOf: (r) => r.name,
+      rowFields: (i) => ({ name: i.name, description: i.description })
+    });
+    expect(diff.toUpdate).toEqual([]);
+  });
 });
 
 // Current character_perks rows as persisted (compounds_with is a row id or null).

@@ -615,6 +615,102 @@ test('gear no class defines still fails the save when the character has no class
   expect(saved).toBeNull();
 });
 
+// --- Enchantment and Mods forwarding (atomic path, p_gear) -------------
+//
+// saveCharacterAtomic builds the payload for save_character_atomic, which is
+// the path production uses (services/character/repository.js wires it
+// whenever supabaseAdmin.rpc exists, and CharacterService prefers it). The
+// RPC's contract keys on whether 'enchantment'/'mods' are present on a p_gear
+// item at all, so these pin the payload's shape, not just its values.
+
+test('a submitted Enchantment and Mods reach the atomic gear payload', async () => {
+  const gear = await saveGearForGunslinger([{
+    name: 'Revolver',
+    enchantment: { source: 'custom', name: 'Ported', description: 'Retooled.' },
+    mods: [{ name: 'Lined', description: 'Warm.' }]
+  }]);
+  expect(gear[0]).toEqual({
+    name: 'Revolver',
+    class_id: 'gunslinger-v2',
+    description: 'A six-shooter.',
+    enchantment: { source: 'custom', name: 'Ported', description: 'Retooled.' },
+    mods: [{ name: 'Lined', description: 'Warm.' }]
+  });
+});
+
+// An OBJECT submission that never mentions equipment, not the bare-string
+// shape the edit form sends -- the string shape carries no equipment keys
+// regardless of this code, so it cannot show whether an object's absence is
+// preserved. Before normalizeGearEquipment used an `in` check (and before
+// this mapping forwarded the fields at all), this shape reached the RPC as
+// enchantment: null, mods: [], which reads as "remove the Enchantment".
+test('a gear item submitted as an object with no equipment keys reaches the atomic payload with none either', async () => {
+  const gear = await saveGearForGunslinger([{ name: 'Revolver' }]);
+  expect(gear).toEqual([{ name: 'Revolver', class_id: 'gunslinger-v2', description: 'A six-shooter.' }]);
+});
+
+test('an explicit null Enchantment reaches the atomic payload as null, leaving an unmentioned Mods key absent', async () => {
+  const gear = await saveGearForGunslinger([{ name: 'Revolver', enchantment: null }]);
+  expect(gear[0]).toEqual({
+    name: 'Revolver', class_id: 'gunslinger-v2', description: 'A six-shooter.', enchantment: null
+  });
+  expect('mods' in gear[0]).toBe(false);
+});
+
+// --- Enchantment and Mods forwarding (fallback path, reconcileGear) ----
+//
+// The fake-client unit tests above never define adapter.saveCharacterAtomic,
+// so updateCharacter falls back to reconcileGear -- the path a real
+// supabaseAdmin without an rpc method would take.
+
+const HIP_FLASK_MAPS = () => ({
+  gearNameToClassId: new Map([['Hip Flask', 'class-1']]),
+  gearNameToDescription: new Map([['Hip Flask', 'A flask.']]),
+  abilityNameToClassId: new Map(),
+  abilityNameToDescription: new Map(),
+  itemsByClassId: new Map(),
+  classesByName: new Map(),
+  classRows: []
+});
+
+const ENCHANTED_GEAR_ROW = {
+  id: 'gear-row-1', name: 'Hip Flask', class_id: 'class-1', description: 'A flask.',
+  enchantment: { source: 'default' }, mods: [{ name: 'Lined', description: 'Warm.' }]
+};
+
+test('reconcileGear leaves a stored Enchantment and Mods alone when the submitted item omits them', async () => {
+  const calls = [];
+  const adapter = makeAdapter(calls, {
+    getChildRows: async (table) => ok(table === 'class_gear' ? [ENCHANTED_GEAR_ROW] : []),
+    getClassContentLookupMaps: async () => HIP_FLASK_MAPS()
+  });
+  const service = new CharacterService(adapter);
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', gear: [{ name: 'Hip Flask', class_id: 'class-1' }]
+  }, { id: 'profile-1' });
+
+  expect(result.error).toBeNull();
+  expect(calls.filter(c => c[0] === 'updateChildRow' && c[1] === 'class_gear')).toEqual([]);
+  expect(calls.filter(c => c[0] === 'insertChildRows' && c[1] === 'class_gear')).toEqual([]);
+  expect(calls.filter(c => c[0] === 'deleteChildRows' && c[1] === 'class_gear')).toEqual([]);
+});
+
+test('reconcileGear clears a stored Enchantment when the submitted item sets it to null', async () => {
+  const calls = [];
+  const adapter = makeAdapter(calls, {
+    getChildRows: async (table) => ok(table === 'class_gear' ? [ENCHANTED_GEAR_ROW] : []),
+    getClassContentLookupMaps: async () => HIP_FLASK_MAPS()
+  });
+  const service = new CharacterService(adapter);
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', gear: [{ name: 'Hip Flask', class_id: 'class-1', enchantment: null }]
+  }, { id: 'profile-1' });
+
+  expect(result.error).toBeNull();
+  const update = calls.find(c => c[0] === 'updateChildRow' && c[1] === 'class_gear');
+  expect(update[3]).toEqual({ enchantment: null });
+});
+
 // --- Auto-calculate economy -------------------------------------------
 //
 // deriveCharacterTotals prices gear differently depending on which economy
