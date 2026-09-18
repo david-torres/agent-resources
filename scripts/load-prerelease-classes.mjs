@@ -57,11 +57,11 @@ export const fieldsFor = (book) => CONTENT_FIELDS
 
 // The row a fork descends from: the same name in the Advent content format, at
 // v1, and not somebody's own class. `content_format` and `is_player_created`
-// guard against data a user can create at any time -- a player naming their
-// own class 'Berserker' is an ordinary event, and this is what stops it being
-// taken as a parent -- but neither clause is doing any work against today's
-// catalogue: all 50 rows are content_format 'advent', and no player-created
-// row shares one of the twelve names.
+// guard against a player naming their own class 'Berserker' being taken as a
+// parent -- but the existing-fork check resolves all twelve ENCLAVE: Aspirant
+// V1 names before parent resolution is ever consulted, so on an ordinary run
+// neither clause is exercised. Keep them anyway: they are what stops a fork
+// being taken as its own parent, once one exists.
 const FORK_PARENT = { content_format: 'advent', rules_version: 'v1', is_player_created: false };
 
 // `rules_version` is NOT NULL with no column default, so a new row cannot be
