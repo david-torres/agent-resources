@@ -4,6 +4,7 @@ const { escapeLikePattern } = require('../util/validate');
 const { statList } = require('../util/enclave-consts');
 const { cloneInput } = require('../services/character/input');
 const { CharacterService } = require('../services/character/service');
+const { computeVersionFamily } = require('../util/class-family');
 const characterRepository = require('../services/character/repository');
 
 // Resolve the rules version a character should be rendered/validated against.
@@ -45,19 +46,31 @@ const resolveCharacterClassReference = async (input) => {
   return data;
 };
 
+// Upgrade targets are the character's class's children WITHIN its version
+// family, so a fork onto differently shaped content is not offered. Both halves
+// of the feature read this one function -- the button (routes/characters.js) and
+// the POST validation (services/character/service.js upgradeClass) -- so the
+// scope applies to each. Moving a character across families has rules
+// consequences (stat caps, the Merx and Perk economies) that later slices land.
+//
+// The parent row is fetched alongside the children because the family
+// comparison needs both its axes; without it no edge counts, which is the
+// fail-closed direction util/class-family.js documents.
 const findUpgradeTargetsFor = async (classId, client = supabase) => {
   if (!classId) return [];
   const { data, error } = await client
     .from('classes')
-    .select('id, name, rules_edition, rules_version, base_class_id')
-    .eq('base_class_id', classId)
+    .select('id, name, rules_edition, rules_version, content_format, base_class_id')
+    .or(`id.eq.${classId},base_class_id.eq.${classId}`)
     .order('rules_edition', { ascending: true })
     .order('rules_version', { ascending: true });
   if (error) {
     console.error(error);
     return [];
   }
-  return Array.isArray(data) ? data : [];
+  const rows = Array.isArray(data) ? data : [];
+  const family = computeVersionFamily(rows, classId);
+  return rows.filter(row => row.base_class_id === classId && family.has(row.id));
 };
 
 const getOwnCharacters = async (profile, client = supabase) => {

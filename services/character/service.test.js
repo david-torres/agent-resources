@@ -1,6 +1,16 @@
 const { test, expect } = require('bun:test');
 const { CharacterService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
+const { findUpgradeTargetsFor } = require('../../models/character');
+const { classesStub } = require('../../test/helpers/classes-family-stub');
+
+// Gunslinger as the catalogue holds it: Advent v1, its same-family v2, and the
+// Aspirant V1 fork, which differs on both family axes.
+const GUNSLINGER_FAMILY_AND_FORK = [
+  { id: 'gunslinger-v1', name: 'Gunslinger', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent', base_class_id: null },
+  { id: 'gunslinger-v2', name: 'Gunslinger', rules_edition: 'advent', rules_version: 'v2', content_format: 'advent', base_class_id: 'gunslinger-v1' },
+  { id: 'gunslinger-aspirant-v1', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v1', content_format: 'aspirant', base_class_id: 'gunslinger-v1' }
+];
 
 const ok = data => ({ data, error: null });
 
@@ -228,6 +238,37 @@ test('CharacterService.upgradeClass succeeds for the creator with a valid target
   expect(result.error).toBeNull();
   expect(result.data.class_id).toBe('target-class');
   expect(calls).toEqual([['updateClass', 'character-1', 'profile-1', 'target-class', 'Upgraded Class']]);
+});
+
+// A hidden button protects only half the feature: upgradeClass validates the
+// POST against the same scoped candidate list, so wire the REAL lookup in and
+// pass a cross-format id directly.
+const familyScopedAdapter = (calls, rows) => makeAdapter(calls, {
+  fetchCharacterOwnership: async () => ok({
+    id: 'character-1', creator_id: 'profile-1', class_id: 'gunslinger-v1'
+  }),
+  findUpgradeTargets: (classId) => findUpgradeTargetsFor(classId, classesStub(rows))
+});
+
+test('CharacterService.upgradeClass rejects a cross-format target id passed directly', async () => {
+  const calls = [];
+  const service = new CharacterService(familyScopedAdapter(calls, GUNSLINGER_FAMILY_AND_FORK));
+
+  const result = await service.upgradeClass(CREATOR, 'character-1', 'gunslinger-aspirant-v1', {});
+  expect(result).toEqual({
+    data: null, error: 'Target class is not a valid upgrade for this character'
+  });
+  expect(calls).toEqual([]);
+});
+
+test('CharacterService.upgradeClass still accepts the in-family v2 target id', async () => {
+  const calls = [];
+  const service = new CharacterService(familyScopedAdapter(calls, GUNSLINGER_FAMILY_AND_FORK));
+
+  const result = await service.upgradeClass(CREATOR, 'character-1', 'gunslinger-v2', {});
+  expect(result.error).toBeNull();
+  expect(result.data.class_id).toBe('gunslinger-v2');
+  expect(calls).toEqual([['updateClass', 'character-1', 'profile-1', 'gunslinger-v2', 'Gunslinger']]);
 });
 
 test('CharacterService.updateStats throws for a non-creator actor', async () => {
