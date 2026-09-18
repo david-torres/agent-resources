@@ -36,7 +36,8 @@ const STRAY_TAG = /<\/?sup>/;
 // different character. `-layout` carries no type size, so what the page prints raised cannot be
 // checked from it; what can be checked is that the markup wraps a rating and not a word of the
 // sentence.
-const RAISED_NOTATION = /^(0–[LMH]|[LMH](–[LMH])?)\+?$/;
+const RATING = '(?:0–[LMH]|[LMH](?:–[LMH])?)\\+?';
+const RAISED_NOTATION = new RegExp(`^${RATING}$`);
 
 const checkSupMarkup = (fail, where, texts) => {
   for (const text of texts) {
@@ -58,7 +59,7 @@ const checkSupMarkup = (fail, where, texts) => {
 // every rating inside the markup, so a rating-shaped token outside it is a pair that went
 // missing. A rating carries the sentence's own mark closed up against it, so the mark is part of
 // the shape looked for here.
-const BARE_RATING = /^(0–[LMH]|[LMH](–[LMH])?)\+?[.,;:]?$/;
+const BARE_RATING = new RegExp(`^${RATING}[.,;:]?$`);
 
 // One shape is excused: the quoted advice names its contributor and the attribution ends in an
 // initial, so "— Tim M." closes the string with a rating-shaped token. Run over the committed
