@@ -100,6 +100,30 @@ describe('the running header', () => {
     expect(headerName(page)).toBe('Gunslinger');
   });
 
+  // The whole-line read is gap-aware, the same rule joinLines uses: one rule in this module for
+  // whether a space belongs between two word boxes, so a reader has no second one to choose
+  // between. The two rules cannot disagree on a line this module matches -- fusing only closes a
+  // space pdftotext opened inside one printed word -- but they can be told apart on a fixture.
+  test('the header band closes a gap narrower than a printed space', () => {
+    const [page] = parseBboxPages(doc(block(40, 23.23, [
+      line(40, 23.23, [
+        word(40, 23.23, 'Witch', { xMax: 60, yMax: 38.86 }),
+        word(60.1, 23.23, 'finder', { xMax: 80, yMax: 38.86 }),
+      ])
+    ])));
+    expect(headerName(page)).toBe('Witchfinder');
+  });
+
+  test('the header band keeps a gap as wide as a printed space', () => {
+    const [page] = parseBboxPages(doc(block(40, 23.23, [
+      line(40, 23.23, [
+        word(40, 23.23, 'Witch', { xMax: 60, yMax: 38.86 }),
+        word(60.9, 23.23, 'finder', { xMax: 80, yMax: 38.86 }),
+      ])
+    ])));
+    expect(headerName(page)).toBe('Witch finder');
+  });
+
   test('body text below the header band is not mistaken for a header', () => {
     const [page] = parseBboxPages(doc(block(40, 200, [
       line(40, 200, [word(40, 200, 'Gunslinger', { yMax: 213 })])
