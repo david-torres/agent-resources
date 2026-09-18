@@ -256,9 +256,10 @@ const rethreadSuperscripts = (page) => {
 
 // The book sets a mark hard against the word before it -- the full stop after a raised
 // rating, the comma after an italic title -- and pdftotext gives that mark a word of its own
-// whose box touches or overlaps its neighbour's. Measured over the whole book: 185 such pairs,
-// none further apart than 0.17, against a narrowest real inter-word gap of 0.86. So a space
-// belongs between two words exactly when their boxes stand apart.
+// whose box touches or overlaps its neighbour's. Measured over all 71944 adjacent word pairs
+// in the book: 182 such pairs, none further apart than 0.1677, against a narrowest real
+// inter-word gap of 0.8641. So a space belongs between two words exactly when their boxes
+// stand apart, and no genuine space is anywhere near this threshold.
 const WORD_GAP_MIN = 0.5;
 
 const joinWords = (words) => words.reduce((text, word, index) => (index === 0 ? word.text
