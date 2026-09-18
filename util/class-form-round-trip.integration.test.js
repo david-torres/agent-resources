@@ -672,13 +672,15 @@ test('saving every class unchanged preserves every metadata field', async () => 
 // stored CRLFs live, and converging them to LF on their next save is the
 // deliberate cost of making the imported corpus survive.
 test('no imported class\'s loader-written column is touched by rule E or rule H', async () => {
-    const { FIELDS } = await import('../scripts/load-prerelease-classes.mjs');
+    const { fieldsFor } = await import('../scripts/load-prerelease-classes.mjs');
+    const { bookFor } = await import('../scripts/lib/books.mjs');
+    const loaderWritten = fieldsFor(bookFor('prerelease'));
     const importedIds = new Set(classes
         .filter((row) => row.prerelease_section !== null)
         .map((row) => row.id));
 
     const verbatim = (entries) => entries
-        .filter((entry) => importedIds.has(entry.class) && FIELDS.includes(entry.column))
+        .filter((entry) => importedIds.has(entry.class) && loaderWritten.includes(entry.column))
         .map((entry) => entry.path);
 
     // Rule E in practice pins the 19 imported classes' `tips`: LF at rest, CRLF

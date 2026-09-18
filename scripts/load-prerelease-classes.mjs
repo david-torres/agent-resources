@@ -5,6 +5,12 @@
 // a run with nothing to change issues no request at all. Dry-run by default --
 // --apply is the only thing that writes.
 //
+// A book whose descriptor sets `forks` never writes over the class it shares a
+// name with. It inserts a row of its own instead, carrying `base_class_id`, its
+// own `content_format` and `rules_edition`, and an id minted in
+// util/starter-content.js; the parent is left exactly as it stands. A second run
+// finds that row and updates it, which is what keeps a repeated --apply a no-op.
+//
 // An --apply run does three things in order: writes the class rows, renames the
 // character-held item rows this document renames, and publishes the four
 // classes the owner authorised. The rename comes from
@@ -28,6 +34,7 @@ import { readFileSync } from 'node:fs';
 
 import { createClient } from '@supabase/supabase-js';
 
+import { ASPIRANT_V1_CLASS_IDS } from '../util/starter-content.js';
 import { bookFor } from './lib/books.mjs';
 import {
   ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
@@ -37,15 +44,26 @@ import {
 // carries the headings the page prints above each block.
 const SECTIONS = { PCCs: 'pcc', EXCLUSIVES: 'exclusive', 'ASPIRANT CLASSES': 'aspirant' };
 
-export const FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
+const CONTENT_FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
     'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples', 'tips_heading',
     'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear',
-    'advanced_abilities'];
+    'advanced_abilities', 'expanded_tips'];
+
+// `prerelease_section` is the pre-release document's own sectioning: the V1
+// artifact carries no such key, and DERIVED.prerelease_section would throw on a
+// record without one rather than store a null.
+export const fieldsFor = (book) => CONTENT_FIELDS
+    .filter((field) => field !== 'prerelease_section' || book.key === 'prerelease');
+
+// The row a fork descends from: the same name in the Advent content format, at
+// v1, and not somebody's own class.
+const FORK_PARENT = { content_format: 'advent', rules_version: 'v1', is_player_created: false };
 
 // `rules_version` is NOT NULL with no column default, so a new row cannot be
 // inserted without it. It is never part of an update payload -- an existing row
 // keeps whatever the owner set. All 16 classes in this document that the
-// catalogue already holds are 'v1'.
+// catalogue already holds are 'v1', and so is every fork: the parent rule
+// accepts none but a v1 row.
 const NEW_ROW_RULES_VERSION = 'v1';
 
 // Rich-text trees whose `text` leaves are runs within a line rather than whole
@@ -61,8 +79,8 @@ const REMAP_KIND = { ability: 'abilities', gear: 'gear' };
 // absent from /classes for non-admins, from the character wizard, and from the
 // name map the save path resolves through. `book.publishedByLoad` is the
 // owner's named set, and it is the only thing here that may set a row's
-// visibility -- is_public is deliberately absent from FIELDS so the general
-// write path cannot.
+// visibility -- is_public is deliberately absent from every field list so the
+// general write path cannot.
 
 const LOCAL_TARGET = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
 const PREVIEW_WIDTH = 140;
@@ -88,15 +106,17 @@ const tipsMarkdown = (tips) => tips.map((tip) => `- ${tip}`).join('\n');
 const DERIVED = {
   name: (record) => displayName(record.name),
   prerelease_section: (record) => sectionEnum(record.prerelease_section),
-  free_play_access: () => true,
+  // The pre-release book was given away, so its classes are free to play. The
+  // Aspirant book grants its twelve through CORE_CLASS_UNLOCKS instead, and
+  // free-play access on top of that would make the roster meaningless.
+  free_play_access: (record, book) => book.key === 'prerelease',
   tips: (record) => tipsMarkdown(record.tips),
-  // The August 2026 artifact predates Aspirant V1 and carries no advanced
-  // abilities, so every record loads []. The key is emitted unconditionally
-  // because the column is NOT NULL
-  // (supabase/migrations/20260912000000_advanced_abilities_not_null.sql) and
-  // because the allowlist test compares the payload's key set against FIELDS
-  // exactly.
-  advanced_abilities: (record) => record.advanced_abilities ?? []
+  // The August 2026 artifact predates Aspirant V1 and carries neither key, so
+  // those records load the empty shape. Both are emitted unconditionally
+  // because the allowlist test compares the payload's key set against the
+  // book's field list exactly.
+  advanced_abilities: (record) => record.advanced_abilities ?? [],
+  expanded_tips: (record) => record.expanded_tips ?? { player: [], conduit: [] }
 };
 
 // util/whitespace-integrity.integration.test.js fails the build on any stored
@@ -112,8 +132,8 @@ export const trimEnds = (value) => {
   return value;
 };
 
-export const buildPayload = (record) => trimEnds(Object.fromEntries(
-    FIELDS.map((field) => [field, DERIVED[field] ? DERIVED[field](record) : record[field]])));
+export const buildPayload = (record, book) => trimEnds(Object.fromEntries(fieldsFor(book)
+    .map((field) => [field, DERIVED[field] ? DERIVED[field](record, book) : record[field]])));
 
 // jsonb comes back with its keys in storage order, so equality has to be
 // structural rather than textual.
@@ -130,7 +150,9 @@ const preview = (value) => {
   return text.length > PREVIEW_WIDTH ? `${text.slice(0, PREVIEW_WIDTH)}… (${text.length} chars)` : text;
 };
 
-export const diffFields = (payload, row) => FIELDS
+// Keyed on the payload rather than on a field list, so a fork reports the four
+// fields it mints alongside the book's own.
+export const diffFields = (payload, row) => Object.keys(payload)
     .filter((field) => stable(payload[field]) !== stable(row?.[field]))
     .map((field) => ({ field, before: row?.[field] ?? null, after: payload[field] }));
 
@@ -157,19 +179,77 @@ export const resolveTarget = (payload, rows, book) => {
   return rows.filter((row) => wanted.has(fold(row.name.trim())));
 };
 
+// An id Postgres mints instead would differ between environments, which is the
+// one thing minting them by hand prevents -- and a payload with no `id` key is
+// exactly what makes Postgres mint one.
+const mintedId = (name) => {
+  const id = ASPIRANT_V1_CLASS_IDS[name];
+  if (!id) throw new Error(`no minted class id for ${JSON.stringify(name)}`);
+  return id;
+};
+
+const isParent = (row) => Object.entries(FORK_PARENT)
+    .every(([column, value]) => row[column] === value);
+
+// A fork of this book already in the catalogue means the load has run before, so
+// the second run updates the fork it made rather than making another. Otherwise
+// the load descends from the parent, which it leaves untouched.
+//
+// `matches` narrows to whichever side decided that, because two candidates there
+// is a name the loader cannot resolve -- while a parent and its own fork sharing
+// a name is the steady state, not an ambiguity. An ambiguous plan is reported
+// and aborts the run before anything reads the rest of it.
+const forkPlan = (payload, matches, book) => {
+  const existing = matches.filter((row) => row.content_format === book.contentFormat
+      && row.rules_edition === book.rulesEdition);
+  if (existing.length) {
+    return {
+      payload, matches: existing, row: existing.length === 1 ? existing[0] : null,
+      parent: null, disposition: 'update'
+    };
+  }
+  const parents = matches.filter(isParent);
+  if (!parents.length) {
+    throw new Error(`no fork parent for ${JSON.stringify(payload.name)}: the catalogue holds no ` +
+        `${FORK_PARENT.content_format} ${FORK_PARENT.rules_version} row of that name`);
+  }
+  // A fork names its own identity, its parent and the two axes that separate it
+  // from that parent. Every other disposition leaves all four to the row's own
+  // column defaults.
+  const parent = parents.length === 1 ? parents[0] : null;
+  const forked = (row) => ({
+    ...payload, id: mintedId(payload.name), base_class_id: row.id,
+    rules_edition: book.rulesEdition, content_format: book.contentFormat
+  });
+  return {
+    payload: parent ? forked(parent) : payload,
+    matches: parents, row: null, parent, disposition: 'fork'
+  };
+};
+
 export const planLoad = (records, rows, book) => records.map((record) => {
-  const payload = buildPayload(record);
+  const payload = buildPayload(record, book);
   const matches = resolveTarget(payload, rows, book);
-  return { payload, matches, row: matches.length === 1 ? matches[0] : null };
+  if (book.forks) return forkPlan(payload, matches, book);
+  const row = matches.length === 1 ? matches[0] : null;
+  return { payload, matches, row, parent: null, disposition: row ? 'update' : 'create' };
 });
+
+const reportInsert = (plan, heading) => {
+  console.log(`\n${heading}`);
+  for (const { field, after } of plan.changes) console.log(`  + ${field}: ${preview(after)}`);
+  console.log(`  + rules_version: ${JSON.stringify(NEW_ROW_RULES_VERSION)}`);
+};
 
 const reportPlan = (plans) => {
   for (const plan of plans) {
-    const { payload, row } = plan;
-    if (!row) {
-      console.log(`\nCREATE ${payload.name}`);
-      for (const { field, after } of plan.changes) console.log(`  + ${field}: ${preview(after)}`);
-      console.log(`  + rules_version: ${JSON.stringify(NEW_ROW_RULES_VERSION)}`);
+    const { payload, row, parent, disposition } = plan;
+    if (disposition === 'create') {
+      reportInsert(plan, `CREATE ${payload.name}`);
+      continue;
+    }
+    if (disposition === 'fork') {
+      reportInsert(plan, `FORK ${payload.name} from ${parent.id}`);
       continue;
     }
     console.log(`\nUPDATE ${row.name} (${row.id})`);
@@ -259,13 +339,22 @@ const main = async (argv) => {
   for (const plan of plans) plan.changes = diffFields(plan.payload, plan.row);
   reportPlan(plans);
 
-  const updates = plans.filter((plan) => plan.row);
-  const creates = plans.filter((plan) => !plan.row);
+  const updates = plans.filter((plan) => plan.disposition === 'update');
+  const creates = plans.filter((plan) => plan.disposition === 'create');
+  const forks = plans.filter((plan) => plan.disposition === 'fork');
+  // Creates and forks are both inserts, and a book yields one kind or the other:
+  // a forking book has no create to make, since a name with no parent stops the
+  // run rather than starting a family of its own.
+  const inserts = [...creates, ...forks];
   const renames = updates
       .filter((plan) => plan.row.name !== plan.payload.name)
       .map((plan) => ({ from: plan.row.name, to: plan.payload.name, id: plan.row.id }));
 
-  console.log(`\n${plans.length} classes resolved (${updates.length} update, ${creates.length} create), 0 ambiguous`);
+  // Only a forking book can fork, so the third count is printed only where it
+  // can be anything but zero.
+  const resolved = [`${updates.length} update`, `${creates.length} create`,
+    ...(book.forks ? [`${forks.length} fork`] : [])].join(', ');
+  console.log(`\n${plans.length} classes resolved (${resolved}), 0 ambiguous`);
   for (const { from, to, id } of renames) console.log(`name correction: "${from}" -> "${to}" (${id})`);
 
   // Unchanged rows are skipped so a re-run does not bump `updated_at` on all 19
@@ -325,26 +414,29 @@ const main = async (argv) => {
     console.log(`--allow-unremapped: loading anyway, ${orphans.length} names left unresolvable`);
   }
 
-  // The three new rows go in one statement. The 16 updates cannot join them:
-  // PostgREST's upsert is INSERT ... ON CONFLICT, and Postgres rejects the
-  // proposed tuple on `rules_version` NOT NULL before the conflict resolves, so
-  // batching them would mean putting `rules_version` -- an owner-controlled
-  // field the allowlist excludes -- into all 16 update payloads. So each update
-  // is its own statement; a failure stops the run and names the rows already
-  // written, and re-running converges because resolution accepts both spellings
-  // of every renamed class.
-  let createdRows = [];
-  if (creates.length) {
+  // The new rows go in one statement. The updates cannot join them: PostgREST's
+  // upsert is INSERT ... ON CONFLICT, and Postgres rejects the proposed tuple on
+  // `rules_version` NOT NULL before the conflict resolves, so batching them
+  // would mean putting `rules_version` -- an owner-controlled field the
+  // allowlist excludes -- into every update payload. So each update is its own
+  // statement; a failure stops the run and names the rows already written, and
+  // re-running converges because resolution accepts both spellings of every
+  // renamed class.
+  if (inserts.length) {
     const { data, error: insertError } = await supabase.from('classes')
-        .insert(creates.map((plan) => ({ ...plan.payload, rules_version: NEW_ROW_RULES_VERSION })))
+        .insert(inserts.map((plan) => ({ ...plan.payload, rules_version: NEW_ROW_RULES_VERSION })))
         .select('id, name, is_public');
     if (insertError) {
-      console.error(`\nfailed to create ${creates.length} classes: ${insertError.message}`);
+      console.error(`\nfailed to create ${inserts.length} classes: ${insertError.message}`);
       console.error('nothing written');
       return 1;
     }
-    createdRows = data;
-    console.log(`${creates.length} classes created`);
+    // The publish step reads `plan.row`, and one insert batch holds one row per
+    // class, so the name resolves within it even where a name now names two rows
+    // in the catalogue at large.
+    const insertedByName = new Map(data.map((created) => [created.name, created]));
+    for (const plan of inserts) plan.row = insertedByName.get(plan.payload.name);
+    console.log(`${inserts.length} classes created`);
   }
 
   const written = [];
@@ -353,7 +445,7 @@ const main = async (argv) => {
         .update(plan.payload).eq('id', plan.row.id);
     if (updateError) {
       console.error(`\nfailed to update "${plan.payload.name}": ${updateError.message}`);
-      console.error(`partial load - created: ${creates.length}, updated: ${written.join(', ') || 'none'}`);
+      console.error(`partial load - created: ${inserts.length}, updated: ${written.join(', ') || 'none'}`);
       console.error('re-run to converge; resolution is idempotent');
       return 1;
     }
@@ -361,7 +453,7 @@ const main = async (argv) => {
   }
 
   console.log(`${written.length} classes updated`);
-  console.log(`${creates.length + written.length} classes written`);
+  console.log(`${inserts.length + written.length} classes written`);
 
   // Renamed in place: character_perks.class_ability_id hangs off these row ids,
   // so a delete-and-reinsert would take the perks with it.
@@ -382,10 +474,11 @@ const main = async (argv) => {
   }
   console.log(`${remap.length} remaps applied, ${renamed} character rows renamed`);
 
-  const rowByName = new Map([...updates.map((plan) => [plan.payload.name, plan.row]),
-    ...createdRows.map((row) => [row.name, row])]);
-  for (const name of published) {
-    const target = rowByName.get(name);
+  // Keyed on the plan: a fork and the parent it descends from carry the same
+  // name for good, and only one of the two is this load's to publish.
+  for (const plan of plans.filter((candidate) => published.includes(candidate.payload.name))) {
+    const { name } = plan.payload;
+    const target = plan.row;
     if (target.is_public) {
       console.log(`already public: ${name} (${target.id})`);
       continue;

@@ -6,27 +6,45 @@ import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import {
-  FIELDS, buildPayload, displayName, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
+  buildPayload, displayName, fieldsFor, fold, isLocalTarget, planLoad, resolveTarget, sectionEnum,
   trimEnds, unremapped, unresolvableTargets
 } from '../scripts/load-prerelease-classes.mjs';
 import { bookFor } from '../scripts/lib/books.mjs';
 import {
   catalogueNames, groupUnresolvable, projectImport
 } from '../scripts/lib/character-impact.mjs';
+import { ASPIRANT_V1_CLASS_IDS } from '../util/starter-content.js';
 
 const book = bookFor('prerelease');
 const records = JSON.parse(readFileSync(book.artifact, 'utf8'));
 const remap = JSON.parse(readFileSync(book.remap, 'utf8'));
+
+// The second book forks the classes it shares with the catalogue instead of
+// overwriting them, so every disposition below is exercised against a real
+// record of each book rather than a hand-built one.
+const forkBook = bookFor('aspirant-v1');
+const forkRecords = JSON.parse(readFileSync(forkBook.artifact, 'utf8'));
+const forkRecordFor = (name) => forkRecords.find((record) => displayName(record.name) === name);
+const berserkerRecord = forkRecordFor('Berserker');
+const gunslingerRecord = forkRecordFor('Gunslinger');
+const prereleaseRecord = records[0];
 
 const ITEM_KEY = { ability: 'abilities', gear: 'gear' };
 const artifactNames = (kind) =>
     records.flatMap((record) => (record[ITEM_KEY[kind]] ?? []).map((item) => item.name.trim()));
 const codepoints = (text) => [...text].map((character) => character.codePointAt(0));
 
-const row = (name) => ({ id: `id-${name}`, name });
+const row = (name, over = {}) => ({ id: `id-${name}`, name, rules_edition: 'advent',
+  content_format: 'advent', rules_version: 'v1', is_player_created: false, ...over });
 
-const FORBIDDEN = ['is_public', 'status', 'rules_edition', 'rules_version', 'teaser',
-  'image_url', 'image_crop', 'base_class_id'];
+// Columns the owner controls: no payload may flip a row's visibility, its
+// status, its marketing copy, or the `rules_version` an owner set -- the insert
+// that creates a row is the only thing that writes that one.
+const FORBIDDEN = ['is_public', 'status', 'teaser', 'image_url', 'image_crop', 'rules_version'];
+
+// A fork mints these four itself. An update or a create must leave every one of
+// them to the row's own column defaults.
+const FORK_ONLY = ['id', 'base_class_id', 'rules_edition', 'content_format'];
 
 // The catalogue names as they stand before any load has run.
 const namesBeforeLoad = ['Beastmaster', 'Berserker', 'Bogatyr', 'Brainiac', 'Drachentöter',
@@ -34,10 +52,10 @@ const namesBeforeLoad = ['Beastmaster', 'Berserker', 'Bogatyr', 'Brainiac', 'Dra
   'Shonen', 'Vessel', 'Witchhunter', 'Zoologist'];
 
 const split = (rows) => {
-  const plans = planLoad(records, rows.map(row), book);
+  const plans = planLoad(records, rows.map((name) => row(name)), book);
   return {
-    update: plans.filter((plan) => plan.row).length,
-    create: plans.filter((plan) => !plan.row).length,
+    update: plans.filter((plan) => plan.disposition === 'update').length,
+    create: plans.filter((plan) => plan.disposition === 'create').length,
     ambiguous: plans.filter((plan) => plan.matches.length > 1).length
   };
 };
@@ -71,6 +89,83 @@ test('the load resolves 16 updates and 4 creates against the pre-load catalogue'
 test('re-running after a load creates nothing', () => {
   const afterLoad = records.map((record) => displayName(record.name));
   expect(split(afterLoad)).toEqual({ update: 20, create: 0, ambiguous: 0 });
+});
+
+test('a class with an advent-format parent forks rather than updating it', () => {
+  const rows = [row('Berserker', { rules_edition: 'aspirant' })];
+  const [plan] = planLoad([berserkerRecord], rows, forkBook);
+  expect(plan.disposition).toBe('fork');
+  expect(plan.row).toBeNull();
+  expect(plan.parent.id).toBe('id-Berserker');
+});
+
+test('the fork payload carries the parent pointer and both axes', () => {
+  const [plan] = planLoad([berserkerRecord], [row('Berserker', { rules_edition: 'aspirant' })], forkBook);
+  expect(plan.payload.base_class_id).toBe('id-Berserker');
+  expect(plan.payload.rules_edition).toBe('aspirant');
+  expect(plan.payload.content_format).toBe('aspirant');
+  expect(plan.payload.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
+});
+
+test('v1 is the parent when a class has both a v1 and a v2 row', () => {
+  const rows = [row('Gunslinger'), row('Gunslinger', { id: 'id-v2', rules_version: 'v2' })];
+  const [plan] = planLoad([gunslingerRecord], rows, forkBook);
+  expect(plan.disposition).toBe('fork');
+  expect(plan.parent.id).toBe('id-Gunslinger');
+});
+
+test("a player's own class of the same name is not a fork parent", () => {
+  const rows = [row('Gunslinger', { id: 'id-mine', is_player_created: true })];
+  expect(() => planLoad([gunslingerRecord], rows, forkBook)).toThrow('Gunslinger');
+});
+
+test('re-running after a fork updates the fork and never creates a second one', () => {
+  const rows = [row('Berserker', { rules_edition: 'aspirant' }),
+    row('Berserker', { id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant' })];
+  const [plan] = planLoad([berserkerRecord], rows, forkBook);
+  expect(plan.disposition).toBe('update');
+  expect(plan.row.id).toBe('id-v1fork');
+});
+
+// Both axes decide it: a row in this book's content format but another
+// rules_edition is not this book's fork, and reading it as one would overwrite a
+// class this book never described.
+test("a row matching one axis only is neither this book's fork nor a parent", () => {
+  const rows = [row('Berserker', { content_format: 'aspirant', rules_edition: 'advent' })];
+  expect(() => planLoad([berserkerRecord], rows, forkBook)).toThrow('Berserker');
+});
+
+// A parent and its own fork share a name for good, so the name alone can no
+// longer decide the row. Two candidates on the side that decides the
+// disposition is the ambiguity, and it is reported rather than picked from.
+test('two forks or two parents of one name are ambiguous rather than silently picked', () => {
+  const twoParents = [row('Berserker'), row('Berserker', { id: 'id-other' })];
+  const [byParent] = planLoad([berserkerRecord], twoParents, forkBook);
+  expect(byParent.matches).toHaveLength(2);
+  expect(byParent.row).toBeNull();
+  expect(byParent.parent).toBeNull();
+
+  const fork = (id) => row('Berserker', { id, rules_edition: 'aspirant', content_format: 'aspirant' });
+  const [byFork] = planLoad([berserkerRecord], [row('Berserker'), fork('f1'), fork('f2')], forkBook);
+  expect(byFork.matches).toHaveLength(2);
+  expect(byFork.row).toBeNull();
+});
+
+// An id Postgres mints instead would differ between local and production, which
+// is the one thing minting them by hand exists to prevent -- and a payload with
+// no `id` key is exactly what makes Postgres mint one.
+test('a forked class with no minted id stops the run', () => {
+  const unnamed = { ...berserkerRecord, name: 'Nobody' };
+  expect(() => planLoad([unnamed], [row('Nobody')], forkBook)).toThrow('Nobody');
+});
+
+test('every V1 class has one minted id of its own', () => {
+  expect(Object.keys(ASPIRANT_V1_CLASS_IDS).sort())
+      .toEqual(forkRecords.map((record) => displayName(record.name)).sort());
+  expect(new Set(Object.values(ASPIRANT_V1_CLASS_IDS)).size).toBe(forkRecords.length);
+  for (const id of Object.values(ASPIRANT_V1_CLASS_IDS)) {
+    expect(id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  }
 });
 
 test('the document title casing reproduces the catalogue names', () => {
@@ -110,27 +205,62 @@ test('trimming takes the ends only and leaves rich-text runs alone', () => {
 
 test('the payload carries the allowlist and nothing else', () => {
   for (const record of records) {
-    const payload = buildPayload(record);
-    expect(Object.keys(payload).sort()).toEqual([...FIELDS].sort());
-    for (const field of FORBIDDEN) expect(payload).not.toHaveProperty(field);
+    const payload = buildPayload(record, book);
+    expect(Object.keys(payload).sort()).toEqual([...fieldsFor(book)].sort());
+    for (const field of [...FORBIDDEN, ...FORK_ONLY]) expect(payload).not.toHaveProperty(field);
     expect(payload).not.toHaveProperty('page_range');
     expect(payload.free_play_access).toBe(true);
   }
 });
 
-// FIELDS and buildPayload are compared against each other above, so widening
-// FIELDS alone stays green while buildPayload silently omits the key for every
-// record. The column is NOT NULL as of
-// supabase/migrations/20260912000000_advanced_abilities_not_null.sql, so an
-// omitted key is an insert failure rather than a null row.
-test('every payload carries an advanced_abilities array', () => {
-  for (const record of records) {
-    expect(Array.isArray(buildPayload(record).advanced_abilities)).toBe(true);
+const forkPlans = () =>
+    planLoad(forkRecords, forkRecords.map((record) => row(displayName(record.name))), forkBook);
+
+test('a fork payload carries the allowlist plus the four fields it mints', () => {
+  for (const plan of forkPlans()) {
+    expect(plan.disposition).toBe('fork');
+    expect(Object.keys(plan.payload).sort())
+        .toEqual([...fieldsFor(forkBook), ...FORK_ONLY].sort());
+    for (const field of FORBIDDEN) expect(plan.payload).not.toHaveProperty(field);
+    expect(plan.payload).not.toHaveProperty('page_range');
+    expect(plan.payload.id).toBe(ASPIRANT_V1_CLASS_IDS[plan.payload.name]);
   }
 });
 
+// `prerelease_section` is the pre-release document's own sectioning. The V1
+// artifact carries no such key, and the derivation throws on a record without
+// one rather than storing a null.
+test('only the pre-release book writes prerelease_section', () => {
+  expect(fieldsFor(book)).toContain('prerelease_section');
+  expect(fieldsFor(forkBook)).not.toContain('prerelease_section');
+});
+
+// The Aspirant book grants its twelve classes through the unlock roster, so
+// free-play access on top of that would make the roster meaningless.
+test('only the pre-release book grants free play access', () => {
+  expect(buildPayload(berserkerRecord, forkBook).free_play_access).toBe(false);
+  expect(buildPayload(prereleaseRecord, bookFor('prerelease')).free_play_access).toBe(true);
+});
+
+// The field list and buildPayload are compared against each other above, so
+// widening the list alone stays green while buildPayload silently omits the key
+// for every record. Both columns are NOT NULL with a shaped default, so an
+// omitted key stores that default in place of the book's own content.
+test('every payload carries an advanced_abilities array', () => {
+  for (const record of records) {
+    expect(Array.isArray(buildPayload(record, book).advanced_abilities)).toBe(true);
+  }
+});
+
+test('every payload carries expanded_tips, whether its book has any or not', () => {
+  expect(buildPayload(prereleaseRecord, bookFor('prerelease')).expanded_tips)
+      .toEqual({ player: [], conduit: [] });
+  expect(buildPayload(berserkerRecord, forkBook).expanded_tips)
+      .toEqual(berserkerRecord.expanded_tips);
+});
+
 test('tips are written as a markdown bullet list', () => {
-  const payload = buildPayload(records[0]);
+  const payload = buildPayload(records[0], book);
   expect(payload.tips.split('\n').every((line) => line.startsWith('- '))).toBe(true);
   expect(payload.tips.split('\n')).toHaveLength(records[0].tips.length);
 });
@@ -145,7 +275,7 @@ test('only a local stack counts as a safe --apply target', () => {
 
 test('ability pronunciation survives into the payload', () => {
   const pronunciations = records
-      .flatMap((record) => buildPayload(record).abilities)
+      .flatMap((record) => buildPayload(record, book).abilities)
       .filter((ability) => ability.pronunciation);
   expect(pronunciations).toHaveLength(2);
 });
@@ -227,6 +357,50 @@ test('a held name is grouped only when the import leaves it unresolvable', () =>
   const groups = groupUnresolvable(held, before, after);
   expect(groups.map((entry) => [entry.name, entry.survivesNow, entry.rows.length, entry.characters.size]))
       .toEqual([['Toolbox', true, 2, 2], ['Neuralyzer', false, 1, 1]]);
+});
+
+// `main` reads a book with no remap file as an empty remap and runs the orphan
+// scan anyway. An empty remap covers nothing, so a vanishing name is still
+// reported: a scan that is skipped could not tell anyone the projection is
+// wrong, while a scan that runs and reports nothing can.
+test('a book with no remap file leaves the orphan scan able to report', () => {
+  expect(forkBook.remap).toBeNull();
+  expect(unremapped([group()], []).map((entry) => entry.name)).toEqual(['Toolbox']);
+});
+
+test('a fork leaves its parent untouched in the post-import projection', () => {
+  const parent = row('Berserker', { rules_edition: 'aspirant', gear: [{ name: 'Old Axe' }] });
+  const [plan] = planLoad([berserkerRecord], [parent], forkBook);
+  const after = projectImport([parent], [plan], forkBook);
+  expect(after.find((c) => c.id === 'id-Berserker').gear).toEqual([{ name: 'Old Axe' }]);
+  expect(after).toHaveLength(2);
+});
+
+test("the parent's item names survive the fork, so nothing is orphaned", () => {
+  const parent = row('Berserker', { is_public: true, rules_edition: 'aspirant',
+    gear: [{ name: 'Old Axe' }], abilities: [] });
+  const [plan] = planLoad([berserkerRecord], [parent], forkBook);
+  const names = catalogueNames(projectImport([parent], [plan], forkBook));
+  expect(names.gear.has('Old Axe')).toBe(true);
+});
+
+test('the projected fork stands under the id the load will give it', () => {
+  const parent = row('Berserker', { rules_edition: 'aspirant' });
+  const [plan] = planLoad([berserkerRecord], [parent], forkBook);
+  expect(projectImport([parent], [plan], forkBook).map((cls) => cls.id))
+      .toEqual(['id-Berserker', ASPIRANT_V1_CLASS_IDS.Berserker]);
+});
+
+// Both rows are named Berserker and the book publishes that name, but only the
+// fork is this load's to publish: a projection that published by name would make
+// a private parent public and count its item names as catalogued.
+test('the projection publishes the fork and not the parent it descends from', () => {
+  const parent = row('Berserker', { rules_edition: 'aspirant', is_public: false });
+  const [plan] = planLoad([berserkerRecord], [parent], forkBook);
+  const projected = projectImport([parent], [plan], forkBook);
+  const publicity = (id) => projected.find((cls) => cls.id === id).is_public;
+  expect(publicity('id-Berserker')).toBe(false);
+  expect(publicity(ASPIRANT_V1_CLASS_IDS.Berserker)).toBe(true);
 });
 
 // The owner authorised exactly these classes to be made visible. Widening the set

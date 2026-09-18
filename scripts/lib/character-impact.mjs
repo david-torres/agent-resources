@@ -47,14 +47,21 @@ export const catalogueNames = (classes) => {
 // that one run, and treating it as private would drop its item names from the
 // post-import catalogue and report names as vanishing that never do.
 export const projectImport = (classes, plans, book) => {
-  const payloadByRowId = new Map(plans.filter((plan) => plan.row).map((plan) => [plan.row.id, plan.payload]));
-  const updated = classes.map((cls) => (payloadByRowId.has(cls.id) ? { ...cls, ...payloadByRowId.get(cls.id) } : cls));
-  // buildClassContentLookupMaps skips a class with no id; an inserted row has
-  // one immediately, so a placeholder stands in for the id it will be given.
-  const created = plans.filter((plan) => !plan.row)
-      .map((plan) => ({ ...CREATED_ROW_DEFAULTS, ...plan.payload, id: `pending:${plan.payload.name}` }));
-  return [...updated, ...created].map((cls) =>
-      (book.publishedByLoad.includes(cls.name) ? { ...cls, is_public: true } : cls));
+  // Keyed on the plan rather than on the name: a fork and the parent it descends
+  // from carry the same name, and only the fork is this load's to publish.
+  const publish = (cls, plan) =>
+      (book.publishedByLoad.includes(plan.payload.name) ? { ...cls, is_public: true } : cls);
+  const planByRowId = new Map(plans.filter((plan) => plan.row).map((plan) => [plan.row.id, plan]));
+  const updated = classes.map((cls) => {
+    const plan = planByRowId.get(cls.id);
+    return plan ? publish({ ...cls, ...plan.payload }, plan) : cls;
+  });
+  // buildClassContentLookupMaps skips a class with no id. A fork carries the id
+  // it will be inserted under; a create is stood in for by a placeholder until
+  // Postgres mints one.
+  const created = plans.filter((plan) => !plan.row).map((plan) => publish(
+      { ...CREATED_ROW_DEFAULTS, id: `pending:${plan.payload.name}`, ...plan.payload }, plan));
+  return [...updated, ...created];
 };
 
 // PostgREST caps a response at 1000 rows without saying so, and class_gear
