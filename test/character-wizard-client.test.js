@@ -285,3 +285,62 @@ test('aspirant creation keeps its 6-plus allotment: 3 to the class spread, 1 to 
   expect(document.getElementById('statPointsAssigned').textContent).toBe('4');
   expect(document.getElementById('statPointsRemaining').textContent).toBe('2');
 });
+
+// --- a Trait's +1 Cap has to be spendable ---------------------------------
+//
+// pg. 3, restated pg. 6: each Personality Trait raises its affiliated Stat's
+// Cap by +1. views/character-wizard.handlebars promises the player exactly
+// that, and statCapFor (util/stat-caps.js) grants it server-side off the
+// stored trait.stat -- so the grid has to offer the box. The +++ creation
+// ceiling still binds at level 1, because it counts every source.
+
+const statBoxes = (stat) => Array.from(
+  document.querySelectorAll('.wizard-stat-row[data-stat="' + stat + '"] .wizard-stat-box')
+);
+const classesOn = (stat) => statBoxes(stat).map((box) => box.className.replace('wizard-stat-box ', ''));
+
+const bootAspirantAtStep2 = () => {
+  const wizard = bootWizard({
+    mode: 'aspirant',
+    preselectedClassId: 'c1',
+    classes: [ASPIRANT_CLASS],
+    statList: STAT_LIST,
+    personalityMap: PERSONALITY_MAP,
+    commonItems: []
+  });
+  const state = wizard.getState();
+  state.traits[0] = 'brave';
+  state.traitStats[0] = 'might';
+  state.traits[1] = 'bold';
+  state.traitStats[1] = 'vitality';
+  state.traits[2] = 'lucky';
+  state.traitStats[2] = 'luck';
+  document.getElementById('step1Next').click();
+  return wizard;
+};
+
+const setLevel = (level) => {
+  const input = document.getElementById('wizardLevel');
+  input.value = String(level);
+  input.dispatchEvent(new window.Event('input', { bubbles: true }));
+};
+
+test('above level 1 a Trait raises its Stat\'s ceiling by one, and only that Stat\'s', () => {
+  bootAspirantAtStep2();
+  setLevel(2);
+
+  // luck carries Trait 3; reflex carries no Trait and no class spread.
+  expect(statBoxes('luck')).toHaveLength(6);
+  expect(statBoxes('reflex')).toHaveLength(5);
+  expect(classesOn('luck')).not.toContain('is-locked');
+  expect(classesOn('reflex')).not.toContain('is-locked');
+});
+
+test('at level 1 the +++ ceiling still binds on a Trait-raised Stat', () => {
+  bootAspirantAtStep2();
+
+  // Cap 6 (5 + the Trait), but only +++ = 3 may be reached at creation, and
+  // the Trait's own +1 counts toward it -- so 3 of the 6 boxes stay locked.
+  expect(statBoxes('luck')).toHaveLength(6);
+  expect(classesOn('luck').filter((cls) => cls === 'is-locked')).toHaveLength(3);
+});

@@ -32,15 +32,18 @@ window.CharacterWizard = (function () {
   // successful mission on top of the base 2. Unbounded — character history
   // matters.
   const BONUS_MERX_PER_SUCCESSFUL = 1;
-  // Total creation pluses before level growth, and the per-level growth
-  // rate. Second copy of util/stat-caps.js's CREATION_PLUSES /
-  // LEVEL_PLUSES_PER_LEVEL — that module is deliberately require-free
-  // CommonJS and nothing yet serves it to the browser (routes/characters.js
-  // does not put it on `wizardData`), so this file mirrors it the same way
-  // it already mirrors util/character-derived.js's gear costs above rather
-  // than leaving the figures unsourced.
+  // Total creation pluses before level growth, the per-level growth rate, a
+  // Stat's base Cap, and the creation ceiling. Second copy of
+  // util/stat-caps.js's CREATION_PLUSES / LEVEL_PLUSES_PER_LEVEL /
+  // BASE_STAT_CAP / CREATION_STAT_CAP — that module is deliberately
+  // require-free CommonJS and nothing yet serves it to the browser
+  // (routes/characters.js does not put it on `wizardData`), so this file
+  // mirrors it the same way it already mirrors util/character-derived.js's
+  // gear costs above rather than leaving the figures unsourced.
   const CREATION_PLUSES = { advent: 6, aspirant: 6, aspiring: 4 };
   const LEVEL_PLUSES_PER_LEVEL = 2;
+  const BASE_STAT_CAP = 5;
+  const CREATION_STAT_CAP = 3;
 
   // ---------- Data ----------
   const dataEl = document.getElementById('wizard-data');
@@ -811,13 +814,32 @@ const getMerxBudget = () => {
     return pts;
   };
 
-  const getMaxAssignable = () => {
-    return state.level > 1 ? 5 : 3;
+  // pg. 3, restated pg. 6: a Stat's Cap is BASE_STAT_CAP plus one for each
+  // Personality Trait affiliated with it. Read off getTraitStat, the Stat each
+  // slot SUBMITS, because statCapFor (util/stat-caps.js) grants the +1 against
+  // the stored trait.stat and never a name lookup — granting it here against
+  // getPersonalityPoints' priority order instead would offer a box the server
+  // then refuses. Cap purchases are not part of creation, so they are absent.
+  const getStatCap = (stat) => {
+    for (let idx = 0; idx < 3; idx++) {
+      if (getTraitStat(idx) === stat) return BASE_STAT_CAP + 1;
+    }
+    return BASE_STAT_CAP;
   };
 
-  // The grid always shows 5 boxes per stat. At level 1 the last 2 render as
-  // "locked" (dashed) per the spec; they become assignable at level 2+.
-  const getBoxesPerStat = () => 5;
+  // What one Stat may be raised to right now. At level 1 the +++ creation
+  // ceiling binds below every Cap, and it counts EVERY source — the class
+  // spread and the Trait's own grant included (Advent pg. 16 step 4c, carried
+  // by Aspirant pg. 3) — which is why the Trait's extra box only opens above
+  // level 1. The server enforces the same split: creationCeilingBreaches at
+  // level 1, capBreaches always (util/stat-caps.js).
+  const getMaxAssignable = (stat) => {
+    return state.level > 1 ? getStatCap(stat) : CREATION_STAT_CAP;
+  };
+
+  // One box per point of that Stat's Cap. Boxes above getMaxAssignable render
+  // "locked" (dashed), which at level 1 is every box above the third.
+  const getBoxesPerStat = (stat) => getStatCap(stat);
 
   const getTotalPoints = () => {
     const base = CREATION_PLUSES[DATA.mode] || CREATION_PLUSES.aspirant;
@@ -840,9 +862,8 @@ const getMerxBudget = () => {
   const capUserStats = () => {
     const classPts = getClassPoints();
     const persPts = getPersonalityPoints();
-    const max = getMaxAssignable();
     DATA.statList.forEach((stat) => {
-      let cap = max - (classPts[stat] || 0) - (persPts[stat] || 0);
+      let cap = getMaxAssignable(stat) - (classPts[stat] || 0) - (persPts[stat] || 0);
       if (cap < 0) cap = 0;
       if ((state.userStats[stat] || 0) > cap) {
         state.userStats[stat] = cap;
@@ -1101,18 +1122,19 @@ const getMerxBudget = () => {
     }
   };
 
-  // Render the 12-stat grid: name, point boxes (always 5 per stat), labels.
-  // At level 1 the last 2 boxes render as "locked" (dashed) per the spec;
-  // they become assignable at level 2+.
+  // Render the 12-stat grid: name, one box per point of that Stat's Cap,
+  // labels. Boxes above what the level allows render "locked" (dashed) — every
+  // box above the third at level 1, and none above it once a Trait's +1 is
+  // reachable.
   const renderStatGrid = () => {
     if (!statGrid) return;
     const classPts = getClassPoints();
     const persPts = getPersonalityPoints();
-    const assignable = getMaxAssignable();
-    const boxesPerStat = getBoxesPerStat();
     const userPts = state.userStats || {};
 
     statGrid.innerHTML = DATA.statList.map((stat) => {
+      const assignable = getMaxAssignable(stat);
+      const boxesPerStat = getBoxesPerStat(stat);
       const cp = classPts[stat] || 0;
       const pp = persPts[stat] || 0;
       const up = userPts[stat] || 0;
@@ -1209,7 +1231,7 @@ const getMerxBudget = () => {
       pp: persPts[stat] || 0,
       up: state.userStats[stat] || 0,
       remaining: remaining,
-      cap: getMaxAssignable()
+      cap: getMaxAssignable(stat)
     });
   };
 
