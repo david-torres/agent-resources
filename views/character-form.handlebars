@@ -211,7 +211,14 @@
                 nowhere. The group carries its own aria-label. --}}
           <div class="label">{{capitalize this}}</div>
           <div class="control">
-            {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5}}
+            {{!-- The block count is this Stat's real Cap, computed by
+                  statCapMap (util/stat-caps.js) and passed in per Stat. A
+                  literal here meant a V1 character could spend a Trait's +1
+                  Cap in the wizard at creation and never again, since this is
+                  the only surface a character is edited on afterwards. A stored
+                  value above the count is still shown -- see stat-blocks'
+                  over-count indicator. --}}
+            {{> stat-blocks stat=this name=this value=(lookup ../character this) max=(lookup ../statCaps this)}}
           </div>
         </div>
       </div>

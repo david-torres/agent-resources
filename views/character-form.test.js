@@ -163,7 +163,12 @@ test('every stat POSTs its own name from a hidden input', async () => {
     FORM_SRC.indexOf('Signature Gear')
   );
   const character = Object.fromEntries(statList.map((s, i) => [s, i % 6]));
-  await render(hb.compile(statsSection)({ statList, character }));
+  // statCaps is required, not optional: stat-blocks interpolates `max` straight
+  // into its x-data expression, so omitting it renders `statBlocks(0, , "luck")`
+  // and takes the whole component down. Every route that renders this form
+  // supplies it (routes/characters.js).
+  const statCaps = Object.fromEntries(statList.map((s) => [s, 5]));
+  await render(hb.compile(statsSection)({ statList, character, statCaps }));
   await tick();
 
   const posted = Array.from(document.querySelectorAll('input[type="hidden"]'))
@@ -337,4 +342,109 @@ test('submitting the rendered form preserves all three names and Stats', () => {
 
   expect(error).toBeNull();
   expect(childData.traits).toEqual(traits);
+});
+
+// --- the per-Stat Cap on the EDIT form ------------------------------------
+//
+// routes/characters.js renders this form for the edit route and the wizard only
+// for creation, so this is the ONLY surface a character is edited on after
+// creation -- and a Trait's +1 Cap matters most as a character grows. A literal
+// max=5 here meant a V1 character could spend that +1 while being created and
+// never again. The cap is computed server-side with statCapFor
+// (util/stat-caps.js) and passed in per Stat; no figure is mirrored into a
+// client.
+
+const { statCapMap } = require('../util/stat-caps');
+
+const renderStats = (context) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks', fs.readFileSync(
+    path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
+  ));
+  const section = FORM_SRC.slice(
+    FORM_SRC.indexOf('<label class="label">Stats</label>'),
+    FORM_SRC.indexOf('Signature Gear')
+  );
+  return hb.compile(section)({ statList, ...context });
+};
+
+// Boxes actually rendered for one Stat, counted off the radiogroup in the
+// served HTML -- the blocks are server-rendered, not x-for generated.
+const boxCount = (html, stat) => {
+  const start = html.indexOf(`data-stat="${stat}"`);
+  const group = html.slice(start, html.indexOf('</div>', start));
+  return (group.match(/role="radio"/g) || []).length;
+};
+
+const renderFor = (character, economy) => renderStats({
+  character,
+  statCaps: statCapMap({
+    statList,
+    economy,
+    traits: character.traits,
+    capPurchases: character.stat_cap_purchases
+  })
+});
+
+const ASPIRANT_TRAITS = [
+  { name: 'brave', stat: 'might' },
+  { name: 'calm', stat: 'will' },
+  { name: 'alert', stat: 'sensory' }
+];
+
+test('a Trait raises the boxes rendered for its own Stat and no other', () => {
+  const html = renderFor({ might: 6, traits: ASPIRANT_TRAITS, stat_cap_purchases: {} }, 'aspirant');
+
+  expect(boxCount(html, 'might')).toBe(6);
+  expect(boxCount(html, 'will')).toBe(6);
+  expect(boxCount(html, 'luck')).toBe(5);
+});
+
+test('a purchased Cap is rendered too', () => {
+  const html = renderFor(
+    { traits: ASPIRANT_TRAITS, stat_cap_purchases: { luck: 2, might: 1 } },
+    'aspirant'
+  );
+
+  expect(boxCount(html, 'luck')).toBe(7);
+  expect(boxCount(html, 'might')).toBe(7);
+});
+
+// Advent has no Trait-Cap mechanic at all -- the +1 per Trait and the purchase
+// are Aspirant rules (pg. 3, restated pg. 6) -- and 26 live advent characters
+// carry two Traits on one Stat, which would otherwise read as a Cap of 7.
+test('an advent character renders five boxes everywhere, Traits notwithstanding', () => {
+  const html = renderFor({
+    might: 2,
+    traits: [
+      { name: 'brave', stat: 'might' },
+      { name: 'forceful', stat: 'might' },
+      { name: 'calm', stat: 'will' }
+    ],
+    stat_cap_purchases: {}
+  }, 'advent');
+
+  for (const stat of statList) expect(boxCount(html, stat)).toBe(5);
+  expect(html).toContain('statBlocks(2, 5, &quot;might&quot;)');
+});
+
+// The new-character render has no character at all, so every Cap is the base
+// one and the form is exactly what it was.
+test('the new-character form renders five boxes everywhere', () => {
+  const html = renderStats({ statCaps: statCapMap({ statList }) });
+  for (const stat of statList) expect(boxCount(html, stat)).toBe(5);
+});
+
+// A value over the rendered box count must still be visible: every block fills
+// and stat-blocks' own over-count indicator carries the real number. A Cap that
+// shrank the grid below a stored value would otherwise hide pluses.
+test('a stored value above the box count still shows its real number', () => {
+  const html = renderFor({ luck: 9, traits: ASPIRANT_TRAITS, stat_cap_purchases: {} }, 'aspirant');
+
+  expect(boxCount(html, 'luck')).toBe(5);
+  expect(html).toContain('statBlocks(9, 5, &quot;luck&quot;)');
+  expect(html).toContain('x-show="value > max"');
 });

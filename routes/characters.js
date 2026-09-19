@@ -32,6 +32,7 @@ const { getProfileById, getProfileConduitCredits } = require('../models/profile'
 const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
 const { economyFor } = require('../util/merx-economy');
+const { statCapMap } = require('../util/stat-caps');
 const { filterClassListsByIds } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
@@ -158,6 +159,10 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
     isNew: true,
     effectiveVersion: 'v1',
     statList,
+    // No character and no class yet, so every Stat is at its base Cap. Passed
+    // anyway: the stat-blocks partial interpolates `max` straight into its
+    // x-data expression, so an absent value is a SyntaxError, not a default.
+    statCaps: statCapMap({ statList }),
     adventV1Classes: filteredAdventV1,
     adventV2Classes: filteredAdventV2,
     aspirantPreviewV1Classes: filteredAspirantV1,
@@ -429,15 +434,16 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       characterRepository.getRealMissions(id),
       characterRepository.listOffscreenMissions(id)
     ]);
+    const economy = economyFor({
+      contentFormat: characterClass && characterClass.content_format,
+      creatorMode: character.creator_mode
+    });
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
       rulesVersion: effectiveVersion,
-      economy: economyFor({
-        contentFormat: characterClass && characterClass.content_format,
-        creatorMode: character.creator_mode
-      })
+      economy
     });
 
     let upgradeTargets = [];
@@ -459,6 +465,15 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       characterClass,
       upgradeTargets,
       derived,
+      // Each Stat's real Cap, so the stat blocks can express a Trait's +1 and a
+      // purchased +1. This is the only surface a character is edited on after
+      // creation, so a literal here is where the mechanic went unreachable.
+      statCaps: statCapMap({
+        statList,
+        economy,
+        traits: character.traits,
+        capPurchases: character.stat_cap_purchases
+      }),
       autoCalculate: character.auto_calculate,
       statList,
       adventV1Classes: filteredAdventV1,

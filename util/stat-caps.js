@@ -120,6 +120,27 @@ const creationCeilingBreaches = (stats) => breachesAgainst(stats, () => CREATION
 // shared.
 const capBreachMessage = ({ stat, value, cap }) => `${stat} is ${value}, over its Cap of ${cap}.`;
 
+// A stat-name -> Cap map, for a surface that renders one control per Stat and
+// needs each Stat's real ceiling rather than a literal. Computed server-side so
+// the figures stay here: routes/characters.js already loads a character's traits
+// (as [{name, stat}]) and stat_cap_purchases, which is everything statCapFor
+// needs.
+//
+// advent is flatly BASE_STAT_CAP. The +1 per Trait and the purchase are Aspirant
+// rules (pg. 3, restated pg. 6), so advent has no Trait-Cap mechanic to render at
+// all -- the same scoping validateStatLimits applies with its own early return.
+// It also matters concretely: 26 of the 327 live characters carry two Traits on
+// one Stat and every one of them is advent, so counting Traits there would read
+// as a Cap of 7 on a rule advent does not have.
+//
+// The stat names come from the caller (util/enclave-consts.js statList) rather
+// than from here, so this module stays require-free.
+const statCapMap = ({ statList, economy, traits, capPurchases } = {}) =>
+    Object.fromEntries((Array.isArray(statList) ? statList : []).map((stat) => [
+        stat,
+        economy === 'advent' ? BASE_STAT_CAP : statCapFor(stat, { traits, capPurchases })
+    ]));
+
 module.exports = {
     statCapFor,
     normalizeLevel,
@@ -128,6 +149,7 @@ module.exports = {
     capBreaches,
     creationCeilingBreaches,
     capBreachMessage,
+    statCapMap,
     BASE_STAT_CAP,
     CREATION_STAT_CAP,
     CAP_INCREASE_PLUS_COST,
