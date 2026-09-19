@@ -121,10 +121,19 @@ const creationCeilingBreaches = (stats) => breachesAgainst(stats, () => CREATION
 const capBreachMessage = ({ stat, value, cap }) => `${stat} is ${value}, over its Cap of ${cap}.`;
 
 // A stat-name -> Cap map, for a surface that renders one control per Stat and
-// needs each Stat's real ceiling rather than a literal. Computed server-side so
-// the figures stay here: routes/characters.js already loads a character's traits
-// (as [{name, stat}]) and stat_cap_purchases, which is everything statCapFor
-// needs.
+// needs each Stat's real ceiling rather than a literal. A presentation helper,
+// not a rule: it serves the three editable Stat surfaces (the classic edit
+// form, the live stat editor, and the level-up modal), all rendered from
+// routes/characters.js, which already loads a character's traits (as
+// [{name, stat}]) and stat_cap_purchases -- everything statCapFor needs. Kept
+// server-side so the figures stay in this module.
+//
+// DELIBERATELY the one economy-aware function here. Everywhere else in this
+// module the economy is the caller's decision and this file is agnostic to it;
+// statCapMap owns the branch instead. That asymmetry is on purpose: a caller
+// that forgets the branch renders a Cap advent does not have, and three view
+// surfaces would each have to remember. Two of them already forgot the Cap
+// itself once.
 //
 // advent is flatly BASE_STAT_CAP. The +1 per Trait and the purchase are Aspirant
 // rules (pg. 3, restated pg. 6), so advent has no Trait-Cap mechanic to render at
@@ -132,6 +141,13 @@ const capBreachMessage = ({ stat, value, cap }) => `${stat} is ${value}, over it
 // It also matters concretely: 26 of the 327 live characters carry two Traits on
 // one Stat and every one of them is advent, so counting Traits there would read
 // as a Cap of 7 on a rule advent does not have.
+//
+// getStatCap in public/js/character-wizard.js is a MIRROR of this function --
+// a second implementation of the same branch, for the one surface this module
+// cannot reach, since nothing serves it to the browser. Nothing enforces that
+// the two agree; a change to the rule here has to be made there by hand. The
+// mirror is also where the advent branch was missed while every caller of this
+// function had it right.
 //
 // The stat names come from the caller (util/enclave-consts.js statList) rather
 // than from here, so this module stays require-free.
