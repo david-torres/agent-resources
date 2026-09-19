@@ -119,3 +119,61 @@ test('common items render as a markdown list', () => {
   expect(html).toContain('Common Items');
   expect(html).toContain('<strong>Rope</strong>');
 });
+
+// --- a Stat above the blocks shown ----------------------------------------
+//
+// stat-blocks-readonly documents its own contract: a value above `max` "fills
+// every block and stops there", and "callers that can exceed max (party totals)
+// print the real number alongside". This fragment was the one caller that did
+// not, so a Stat of 6 rendered identically to a Stat of 5 on the /party roster
+// and the LFG post page -- a player reading their own character as weaker than
+// it is, with nothing to indicate the rounding. A Trait raises a V1 Stat's Cap
+// to 6 (pg. 3, restated pg. 6), which is what makes a 6 ordinary rather than
+// exotic. The numeral matches views/character.handlebars' statsReadOnly grid and
+// stat-blocks' own over-count indicator.
+
+const statsSection = (html) => html.slice(
+  html.indexOf('<h4 class="title is-5">Stats</h4>'),
+  html.indexOf('</div>\n\n', html.indexOf('<h4 class="title is-5">Stats</h4>'))
+);
+
+test('a Stat above the blocks shown prints its real number', () => {
+  const html = render(makeCharacter({ might: 6, luck: 9 }));
+
+  expect(html).toContain('<span class="stat-blocks-over">6 points</span>');
+  expect(html).toContain('<span class="stat-blocks-over">9 points</span>');
+  // Only for the two that exceed -- the other ten sit at 2.
+  expect(html.match(/stat-blocks-over/g)).toHaveLength(2);
+});
+
+test('a Stat at the blocks shown prints no number', () => {
+  // 5 is the boundary: it fills every block and is not over it.
+  const html = render(makeCharacter({ might: 5 }));
+  expect(html).not.toContain('stat-blocks-over');
+});
+
+// This fragment is served to the /party roster and the LFG post page for any
+// character a viewer can see, so a missing or null Stat has to render as
+// quietly as it did before rather than as "null points".
+test('a missing or null Stat prints no number', () => {
+  const html = render(makeCharacter({ might: null, luck: undefined }));
+  expect(html).not.toContain('stat-blocks-over');
+  expect(html).not.toContain('points');
+});
+
+// This fragment is lazy-loaded into the /party roster and the LFG post page, so
+// a stray character in the common output would be visible on both. Nothing may
+// change for a character at or below the blocks shown.
+test('a character no Stat of which exceeds the blocks renders unchanged', () => {
+  const html = render(makeCharacter(
+    Object.fromEntries(statList.map((stat, i) => [stat, i % 6]))
+  ));
+
+  expect(html).not.toContain('stat-blocks-over');
+  expect(html).not.toContain('points');
+  // The stats section is exactly one readonly row per Stat and nothing else.
+  const section = statsSection(html);
+  expect(section.match(/<span class="stat-blocks is-readonly">/g)).toHaveLength(statList.length);
+  expect((section.match(/<span/g) || []).length)
+    .toBe(statList.length + (section.match(/wizard-stat-box/g) || []).length);
+});

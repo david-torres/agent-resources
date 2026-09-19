@@ -10,7 +10,16 @@
     {{#each statList}}
     <div class="column is-half-mobile is-one-third-tablet">
       <p class="mb-1"><strong>{{capitalize this}}</strong></p>
+      {{!-- stat-blocks-readonly fills every block and stops there for a value
+            above `max`, and asks its callers to print the real number
+            alongside. A Trait raises a V1 Stat's Cap to 6 (pg. 3, restated
+            pg. 6), so without this a 6 would read as a 5 on the /party roster
+            and the LFG post page. Same markup as views/character.handlebars'
+            statsReadOnly grid; the 5 pairs with the max on the line above. --}}
       {{> stat-blocks-readonly value=(lookup ../character this) max=5}}
+      {{#if (gt (lookup ../character this) 5)}}
+      <span class="stat-blocks-over">{{lookup ../character this}} points</span>
+      {{/if}}
     </div>
     {{/each}}
   </div>
