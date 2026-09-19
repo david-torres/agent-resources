@@ -14,16 +14,21 @@ const openai = new OpenAIChatApi(
   { model: "gpt-5-mini" }
 );
 
-const traits = Object.values(personalityMap).join(', ');
+// The vocabulary itself is the constraint, not just a hint in `.describe()`:
+// a z.enum over these 48 words means the model's structured output cannot
+// emit an off-vocabulary word at all, the same discipline
+// 20260919000000_traits_stat_affiliation.sql used for its one-time snapshot.
+const traitWords = Object.values(personalityMap).flat();
+const traits = traitWords.join(', ');
 const classes = adventClassList.concat(aspirantPreviewClassList, playerCreatedClassList).join(', ');
 const gear = Object.values(classGearList).map(gear => gear.join(', ')).join(', ');
 
 const schema = z.object({
   name: z.string().describe("The character's name"),
   class: z.string().describe(`The character's class, must be in the following list: ${classes}`),
-  trait0: z.string().nullable().describe(`The character's first personality trait, must be in the following list: ${traits}`),
-  trait1: z.string().nullable().describe(`The character's second personality trait, must be in the following list: ${traits}`),
-  trait2: z.string().nullable().describe(`The character's third personality trait, must be in the following list: ${traits}`),
+  trait0: z.enum(traitWords).nullable().describe(`The character's first personality trait, must be in the following list: ${traits}`),
+  trait1: z.enum(traitWords).nullable().describe(`The character's second personality trait, must be in the following list: ${traits}`),
+  trait2: z.enum(traitWords).nullable().describe(`The character's third personality trait, must be in the following list: ${traits}`),
   vitality: z.number().int().describe("The character's vitality, may be represented as a number or a series of plus signs (+)"),
   might: z.number().int().describe("The character's might, may be represented as a number or a series of plus signs (+)"),
   resilience: z.number().int().describe("The character's resilience, may be represented as a number or a series of plus signs (+)"),

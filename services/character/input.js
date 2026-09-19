@@ -135,13 +135,8 @@ const statByVocabularyWord = new Map(
 );
 
 // Resolves a submitted Personality Trait to its Stat and judges it against the
-// book, following shapeEnchantment's contract just above: never throws,
-// `value: undefined` on rejection so a caller cannot mistake a refusal for an
-// empty value. A throw here would reach `POST /characters/wizard` and
-// `POST /characters` as an unhandled promise rejection (neither route has an
-// asyncHandler wrapper, so the request just hangs) and `PUT /characters/:id`
-// as a generic "unexpected error" (a bare Error has no `.code`, so
-// util/http-error.js classifyError drops the message in production).
+// book, following shapeEnchantment's contract just above (never throws;
+// `value: undefined` on rejection) for the same reasons cited there.
 //
 // A Trait is a single word (pg. 6, pg. 121), checked here for WHITESPACE, not
 // for letters only -- `fun-loving` is a real vocabulary word, and an
@@ -195,8 +190,7 @@ const validateTraits = (traits, { economy } = {}) => {
   }
   const seenStats = new Set();
   for (const trait of rows) {
-    const stat = trait && trait.stat;
-    if (!stat) continue;
+    const stat = trait.stat;
     if (seenStats.has(stat)) {
       errors.push(`Two Traits may not share a Stat (${stat}).`);
     }

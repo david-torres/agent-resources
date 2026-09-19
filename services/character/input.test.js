@@ -372,7 +372,8 @@ test('an aspirant payload carrying a pseudo_class keeps its own class', () => {
 test('a vocabulary word resolves to its Stat without a submitted stat', () => {
   const { value, error } = shapeTrait('brave', {});
   expect(error).toBeNull();
-  expect(value.stat).toBe(personalityMap.might.includes('brave') ? 'might' : value.stat);
+  expect(personalityMap.might.includes('brave')).toBe(true);
+  expect(value.stat).toBe('might');
 });
 
 test('a submitted stat wins for a self-made word', () => {
