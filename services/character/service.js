@@ -9,6 +9,7 @@ const {
 } = require('./input');
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { economyFor } = require('../../util/merx-economy');
+const { capBreaches } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
@@ -65,6 +66,46 @@ const requireOwnedCharacter = async (adapter, actor, id) => {
     throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
   }
   return character;
+};
+
+// Resolves the economy for a mutation path that only has the stored
+// character in hand, not a fresh class-catalogue fetch. creator_mode alone
+// already answers economyFor's question for 'aspiring' (class-less) and for
+// every one of the 327 live characters (creator_mode is null or 'advent' for
+// all of them, confirmed against the local restored production copy), so
+// this spends a query only on the one case those two shortcuts cannot
+// resolve: an 'aspirant' creator_mode, where economyFor still needs the
+// class's content_format to tell it apart from advent.
+const resolveMutationEconomy = async (adapter, character) => {
+  if (character.creator_mode !== 'aspirant') {
+    return economyFor({ creatorMode: character.creator_mode });
+  }
+  if (!character.class_id) return 'advent';
+  const { contentFormat } = await adapter.getClassRulesVersion(character.class_id);
+  return economyFor({ contentFormat, creatorMode: character.creator_mode });
+};
+
+// Judges a mutation-path Stat write against the per-stat Cap only -- never
+// the creation allotment or the +++ ceiling, both creation-only rules that
+// updateStats and levelUp sit on the wrong side of: updateStats edits an
+// existing character, and levelUp legitimately RAISES the allotment, so
+// enforcing the old one against it would refuse the very pluses a level-up
+// grants. capBreaches (util/stat-caps.js) needs only Traits and stored Cap
+// purchases, both already on the character object requireOwnedCharacter
+// returns -- no catalogue fetch. Returns the { status, message } shape
+// routes/characters.js's sendRouteError already renders for this file's
+// other business-rule errors (see markDeceased and levelUp's mission-name/
+// credit checks below), not normalizeCharacterInput's bare-string
+// convention -- callers here return `{ data, error }`, never throw, since
+// PATCH /:id/stats and POST /:id/level-up wrap only the ownership gate in a
+// throw and render everything else through that shape.
+const statCapError = (character, stats) => {
+  const breaches = capBreaches({ stats, traits: character.traits, capPurchases: character.stat_cap_purchases });
+  if (breaches.length === 0) return null;
+  return {
+    status: 400,
+    message: breaches.map(b => `${b.stat} is ${b.value}, over its Cap of ${b.cap}.`).join(' ')
+  };
 };
 
 // Leaner ownership probe (id/creator_id/class_id only) — used by upgradeClass,
@@ -637,6 +678,13 @@ class CharacterService {
   async updateStats(actor, id, rawFields) {
     const character = await requireOwnedCharacter(this.adapter, actor, id);
     const stats = normalizeStatsPayload(rawFields || {});
+
+    const economy = await resolveMutationEconomy(this.adapter, character);
+    if (economy !== 'advent') {
+      const capError = statCapError(character, stats);
+      if (capError) return { data: null, error: capError };
+    }
+
     const { data, error } = await this.adapter.updateOwnedFields({
       id, creatorId: character.creator_id, fields: stats
     });
@@ -725,19 +773,27 @@ class CharacterService {
       ? await this.adapter.getClassRulesVersion(character.class_id)
       : { data: 'v1', contentFormat: null };
     const rulesVersion = rulesVersionResult.data || 'v1';
+    const economy = economyFor({
+      contentFormat: rulesVersionResult.contentFormat,
+      creatorMode: character.creator_mode
+    });
 
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
       rulesVersion,
-      economy: economyFor({
-        contentFormat: rulesVersionResult.contentFormat,
-        creatorMode: character.creator_mode
-      })
+      economy
     });
 
     const stats = normalizeStatsPayload(body.stats || body);
+    // The per-stat Cap only -- not the creation allotment, which a level-up
+    // legitimately raises (LEVEL_PLUSES_PER_LEVEL, util/stat-caps.js); see
+    // statCapError's own comment.
+    if (economy !== 'advent') {
+      const capError = statCapError(character, stats);
+      if (capError) return { data: null, error: capError };
+    }
     const fields = {
       ...stats,
       level: derived.level,

@@ -384,6 +384,102 @@ test('levelUp still refuses a non-owner with AuthorizationError', async () => {
   await expect(svc.levelUp(STRANGER, 'character-1', {})).rejects.toBeInstanceOf(AuthorizationError);
 });
 
+// --- Fix round 2: the per-stat Cap on the two mutation paths that bypass
+// normalizeCharacterInput entirely (updateStats, levelUp's Stat write) -----
+//
+// PATCH /:id/stats (public/js/alpine-components.js:355, the live stat editor
+// on the character page) and the Stats portion of POST /:id/level-up write
+// through normalizeStatsPayload straight to the adapter, so validateStatLimits
+// never sees them. Both already hold the full character (traits,
+// stat_cap_purchases) via requireOwnedCharacter, so the Cap check costs no
+// catalogue fetch -- only resolveMutationEconomy's one-row class lookup, and
+// only for an 'aspirant' creator_mode (see its own comment). Neither path
+// enforces the creation allotment or the +++ ceiling: both are creation-only
+// rules, and levelUp legitimately raises the allotment.
+const aspirantStatsCharacter = (overrides = {}) => ({
+  id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+  name: 'Hero', level: 1, completed_missions: 0, commissary_reward: 0, is_deceased: false,
+  gear: [], common_items: [], abilities: [], traits: [], stat_cap_purchases: {},
+  ...overrides
+});
+
+const aspirantMutationAdapter = (calls, overrides = {}) => makeAdapter(calls, {
+  getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null }),
+  ...overrides
+});
+
+test('updateStats refuses a V1 Stat over its Cap', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter())
+  }));
+  const result = await service.updateStats(CREATOR, 'character-1', { vitality: 6 });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/Cap/);
+});
+
+test('updateStats accepts the same value once a Trait raises the Cap', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ traits: [{ name: 'brave', stat: 'vitality' }] }))
+  }));
+  const result = await service.updateStats(CREATOR, 'character-1', { vitality: 6 });
+  expect(result.error).toBeNull();
+});
+
+test('updateStats accepts the same value once a purchase raises the Cap', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ stat_cap_purchases: { vitality: 1 } }))
+  }));
+  const result = await service.updateStats(CREATOR, 'character-1', { vitality: 6 });
+  expect(result.error).toBeNull();
+});
+
+test('updateStats leaves an advent character unaffected by an absurd Stat', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ class_id: ADVENT_CLASS_ID, creator_mode: 'advent' }))
+  }));
+  const result = await service.updateStats(CREATOR, 'character-1', { vitality: 999 });
+  expect(result.error).toBeNull();
+});
+
+test('updateStats does not fetch class data for a non-aspirant creator_mode', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ class_id: ADVENT_CLASS_ID, creator_mode: null })),
+    getClassRulesVersion: async () => { calls.push(['getClassRulesVersion']); return ok('v1'); }
+  }));
+  await service.updateStats(CREATOR, 'character-1', { vitality: 999 });
+  expect(calls.filter(c => c[0] === 'getClassRulesVersion')).toHaveLength(0);
+});
+
+const levelUpWithStats = (service, stats) => service.levelUp(CREATOR, 'character-1', {
+  level: 2, completed_missions: 0, mission_names: [], use_conduit_credit: false, stats
+});
+
+test('a level-up that would breach a Cap is refused', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter())
+  }));
+  const result = await levelUpWithStats(service, { arcane: 7 });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/Cap/);
+});
+
+test('a level-up that merely spends its new pluses is accepted', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter())
+  }));
+  const result = await levelUpWithStats(service, { arcane: 3 });
+  expect(result.error).toBeNull();
+});
+
 // --- Offscreen-mission capabilities ----------------------------------
 
 const offscreenAdapter = (overrides = {}) => ({
