@@ -354,6 +354,14 @@ const normalizeCharacterInput = (input, context = {}) => {
   // gearNameToClassId from the same catalogue lookup it uses for content_format,
   // so it resolves this once with resolveSubmittedGear and hands the result
   // in, rather than this module re-implementing that resolution.
+  //
+  // Normalized before it is priced, through the same normalizeClassItems the
+  // write paths run: a submission may carry equipment that shapes to nothing
+  // storable (`enchantment: {}` has no source and stores null; a blank-named
+  // Mod is dropped), and charging Merx or a Signature Cap slot for equipment
+  // the save will not store refuses builds the rules permit. Normalizing here
+  // rather than re-deriving "what counts as stored equipment" keeps that
+  // definition in one place.
   // context.enforceMerxBudget defaults to true (creation: a brand-new
   // character has no missions, so CREATION_GRANT alone IS its budget) and is
   // passed false by updateCharacter (an edit may have mission-earned Merx
@@ -363,7 +371,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
   const economyValidation = validateEconomyLimits({
     economy,
-    gear: context.economyGear ?? childData.classGear,
+    gear: normalizeClassItems(context.economyGear ?? childData.classGear),
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
     enforceMerxBudget: context.enforceMerxBudget ?? true

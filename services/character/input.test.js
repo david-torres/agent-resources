@@ -681,3 +681,57 @@ test('normalizeCharacterInput leaves an advent character unenforced', () => {
   }, { rulesVersion: 'v1', contentFormat: 'advent' });
   expect(result.error).toBeNull();
 });
+
+// --- the gate judges what will be STORED, not what was submitted ---------
+//
+// Whole-plan review, Important 2: validateEconomyLimits was handed the raw
+// submission, so it priced and counted equipment that normalization drops.
+// A gate that refuses a save the rules permit is the exact failure mode
+// validateEconomyLimits's own comment calls worse than not checking at all.
+
+test('an Enchantment that normalizes to nothing costs no Signature Cap slot', () => {
+  // `enchantment: {}` carries no source, so shapeEnchantment stores null --
+  // nothing is stored, so nothing may be counted. Seven such items are 7 of
+  // the 12 aspirant slots, not 14.
+  const gear = own(7).map((g) => ({ ...g, enchantment: {} }));
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
+  expect(result.error).toBeNull();
+});
+
+test('a real Enchantment still costs a Signature Cap slot', () => {
+  const gear = own(7).map((g) => ({ ...g, enchantment: { source: 'default' } }));
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
+  expect(result.error).toMatch(/Signature Cap|12/);
+});
+
+test('Mods that normalize away are not charged Merx', () => {
+  // Two blank-named Mods shape to [] -- nothing is stored -- so the item
+  // costs its bare 2 Merx and the six Signatures spend exactly the grant.
+  const gear = own(6);
+  gear[0] = { ...gear[0], mods: [{ name: '' }, { name: '  ' }] };
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.error).toBeNull();
+});
+
+test('a real Mod is still charged Merx', () => {
+  const gear = own(6);
+  gear[0] = { ...gear[0], mods: [{ name: 'Serrated' }] };
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.error).toMatch(/Merx/);
+});
+
+test('the gate counts a bare "Class::Item" submission as one slot each', () => {
+  const gear = Array.from({ length: 13 }, (_, i) => `Aspira::S${i}`);
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
+  expect(result.error).toMatch(/Signature Cap|12/);
+});
