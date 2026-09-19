@@ -913,9 +913,14 @@ Two jsonb columns on `class_gear`, the table holding a character's owned Signatu
 
 ```bash
 eval "$(supabase status -o env)"
-echo "$SUPABASE_URL"
+echo "API_URL=$API_URL"
+grep -E '^SUPABASE_URL=' .env
 ```
-This **must** print `http://127.0.0.1:54321`. If it does not, stop. **Never run `supabase db reset`.**
+`API_URL` **must** print `http://127.0.0.1:54321`, and the `.env` line must name the same host. If either does not, stop.
+
+Note the name: `supabase status -o env` exports `API_URL`, `DB_URL`, `SERVICE_ROLE_KEY` and friends — it does **not** export `SUPABASE_URL`. Checking `$SUPABASE_URL` after that eval reads whatever the ambient shell happened to hold, which in a fresh shell is nothing at all, so it confirms nothing. `.env` is the file the app reads and is hand-switched between this local stack and a **live production** project, which is why both halves of the check matter.
+
+**Never run `supabase db reset`** — the local database holds a restored copy of production data, not seed data.
 
 - [ ] **Step 2: Write the migration**
 
