@@ -148,10 +148,12 @@ const statByVocabularyWord = new Map(
 // Resolution order is deliberate: a submitted Stat wins over a vocabulary
 // match. pg. 3 makes Aspirant Traits "fully customizable", so a player's
 // explicit choice must not be overridden by a coincidental vocabulary hit.
-// Absent a submitted Stat -- every request does, until Task 10 adds
-// trait0_stat/trait1_stat/trait2_stat to the payload -- resolution falls back
-// to the vocabulary, which resolves all 48 of its words plus, case-
-// insensitively, every one of the 981 live Trait names.
+// Absent a submitted Stat, resolution falls back to the vocabulary, which
+// resolves all 48 of its words plus, case-insensitively, every one of the 981
+// live Trait names. Both the wizard and the classic form now send
+// trait0_stat/trait1_stat/trait2_stat, so the fallback serves a blank field on
+// a fresh classic form and any caller that omits them -- the AI import path
+// among them.
 const shapeTrait = (value, { submittedStat } = {}) => {
   const name = typeof value === 'string' ? value.trim() : '';
   if (!name) return { value: null, error: null };
@@ -464,9 +466,10 @@ const normalizeCharacterInput = (input, context = {}) => {
   // Each of trait0/trait1/trait2 is shaped (and, for a submitted name, judged)
   // independently; a blank slot shapes to null and is simply omitted rather
   // than erroring, matching shapeMods's treatment of a blank Mod name. The
-  // trailing `_stat` field is what Task 10 adds to the payload -- absent
-  // today, so shapeTrait falls back to the vocabulary for every request that
-  // exists right now.
+  // trailing `_stat` field carries the slot's Stat: the wizard sends it
+  // (public/js/character-wizard.js buildSubmitPayload) and so does the classic
+  // form (views/character-form.handlebars, one hidden input per slot). When it
+  // is blank or absent, shapeTrait falls back to the vocabulary.
   const traits = [];
   for (const slot of TRAIT_SLOTS) {
     const shaped = shapeTrait(data[slot], { submittedStat: data[`${slot}_stat`] });
