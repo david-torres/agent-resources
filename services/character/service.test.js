@@ -3,6 +3,7 @@ const { CharacterService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
+const { LEVEL_CEILING } = require('../../util/stat-caps');
 
 // Gunslinger as the catalogue holds it: Advent v1, its same-family v2, and the
 // Aspirant V1 fork, which differs on both family axes.
@@ -376,6 +377,42 @@ test('levelUp persists via a single levelUpAtomic call (not updateOwnedFields + 
   expect(calls[0].characterId).toBe('character-1');
   expect(calls[0].creatorId).toBe('profile-1');
   expect(calls[0].perks[0]).toMatchObject({ class_ability_id: 'ab-1', text: 'New perk', position: 0 });
+});
+
+// The level a level-up may reach is LEVEL_CEILING (util/stat-caps.js), read
+// from there rather than re-typed: a second literal 20 in levelUp would
+// silently desync from normalizeLevel, the clamp every Cap and allotment check
+// reads a level through. Observable through the Conduit Credit mission name,
+// the one place requestedLevel is rendered -- the stored `level` column comes
+// from deriveCharacterTotals, not from this clamp.
+//
+// The character sits at level 5 deliberately. requestedLevel is
+// `Math.max(currentLevel + 1, Math.min(LEVEL_CEILING, requested))`, so near the
+// ceiling the Math.max wins and the ceiling is never the binding term -- a test
+// run from level 19 passes whatever number the Math.min holds.
+test('levelUp clamps a runaway requested level to LEVEL_CEILING', async () => {
+  const offscreenWrites = [];
+  const adapter = {
+    ...minimalRequiredAdapter(),
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: 'class-1',
+      level: 5, completed_missions: 0, commissary_reward: 0, abilities: []
+    }),
+    getAvailableHostedMissions: async () => ok([{ id: 'hosted-1', name: 'A Hosted Game', date: '2026-01-02' }]),
+    createOffscreenMissionRow: async (args) => { offscreenWrites.push(args); return ok({ id: 'off-1' }); },
+    getRealMissions: async () => ok([]),
+    listOffscreenMissions: async () => ok([]),
+    getClassRulesVersion: async () => ok('v2'),
+    levelUpAtomic: async () => ok({ id: 'character-1', name: 'Hero', level: 2, completed_missions: 1, commissary_reward: 0 })
+  };
+  const svc = new CharacterService(adapter);
+
+  const { error } = await svc.levelUp(CREATOR, 'character-1', {
+    level: 999, completed_missions: 1, use_conduit_credit: true
+  });
+
+  expect(error).toBeNull();
+  expect(offscreenWrites[0].payload.name).toBe(`Conduit Credit: Level ${LEVEL_CEILING}`);
 });
 
 test('levelUp still refuses a non-owner with AuthorizationError', async () => {

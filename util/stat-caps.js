@@ -64,9 +64,11 @@ const statCapFor = (stat, { traits, capPurchases } = {}) => {
 // input.js). Named and centralized here so normalizeLevel enforces the same
 // ceiling everywhere: without one, normalizeLevel(Infinity) was Infinity and
 // normalizeLevel(1e9) gave plusAllotment an allotment over two billion,
-// silently passing any stat total on the classic/expert save path (level is
-// otherwise clamped only inside normalizeWizardPayload, which the wizard
-// alone calls). Distinct from MAX_LEVEL in util/character-derived.js, which
+// silently passing any stat total on the classic/expert save path. Two other
+// sites clamp a SUBMITTED level against this same ceiling, and both read it
+// from here: normalizeWizardPayload (services/character/input.js), which the
+// wizard alone calls, and levelUp's requestedLevel (services/character/
+// service.js). Distinct from MAX_LEVEL in util/character-derived.js, which
 // caps the level derived from completed missions -- a different concept.
 const LEVEL_CEILING = 20;
 

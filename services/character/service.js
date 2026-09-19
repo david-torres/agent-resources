@@ -9,7 +9,7 @@ const {
 } = require('./input');
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { economyFor } = require('../../util/merx-economy');
-const { capBreaches } = require('../../util/stat-caps');
+const { capBreaches, LEVEL_CEILING } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
@@ -712,7 +712,7 @@ class CharacterService {
     const character = await requireOwnedCharacter(this.adapter, actor, id);
 
     const currentLevel = Math.max(1, parseInteger(character.level, 1));
-    const requestedLevel = Math.max(currentLevel + 1, Math.min(20, parseInteger(body.level, currentLevel + 1)));
+    const requestedLevel = Math.max(currentLevel + 1, Math.min(LEVEL_CEILING, parseInteger(body.level, currentLevel + 1)));
     const currentCompleted = Math.max(0, parseInteger(character.completed_missions, 0));
     const requestedCompleted = Math.max(currentCompleted, parseInteger(body.completed_missions, currentCompleted));
     const missionNames = Array.isArray(body.mission_names)
