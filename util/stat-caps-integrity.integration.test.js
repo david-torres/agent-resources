@@ -131,6 +131,9 @@ const rpcFixtureCharacter = async () => {
   return rpcCharacterId;
 };
 
+// Puts every one of the character's trait stats back. Reports rather than
+// throws, because it is also called from the test's own `finally`, where a throw
+// would replace the failure that sent it there. afterAll is what asserts.
 const restoreRpcTraits = async () => {
   for (const row of rpcOriginalTraits || []) {
     const { error } = await sb.from('traits').update({ stat: row.stat }).eq('id', row.id);
@@ -142,6 +145,21 @@ const restoreRpcTraits = async () => {
 
 afterAll(async () => {
   await restoreRpcTraits();
+
+  // Read the rows back and assert each stat, rather than asserting the update
+  // calls reported no error. The row count cannot see a wrong stat at all, and
+  // an update that matched no row reports no error either -- which is exactly
+  // what a save_character_atomic that recreated these rows under new ids would
+  // look like. Asserting the stored value is the only check that fails loudly
+  // for both.
+  if (rpcOriginalTraits) {
+    const { data: restored, error: readError } = await sb.from('traits')
+      .select('id,stat').eq('character_id', rpcCharacterId).order('id');
+    expect(readError).toBeNull();
+    expect(restored.map(row => [row.id, row.stat]))
+      .toEqual(rpcOriginalTraits.map(row => [row.id, row.stat]));
+  }
+
   const { count, error: countError } = await sb.from('traits').select('id', { count: 'exact', head: true });
   expect(countError).toBeNull();
   expect(count).toBe(981);
