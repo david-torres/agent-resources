@@ -76,30 +76,16 @@ const plusAllotment = ({ economy, level } = {}) => {
     return base + LEVEL_PLUSES_PER_LEVEL * (normalizeLevel(level) - 1);
 };
 
-// The third Trait's Stat gets +1 to its VALUE at creation (Advent pg. 16) --
-// a different mechanic from the +1 CAP every Trait grants, and the two are
-// easy to conflate.
-//
-// Aspiring has no such grant: pg. 90's three Trait-Stat pluses are three of
-// the four the player distributes, not a bonus on top. Handing an
-// aspirant-shaped grant to an aspiring character would understate what the
-// player spent by one.
-const traitGrantFor = (traits, economy) => {
-    if (economy === 'aspiring') return {};
-    const rows = Array.isArray(traits) ? traits : [];
-    const third = rows[2];
-    return (third && third.stat) ? { [third.stat]: 1 } : {};
-};
-
+// Sums a stat-name -> value map (a character's Stats, or any other such map),
+// tolerant of the same junk statCapFor's capPurchases branch tolerates.
+// plusAllotment is compared against sumValues(stats) directly -- the book's
+// six (Advent pg. 16, carried by Aspirant pg. 3) is a creation TOTAL across
+// Class Stats, the third Trait's value grant, and the player's own pluses,
+// not a figure to net the automatic grants out of first. This is also the
+// same total the wizard's step-2 display checks against
+// (public/js/character-wizard.js:810's class + personality + user pluses).
 const sumValues = (map) => Object.values(map || {})
     .reduce((total, value) => total + (Math.floor(Number(value)) || 0), 0);
-
-// What the PLAYER assigned, recovered from a stored total by removing the two
-// automatic grants. This is the same arithmetic the wizard performs at
-// public/js/character-wizard.js:810 when it decides how many boxes remain
-// assignable.
-const assignedPluses = ({ stats, classSpread, traitGrant } = {}) =>
-    sumValues(stats) - sumValues(classSpread) - sumValues(traitGrant);
 
 const breachesAgainst = (stats, capOf) => Object.keys(stats || {})
     .map((stat) => ({ stat, value: Math.floor(Number(stats[stat])) || 0, cap: capOf(stat) }))
@@ -114,8 +100,7 @@ module.exports = {
     statCapFor,
     normalizeLevel,
     plusAllotment,
-    traitGrantFor,
-    assignedPluses,
+    sumValues,
     capBreaches,
     creationCeilingBreaches,
     BASE_STAT_CAP,

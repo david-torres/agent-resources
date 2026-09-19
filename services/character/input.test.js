@@ -490,7 +490,7 @@ test('a purchased Cap does the same', () => {
 test('the +++ ceiling refuses a 4 at creation and permits it on update', () => {
   const stats = { might: 4 };
   const atCreation = validateStatLimits({
-    economy: 'aspirant', stats, traits: [], capPurchases: {}, classSpread: {}, level: 1
+    economy: 'aspirant', stats, traits: [], capPurchases: {}, level: 1
   });
   expect(atCreation.ok).toBe(false);
   expect(atCreation.errors.join(' ')).toMatch(/\+\+\+/);
@@ -509,7 +509,7 @@ test('the +++ ceiling refuses a 4 at creation and permits it on update', () => {
 // not a permanent ceiling, which is why the base Cap of 5 exists above it.
 test('the +++ ceiling applies only at level 1: a 4 is refused at level 1 and accepted at level 2', () => {
   const at = (level) => validateStatLimits({
-    economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, classSpread: {}, level
+    economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, level
   });
   const atLevel1 = at(1);
   expect(atLevel1.ok).toBe(false);
@@ -524,7 +524,7 @@ test('the +++ ceiling applies only at level 1: a 4 is refused at level 1 and acc
 test('above level 1, a stat over its derived Cap is still refused', () => {
   const traits = [{ name: 'brave', stat: 'might' }];
   const result = validateStatLimits({
-    economy: 'aspirant', stats: { might: 7 }, traits, capPurchases: {}, classSpread: {}, level: 10
+    economy: 'aspirant', stats: { might: 7 }, traits, capPurchases: {}, level: 10
   });
   expect(result.ok).toBe(false);
   expect(result.errors.join(' ')).toMatch(/might/);
@@ -545,15 +545,21 @@ test('the +++ ceiling gate agrees with normalizeLevel for every level shape, not
   for (const level of rawLevels) {
     const isLevelOne = normalizeLevel(level) === 1;
     const result = validateStatLimits({
-      economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, classSpread: {}, level
+      economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, level
     });
     expect(result.ok).toBe(!isLevelOne);
   }
 });
 
+// Book figures pinned as the TOTAL of every source together -- Class Stats,
+// the third Trait's value grant, and the player's own pluses (Advent pg. 16,
+// carried by Aspirant pg. 3; pg. 90 for aspiring) -- not a figure to net
+// those automatic grants back out of first. spreadStats builds an arbitrary
+// total with no single stat over 3, so this exercises the total check alone,
+// independent of the per-stat Cap and the +++ ceiling.
 test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow by 2 per level', () => {
   const at = (economy, level, total) => validateStatLimits({
-    economy, stats: spreadStats(total), traits: [], capPurchases: {}, classSpread: {}, level
+    economy, stats: spreadStats(total), traits: [], capPurchases: {}, level
   });
 
   expect(at('aspirant', 1, 6)).toEqual({ ok: true });
@@ -567,54 +573,54 @@ test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow 
   expect(at('aspiring', 2, 7).ok).toBe(false);
 });
 
-// pg. 90: aspiring's three Trait-Stat pluses are three of the four the
-// player distributes, not a bonus on top -- traitGrantFor returns {} for
-// aspiring for exactly this reason (util/stat-caps.js). If the
-// aspirant-shaped grant were wrongly applied to an aspiring character, the
-// third Trait's Stat would read one plus richer than it is, understating
-// what the player spent by one and letting this over-spend pass at exactly
-// the allotment instead of failing one over it.
-test('aspiring gets no third-Trait grant, so a genuine over-spend by one is still refused', () => {
-  const traits = [
-    { name: 'brave', stat: 'might' },
-    { name: 'calm', stat: 'spirit' },
-    { name: 'sharp', stat: 'will' }
-  ];
-  const result = validateStatLimits({
-    economy: 'aspiring',
-    stats: { might: 2, will: 3 }, // sums to 5, one over aspiring's level-1 allotment of 4
-    traits,
+// Fix round 1: the allotment check used to recover "what the player assigned"
+// by subtracting a class spread and a third-Trait grant from the stored
+// total, and compared THAT to plusAllotment. That is not what the book
+// grants -- the six (or four) is the total, not a post-deduction figure --
+// and the bug it produced was silent and one-directional: a real class
+// spread of {arcane:1, sensory:2} let a stored total of 10 pass at level 1,
+// four pluses over the book's maximum of 6. Comparing the stored total
+// directly against plusAllotment, as the wizard's own step-2 display already
+// does (public/js/character-wizard.js:810), makes a class's spread
+// irrelevant to this check -- it has no parameter to read it from.
+test('the allotment checks the stored TOTAL, so a class spread cannot buy extra room', () => {
+  // A real class spread (arcane 1, sensory 2) is baked into these totals
+  // exactly as it would be on a saved character -- this test does not pass
+  // a spread anywhere, because the fixed check has nowhere to put one.
+  const atTheBookMaximum = validateStatLimits({
+    economy: 'aspirant',
+    stats: { arcane: 1, sensory: 2, will: 1, vitality: 1, resilience: 1 }, // totals 6
+    traits: [{ name: 'sharp', stat: 'sensory' }],
     capPurchases: {},
-    classSpread: {},
     level: 1
   });
-  expect(result.ok).toBe(false);
-  expect(result.errors.join(' ')).toMatch(/allotment/);
+  expect(atTheBookMaximum).toEqual({ ok: true });
+
+  const fourOverTheBookMaximum = validateStatLimits({
+    economy: 'aspirant',
+    stats: { arcane: 1, sensory: 2, will: 1, vitality: 2, resilience: 2, spirit: 2 }, // totals 10
+    traits: [{ name: 'sharp', stat: 'sensory' }],
+    capPurchases: {},
+    level: 1
+  });
+  expect(fourOverTheBookMaximum.ok).toBe(false);
+  expect(fourOverTheBookMaximum.errors.join(' ')).toMatch(/allotment/);
 });
 
 // This is the design's most surprising property, pinned directly: the two
 // calls below submit the IDENTICAL payload -- same stats, same Traits, same
-// class spread, same level -- an over-spend that a player could only reach by
-// training Stats with Merx after creation. The only thing that differs is
+// level -- a total that a player could only reach by training Stats with
+// Merx after creation. The only thing that differs is
 // enforceCreationAllotment. If a future edit let the allotment default apply
 // on an update path, or passed it 0, this test would start failing every
 // character who has ever trained a Stat, silently, since the payload here is
 // exactly like theirs.
-test('enforceCreationAllotment is the only difference between a passing and failing over-spend payload', () => {
+test('enforceCreationAllotment is the only difference between a passing and failing over-total payload', () => {
   const payload = {
     economy: 'aspirant',
-    stats: {
-      arcane: 1, sensory: 2, // class spread
-      will: 1, // third Trait's value grant
-      vitality: 2, resilience: 2, spirit: 2, luck: 1 // player-assigned: 7, one over the level-1 allotment of 6
-    },
-    traits: [
-      { name: 'brave', stat: 'might' },
-      { name: 'calm', stat: 'spirit' },
-      { name: 'sharp', stat: 'will' }
-    ],
+    stats: { vitality: 2, resilience: 2, spirit: 2, luck: 1 }, // totals 7, one over the level-1 allotment of 6
+    traits: [],
     capPurchases: {},
-    classSpread: { arcane: 1, sensory: 2 },
     level: 1
   };
 

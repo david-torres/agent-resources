@@ -1081,13 +1081,7 @@ test('an aspirant-content update fetches the class catalogue exactly once too', 
 
 // --- Task 8: validateStatLimits (util/stat-caps.js via services/character/
 // input.js) wired into both save paths -----------------------------------
-//
-// statSpreadByClassId is a Map built by models/class.js#buildClassContentLookupMaps
-// from the full class rows it already fetches, keyed by class id -- these
-// tests stand in for that map directly, since it is the adapter's job (not
-// CharacterService's) to build it, and getClassContentLookupMaps is already
-// mocked at this layer for every other maps field.
-const aspirantCreateAdapter = (calls, { statSpreadByClassId = new Map() } = {}) => makeAdapter(calls, {
+const aspirantCreateAdapter = (calls, { classRows = GUNSLINGER_FAMILY_AND_FORK } = {}) => makeAdapter(calls, {
   getClassContentLookupMaps: async () => {
     calls.push(['getClassContentLookupMaps']);
     return {
@@ -1097,8 +1091,7 @@ const aspirantCreateAdapter = (calls, { statSpreadByClassId = new Map() } = {}) 
       abilityNameToDescription: new Map(),
       itemsByClassId: new Map(),
       classesByName: new Map(),
-      classRows: GUNSLINGER_FAMILY_AND_FORK,
-      statSpreadByClassId
+      classRows
     };
   }
 });
@@ -1125,11 +1118,10 @@ test('createCharacter refuses a V1 payload whose stats breach a Cap', async () =
 test('createCharacter refuses a V1 payload that exceeds the creation allotment', async () => {
   const calls = [];
   const service = new CharacterService(aspirantCreateAdapter(calls));
-  // will(3) + arcane(3) + skill(2) sums to 8 assigned pluses (minus the third
-  // Trait's automatic +1 to spirit, which none of these three touch) against
-  // a level-1 aspirant allotment of 6 (CREATION_PLUSES.aspirant). None of the
-  // three exceeds its own Cap of 5-or-6, and none exceeds the +++ creation
-  // ceiling of 3, so only the allotment check can be what refuses this.
+  // will(3) + arcane(3) + skill(2) totals 8 Stat pluses against a level-1
+  // aspirant allotment of 6 (CREATION_PLUSES.aspirant). None of the three
+  // exceeds its own Cap of 5-or-6, and none exceeds the +++ creation ceiling
+  // of 3, so only the allotment check can be what refuses this.
   const result = await service.createCharacter(aspirantCreatePayload({
     will: 3, arcane: 3, skill: 2
   }), { id: 'profile-1' });
@@ -1143,6 +1135,30 @@ test('createCharacter fetches the class catalogue exactly once, Stat validation 
   const result = await service.createCharacter(aspirantCreatePayload({ will: 2, arcane: 1 }), { id: 'profile-1' });
   expect(result.error).toBeNull();
   expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
+});
+
+// Fix round 1: the allotment used to be checked against a class-spread-
+// adjusted "assigned" figure, so a class's stat_spread could change the
+// verdict -- that was the bug (a real spread let a total four over the book's
+// maximum pass). The fix compares the stored total directly, which has no
+// parameter for a spread to occupy, so this pins that two classes with
+// different stat_spread values, given the identical submitted Stats, produce
+// the identical verdict.
+test("createCharacter's allotment verdict does not depend on the class's stat_spread", async () => {
+  const runWith = async (statSpread) => {
+    const calls = [];
+    const classRows = GUNSLINGER_FAMILY_AND_FORK.map(row =>
+      row.id === ASPIRANT_CLASS_ID ? { ...row, stat_spread: statSpread } : row);
+    const service = new CharacterService(aspirantCreateAdapter(calls, { classRows }));
+    return service.createCharacter(aspirantCreatePayload({ will: 3, arcane: 3, skill: 2 }), { id: 'profile-1' });
+  };
+
+  const bare = await runWith({});
+  const generous = await runWith({ arcane: 1, sensory: 2 });
+  expect(bare.data).toBeNull();
+  expect(generous.data).toBeNull();
+  expect(bare.error).toBe(generous.error);
+  expect(bare.error).toMatch(/allotment/i);
 });
 
 const aspirantStatUpdateAdapter = (calls) => makeAdapter(calls, {
@@ -1163,7 +1179,7 @@ test('updateCharacter refuses a Cap breach', async () => {
 });
 
 // enforceCreationAllotment: false on the update path (services/character/
-// service.js) means this is accepted even though 5+3+3=11 assigned pluses
+// service.js) means this is accepted even though 5+3+3=11 Stat pluses total
 // would fail the same level-1 allotment of 6 that refused it above at
 // creation -- a levelled or Cap-purchased character legitimately sits above
 // that budget, and updateCharacter has no way to know which happened.
@@ -1178,9 +1194,11 @@ test('updateCharacter accepts stats that would breach the creation allotment', a
   expect(result.error).toBeNull();
 });
 
-// The update path must not fetch the class spread at all: enforceCreationAllotment
-// is false, so classSpread is never read, and a lookup here would cost every
-// V1 edit a query for nothing (see the comment on updateCharacter in service.js).
+// The update path must not fetch any class data for the Stat Cap check:
+// enforceCreationAllotment is false, so the allotment (the only check that
+// would ever have used a class's stat_spread) is never run, and a lookup
+// here would cost every V1 edit a query for nothing (see the comment on
+// updateCharacter in service.js).
 test('updateCharacter does not fetch the class catalogue for the Stat Cap check', async () => {
   const calls = [];
   const service = new CharacterService(aspirantStatUpdateAdapter(calls));

@@ -2,7 +2,7 @@ const { test, expect } = require('bun:test');
 const {
   BASE_STAT_CAP, CREATION_STAT_CAP, CAP_INCREASE_PLUS_COST,
   CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT,
-  statCapFor, normalizeLevel, plusAllotment, traitGrantFor, assignedPluses,
+  statCapFor, normalizeLevel, plusAllotment, sumValues,
   capBreaches, creationCeilingBreaches
 } = require('./stat-caps.js');
 
@@ -74,25 +74,11 @@ test('the allotment grows by two per level and is unknown for an unknown economy
   expect(plusAllotment({ economy: 'nonsense', level: 1 })).toBeNull();
 });
 
-// The decomposition differs by economy: aspiring's three Trait-Stat pluses are
-// PART of its four, not a grant on top (pg. 90), so it has no automatic grant.
-test('only advent and aspirant get the third Trait value grant', () => {
-  const traits = [
-    { name: 'brave', stat: 'might' },
-    { name: 'calm', stat: 'will' },
-    { name: 'sharp', stat: 'sensory' }
-  ];
-  expect(traitGrantFor(traits, 'aspirant')).toEqual({ sensory: 1 });
-  expect(traitGrantFor(traits, 'advent')).toEqual({ sensory: 1 });
-  expect(traitGrantFor(traits, 'aspiring')).toEqual({});
-});
-
-test('assignedPluses recovers what the player spent', () => {
-  const stats = { might: 2, sensory: 2, will: 1 };
-  expect(assignedPluses({
-    stats, classSpread: { might: 1, sensory: 2 }, traitGrant: { will: 1 }
-  })).toBe(1);
-  expect(assignedPluses({ stats })).toBe(5);
+test('sumValues totals a stat map and drops non-numeric junk to zero', () => {
+  expect(sumValues({ might: 2, sensory: 2, will: 1 })).toBe(5);
+  expect(sumValues({})).toBe(0);
+  expect(sumValues(undefined)).toBe(0);
+  expect(sumValues({ luck: 3, skill: 'two' })).toBe(3);
 });
 
 test('capBreaches names every stat over its own Cap and nothing else', () => {

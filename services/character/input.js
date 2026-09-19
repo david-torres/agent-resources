@@ -4,7 +4,7 @@ const { validateAbilityPerks } = require('../../util/validate');
 const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
 const {
-  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, traitGrantFor, assignedPluses,
+  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, sumValues,
   normalizeLevel
 } = require('../../util/stat-caps');
 const {
@@ -218,11 +218,15 @@ const validateTraits = (traits, { economy } = {}) => {
 //
 // `enforceCreationAllotment` (default true) exists because the per-stat Cap
 // and the plus allotment need different information. The Cap needs only a
-// character's Traits and its stored Cap purchases, which every caller has. The
-// allotment needs to know how many pluses were bought with Merx through Stat
-// Training (pg. 85, restated pg. 87), and nothing stores those -- the purchase
-// surface is not built. Enforcing the allotment on an edit would therefore
-// refuse pluses a player legitimately bought.
+// character's Traits and its stored Cap purchases, which every caller has.
+// The allotment compares the character's TOTAL Stat pluses against
+// plusAllotment -- correct at creation, where the total IS the six (or four,
+// for aspiring) the book grants -- but a character who later bought pluses
+// with Merx through Stat Training (pg. 85, restated pg. 87) legitimately
+// carries a stored total plusAllotment was never meant to bound, and nothing
+// stores those purchases separately for this check to subtract back out.
+// Enforcing the allotment on an edit would therefore refuse totals a player
+// legitimately bought.
 //
 // Do NOT "tidy this up" by passing an allotment of 0 or by letting the default
 // apply on the update path. That would not skip the check; it would enforce it
@@ -249,7 +253,7 @@ const validateTraits = (traits, { economy } = {}) => {
 // Cap above -- already unconditional, and already the more generous figure
 // once a Trait or purchase has raised it -- is the binding limit.
 const validateStatLimits = ({
-  economy, stats, traits, capPurchases, classSpread, level, enforceCreationAllotment = true
+  economy, stats, traits, capPurchases, level, enforceCreationAllotment = true
 } = {}) => {
   if (economy === 'advent') return { ok: true };
 
@@ -269,11 +273,16 @@ const validateStatLimits = ({
       }
     }
 
-    const traitGrant = traitGrantFor(traits, economy);
-    const assigned = assignedPluses({ stats, classSpread, traitGrant });
+    // The book's six (or four, for aspiring) is a creation TOTAL -- Class
+    // Stats, the third Trait's value grant, and the player's own pluses
+    // together -- not a figure to net those automatic grants out of first
+    // (Advent pg. 16, carried by Aspirant pg. 3; pg. 90 for aspiring). The
+    // wizard's own step-2 display checks the same total (class + personality
+    // + user pluses, public/js/character-wizard.js:810).
+    const total = sumValues(stats);
     const allotment = plusAllotment({ economy, level });
-    if (allotment != null && assigned > allotment) {
-      errors.push(`This character assigns ${assigned} pluses of a creation allotment of ${allotment}.`);
+    if (allotment != null && total > allotment) {
+      errors.push(`This character totals ${total} Stat pluses, over its creation allotment of ${allotment}.`);
     }
   }
 
@@ -566,21 +575,19 @@ const normalizeCharacterInput = (input, context = {}) => {
   const traitValidation = validateTraits(childData.traits, { economy });
   if (!traitValidation.ok) return { data: null, childData: null, error: traitValidation.errors.join(' ') };
 
-  // context.classSpread and context.capPurchases are handed in by the caller
-  // (CharacterService), not re-derived here: the spread lives on the class
-  // catalogue this module never queries, and the purchases live on the
-  // character row itself, which only an update's caller has already fetched.
-  // context.enforceCreationAllotment mirrors enforceMerxBudget's split just
-  // above -- updateCharacter passes false because neither the +++ ceiling nor
-  // the plus allotment is a legal thing to enforce against a levelled or
-  // Cap-purchased character; see validateStatLimits's own comment.
+  // context.capPurchases is handed in by the caller (CharacterService), not
+  // re-derived here: it lives on the character row itself, which only an
+  // update's caller has already fetched. context.enforceCreationAllotment
+  // mirrors enforceMerxBudget's split just above -- updateCharacter passes
+  // false because neither the +++ ceiling nor the plus allotment is a legal
+  // thing to enforce against a levelled or Cap-purchased character; see
+  // validateStatLimits's own comment.
   const stats = Object.fromEntries(statList.map(stat => [stat, data[stat]]));
   const statLimitsValidation = validateStatLimits({
     economy,
     stats,
     traits: childData.traits,
     capPurchases: context.capPurchases,
-    classSpread: context.classSpread,
     level: data.level,
     enforceCreationAllotment: context.enforceCreationAllotment ?? true
   });

@@ -134,7 +134,7 @@ class CharacterService {
     // handed straight through so it does not fetch the same four sub-queries
     // a second time on every creation.
     const maps = await this.adapter.getClassContentLookupMaps();
-    const { gearNameToClassId, classRows, statSpreadByClassId } = maps;
+    const { gearNameToClassId, classRows } = maps;
     const classRow = (classRows || []).find(row => row.id === prepared.class_id);
     const contentFormat = classRow && classRow.content_format;
     // The classic/expert create form submits gear as bare "ClassName::Item"
@@ -144,14 +144,8 @@ class CharacterService {
     // both the economy check and the reward derivation below now avoid doing,
     // would price every cross-class Signature as if it were own-class.
     const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
-    // statSpreadByClassId comes from this same catalogue lookup (models/
-    // class.js#buildClassContentLookupMaps) rather than a second query: the
-    // full class rows it already fetches to build gearNameToClassId etc.
-    // carry stat_spread, which fetchClassFamilyRows's five-column select
-    // (services/class/repository.js) does not.
-    const classSpread = (statSpreadByClassId && statSpreadByClassId.get(prepared.class_id)) || {};
     const normalized = normalizeCharacterInput(prepared, {
-      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear, classSpread
+      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear
     });
     if (normalized.error) return { data: null, error: normalized.error };
 
@@ -300,9 +294,9 @@ class CharacterService {
     // Cap is just above; capPurchases comes from the row this call already
     // fetched (existing.data.stat_cap_purchases), not a second lookup. The
     // creation allotment and +++ ceiling are NOT enforced here -- see
-    // validateStatLimits's own comment -- which is also why classSpread is
-    // deliberately absent: enforceCreationAllotment: false means it is never
-    // read, and fetching it would cost this path a query for nothing.
+    // validateStatLimits's own comment -- so this path fetches no class data
+    // for the Stat Cap at all; a class's stat_spread plays no part in either
+    // check validateStatLimits runs.
     const normalized = normalizeCharacterInput(prepared, {
       rulesVersion,
       normalizeAutoCalculate: true,

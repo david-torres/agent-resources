@@ -564,13 +564,11 @@ const buildClassContentLookupMaps = async () => {
       const abilityNameToDescription = new Map();
       const itemsByClassId = new Map();
       const classesByName = new Map();
-      const statSpreadByClassId = new Map();
 
       for (const cls of allClasses) {
         if (!cls?.id) continue;
         const classItems = { gear: new Map(), abilities: new Map() };
         itemsByClassId.set(cls.id, classItems);
-        statSpreadByClassId.set(cls.id, cls.stat_spread ?? {});
         if (cls.name) {
           const key = cls.name.trim().toLowerCase();
           classesByName.set(key, [...(classesByName.get(key) ?? []), cls.id]);
@@ -608,7 +606,6 @@ const buildClassContentLookupMaps = async () => {
         abilityNameToDescription,
         itemsByClassId,
         classesByName,
-        statSpreadByClassId,
         classRows: Array.isArray(familyRows) ? familyRows : []
       };
     } catch (error) {
