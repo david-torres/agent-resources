@@ -69,18 +69,26 @@ const requireOwnedCharacter = async (adapter, actor, id) => {
 };
 
 // Resolves the economy for a mutation path that only has the stored
-// character in hand, not a fresh class-catalogue fetch. creator_mode alone
-// already answers economyFor's question for 'aspiring' (class-less) and for
-// every one of the 327 live characters (creator_mode is null or 'advent' for
-// all of them, confirmed against the local restored production copy), so
-// this spends a query only on the one case those two shortcuts cannot
-// resolve: an 'aspirant' creator_mode, where economyFor still needs the
-// class's content_format to tell it apart from advent.
+// character in hand, not a fresh class-catalogue fetch. economyFor
+// (util/merx-economy.js) only ever reads creator_mode to special-case
+// 'aspiring' -- every other split is decided by the class's content_format,
+// NOT by creator_mode, so creator_mode is not a safe field to short-circuit
+// on. Nothing server-side requires creator_mode and the class's
+// content_format to agree (routes/characters.js:190: creator_mode does not
+// filter the class pool a character can hold), so a creator_mode of null or
+// 'advent' paired with an aspirant-format class is a real, if latent,
+// possibility -- 0 of 327 live characters hold one today, but a Cap that can
+// be routed around by that mismatch is not trustworthy.
+//
+// So the only shortcuts that skip the query are the ones that genuinely
+// don't need content_format: 'aspiring' (class-less, economyFor decides it
+// before ever consulting content_format) and a character with no class_id
+// at all (nothing to look up). Everything else reads content_format and
+// passes both to economyFor, exactly as levelUp already does unconditionally.
 const resolveMutationEconomy = async (adapter, character) => {
-  if (character.creator_mode !== 'aspirant') {
+  if (character.creator_mode === 'aspiring' || !character.class_id) {
     return economyFor({ creatorMode: character.creator_mode });
   }
-  if (!character.class_id) return 'advent';
   const { contentFormat } = await adapter.getClassRulesVersion(character.class_id);
   return economyFor({ contentFormat, creatorMode: character.creator_mode });
 };

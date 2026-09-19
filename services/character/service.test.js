@@ -446,10 +446,41 @@ test('updateStats leaves an advent character unaffected by an absurd Stat', asyn
   expect(result.error).toBeNull();
 });
 
-test('updateStats does not fetch class data for a non-aspirant creator_mode', async () => {
+// Fix round 3, Important: economyFor (util/merx-economy.js) only ever reads
+// creator_mode to special-case 'aspiring' -- every other split is decided by
+// the class's content_format. creator_mode does not filter which class a
+// character can hold (routes/characters.js:190), so a creator_mode of null
+// -- 318 of the 327 live characters' actual value -- paired with an
+// aspirant-format class is a real possibility, and resolveMutationEconomy
+// must not treat "not aspirant" as "safe to skip the content_format read."
+test("updateStats refuses a Cap breach even when creator_mode is null, if the class is aspirant-format", async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantMutationAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ creator_mode: null }))
+  }));
+  const result = await service.updateStats(CREATOR, 'character-1', { vitality: 6 });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/Cap/);
+});
+
+// The only shortcuts that skip the content_format read are the ones that
+// genuinely don't need it: 'aspiring' (class-less; economyFor decides it
+// before ever consulting content_format) and no class_id at all.
+test('updateStats does not fetch class data for an aspiring (class-less) character', async () => {
   const calls = [];
   const service = new CharacterService(makeAdapter(calls, {
-    getCharacter: async () => ok(aspirantStatsCharacter({ class_id: ADVENT_CLASS_ID, creator_mode: null })),
+    getCharacter: async () => ok(aspirantStatsCharacter({ class_id: null, creator_mode: 'aspiring' })),
+    getClassRulesVersion: async () => { calls.push(['getClassRulesVersion']); return ok('v1'); }
+  }));
+  await service.updateStats(CREATOR, 'character-1', { vitality: 999 });
+  expect(calls.filter(c => c[0] === 'getClassRulesVersion')).toHaveLength(0);
+});
+
+test('updateStats does not fetch class data for a character with no class_id', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok(aspirantStatsCharacter({ class_id: null, creator_mode: null })),
     getClassRulesVersion: async () => { calls.push(['getClassRulesVersion']); return ok('v1'); }
   }));
   await service.updateStats(CREATOR, 'character-1', { vitality: 999 });

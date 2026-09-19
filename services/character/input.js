@@ -634,8 +634,9 @@ const normalizeStatsPayload = (body = {}) => {
     // Cap. This function's two callers -- PATCH /characters/:id/stats and
     // levelUp -- do enforce the per-stat Cap, but they reach it through
     // capBreaches directly (services/character/service.js#statCapError)
-    // rather than through validateStatLimits, because neither is a creation
-    // and so neither applies the allotment or the +++ ceiling.
+    // rather than through validateStatLimits: both return { status, message }
+    // for sendRouteError, not validateStatLimits's { ok, errors } -- see
+    // statCapError's own comment.
     out[stat] = Math.max(0, Math.min(STAT_SANITY_BOUND, n));
   }
   return out;
