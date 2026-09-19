@@ -1079,6 +1079,143 @@ test('an aspirant-content update fetches the class catalogue exactly once too', 
   await expectExactlyOneCatalogueFetch('aspirant', ASPIRANT_CLASS_ID);
 });
 
+// --- Task 8: validateStatLimits (util/stat-caps.js via services/character/
+// input.js) wired into both save paths -----------------------------------
+//
+// statSpreadByClassId is a Map built by models/class.js#buildClassContentLookupMaps
+// from the full class rows it already fetches, keyed by class id -- these
+// tests stand in for that map directly, since it is the adapter's job (not
+// CharacterService's) to build it, and getClassContentLookupMaps is already
+// mocked at this layer for every other maps field.
+const aspirantCreateAdapter = (calls, { statSpreadByClassId = new Map() } = {}) => makeAdapter(calls, {
+  getClassContentLookupMaps: async () => {
+    calls.push(['getClassContentLookupMaps']);
+    return {
+      gearNameToClassId: new Map(),
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map(),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map(),
+      classesByName: new Map(),
+      classRows: GUNSLINGER_FAMILY_AND_FORK,
+      statSpreadByClassId
+    };
+  }
+});
+
+// calm -> will, alert -> sensory, giving -> spirit (util/enclave-consts.js
+// personalityMap), satisfying validateTraits' "exactly 3, no shared Stat"
+// rule for the non-advent economies these tests exercise.
+const aspirantCreatePayload = (overrides = {}) => ({
+  name: 'Hero', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+  trait0: 'calm', trait1: 'alert', trait2: 'giving',
+  commissary_reward: 0,
+  ...overrides
+});
+
+test('createCharacter refuses a V1 payload whose stats breach a Cap', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  // might carries no Trait, so its Cap is the base 5 (util/stat-caps.js).
+  const result = await service.createCharacter(aspirantCreatePayload({ might: 6 }), { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Cap/);
+});
+
+test('createCharacter refuses a V1 payload that exceeds the creation allotment', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  // will(3) + arcane(3) + skill(2) sums to 8 assigned pluses (minus the third
+  // Trait's automatic +1 to spirit, which none of these three touch) against
+  // a level-1 aspirant allotment of 6 (CREATION_PLUSES.aspirant). None of the
+  // three exceeds its own Cap of 5-or-6, and none exceeds the +++ creation
+  // ceiling of 3, so only the allotment check can be what refuses this.
+  const result = await service.createCharacter(aspirantCreatePayload({
+    will: 3, arcane: 3, skill: 2
+  }), { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/allotment/i);
+});
+
+test('createCharacter fetches the class catalogue exactly once, Stat validation included', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  const result = await service.createCharacter(aspirantCreatePayload({ will: 2, arcane: 1 }), { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
+});
+
+const aspirantStatUpdateAdapter = (calls) => makeAdapter(calls, {
+  getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
+  getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
+});
+
+test('updateCharacter refuses a Cap breach', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantStatUpdateAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID,
+    trait0: 'calm', trait1: 'alert', trait2: 'giving',
+    might: 6
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Cap/);
+});
+
+// enforceCreationAllotment: false on the update path (services/character/
+// service.js) means this is accepted even though 5+3+3=11 assigned pluses
+// would fail the same level-1 allotment of 6 that refused it above at
+// creation -- a levelled or Cap-purchased character legitimately sits above
+// that budget, and updateCharacter has no way to know which happened.
+test('updateCharacter accepts stats that would breach the creation allotment', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantStatUpdateAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID,
+    trait0: 'calm', trait1: 'alert', trait2: 'giving',
+    will: 5, arcane: 3, skill: 3
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// The update path must not fetch the class spread at all: enforceCreationAllotment
+// is false, so classSpread is never read, and a lookup here would cost every
+// V1 edit a query for nothing (see the comment on updateCharacter in service.js).
+test('updateCharacter does not fetch the class catalogue for the Stat Cap check', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantStatUpdateAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID,
+    trait0: 'calm', trait1: 'alert', trait2: 'giving',
+    will: 2
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(0);
+});
+
+test('an advent create is unaffected by an out-of-range Stat', async () => {
+  const { service, saved } = makeServiceOnAdventClass();
+  const result = await service.createCharacter({
+    name: 'Legacy', class_id: ADVENT_CLASS_ID, creator_mode: 'advent',
+    gear: [], commissary_reward: 7, might: 999
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(saved.might).toBe(999);
+});
+
+test('an advent update is unaffected by an out-of-range Stat', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, abilities: [], gear: [] }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    saveCharacterAtomic: async (args) => ok({ id: 'character-1', ...args.character })
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ADVENT_CLASS_ID, gear: [], might: 999
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
 // The wizard sends type on every aspiring ability
 // (public/js/character-wizard.js:3225,3228), but both write paths projected
 // abilities down to {name, class_id, description}. A dropped tag makes an

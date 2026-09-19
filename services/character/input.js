@@ -566,6 +566,26 @@ const normalizeCharacterInput = (input, context = {}) => {
   const traitValidation = validateTraits(childData.traits, { economy });
   if (!traitValidation.ok) return { data: null, childData: null, error: traitValidation.errors.join(' ') };
 
+  // context.classSpread and context.capPurchases are handed in by the caller
+  // (CharacterService), not re-derived here: the spread lives on the class
+  // catalogue this module never queries, and the purchases live on the
+  // character row itself, which only an update's caller has already fetched.
+  // context.enforceCreationAllotment mirrors enforceMerxBudget's split just
+  // above -- updateCharacter passes false because neither the +++ ceiling nor
+  // the plus allotment is a legal thing to enforce against a levelled or
+  // Cap-purchased character; see validateStatLimits's own comment.
+  const stats = Object.fromEntries(statList.map(stat => [stat, data[stat]]));
+  const statLimitsValidation = validateStatLimits({
+    economy,
+    stats,
+    traits: childData.traits,
+    capPurchases: context.capPurchases,
+    classSpread: context.classSpread,
+    level: data.level,
+    enforceCreationAllotment: context.enforceCreationAllotment ?? true
+  });
+  if (!statLimitsValidation.ok) return { data: null, childData: null, error: statLimitsValidation.errors.join(' ') };
+
   if (context.normalizeAutoCalculate) data.auto_calculate = data.auto_calculate === 'on' || data.auto_calculate === true;
   if ('image_url' in data) data.image_url = data.image_url ? sanitizeHttpUrl(data.image_url) : null;
 
