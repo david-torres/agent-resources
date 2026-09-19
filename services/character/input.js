@@ -11,6 +11,7 @@ const {
   economyFor,
   equipmentSpend,
   signatureSlotsUsed,
+  withPreservedEnchantments,
   CREATION_GRANT,
   SIGNATURE_CAP,
   COMMON_ITEM_PRICE
@@ -154,8 +155,18 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 // character's real (unfetched) earnings could afford. That false rejection
 // is worse than not checking at all, so the two rules are split explicitly
 // rather than left to whatever earnedMerx a caller happens to pass.
+//
+// `storedGear` is the character's current class_gear rows, passed by
+// updateCharacter from the getCharacter call it already makes. The cap is
+// counted from the Enchantments the save will LEAVE, not only the ones it
+// mentions: an item that omits `enchantment` keeps its stored one, so the
+// submitted list alone is breachable across two saves (see
+// withPreservedEnchantments). The spend below stays on the submitted list --
+// storedGear only ever arrives from updateCharacter, which passes
+// enforceMerxBudget: false, so no caller prices a list with stored rows
+// behind it.
 const validateEconomyLimits = ({
-  economy, gear, commonItems, characterClassId, earnedMerx = 0, enforceMerxBudget = true
+  economy, gear, storedGear, commonItems, characterClassId, earnedMerx = 0, enforceMerxBudget = true
 }) => {
   if (economy === 'advent') return { ok: true };
 
@@ -166,7 +177,7 @@ const validateEconomyLimits = ({
   // This is checked independently of Merx -- a character who can afford a
   // seventh enchanted Signature may still not carry it if the slots are full.
   const cap = SIGNATURE_CAP[economy];
-  const slots = signatureSlotsUsed(items);
+  const slots = signatureSlotsUsed(withPreservedEnchantments(items, storedGear));
   if (cap !== null && slots > cap) {
     errors.push(
       `Signature Cap is ${cap}; this character carries ${slots} `
@@ -372,6 +383,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   const economyValidation = validateEconomyLimits({
     economy,
     gear: normalizeClassItems(context.economyGear ?? childData.classGear),
+    storedGear: context.storedGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
     enforceMerxBudget: context.enforceMerxBudget ?? true

@@ -902,6 +902,75 @@ test('an aspirant-content character edited past the Signature Cap is rejected', 
   expect(result.error).toMatch(/Signature Cap|12/);
 });
 
+// Whole-plan review, Important 1: the cap was taken against the submitted
+// list alone, but a submitted item that omits `enchantment` KEEPS the stored
+// one (the three-state model in normalizeGearEquipment and the
+// save_character_atomic RPC), so two saves could carry a character past the
+// cap -- six enchanted Signatures, then twelve bare ones. The stored rows come
+// from the getCharacter call updateCharacter already makes, so no query is
+// added.
+test('an update cannot breach the Signature Cap with preserved Enchantments', async () => {
+  const calls = [];
+  const storedGear = Array.from({ length: 6 }, (_, i) => ({
+    name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }
+  }));
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID,
+      abilities: [], gear: storedGear
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
+  }));
+  // 12 Signatures, the first 6 of them naming stored enchanted rows and saying
+  // nothing about equipment: 12 slots submitted, 18 effective.
+  const gear = Array.from({ length: 12 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Signature Cap|18/);
+});
+
+test('re-saving the same enchanted Signatures is not a breach', async () => {
+  const calls = [];
+  const storedGear = Array.from({ length: 6 }, (_, i) => ({
+    name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }
+  }));
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID,
+      abilities: [], gear: storedGear
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null }),
+    saveCharacterAtomic: async () => ok({ id: 'character-1' })
+  }));
+  const gear = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+test('an advent update is unaffected by stored Enchantments', async () => {
+  const calls = [];
+  const storedGear = Array.from({ length: 20 }, (_, i) => ({
+    name: `S${i}`, class_id: ADVENT_CLASS_ID, enchantment: { source: 'default' }
+  }));
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID,
+      abilities: [], gear: storedGear
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    saveCharacterAtomic: async () => ok({ id: 'character-1' })
+  }));
+  const gear = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: ADVENT_CLASS_ID }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ADVENT_CLASS_ID, gear
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
 test('an update does not refuse a purchase earned Merx could fund', async () => {
   const calls = [];
   const service = new CharacterService(aspirantUpdateAdapter(calls));
@@ -917,10 +986,11 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
   expect(result.error).toBeNull();
 });
 
-// The Signature Cap is class-id agnostic (signatureSlotsUsed counts entries
-// and Enchantment presence, never class_id), so an update's cap check needs
-// no gear resolution and no catalogue lookup at all -- see the comment on
-// updateCharacter in service.js. The only getClassContentLookupMaps call an
+// An update's cap check needs no gear resolution and no catalogue lookup: it
+// counts entries and Enchantment presence (signatureSlotsUsed) and pairs the
+// submission against the stored rows getCharacter already returned, using the
+// class_id each side carries rather than resolving a name to one -- see the
+// comment on updateCharacter in service.js. The only getClassContentLookupMaps call an
 // update ever makes is saveCharacterAtomic's own, for its unrelated gear/
 // ability class-id resolution, and it happens exactly once regardless of
 // gear count or economy. Pinning the count at 1 (not 0) for BOTH an advent

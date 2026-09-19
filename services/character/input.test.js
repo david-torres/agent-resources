@@ -735,3 +735,66 @@ test('the gate counts a bare "Class::Item" submission as one slot each', () => {
   }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
   expect(result.error).toMatch(/Signature Cap|12/);
 });
+
+// --- the Signature Cap counts preserved equipment too --------------------
+//
+// Whole-plan review, Important 1: the cap was taken against the submitted
+// list, but an item that omits `enchantment` keeps its stored one, so the cap
+// was breachable across two saves. context.storedGear is the character's
+// current class_gear rows, which updateCharacter already has in hand.
+
+const enchanted = (n, classId = 'v1') => Array.from({ length: n }, (_, i) => ({
+  name: `S${i}`, class_id: classId, enchantment: { source: 'default' }
+}));
+
+test('six stored Enchantments plus twelve bare Signatures breaches the cap', () => {
+  // The two-save route: save 6 enchanted Signatures (12 slots, legal), then
+  // submit 12 items whose first 6 omit `enchantment` and so keep theirs. The
+  // effective character carries 12 Signatures + 6 Enchantments = 18 slots.
+  const submitted = Array.from({ length: 12 }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
+  const result = validateEconomyLimits({
+    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
+    enforceMerxBudget: false
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/Signature Cap|18/);
+});
+
+test('a legitimate twelve-slot update is still accepted', () => {
+  // Re-saving the same six enchanted Signatures is exactly the cap, not over
+  // it: each submitted item claims its own stored row, so no Enchantment is
+  // counted twice.
+  const submitted = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
+  expect(validateEconomyLimits({
+    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
+    enforceMerxBudget: false
+  })).toEqual({ ok: true });
+});
+
+test('removing a stored Enchantment frees its slot', () => {
+  const submitted = Array.from({ length: 12 }, (_, i) => ({
+    name: `S${i}`, class_id: 'v1', ...(i < 6 ? { enchantment: null } : {})
+  }));
+  expect(validateEconomyLimits({
+    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
+    enforceMerxBudget: false
+  })).toEqual({ ok: true });
+});
+
+test('an advent update pays nothing for stored equipment', () => {
+  expect(validateEconomyLimits({
+    economy: 'advent', characterClassId: 'advent', gear: own(20),
+    storedGear: enchanted(20, 'advent'), commonItems: [], enforceMerxBudget: false
+  })).toEqual({ ok: true });
+});
+
+test('normalizeCharacterInput threads context.storedGear into the cap', () => {
+  const gear = Array.from({ length: 12 }, (_, i) => `Aspira::S${i}`);
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+  }, {
+    rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false,
+    storedGear: enchanted(6)
+  });
+  expect(result.error).toMatch(/Signature Cap|18/);
+});

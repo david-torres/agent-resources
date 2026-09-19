@@ -92,6 +92,50 @@ const signatureSlotsUsed = (gear) => {
     return items.reduce((slots, item) => slots + 1 + (item.enchantment ? 1 : 0), 0);
 };
 
+// pg. 8 charges an Enchantment a cap slot, so the cap has to be judged against
+// the Enchantments a save LEAVES on a character, not only the ones its payload
+// mentions. A submitted item that omits its `enchantment` key keeps whatever
+// is stored -- the three-state model services/character/input.js
+// normalizeGearEquipment and the save_character_atomic RPC share -- so
+// counting the submission alone lets two saves walk a character past the cap:
+// six enchanted Signatures, then twelve bare ones.
+//
+// Pairing mirrors the RPC's (class_id, name, occurrence) matching, with one
+// concession: a bare "ClassName::ItemName" submission carries a class NAME,
+// not a class_id, and the update path resolves no gear. So a submitted item
+// must match a stored row's name, and its class_id as well only when it
+// carries one. Claiming each row at most once is the occurrence index.
+//
+// Where several stored rows share a name, an enchanted one is claimed first,
+// and an item that submits its own `enchantment` claims nothing. Both choices
+// make the imprecision one-sided: the RPC resolves every bare copy of a name
+// to the ONE class_id the catalogue maps it to and deletes the same-named rows
+// of other classes, so the Enchantment it preserves may not be the one claimed
+// here. Claiming the enchanted row first means this can report a slot MORE
+// than the save will produce, never fewer. The worst case is refusing a save
+// that already sits exactly on the cap in an ambiguous same-name-across-
+// classes build; the opposite bias would leave the two-save breach open.
+const withPreservedEnchantments = (submitted, stored) => {
+    const items = Array.isArray(submitted) ? submitted.filter(Boolean) : [];
+    const rows = Array.isArray(stored) ? stored.filter(Boolean) : [];
+    if (rows.length === 0) return items;
+
+    const unclaimed = new Set(rows);
+    const claimFor = (item) => {
+        const candidates = [...unclaimed].filter((row) => row.name === item.name
+            && (!item.class_id || row.class_id === item.class_id));
+        const claimed = candidates.find((row) => row.enchantment) || candidates[0];
+        if (claimed) unclaimed.delete(claimed);
+        return claimed || null;
+    };
+
+    return items.map((item) => {
+        if (typeof item !== 'object' || 'enchantment' in item) return item;
+        const row = claimFor(item);
+        return { ...item, enchantment: (row && row.enchantment) || null };
+    });
+};
+
 // pg. 86: a Custom Enchantment is "no more than 40 words long, minus Power
 // Rating Superscripts". A rating is stored as a <sup> span, so the spans come
 // out before the words are counted. Stripping a span to a bare space can
@@ -124,6 +168,7 @@ module.exports = {
     priceOfMod,
     equipmentSpend,
     signatureSlotsUsed,
+    withPreservedEnchantments,
     countWordsExcludingRatings,
     COMMON_ITEM_PRICE,
     CREATION_GRANT,

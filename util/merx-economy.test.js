@@ -10,6 +10,7 @@ const {
   priceOfMod,
   equipmentSpend,
   signatureSlotsUsed,
+  withPreservedEnchantments,
   countWordsExcludingRatings,
   COMMON_ITEM_PRICE,
   CREATION_GRANT,
@@ -156,4 +157,95 @@ test('economyFor reads content_format, and creator_mode only for aspiring', () =
 test('an aspiring character has no class to read, so creator_mode decides', () => {
   expect(economyFor({ contentFormat: null, creatorMode: 'aspiring' })).toBe('aspiring');
   expect(economyFor({ contentFormat: undefined, creatorMode: 'aspiring' })).toBe('aspiring');
+});
+
+// --- withPreservedEnchantments: the cap counts what a save LEAVES ---------
+//
+// pg. 8 charges an Enchantment a cap slot, so the slot count has to be taken
+// against the equipment a save leaves on the character, not the equipment the
+// submission happens to mention. A submitted item that omits `enchantment`
+// keeps whatever is stored (services/character/input.js normalizeGearEquipment
+// and the save_character_atomic RPC), so counting the submission alone lets
+// two saves walk a character past the cap.
+
+const stored = (name, classId, enchantment) => ({ name, class_id: classId, enchantment });
+
+test('an item that omits enchantment inherits the stored one', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c1' }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(effective[0].enchantment).toEqual({ source: 'default' });
+  expect(signatureSlotsUsed(effective)).toBe(2);
+});
+
+test('an explicit null removes the stored Enchantment, so it costs no slot', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c1', enchantment: null }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(1);
+});
+
+test('an item with its own Enchantment replaces the stored one, costing one slot', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c1', enchantment: { source: 'custom', name: 'Hex' } }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(effective[0].enchantment).toEqual({ source: 'custom', name: 'Hex' });
+  expect(signatureSlotsUsed(effective)).toBe(2);
+});
+
+test('an unenchanted stored row leaves an omitting item unenchanted', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c1' }],
+    [stored('Blade', 'c1', null)]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(1);
+});
+
+// A bare "ClassName::ItemName" submission carries a class NAME, not an id, so
+// pairing falls back to the name alone -- but an item that DOES carry a
+// class_id must not inherit another class's Enchantment.
+test('a class_id on the submitted item discriminates between same-named rows', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c2' }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(1);
+});
+
+test('a name-only item pairs with a same-named row of any class', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade' }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(2);
+});
+
+// N identical items consume N stored rows, so a second copy of a name with
+// only one enchanted row inherits nothing.
+test('each stored row is claimed once', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Blade', class_id: 'c1' }, { name: 'Blade', class_id: 'c1' }],
+    [stored('Blade', 'c1', { source: 'default' }), stored('Blade', 'c1', null)]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(3);
+});
+
+// The create path has no stored rows at all: every existing caller must see
+// exactly the list it passed in.
+test('no stored rows leaves the submitted list alone', () => {
+  const submitted = [{ name: 'Blade', class_id: 'c1' }, { name: 'Shield' }];
+  expect(withPreservedEnchantments(submitted, undefined)).toEqual(submitted);
+  expect(withPreservedEnchantments(submitted, [])).toEqual(submitted);
+  expect(signatureSlotsUsed(withPreservedEnchantments(submitted, []))).toBe(2);
+});
+
+test('an unmatched submitted item inherits nothing', () => {
+  const effective = withPreservedEnchantments(
+    [{ name: 'Shield', class_id: 'c1' }],
+    [stored('Blade', 'c1', { source: 'default' })]
+  );
+  expect(signatureSlotsUsed(effective)).toBe(1);
 });

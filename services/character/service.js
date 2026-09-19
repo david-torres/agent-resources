@@ -278,17 +278,24 @@ class CharacterService {
     // Merx budget is NOT -- see validateEconomyLimits's own comment for why
     // (an edit's real budget needs mission-earned Merx this path does not
     // fetch outside auto_calculate, and checking the bare grant would refuse
-    // a purchase the character can actually afford). The cap is class-id
-    // agnostic -- it counts Signatures and Enchantments (signatureSlotsUsed),
-    // never class_id -- so an edit needs no catalogue lookup to enforce it.
-    // The create path below resolves gear because the Merx budget IT
-    // enforces prices cross-class items differently (equipmentSpend reads
-    // class_id); nothing here does the equivalent, so nothing here resolves.
+    // a purchase the character can actually afford). The cap needs no
+    // catalogue lookup: it counts Signatures and Enchantments
+    // (signatureSlotsUsed), and it pairs a submission against the stored rows
+    // getCharacter already returned using the class_id each side carries, so
+    // it resolves no gear names. createCharacter does resolve gear, because
+    // the Merx budget IT enforces prices cross-class items differently
+    // (equipmentSpend reads class_id).
+    //
+    // storedGear is what makes the cap honest across two saves: an item that
+    // omits `enchantment` keeps its stored one, so counting only what the
+    // payload mentions would let 6 enchanted Signatures plus 12 bare ones
+    // through at a submitted 12 slots and a real 18.
     const normalized = normalizeCharacterInput(prepared, {
       rulesVersion,
       normalizeAutoCalculate: true,
       contentFormat,
-      enforceMerxBudget: false
+      enforceMerxBudget: false,
+      storedGear: existing.data.gear
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
