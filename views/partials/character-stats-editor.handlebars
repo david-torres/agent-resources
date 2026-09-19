@@ -6,7 +6,12 @@
     {{#each statList}}
     <div class="wizard-stat-row" data-stat="{{this}}">
       <div class="wizard-stat-name">{{capitalize this}}</div>
-      {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5 model=(concat "stats." this)}}
+      {{!-- The block count is this Stat's real Cap, computed by statCapMap
+            (util/stat-caps.js) and passed in per Stat. PATCH /:id/stats already
+            accepts a value a Trait or a purchase raised (statCapError,
+            services/character/service.js), so a literal here made the raised
+            Cap unspendable on a surface the server would have taken. --}}
+      {{> stat-blocks stat=this name=this value=(lookup ../character this) max=(lookup ../statCaps this) model=(concat "stats." this)}}
     </div>
     {{/each}}
   </div>

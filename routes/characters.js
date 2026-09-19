@@ -1001,6 +1001,20 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         recentMissions,
         recentMerged,
         statList,
+        // Each Stat's real Cap, for the live stat editor and the level-up modal
+        // this page mounts. Both write through routes that already judge a Stat
+        // against the same Cap (statCapError, services/character/service.js), so
+        // a literal in either partial made the raised Cap unspendable on the two
+        // surfaces a character actually grows on.
+        statCaps: statCapMap({
+          statList,
+          economy: economyFor({
+            contentFormat: characterClass && characterClass.content_format,
+            creatorMode: character.creator_mode
+          }),
+          traits: character.traits,
+          capPurchases: character.stat_cap_purchases
+        }),
         authOptional: true,
         activeNav: 'characters',
         breadcrumbs: [

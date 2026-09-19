@@ -449,3 +449,79 @@ test('the lost title tooltips are gone from the read-only row', () => {
 test('the #statsReadOnly container line is unchanged by the conversion', () => {
   expect(CHARACTER_SRC).toContain('id="statsReadOnly" class="wizard-stat-grid" x-show="!editing"');
 });
+
+// --- the per-Stat Cap on the live stat editor -----------------------------
+//
+// PATCH /:id/stats already refuses a value over the real Cap and accepts one a
+// Trait or a purchase raised (statCapError, services/character/service.js), so a
+// literal max=5 here made the raised Cap unspendable on a surface the server
+// would have taken. The Cap is computed server-side by statCapMap
+// (util/stat-caps.js) from the traits and stat_cap_purchases the character route
+// already loads, and passed in per Stat -- no figure reaches the client.
+
+const { statCapMap } = require('../../util/stat-caps');
+
+const EDITOR_SRC = fs.readFileSync(
+  path.join(__dirname, 'character-stats-editor.handlebars'), 'utf8'
+);
+
+const renderEditor = (character, economy) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks', STAT_BLOCKS_SRC);
+  return hb.compile(EDITOR_SRC)({
+    statList,
+    character,
+    statCaps: statCapMap({
+      statList,
+      economy,
+      traits: character.traits,
+      capPurchases: character.stat_cap_purchases
+    })
+  });
+};
+
+// Boxes rendered for one Stat, counted off the row in the served HTML.
+// Boxes rendered for one Stat: from that Stat's row marker to the start of the
+// next row, so the count cannot bleed into a neighbouring Stat.
+const editorBoxes = (html, stat) => {
+  const start = html.indexOf(`data-stat="${stat}"`);
+  const next = html.indexOf('class="wizard-stat-row"', start);
+  const row = html.slice(start, next === -1 ? html.length : next);
+  return (row.match(/role="radio"/g) || []).length;
+};
+
+const V1_TRAITS = [
+  { name: 'brave', stat: 'might' },
+  { name: 'calm', stat: 'will' },
+  { name: 'alert', stat: 'sensory' }
+];
+
+test('the stat editor renders a Trait-raised Cap and leaves other Stats alone', () => {
+  const html = renderEditor({ might: 6, traits: V1_TRAITS, stat_cap_purchases: {} }, 'aspirant');
+  expect(editorBoxes(html, 'might')).toBe(6);
+  expect(editorBoxes(html, 'luck')).toBe(5);
+});
+
+test('the stat editor renders a purchased Cap', () => {
+  const html = renderEditor({ traits: V1_TRAITS, stat_cap_purchases: { luck: 2 } }, 'aspirant');
+  expect(editorBoxes(html, 'luck')).toBe(7);
+});
+
+// advent has no Trait-Cap mechanic (pg. 3 is an Aspirant rule) and 26 live
+// advent characters carry two Traits on one Stat, which would otherwise read
+// as a Cap of 7.
+test('the stat editor is unchanged for an advent character', () => {
+  const html = renderEditor({
+    might: 2,
+    traits: [
+      { name: 'brave', stat: 'might' },
+      { name: 'forceful', stat: 'might' },
+      { name: 'calm', stat: 'will' }
+    ],
+    stat_cap_purchases: {}
+  }, 'advent');
+  for (const stat of statList) expect(editorBoxes(html, stat)).toBe(5);
+});

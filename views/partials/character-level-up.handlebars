@@ -55,7 +55,13 @@
         {{#each statList}}
         <div class="wizard-stat-row" data-stat="{{this}}">
           <div class="wizard-stat-name">{{capitalize this}}</div>
-          {{> stat-blocks stat=this name=this value=(lookup ../character this) max=5 inputClass="level-up-stat"}}
+          {{!-- This Stat's real Cap, computed by statCapMap (util/stat-caps.js).
+                A level-up is the moment a character grows, and POST
+                /:id/level-up already accepts a value a Trait or a purchase
+                raised (statCapError, services/character/service.js), so a
+                literal here made the raised Cap unspendable exactly where it
+                matters most. --}}
+          {{> stat-blocks stat=this name=this value=(lookup ../character this) max=(lookup ../statCaps this) inputClass="level-up-stat"}}
         </div>
         {{/each}}
       </div>

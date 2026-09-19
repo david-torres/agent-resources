@@ -212,3 +212,73 @@ test('a stat-change bubbling out of the grid drives the live total', async () =>
   await tick();
   expect(document.getElementById('levelUpTotal').textContent).toBe('8');
 });
+
+// --- the per-Stat Cap in the level-up modal --------------------------------
+//
+// POST /:id/level-up already refuses a value over the real Cap and accepts one a
+// Trait or a purchase raised (statCapError, services/character/service.js), and
+// a level-up is the moment a character grows -- so a literal max=5 here made the
+// raised Cap unspendable exactly where it matters. Computed server-side by
+// statCapMap (util/stat-caps.js); no figure reaches the client.
+
+const { statCapMap } = require('../../util/stat-caps');
+const { statList } = require('../../util/enclave-consts');
+
+const renderLevelUpStats = (character, economy) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  hb.registerPartial('stat-blocks', read('stat-blocks.handlebars'));
+  const src = read('character-level-up.handlebars');
+  const grid = src.slice(src.indexOf('id="levelUpStatGrid"'), src.indexOf('Abilities</h4>'));
+  return hb.compile(grid)({
+    statList,
+    character,
+    statCaps: statCapMap({
+      statList,
+      economy,
+      traits: character.traits,
+      capPurchases: character.stat_cap_purchases
+    })
+  });
+};
+
+// Boxes rendered for one Stat: from that Stat's row marker to the start of the
+// next row, so the count cannot bleed into a neighbouring Stat.
+const levelUpBoxes = (html, stat) => {
+  const start = html.indexOf(`data-stat="${stat}"`);
+  const next = html.indexOf('class="wizard-stat-row"', start);
+  const row = html.slice(start, next === -1 ? html.length : next);
+  return (row.match(/role="radio"/g) || []).length;
+};
+
+const LEVEL_UP_TRAITS = [
+  { name: 'brave', stat: 'might' },
+  { name: 'calm', stat: 'will' },
+  { name: 'alert', stat: 'sensory' }
+];
+
+test('the level-up modal renders a Trait-raised Cap and leaves other Stats alone', () => {
+  const html = renderLevelUpStats({ might: 6, traits: LEVEL_UP_TRAITS, stat_cap_purchases: {} }, 'aspirant');
+  expect(levelUpBoxes(html, 'might')).toBe(6);
+  expect(levelUpBoxes(html, 'luck')).toBe(5);
+});
+
+test('the level-up modal renders a purchased Cap', () => {
+  const html = renderLevelUpStats({ traits: LEVEL_UP_TRAITS, stat_cap_purchases: { luck: 2 } }, 'aspirant');
+  expect(levelUpBoxes(html, 'luck')).toBe(7);
+});
+
+test('the level-up modal is unchanged for an advent character', () => {
+  const html = renderLevelUpStats({
+    might: 2,
+    traits: [
+      { name: 'brave', stat: 'might' },
+      { name: 'forceful', stat: 'might' },
+      { name: 'calm', stat: 'will' }
+    ],
+    stat_cap_purchases: {}
+  }, 'advent');
+  for (const stat of statList) expect(levelUpBoxes(html, stat)).toBe(5);
+});
