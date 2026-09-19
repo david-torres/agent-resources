@@ -4,8 +4,8 @@ const { validateAbilityPerks } = require('../../util/validate');
 const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
 const {
-  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, sumValues,
-  normalizeLevel, LEVEL_CEILING, STAT_SANITY_BOUND
+  TRAIT_COUNT, capBreaches, capBreachMessage, creationCeilingBreaches, plusAllotment,
+  sumValues, normalizeLevel, LEVEL_CEILING, STAT_SANITY_BOUND
 } = require('../../util/stat-caps');
 const {
   countWordsExcludingRatings,
@@ -260,7 +260,7 @@ const validateStatLimits = ({
   const errors = [];
 
   for (const breach of capBreaches({ stats, traits, capPurchases })) {
-    errors.push(`${breach.stat} is ${breach.value}, over its Cap of ${breach.cap}.`);
+    errors.push(capBreachMessage(breach));
   }
 
   if (enforceCreationAllotment) {

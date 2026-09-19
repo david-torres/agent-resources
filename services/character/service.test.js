@@ -3,7 +3,7 @@ const { CharacterService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
-const { LEVEL_CEILING } = require('../../util/stat-caps');
+const { LEVEL_CEILING, capBreachMessage } = require('../../util/stat-caps');
 
 // Gunslinger as the catalogue holds it: Advent v1, its same-family v2, and the
 // Aspirant V1 fork, which differs on both family axes.
@@ -453,7 +453,10 @@ test('updateStats refuses a V1 Stat over its Cap', async () => {
   const result = await service.updateStats(CREATOR, 'character-1', { vitality: 6 });
   expect(result.data).toBeNull();
   expect(result.error).toMatchObject({ status: 400 });
-  expect(result.error.message).toMatch(/Cap/);
+  // The same sentence the creation path produces, from the same formatter --
+  // the { status, message } shape this path returns for sendRouteError is what
+  // differs, not the wording.
+  expect(result.error.message).toBe(capBreachMessage({ stat: 'vitality', value: 6, cap: 5 }));
 });
 
 test('updateStats accepts the same value once a Trait raises the Cap', async () => {

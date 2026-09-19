@@ -111,6 +111,15 @@ const capBreaches = ({ stats, traits, capPurchases } = {}) =>
 
 const creationCeilingBreaches = (stats) => breachesAgainst(stats, () => CREATION_STAT_CAP);
 
+// One wording for "this Stat is over its Cap", so a change to it cannot leave
+// two different messages for one rule. Formats a single capBreaches row. Its two
+// callers report differently on purpose and that stays theirs: validateStatLimits
+// (services/character/input.js) pushes one per breach into its `{ ok, errors }`
+// array, and statCapError (services/character/service.js) joins them into the
+// single `{ status, message }` sendRouteError renders. Only the sentence is
+// shared.
+const capBreachMessage = ({ stat, value, cap }) => `${stat} is ${value}, over its Cap of ${cap}.`;
+
 module.exports = {
     statCapFor,
     normalizeLevel,
@@ -118,6 +127,7 @@ module.exports = {
     sumValues,
     capBreaches,
     creationCeilingBreaches,
+    capBreachMessage,
     BASE_STAT_CAP,
     CREATION_STAT_CAP,
     CAP_INCREASE_PLUS_COST,

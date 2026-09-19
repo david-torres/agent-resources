@@ -5,7 +5,7 @@ const {
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 const { personalityMap, statList } = require('../../util/enclave-consts');
-const { normalizeLevel } = require('../../util/stat-caps');
+const { normalizeLevel, capBreachMessage } = require('../../util/stat-caps');
 
 test('trims every string in a character payload, not just item names', () => {
   const { data, childData } = normalizeCharacterInput({
@@ -461,9 +461,10 @@ test('a stat at its Cap passes and one over it fails, naming the stat, its value
     economy: 'aspirant', stats: { might: 6 }, traits: [], capPurchases: {}, enforceCreationAllotment: false
   });
   expect(overCap.ok).toBe(false);
-  expect(overCap.errors.join(' ')).toMatch(/might/);
-  expect(overCap.errors.join(' ')).toMatch(/6/);
-  expect(overCap.errors.join(' ')).toMatch(/5/);
+  // Compared against capBreachMessage rather than a re-typed sentence: the
+  // wording has one home (util/stat-caps.js) shared with statCapError on the
+  // mutation path, and a literal here would be a third copy of it.
+  expect(overCap.errors).toEqual([capBreachMessage({ stat: 'might', value: 6, cap: 5 })]);
 });
 
 test('a Trait raises the Cap so the same value passes with the Trait and fails without it', () => {

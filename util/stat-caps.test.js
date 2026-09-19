@@ -3,7 +3,7 @@ const {
   BASE_STAT_CAP, CREATION_STAT_CAP, CAP_INCREASE_PLUS_COST,
   CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT, LEVEL_CEILING,
   statCapFor, normalizeLevel, plusAllotment, sumValues,
-  capBreaches, creationCeilingBreaches
+  capBreaches, creationCeilingBreaches, capBreachMessage
 } = require('./stat-caps.js');
 
 // Figures, each pinned so that changing it breaks a named test.
@@ -107,4 +107,16 @@ test('capBreaches names every stat over its own Cap and nothing else', () => {
 test('creationCeilingBreaches uses the +++ ceiling, not the base Cap', () => {
   expect(creationCeilingBreaches({ might: 3 })).toEqual([]);
   expect(creationCeilingBreaches({ might: 4 })).toEqual([{ stat: 'might', value: 4, cap: 3 }]);
+});
+
+// One wording for "this Stat is over its Cap". Both the creation path
+// (validateStatLimits, services/character/input.js) and the mutation path
+// (statCapError, services/character/service.js) format a capBreaches row
+// through this, so a wording change cannot leave two different messages for
+// one rule.
+test('capBreachMessage names the stat, its value and its Cap in one sentence', () => {
+  expect(capBreachMessage({ stat: 'might', value: 7, cap: 6 }))
+    .toBe('might is 7, over its Cap of 6.');
+  expect(capBreaches({ stats: { might: 7 }, traits: [] }).map(capBreachMessage))
+    .toEqual(['might is 7, over its Cap of 5.']);
 });

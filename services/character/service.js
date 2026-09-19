@@ -9,7 +9,7 @@ const {
 } = require('./input');
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { economyFor } = require('../../util/merx-economy');
-const { capBreaches, LEVEL_CEILING } = require('../../util/stat-caps');
+const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
@@ -112,7 +112,7 @@ const statCapError = (character, stats) => {
   if (breaches.length === 0) return null;
   return {
     status: 400,
-    message: breaches.map(b => `${b.stat} is ${b.value}, over its Cap of ${b.cap}.`).join(' ')
+    message: breaches.map(capBreachMessage).join(' ')
   };
 };
 
