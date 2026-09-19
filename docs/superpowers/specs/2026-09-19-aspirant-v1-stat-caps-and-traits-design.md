@@ -451,5 +451,15 @@ The book leaves seven things open. These were settled here rather than deferred.
 8. No stat column accepts a negative value.
 9. All 327 existing characters still load, render and save unchanged; row counts
    are unchanged.
-10. `data.traits` has exactly one shape, and all four display sites render the
-    Trait name.
+10. `data.traits` — the shape the read paths in `services/character/repository.js`
+    and `models/character.js#getCharacter` produce — has exactly one form, and all
+    four display sites render the Trait name.
+
+    This is narrower than "one shape everywhere", deliberately.
+    `serializeCharacterForAgent` (`models/character.js:418`) emits its own
+    `traits` field of bare names, from a separate `personality:traits(name)`
+    select (`services/character/repository.js:225`) that does not fetch `stat`.
+    That is an agent-facing payload — an external boundary, where a narrower
+    projection is legitimate for the same reason the Markdown/JSON export keeps
+    names. Enriching it with Stat affiliations would change a published payload
+    and is a decision for whoever owns the agent API, not for this slice.
