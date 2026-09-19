@@ -15,20 +15,36 @@ const openai = new OpenAIChatApi(
 );
 
 // The vocabulary itself is the constraint, not just a hint in `.describe()`:
-// a z.enum over these 48 words means the model's structured output cannot
-// emit an off-vocabulary word at all, the same discipline
-// 20260919000000_traits_stat_affiliation.sql used for its one-time snapshot.
+// a z.enum over these 48 words is listed in the schema so the model is
+// steered toward a real word, and safeParse rejects whatever it emits
+// otherwise, the same discipline 20260919000000_traits_stat_affiliation.sql
+// used for its one-time snapshot.
+//
+// This schema is sent to the OpenAI API as a plain function/tool definition
+// (llm-api's OpenAIChatApi does not set `strict: true`), not constrained
+// decoding -- the model can still emit any string, and zod-gpt's completion()
+// only catches a bad one locally, after the call, via schema.safeParse. A
+// transcribing model very often capitalizes a Trait ("Brave"), so the enum
+// check normalizes case first rather than rejecting a real word over
+// casing alone. That agrees with the other two places a Trait name is
+// already matched case-insensitively: the backfill migration
+// (`lower(btrim(name))`) and shapeTrait's own vocabulary lookup
+// (services/character/input.js).
 const traitWords = Object.values(personalityMap).flat();
 const traits = traitWords.join(', ');
 const classes = adventClassList.concat(aspirantPreviewClassList, playerCreatedClassList).join(', ');
 const gear = Object.values(classGearList).map(gear => gear.join(', ')).join(', ');
 
+const lowercased = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+const traitField = (ordinal) => z.preprocess(lowercased, z.enum(traitWords).nullable())
+  .describe(`The character's ${ordinal} personality trait, must be in the following list: ${traits}`);
+
 const schema = z.object({
   name: z.string().describe("The character's name"),
   class: z.string().describe(`The character's class, must be in the following list: ${classes}`),
-  trait0: z.enum(traitWords).nullable().describe(`The character's first personality trait, must be in the following list: ${traits}`),
-  trait1: z.enum(traitWords).nullable().describe(`The character's second personality trait, must be in the following list: ${traits}`),
-  trait2: z.enum(traitWords).nullable().describe(`The character's third personality trait, must be in the following list: ${traits}`),
+  trait0: traitField('first'),
+  trait1: traitField('second'),
+  trait2: traitField('third'),
   vitality: z.number().int().describe("The character's vitality, may be represented as a number or a series of plus signs (+)"),
   might: z.number().int().describe("The character's might, may be represented as a number or a series of plus signs (+)"),
   resilience: z.number().int().describe("The character's resilience, may be represented as a number or a series of plus signs (+)"),
@@ -173,5 +189,5 @@ JSON output:`;
   }
 }
 
-module.exports = { processCharacterImport };
+module.exports = { processCharacterImport, schema };
 

@@ -52,7 +52,7 @@ mock.module('../models/class', () => ({
   getClasses: async () => ({ data: [{ id: 'class-1', name: 'Gunslinger' }], error: null })
 }));
 
-const { processCharacterImport } = require('./character-import');
+const { processCharacterImport, schema } = require('./character-import');
 
 afterAll(() => {
   mock.module('llm-api', () => realLlmApi);
@@ -71,4 +71,32 @@ test('an Error-shaped error from createCharacter still reaches the player', asyn
   createResult = { data: null, error: { message: 'Character creation returned no rows' } };
   await expect(processCharacterImport('a character sheet', { id: 'profile-1' }))
     .rejects.toThrow('Character creation returned no rows');
+});
+
+// The schema is sent to the OpenAI API as a plain function/tool definition
+// (llm-api's OpenAIChatApi does not set `strict: true`), not constrained
+// decoding, so a transcribing model can still emit a capitalized Trait --
+// and very often does. The trait fields normalize case before the vocabulary
+// check so a real word is never rejected over casing alone, while an
+// off-vocabulary word is still refused.
+test("a capitalized Trait is accepted and normalized to the vocabulary's case", () => {
+  const result = schema.shape.trait0.safeParse('Brave');
+  expect(result.success).toBe(true);
+  expect(result.data).toBe('brave');
+});
+
+test('an already-lowercase Trait is accepted unchanged', () => {
+  const result = schema.shape.trait0.safeParse('brave');
+  expect(result.success).toBe(true);
+  expect(result.data).toBe('brave');
+});
+
+test('a null Trait is accepted', () => {
+  const result = schema.shape.trait0.safeParse(null);
+  expect(result.success).toBe(true);
+  expect(result.data).toBeNull();
+});
+
+test('an off-vocabulary Trait is still rejected', () => {
+  expect(schema.shape.trait0.safeParse('Clever').success).toBe(false);
 });
