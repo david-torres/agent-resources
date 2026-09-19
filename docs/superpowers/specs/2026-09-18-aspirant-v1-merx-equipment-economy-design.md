@@ -1,6 +1,8 @@
 # Aspirant V1: the Merx equipment economy
 
-Status: approved design, not yet planned.
+Status: approved design. Plan 1 (the server foundation) has landed; plan 2
+(the purchase surfaces) is planned, and the decisions taken when it was designed
+are recorded under "Plan 2 rulings".
 Branch: `aspirant-v1-classes-and-characters`.
 
 ## Place in the stack
@@ -118,6 +120,12 @@ in this slice.
   your Class for the purposes of acquisition and improvement" (pg. 90), so they
   are priced own-class despite each coming from a different Class. This is what
   `public/js/character-wizard.js:2449` already does.
+- Advent, which the Aspirant grant replaces, is **three Default Signatures and
+  one Elective** — pg. 3's "Instead of four Signature Items (three Default and
+  one Elective)". The Elective is a choice rather than a fixed item: Advent V2
+  pg. 16 lets it double up on a Default instead of taking a new one. Priced at
+  the Signature rate it is worth 2 Merx, which buys either one class item or two
+  common items.
 
 ### Authored content
 
@@ -275,9 +283,16 @@ resolved from its class's `content_format` and its `creator_mode` by a single
 named function so the three call sites cannot each decide it differently — and
 branches three ways:
 
-- **`advent`** — unchanged, to the digit: four free on-class items, then 2 for
-  on-class and 3 for off-class, `earned` from missions alone. Pinned by a test,
-  because all 327 existing characters are in this branch.
+- **`advent`** — **three** free on-class items, then 2 for on-class and 3 for
+  off-class, with `earned = 2 + mission income`: the three Defaults are free and
+  the Elective arrives as its 2-Merx value. Modelling it as four free items and
+  no grant, as this design first did, priced only the route where the Elective
+  is spent on a class item; a character who took two common items instead was
+  shown a 2-Merx deficit for a legal build. Both routes now cost exactly 2.
+  Measured against all 327 existing characters: 258 are arithmetically unchanged
+  (spend and `earned` both rise by 2), 69 gain 2 `earned` they were never
+  credited, and of those only 3 have `auto_calculate` on and would see it.
+  Pinned by a test per route.
 - **`aspirant`** — `earned = CREATION_GRANT + mission income`;
   `spend = common items + Σ priceOfSignature + Σ priceOfEnchantment + Σ priceOfMod`.
   No free allotment: the book replaced the four starting Signatures with the
@@ -313,8 +328,18 @@ has to be spendable afterwards.
 - **Wizard step 4** offers all twelve Signatures as choices rather than the first
   six, each with its Default Enchantment as an unlock, a Custom Enchantment as an
   alternative, and up to two Mods. The spent/budget readout reads from the shared
-  module.
-- **The character edit form** offers the same purchases post-creation.
+  module. The twelve are listed in the book's printed order, and opening one
+  reveals the printed entry — description, meters, the Default Enchantment
+  divider and its text — with the purchase controls beneath it, so nobody buys an
+  Enchantment without reading what it does. Cross-class Signatures stay reachable
+  through the existing search and class filter at the +1 tier. An Aspiring
+  character's pool remains its three step-1 picks, priced own-class per pg. 90.
+- **The character edit form** offers the same purchases post-creation, through
+  the same component, against the real post-creation budget of grant plus mission
+  income.
+- **The character page** shows each Signature's Enchantment and Mods, and its
+  single `Commissary Reward` line becomes the derived breakdown — earned, spent,
+  remaining.
 
 Both surfaces appear only for the two populations under this economy — a class
 with `content_format = 'aspirant'`, or `creator_mode = 'aspiring'`. Every other
@@ -349,7 +374,7 @@ the app has no approval machinery to hang it on.
 | --- | --- | --- |
 | Prices, caps, grants | `util/merx-economy.js` | New. Single definition. |
 | Derivation | `util/character-derived.js` | Branch on `content_format`; consume the module; drop local cost constants. |
-| Constants | `util/enclave-consts.js` | `STARTING_ON_CLASS_GEAR_ALLOTMENT` moves or is re-expressed; `MERX_PER_MISSION_SUCCESS` stays. |
+| Constants | `util/character-derived.js` | `STARTING_ON_CLASS_GEAR_ALLOTMENT` lives here, advent-only, and becomes **3**; `MERX_PER_MISSION_SUCCESS` stays in `util/enclave-consts.js`. |
 | Storage | `supabase/migrations/` | `class_gear.enchantment`, `class_gear.mods`. |
 | Atomic save | `supabase/migrations/` | `save_character_atomic` carries both columns, preserve-on-absent. |
 | Reconciliation | `util/reconcile.js`, `services/character/service.js` | Gear rows compare and update the two new fields. |
@@ -365,7 +390,9 @@ the app has no approval machinery to hang it on.
   mutation-pinned: moving any price, grant or cap fails a named test.
 - `util/character-derived.test.js` — extended. Two regressions matter: a V1
   character holding twelve own-class Signatures with no missions is **not** in
-  deficit (today: 16), and the Advent four-free rule is unchanged to the digit.
+  deficit (today: 16), and advent's Elective prices to exactly 2 whichever route
+  it takes — one class item, two common items, or a doubled-up Default — so that
+  none of the three reports a deficit for a fresh character.
 - `models/character-atomic.integration.test.js` — the new columns survive a save
   that omits them, a submitted Enchantment replaces a stored one, and a renamed
   Signature arrives unenchanted rather than inheriting the old row's purchase.
@@ -384,6 +411,36 @@ the app has no approval machinery to hang it on.
 - An aspiring-branch case: three picks from three different classes cost 6, not
   9, and the 10-Merx grant leaves 4. This is the regression guard for the
   missing-`class_id` overcharge described under "Who is under this economy".
+
+## Plan 2 rulings
+
+Taken when plan 2 was designed, after plan 1 had landed. Each was a real choice,
+and the reason matters more than the choice.
+
+1. **Advent is three Defaults plus a 2-Merx Elective**, not four free items. The
+   correction and its measurement are under "Derivation". It changes advent's
+   derived figures, which plan 1 called a defect — taken deliberately, because
+   the old model reported a deficit for a legal build. It does **not** start
+   validating advent against a budget; that stays out of scope.
+2. **The wizard resolves its economy from the selected class, not the URL mode.**
+   The class pool is deliberately unfiltered by mode (`routes/characters.js:194`),
+   so `?mode=advent` reaches a V1 class; the client keyed prices off the mode
+   while the server read `content_format`, and the two disagreed on budget, cap
+   and prices for exactly that combination. The client now applies the server's
+   rule, recomputing when the class changes.
+3. **Figures are served, never mirrored.** The economy and stat-cap figures reach
+   the browser through the existing `<script type="application/json">` island
+   (`views/character-wizard.handlebars:2`). Every client constant they replace is
+   deleted in the same change, including the stat-cap mirrors slice 5 had to
+   leave behind.
+4. **No spend-it-all gate, in any economy.** pg. 3 says Merx "may be spent
+   however they like or save for later", while the wizard blocked its Next button
+   until the budget was exhausted. The remainder now flows to
+   `commissary_reward`. Over-budget is still prevented by refusing the add.
+5. **Replacing a Signature that carries purchases confirms first**, naming the
+   Enchantment and Mods it will destroy. The destruction is inherent — a rename
+   is a delete plus an insert (see "Storage") — so the guard is a warning, not a
+   repair.
 
 ## Deliberately not in this slice
 
