@@ -631,8 +631,11 @@ const normalizeStatsPayload = (body = {}) => {
   for (const stat of statList) {
     const n = parseInteger(body[stat], 0);
     // STAT_SANITY_BOUND is a guard against a runaway request body, not the
-    // Cap. The Cap is validateStatLimits, and neither of this function's two
-    // callers (PATCH /characters/:id/stats, levelUp) invokes it.
+    // Cap. This function's two callers -- PATCH /characters/:id/stats and
+    // levelUp -- do enforce the per-stat Cap, but they reach it through
+    // capBreaches directly (services/character/service.js#statCapError)
+    // rather than through validateStatLimits, because neither is a creation
+    // and so neither applies the allotment or the +++ ceiling.
     out[stat] = Math.max(0, Math.min(STAT_SANITY_BOUND, n));
   }
   return out;
