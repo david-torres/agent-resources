@@ -717,7 +717,9 @@ Expected: FAIL — `wizard.getMerxBudget is not a function`, and the grep test f
 
 - [ ] **Step 3: Replace the constants with reads**
 
-Delete the constant block at `:16-46` and `:1589`, and the `FREE_BASE_GEAR_COUNT` pair at `:229-232`. In their place, near the `DATA` parse at `:48-51`:
+Delete the constant block at `:16-46`, the single line `:1589`, and the `FREE_BASE_GEAR_COUNT` pair at `:229-232`.
+
+**`:1589` is one line, not a block.** `ASPIRING_MERX_BUDGET` sits between `ASPIRING_CORE_PERKS` (`:1587`), `ASPIRING_ADVANCED_PERKS` (`:1588`) and `ASPIRING_PERKS_BUDGET` (`:1593`). Those three are **Perk** figures; no server module defines them, slice 4b owns them, and there is nothing to read them from. Delete `ASPIRING_MERX_BUDGET` alone and leave its three neighbours untouched. In their place, near the `DATA` parse at `:48-51`:
 
 ```js
   // Every price, grant, cap and limit comes from the server. util/merx-economy.js
@@ -1909,14 +1911,36 @@ Six literal Merx figures survive in the wizard view as prose, and `#merxBudget` 
 
 - [ ] **Step 1: Write the failing test**
 
+A figure printed to a player only exists after the template renders, so assert
+against the rendered output. Compile the template with the project's real
+helpers the way `views/character-form.test.js` does — read that file first and
+match its setup.
+
 ```js
-test('the wizard view writes down no economy figure', () => {
-  const source = require('fs').readFileSync('views/character-wizard.handlebars', 'utf8');
+const fs = require('fs');
+
+test('the wizard view source writes down no Merx price', () => {
+  const source = fs.readFileSync('views/character-wizard.handlebars', 'utf8');
   const prose = source.replace(/<script[\s\S]*?<\/script>/g, '');
   expect(prose).not.toMatch(/\d+\s*Merx/i);
-  expect(prose).not.toMatch(/>\s*(2|10|12)\s*</);
 });
+
+test.each(['advent', 'aspirant', 'aspiring'])(
+  'the rendered %s wizard prints no budget of its own', (mode) => {
+    const html = renderWizardView({ mode, wizardData: fixture({ mode }) });
+    const body = html.replace(/<script[\s\S]*?<\/script>/g, '');
+    expect(body).not.toMatch(/\d+\s*Merx/i);
+    // The client fills this on first render from the served grant. An empty
+    // span is honest about where the figure comes from; a hardcoded one is a
+    // second copy that can disagree with the server.
+    expect(body).toMatch(/<span id="merxBudget">\s*<\/span>/);
+  }
+);
 ```
+
+The old form of this test scanned raw Handlebars for `>2<` and could neither
+see the ternary it was aimed at — which reads `{{else}}2{{/if}}</span>` in
+source — nor avoid matching unrelated markup. Do not reinstate it.
 
 - [ ] **Step 2: Run it and confirm it fails**
 
