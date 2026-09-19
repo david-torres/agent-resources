@@ -406,7 +406,24 @@ Weighted toward where this slice can actually go wrong rather than spread evenly
 - **Flavor**, and therefore Trait swapping (pg. 106) — out of scope for the whole
   stack by earlier decision, alongside Glance Grades, the Keyword glossary,
   Loadout, Companions and Scarring.
-- **Any change to Advent behaviour**, including the 26 colliding-Trait characters.
+- **Any change to Advent behaviour**, including the 26 colliding-Trait
+  characters — with **one exception found during the final review, recorded
+  here rather than left as a false claim.**
+
+  A Trait's Stat is resolved for every economy, because `traits.stat` is
+  `NOT NULL`: a Trait whose Stat cannot be resolved cannot be stored at all, so
+  the resolution is not economy-gated and neither is its refusal. An advent
+  save whose Trait word is outside the 48-word vocabulary **and** carries no
+  submitted Stat is therefore refused, where before it saved. What remains
+  advent-exempt is everything the caps slice adds as a *rule*: the per-stat Cap,
+  the creation allotment, the +++ ceiling, the three-Trait count and the
+  one-Trait-per-Stat rule all return early for advent.
+
+  No live path reaches the refusal. The classic form and the expert form submit
+  from a `<select>` built out of `personalityMap`; the wizard submits a Stat for
+  every slot in every economy; and the AI import constrains its Trait fields to
+  a case-normalised `z.enum` over the same 48 words. It is reachable only by a
+  hand-built request, and all 981 live trait rows are in the vocabulary.
 - **The Perk economy** (slice 4b) and **slice 4's browser purchase surface**
   (its plan 2).
 
