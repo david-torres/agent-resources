@@ -74,7 +74,7 @@ const requireOwnedCharacter = async (adapter, actor, id) => {
 // 'aspiring' -- every other split is decided by the class's content_format,
 // NOT by creator_mode, so creator_mode is not a safe field to short-circuit
 // on. Nothing server-side requires creator_mode and the class's
-// content_format to agree (routes/characters.js:190: creator_mode does not
+// content_format to agree (routes/characters.js:189: creator_mode does not
 // filter the class pool a character can hold), so a creator_mode of null or
 // 'advent' paired with an aspirant-format class is a real, if latent,
 // possibility -- 0 of 327 live characters hold one today, but a Cap that can
