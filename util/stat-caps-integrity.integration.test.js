@@ -235,7 +235,18 @@ test.each([
   ['a negative value', { might: -1 }],
   ['a non-integer value', { might: 1.5 }],
   ['a non-number value', { might: 'two' }],
-  ['a JSON null value', { might: null }]
+  ['a JSON null value', { might: null }],
+  // An ARRAY wrapping a legal value. The values CHECK's JSONPath was LAX, and
+  // lax mode unwraps an array before applying a filter predicate, so the array
+  // itself was never tested and `{"might": [1]}` was storable. Fixed by
+  // 20260919000004_stat_cap_purchase_values_strict.sql.
+  ['an array value', { might: [1] }],
+  // A top-level non-object. Strict mode RAISES on `$.*` over a non-object
+  // rather than returning false, so 20260919000004 guards the wildcard behind a
+  // CASE on jsonb_typeof -- this asserts that a non-object is still an ordinary
+  // check_violation (from characters_stat_cap_purchase_keys) and not a jsonpath
+  // error.
+  ['a top-level array', [1]]
 ])('stat_cap_purchases rejects %s', async (_label, shape) => {
   const id = await fixtureCharacterRow();
   const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
