@@ -180,20 +180,38 @@ and pure functions over them:
 - `creationStatCeiling()` — `CREATION_STAT_CAP`, counting all sources.
 - `plusAllotment({ economy, level })` — `CREATION_PLUSES[economy] +
   LEVEL_PLUSES_PER_LEVEL × (level - 1)`.
-- `assignedPluses({ stats, classSpread, traitGrant })` — the decomposition that
-  recovers what a player assigned from a stored total. This is the arithmetic
-  `capUserStats` already performs correctly at `character-wizard.js:810`; the
-  server needs the same answer, so it lives here once and the client is
-  repointed at it in the follow-up plan rather than a second copy being written.
+- `sumValues(stats)` — the stored total, which is what the allotment is checked
+  against.
 
-  **The decomposition is not the same for all three economies.** For `advent`
-  and `aspirant`, a stored total is `classSpread + traitGrant + assigned`, where
-  `traitGrant` is the +1 on the third Trait's Stat (Advent pg. 16). For
-  `aspiring` there is no class spread and **no automatic Trait grant at all**:
-  pg. 90's three Trait-Stat pluses are part of the four the player distributes,
-  not a bonus on top, so a stored total is `assigned` alone. Passing an
-  aspirant-shaped `traitGrant` for an aspiring character would understate what
-  the player spent by one.
+**Corrected during implementation, and the correction matters enough to record
+here rather than bury in a ledger.** This section originally specified an
+`assignedPluses({ stats, classSpread, traitGrant })` decomposition — recovering
+what the player assigned by subtracting the class spread and the third Trait's
++1 from a stored total — plus a `traitGrantFor` that returned `{}` for
+`aspiring`, because pg. 90's three Trait-Stat pluses are part of its four rather
+than a bonus on top.
+
+That was wrong, and it produced a real enforcement hole: `plusAllotment` returns
+the book's creation **total** (6 aspirant, 4 aspiring), and the implementation
+dutifully compared it against the player's **free share**, so a stored total of
+10 was accepted where 6 is the maximum — an overgrant exactly the size of the
+automatic grants. The spec asked for a quantity to be computed and never said
+what to compare it to.
+
+The check is therefore `sumValues(stats) <= plusAllotment({ economy, level })`:
+the stored total against the allotment. That is what the book says — the six is
+"3 to Class Stats, 1 to the third Trait's Stat, 2 free", a partition of six, not
+six on top of four — and it matches what the wizard has always done at
+`public/js/character-wizard.js:810`, where `capUserStats` subtracts both grants
+from `getTotalPoints()` before deciding what remains assignable.
+
+`assignedPluses` and `traitGrantFor` are deleted, along with the `classSpread`
+threading and the `statSpreadByClassId` map built to feed it. Note what that
+buys beyond correctness: **the aspiring asymmetry disappears entirely.** It
+existed only to make the decomposition right, and pg. 90's four pluses are
+already a total. A rule that exists solely to serve a wrong comparison is a rule
+worth losing, and its disappearance is the strongest evidence the simpler shape
+is correct.
 
 `CREATION_PLUSES.advent` records 6 because 6 is the true Advent figure and the
 client uses it. It is unenforced, because the validator returns early for
