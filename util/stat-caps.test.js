@@ -1,7 +1,7 @@
 const { test, expect } = require('bun:test');
 const {
   BASE_STAT_CAP, CREATION_STAT_CAP, CAP_INCREASE_PLUS_COST,
-  CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT,
+  CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT, LEVEL_CEILING,
   statCapFor, normalizeLevel, plusAllotment, sumValues,
   capBreaches, creationCeilingBreaches
 } = require('./stat-caps.js');
@@ -40,16 +40,32 @@ test('a missing or junk purchase count never lowers a Cap', () => {
 // The one clamp every level-gated rule reads from. Other callers (the +++
 // creation ceiling gate in services/character/input.js) rely on this
 // agreeing with plusAllotment's own idea of the level -- see the test below.
-test('normalizeLevel clamps to a whole number no lower than 1', () => {
+test('normalizeLevel clamps to a whole number in [1, LEVEL_CEILING]', () => {
   expect(normalizeLevel(1)).toBe(1);
   expect(normalizeLevel(2)).toBe(2);
   expect(normalizeLevel('3')).toBe(3);
   expect(normalizeLevel(1.9)).toBe(1);
+  expect(normalizeLevel(2.9)).toBe(2);
   expect(normalizeLevel(0)).toBe(1);
   expect(normalizeLevel(-5)).toBe(1);
   expect(normalizeLevel(undefined)).toBe(1);
   expect(normalizeLevel(null)).toBe(1);
   expect(normalizeLevel('nonsense')).toBe(1);
+  expect(normalizeLevel(LEVEL_CEILING)).toBe(LEVEL_CEILING);
+});
+
+// Without an upper bound, normalizeLevel(Infinity) is Infinity and
+// normalizeLevel(1e9) is 1e9, so plusAllotment returns an unbounded figure
+// and the allotment check (services/character/input.js's validateStatLimits)
+// passes anything -- reachable via a hand-built request on the classic/expert
+// path, since level is otherwise clamped only inside normalizeWizardPayload,
+// which the wizard alone calls.
+test('normalizeLevel has an upper bound, so it cannot be tricked into an unbounded allotment', () => {
+  expect(normalizeLevel(Infinity)).toBe(LEVEL_CEILING);
+  expect(normalizeLevel(1e9)).toBe(LEVEL_CEILING);
+  expect(normalizeLevel(LEVEL_CEILING + 1)).toBe(LEVEL_CEILING);
+  expect(plusAllotment({ economy: 'aspirant', level: Infinity }))
+    .toBe(CREATION_PLUSES.aspirant + LEVEL_PLUSES_PER_LEVEL * (LEVEL_CEILING - 1));
 });
 
 // Ties plusAllotment's arithmetic to normalizeLevel's own output rather than

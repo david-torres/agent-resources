@@ -53,14 +53,15 @@ test('a stat outside the twelve names is rejected', async () => {
   expect(error?.code).toBe('23514');
 });
 
-// Correct only until Task 9, which makes traits.stat NOT NULL once every
-// write path supplies a value. Task 9 owns flipping this assertion to
-// `expect(error?.code).toBe('23502')` (not_null_violation) -- see this
-// migration's header comment for why the column is nullable today.
-test('a null stat is still accepted -- Task 9 flips this to rejected', async () => {
+// traits.stat is NOT NULL as of supabase/migrations/20260919000003_stat_
+// floor_and_trait_stat_notnull.sql, which completes the nullable-now/NOT-
+// NULL-later split described in 20260919000000's header now that every write
+// path supplies a value. Flipped from "accepted" (Task 2) to "rejected".
+test('a null stat is rejected', async () => {
   const id = await fixtureRow();
   const { error } = await sb.from('traits').update({ stat: null }).eq('id', id);
-  expect(error).toBeNull();
+  // 23502 is not_null_violation.
+  expect(error?.code).toBe('23502');
 });
 
 test.each(statList)('%s is an accepted stat', async (stat) => {
@@ -213,5 +214,51 @@ test.each([
 ])('stat_cap_purchases accepts %s', async (_label, shape) => {
   const id = await fixtureCharacterRow();
   const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
+  expect(error).toBeNull();
+});
+
+// The twelve `<stat> >= 0` CHECK constraints (supabase/migrations/
+// 20260919000003_stat_floor_and_trait_stat_notnull.sql). Reuses the same
+// character-fixture pattern as stat_cap_purchases above -- one existing row
+// mutated and restored in afterAll -- and pins both the floor and the
+// deliberate absence of a ceiling: ENCLAVE: Aspirant pg. 3's "Scaling Beyond"
+// sidebar states there is no theoretical maximum, and the real Cap is derived
+// per stat from Traits and purchases, which a per-column CHECK cannot see.
+// The application refuses an illegal value; the column does not.
+
+let statColumnFixtureId;
+let statColumnFixtureOriginalVitality;
+
+const statColumnFixtureRow = async () => {
+  if (statColumnFixtureId) return statColumnFixtureId;
+  const { data, error } = await sb.from('characters').select('id,vitality').order('id').limit(1);
+  expect(error).toBeNull();
+  expect(data).toHaveLength(1);
+  statColumnFixtureId = data[0].id;
+  statColumnFixtureOriginalVitality = data[0].vitality;
+  return statColumnFixtureId;
+};
+
+afterAll(async () => {
+  if (statColumnFixtureId) {
+    const { error } = await sb.from('characters')
+      .update({ vitality: statColumnFixtureOriginalVitality }).eq('id', statColumnFixtureId);
+    expect(error).toBeNull();
+  }
+  const { count, error: countError } = await sb.from('characters').select('id', { count: 'exact', head: true });
+  expect(countError).toBeNull();
+  expect(count).toBe(327);
+});
+
+test('a negative stat is rejected', async () => {
+  const id = await statColumnFixtureRow();
+  const { error } = await sb.from('characters').update({ vitality: -1 }).eq('id', id);
+  // 23514 is check_violation.
+  expect(error?.code).toBe('23514');
+});
+
+test('a stat of 9999 is still accepted -- the database enforces only the floor, not a Cap it cannot compute', async () => {
+  const id = await statColumnFixtureRow();
+  const { error } = await sb.from('characters').update({ vitality: 9999 }).eq('id', id);
   expect(error).toBeNull();
 });

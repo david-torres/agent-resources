@@ -5,7 +5,7 @@ const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
 const {
   TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, sumValues,
-  normalizeLevel
+  normalizeLevel, LEVEL_CEILING, STAT_SANITY_BOUND
 } = require('../../util/stat-caps');
 const {
   countWordsExcludingRatings,
@@ -630,7 +630,10 @@ const normalizeStatsPayload = (body = {}) => {
   const out = {};
   for (const stat of statList) {
     const n = parseInteger(body[stat], 0);
-    out[stat] = Math.max(0, Math.min(20, n));
+    // STAT_SANITY_BOUND is a guard against a runaway request body, not the
+    // Cap. The Cap is validateStatLimits, and neither of this function's two
+    // callers (PATCH /characters/:id/stats, levelUp) invokes it.
+    out[stat] = Math.max(0, Math.min(STAT_SANITY_BOUND, n));
   }
   return out;
 };
@@ -682,7 +685,7 @@ const normalizeWizardPayload = (rawBody) => {
     if (knownStats.has(k)) body[k] = parseInteger(body[k], 0);
   }
 
-  if (body.level != null) body.level = Math.max(1, Math.min(20, parseInteger(body.level, 1)));
+  if (body.level != null) body.level = Math.max(1, Math.min(LEVEL_CEILING, parseInteger(body.level, 1)));
   if (body.completed_missions != null) body.completed_missions = Math.max(0, parseInteger(body.completed_missions, 0));
   body.commissary_reward = Math.max(0, parseInteger(body.commissary_reward, 0));
   body.name = trimmedName;

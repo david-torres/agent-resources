@@ -59,14 +59,27 @@ const statCapFor = (stat, { traits, capPurchases } = {}) => {
     return BASE_STAT_CAP + fromTraits + purchased;
 };
 
-// The one clamp for "what level is this character": a whole number no lower
-// than 1, so a missing, non-numeric, fractional or sub-1 level all read as
-// level 1 rather than as an error. Exported so every caller who needs to know
+// The app's existing settable maximum for a character's level (previously a
+// literal 20 duplicated in normalizeWizardPayload, services/character/
+// input.js). Named and centralized here so normalizeLevel enforces the same
+// ceiling everywhere: without one, normalizeLevel(Infinity) was Infinity and
+// normalizeLevel(1e9) gave plusAllotment an allotment over two billion,
+// silently passing any stat total on the classic/expert save path (level is
+// otherwise clamped only inside normalizeWizardPayload, which the wizard
+// alone calls). Distinct from MAX_LEVEL in util/character-derived.js, which
+// caps the level derived from completed missions -- a different concept.
+const LEVEL_CEILING = 20;
+
+// The one clamp for "what level is this character": a whole number in
+// [1, LEVEL_CEILING]. A missing, non-numeric, or sub-1 level all read as
+// level 1; a level above the ceiling reads as the ceiling; none of that is
+// treated as an error. Only fractional levels in [0, 2) floor to 1 --
+// normalizeLevel(2.9) is 2, not 1. Exported so every caller who needs to know
 // whether a character is AT level 1 -- not just how many pluses that level
 // grants -- reads it from here rather than re-deriving it; two independent
 // copies of this clamp is how a future change to one of them silently
 // desyncs a level-gated rule from plusAllotment's own idea of the level.
-const normalizeLevel = (level) => Math.max(1, Math.floor(Number(level)) || 1);
+const normalizeLevel = (level) => Math.min(LEVEL_CEILING, Math.max(1, Math.floor(Number(level)) || 1));
 
 // null for an economy this module has no figure for, so a caller must decide
 // what to do rather than silently enforcing zero.
@@ -109,5 +122,6 @@ module.exports = {
     CREATION_PLUSES,
     LEVEL_PLUSES_PER_LEVEL,
     TRAIT_COUNT,
-    STAT_SANITY_BOUND
+    STAT_SANITY_BOUND,
+    LEVEL_CEILING
 };
