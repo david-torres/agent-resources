@@ -5,13 +5,22 @@
 // still nullable. This pins that constraint by attempting real writes and
 // asserting on the error, not by reading the DDL.
 //
-// It mutates one existing trait row rather than inserting/deleting a fixture:
-// a fixture character needs an auth.users row and a profile
+// It mutates existing rows rather than inserting/deleting a fixture: a fixture
+// character needs an auth.users row and a profile
 // (models/character-atomic.integration.test.js), which is more setup than a
-// CHECK constraint needs. util/character-equipment.integration.test.js proves
-// the lighter approach out for the same kind of constraint -- "the test
-// changes no data, which is what makes it safe against a restored production
-// copy". The row's original stat is restored in afterAll either way.
+// CHECK constraint needs.
+//
+// Most of the writes here are reject-only -- the constraint refuses them, so
+// nothing lands and nothing needs undoing. That is the pattern
+// util/character-equipment.integration.test.js relies on, and its safety claim
+// ("the test changes no data, which is what makes it safe against a restored
+// production copy") holds only for writes that do not land. It is NOT a
+// justification for the accepted-shape writes below, which really do land: a
+// stat onto a live trait row, three purchase maps and 9999 into a live
+// character's vitality, plus one real save_character_atomic call. Each of those
+// restores the row inside a `finally`, so no throw between the write and the end
+// of the test can leave a row of the restored production copy altered; afterAll
+// restores again and asserts the row counts.
 //
 // Requires the local Supabase stack: SUPABASE_URL=http://127.0.0.1:54321
 require('./require-local-supabase');
@@ -21,6 +30,21 @@ const { createClient } = require('@supabase/supabase-js');
 const { statList } = require('./enclave-consts');
 
 const sb = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SECRET_KEY);
+
+// Runs `body`, then puts `values` back on the row whether body returned or
+// threw. A failed restore is reported rather than thrown: rethrowing from a
+// `finally` would replace body's own failure, and the afterAll hooks below
+// re-restore and assert the row counts, so the real problem still surfaces.
+const restoring = async (table, id, values, body) => {
+  try {
+    await body();
+  } finally {
+    const { error } = await sb.from(table).update(values).eq('id', id);
+    if (error) {
+      console.error(`stat-caps-integrity: FAILED to restore ${table} ${id}: ${error.message}`);
+    }
+  }
+};
 
 let fixtureId;
 let fixtureOriginalStat;
@@ -66,8 +90,10 @@ test('a null stat is rejected', async () => {
 
 test.each(statList)('%s is an accepted stat', async (stat) => {
   const id = await fixtureRow();
-  const { error } = await sb.from('traits').update({ stat }).eq('id', id);
-  expect(error).toBeNull();
+  await restoring('traits', id, { stat: fixtureOriginalStat }, async () => {
+    const { error } = await sb.from('traits').update({ stat }).eq('id', id);
+    expect(error).toBeNull();
+  });
 });
 
 // public.save_character_atomic (supabase/migrations/
@@ -105,13 +131,17 @@ const rpcFixtureCharacter = async () => {
   return rpcCharacterId;
 };
 
-afterAll(async () => {
-  if (rpcOriginalTraits) {
-    for (const row of rpcOriginalTraits) {
-      const { error } = await sb.from('traits').update({ stat: row.stat }).eq('id', row.id);
-      expect(error).toBeNull();
+const restoreRpcTraits = async () => {
+  for (const row of rpcOriginalTraits || []) {
+    const { error } = await sb.from('traits').update({ stat: row.stat }).eq('id', row.id);
+    if (error) {
+      console.error(`stat-caps-integrity: FAILED to restore traits ${row.id}: ${error.message}`);
     }
   }
+};
+
+afterAll(async () => {
+  await restoreRpcTraits();
   const { count, error: countError } = await sb.from('traits').select('id', { count: 'exact', head: true });
   expect(countError).toBeNull();
   expect(count).toBe(981);
@@ -127,27 +157,34 @@ test('save_character_atomic persists a trait\'s stat', async () => {
     stat: row.id === target.id ? testStat : row.stat
   }));
 
-  // p_character: {} keeps every stored character field as-is (jsonb_populate_
-  // record falls back to the current row for any key it omits); p_gear/
-  // p_abilities/p_perks: null skip those blocks entirely, matching
-  // rpcSaveGear's isolation approach in models/character-atomic.integration.
-  // test.js.
-  const { error } = await sb.rpc('save_character_atomic', {
-    p_character_id: characterId,
-    p_creator_id: rpcCreatorId,
-    p_character: {},
-    p_traits: payload,
-    p_gear: null,
-    p_abilities: null,
-    p_perks: null
-  });
-  expect(error).toBeNull();
+  // This write lands, and it lands through the RPC across every one of the
+  // character's trait rows, so the whole set is put back in the `finally` --
+  // not just the target's stat.
+  try {
+    // p_character: {} keeps every stored character field as-is (jsonb_populate_
+    // record falls back to the current row for any key it omits); p_gear/
+    // p_abilities/p_perks: null skip those blocks entirely, matching
+    // rpcSaveGear's isolation approach in models/character-atomic.integration.
+    // test.js.
+    const { error } = await sb.rpc('save_character_atomic', {
+      p_character_id: characterId,
+      p_creator_id: rpcCreatorId,
+      p_character: {},
+      p_traits: payload,
+      p_gear: null,
+      p_abilities: null,
+      p_perks: null
+    });
+    expect(error).toBeNull();
 
-  const { data: rows, error: readError } = await sb.from('traits')
-    .select('id,stat').eq('character_id', characterId).order('id');
-  expect(readError).toBeNull();
-  expect(rows).toHaveLength(rpcOriginalTraits.length);
-  expect(rows.find(row => row.id === target.id).stat).toBe(testStat);
+    const { data: rows, error: readError } = await sb.from('traits')
+      .select('id,stat').eq('character_id', characterId).order('id');
+    expect(readError).toBeNull();
+    expect(rows).toHaveLength(rpcOriginalTraits.length);
+    expect(rows.find(row => row.id === target.id).stat).toBe(testStat);
+  } finally {
+    await restoreRpcTraits();
+  }
 });
 
 // characters_stat_cap_purchase_keys / characters_stat_cap_purchase_values
@@ -213,8 +250,10 @@ test.each([
   ['two known stats', { might: 2, luck: 3 }]
 ])('stat_cap_purchases accepts %s', async (_label, shape) => {
   const id = await fixtureCharacterRow();
-  const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
-  expect(error).toBeNull();
+  await restoring('characters', id, { stat_cap_purchases: characterFixtureOriginalPurchases }, async () => {
+    const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
+    expect(error).toBeNull();
+  });
 });
 
 // The twelve `<stat> >= 0` CHECK constraints (supabase/migrations/
@@ -259,6 +298,8 @@ test('a negative stat is rejected', async () => {
 
 test('a stat of 9999 is still accepted -- the database enforces only the floor, not a Cap it cannot compute', async () => {
   const id = await statColumnFixtureRow();
-  const { error } = await sb.from('characters').update({ vitality: 9999 }).eq('id', id);
-  expect(error).toBeNull();
+  await restoring('characters', id, { vitality: statColumnFixtureOriginalVitality }, async () => {
+    const { error } = await sb.from('characters').update({ vitality: 9999 }).eq('id', id);
+    expect(error).toBeNull();
+  });
 });
