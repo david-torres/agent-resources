@@ -1,6 +1,6 @@
 const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
-const { v1LevelingSequence, v2LevelingSequence } = require('./enclave-consts');
+const { v1LevelingSequence, v2LevelingSequence, personalityMap } = require('./enclave-consts');
 
 // The class form's gear category <select> has to pick the same `selected`
 // option normalizeGear would pick for the same item, or an uncategorised item
@@ -234,8 +234,27 @@ const nextPerkPositionH = function (perks, abilityId) {
   return Math.max(...peers.map(p => Number(p.position) || 0)) + 1;
 };
 
+// Aspirant Traits are "fully customizable" (pg. 3), so a stored Trait name is
+// not guaranteed to be one of personalityMap's 48 words. A <select> built only
+// from the vocabulary has no <option> for a self-made word, and a browser given
+// no matching option falls back to the FIRST one -- silently rewriting the word
+// and moving its +1 Cap to another Stat. Returns the stored row, so the
+// template can render one extra option for it, only when the word is outside
+// the vocabulary. Matched case-insensitively, like shapeTrait's own lookup
+// (services/character/input.js) and 20260919000000_traits_stat_affiliation.sql.
+const vocabularyWords = new Set(Object.values(personalityMap).flat());
+
+const customTraitH = function (traits, index) {
+  const trait = (Array.isArray(traits) ? traits[index] : null) || {};
+  const name = typeof trait.name === 'string' ? trait.name.trim() : '';
+  const stat = typeof trait.stat === 'string' ? trait.stat.trim() : '';
+  if (!name || !stat || vocabularyWords.has(name.toLowerCase())) return null;
+  return { name, stat };
+};
+
 module.exports = {
   times,
+  customTrait: customTraitH,
   date_tz,
   time_ago,
   calendar_link,

@@ -119,10 +119,11 @@ test('deceased submit button has no bare disabled attribute', () => {
 
 // --- stat blocks ----------------------------------------------------------
 //
-// This form is a plain native POST -- no fetch, no Alpine state carrying the
-// values -- so the hidden input inside each control is the ONLY thing that
-// makes a stat reach the server. A test that only checked the blocks render
-// would pass on a form that silently posts no stats at all.
+// This form submits through htmx (`hx-post`/`hx-put` on the <form>), which
+// serializes the form's own named fields and nothing else -- so the hidden
+// input inside each control is the ONLY thing that makes a stat reach the
+// server. A test that only checked the blocks render would pass on a form
+// that silently posts no stats at all.
 
 const Handlebars = require('handlebars');
 const hbsHelpers = require('handlebars-helpers')();
@@ -203,7 +204,7 @@ test('the personality select marks the character\'s existing trait as selected',
   const character = { traits: [{ name: 'brave', stat: 'might' }] };
   const html = hb.compile(personalitySection)({ personalityMap, character });
 
-  const selectedMatch = html.match(/<option value="([^"]+)"\s+selected>/);
+  const selectedMatch = html.match(/<option value="([^"]+)" data-stat="[^"]+"\s+selected>/);
   expect(selectedMatch).toBeTruthy();
   expect(selectedMatch[1]).toBe('brave');
 });
@@ -222,4 +223,118 @@ test('the Created date input carries a max attribute sourced from the render con
   });
 
   expect(html).toContain('max="2026-08-15"');
+});
+
+// --- self-made Trait words ------------------------------------------------
+//
+// Task 10 made a Trait word outside the 48-word vocabulary storable. A form
+// built only from personalityMap has no <option> for such a word, so the
+// browser selects nothing and falls back to each select's FIRST option --
+// the same word in all three, which validateTraits then refuses for sharing
+// a Stat. The stored word therefore has to render as an option of its own,
+// and the Stat has to be submitted alongside the name, because the server can
+// only resolve a self-made word's Stat from what the form sends.
+
+const renderPersonality = (context) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  const start = FORM_SRC.indexOf('<label class="label">Personality</label>');
+  const section = FORM_SRC.slice(start, FORM_SRC.indexOf('<hr />', start));
+  return hb.compile(section)({ personalityMap, ...context });
+};
+
+test('a self-made Trait word renders as a selected option of its own', () => {
+  const html = renderPersonality({
+    character: {
+      traits: [
+        { name: 'brave', stat: 'might' },
+        { name: 'wanderer', stat: 'arcane' },
+        { name: 'calm', stat: 'will' }
+      ]
+    }
+  });
+
+  expect(html).toMatch(/<option value="wanderer" data-stat="arcane" selected>/);
+  expect(html).toMatch(/Wanderer \(Arcane\)/);
+});
+
+test('each Trait slot submits the stored Stat alongside the name', () => {
+  const html = renderPersonality({
+    character: {
+      traits: [
+        { name: 'brave', stat: 'might' },
+        { name: 'wanderer', stat: 'arcane' },
+        { name: 'calm', stat: 'will' }
+      ]
+    }
+  });
+
+  expect(html).toMatch(/name="trait0_stat"[\s\S]*?value="might"/);
+  expect(html).toMatch(/name="trait1_stat"[\s\S]*?value="arcane"/);
+  expect(html).toMatch(/name="trait2_stat"[\s\S]*?value="will"/);
+});
+
+test('three vocabulary Traits add no extra option and stay selected', () => {
+  const html = renderPersonality({
+    character: {
+      traits: [
+        { name: 'brave', stat: 'might' },
+        { name: 'sly', stat: 'reflex' },
+        { name: 'calm', stat: 'will' }
+      ]
+    }
+  });
+
+  const vocabularySize = Object.values(personalityMap).flat().length;
+  expect(html.match(/<option /g)).toHaveLength(vocabularySize * 3);
+
+  const selected = [...html.matchAll(/<option value="([^"]+)" data-stat="([^"]+)" selected>/g)];
+  expect(selected.map(match => [match[1], match[2]]))
+    .toEqual([['brave', 'might'], ['sly', 'reflex'], ['calm', 'will']]);
+});
+
+test('a new character submits no Stat, leaving the vocabulary to resolve it', () => {
+  // shapeTrait (services/character/input.js) falls back to the vocabulary when
+  // no Stat is submitted, which is the right answer for a fresh form sitting
+  // on its first option.
+  const html = renderPersonality({ character: {} });
+  expect(html).toMatch(/name="trait0_stat"[\s\S]*?value=""/);
+  expect(html).not.toMatch(/ selected>/);
+});
+
+// The round-trip that matters is the whole loop: what the form RENDERS for a
+// stored character has to be what the server SHAPES back into the same three
+// rows. Asserting only on the markup would miss a name/Stat pairing that the
+// browser serializes one way and shapeTrait resolves another.
+const { normalizeCharacterInput } = require('../services/character/input');
+
+const submitPersonality = (html) => {
+  const payload = {};
+  for (const slot of [0, 1, 2]) {
+    const select = html.slice(
+      html.indexOf(`name="trait${slot}"`),
+      html.indexOf('</select>', html.indexOf(`name="trait${slot}"`))
+    );
+    const chosen = select.match(/<option value="([^"]+)"[^>]*\sselected>/);
+    payload[`trait${slot}`] = chosen ? chosen[1] : '';
+    const hidden = html.slice(html.indexOf(`name="trait${slot}_stat"`));
+    payload[`trait${slot}_stat`] = hidden.match(/value="([^"]*)"/)[1];
+  }
+  return payload;
+};
+
+test('submitting the rendered form preserves all three names and Stats', () => {
+  const traits = [
+    { name: 'brave', stat: 'might' },
+    { name: 'wanderer', stat: 'arcane' },
+    { name: 'calm', stat: 'will' }
+  ];
+  const html = renderPersonality({ character: { traits } });
+
+  const { childData, error } = normalizeCharacterInput(submitPersonality(html), {});
+
+  expect(error).toBeNull();
+  expect(childData.traits).toEqual(traits);
 });

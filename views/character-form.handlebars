@@ -164,18 +164,33 @@
     <div class="columns is-multiline">
       {{#times 3}}
       <div class="column is-one-third">
-        <div class="control">
+        {{!-- The Stat travels with the name. An Aspirant Trait word may be
+              self-made (pg. 3), and the server can only resolve such a word's
+              Stat from what the form sends -- shapeTrait
+              (services/character/input.js) lets a submitted Stat win over a
+              vocabulary match. The hidden input is server-rendered with the
+              stored Stat so an untouched slot round-trips exactly, and the
+              select rewrites it from the chosen option's data-stat. Empty is
+              safe: shapeTrait then falls back to the vocabulary, which is the
+              right answer for a new character sitting on the first option. --}}
+        <div class="control" x-data>
           <label class="label">Trait:</label>
           <div class="select">
-            <select name="trait{{@index}}" required>
+            <select name="trait{{@index}}" required
+                    @change="$refs.traitStat.value = $event.target.selectedOptions[0].dataset.stat">
+              {{#with (customTrait character.traits @index)}}
+              <option value="{{name}}" data-stat="{{stat}}" selected>{{capitalize name}} ({{capitalize stat}})</option>
+              {{/with}}
               {{#each personalityMap}}
               {{#each this}}
-              <option value="{{this}}" {{#if (eq (lookup (itemAt ../../character.traits @../../index) "name") this)}}selected{{/if}}>
+              <option value="{{this}}" data-stat="{{@../key}}" {{#if (eq (lookup (itemAt ../../character.traits @../../index) "name") this)}}selected{{/if}}>
                 {{capitalize this}} ({{capitalize @../key}})</option>
               {{/each}}
               {{/each}}
             </select>
           </div>
+          <input type="hidden" name="trait{{@index}}_stat" x-ref="traitStat"
+                 value="{{lookup (itemAt character.traits @index) 'stat'}}">
         </div>
       </div>
       {{/times}}
