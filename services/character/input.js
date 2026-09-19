@@ -3,7 +3,9 @@ const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
 const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
-const { TRAIT_COUNT } = require('../../util/stat-caps');
+const {
+  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, traitGrantFor, assignedPluses
+} = require('../../util/stat-caps');
 const {
   countWordsExcludingRatings,
   ENCHANTMENT_WORD_LIMIT,
@@ -200,6 +202,70 @@ const validateTraits = (traits, { economy } = {}) => {
     }
     seenStats.add(stat);
   }
+  return errors.length === 0 ? { ok: true } : { ok: false, errors };
+};
+
+// Judges a character's Stats against util/stat-caps.js -- the single
+// definition of every figure and all the arithmetic over them -- following
+// validateEconomyLimits's contract just above: `{ ok: true }` or
+// `{ ok: false, errors }`, never a throw. A throw here would reach
+// `POST /characters/wizard` and `POST /characters` as an unhandled promise
+// rejection (neither route has an asyncHandler wrapper, so the request just
+// hangs) and `PUT /characters/:id` as a generic "unexpected error" (a bare
+// Error has no `.code`, so util/http-error.js classifyError drops the message
+// in production).
+//
+// The Advent economy is deliberately unenforced, for the same reason
+// validateEconomyLimits skips it: 327 live characters predate any Stat
+// enforcement and no measurement says they would pass one, so enforcing it
+// now would retroactively invalidate real data. Aspirant and Aspiring are
+// both empty populations, which is what makes hard rejection safe for them.
+//
+// `enforceCreationAllotment` (default true) exists because the per-stat Cap
+// and the plus allotment need different information. The Cap needs only a
+// character's Traits and its stored Cap purchases, which every caller has. The
+// allotment needs to know how many pluses were bought with Merx through Stat
+// Training (pg. 85, restated pg. 87), and nothing stores those -- the purchase
+// surface is not built. Enforcing the allotment on an edit would therefore
+// refuse pluses a player legitimately bought.
+//
+// Do NOT "tidy this up" by passing an allotment of 0 or by letting the default
+// apply on the update path. That would not skip the check; it would enforce it
+// against a budget that is wrong for every character who has ever trained a
+// Stat, and a gate that refuses legal play is worse than an absent one --
+// the absence is obvious, while the false rejection reads as a rules decision.
+// validateEconomyLimits in this file splits enforceMerxBudget for the same
+// reason, and a reviewer confirmed that comment is what stopped the tidy-up
+// from being reintroduced.
+//
+// The +++ creation ceiling and the plus allotment are both creation-only
+// rules and share the one flag: a stored Stat value legitimately exceeds +++
+// after a level-up (LEVEL_PLUSES_PER_LEVEL) or a Cap purchase, so the ceiling
+// is exactly as wrong to enforce on an edit as the allotment is.
+const validateStatLimits = ({
+  economy, stats, traits, capPurchases, classSpread, level, enforceCreationAllotment = true
+} = {}) => {
+  if (economy === 'advent') return { ok: true };
+
+  const errors = [];
+
+  for (const breach of capBreaches({ stats, traits, capPurchases })) {
+    errors.push(`${breach.stat} is ${breach.value}, over its Cap of ${breach.cap}.`);
+  }
+
+  if (enforceCreationAllotment) {
+    for (const breach of creationCeilingBreaches(stats)) {
+      errors.push(`${breach.stat} is ${breach.value} at creation, over the +++ ceiling of ${breach.cap}.`);
+    }
+
+    const traitGrant = traitGrantFor(traits, economy);
+    const assigned = assignedPluses({ stats, classSpread, traitGrant });
+    const allotment = plusAllotment({ economy, level });
+    if (allotment != null && assigned > allotment) {
+      errors.push(`This character assigns ${assigned} pluses of a creation allotment of ${allotment}.`);
+    }
+  }
+
   return errors.length === 0 ? { ok: true } : { ok: false, errors };
 };
 
@@ -650,6 +716,7 @@ module.exports = {
   validateGearEquipment,
   validateEconomyLimits,
   validateTraits,
+  validateStatLimits,
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,

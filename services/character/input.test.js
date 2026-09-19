@@ -1,7 +1,7 @@
 const { test, expect } = require('bun:test');
 const {
   normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment,
-  validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits
+  validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits, validateStatLimits
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 const { personalityMap } = require('../../util/enclave-consts');
@@ -415,6 +415,142 @@ test('V1 economies require exactly three Traits, each on its own Stat', () => {
 test('advent is not held to either Trait rule', () => {
   const collide = [{ name: 'brave', stat: 'might' }, { name: 'bold', stat: 'might' }];
   expect(validateTraits(collide, { economy: 'advent' })).toEqual({ ok: true });
+});
+
+// --- validateStatLimits: the per-stat Cap and the creation allotment ----
+//
+// Reports like validateEconomyLimits -- `{ ok: true }` or `{ ok: false,
+// errors }` -- never a throw. See validateStatLimits's own comment in
+// input.js for why: a throw here would hang POST /characters/wizard and
+// POST /characters (neither route has an asyncHandler wrapper) and would
+// lose its message on PUT /characters/:id (classifyError's generic
+// "unexpected error" text).
+
+// Distributes `total` pluses across as many stats as it needs, never more
+// than 3 to a stat, so a large total can be asserted against the plus
+// allotment without also tripping the +++ creation ceiling -- the two rules
+// are independent and a test for one should not accidentally exercise the
+// other.
+const STATS_FOR_SPREAD = [
+  'vitality', 'might', 'resilience', 'spirit', 'arcane', 'will',
+  'sensory', 'reflex', 'vigor', 'skill', 'intelligence', 'luck'
+];
+const spreadStats = (total) => {
+  const stats = {};
+  let remaining = total;
+  for (const stat of STATS_FOR_SPREAD) {
+    if (remaining <= 0) break;
+    const amount = Math.min(3, remaining);
+    stats[stat] = amount;
+    remaining -= amount;
+  }
+  return stats;
+};
+
+test('advent returns ok:true whatever it is given', () => {
+  expect(validateStatLimits({
+    economy: 'advent', stats: { might: 999 }, traits: [], capPurchases: { might: 999 }
+  })).toEqual({ ok: true });
+});
+
+test('a stat at its Cap passes and one over it fails, naming the stat, its value and its Cap', () => {
+  const atCap = validateStatLimits({
+    economy: 'aspirant', stats: { might: 5 }, traits: [], capPurchases: {}, enforceCreationAllotment: false
+  });
+  expect(atCap).toEqual({ ok: true });
+
+  const overCap = validateStatLimits({
+    economy: 'aspirant', stats: { might: 6 }, traits: [], capPurchases: {}, enforceCreationAllotment: false
+  });
+  expect(overCap.ok).toBe(false);
+  expect(overCap.errors.join(' ')).toMatch(/might/);
+  expect(overCap.errors.join(' ')).toMatch(/6/);
+  expect(overCap.errors.join(' ')).toMatch(/5/);
+});
+
+test('a Trait raises the Cap so the same value passes with the Trait and fails without it', () => {
+  const stats = { might: 6 };
+  const traits = [{ name: 'brave', stat: 'might' }];
+  expect(validateStatLimits({
+    economy: 'aspirant', stats, traits, capPurchases: {}, enforceCreationAllotment: false
+  })).toEqual({ ok: true });
+  expect(validateStatLimits({
+    economy: 'aspirant', stats, traits: [], capPurchases: {}, enforceCreationAllotment: false
+  }).ok).toBe(false);
+});
+
+test('a purchased Cap does the same', () => {
+  const stats = { might: 6 };
+  expect(validateStatLimits({
+    economy: 'aspirant', stats, traits: [], capPurchases: { might: 1 }, enforceCreationAllotment: false
+  })).toEqual({ ok: true });
+  expect(validateStatLimits({
+    economy: 'aspirant', stats, traits: [], capPurchases: {}, enforceCreationAllotment: false
+  }).ok).toBe(false);
+});
+
+test('the +++ ceiling refuses a 4 at creation and permits it on update', () => {
+  const stats = { might: 4 };
+  const atCreation = validateStatLimits({
+    economy: 'aspirant', stats, traits: [], capPurchases: {}, classSpread: {}, level: 1
+  });
+  expect(atCreation.ok).toBe(false);
+  expect(atCreation.errors.join(' ')).toMatch(/\+\+\+/);
+
+  const onUpdate = validateStatLimits({
+    economy: 'aspirant', stats, traits: [], capPurchases: {}, enforceCreationAllotment: false
+  });
+  expect(onUpdate).toEqual({ ok: true });
+});
+
+test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow by 2 per level', () => {
+  const at = (economy, level, total) => validateStatLimits({
+    economy, stats: spreadStats(total), traits: [], capPurchases: {}, classSpread: {}, level
+  });
+
+  expect(at('aspirant', 1, 6)).toEqual({ ok: true });
+  expect(at('aspirant', 1, 7).ok).toBe(false);
+  expect(at('aspiring', 1, 4)).toEqual({ ok: true });
+  expect(at('aspiring', 1, 5).ok).toBe(false);
+
+  expect(at('aspirant', 2, 8)).toEqual({ ok: true });
+  expect(at('aspirant', 2, 9).ok).toBe(false);
+  expect(at('aspiring', 2, 6)).toEqual({ ok: true });
+  expect(at('aspiring', 2, 7).ok).toBe(false);
+});
+
+// This is the design's most surprising property, pinned directly: the two
+// calls below submit the IDENTICAL payload -- same stats, same Traits, same
+// class spread, same level -- an over-spend that a player could only reach by
+// training Stats with Merx after creation. The only thing that differs is
+// enforceCreationAllotment. If a future edit let the allotment default apply
+// on an update path, or passed it 0, this test would start failing every
+// character who has ever trained a Stat, silently, since the payload here is
+// exactly like theirs.
+test('enforceCreationAllotment is the only difference between a passing and failing over-spend payload', () => {
+  const payload = {
+    economy: 'aspirant',
+    stats: {
+      arcane: 1, sensory: 2, // class spread
+      will: 1, // third Trait's value grant
+      vitality: 2, resilience: 2, spirit: 2, luck: 1 // player-assigned: 7, one over the level-1 allotment of 6
+    },
+    traits: [
+      { name: 'brave', stat: 'might' },
+      { name: 'calm', stat: 'spirit' },
+      { name: 'sharp', stat: 'will' }
+    ],
+    capPurchases: {},
+    classSpread: { arcane: 1, sensory: 2 },
+    level: 1
+  };
+
+  const atCreation = validateStatLimits(payload);
+  expect(atCreation.ok).toBe(false);
+  expect(atCreation.errors.join(' ')).toMatch(/allotment/);
+
+  const onUpdate = validateStatLimits({ ...payload, enforceCreationAllotment: false });
+  expect(onUpdate).toEqual({ ok: true });
 });
 
 const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
