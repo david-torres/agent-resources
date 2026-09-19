@@ -448,3 +448,29 @@ test('a stored value above the box count still shows its real number', () => {
   expect(html).toContain('statBlocks(9, 5, &quot;luck&quot;)');
   expect(html).toContain('x-show="value > max"');
 });
+
+// customTrait matches the vocabulary case-insensitively, like shapeTrait's own
+// lookup, 20260919000000_traits_stat_affiliation.sql's backfill and the AI
+// import. The `selected` comparison has to agree, or a stored "Brave" gets no
+// custom option (the word IS in the vocabulary) AND no vocabulary option
+// selected -- so the first option wins while the hidden Stat keeps the stored
+// one, storing "indulgent" affiliated with might. Latent today: all 981 live
+// trait names are lowercase.
+test('a capitalized stored Trait selects its vocabulary option', () => {
+  const html = renderPersonality({
+    character: {
+      traits: [
+        { name: 'Brave', stat: 'might' },
+        { name: 'sly', stat: 'reflex' },
+        { name: 'calm', stat: 'will' }
+      ]
+    }
+  });
+
+  const selected = [...html.matchAll(/<option value="([^"]+)" data-stat="([^"]+)" selected>/g)];
+  expect(selected.map(match => [match[1], match[2]]))
+    .toEqual([['brave', 'might'], ['sly', 'reflex'], ['calm', 'will']]);
+  // No extra option: "Brave" is a vocabulary word, not a self-made one.
+  const vocabularySize = Object.values(personalityMap).flat().length;
+  expect(html.match(/<option /g)).toHaveLength(vocabularySize * 3);
+});

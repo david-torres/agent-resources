@@ -183,7 +183,13 @@
               {{/with}}
               {{#each personalityMap}}
               {{#each this}}
-              <option value="{{this}}" data-stat="{{@../key}}" {{#if (eq (lookup (itemAt ../../character.traits @../../index) "name") this)}}selected{{/if}}>
+              {{!-- Compared lowercased, so this agrees with customTrait above:
+                    that helper decides a word is IN the vocabulary
+                    case-insensitively, so a case-sensitive `eq` here would give
+                    a stored "Brave" neither a custom option nor a selected one,
+                    and the first option would win while the hidden Stat kept
+                    the stored one. --}}
+              <option value="{{this}}" data-stat="{{@../key}}" {{#if (eq (lowercase (lookup (itemAt ../../character.traits @../../index) "name")) this)}}selected{{/if}}>
                 {{capitalize this}} ({{capitalize @../key}})</option>
               {{/each}}
               {{/each}}
