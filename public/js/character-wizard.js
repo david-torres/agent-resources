@@ -32,6 +32,15 @@ window.CharacterWizard = (function () {
   // successful mission on top of the base 2. Unbounded — character history
   // matters.
   const BONUS_MERX_PER_SUCCESSFUL = 1;
+  // Total creation pluses before level growth, and the per-level growth
+  // rate. Second copy of util/stat-caps.js's CREATION_PLUSES /
+  // LEVEL_PLUSES_PER_LEVEL — that module is deliberately require-free
+  // CommonJS and nothing yet serves it to the browser (routes/characters.js
+  // does not put it on `wizardData`), so this file mirrors it the same way
+  // it already mirrors util/character-derived.js's gear costs above rather
+  // than leaving the figures unsourced.
+  const CREATION_PLUSES = { advent: 6, aspirant: 6, aspiring: 4 };
+  const LEVEL_PLUSES_PER_LEVEL = 2;
 
   // ---------- Data ----------
   const dataEl = document.getElementById('wizard-data');
@@ -739,6 +748,19 @@ const getMerxBudget = () => {
     return null;
   };
 
+  // The Stat to submit for a Trait slot: the player's explicit pick (the
+  // split UI's stat dropdown) wins over a vocabulary match, and a vocabulary
+  // match is the only fallback when nothing was explicitly picked. A
+  // submitted Stat must win over a coincidental 48-word hit — pg. 3 makes
+  // Aspirant Traits "fully customizable" — so this is the opposite priority
+  // from getPersonalityPoints below, which resolves the recognized word
+  // first because that function decides bonus placement, not what to submit.
+  const getTraitStat = (idx) => {
+    const picked = state.traitStats && state.traitStats[idx];
+    if (picked) return picked;
+    return state.traits[idx] ? getStatForTrait(state.traits[idx]) : null;
+  };
+
   // { stat: points } contributed by the class's stat_spread.
   const getClassPoints = () => {
     const c = selectedClass();
@@ -762,11 +784,29 @@ const getMerxBudget = () => {
 //   3. None — if neither is available, no bonus is awarded (the user gets
 //      the full 6+2*(level-1) points to distribute instead).
   const getPersonalityPoints = () => {
+    const statForSlot = (idx) => {
+      let stat = state.traits[idx] ? getStatForTrait(state.traits[idx]) : null;
+      if (!stat && state.traitStats && state.traitStats[idx]) {
+        stat = state.traitStats[idx];
+      }
+      return stat;
+    };
     const pts = {};
-    let stat3 = state.traits[2] ? getStatForTrait(state.traits[2]) : null;
-    if (!stat3 && state.traitStats && state.traitStats[2]) {
-      stat3 = state.traitStats[2];
+    if (DATA.mode === 'aspiring') {
+      // pg. 90: aspiring's four creation pluses are 3 pinned one-per-Trait to
+      // that Trait's Stat, plus a 4th free. This is ruling 8 in the design
+      // spec's decided reading -- not three pluses freely arranged across
+      // the three Stats -- so every resolved Trait gets exactly +1 here,
+      // never more, regardless of the other two.
+      for (let idx = 0; idx < 3; idx++) {
+        const stat = statForSlot(idx);
+        if (stat) pts[stat] = (pts[stat] || 0) + 1;
+      }
+      return pts;
     }
+    // Advent pg. 16 / Aspirant pg. 3: only the third Trait grants a Value
+    // bonus (the first two are already covered by the class's stat spread).
+    const stat3 = statForSlot(2);
     if (stat3) pts[stat3] = 1;
     return pts;
   };
@@ -780,7 +820,8 @@ const getMerxBudget = () => {
   const getBoxesPerStat = () => 5;
 
   const getTotalPoints = () => {
-    return 6 + Math.max(0, (state.level - 1) * 2);
+    const base = CREATION_PLUSES[DATA.mode] || CREATION_PLUSES.aspirant;
+    return base + Math.max(0, (state.level - 1) * LEVEL_PLUSES_PER_LEVEL);
   };
 
   const sumPoints = (pts) => {
@@ -3186,7 +3227,14 @@ const getMerxBudget = () => {
       // out before insert and writes them to the traits table.
       trait0: state.traits[0] || null,
       trait1: state.traits[1] || null,
-      trait2: state.traits[2] || null
+      trait2: state.traits[2] || null,
+      // Each Trait's Stat, sent alongside its name in every economy (even
+      // advent, which has no stat picker but still needs a self-made word
+      // resolved) -- shapeTrait falls back to the 48-word vocabulary when
+      // this is absent, but a submitted Stat wins when present.
+      trait0_stat: getTraitStat(0),
+      trait1_stat: getTraitStat(1),
+      trait2_stat: getTraitStat(2)
     };
     // Combined stats: the model's createCharacter passes unknown fields
     // through to the insert; the characters table has 12 stat int columns.

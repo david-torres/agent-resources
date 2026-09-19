@@ -226,3 +226,25 @@ test('the aspirant gear step names both Signature prices', async () => {
   expect(body).toContain('3 Merx');
   expect(body).not.toMatch(/signature items from any class \(2 Merx\)/i);
 });
+
+// The old copy claimed "Custom names save as flavor with no stat bonus" for
+// both aspirant and aspiring. That was already false for aspirant (a custom
+// name with a picked Stat gets the third Trait's +1 Value bonus via
+// getPersonalityPoints), and Task 10 makes it false a second way: every
+// Trait, custom or recognized, now submits a Stat and so raises that Stat's
+// Cap by +1 (pg. 3, restated pg. 6). Aspiring's mechanic is different again
+// -- ruling 8 pins a Value bonus to all three Traits' Stats, not just the
+// third -- so the two economies need their own copy, not one shared claim.
+test('the personality copy for aspirant Traits states the true Value-bonus and Cap-grant rules', async () => {
+  const body = await getWizard('?mode=aspirant');
+  expect(body).not.toContain('Custom names save as flavor with no stat bonus');
+  expect(body).toContain('the third comes from any other stat and grants it +1 to its value');
+  expect(body).toContain("Whatever you type, recognized word or not, also raises that Stat's Cap by +1.");
+});
+
+test('the personality copy for aspiring Traits states the true four-plus, three-Trait allotment', async () => {
+  const body = await getWizard('?mode=aspiring');
+  expect(body).not.toContain('Custom names save as flavor with no stat bonus');
+  expect(body).toContain('three of your four creation pluses, one per Trait');
+  expect(body).toContain("each also raises that Stat's Cap by +1, whether the name is recognized or your own");
+});

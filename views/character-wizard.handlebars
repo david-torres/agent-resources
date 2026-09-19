@@ -136,8 +136,10 @@
   <div class="box">
     <h4 class="title is-5 mb-2">Personality</h4>
     <p class="has-text-grey is-size-7 mb-3">
-      {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
-        Pick a stat, then pick a trait (or type your own). Recognized names still denote their stat — the first two come from your class's spread (two different stats), the third comes from any other stat (and grants +1 to it). Custom names save as flavor with no stat bonus.
+      {{#if (eq mode 'aspirant')}}
+        Pick a stat, then pick a trait (or type your own). The first two come from your class's spread (two different stats); the third comes from any other stat and grants it +1 to its value. Whatever you type, recognized word or not, also raises that Stat's Cap by +1.
+      {{else if (eq mode 'aspiring')}}
+        Pick a stat, then pick a trait (or type your own). The first two come from the classes you picked items from (two different stats); the third comes from any other stat. All three grant +1 to their Stat's value — three of your four creation pluses, one per Trait — and each also raises that Stat's Cap by +1, whether the name is recognized or your own.
       {{else}}
         Choose 3 personality traits. The first two come from your class's stat spread (two different stats). The third comes from any other stat.
       {{/if}}
