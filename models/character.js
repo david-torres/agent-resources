@@ -156,7 +156,7 @@ const getCharacter = async (id, client = supabase) => {
     console.error(traitsError);
     return { data: null, error: traitsError };
   }
-  data.traits = traits.map(trait => trait.name);
+  data.traits = traits.map(({ name, stat }) => ({ name, stat }));
 
   const { data: gear, error: gearError } = await characterRepository.getCharacterGear(id, client);
   if (gearError) {

@@ -180,6 +180,34 @@ test('every stat POSTs its own name from a hidden input', async () => {
 // is a client-side convenience that stops most players from ever submitting
 // one; the route must supply today's date (UTC) as maxCreatedAt.
 
+// --- personality trait select --------------------------------------------
+//
+// character.traits is `[{name, stat}]` (Task 5). `itemAt` returns the whole
+// object at that index, so the `selected` comparison has to pull `.name`
+// back out before comparing it against the option's string value -- compare
+// the object itself and every option renders unselected.
+
+const { personalityMap } = require('../util/enclave-consts');
+
+test('the personality select marks the character\'s existing trait as selected', () => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+
+  const personalitySection = FORM_SRC.slice(
+    FORM_SRC.indexOf('<label class="label">Personality</label>'),
+    FORM_SRC.indexOf('<hr />', FORM_SRC.indexOf('<label class="label">Personality</label>'))
+  );
+
+  const character = { traits: [{ name: 'brave', stat: 'might' }] };
+  const html = hb.compile(personalitySection)({ personalityMap, character });
+
+  const selectedMatch = html.match(/<option value="([^"]+)"\s+selected>/);
+  expect(selectedMatch).toBeTruthy();
+  expect(selectedMatch[1]).toBe('brave');
+});
+
 test('the Created date input carries a max attribute sourced from the render context', () => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);

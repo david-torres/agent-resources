@@ -30,7 +30,7 @@ const makeCharacter = (overrides = {}) => ({
   id: 'char-1',
   name: 'Ash',
   ...Object.fromEntries(statList.map(stat => [stat, 2])),
-  traits: ['brave'],
+  traits: [{ name: 'brave', stat: 'might' }],
   abilities: [{ id: 'ab-1', name: 'Fireball', description: 'Big boom', class_id: 'class-a' }],
   gear: [{ name: 'Staff', description: 'Pointy', class_id: 'class-a' }],
   ability_perks: [],
@@ -103,6 +103,15 @@ test('a gated item shows its name but offers no tooltip', () => {
   }));
   expect(html).toContain('Fireball');
   expect(html).not.toContain('data-tooltip-markdown');
+});
+
+test('personality traits render each trait name, not [object Object]', () => {
+  const html = render(makeCharacter({
+    traits: [{ name: 'brave', stat: 'might' }, { name: 'curious', stat: 'intelligence' }],
+  }));
+  expect(html).toContain('Brave');
+  expect(html).toContain('Curious');
+  expect(html).not.toContain('[object Object]');
 });
 
 test('common items render as a markdown list', () => {

@@ -57,6 +57,34 @@ test('Escape closes it', async () => {
   expect(document.getElementById('export-dropdown').classList.contains('is-active')).toBe(false);
 });
 
+// character.traits is `[{name, stat}]` (Task 5) -- a missed `.name` here
+// would silently render `[object Object]` instead of erroring.
+test('the Personality box renders each trait name, not [object Object]', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const Handlebars = require('handlebars');
+  const hbsHelpers = require('handlebars-helpers')();
+  const customHelpers = require('../util/handlebars');
+
+  const src = fs.readFileSync(path.join(__dirname, 'character.handlebars'), 'utf8');
+  const personalitySection = src.slice(
+    src.indexOf('<h3 class="title is-4">Personality</h3>'),
+    src.indexOf('<h3 class="title is-4">Recent Missions</h3>')
+  );
+
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+
+  const html = hb.compile(personalitySection)({
+    character: { traits: [{ name: 'brave', stat: 'might' }, { name: 'curious', stat: 'intelligence' }] },
+  });
+
+  expect(html).toContain('Brave');
+  expect(html).toContain('Curious');
+  expect(html).not.toContain('[object Object]');
+});
+
 test('both export dropdowns really carry the directives', () => {
   const fs = require('fs');
   const path = require('path');

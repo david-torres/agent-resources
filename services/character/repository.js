@@ -129,7 +129,7 @@ const getCharacterAdmin = async (id) => {
 
   const { data: traits, error: traitsError } = await getCharacterTraits(id);
   if (traitsError) return { data: null, error: traitsError };
-  data.traits = traits.map(trait => trait.name);
+  data.traits = traits.map(({ name, stat }) => ({ name, stat }));
 
   const { data: gear, error: gearError } = await getCharacterGear(id, supabaseAdmin);
   if (gearError) return { data: null, error: gearError };

@@ -170,7 +170,7 @@
             <select name="trait{{@index}}" required>
               {{#each personalityMap}}
               {{#each this}}
-              <option value="{{this}}" {{#if (eq (itemAt ../../character.traits @../../index) this)}}selected{{/if}}>
+              <option value="{{this}}" {{#if (eq (lookup (itemAt ../../character.traits @../../index) "name") this)}}selected{{/if}}>
                 {{capitalize this}} ({{capitalize @../key}})</option>
               {{/each}}
               {{/each}}

@@ -87,7 +87,7 @@ const exportToMarkdown = (character, options = {}) => {
   
   // Personality Traits - displayed as inline tags
   if (character.traits && character.traits.length > 0) {
-    const traitTags = character.traits.map(trait => `\`${capitalize(trait)}\``).join(' · ');
+    const traitTags = character.traits.map(trait => `\`${capitalize(trait.name)}\``).join(' · ');
     lines.push(`🎭 **Personality:** ${traitTags}`);
     lines.push('');
   }
@@ -252,7 +252,11 @@ const exportToJson = (character, options = {}) => {
     completed_missions: character.completed_missions,
     commissary_reward: character.commissary_reward,
     is_deceased: character.is_deceased,
-    traits: character.traits || [],
+    // The exported JSON is a published interchange format that users already
+    // have files in; this projects names out of the internal {name, stat}
+    // shape at write time rather than exporting stat, so already-exported
+    // files never need to be reconciled with an internal shape change.
+    traits: (character.traits || []).map(trait => trait.name),
     stats: {},
     abilities: (character.abilities || []).map(a => 
       typeof a === 'string' ? { name: a } : { name: a.name, description: a.description }
