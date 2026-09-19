@@ -157,6 +157,9 @@ test('deriveMerx with no character class makes all gear off-class', () => {
 });
 
 test('deriveMerx floors at 0 when spend exceeds earned', () => {
+  // earned = 2 (advent grant) + 1 mission = 3; spend = 0 gear (2 on-class
+  // items, inside the 3 free) + 4 commons = 4; 4 > 3, so this actually
+  // exercises the floor rather than landing on it by coincidence.
   const result = deriveMerx({
     realMissions: [{ outcome: 'success' }],
     offscreenMissions: [],
@@ -164,7 +167,7 @@ test('deriveMerx floors at 0 when spend exceeds earned', () => {
       { name: 'A', class_id: 'class-A' },
       { name: 'B', class_id: 'class-A' }
     ],
-    commonItems: ['c1', 'c2', 'c3'],
+    commonItems: ['c1', 'c2', 'c3', 'c4'],
     characterClassId: 'class-A'
   });
   expect(result).toBe(0);
