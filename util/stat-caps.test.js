@@ -2,7 +2,7 @@ const { test, expect } = require('bun:test');
 const {
   BASE_STAT_CAP, CREATION_STAT_CAP, CAP_INCREASE_PLUS_COST,
   CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT,
-  statCapFor, plusAllotment, traitGrantFor, assignedPluses,
+  statCapFor, normalizeLevel, plusAllotment, traitGrantFor, assignedPluses,
   capBreaches, creationCeilingBreaches
 } = require('./stat-caps.js');
 
@@ -35,6 +35,35 @@ test('a missing or junk purchase count never lowers a Cap', () => {
   expect(statCapFor('luck', {})).toBe(5);
   expect(statCapFor('luck', { capPurchases: { luck: -4 } })).toBe(5);
   expect(statCapFor('luck', { capPurchases: { luck: 'two' } })).toBe(5);
+});
+
+// The one clamp every level-gated rule reads from. Other callers (the +++
+// creation ceiling gate in services/character/input.js) rely on this
+// agreeing with plusAllotment's own idea of the level -- see the test below.
+test('normalizeLevel clamps to a whole number no lower than 1', () => {
+  expect(normalizeLevel(1)).toBe(1);
+  expect(normalizeLevel(2)).toBe(2);
+  expect(normalizeLevel('3')).toBe(3);
+  expect(normalizeLevel(1.9)).toBe(1);
+  expect(normalizeLevel(0)).toBe(1);
+  expect(normalizeLevel(-5)).toBe(1);
+  expect(normalizeLevel(undefined)).toBe(1);
+  expect(normalizeLevel(null)).toBe(1);
+  expect(normalizeLevel('nonsense')).toBe(1);
+});
+
+// Ties plusAllotment's arithmetic to normalizeLevel's own output rather than
+// to a level plusAllotment reads and clamps itself. If plusAllotment ever
+// grew its own inline clamp again instead of calling normalizeLevel, this
+// would fail for any input where the two clamps disagree (a fraction, a
+// string, a sub-1 number) -- not just for the whole numbers a hand-picked
+// example would happen to cover.
+test('plusAllotment is computed from normalizeLevel, not a second clamp', () => {
+  const rawLevels = [1, '1', 0, -3, 1.9, undefined, null, 'nonsense', 2, '5'];
+  for (const level of rawLevels) {
+    const expected = CREATION_PLUSES.aspirant + LEVEL_PLUSES_PER_LEVEL * (normalizeLevel(level) - 1);
+    expect(plusAllotment({ economy: 'aspirant', level })).toBe(expected);
+  }
 });
 
 test('the allotment grows by two per level and is unknown for an unknown economy', () => {

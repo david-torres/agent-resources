@@ -4,7 +4,8 @@ const { validateAbilityPerks } = require('../../util/validate');
 const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
 const {
-  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, traitGrantFor, assignedPluses
+  TRAIT_COUNT, capBreaches, creationCeilingBreaches, plusAllotment, traitGrantFor, assignedPluses,
+  normalizeLevel
 } = require('../../util/stat-caps');
 const {
   countWordsExcludingRatings,
@@ -259,10 +260,10 @@ const validateStatLimits = ({
   }
 
   if (enforceCreationAllotment) {
-    // Matches plusAllotment's own level normalization so "is this level 1"
-    // agrees with the number plusAllotment is about to compute from.
-    const normalizedLevel = Math.max(1, Math.floor(Number(level)) || 1);
-    if (normalizedLevel === 1) {
+    // normalizeLevel (util/stat-caps.js) is the same clamp plusAllotment
+    // below reads its own level from, so "is this level 1" can never desync
+    // from the number plusAllotment computes the allotment against.
+    if (normalizeLevel(level) === 1) {
       for (const breach of creationCeilingBreaches(stats)) {
         errors.push(`${breach.stat} is ${breach.value} at creation, over the +++ ceiling of ${breach.cap}.`);
       }

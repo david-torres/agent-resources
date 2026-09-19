@@ -59,13 +59,21 @@ const statCapFor = (stat, { traits, capPurchases } = {}) => {
     return BASE_STAT_CAP + fromTraits + purchased;
 };
 
+// The one clamp for "what level is this character": a whole number no lower
+// than 1, so a missing, non-numeric, fractional or sub-1 level all read as
+// level 1 rather than as an error. Exported so every caller who needs to know
+// whether a character is AT level 1 -- not just how many pluses that level
+// grants -- reads it from here rather than re-deriving it; two independent
+// copies of this clamp is how a future change to one of them silently
+// desyncs a level-gated rule from plusAllotment's own idea of the level.
+const normalizeLevel = (level) => Math.max(1, Math.floor(Number(level)) || 1);
+
 // null for an economy this module has no figure for, so a caller must decide
 // what to do rather than silently enforcing zero.
 const plusAllotment = ({ economy, level } = {}) => {
     const base = CREATION_PLUSES[economy];
     if (base == null) return null;
-    const levels = Math.max(1, Math.floor(Number(level)) || 1);
-    return base + LEVEL_PLUSES_PER_LEVEL * (levels - 1);
+    return base + LEVEL_PLUSES_PER_LEVEL * (normalizeLevel(level) - 1);
 };
 
 // The third Trait's Stat gets +1 to its VALUE at creation (Advent pg. 16) --
@@ -104,6 +112,7 @@ const creationCeilingBreaches = (stats) => breachesAgainst(stats, () => CREATION
 
 module.exports = {
     statCapFor,
+    normalizeLevel,
     plusAllotment,
     traitGrantFor,
     assignedPluses,

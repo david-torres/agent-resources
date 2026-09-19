@@ -4,7 +4,8 @@ const {
   validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits, validateStatLimits
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
-const { personalityMap } = require('../../util/enclave-consts');
+const { personalityMap, statList } = require('../../util/enclave-consts');
+const { normalizeLevel } = require('../../util/stat-caps');
 
 test('trims every string in a character payload, not just item names', () => {
   const { data, childData } = normalizeCharacterInput({
@@ -432,14 +433,10 @@ test('advent is not held to either Trait rule', () => {
 // allotment without also tripping the +++ creation ceiling -- the two rules
 // are independent and a test for one should not accidentally exercise the
 // other.
-const STATS_FOR_SPREAD = [
-  'vitality', 'might', 'resilience', 'spirit', 'arcane', 'will',
-  'sensory', 'reflex', 'vigor', 'skill', 'intelligence', 'luck'
-];
 const spreadStats = (total) => {
   const stats = {};
   let remaining = total;
-  for (const stat of STATS_FOR_SPREAD) {
+  for (const stat of statList) {
     if (remaining <= 0) break;
     const amount = Math.min(3, remaining);
     stats[stat] = amount;
@@ -535,6 +532,25 @@ test('above level 1, a stat over its derived Cap is still refused', () => {
   expect(result.errors.join(' ')).toMatch(/6/);
 });
 
+// Round 2 finding: the ceiling gate re-derived plusAllotment's level clamp
+// inline instead of calling util/stat-caps.js's normalizeLevel, so a future
+// change to either clamp could make the ceiling and the allotment silently
+// disagree about what level a character is. This test drives the ceiling
+// gate from normalizeLevel's own output across the edge cases that clamp
+// actually has to handle (a string, absent, 0, a fraction) -- not just the
+// whole numbers a hand-picked pair of levels would happen to agree on -- so
+// it fails the moment the two stop reading the same clamp.
+test('the +++ ceiling gate agrees with normalizeLevel for every level shape, not just whole numbers', () => {
+  const rawLevels = [1, '1', 0, -3, 1.9, undefined, null, 'nonsense', 2, '5'];
+  for (const level of rawLevels) {
+    const isLevelOne = normalizeLevel(level) === 1;
+    const result = validateStatLimits({
+      economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, classSpread: {}, level
+    });
+    expect(result.ok).toBe(!isLevelOne);
+  }
+});
+
 test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow by 2 per level', () => {
   const at = (economy, level, total) => validateStatLimits({
     economy, stats: spreadStats(total), traits: [], capPurchases: {}, classSpread: {}, level
@@ -549,6 +565,31 @@ test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow 
   expect(at('aspirant', 2, 9).ok).toBe(false);
   expect(at('aspiring', 2, 6)).toEqual({ ok: true });
   expect(at('aspiring', 2, 7).ok).toBe(false);
+});
+
+// pg. 90: aspiring's three Trait-Stat pluses are three of the four the
+// player distributes, not a bonus on top -- traitGrantFor returns {} for
+// aspiring for exactly this reason (util/stat-caps.js). If the
+// aspirant-shaped grant were wrongly applied to an aspiring character, the
+// third Trait's Stat would read one plus richer than it is, understating
+// what the player spent by one and letting this over-spend pass at exactly
+// the allotment instead of failing one over it.
+test('aspiring gets no third-Trait grant, so a genuine over-spend by one is still refused', () => {
+  const traits = [
+    { name: 'brave', stat: 'might' },
+    { name: 'calm', stat: 'spirit' },
+    { name: 'sharp', stat: 'will' }
+  ];
+  const result = validateStatLimits({
+    economy: 'aspiring',
+    stats: { might: 2, will: 3 }, // sums to 5, one over aspiring's level-1 allotment of 4
+    traits,
+    capPurchases: {},
+    classSpread: {},
+    level: 1
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/allotment/);
 });
 
 // This is the design's most surprising property, pinned directly: the two
