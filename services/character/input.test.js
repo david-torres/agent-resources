@@ -503,6 +503,37 @@ test('the +++ ceiling refuses a 4 at creation and permits it on update', () => {
   expect(onUpdate).toEqual({ ok: true });
 });
 
+// Round 1 finding: creationCeilingBreaches was running at every level, so a
+// level-10 character (a normal flow -- normalizeWizardPayload accepts and
+// clamps a submitted level, and plusAllotment grants 24 pluses at level 10)
+// could never legally use most of its allotment. The book's "no Stat above
+// +++" (Advent pg. 16 step 4c) governs the six CREATION pluses' distribution,
+// not a permanent ceiling, which is why the base Cap of 5 exists above it.
+test('the +++ ceiling applies only at level 1: a 4 is refused at level 1 and accepted at level 2', () => {
+  const at = (level) => validateStatLimits({
+    economy: 'aspirant', stats: { might: 4 }, traits: [], capPurchases: {}, classSpread: {}, level
+  });
+  const atLevel1 = at(1);
+  expect(atLevel1.ok).toBe(false);
+  expect(atLevel1.errors.join(' ')).toMatch(/\+\+\+/);
+
+  expect(at(2)).toEqual({ ok: true });
+});
+
+// The ceiling's replacement above level 1 is the per-stat Cap, which already
+// runs unconditionally -- this pins that the fix above did not also remove
+// enforcement for a high-level character who genuinely over-built a Stat.
+test('above level 1, a stat over its derived Cap is still refused', () => {
+  const traits = [{ name: 'brave', stat: 'might' }];
+  const result = validateStatLimits({
+    economy: 'aspirant', stats: { might: 7 }, traits, capPurchases: {}, classSpread: {}, level: 10
+  });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/might/);
+  expect(result.errors.join(' ')).toMatch(/7/);
+  expect(result.errors.join(' ')).toMatch(/6/);
+});
+
 test('aspiring\'s allotment is 4 and aspirant\'s is 6 at level 1, and both grow by 2 per level', () => {
   const at = (economy, level, total) => validateStatLimits({
     economy, stats: spreadStats(total), traits: [], capPurchases: {}, classSpread: {}, level

@@ -242,6 +242,17 @@ const validateTraits = (traits, { economy } = {}) => {
 // rules and share the one flag: a stored Stat value legitimately exceeds +++
 // after a level-up (LEVEL_PLUSES_PER_LEVEL) or a Cap purchase, so the ceiling
 // is exactly as wrong to enforce on an edit as the allotment is.
+//
+// The ceiling itself is further scoped to level 1. Advent pg. 16 step 4c's
+// "no Stat above +++" governs how the six creation pluses are distributed --
+// it is not a permanent ceiling on a levelled character, which is why the
+// base Cap of 5 (pg. 3, restated pg. 6) exists above it at all. A character
+// can be created above level 1 (normalizeWizardPayload accepts and clamps a
+// submitted level), and plusAllotment grants 6 + 2*(level-1) pluses for
+// exactly that case; applying +++ at every level would refuse a build the
+// allotment itself was just computed to permit. Above level 1, the per-stat
+// Cap above -- already unconditional, and already the more generous figure
+// once a Trait or purchase has raised it -- is the binding limit.
 const validateStatLimits = ({
   economy, stats, traits, capPurchases, classSpread, level, enforceCreationAllotment = true
 } = {}) => {
@@ -254,8 +265,13 @@ const validateStatLimits = ({
   }
 
   if (enforceCreationAllotment) {
-    for (const breach of creationCeilingBreaches(stats)) {
-      errors.push(`${breach.stat} is ${breach.value} at creation, over the +++ ceiling of ${breach.cap}.`);
+    // Matches plusAllotment's own level normalization so "is this level 1"
+    // agrees with the number plusAllotment is about to compute from.
+    const normalizedLevel = Math.max(1, Math.floor(Number(level)) || 1);
+    if (normalizedLevel === 1) {
+      for (const breach of creationCeilingBreaches(stats)) {
+        errors.push(`${breach.stat} is ${breach.value} at creation, over the +++ ceiling of ${breach.cap}.`);
+      }
     }
 
     const traitGrant = traitGrantFor(traits, economy);
