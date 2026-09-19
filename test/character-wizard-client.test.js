@@ -344,3 +344,30 @@ test('at level 1 the +++ ceiling still binds on a Trait-raised Stat', () => {
   expect(statBoxes('luck')).toHaveLength(6);
   expect(classesOn('luck').filter((cls) => cls === 'is-locked')).toHaveLength(3);
 });
+
+// advent has no Trait-Cap mechanic at all: the +1 per Trait is an Aspirant rule
+// (pg. 3, restated pg. 6), the wizard's own step-2 copy scopes the claim to the
+// two V1 modes, and statCapMap (util/stat-caps.js) returns a flat BASE_STAT_CAP
+// for advent on every server surface. advent is also the wizard's DEFAULT mode
+// (routes/characters.js), so an unbranched Cap here is what most wizard sessions
+// would get.
+test('advent gets no Trait Cap bonus, at any level', () => {
+  const wizard = bootWizard({
+    mode: 'advent',
+    preselectedClassId: 'c1',
+    classes: [ASPIRANT_CLASS],
+    statList: STAT_LIST,
+    personalityMap: PERSONALITY_MAP,
+    commonItems: []
+  });
+  const state = wizard.getState();
+  state.traits[0] = 'brave';
+  state.traits[1] = 'bold';
+  state.traits[2] = 'lucky';
+  document.getElementById('step1Next').click();
+  setLevel(2);
+
+  // luck carries Trait 3 and would read as a Cap of 6 under the Aspirant rule.
+  expect(statBoxes('luck')).toHaveLength(5);
+  for (const stat of STAT_LIST) expect(statBoxes(stat)).toHaveLength(5);
+});

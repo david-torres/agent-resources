@@ -820,7 +820,12 @@ const getMerxBudget = () => {
   // the stored trait.stat and never a name lookup — granting it here against
   // getPersonalityPoints' priority order instead would offer a box the server
   // then refuses. Cap purchases are not part of creation, so they are absent.
+  // advent is flatly BASE_STAT_CAP: the +1 per Trait is an Aspirant rule, step
+  // 2's own copy scopes the claim to the two V1 modes, and advent is this
+  // wizard's default mode. Mirrors statCapMap (util/stat-caps.js), which makes
+  // the same branch for every server surface.
   const getStatCap = (stat) => {
+    if (DATA.mode === 'advent') return BASE_STAT_CAP;
     for (let idx = 0; idx < 3; idx++) {
       if (getTraitStat(idx) === stat) return BASE_STAT_CAP + 1;
     }
