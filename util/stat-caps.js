@@ -28,11 +28,12 @@ const CAP_INCREASE_PLUS_COST = 2;
 // Total pluses at creation, before level growth.
 //
 // `advent` records 6 because 6 is the true Advent figure and the wizard uses
-// it. It is never enforced -- validateStatLimits returns early for advent --
-// and recording a false value to signal "unenforced" would be a lie in the one
-// module that exists to be authoritative. SIGNATURE_CAP.advent in
-// util/merx-economy.js is null for the same kind of reason: Advent has no such
-// cap, so null is the true answer there.
+// it. Whether a save is held to it is a decision for whatever validates the
+// save, not for this module; recording a false value here to signal
+// "unenforced" would be a lie in the one place that exists to be
+// authoritative. SIGNATURE_CAP.advent in util/merx-economy.js is null for a
+// different reason that looks similar: Advent has no such cap at all, so null
+// is the true figure there.
 const CREATION_PLUSES = { advent: 6, aspirant: 6, aspiring: 4 };
 
 const LEVEL_PLUSES_PER_LEVEL = 2;
