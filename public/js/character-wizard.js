@@ -2451,13 +2451,13 @@ const getMerxBudget = () => {
   // state.gear merges the auto-loaded base picks and any elective picks
   // (the server model already keys off `class_id` to charge for on-class
   // gear, so base picks don't need to be flagged separately — they're free
-  // via STARTING_ON_CLASS_GEAR_ALLOTMENT).
+  // via ADVENT_DEFAULT_SIGNATURES).
 
   // Build a flat spend-pool = common items + class gear. Each entry is a
   // "shop item" with { key, name, description_html, cost, kind, subtype }.
   //   - advent/aspiring: only the selected class's gear (all 6 items, so the
   //     user can re-pick a base item as a duplicate). All items cost 2 Merx
-  //     (CLASS_GEAR_COST) here; the first 3 are free via STARTING_ON_CLASS_GEAR_ALLOTMENT
+  //     (CLASS_GEAR_COST) here; the first 3 are free via ADVENT_DEFAULT_SIGNATURES
   //     at pick time (syncBaseGear stamps cost: 0 on the auto-loaded base rows).
   //   - aspirant: every unlocked class's gear. Cost depends on origin:
   //     items from the user's selected class cost CLASS_GEAR_COST (2 Merx);
@@ -2546,7 +2546,7 @@ const getMerxBudget = () => {
   // Sum the merx cost of the user's current right-column picks. Common items
   // cost 1 each. Class gear carries its own `cost` (stamped at pick time):
   //   - 0 for the first effectiveFreeBaseCount() entries — auto-loaded base,
-  //     free under STARTING_ON_CLASS_GEAR_ALLOTMENT.
+  //     free under ADVENT_DEFAULT_SIGNATURES.
   //   - CLASS_GEAR_COST (2) for own-class elective picks.
   //   - CROSS_CLASS_GEAR_COST (3) for cross-class picks (aspirant only).
   // Items beyond the free allotment charge their per-item cost regardless.

@@ -10,10 +10,10 @@ const {
   CREATION_GRANT
 } = require('./merx-economy');
 
-// Number of on-class Signatures Advent grants for free at creation (pg. 3's
-// four Signature Items). The Aspirant editions replaced this gift with the
-// CREATION_GRANT Merx grant, so only the advent branch still needs it.
-const STARTING_ON_CLASS_GEAR_ALLOTMENT = 4;
+// pg. 3's "three Default" Signatures, which an Advent character has without
+// paying. The fourth item is the Elective, and it is paid for out of
+// CREATION_GRANT.advent like anything else -- see util/merx-economy.js.
+const ADVENT_DEFAULT_SIGNATURES = 3;
 
 const COUNTABLE_OUTCOMES = new Set(['success', 'failure']);
 
@@ -47,9 +47,10 @@ const coerceMerx = (raw) => {
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
 };
 
-// Advent grants four on-class Signatures at creation and charges for the rest;
-// the Aspirant editions replaced that gift with a Merx grant (pg. 3), so every
-// Signature is bought and the grant is income rather than a discount.
+// Advent grants three on-class Signatures free at creation (ADVENT_DEFAULT_
+// SIGNATURES) and charges for the rest, including the fourth -- the Elective
+// -- which is paid for out of CREATION_GRANT.advent rather than handed over
+// free.
 //
 // It reads its two prices from the same table as the Aspirant branch because
 // they are the same two numbers (2 on-class, 3 off-class) and always have been.
@@ -65,7 +66,7 @@ const adventGearSpend = (gearList, characterClassId) => {
     if (onClass) onClassCount++;
     else offClassCount++;
   }
-  const chargedOnClass = Math.max(0, onClassCount - STARTING_ON_CLASS_GEAR_ALLOTMENT);
+  const chargedOnClass = Math.max(0, onClassCount - ADVENT_DEFAULT_SIGNATURES);
   return chargedOnClass * priceOfSignature({ crossClass: false })
     + offClassCount * priceOfSignature({ crossClass: true });
 };

@@ -248,8 +248,8 @@ test('updateCharacter with auto_calculate=true overwrites the three derived fiel
   // 2 success + 1 offscreen = 3 completed; v1 sequence: 3 >= 2 -> level 2
   expect(data.completed_missions).toBe(3);
   expect(data.level).toBe(2);
-  // 2*1 + 3 = 5 merx, no spend
-  expect(data.commissary_reward).toBe(5);
+  // 2 (advent grant) + 2*1 + 3 = 7 merx, no spend
+  expect(data.commissary_reward).toBe(7);
   expect(data.auto_calculate).toBe(true);
 });
 

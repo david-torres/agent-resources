@@ -52,7 +52,10 @@ test('an unenchanted Signature is priced with no enchantment component', () => {
 test('grants are 12 Merx for a V1 class and 10 for aspiring (pp. 3, 90)', () => {
   expect(CREATION_GRANT.aspirant).toBe(12);
   expect(CREATION_GRANT.aspiring).toBe(10);
-  expect(CREATION_GRANT.advent).toBe(0);
+});
+
+test('advent grants the Elective, aspirant and aspiring their book figures', () => {
+  expect(CREATION_GRANT).toEqual({ advent: 2, aspirant: 12, aspiring: 10 });
 });
 
 test('caps are 12/8 Signatures and 6/4 Abilities (pp. 85, 92)', () => {

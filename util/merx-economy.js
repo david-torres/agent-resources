@@ -20,9 +20,15 @@ const COMMON_ITEM_PRICE = 1;
 
 // pg. 3: "Instead of four Signature Items (three Default and one Elective),
 // characters start with 12 Merx". pg. 90: aspiring starts with 10.
-// Advent grants no Merx -- it grants the four Signatures the Aspirant rule
-// replaces, which its own consumer still needs to honour separately.
-const CREATION_GRANT = { advent: 0, aspirant: 12, aspiring: 10 };
+//
+// Advent keeps the arrangement Aspirant replaces: three Default Signatures,
+// free, plus one Elective. The Elective is a choice rather than a fixed item --
+// Advent V2 pg. 16 lets it double up on a Default instead of taking a new one --
+// so it is granted as its 2-Merx value and spends like any other Merx: one
+// class item, or two common items, or a duplicated Default. Granting four free
+// items instead priced only the first of those routes and reported a deficit
+// for the other two.
+const CREATION_GRANT = { advent: 2, aspirant: 12, aspiring: 10 };
 
 // pg. 85: "you can never bring more than 12 Signature Items on a mission".
 // pg. 92: aspiring "Signature Cap is set at 8, and they may never have more

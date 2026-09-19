@@ -327,7 +327,8 @@ test('CharacterService.levelUp succeeds for the creator, backfilling named missi
 
   expect(result.error).toBeNull();
   expect(result.data.completed_missions).toBe(2);
-  expect(result.data.commissary_reward).toBe(2);
+  // 2 (advent grant) + 2 successful missions = 4
+  expect(result.data.commissary_reward).toBe(4);
   expect(backfillCalls).toEqual([
     { characterId: 'character-1', name: 'Op Alpha', profileId: 'profile-1' },
     { characterId: 'character-1', name: 'Op Bravo', profileId: 'profile-1' }

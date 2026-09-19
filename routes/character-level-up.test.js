@@ -264,8 +264,8 @@ test('level-up backfilling real missions updates stored commissary_reward', asyn
 
   expect(res.status).toBe(200);
 
-  // Two success missions at MERX_PER_MISSION_SUCCESS (1) each, no spend → 2.
-  expect(characterRow.commissary_reward).toBe(2);
+  // 2 (advent grant) + two success missions at MERX_PER_MISSION_SUCCESS (1) each, no spend → 4.
+  expect(characterRow.commissary_reward).toBe(4);
   expect(characterRow.completed_missions).toBe(2);
 });
 

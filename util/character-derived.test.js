@@ -1,4 +1,4 @@
-const { test, expect } = require('bun:test');
+const { test, expect, describe } = require('bun:test');
 const { deriveCompletedMissions } = require('./character-derived');
 
 test('deriveCompletedMissions counts success and failure real missions plus all offscreen', () => {
@@ -79,7 +79,8 @@ test('deriveMerx awards 1 per successful real mission and sums offscreen merx_ga
     commonItems: [],
     characterClassId: 'class-A'
   });
-  expect(result).toBe(7);
+  // earned = 2 (advent grant) + 2 successes + 5 offscreen (3+2+0) = 9
+  expect(result).toBe(9);
 });
 
 test('deriveMerx subtracts 1 per common item', () => {
@@ -90,12 +91,13 @@ test('deriveMerx subtracts 1 per common item', () => {
     commonItems: ['x', 'y'],
     characterClassId: 'class-A'
   });
-  expect(result).toBe(1);
+  // earned = 2 (advent grant) + 3 successes = 5; 2 common items cost 2; 5 - 2 = 3
+  expect(result).toBe(3);
 });
 
 test('deriveMerx subtracts 2 for on-class gear beyond the allotment and 3 for off-class gear', () => {
-  // 5 on-class gear: first 4 are free (creation allotment); 5th costs 2.
-  // 1 off-class costs 3. Total spend = 2 + 3 = 5.
+  // 5 on-class gear: first 3 are free (ADVENT_DEFAULT_SIGNATURES); the 4th and
+  // 5th cost 2 each. 1 off-class costs 3. Total gear spend = 4 + 3 = 7.
   const result = deriveMerx({
     realMissions: Array.from({ length: 10 }, () => ({ outcome: 'success' })),
     offscreenMissions: [],
@@ -110,13 +112,13 @@ test('deriveMerx subtracts 2 for on-class gear beyond the allotment and 3 for of
     commonItems: [],
     characterClassId: 'class-A'
   });
-  // 10 earned - (1 charged on-class * 2 + 1 off-class * 3) = 10 - 5 = 5
+  // earned = 2 (advent grant) + 10 missions = 12; 12 - 7 spend = 5
   expect(result).toBe(5);
 });
 
 test('deriveMerx treats missing class_id on gear as off-class', () => {
-  // 1 on-class (within allotment, free) + 1 off-class (no class_id, costs 3).
-  // 5 earned - 3 spend = 2.
+  // 1 on-class (within the 3-item allotment, free) + 1 off-class (no class_id, costs 3).
+  // earned = 2 (advent grant) + 5 missions = 7; 7 - 3 spend = 4.
   const result = deriveMerx({
     realMissions: Array.from({ length: 5 }, () => ({ outcome: 'success' })),
     offscreenMissions: [],
@@ -127,7 +129,7 @@ test('deriveMerx treats missing class_id on gear as off-class', () => {
     commonItems: [],
     characterClassId: 'class-A'
   });
-  expect(result).toBe(2);
+  expect(result).toBe(4);
 });
 
 test('deriveMerx with no character class makes all gear off-class', () => {
@@ -149,9 +151,9 @@ test('deriveMerx with no character class makes all gear off-class', () => {
     commonItems: [],
     characterClassId: null
   });
-  // 7 successes - 2 off-class gear at 3 each = 7 - 6 = 1
-  // Would be 7 - 4 = 3 if treated as on-class, so this discriminates.
-  expect(result).toBe(1);
+  // earned = 2 (advent grant) + 7 successes = 9; 2 off-class gear at 3 each = 6; 9 - 6 = 3.
+  // Would be 9 (no spend) if treated as on-class (within the free allotment), so this discriminates.
+  expect(result).toBe(3);
 });
 
 test('deriveMerx floors at 0 when spend exceeds earned', () => {
@@ -168,14 +170,14 @@ test('deriveMerx floors at 0 when spend exceeds earned', () => {
   expect(result).toBe(0);
 });
 
-test('deriveMerx returns 0 for empty inputs', () => {
+test('deriveMerx returns the bare advent grant for empty inputs', () => {
   expect(deriveMerx({
     realMissions: [],
     offscreenMissions: [],
     gear: [],
     commonItems: [],
     characterClassId: 'class-A'
-  })).toBe(0);
+  })).toBe(2);
 });
 
 test('deriveMerx coerces non-numeric offscreen merx_gained to 0', () => {
@@ -191,7 +193,8 @@ test('deriveMerx coerces non-numeric offscreen merx_gained to 0', () => {
     commonItems: [],
     characterClassId: 'class-A'
   });
-  expect(result).toBe(4);
+  // earned = 2 (advent grant) + 4 (only numeric merx_gained counted) = 6
+  expect(result).toBe(6);
 });
 
 const { deriveCharacterTotals } = require('./character-derived');
@@ -223,11 +226,12 @@ test('deriveCharacterTotals returns all three derived fields together', () => {
   });
 
   // completed: 2 success + 1 failure + 1 offscreen = 4
-  // merx earned: 2*1 + 3 = 5; spend: 2 items*1 + 1 on-class*2 + 1 off-class*3 = 7; max(0, 5-7) = 0
+  // merx earned: 2 (advent grant) + 2*1 + 3 = 7; spend: 2 items*1 + 1 on-class
+  // (free, within the 3-item allotment) + 1 off-class*3 = 5; max(0, 7-5) = 2
   // level (v2, 4 missions): cumulative v2 is [2,4,7,...]; 4 >= 4 -> level 3
   expect(result).toEqual({
     completed_missions: 4,
-    commissary_reward: 0,
+    commissary_reward: 2,
     merx_deficit: 0,
     level: 3
   });
@@ -242,17 +246,18 @@ test('deriveCharacterTotals defaults to v1 when rulesVersion missing', () => {
     offscreenMissions: []
   });
   // completed 5, level v1: cumulative [2,5,...] -> 5 >= 5 -> level 3
-  // merx: 5 earned, no spend = 5
+  // merx: earned = 2 (advent grant) + 5 = 7, no spend = 7
   expect(result).toEqual({
     completed_missions: 5,
-    commissary_reward: 5,
+    commissary_reward: 7,
     merx_deficit: 0,
     level: 3
   });
 });
 
 test('deriveCharacterTotals reports merx_deficit when spend exceeds earned', () => {
-  // 2 successes earn 2 merx; 5 common items cost 5; reward floors at 0, deficit = 3.
+  // 2 successes plus the 2-Merx advent grant earn 4 merx; 5 common items
+  // cost 5; reward floors at 0, deficit = 1.
   const character = {
     class_id: 'class-A',
     gear: [],
@@ -265,7 +270,7 @@ test('deriveCharacterTotals reports merx_deficit when spend exceeds earned', () 
     rulesVersion: 'v1'
   });
   expect(result.commissary_reward).toBe(0);
-  expect(result.merx_deficit).toBe(3);
+  expect(result.merx_deficit).toBe(1);
 });
 
 test('deriveCharacterTotals reports zero deficit when reward is positive', () => {
@@ -276,12 +281,13 @@ test('deriveCharacterTotals reports zero deficit when reward is positive', () =>
     offscreenMissions: [],
     rulesVersion: 'v1'
   });
-  expect(result.commissary_reward).toBe(1);
+  // earned = 2 (advent grant) + 2 successes = 4; 1 common item costs 1; reward = 3
+  expect(result.commissary_reward).toBe(3);
   expect(result.merx_deficit).toBe(0);
 });
 
-test('deriveMerx grants the first 4 on-class signature gear for free (creation allotment)', () => {
-  // 4 on-class gear (entirely within the allotment) → 0 gear spend.
+test('deriveMerx grants three on-class signature gear for free, the 4th costs 2 (ADVENT_DEFAULT_SIGNATURES)', () => {
+  // 4 on-class gear: 3 free, the 4th (the Elective) costs 2 -> 2 gear spend.
   const result = deriveMerx({
     realMissions: [{ outcome: 'success' }, { outcome: 'success' }],
     offscreenMissions: [],
@@ -294,6 +300,7 @@ test('deriveMerx grants the first 4 on-class signature gear for free (creation a
     commonItems: [],
     characterClassId: 'class-A'
   });
+  // earned = 2 (advent grant) + 2 successes = 4; 4 - 2 spend = 2
   expect(result).toBe(2);
 });
 
@@ -311,8 +318,8 @@ test('deriveMerx allotment does not apply to off-class gear', () => {
     commonItems: [],
     characterClassId: 'class-A'
   });
-  // 15 earned - 4*3 = 15 - 12 = 3
-  expect(result).toBe(3);
+  // earned = 2 (advent grant) + 15 missions = 17; 17 - 4*3 = 17 - 12 = 5
+  expect(result).toBe(5);
 });
 
 const { deriveMerxBreakdown } = require('./character-derived');
@@ -383,26 +390,26 @@ test('an aspiring character pays own-class price for picks from three classes', 
   expect(parts.reward).toBe(4);
 });
 
-// All 327 existing characters are in this branch. Any movement here is a
-// defect, not an improvement.
-test('the advent branch is unchanged: four on-class Signatures are free', () => {
+// All 327 existing characters are in this branch. Three on-class Signatures
+// are free; the fourth is the Elective, bought out of CREATION_GRANT.advent.
+test('the advent branch: three on-class Signatures free, the fourth costs the Elective', () => {
   const parts = deriveMerxBreakdown({
     realMissions: [], offscreenMissions: [],
     gear: twelveOwn('advent-class').slice(0, 4), commonItems: [],
     characterClassId: 'advent-class'
   });
-  expect(parts.earned).toBe(0);
-  expect(parts.spend).toBe(0);
+  expect(parts.earned).toBe(2);
+  expect(parts.spend).toBe(2);
   expect(parts.deficit).toBe(0);
 });
 
-test('the advent branch still charges the fifth on-class Signature 2 Merx', () => {
+test('the advent branch charges the fifth on-class Signature 2 Merx on top of the Elective', () => {
   const parts = deriveMerxBreakdown({
     realMissions: [], offscreenMissions: [],
     gear: twelveOwn('advent-class').slice(0, 5), commonItems: [],
     characterClassId: 'advent-class'
   });
-  expect(parts.spend).toBe(2);
+  expect(parts.spend).toBe(4);
 });
 
 test('an omitted economy is advent, so existing callers keep their answer', () => {
@@ -424,4 +431,56 @@ test('a V1 character still earns Merx from missions on top of the grant', () => 
     characterClassId: 'v1-class', economy: 'aspirant'
   });
   expect(parts.earned).toBe(12 + 2 + 3);
+});
+
+describe('advent: three Defaults and one Elective (pg. 3)', () => {
+  const CLASS_ID = 'aaaaaaaa-0000-4000-8000-000000000001';
+  const own = (name) => ({ name, class_id: CLASS_ID });
+  const threeDefaults = [own('Alpha'), own('Bravo'), own('Charlie')];
+  const base = {
+    realMissions: [], offscreenMissions: [],
+    characterClassId: CLASS_ID, economy: 'advent'
+  };
+
+  test('the Elective spent on a fourth class item costs exactly 2', () => {
+    const result = deriveMerxBreakdown({
+      ...base, gear: [...threeDefaults, own('Delta')], commonItems: []
+    });
+    expect(result).toMatchObject({ earned: 2, spend: 2, reward: 0, deficit: 0 });
+  });
+
+  test('the Elective spent on two common items costs exactly 2', () => {
+    const result = deriveMerxBreakdown({
+      ...base, gear: threeDefaults, commonItems: ['Rope', 'Lantern']
+    });
+    expect(result).toMatchObject({ earned: 2, spend: 2, reward: 0, deficit: 0 });
+  });
+
+  test('the Elective doubling up on a Default costs exactly 2 (Advent V2 pg. 16)', () => {
+    const result = deriveMerxBreakdown({
+      ...base, gear: [...threeDefaults, own('Alpha')], commonItems: []
+    });
+    expect(result).toMatchObject({ earned: 2, spend: 2, reward: 0, deficit: 0 });
+  });
+
+  test('an unspent Elective is carried, not forfeited', () => {
+    const result = deriveMerxBreakdown({ ...base, gear: threeDefaults, commonItems: [] });
+    expect(result).toMatchObject({ earned: 2, spend: 0, reward: 2, deficit: 0 });
+  });
+
+  test('a fifth on-class Signature is charged on top of the Elective', () => {
+    const result = deriveMerxBreakdown({
+      ...base, gear: [...threeDefaults, own('Delta'), own('Echo')], commonItems: []
+    });
+    expect(result).toMatchObject({ earned: 2, spend: 4, deficit: 2 });
+  });
+
+  test('mission income still stacks on the grant', () => {
+    const result = deriveMerxBreakdown({
+      ...base,
+      realMissions: [{ outcome: 'success' }, { outcome: 'success' }],
+      gear: threeDefaults, commonItems: []
+    });
+    expect(result).toMatchObject({ earned: 4 });
+  });
 });
