@@ -167,8 +167,45 @@ const economyFor = ({ contentFormat, creatorMode } = {}) => {
     return contentFormat === 'aspirant' ? 'aspirant' : 'advent';
 };
 
+// The whole economy as plain data, for a consumer that cannot require this
+// module -- a browser IIFE reading the wizard's JSON island. Built by calling
+// the pricing functions rather than restating the tables, so there is still
+// exactly one place a price is written down. Returns a fresh object each call:
+// it is handed to JSON.stringify and to callers who have no reason to expect
+// the module's own constants back.
+const economyFigures = () => ({
+    grants: { ...CREATION_GRANT },
+    signatureCap: { ...SIGNATURE_CAP },
+    modsPerSignature: MODS_PER_SIGNATURE,
+    enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,
+    modWordLimit: MOD_WORD_LIMIT,
+    prices: {
+        commonItem: COMMON_ITEM_PRICE,
+        signature: {
+            own: priceOfSignature({ crossClass: false }),
+            cross: priceOfSignature({ crossClass: true })
+        },
+        defaultEnchantment: {
+            own: priceOfEnchantment({ source: 'default', crossClass: false }),
+            cross: priceOfEnchantment({ source: 'default', crossClass: true })
+        },
+        customEnchantment: {
+            own: priceOfEnchantment({ source: 'custom', crossClass: false }),
+            cross: priceOfEnchantment({ source: 'custom', crossClass: true })
+        },
+        mod: {
+            own: [priceOfMod({ index: 0 }), priceOfMod({ index: 1 })],
+            cross: [
+                priceOfMod({ index: 0, crossClass: true }),
+                priceOfMod({ index: 1, crossClass: true })
+            ]
+        }
+    }
+});
+
 module.exports = {
     economyFor,
+    economyFigures,
     priceOfSignature,
     priceOfEnchantment,
     priceOfMod,

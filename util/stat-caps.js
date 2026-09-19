@@ -157,6 +157,17 @@ const statCapMap = ({ statList, economy, traits, capPurchases } = {}) =>
         economy === 'advent' ? BASE_STAT_CAP : statCapFor(stat, { traits, capPurchases })
     ]));
 
+// Every stat figure as plain data, for the browser surfaces that cannot
+// require this module. See economyFigures in util/merx-economy.js.
+const statCapFigures = () => ({
+    baseStatCap: BASE_STAT_CAP,
+    creationStatCap: CREATION_STAT_CAP,
+    creationPluses: { ...CREATION_PLUSES },
+    levelPlusesPerLevel: LEVEL_PLUSES_PER_LEVEL,
+    capIncreasePlusCost: CAP_INCREASE_PLUS_COST,
+    traitCount: TRAIT_COUNT
+});
+
 module.exports = {
     statCapFor,
     normalizeLevel,
@@ -166,6 +177,7 @@ module.exports = {
     creationCeilingBreaches,
     capBreachMessage,
     statCapMap,
+    statCapFigures,
     BASE_STAT_CAP,
     CREATION_STAT_CAP,
     CAP_INCREASE_PLUS_COST,

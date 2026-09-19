@@ -3,7 +3,7 @@ const {
   BASE_STAT_CAP, CREATION_STAT_CAP, CAP_INCREASE_PLUS_COST,
   CREATION_PLUSES, LEVEL_PLUSES_PER_LEVEL, TRAIT_COUNT, LEVEL_CEILING,
   statCapFor, normalizeLevel, plusAllotment, sumValues,
-  capBreaches, creationCeilingBreaches, capBreachMessage
+  capBreaches, creationCeilingBreaches, capBreachMessage, statCapFigures
 } = require('./stat-caps.js');
 
 // Figures, each pinned so that changing it breaks a named test.
@@ -119,4 +119,15 @@ test('capBreachMessage names the stat, its value and its Cap in one sentence', (
     .toBe('might is 7, over its Cap of 6.');
   expect(capBreaches({ stats: { might: 7 }, traits: [] }).map(capBreachMessage))
     .toEqual(['might is 7, over its Cap of 5.']);
+});
+
+test('statCapFigures carries every stat figure a surface needs', () => {
+  expect(statCapFigures()).toEqual({
+    baseStatCap: BASE_STAT_CAP,
+    creationStatCap: CREATION_STAT_CAP,
+    creationPluses: CREATION_PLUSES,
+    levelPlusesPerLevel: LEVEL_PLUSES_PER_LEVEL,
+    capIncreasePlusCost: CAP_INCREASE_PLUS_COST,
+    traitCount: TRAIT_COUNT
+  });
 });

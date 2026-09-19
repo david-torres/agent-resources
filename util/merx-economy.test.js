@@ -2,9 +2,10 @@
 // named. The book is the authority; this file is the fixture that holds the
 // implementation to it. util/merx-economy.js must never be the only place a
 // number appears -- if these two disagree, the book decides.
-const { test, expect } = require('bun:test');
+const { test, expect, describe } = require('bun:test');
 const {
   economyFor,
+  economyFigures,
   priceOfSignature,
   priceOfEnchantment,
   priceOfMod,
@@ -251,4 +252,40 @@ test('an unmatched submitted item inherits nothing', () => {
     [stored('Blade', 'c1', { source: 'default' })]
   );
   expect(signatureSlotsUsed(effective)).toBe(1);
+});
+
+describe('economyFigures', () => {
+  test('carries every figure a surface needs, and no function', () => {
+    const figures = economyFigures();
+    expect(figures).toEqual({
+      grants: CREATION_GRANT,
+      signatureCap: SIGNATURE_CAP,
+      modsPerSignature: MODS_PER_SIGNATURE,
+      enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,
+      modWordLimit: MOD_WORD_LIMIT,
+      prices: {
+        commonItem: COMMON_ITEM_PRICE,
+        signature: { own: 2, cross: 3 },
+        defaultEnchantment: { own: 2, cross: 3 },
+        customEnchantment: { own: 3, cross: 4 },
+        mod: { own: [1, 2], cross: [2, 3] }
+      }
+    });
+  });
+
+  test('survives JSON, because that is how it reaches a browser', () => {
+    expect(JSON.parse(JSON.stringify(economyFigures()))).toEqual(economyFigures());
+  });
+
+  test('is built from the pricing functions, not retyped', () => {
+    const { prices } = economyFigures();
+    expect(prices.signature.cross).toBe(priceOfSignature({ crossClass: true }));
+    expect(prices.customEnchantment.own).toBe(priceOfEnchantment({ source: 'custom' }));
+    expect(prices.mod.cross[1]).toBe(priceOfMod({ index: 1, crossClass: true }));
+  });
+
+  test('hands back a fresh object, so a caller cannot mutate the module', () => {
+    economyFigures().grants.advent = 99;
+    expect(CREATION_GRANT.advent).toBe(2);
+  });
 });

@@ -29,10 +29,10 @@ const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
-const { statList, personalityMap, commonItemList } = require('../util/enclave-consts');
+const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
 const { deriveCharacterTotals } = require('../util/character-derived');
-const { economyFor } = require('../util/merx-economy');
-const { statCapMap } = require('../util/stat-caps');
+const { economyFor, economyFigures } = require('../util/merx-economy');
+const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { filterClassListsByIds } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
@@ -216,6 +216,10 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       image_url: c.image_url || null,
       image_crop: c.image_crop || null,
       rules_edition: c.rules_edition || 'advent',
+      // The shape of the class's content, and therefore which economy prices
+      // its gear. Served because the client must not re-derive the rule --
+      // economyByClassId below is computed with the real economyFor.
+      content_format: c.content_format || 'advent',
       rules_version: c.rules_version || 'v1',
       is_player_created: !!c.is_player_created,
       // Drives the wizard's step 2 (personality & stat selection). Stored on
@@ -302,7 +306,24 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       classes: wizardClasses,
       statList,
       personalityMap,
-      commonItems: commonItemsHtml
+      commonItems: commonItemsHtml,
+      economy: economyFigures(),
+      statCaps: statCapFigures(),
+      // Mission income is not the economy module's to hold -- that module is
+      // require-free and this figure lives in util/enclave-consts.js, where
+      // the derivation reads it. Served alongside rather than copied into it.
+      merxPerMissionSuccess: MERX_PER_MISSION_SUCCESS,
+      // Which economy each class puts a character under, decided here by the
+      // same economyFor every save path calls. The client looks the answer up
+      // rather than working it out, so the two can never disagree -- they did
+      // before this, for `?mode=advent` on a V1 class.
+      economyByClassId: Object.fromEntries(wizardClasses.map((c) => [
+        c.id,
+        economyFor({ contentFormat: c.content_format, creatorMode: mode })
+      ])),
+      // The aspiring wizard has no class to look up until its pseudo-class is
+      // built, and an advent wizard has none before step 1 is answered.
+      economyWhenClassless: economyFor({ contentFormat: null, creatorMode: mode })
     },
     activeNav: 'characters',
     breadcrumbs: [
