@@ -124,7 +124,7 @@ test('CharacterService creates through a recording adapter without mutating its 
   expect(calls).toEqual([
     ['createCharacterRow', { name: 'New', is_public: true, hide_from_search: false, creator_id: 'profile-1', creator_mode: null, common_items: [] }],
     ['getChildRows', 'traits', 'new-character'],
-    ['insertChildRows', 'traits', 'new-character', [{ name: 'Brave' }]],
+    ['insertChildRows', 'traits', 'new-character', [{ name: 'Brave', stat: null }]],
     ['getChildRows', 'class_gear', 'new-character'],
     ['insertChildRows', 'class_gear', 'new-character', [{ name: 'Rifle', class_id: 'class-1', description: null }]]
   ]);
@@ -709,6 +709,51 @@ test('reconcileGear clears a stored Enchantment when the submitted item sets it 
   expect(result.error).toBeNull();
   const update = calls.find(c => c[0] === 'updateChildRow' && c[1] === 'class_gear');
   expect(update[3]).toEqual({ enchantment: null });
+});
+
+// --- Stat forwarding (traits) ------------------------------------------
+//
+// public.save_character_atomic (supabase/migrations/
+// 20260919000002_save_character_atomic_trait_stat.sql) is the path production
+// uses (see the gear comment above), so the atomic-path test calls
+// saveCharacterAtomic directly with a childData.traits shaped {name, stat} --
+// the shape this project's Task 6 starts producing; today's
+// normalizeCharacterInput still emits bare names, which the fallback test
+// below covers instead.
+
+test('shaped traits reach the atomic p_traits payload with both name and stat', async () => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    saveCharacterAtomic: async (args) => {
+      saved = args;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const result = await service.saveCharacterAtomic({
+    id: null,
+    actor: { id: 'profile-1' },
+    characterInput: { name: 'Hero' },
+    childData: { traits: [{ name: 'brave', stat: 'might' }, { name: 'calm', stat: 'will' }] },
+    rulesVersion: 'v1',
+    previousAbilities: []
+  });
+  expect(result.error).toBeNull();
+  expect(saved.traits).toEqual([
+    { name: 'brave', stat: 'might' },
+    { name: 'calm', stat: 'will' }
+  ]);
+});
+
+// The fallback path (reconcileTraits) is what an adapter without
+// saveCharacterAtomic takes -- exercised directly, the same way the
+// reconcileAbilities tests below call that method rather than going through
+// updateCharacter/createCharacter.
+test('reconcileTraits carries stat into an inserted row', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls));
+  await service.reconcileTraits('character-1', [{ name: 'brave', stat: 'might' }]);
+  const inserted = calls.find(c => c[0] === 'insertChildRows' && c[1] === 'traits');
+  expect(inserted[3]).toEqual([{ name: 'brave', stat: 'might' }]);
 });
 
 // --- Auto-calculate economy -------------------------------------------

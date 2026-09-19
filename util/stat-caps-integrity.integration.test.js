@@ -27,7 +27,7 @@ let fixtureOriginalStat;
 
 const fixtureRow = async () => {
   if (fixtureId) return fixtureId;
-  const { data, error } = await sb.from('traits').select('id,stat').limit(1);
+  const { data, error } = await sb.from('traits').select('id,stat').order('id').limit(1);
   expect(error).toBeNull();
   expect(data).toHaveLength(1);
   fixtureId = data[0].id;
@@ -67,6 +67,86 @@ test.each(statList)('%s is an accepted stat', async (stat) => {
   const id = await fixtureRow();
   const { error } = await sb.from('traits').update({ stat }).eq('id', id);
   expect(error).toBeNull();
+});
+
+// public.save_character_atomic (supabase/migrations/
+// 20260919000002_save_character_atomic_trait_stat.sql) is what every real
+// save actually runs (services/character/repository.js wires it whenever
+// supabaseAdmin.rpc exists), so this pins the RPC itself, not just the JS
+// reconciler it can fall back to. It reuses one existing character's traits
+// rather than a fresh fixture, for the same reason the CHECK-constraint tests
+// above do -- and picks the LAST trait row (descending id) rather than the
+// FIRST, so it never contends with fixtureRow()'s own mutate/restore above.
+// Every one of the character's existing traits is resubmitted unchanged
+// except the target's stat, because save_character_atomic deletes any of the
+// character's stored traits missing from p_traits entirely.
+
+let rpcCharacterId;
+let rpcCreatorId;
+let rpcOriginalTraits;
+
+const rpcFixtureCharacter = async () => {
+  if (rpcCharacterId) return rpcCharacterId;
+  const { data: last, error } = await sb.from('traits').select('id,character_id').order('id', { ascending: false }).limit(1);
+  expect(error).toBeNull();
+  expect(last).toHaveLength(1);
+  rpcCharacterId = last[0].character_id;
+
+  const { data: character, error: characterError } = await sb.from('characters')
+    .select('id,creator_id').eq('id', rpcCharacterId).single();
+  expect(characterError).toBeNull();
+  rpcCreatorId = character.creator_id;
+
+  const { data: traits, error: traitsError } = await sb.from('traits')
+    .select('id,name,stat').eq('character_id', rpcCharacterId).order('id');
+  expect(traitsError).toBeNull();
+  rpcOriginalTraits = traits;
+  return rpcCharacterId;
+};
+
+afterAll(async () => {
+  if (rpcOriginalTraits) {
+    for (const row of rpcOriginalTraits) {
+      const { error } = await sb.from('traits').update({ stat: row.stat }).eq('id', row.id);
+      expect(error).toBeNull();
+    }
+  }
+  const { count, error: countError } = await sb.from('traits').select('id', { count: 'exact', head: true });
+  expect(countError).toBeNull();
+  expect(count).toBe(981);
+});
+
+test('save_character_atomic persists a trait\'s stat', async () => {
+  const characterId = await rpcFixtureCharacter();
+  const target = rpcOriginalTraits[0];
+  const testStat = statList.find(stat => stat !== target.stat);
+
+  const payload = rpcOriginalTraits.map(row => ({
+    name: row.name,
+    stat: row.id === target.id ? testStat : row.stat
+  }));
+
+  // p_character: {} keeps every stored character field as-is (jsonb_populate_
+  // record falls back to the current row for any key it omits); p_gear/
+  // p_abilities/p_perks: null skip those blocks entirely, matching
+  // rpcSaveGear's isolation approach in models/character-atomic.integration.
+  // test.js.
+  const { error } = await sb.rpc('save_character_atomic', {
+    p_character_id: characterId,
+    p_creator_id: rpcCreatorId,
+    p_character: {},
+    p_traits: payload,
+    p_gear: null,
+    p_abilities: null,
+    p_perks: null
+  });
+  expect(error).toBeNull();
+
+  const { data: rows, error: readError } = await sb.from('traits')
+    .select('id,stat').eq('character_id', characterId).order('id');
+  expect(readError).toBeNull();
+  expect(rows).toHaveLength(rpcOriginalTraits.length);
+  expect(rows.find(row => row.id === target.id).stat).toBe(testStat);
 });
 
 // characters_stat_cap_purchase_keys / characters_stat_cap_purchase_values

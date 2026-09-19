@@ -365,9 +365,14 @@ class CharacterService {
   }
 
   async saveCharacterAtomic({ id, actor, characterInput, childData, rulesVersion, previousAbilities, maps: providedMaps }) {
+    // A trait item is still a bare name from every caller today
+    // (services/character/input.js#normalizeCharacterInput builds
+    // childData.traits from trait0/trait1/trait2); this project's Task 6 is
+    // what starts shaping it to {name, stat}. Both shapes are accepted here
+    // so this keeps working either way.
     const traits = (Array.isArray(childData.traits) ? childData.traits : [])
-      .filter(name => name != null && name !== '')
-      .map(name => ({ name }));
+      .map(item => (typeof item === 'string' ? { name: item } : item))
+      .filter(item => item && item.name != null && item.name !== '');
     // A caller that already fetched the catalogue (createCharacter, to
     // resolve content_format/gear before this ever runs) hands it in rather
     // than paying for the same four sub-queries again.
@@ -487,12 +492,15 @@ class CharacterService {
   async reconcileTraits(characterId, traits) {
     const existing = await this.adapter.getChildRows('traits', characterId);
     if (existing.error) return existing;
+    // See saveCharacterAtomic's identical shape handling above: a trait item
+    // is a bare name from every caller today, and {name, stat} once Task 6
+    // lands.
     const desired = (Array.isArray(traits) ? traits : [])
-      .filter(name => name != null && name !== '')
-      .map(name => ({ name }));
+      .map(item => (typeof item === 'string' ? { name: item } : item))
+      .filter(item => item && item.name != null && item.name !== '');
     return this.applyChildDiff('traits', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => row.name,
-      rowFields: item => ({ name: item.name })
+      rowFields: item => ({ name: item.name, stat: item.stat ?? null })
     }));
   }
 
