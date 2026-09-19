@@ -68,3 +68,70 @@ test.each(statList)('%s is an accepted stat', async (stat) => {
   const { error } = await sb.from('traits').update({ stat }).eq('id', id);
   expect(error).toBeNull();
 });
+
+// characters_stat_cap_purchase_keys / characters_stat_cap_purchase_values
+// (supabase/migrations/20260919000001_characters_stat_cap_purchases.sql)
+// restrict stat_cap_purchases to the twelve stat names with non-negative
+// integer values. This pins both constraints by attempting real writes and
+// asserting on the error, exactly as the traits.stat tests above do -- same
+// file, same house pattern, one existing character row mutated and restored
+// in afterAll rather than a fresh auth.users/profiles/characters fixture.
+//
+// `{"might": null}` is included deliberately: a CHECK that evaluates to SQL
+// NULL passes rather than fails, which is how {} and {"name":"Foo"} became
+// storable as a free class_gear Enchantment
+// (supabase/migrations/20260918000000_class_gear_enchantment_mods.sql,
+// fixed in 20260918000002_class_gear_enchantment_source_notnull.sql). This
+// column's constraints use jsonb_typeof(value), which reports JSON null as
+// the string 'null' rather than as SQL NULL, so the comparison stays a
+// boolean and the same trap does not reappear here -- but that reasoning is
+// only as good as this test proving it out.
+
+let characterFixtureId;
+let characterFixtureOriginalPurchases;
+
+const fixtureCharacterRow = async () => {
+  if (characterFixtureId) return characterFixtureId;
+  const { data, error } = await sb.from('characters').select('id,stat_cap_purchases').limit(1);
+  expect(error).toBeNull();
+  expect(data).toHaveLength(1);
+  characterFixtureId = data[0].id;
+  characterFixtureOriginalPurchases = data[0].stat_cap_purchases;
+  return characterFixtureId;
+};
+
+afterAll(async () => {
+  if (characterFixtureId) {
+    const { error } = await sb.from('characters')
+      .update({ stat_cap_purchases: characterFixtureOriginalPurchases })
+      .eq('id', characterFixtureId);
+    expect(error).toBeNull();
+  }
+  const { count, error: countError } = await sb.from('characters').select('id', { count: 'exact', head: true });
+  expect(countError).toBeNull();
+  expect(count).toBe(327);
+});
+
+test.each([
+  ['an unknown key', { nonsense: 1 }],
+  ['a negative value', { might: -1 }],
+  ['a non-integer value', { might: 1.5 }],
+  ['a non-number value', { might: 'two' }],
+  ['a JSON null value', { might: null }]
+])('stat_cap_purchases rejects %s', async (_label, shape) => {
+  const id = await fixtureCharacterRow();
+  const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
+  // 23514 is check_violation. Asserting the code, not just truthiness, keeps a
+  // missing constraint from standing in for a working one.
+  expect(error?.code).toBe('23514');
+});
+
+test.each([
+  ['an empty object', {}],
+  ['a single known stat', { might: 1 }],
+  ['two known stats', { might: 2, luck: 3 }]
+])('stat_cap_purchases accepts %s', async (_label, shape) => {
+  const id = await fixtureCharacterRow();
+  const { error } = await sb.from('characters').update({ stat_cap_purchases: shape }).eq('id', id);
+  expect(error).toBeNull();
+});
