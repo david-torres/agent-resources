@@ -124,7 +124,7 @@ test('CharacterService creates through a recording adapter without mutating its 
   expect(calls).toEqual([
     ['createCharacterRow', { name: 'New', is_public: true, hide_from_search: false, creator_id: 'profile-1', creator_mode: null, common_items: [] }],
     ['getChildRows', 'traits', 'new-character'],
-    ['insertChildRows', 'traits', 'new-character', [{ name: 'Brave', stat: null }]],
+    ['insertChildRows', 'traits', 'new-character', [{ name: 'Brave', stat: 'might' }]],
     ['getChildRows', 'class_gear', 'new-character'],
     ['insertChildRows', 'class_gear', 'new-character', [{ name: 'Rifle', class_id: 'class-1', description: null }]]
   ]);
@@ -717,9 +717,8 @@ test('reconcileGear clears a stored Enchantment when the submitted item sets it 
 // 20260919000002_save_character_atomic_trait_stat.sql) is the path production
 // uses (see the gear comment above), so the atomic-path test calls
 // saveCharacterAtomic directly with a childData.traits shaped {name, stat} --
-// the shape this project's Task 6 starts producing; today's
-// normalizeCharacterInput still emits bare names, which the fallback test
-// below covers instead.
+// the shape services/character/input.js#normalizeCharacterInput now produces
+// (see services/character/input.test.js for its resolution rules).
 
 test('shaped traits reach the atomic p_traits payload with both name and stat', async () => {
   let saved = null;
@@ -859,7 +858,7 @@ test('a created V1 character keeps the Merx it did not spend', async () => {
   await service.createCharacter({
     name: 'Thrifty', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
     gear: Array.from({ length: 4 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID })),
-    commissary_reward: 0
+    commissary_reward: 0, trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { id: 'profile-1' });
   expect(saved.commissary_reward).toBe(4);
 });
@@ -991,7 +990,8 @@ test('re-saving the same enchanted Signatures is not a breach', async () => {
   }));
   const gear = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
   const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
 });
@@ -1026,7 +1026,8 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
   // missions; refusing this save would refuse a purchase that Merx paid for.
   const gear = Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
   const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
 });
@@ -1063,7 +1064,8 @@ const expectExactlyOneCatalogueFetch = async (contentFormat, classId) => {
   const service = new CharacterService(adapter);
   const gear = Array.from({ length: 5 }, (_, i) => ({ name: `S${i}`, class_id: classId }));
   const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: classId, gear
+    name: 'Hero', class_id: classId, gear,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
   expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);

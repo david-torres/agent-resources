@@ -1,8 +1,9 @@
 const moment = require('moment-timezone');
 const { sanitizeHttpUrl } = require('../../util/url');
 const { validateAbilityPerks } = require('../../util/validate');
-const { statList } = require('../../util/enclave-consts');
+const { statList, personalityMap } = require('../../util/enclave-consts');
 const { trimStrings } = require('../../util/trim-input');
+const { TRAIT_COUNT } = require('../../util/stat-caps');
 const {
   countWordsExcludingRatings,
   ENCHANTMENT_WORD_LIMIT,
@@ -21,6 +22,7 @@ const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
 const CREATOR_MODES = ['advent', 'aspiring', 'aspirant'];
 const ENCHANTMENT_SOURCES = ['default', 'custom'];
+const TRAIT_SLOTS = ['trait0', 'trait1', 'trait2'];
 
 // Submitted character payloads are ordinary JSON-like data. Clone them before
 // transforming so route callers (and import callers) retain their request body.
@@ -119,6 +121,86 @@ const shapeMods = (value) => {
     return { value: undefined, error: 'A Signature may hold no more than two Mods.' };
   }
   return { value: mods, error: null };
+};
+
+// A word-to-Stat lookup built once from personalityMap (util/enclave-consts.js),
+// matched case-insensitively: 20260919000000_traits_stat_affiliation.sql
+// backfilled all 981 live trait rows the same way (`lower(btrim(name))`), and
+// the wizard's dropdown, the import tool, and players typing free text all
+// vary in case.
+const statByVocabularyWord = new Map(
+  Object.entries(personalityMap).flatMap(([stat, words]) => words.map(word => [word, stat]))
+);
+
+// Resolves a submitted Personality Trait to its Stat and judges it against the
+// book, following shapeEnchantment's contract just above: never throws,
+// `value: undefined` on rejection so a caller cannot mistake a refusal for an
+// empty value. A throw here would reach `POST /characters/wizard` and
+// `POST /characters` as an unhandled promise rejection (neither route has an
+// asyncHandler wrapper, so the request just hangs) and `PUT /characters/:id`
+// as a generic "unexpected error" (a bare Error has no `.code`, so
+// util/http-error.js classifyError drops the message in production).
+//
+// A Trait is a single word (pg. 6, pg. 121), checked here for WHITESPACE, not
+// for letters only -- `fun-loving` is a real vocabulary word, and an
+// alphabetic-only check would refuse it. The book states no word COUNT limit
+// for a Trait, unlike Enchantments (40, pg. 86) and Mods (10, pg. 87), so none
+// is invented here.
+//
+// Resolution order is deliberate: a submitted Stat wins over a vocabulary
+// match. pg. 3 makes Aspirant Traits "fully customizable", so a player's
+// explicit choice must not be overridden by a coincidental vocabulary hit.
+// Absent a submitted Stat -- every request does, until Task 10 adds
+// trait0_stat/trait1_stat/trait2_stat to the payload -- resolution falls back
+// to the vocabulary, which resolves all 48 of its words plus, case-
+// insensitively, every one of the 981 live Trait names.
+const shapeTrait = (value, { submittedStat } = {}) => {
+  const name = typeof value === 'string' ? value.trim() : '';
+  if (!name) return { value: null, error: null };
+  if (/\s/.test(name)) {
+    return { value: undefined, error: `A Trait must be a single word, not "${name}".` };
+  }
+  const stat = typeof submittedStat === 'string' ? submittedStat.trim() : '';
+  if (stat) {
+    if (!statList.includes(stat)) {
+      return { value: undefined, error: `"${stat}" is not a Stat.` };
+    }
+    return { value: { name, stat }, error: null };
+  }
+  const vocabularyStat = statByVocabularyWord.get(name.toLowerCase());
+  if (!vocabularyStat) {
+    return { value: undefined, error: `Trait "${name}" is not in the vocabulary; submit a Stat for it.` };
+  }
+  return { value: { name, stat: vocabularyStat }, error: null };
+};
+
+// pg. 6, pg. 110: two Traits may not share a Stat. pg. 110: Flavor cannot
+// grant "a fourth Personality Trait", so three is a hard ceiling, not a
+// starting count -- all 981 live trait rows already sit at exactly three per
+// character.
+//
+// Enforced for aspirant and aspiring only: advent returns {ok: true}
+// immediately. This is not timidity -- 26 of the 327 live characters carry
+// two Traits on one Stat, and every one of them is advent, so enforcing the
+// collision rule there would make them unsaveable. economyFor
+// (util/merx-economy.js) is how the caller resolves which economy applies.
+const validateTraits = (traits, { economy } = {}) => {
+  if (economy === 'advent') return { ok: true };
+  const rows = Array.isArray(traits) ? traits : [];
+  const errors = [];
+  if (rows.length !== TRAIT_COUNT) {
+    errors.push(`A character needs exactly ${TRAIT_COUNT} Traits (has ${rows.length}).`);
+  }
+  const seenStats = new Set();
+  for (const trait of rows) {
+    const stat = trait && trait.stat;
+    if (!stat) continue;
+    if (seenStats.has(stat)) {
+      errors.push(`Two Traits may not share a Stat (${stat}).`);
+    }
+    seenStats.add(stat);
+  }
+  return errors.length === 0 ? { ok: true } : { ok: false, errors };
 };
 
 // Permissive shaping only: an invalid submission shapes to "no equipment"
@@ -293,15 +375,29 @@ const normalizeCharacterInput = (input, context = {}) => {
   if (context.creatorId) data.creator_id = context.creatorId;
   for (const field of rulesVersion === 'v2' ? V1_ONLY_FIELDS : V2_ONLY_FIELDS) delete data[field];
 
+  // Each of trait0/trait1/trait2 is shaped (and, for a submitted name, judged)
+  // independently; a blank slot shapes to null and is simply omitted rather
+  // than erroring, matching shapeMods's treatment of a blank Mod name. The
+  // trailing `_stat` field is what Task 10 adds to the payload -- absent
+  // today, so shapeTrait falls back to the vocabulary for every request that
+  // exists right now.
+  const traits = [];
+  for (const slot of TRAIT_SLOTS) {
+    const shaped = shapeTrait(data[slot], { submittedStat: data[`${slot}_stat`] });
+    if (shaped.error) return { data: null, childData: null, error: shaped.error };
+    if (shaped.value) traits.push(shaped.value);
+  }
+
   const childData = {
-    traits: [data.trait0, data.trait1, data.trait2],
+    traits,
     abilityPerks: data.ability_perks,
     classGear: data.gear,
     classAbilities: data.abilities
   };
-  delete data.trait0;
-  delete data.trait1;
-  delete data.trait2;
+  for (const slot of TRAIT_SLOTS) {
+    delete data[slot];
+    delete data[`${slot}_stat`];
+  }
   delete data.ability_perks;
   delete data.gear;
   delete data.abilities;
@@ -389,6 +485,9 @@ const normalizeCharacterInput = (input, context = {}) => {
     enforceMerxBudget: context.enforceMerxBudget ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };
+
+  const traitValidation = validateTraits(childData.traits, { economy });
+  if (!traitValidation.ok) return { data: null, childData: null, error: traitValidation.errors.join(' ') };
 
   if (context.normalizeAutoCalculate) data.auto_calculate = data.auto_calculate === 'on' || data.auto_calculate === true;
   if ('image_url' in data) data.image_url = data.image_url ? sanitizeHttpUrl(data.image_url) : null;
@@ -547,8 +646,10 @@ module.exports = {
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,
   normalizeGearEquipment,
+  shapeTrait,
   validateGearEquipment,
   validateEconomyLimits,
+  validateTraits,
   normalizeAbilityPerks,
   parseInteger,
   normalizeStatsPayload,

@@ -1,9 +1,10 @@
 const { test, expect } = require('bun:test');
 const {
   normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment,
-  validateGearEquipment, validateEconomyLimits
+  validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
+const { personalityMap } = require('../../util/enclave-consts');
 
 test('trims every string in a character payload, not just item names', () => {
   const { data, childData } = normalizeCharacterInput({
@@ -32,7 +33,7 @@ test('normalizeGearItems keeps the class half of a "ClassName::ItemName" value a
 test('normalizes a v1 payload without mutating the submitted request', () => {
   const input = {
     name: '  Scout  ',
-    trait0: 'Brave', trait1: '', trait2: 'Clever',
+    trait0: 'Brave', trait1: '', trait2: 'Calm',
     gear: ['Ranger::Knife'], abilities: ['Ranger::Dodge'],
     common_items: [' rope ', '', 3], is_public: 'on', hide_from_search: 'off',
     quirks: [{ name: 'v2 only' }], ability_perks: [{ class_ability_id: 'a', text: 'ignored' }]
@@ -45,7 +46,7 @@ test('normalizes a v1 payload without mutating the submitted request', () => {
   expect(result.data).not.toHaveProperty('quirks');
   expect(result.data).not.toHaveProperty('ability_perks');
   expect(result.data).not.toHaveProperty('trait0');
-  expect(result.childData.traits).toEqual(['Brave', '', 'Clever']);
+  expect(result.childData.traits).toEqual([{ name: 'Brave', stat: 'might' }, { name: 'Calm', stat: 'will' }]);
   expect(result.childData.classGear).toEqual(['Ranger::Knife']);
   expect(input.quirks).toHaveLength(1);
   expect(input).toHaveProperty('trait0');
@@ -56,7 +57,8 @@ test('normalizes v2 fields and strips legacy free-text fields', () => {
     quirks: [' Synthetic ', { name: 'Veteran', description: '  Seen it all ' }, { name: ' ' }],
     accessories: [{ name: ' Monocle ' }], perks: 'legacy', additional_gear: 'legacy gear',
     ability_perks: [{ class_ability_id: 'ability-1', text: '  Deal more damage  ', position: '2' }],
-    creator_mode: 'aspiring', image_url: 'https://example.test/image.png'
+    creator_mode: 'aspiring', image_url: 'https://example.test/image.png',
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v2' });
 
   expect(result.error).toBeNull();
@@ -219,7 +221,8 @@ test('maps an aspiring pseudo_class onto class and the pseudo-class columns', ()
   const result = normalizeCharacterInput({
     name: 'Vesper',
     creator_mode: 'aspiring',
-    pseudo_class: { name: '  Ashwalker  ', tagline: ' Walks the ash ', description: ' A long tale. ' }
+    pseudo_class: { name: '  Ashwalker  ', tagline: ' Walks the ash ', description: ' A long tale. ' },
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1' });
 
   expect(result.error).toBeNull();
@@ -236,7 +239,8 @@ test('maps an aspiring pseudo_class onto class and the pseudo-class columns', ()
 test('an aspiring character keeps a null class_id', () => {
   const result = normalizeCharacterInput({
     name: 'Vesper', creator_mode: 'aspiring', class_id: null,
-    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' }
+    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1' });
 
   expect(result.data.class_id).toBeNull();
@@ -248,7 +252,8 @@ test('an aspiring character keeps a null class_id', () => {
 test('blank pseudo-class prose becomes null', () => {
   const result = normalizeCharacterInput({
     name: 'Vesper', creator_mode: 'aspiring',
-    pseudo_class: { name: 'Ashwalker', tagline: '   ', description: '' }
+    pseudo_class: { name: 'Ashwalker', tagline: '   ', description: '' },
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1' });
 
   expect(result.data.pseudo_class_tagline).toBeNull();
@@ -360,6 +365,56 @@ test('an aspirant payload carrying a pseudo_class keeps its own class', () => {
   expect(result.data).not.toHaveProperty('pseudo_class_tagline');
   expect(result.data).not.toHaveProperty('pseudo_class_description');
   expect(result.data).not.toHaveProperty('pseudo_class');
+});
+
+// --- shapeTrait / validateTraits ----------------------------------------
+
+test('a vocabulary word resolves to its Stat without a submitted stat', () => {
+  const { value, error } = shapeTrait('brave', {});
+  expect(error).toBeNull();
+  expect(value.stat).toBe(personalityMap.might.includes('brave') ? 'might' : value.stat);
+});
+
+test('a submitted stat wins for a self-made word', () => {
+  const { value, error } = shapeTrait('moonstruck', { submittedStat: 'arcane' });
+  expect(error).toBeNull();
+  expect(value).toEqual({ name: 'moonstruck', stat: 'arcane' });
+});
+
+test('an unresolvable Trait is refused, never stored with a null stat', () => {
+  const { value, error } = shapeTrait('moonstruck', {});
+  expect(value).toBeUndefined();
+  expect(error).toMatch(/moonstruck/);
+});
+
+test('a submitted stat outside the twelve is refused', () => {
+  expect(shapeTrait('moonstruck', { submittedStat: 'vibes' }).error).toMatch(/vibes/);
+});
+
+// A Trait is a single word (pg. 6, pg. 121). The book states no word COUNT
+// limit, unlike Enchantments (40) and Mods (10), so none is invented.
+// The test is for WHITESPACE, not for letters only: `fun-loving` is a real
+// vocabulary word.
+test('a hyphenated vocabulary word is accepted and a two-word name is not', () => {
+  expect(shapeTrait('fun-loving', {}).error).toBeNull();
+  expect(shapeTrait('very brave', { submittedStat: 'might' }).error).toMatch(/single word/);
+});
+
+test('V1 economies require exactly three Traits, each on its own Stat', () => {
+  const three = [
+    { name: 'brave', stat: 'might' }, { name: 'calm', stat: 'will' }, { name: 'sharp', stat: 'sensory' }
+  ];
+  expect(validateTraits(three, { economy: 'aspirant' })).toEqual({ ok: true });
+  expect(validateTraits(three.slice(0, 2), { economy: 'aspirant' }).ok).toBe(false);
+  const collide = [{ name: 'brave', stat: 'might' }, { name: 'bold', stat: 'might' }, { name: 'calm', stat: 'will' }];
+  expect(validateTraits(collide, { economy: 'aspirant' }).ok).toBe(false);
+});
+
+// 26 of the 327 live characters have two Traits on one Stat and all 26 are
+// advent. Enforcing there would make them unsaveable.
+test('advent is not held to either Trait rule', () => {
+  const collide = [{ name: 'brave', stat: 'might' }, { name: 'bold', stat: 'might' }];
+  expect(validateTraits(collide, { economy: 'advent' })).toEqual({ ok: true });
 });
 
 const words = (n) => Array.from({ length: n }, (_, i) => `w${i}`).join(' ');
@@ -669,7 +724,7 @@ test('normalizeCharacterInput rejects an aspirant character over its Merx budget
 test('normalizeCharacterInput accepts an aspirant character within its Merx budget', () => {
   const result = normalizeCharacterInput({
     name: 'Vex', creator_mode: 'aspirant', class_id: 'v1',
-    gear: own(6)
+    gear: own(6), trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
   expect(result.error).toBeNull();
 });
@@ -695,7 +750,8 @@ test('an Enchantment that normalizes to nothing costs no Signature Cap slot', ()
   // the 12 aspirant slots, not 14.
   const gear = own(7).map((g) => ({ ...g, enchantment: {} }));
   const result = normalizeCharacterInput({
-    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
   expect(result.error).toBeNull();
 });
@@ -714,7 +770,8 @@ test('Mods that normalize away are not charged Merx', () => {
   const gear = own(6);
   gear[0] = { ...gear[0], mods: [{ name: '' }, { name: '  ' }] };
   const result = normalizeCharacterInput({
-    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
   }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
   expect(result.error).toBeNull();
 });
