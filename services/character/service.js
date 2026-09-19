@@ -518,9 +518,11 @@ class CharacterService {
       desired.push(row);
     }
     // Each `desired` row above is already exactly the insert/update payload
-    // shape -- name, class_id, description, and enchantment/mods only when
-    // the submitted item carried them -- so rowFields just hands it back
-    // rather than rebuilding it field-by-field with the same 'in' checks.
+    // shape -- name, class_id, description, and enchantment/mods only when the
+    // submitted item carried them -- so rowFields hands it straight back. That
+    // keeps "an absent key means keep what is stored" expressed once, where
+    // the row is built, instead of in a second set of 'in' checks that could
+    // drift from it.
     return this.applyChildDiff('class_gear', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => `${row.class_id}:${row.name}`,
       rowFields: item => item

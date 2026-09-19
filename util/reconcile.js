@@ -14,8 +14,8 @@
 // the database with a different key order than this codebase builds it in.
 // Sorting first makes the comparison depend only on the value, not on which
 // side wrote it. A false "changed" here costs a needless UPDATE; a false
-// "same" would silently lose a write, so undefined and null still collapse
-// to the same canonical value for scalars.
+// "same" would silently lose a write. Scalars never reach canonicalize at all:
+// `?? null` on each side is what collapses undefined and null for them.
 const isStructured = (value) => value !== null && typeof value === 'object';
 
 const canonicalize = (value) => {
