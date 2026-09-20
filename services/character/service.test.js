@@ -991,12 +991,13 @@ test('auto-calculate leaves an Advent character on the advent economy', async ()
 
 // --- commissary_reward derived at creation -----------------------------
 //
-// The wizard hardcodes commissary_reward: 0 in its create payload. For the
-// two V1 economies createCharacter now knows the right answer -- the Merx
-// grant minus what the submitted gear spends, with no missions yet to add
-// to it -- so it computes that rather than trusting the client's number.
-// Advent keeps trusting the submitted value: nothing here recalculates a
-// budget-less character's reward.
+// The wizard sends its own agreeing commissary_reward figure, but for the
+// two V1 economies createCharacter recomputes it rather than trusting the
+// client's number -- the Merx grant minus what the submitted gear spends,
+// with no missions yet to add to it. A disagreement between what the player
+// was shown and what gets stored would be worse than the redundant
+// computation. Advent keeps trusting the submitted value: nothing here
+// recalculates a budget-less character's reward.
 const makeServiceOnClass = () => {
   const saved = {};
   const adapter = makeAdapter([], {

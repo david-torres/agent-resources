@@ -779,12 +779,11 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(document.getElementById('slotsReadout').hidden).toBe(true);
   });
 
-  // Everything bought against a Signature (its Enchantment, its Mods) rode
-  // in browser state only and was discarded at submit -- serializePayload
-  // sent bare {name, class_id}. setMods isn't on the exposed handle (only
-  // pure reads and buySignature/setEnchantment are), so a Mod is stamped
-  // directly on the purchase the same way other tests here reach into
-  // state.gear.
+  // serializePayload puts each Signature's Enchantment and Mods on its gear
+  // entry, alongside name and class_id. setMods isn't on the exposed handle
+  // (only pure reads and buySignature/setEnchantment are), so a Mod is
+  // stamped directly on the purchase the same way other tests here reach
+  // into state.gear.
   test('the payload carries each Signature\'s Enchantment and Mods', () => {
     const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
     wizard.getState().classId = 'c-v1';
@@ -835,5 +834,27 @@ describe('step 4 offers the whole class and its purchases', () => {
     const [item] = wizard.buildSubmitPayload().gear;
     expect(item.enchantment).toBeNull();
     expect(item.mods).toEqual([]);
+  });
+
+  // Advent's own creation grant (2, the Elective) leaves no room to buy
+  // anything and still owe a remainder worth asserting on, so missions are
+  // added here purely to give the budget headroom above one paid purchase --
+  // the same getMerxBudget/getMerxSpent arithmetic the aspirant test above
+  // already covers, exercised once under the economy whose grant this plan
+  // changed from 0.
+  test('commissary_reward carries the unspent Merx under the advent economy', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    const state = wizard.getState();
+    state.classId = 'c-advent';
+    // renderSummaryMeta clamps successfulMissions to missionsForLevel(level),
+    // which is 0 at level 1 -- level 3 allows the 4 this test sets.
+    state.level = 3;
+    state.successfulMissions = 4;
+    wizard.syncBaseGear();
+    wizard.buySignature('Duster');
+    const payload = wizard.buildSubmitPayload();
+    expect(wizard.getMerxSpent()).toBeGreaterThan(0);
+    expect(wizard.getMerxSpent()).toBeLessThan(wizard.getMerxBudget());
+    expect(payload.commissary_reward).toBe(wizard.getMerxBudget() - wizard.getMerxSpent());
   });
 });

@@ -200,11 +200,13 @@ class CharacterService {
 
     const { data: characterInput, childData } = normalized;
 
-    // The wizard hardcodes commissary_reward: 0 in its payload; the server
-    // now knows the right answer for the two V1 economies, so it overrides
-    // the client's number rather than trusting it. A brand-new character has
-    // no missions yet, so this is purely "grant minus spend" -- the same
-    // reward deriveCharacterTotals would compute once missions exist.
+    // The client sends its own agreeing commissary_reward figure, but the
+    // server recomputes it here for the two V1 economies rather than
+    // trusting it -- a disagreement between what the player was shown and
+    // what gets stored is worse than a redundant computation. A brand-new
+    // character has no missions yet, so this is purely "grant minus spend"
+    // -- the same reward deriveCharacterTotals would compute once missions
+    // exist.
     const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
     if (economy !== 'advent') {
       const derived = deriveCharacterTotals({
