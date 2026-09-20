@@ -120,6 +120,41 @@ const rpcSaveGear = async (characterId, gear) => {
   return data;
 };
 
+// Drives save_character_atomic directly, the same way rpcSaveGear and the
+// ownership-check test above do: this task only ships the storage layer, not
+// the service-layer wiring that would let createCharacter/updateCharacter
+// forward aspiring_signatures, so the RPC itself is the unit under test.
+const saveAtomic = async ({ characterId, character, gear = [], abilities = [], traits = [], perks = [] }) => {
+  const { data, error } = await supabaseAdmin.rpc('save_character_atomic', {
+    p_character_id: characterId,
+    p_creator_id: profile.id,
+    p_character: character,
+    p_traits: traits,
+    p_gear: gear,
+    p_abilities: abilities,
+    p_perks: perks
+  });
+  if (error) throw error;
+  return data;
+};
+
+const CLASS_A_ID = '00000000-0000-4000-8000-0000000000a1';
+const CLASS_B_ID = '00000000-0000-4000-8000-0000000000b1';
+const CLASS_C_ID = '00000000-0000-4000-8000-0000000000c1';
+
+// A minimal valid character row for a direct RPC insert -- the NOT NULL
+// columns save_character_atomic's INSERT does not COALESCE (name, class, the
+// twelve stats, level, completed_missions, commissary_reward) plus creator_id,
+// which for the INSERT branch comes from p_character itself, not p_creator_id.
+const baseCharacter = () => ({
+  ...stats,
+  creator_id: profile.id,
+  name: `Atomic Aspiring ${suffix}`,
+  class: 'Aspiring',
+  creator_mode: 'aspiring',
+  class_id: null
+});
+
 test('atomic character create writes parent and children together', async () => {
   await setup();
   const { data, error } = await createCharacter(input(`Atomic success ${suffix}`), profile);
@@ -564,4 +599,43 @@ test('updateCharacter through the edit form\'s bare gear string preserves a stor
   expect(after[0].id).toBe(before[0].id);
   expect(after[0].enchantment).toEqual(before[0].enchantment);
   expect(after[0].mods).toEqual(before[0].mods);
+});
+
+// The pool is written on create and survives an update that never mentions
+// it -- the shape every edit-form save has, since that form does not submit
+// the field. jsonb_populate_record(saved, p_character) is what makes an
+// absent key mean "keep stored".
+test('save_character_atomic writes the aspiring pool and preserves it on update', async () => {
+  await setup();
+  const pool = [
+    { class_id: CLASS_A_ID, name: 'A' },
+    { class_id: CLASS_B_ID, name: 'B' },
+    { class_id: CLASS_C_ID, name: 'C' }
+  ];
+  const created = await saveAtomic({
+    characterId: null,
+    character: { ...baseCharacter(), aspiring_signatures: pool }
+  });
+  expect(created.aspiring_signatures).toEqual(pool);
+
+  const updated = await saveAtomic({
+    characterId: created.id,
+    character: {}
+  });
+  expect(updated.aspiring_signatures).toEqual(pool);
+});
+
+// The CHECK constraint's creator_mode clause is what stops a class_id'd
+// character from also carrying a pool, so a save attempting both must fail
+// at the database, not merely be ignored by application code.
+test('a non-aspiring character cannot carry a pool', async () => {
+  await setup();
+  await expect(saveAtomic({
+    characterId: null,
+    character: {
+      ...baseCharacter(),
+      creator_mode: 'advent',
+      aspiring_signatures: [{ class_id: CLASS_A_ID, name: 'A' }]
+    }
+  })).rejects.toThrow();
 });
