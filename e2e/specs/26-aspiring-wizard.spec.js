@@ -162,13 +162,29 @@ test('the wizard creates an aspiring character end to end', async ({ page }) => 
   await page.locator('[data-step-panel="3"] [data-wizard-next]').click();
   await expect(page.locator('[data-step-panel="4"]')).toBeVisible();
 
-  // Step 4 -- 10 Merx, and the spend is not free-form: the submit rejects
-  // anything but exactly 3 gear rows (services/character/input.js's
-  // validateAspiringBuild), so the only shape that satisfies both is the 3
-  // borrowed signature items at 2 Merx each plus 4 common items at 1.
+  // Step 4 -- 10 Merx, spent however the player likes. Choosing the three
+  // Signatures in step 1 already defines the invented Class; the grant is
+  // not compelled to buy them (services/character/input.js's
+  // validateAspiringBuild checks the aspiring_signatures pool, not the gear
+  // array). Buying all three at 2 Merx each plus 4 common items at 1 is one
+  // legal way to spend the full 10 -- not the only one -- and is what this
+  // spec exercises below.
+  //
+  // The three picks are bought through the grid + drawer, not #spendList:
+  // pg. 90 prices them at the own-class rate, and the shop
+  // (character-wizard.js#getShopPool) deliberately excludes anything already
+  // in the pool so the same Signature is never offered at two prices at
+  // once. signatureEntries() builds the grid for aspiring mode from exactly
+  // these three picks; a cell only opens the drawer, and the drawer's own
+  // data-signature-buy is what actually buys it -- same mechanism
+  // 28-aspirant-v1-merx-purchases.spec.js uses for an aspirant's own class,
+  // and the one 29-aspiring-signature-acquisition.spec.js uses for the same
+  // three picks.
   const next4 = page.locator('#step4Next');
   for (const { key } of DONORS) {
-    await page.locator(`#spendList [data-shop-key="class:${donors[key].id}:${prefix} ${key} Item"]`).click();
+    await page.locator(`#signatureGrid [data-signature-name="${prefix} ${key} Item"]`).click();
+    await expect(page.locator('#signatureDrawer')).toBeVisible();
+    await page.locator('#signatureDrawer [data-signature-buy]').click();
   }
   await page.locator('[data-shop-tab="common"]').click();
   for (let i = 0; i < 4; i++) {
