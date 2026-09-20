@@ -659,3 +659,28 @@ test('a NULL creator_mode character cannot carry a pool', async () => {
     }
   })).rejects.toThrow(/characters_aspiring_signatures_check/);
 });
+
+// aspiring_abilities guards the same way aspiring_signatures does: a
+// non-string class_id must fail at the database via the type() guard in the
+// CHECK's jsonpath predicate, not merely be filtered out by application code.
+// Matching on the constraint's own name is what stops an unrelated NOT NULL
+// regression from passing this test for the wrong reason.
+//
+// This goes through a direct table insert rather than saveAtomic: unlike
+// aspiring_signatures, save_character_atomic does not forward aspiring_abilities
+// yet, so an insert through the RPC would silently keep the column's default
+// and never exercise the CHECK.
+const insertWithAspiringAbilities = async (pool) => {
+  const { data, error } = await supabaseAdmin.from('characters')
+    .insert({ ...baseCharacter(), aspiring_abilities: pool })
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+};
+
+test('an aspiring_abilities entry with a non-string class_id is rejected', async () => {
+  await setup();
+  await expect(insertWithAspiringAbilities([{ class_id: 123, name: 'X', type: 'core' }]))
+    .rejects.toThrow(/characters_aspiring_abilities_check/);
+});
