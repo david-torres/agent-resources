@@ -921,7 +921,16 @@ class CharacterService {
 
     if (rows.length === 0) return { data: [], error: null };
 
-    const validation = validateAbilityPerks(existingForValidation.concat(rows));
+    // Validation must know which rows are compounds: a compound is allowed
+    // five more words (util/perk-economy.js). The rows carry compounds_with:
+    // null until the batch's refs are resolved below, so the flag is read from
+    // the parallel meta array instead.
+    const rowsForValidation = rows.map((row, index) => (
+      meta[index] && meta[index].compoundsWith
+        ? { ...row, compounds_with: meta[index].compoundsWith }
+        : row
+    ));
+    const validation = validateAbilityPerks(existingForValidation.concat(rowsForValidation));
     if (!validation.ok) {
       return { data: null, error: { status: 400, message: validation.errors.join(' ') } };
     }

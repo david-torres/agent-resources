@@ -1,3 +1,5 @@
+const { COMPOUND_WORD_BONUS, PERK_WORD_LIMIT, PERKS_PER_ABILITY } = require('./perk-economy');
+
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function isValidUuid(value) {
@@ -45,7 +47,11 @@ function assertNonEmptyImportText(inputText, subject = 'content') {
   return inputText.trim();
 }
 
-function validateAbilityPerks(perks, { wordLimit = 25, perAbility = 5 } = {}) {
+// `wordLimit` is the BASELINE limit; a perk that compounds another gets
+// COMPOUND_WORD_BONUS more (Advent pg. 30, via util/perk-economy.js). Callers
+// that pass an explicit wordLimit still get the bonus applied on top of it,
+// which is what the custom-limit test expects.
+function validateAbilityPerks(perks, { wordLimit = PERK_WORD_LIMIT, perAbility = PERKS_PER_ABILITY } = {}) {
   if (!Array.isArray(perks)) return { ok: true };
 
   const errors = [];
@@ -58,8 +64,9 @@ function validateAbilityPerks(perks, { wordLimit = 25, perAbility = 5 } = {}) {
     const abilityId = perk.class_ability_id;
     const text = typeof perk.text === 'string' ? perk.text : '';
     const words = countWords(text);
-    if (words > wordLimit) {
-      errors.push(`Perk #${i + 1}: must be at most ${wordLimit} words (was ${words}).`);
+    const limit = wordLimit + (perk.compounds_with ? COMPOUND_WORD_BONUS : 0);
+    if (words > limit) {
+      errors.push(`Perk #${i + 1}: must be at most ${limit} words (was ${words}).`);
     }
 
     if (abilityId) {

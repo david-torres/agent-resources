@@ -112,3 +112,50 @@ test('validateAbilityPerks accepts custom limits', () => {
   expect(res.ok).toBe(false);
   expect(res.errors[0]).toMatch(/2 words/);
 });
+
+const { PERK_WORD_LIMIT, COMPOUND_WORD_BONUS } = require('./perk-economy');
+
+const words = (n) => Array(n).fill('word').join(' ');
+
+test('a baseline perk is still held to 25 words', () => {
+  const res = validateAbilityPerks([
+    { class_ability_id: 'a1', text: words(26), compounds_with: null }
+  ]);
+  expect(res.ok).toBe(false);
+  expect(res.errors[0]).toContain('at most 25 words');
+});
+
+test('a compound is allowed five more words than a baseline perk', () => {
+  // Advent pg. 30: "increasing its maximum length by +5 words".
+  const res = validateAbilityPerks([
+    { class_ability_id: 'a1', text: words(30), compounds_with: 'p1' }
+  ]);
+  expect(res.ok).toBe(true);
+});
+
+test('a compound is still held to a limit, just a higher one', () => {
+  const res = validateAbilityPerks([
+    { class_ability_id: 'a1', text: words(31), compounds_with: 'p1' }
+  ]);
+  expect(res.ok).toBe(false);
+  expect(res.errors[0]).toContain('at most 30 words');
+});
+
+test('the word limits come from perk-economy, not from literals here', () => {
+  expect(PERK_WORD_LIMIT).toBe(25);
+  expect(PERK_WORD_LIMIT + COMPOUND_WORD_BONUS).toBe(30);
+});
+
+test('a compound still counts toward the per-ability Perk cap', () => {
+  // Advent pg. 30: "(still counts towards Perk cap)". True without special
+  // handling, because a compound is its own row -- this test pins it so a
+  // future refactor cannot quietly exempt it.
+  const perks = Array(5).fill(null).map((_, i) => ({
+    class_ability_id: 'a1', text: 'short', compounds_with: i === 4 ? 'p1' : null
+  }));
+  expect(validateAbilityPerks(perks).ok).toBe(true);
+  perks.push({ class_ability_id: 'a1', text: 'short', compounds_with: 'p1' });
+  const res = validateAbilityPerks(perks);
+  expect(res.ok).toBe(false);
+  expect(res.errors[0]).toContain('at most 5 perks per ability');
+});
