@@ -24,6 +24,7 @@ const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+const { twelveItems, sixItems } = require('../test/helpers/wizard-fixture');
 
 const makeClient = () => ({
   from() {
@@ -222,4 +223,43 @@ test('each served class carries its content_format', async () => {
     mode: 'aspirant', classes: [{ id: 'c-v1', content_format: 'aspirant' }]
   });
   expect(data.classes[0].content_format).toBe('aspirant');
+});
+
+test('a V1 class serves all twelve of its Signatures', async () => {
+  const data = await renderWizardData({
+    mode: 'aspirant',
+    classes: [{ id: 'c-v1', content_format: 'aspirant', gear: twelveItems() }]
+  });
+  expect(data.classes[0].class_gear).toHaveLength(12);
+});
+
+test('each served Signature keeps its printed position and its Default', async () => {
+  const data = await renderWizardData({
+    mode: 'aspirant',
+    classes: [{ id: 'c-v1', content_format: 'aspirant', gear: twelveItems() }]
+  });
+  const first = data.classes[0].class_gear[0];
+  expect(first).toMatchObject({ column: 1, position: 1 });
+  expect(first.default_enchantment).toMatchObject({ name: expect.any(String) });
+});
+
+test('the served order is the printed order', async () => {
+  const data = await renderWizardData({
+    mode: 'aspirant',
+    classes: [{ id: 'c-v1', content_format: 'aspirant', gear: twelveItems() }]
+  });
+  const keys = data.classes[0].class_gear.map((g) => `${g.column}.${g.position}`);
+  expect(keys).toEqual([...keys].sort((a, b) => {
+    const [ac, ap] = a.split('.').map(Number);
+    const [bc, bp] = b.split('.').map(Number);
+    return ac - bc || ap - bp;
+  }));
+});
+
+test('advent still gets exactly three free Default Signatures', async () => {
+  const data = await renderWizardData({
+    mode: 'advent',
+    classes: [{ id: 'c-advent', content_format: 'advent', gear: sixItems() }]
+  });
+  expect(data.classes[0].base_gear).toHaveLength(3);
 });

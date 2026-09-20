@@ -30,7 +30,7 @@ const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
-const { deriveCharacterTotals } = require('../util/character-derived');
+const { deriveCharacterTotals, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -173,6 +173,7 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
     playerCreatedAspirantV2Classes: filteredPCCAspirantV2,
     personalityMap,
     classGearList: filteredGear,
+    adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
     classAbilityList: filteredAbilities,
     activeNav: 'characters',
     breadcrumbs: [
@@ -249,37 +250,30 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             description_html: renderMarkdown(a.description || '')
           }))
         : [],
-      // Step 4 gear: the first 6 class items go to the right-hand shop and the
-      // first 3 of those to `base_gear` for the left-hand list, with `subtype`
-      // badging each card. Both slices are the same in every wizard mode -- what
-      // an item costs and whether the left list renders at all is decided in
-      // public/js/character-wizard.js, which is the only place the mode matrix
-      // should live. In outline: own-class items are ECONOMY.prices.signature.own
-      // and cross-class items ECONOMY.prices.signature.cross (aspirant only),
-      // and the free auto-loaded allotment is advent's alone -- freeBaseCount()
-      // is 0 in aspirant and aspiring modes.
-      //
-      // 6 is a cap here, not the size of a class: an ENCLAVE: Aspirant V1 class
-      // carries 12 Signatures across four columns, and this deliberately shows
-      // only the first 6 of them. Offering the rest needs the Merx and column
-      // rules that arrive with the later Aspirant slices.
-      //
-      // `idx < 3` is a third hardcoded copy of the column-1-is-Default rule,
-      // after util/class-gear.js gearCategory and util/aspirant-extract.js
-      // gearFrom, and it is the one that reads a position rather than the
-      // stored column. The two agree only because normalizeGear derives
-      // `column` from that same position on every save; a slice that lets a
-      // column be set independently of array order breaks this copy alone.
-      // The plan defers making this route column-aware to slices 4-5.
+      // Every Signature the class carries, in printed order. A V1 class has
+      // twelve across four columns; an Advent class has six. The player chooses
+      // which to buy, so the route no longer decides for them by taking the
+      // first six. `column` and `position` come from the class contract
+      // (util/class-gear.js) and are layout facts, not economy ones -- nothing
+      // gates a purchase on a column (see the spec, "Two things the book does
+      // not say").
       class_gear: Array.isArray(c.gear)
-        ? c.gear.slice(0, 6).map((g, idx) => ({
+        ? c.gear.map((g, idx) => ({
             name: g.name || '',
             description_html: renderMarkdown(g.description || ''),
-            subtype: idx < 3 ? 'base' : 'elective'
+            meters: Array.isArray(g.meters) ? g.meters : [],
+            column: g.column || null,
+            position: g.position || null,
+            default_enchantment: g.default_enchantment || null,
+            subtype: idx < ADVENT_DEFAULT_SIGNATURES ? 'base' : 'elective'
           }))
         : [],
+      // Advent's free auto-loaded allotment for the left-hand list -- see
+      // util/character-derived.js's ADVENT_DEFAULT_SIGNATURES. Aspirant and
+      // aspiring modes never render this list; what an item costs and whether
+      // it does is decided in public/js/character-wizard.js.
       base_gear: Array.isArray(c.gear)
-        ? c.gear.slice(0, 3).map((g) => ({
+        ? c.gear.slice(0, ADVENT_DEFAULT_SIGNATURES).map((g) => ({
             name: g.name || '',
             description_html: renderMarkdown(g.description || '')
           }))
@@ -507,6 +501,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       playerCreatedAspirantV2Classes: filteredPCCAspirantV2,
       personalityMap,
       classGearList: filteredGear,
+      adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
       classAbilityList: filteredAbilities,
       activeNav: 'characters',
       breadcrumbs: [
@@ -683,7 +678,11 @@ router.post('/', isAuthenticated, async (req, res) => {
 
 router.get('/class-gear', authOptional, async (req, res) => {
   const { filteredGear } = await filterClassDataForUser(res.locals.user);
-  res.render('partials/character-class-gear', { layout: false, classGearList: filteredGear });
+  res.render('partials/character-class-gear', {
+    layout: false,
+    classGearList: filteredGear,
+    adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES
+  });
 });
 
 router.get('/class-abilities', authOptional, async (req, res) => {

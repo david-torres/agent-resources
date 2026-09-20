@@ -239,7 +239,7 @@
     <div class="columns is-multiline" id="class-gear-list">
       {{#if character.gear}}
       {{#each character.gear}}
-      {{> character-class-gear characterGear=this classGearList=../classGearList}}
+      {{> character-class-gear characterGear=this classGearList=../classGearList adventDefaultSignatures=../adventDefaultSignatures}}
       {{/each}}
       {{/if}}
     </div>

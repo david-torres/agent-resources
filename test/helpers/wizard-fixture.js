@@ -13,6 +13,25 @@ const { economyFor, economyFigures } = require('../../util/merx-economy');
 const { statCapFigures } = require('../../util/stat-caps');
 const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
 
+// A V1 class's twelve printed Signatures, three to a column across the four
+// columns the book prints (ENCLAVE: Aspirant, pg. 11). `sixItems()` is the
+// first two columns, the shape an Advent class's six-item roster carries.
+const TWELVE_SIGNATURE_NAMES = [
+  'Cowboy Hat', 'Sharps Rifle', 'Bandolier', 'Bowie Knife', 'Wild Rag', 'Duster',
+  'Rollups', 'Lasso', 'Spurs', 'Canteen', 'Saddlebag', 'Tin Star'
+];
+const signatureItem = (name, column, position) => ({
+  name,
+  description: `${name} description.`,
+  meters: [],
+  column,
+  position,
+  default_enchantment: { name: `${name} Enchantment`, description: 'Does a thing.' }
+});
+const twelveItems = () => TWELVE_SIGNATURE_NAMES.map((name, i) =>
+  signatureItem(name, Math.floor(i / 3) + 1, (i % 3) + 1));
+const sixItems = () => twelveItems().slice(0, 6);
+
 const COMMON_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-common.js'),
   'utf8'
@@ -175,4 +194,4 @@ const fixture = (overrides = {}) => {
   };
 };
 
-module.exports = { bootWizard, fixture };
+module.exports = { bootWizard, fixture, twelveItems, sixItems };
