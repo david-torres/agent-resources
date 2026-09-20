@@ -663,6 +663,65 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(wizard.getSlotsUsed()).toBe(cap);
   });
 
+
+  // A walk back through the wizard is not a change of class. A Custom
+  // Enchantment's and a Mod's text are the player's own writing, so losing
+  // them on a re-entry loses something no re-pick brings back. Advent MODE is
+  // what exercises this: syncBaseGear no-ops for aspirant mode.
+  test('returning to step 4 unchanged keeps the Signature, its Enchantment and its Mods', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.syncBaseGear();
+    wizard.renderGearStep();
+    document.querySelector('[data-signature-name="Cowboy Hat"]').click();
+    document.querySelector('[data-signature-buy]').click();
+
+    const drawer = document.getElementById('signatureDrawer');
+    const custom = drawer.querySelector('input[name="enchantment"][value="custom"]');
+    custom.checked = true;
+    custom.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const customName = drawer.querySelector('[data-custom-name]');
+    customName.value = 'Hex of the Long Ride';
+    customName.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const modName = drawer.querySelector('[data-mod-name]');
+    modName.value = 'Wide Brim';
+    modName.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    const spent = wizard.getMerxSpent();
+    wizard.syncBaseGear();
+
+    const gear = wizard.getState().gear;
+    expect(gear).toHaveLength(1);
+    expect(gear[0].enchantment)
+      .toEqual({ source: 'custom', name: 'Hex of the Long Ride', description: '' });
+    expect(gear[0].mods).toEqual([{ name: 'Wide Brim', description: '' }]);
+    expect(wizard.getMerxSpent()).toBe(spent);
+  });
+
+  test('changing class still drops the picks made against the old one', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'advent', classes: [v1Class(), otherV1Class()]
+    }));
+    const state = wizard.getState();
+    state.classId = 'c-v1';
+    wizard.syncBaseGear();
+    wizard.buySignature('Cowboy Hat');
+    expect(state.gear).toHaveLength(1);
+
+    state.classId = 'c-other';
+    wizard.syncBaseGear();
+    expect(state.gear).toEqual([]);
+  });
+
+  test('re-entering advent step 4 does not reload the Defaults it was granted', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    wizard.getState().classId = 'c-advent';
+    wizard.syncBaseGear();
+    wizard.syncBaseGear();
+    expect(wizard.getState().gear).toHaveLength(wizard.getFreeBaseCount());
+    expect(wizard.getMerxSpent()).toBe(0);
+  });
+
   // pg. 85: an economy with no cap has no readout to show.
   test('the slot readout appears only where the economy caps Signatures', () => {
     const aspirant = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));

@@ -63,6 +63,10 @@ window.CharacterWizard = (function () {
       // user cleared the textarea). Persisted via writeStorage so a draft
       // resumed from localStorage keeps the assignment.
       perkAbilityName: null,
+      // The class state.gear's picks were made against, which syncBaseGear
+      // compares the selected class to. Null while nothing has been picked
+      // for any class.
+      gearClassId: null,
       // Which cell of step 4's printed Signature grid is open, as
       // { name, classId }. Null means the drawer is closed.
       openSignature: null,
@@ -3185,6 +3189,16 @@ window.CharacterWizard = (function () {
     // against the new class's pool. Common items are class-agnostic and
     // stay, but the brief "safe" rule from the prior round (clear in
     // advent) is kept: the user is re-entering step 1 and should re-pick.
+    //
+    // Only a change of class drops them. Walking back through the wizard and
+    // returning to step 4 is not one, and a purchase carries writing a
+    // re-pick cannot restore: the name and text of a Custom Enchantment, and
+    // of every Mod. state.gearClassId records which class the current picks
+    // were made against, so the two cases are told apart even before
+    // anything has been picked -- the gear itself cannot say, because an
+    // empty list belongs to no class.
+    if (state.gearClassId === c.id) return;
+    state.gearClassId = c.id;
     state.gear = [];
     state.openSignature = null;
     if (DATA.mode === 'advent') {
