@@ -554,13 +554,26 @@ moves.
    this reason. The edit form must likewise never submit the pool — a character's
    Class is not editable, and an absent key is how that is enforced rather than a
    server-side override.
-6. **`validateAspiringBuild`'s "exactly three" moves from the gear array to the
-   pool.** Today `services/character/input.js:668` reads
+6. **Selecting the three is not buying them.** An Aspiring character chooses
+   three Signatures to *constitute its Class*; it then spends its 10 Merx however
+   it likes, exactly as an Aspirant character spends 12 — pg. 3's "may spend
+   however they like or save for later" governs both. It may buy all three, some
+   of them, none of them, or none of them and two cross-class Signatures instead.
+   The pool is a price list, not an inventory.
+
+   So `validateAspiringBuild`'s "exactly three" moves from the gear array to the
+   pool. Today `services/character/input.js:668` reads
    `if (gear.length !== 3) return 'An Aspiring character needs exactly three gear
-   picks.'` — which would refuse the fourth Signature outright. The three-ness is
-   a property of the Class being invented, not of what the character walked out
-   with, so the count check binds the pool and the gear array is left to the
-   budget and cap checks that already govern every other economy.
+   picks.'`, which both refuses a fourth Signature and compels the first three.
+   The three-ness is a property of the Class being invented, not of what the
+   character walked out with, so the count check binds the pool and the gear
+   array is left to the budget and cap checks that already govern every other
+   economy. A creation that buys nothing submits no `gear` key at all — the
+   wizard omits it when `state.gear` is empty — and that must be a legal save.
+
+   This is also why the pool has to outlive ownership: a character that bought
+   none of its three at creation must still get them at the own-class rate later,
+   and one that sells a pick must not find it repriced from 2 Merx to 3.
 7. **An empty or absent pool prices every Signature own-class** — plan 2's exact
    behaviour — so a row written before the column existed derives as it always
    did. The permissive direction is chosen deliberately: the strict one would
