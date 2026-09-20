@@ -552,8 +552,8 @@ const normalizeCharacterInput = (input, context = {}) => {
   }
   delete data.pseudo_class;
 
-  // The pools is written once, by the creation that invents the Class. On an
-  // update the key must be ABSENT, not empty: save_character_atomic treats a
+  // The pools are written once, by the creation that invents the Class. On an
+  // update the keys must be ABSENT, not empty: save_character_atomic treats a
   // present key as authoritative, so sending [] would delete the character's
   // Class. Absence is also what makes the Class un-editable, without needing a
   // server-side override to enforce it.
