@@ -2592,18 +2592,16 @@ window.CharacterWizard = (function () {
     // selected one; for aspiring, whose Class is three named items, it is
     // every Signature outside the pool. Branching on the resolved economy
     // rather than DATA.mode is what keeps this agreeing with
-    // usesSignatureGrid -- they disagreed before, and ?mode=advent on an
-    // aspirant-content class produced a shop with no class items at all.
+    // usesSignatureGrid, so ?mode=advent on an aspirant-content class still
+    // produces a shop with class items in it.
     if (usesSignatureGrid()) {
-      const picks = aspiringPool();
-      const inPool = (cls, g) => picks.some((pick) => pick.class_id === cls.id && pick.name === g.name);
       if (Array.isArray(DATA.classes)) {
         DATA.classes.forEach((cls) => {
           if (!cls || !cls.id || !Array.isArray(cls.class_gear)) return;
           if (economyForState() !== 'aspiring' && cls.id === state.classId) return;
           cls.class_gear.forEach((g) => {
             if (!g || !g.name) return;
-            if (economyForState() === 'aspiring' && inPool(cls, g)) return;
+            if (economyForState() === 'aspiring' && !crossClassFor(cls.id, g.name)) return;
             pushClassItem(cls, g);
           });
         });

@@ -1449,9 +1449,23 @@ test('every class Signature in the aspiring shop is cross-class priced', () => {
   for (const item of classItems) expect(item.cost).toBe(FIGURES.prices.signature.cross);
 });
 
-// Pre-existing gap this task closes: getShopPool branched on DATA.mode while
-// usesSignatureGrid branched on the resolved economy, so ?mode=advent on an
-// aspirant-content class produced a shop with no class items in it.
+// An unset pool prices everything own-class (util/merx-economy.js
+// isCrossClass's permissive direction for legacy rows and an unstarted
+// builder). The shop's exclusion has to agree with that pricing rule, or a
+// Signature ends up listed at the own-class rate in a place that is supposed
+// to be the cross-class catalogue -- the "same Signature at two prices" the
+// exclusion exists to prevent.
+test('the aspiring shop never lists a Signature at a price its own pricer disagrees with', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+  const classItems = wizard.getShopPool().filter((p) => p.kind === 'class');
+  for (const item of classItems) {
+    expect(item.cost).toBe(FIGURES.prices.signature.cross);
+  }
+});
+
+// getShopPool branched on DATA.mode while usesSignatureGrid branched on the
+// resolved economy: ?mode=advent on an aspirant-content class produces a
+// shop with no class items in it unless both agree.
 test('the shop follows the resolved economy, not the URL mode', () => {
   const wizard = bootWizard(fixture({
     mode: 'advent', classes: [v1Class(), otherV1Class()]
