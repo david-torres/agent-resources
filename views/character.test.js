@@ -85,6 +85,128 @@ test('the Personality box renders each trait name, not [object Object]', () => {
   expect(html).not.toContain('[object Object]');
 });
 
+// -- Signature Gear: Enchantments, Mods and the Merx breakdown (Task 11) ---
+//
+// views/character.handlebars is the full page; views/partials/character-
+// details.handlebars is the htmx fragment rendered for the same character on
+// /party and the LFG post page. Both render Signature Gear through the same
+// views/partials/signature-entry.handlebars partial so they cannot drift --
+// see views/partials/character-details.test.js for the fragment's half of
+// this contract.
+const fs = require('fs');
+const path = require('path');
+const Handlebars = require('handlebars');
+const hbsHelpers = require('handlebars-helpers')();
+const customHelpers = require('../util/handlebars');
+const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
+
+const CHARACTER_SRC = fs.readFileSync(path.join(__dirname, 'character.handlebars'), 'utf8');
+
+const registerSignatureEntryPartials = (hb) => {
+  hb.registerPartial('signature-entry',
+    fs.readFileSync(path.join(__dirname, 'partials/signature-entry.handlebars'), 'utf8'));
+  hb.registerPartial('character-detail-tag',
+    fs.readFileSync(path.join(__dirname, 'partials/character-detail-tag.handlebars'), 'utf8'));
+  hb.registerPartial('class-enchantment',
+    fs.readFileSync(path.join(__dirname, 'partials/class-enchantment.handlebars'), 'utf8'));
+};
+
+const renderGearSection = (locals) => {
+  const section = CHARACTER_SRC.slice(
+    CHARACTER_SRC.indexOf('<h3 class="title is-4">Signature Gear</h3>'),
+    CHARACTER_SRC.indexOf('{{#if character.common_items}}')
+  );
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
+  registerSignatureEntryPartials(hb);
+  return hb.compile(section)(locals);
+};
+
+const renderCommissarySection = (locals) => {
+  const section = CHARACTER_SRC.slice(
+    CHARACTER_SRC.indexOf('<p><strong>Completed Missions:'),
+    CHARACTER_SRC.indexOf('<div class="box">\n      <h3 class="title is-4">Personality</h3>')
+  );
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  return hb.compile(section)(locals);
+};
+
+test('a Signature shows its Enchantment and Mods when purchases are shown', () => {
+  const html = renderGearSection({
+    showGearPurchases: true,
+    character: {
+      gear: [{
+        name: 'Cowboy Hat',
+        enchantment: { source: 'default' },
+        default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+        mods: [{ name: 'Scope', description: 'Sees far' }]
+      }]
+    }
+  });
+  expect(html).toContain('Hats Off to You');
+  expect(html).toContain('Scope');
+});
+
+test('a player-authored Custom Enchantment and its Mods are escaped', () => {
+  const html = renderGearSection({
+    showGearPurchases: true,
+    character: {
+      gear: [{
+        name: 'Cowboy Hat',
+        enchantment: { source: 'custom', name: '<script>x</script>', description: 'd' },
+        mods: [{ name: '<img src=x onerror=alert(1)>', description: 'z' }]
+      }]
+    }
+  });
+  expect(html).not.toContain('<script>x');
+  expect(html).not.toContain('<img src=x');
+  expect(html).toContain('&lt;script&gt;');
+  expect(html).toContain('&lt;img');
+});
+
+test('an advent character (showGearPurchases false) keeps today\'s plain gear tag', () => {
+  const html = renderGearSection({
+    showGearPurchases: false,
+    character: {
+      gear: [{
+        name: 'Cowboy Hat',
+        class_id: 'class-a',
+        enchantment: { source: 'default' },
+        default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+        mods: [{ name: 'Scope', description: 'Sees far' }]
+      }]
+    }
+  });
+  expect(html).not.toContain('Hats Off to You');
+  expect(html).not.toContain('Scope');
+  expect(html).toContain('Cowboy Hat');
+});
+
+test('a V1 character shows the Merx breakdown, not one bare number', () => {
+  const html = renderCommissarySection({
+    character: { completed_missions: 2, commissary_reward: 99 },
+    merxBreakdown: { earned: 12, spend: 5, reward: 7, deficit: 0 }
+  });
+  expect(html).toContain('Earned');
+  expect(html).toContain('Spent');
+  expect(html).toContain('Remaining');
+  expect(html).not.toContain('Commissary Reward');
+});
+
+test('an advent character keeps its single Commissary Reward line', () => {
+  const html = renderCommissarySection({
+    character: { completed_missions: 2, commissary_reward: 4 },
+    merxBreakdown: null
+  });
+  expect(html).toContain('Commissary Reward');
+  expect(html).not.toContain('Earned');
+});
+
 test('both export dropdowns really carry the directives', () => {
   const fs = require('fs');
   const path = require('path');

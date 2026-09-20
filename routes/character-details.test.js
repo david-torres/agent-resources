@@ -112,7 +112,7 @@ const {
   setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
   substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
 } = require('../util/handlebars');
-const { renderMarkdown } = require('../util/markdown');
+const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 
 let server;
@@ -134,6 +134,7 @@ beforeAll(async () => {
       getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, dump,
       videoEmbed, isSupportedVideoUrl, substring, concat, effectiveRulesVersion,
       wordCount, perksForAbility, nextPerkPosition, json, markdown: renderMarkdown,
+      powerRatings: renderPowerRatings,
     },
   }));
   app.set('view engine', 'handlebars');
@@ -229,4 +230,38 @@ test('?lfg lets the hosting Conduit read an approved applicant in full', async (
   const html = await res.text();
   expect(html).toContain('SECRET ABILITY TEXT');
   expect(html).toContain('SECRET GEAR TEXT');
+});
+
+// -- Signature Gear: Enchantments and Mods for a V1 population (Task 11) ----
+//
+// showGearPurchases is true for content_format 'aspirant' or creator_mode
+// 'aspiring', never for an advent character (the default fixture here).
+test('an aspiring character shows its Enchantment and Mods', async () => {
+  state.character.creator_mode = 'aspiring';
+  state.character.gear = [{
+    name: 'Cowboy Hat',
+    class_id: 'class-a',
+    enchantment: { source: 'default' },
+    default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+    mods: [{ name: 'Scope', description: 'Sees far' }],
+  }];
+  const res = await get(`/characters/${CHAR_ID}/details`);
+  const html = await res.text();
+  expect(html).toContain('Hats Off to You');
+  expect(html).toContain('Scope');
+});
+
+test('an advent character keeps the plain gear tag, never an Enchantment', async () => {
+  state.character.gear = [{
+    name: 'Cowboy Hat',
+    class_id: 'class-a',
+    enchantment: { source: 'default' },
+    default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+    mods: [{ name: 'Scope', description: 'Sees far' }],
+  }];
+  const res = await get(`/characters/${CHAR_ID}/details`);
+  const html = await res.text();
+  expect(html).toContain('Cowboy Hat');
+  expect(html).not.toContain('Hats Off to You');
+  expect(html).not.toContain('Scope');
 });

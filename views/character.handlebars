@@ -73,7 +73,16 @@
       </p>
       {{/if}}
       <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
+      {{#if merxBreakdown}}
+      <p><strong>Earned:</strong> {{merxBreakdown.earned}}</p>
+      <p><strong>Spent:</strong> {{merxBreakdown.spend}}</p>
+      <p><strong>Remaining:</strong> {{merxBreakdown.reward}}</p>
+      {{#if merxBreakdown.deficit}}
+      <p class="has-text-danger"><strong>Deficit:</strong> {{merxBreakdown.deficit}}</p>
+      {{/if}}
+      {{else}}
       <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
+      {{/if}}
     </div>
 
     <div class="box">
@@ -260,7 +269,11 @@
       <div class="columns is-multiline">
         {{#each character.gear}}
         <div class="column is-one-third">
+          {{#if ../showGearPurchases}}
+          {{> signature-entry item=this}}
+          {{else}}
           {{> character-detail-tag item=this idPrefix="gear" className="is-size-5"}}
+          {{/if}}
         </div>
         {{/each}}
       </div>

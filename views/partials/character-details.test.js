@@ -14,16 +14,22 @@ const { statList } = require('../../util/enclave-consts');
 const DETAILS_SRC = fs.readFileSync(path.join(__dirname, 'character-details.handlebars'), 'utf8');
 const TAG_SRC = fs.readFileSync(path.join(__dirname, 'character-detail-tag.handlebars'), 'utf8');
 const READONLY_SRC = fs.readFileSync(path.join(__dirname, 'stat-blocks-readonly.handlebars'), 'utf8');
+const SIGNATURE_ENTRY_SRC = fs.readFileSync(path.join(__dirname, 'signature-entry.handlebars'), 'utf8');
+const CLASS_ENCHANTMENT_SRC = fs.readFileSync(path.join(__dirname, 'class-enchantment.handlebars'), 'utf8');
+const { renderPowerRatings } = require('../../util/markdown');
 
-const render = (character, effectiveVersion = 'v1') => {
+const render = (character, effectiveVersion = 'v1', showGearPurchases = false) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
   hb.registerHelper('range', rangeHelper);
   hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
   hb.registerPartial('character-detail-tag', TAG_SRC);
   hb.registerPartial('stat-blocks-readonly', READONLY_SRC);
-  return hb.compile(DETAILS_SRC)({ character, effectiveVersion, statList });
+  hb.registerPartial('signature-entry', SIGNATURE_ENTRY_SRC);
+  hb.registerPartial('class-enchantment', CLASS_ENCHANTMENT_SRC);
+  return hb.compile(DETAILS_SRC)({ character, effectiveVersion, statList, showGearPurchases });
 };
 
 const makeCharacter = (overrides = {}) => ({
@@ -176,4 +182,52 @@ test('a character no Stat of which exceeds the blocks renders unchanged', () => 
   expect(section.match(/<span class="stat-blocks is-readonly">/g)).toHaveLength(statList.length);
   expect((section.match(/<span/g) || []).length)
     .toBe(statList.length + (section.match(/wizard-stat-box/g) || []).length);
+});
+
+// -- Signature Gear: Enchantments and Mods (Task 11) ------------------------
+//
+// This fragment and views/character.handlebars render Signature Gear through
+// the same views/partials/signature-entry.handlebars partial so the two
+// cannot drift -- slice 5 shipped a fix for exactly this kind of divergence
+// (ad019e3). See views/character.test.js for the full page's half of this
+// contract.
+
+test('the details fragment shows a Signature\'s Enchantment and Mods when purchases are shown', () => {
+  const html = render(makeCharacter({
+    gear: [{
+      name: 'Cowboy Hat',
+      enchantment: { source: 'default' },
+      default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    }]
+  }), 'v1', true);
+  expect(html).toContain('Hats Off to You');
+  expect(html).toContain('Scope');
+});
+
+test('the details fragment escapes a player-authored Custom Enchantment', () => {
+  const html = render(makeCharacter({
+    gear: [{
+      name: 'Cowboy Hat',
+      enchantment: { source: 'custom', name: '<script>x</script>', description: 'd' },
+      mods: []
+    }]
+  }), 'v1', true);
+  expect(html).not.toContain('<script>x');
+  expect(html).toContain('&lt;script&gt;');
+});
+
+test('an advent character (showGearPurchases false) keeps the plain gear tag', () => {
+  const html = render(makeCharacter({
+    gear: [{
+      name: 'Cowboy Hat',
+      class_id: 'class-a',
+      enchantment: { source: 'default' },
+      default_enchantment: { name: 'Hats Off to You', description: 'Portray a Turning Point.' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    }]
+  }), 'v1', false);
+  expect(html).not.toContain('Hats Off to You');
+  expect(html).not.toContain('Scope');
+  expect(html).toContain('Cowboy Hat');
 });

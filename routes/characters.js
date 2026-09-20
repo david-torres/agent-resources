@@ -30,7 +30,7 @@ const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
-const { deriveCharacterTotals, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
+const { deriveCharacterTotals, deriveMerxBreakdown, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
@@ -939,6 +939,13 @@ router.get('/:id/details', authOptional, async (req, res) => {
     // ignore; render as v1 without class details
   }
   const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
+  // A Signature's Enchantments and Mods are a V1-population feature: they
+  // show for a class with content_format 'aspirant' or a creator_mode of
+  // 'aspiring', never for an advent character, which keeps today's plain tags.
+  const showGearPurchases = economyFor({
+    contentFormat: characterClass && characterClass.content_format,
+    creatorMode: character.creator_mode
+  }) !== 'advent';
 
   await applyDescriptionGate({
     character,
@@ -952,6 +959,7 @@ router.get('/:id/details', authOptional, async (req, res) => {
     layout: false,
     character,
     effectiveVersion,
+    showGearPurchases,
     statList
   });
 });
@@ -1015,6 +1023,36 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
 
       const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
 
+      // A Signature's Enchantments and Mods, and the Earned/Spent/Remaining
+      // breakdown below, are a V1-population feature: content_format
+      // 'aspirant' or creator_mode 'aspiring'. An advent character's page
+      // keeps its single Commissary Reward line and today's plain gear tags.
+      const economy = economyFor({
+        contentFormat: characterClass && characterClass.content_format,
+        creatorMode: character.creator_mode
+      });
+      const showGearPurchases = economy !== 'advent';
+
+      // recentMissions above is capped at 5 for the Recent Missions box;
+      // the breakdown needs every mission, so it reads the full list --
+      // non-fatally, since the breakdown is supplementary to the page.
+      let merxBreakdown = null;
+      if (showGearPurchases) {
+        try {
+          const { data: allRealMissions } = await characterRepository.getRealMissions(id);
+          merxBreakdown = deriveMerxBreakdown({
+            realMissions: allRealMissions || [],
+            offscreenMissions: offscreenMissions || [],
+            gear: character.gear,
+            commonItems: character.common_items,
+            characterClassId: character.class_id,
+            economy
+          });
+        } catch (_) {
+          // Render without the breakdown; the bare page still works.
+        }
+      }
+
       const ownerCredit = ownerProfile && ownerProfile.is_public !== false
         ? `by ${ownerProfile.name}`
         : null;
@@ -1039,6 +1077,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         recentMissions,
         recentMerged,
         statList,
+        showGearPurchases,
+        merxBreakdown,
         // Each Stat's real Cap, for the live stat editor and the level-up modal
         // this page mounts. Both write through routes that already judge a Stat
         // against the same Cap (statCapError, services/character/service.js), so
@@ -1046,10 +1086,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // surfaces a character actually grows on.
         statCaps: statCapMap({
           statList,
-          economy: economyFor({
-            contentFormat: characterClass && characterClass.content_format,
-            creatorMode: character.creator_mode
-          }),
+          economy,
           traits: character.traits,
           capPurchases: character.stat_cap_purchases
         }),

@@ -35,11 +35,17 @@
 
   {{#if character.gear.length}}
   <h4 class="title is-5">Signature Gear</h4>
+  {{#if showGearPurchases}}
+  {{#each character.gear}}
+  {{> signature-entry item=this}}
+  {{/each}}
+  {{else}}
   <div class="tags">
     {{#each character.gear}}
     {{> character-detail-tag item=this idPrefix=(concat "detail-" ../character.id "-gear") className="tag is-gray is-medium"}}
     {{/each}}
   </div>
+  {{/if}}
   {{/if}}
 
   {{#if character.traits.length}}

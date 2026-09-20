@@ -1,0 +1,45 @@
+{{!-- Read-only twin of public/js/signature-entry.js's readOnly render(): a
+      Signature's class-authored name and description, the Enchantment
+      actually bought on it (the class's Default text via class-enchantment,
+      or a Custom the player named and wrote), and every Mod the player named
+      and described. `item.enchantment` and `item.mods` are the stored
+      purchase shape (services/character/input.js); `item.default_enchantment`
+      is the class's own text, already merged onto the row by
+      services/character/repository.js#mergeClassItems.
+
+      Player-authored text (a Custom Enchantment's name/description, a Mod's
+      name/description) is rendered with `{{ }}` so it is always escaped --
+      it is untrusted. Class-authored text goes through `markdown` /
+      class-enchantment's `powerRatings`, which already render it safely.
+
+      Shared by views/character.handlebars and
+      views/partials/character-details.handlebars so the two cannot drift on
+      what a Signature shows. Neither renders this for an advent character --
+      the caller decides that, this partial only renders what it is given. --}}
+<div class="signature-entry-readonly">
+  <p class="has-text-weight-semibold is-size-5">{{capitalize item.name}}</p>
+  {{#if item.description}}
+  <div class="content is-size-7">{{{markdown item.description}}}</div>
+  {{/if}}
+  {{#with item.enchantment}}
+    {{#if (eq source 'default')}}
+    {{> class-enchantment enchantment=../item.default_enchantment}}
+    {{else if (eq source 'custom')}}
+    <div class="class-enchantment mt-3">
+      <p class="has-text-weight-semibold has-text-grey is-size-7 mb-1">Custom Enchantment</p>
+      <p class="mb-1"><strong>{{name}}</strong></p>
+      <p>{{description}}</p>
+    </div>
+    {{/if}}
+  {{/with}}
+  {{#if item.mods.length}}
+  <div class="entry-mods mt-2">
+    <p class="has-text-weight-semibold has-text-grey is-size-7 mb-1">Mods</p>
+    <ul>
+      {{#each item.mods}}
+      <li><strong>{{this.name}}</strong>{{#if this.description}} &mdash; {{this.description}}{{/if}}</li>
+      {{/each}}
+    </ul>
+  </div>
+  {{/if}}
+</div>
