@@ -425,7 +425,7 @@ the app has no approval machinery to hang it on.
 | Edit form | `views/character-form.handlebars`, partials | Purchase surfaces for enchantments and mods. |
 | Display | `views/character.handlebars` | Show a character's Enchantments and Mods. |
 | Aspiring pool | `supabase/migrations/` | `characters.aspiring_signatures`, plus a full `save_character_atomic` restatement carrying it. |
-| Aspiring pool | `services/character/service.js` | Snapshot the three picks onto `characterInput` at create, after `resolveClassItem` has filled each `class_id`. |
+| Aspiring pool | `services/character/service.js` | Tell `normalizeCharacterInput` whether this is a creation, and feed the pool to both `deriveCharacterTotals` calls — from `characterInput` on create, from the stored row on update, because an update deliberately omits the key. |
 | Aspiring pricing | `util/merx-economy.js`, `public/js/signature-entry.js` | `isCrossClass` takes the pool and tests membership instead of exempting the economy. |
 | Aspiring shop | `public/js/character-wizard.js`, `util/gear-purchase-data.js` | Open every class's roster to an Aspiring character at the cross tier, on both surfaces. |
 | Aspiring pool | `services/character/input.js` | Shape and validate the submitted pool; move the "exactly three" check onto it. |
