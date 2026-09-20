@@ -627,7 +627,10 @@ test('save_character_atomic writes the aspiring pool and preserves it on update'
 
 // The CHECK constraint's creator_mode clause is what stops a class_id'd
 // character from also carrying a pool, so a save attempting both must fail
-// at the database, not merely be ignored by application code.
+// at the database, not merely be ignored by application code. Matching on
+// the constraint's own name (rather than a bare .rejects.toThrow()) is what
+// stops an unrelated NOT NULL regression from passing this test for the
+// wrong reason.
 test('a non-aspiring character cannot carry a pool', async () => {
   await setup();
   await expect(saveAtomic({
@@ -637,5 +640,21 @@ test('a non-aspiring character cannot carry a pool', async () => {
       creator_mode: 'advent',
       aspiring_signatures: [{ class_id: CLASS_A_ID, name: 'A' }]
     }
-  })).rejects.toThrow();
+  })).rejects.toThrow(/characters_aspiring_signatures_check/);
+});
+
+// creator_mode = 'aspiring' OR ... reads as NULL, not FALSE, when
+// creator_mode IS NULL -- and Postgres satisfies a CHECK on NULL as well as
+// on TRUE. IS NOT DISTINCT FROM is what closes that: a NULL creator_mode
+// must be rejected exactly like any other non-'aspiring' value.
+test('a NULL creator_mode character cannot carry a pool', async () => {
+  await setup();
+  await expect(saveAtomic({
+    characterId: null,
+    character: {
+      ...baseCharacter(),
+      creator_mode: null,
+      aspiring_signatures: [{ class_id: CLASS_A_ID, name: 'A' }]
+    }
+  })).rejects.toThrow(/characters_aspiring_signatures_check/);
 });

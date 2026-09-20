@@ -19,7 +19,7 @@ ALTER TABLE public.characters
   CHECK (
     jsonb_typeof(aspiring_signatures) = 'array'
     AND jsonb_array_length(aspiring_signatures) <= 3
-    AND (creator_mode = 'aspiring' OR jsonb_array_length(aspiring_signatures) = 0)
+    AND (creator_mode IS NOT DISTINCT FROM 'aspiring' OR jsonb_array_length(aspiring_signatures) = 0)
     -- The .type() == "string" checks are load-bearing, not redundant: in lax
     -- jsonpath mode, like_regex against a non-string value errors internally
     -- and that error is suppressed rather than raised, which silently drops
