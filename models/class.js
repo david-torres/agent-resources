@@ -595,6 +595,18 @@ const buildClassContentLookupMaps = async () => {
         // service.js) can resolve one back to a class_id -- an Advanced
         // ability missing from here cannot be saved through that form at
         // all, not priced differently.
+        //
+        // Advanced names join the SAME global map core names already use, so
+        // a name reused across two classes overwrites its earlier entry.
+        // Measured against the live catalogue: 12 of 62 classes carry
+        // advanced_abilities today, 36 names total, and none of the 36
+        // collides with a core ability in another class, within its own
+        // class, or with another class's advanced ability -- so nothing is
+        // overwritten right now. If that ever changes, the exposure is
+        // narrow: resolveClassItem (services/character/service.js) tries a
+        // character's own class before falling back to this map, so a
+        // collision could only mis-resolve an ability submitted as a bare
+        // name for a class OTHER than the one it is on.
         for (const list of [cls?.abilities, cls?.advanced_abilities]) {
           if (!Array.isArray(list)) continue;
           for (const a of list) {
