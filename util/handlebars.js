@@ -252,6 +252,31 @@ const customTraitH = function (traits, index) {
   return { name, stat };
 };
 
+// Serializes a value for a <script type="application/json"> island or an
+// inline JS expression (an Alpine x-data, say). Four characters are escaped
+// beyond what JSON.stringify does, and they only ever occur inside JSON
+// strings, so the result is still valid JSON and still a valid JavaScript
+// expression:
+//
+//   <  >  &   a value containing "</script>" would otherwise close the
+//             element early -- the browser stops parsing JSON there, the
+//             injected markup is parsed as HTML, and it runs. The values on
+//             an island are not sanitised anywhere upstream: a Signature name
+//             comes from class_gear.name, which any signed-in user can write
+//             through class import, and a Custom Enchantment's name and
+//             description pass through shapeEnchantment untouched.
+//   U+2028 / U+2029   legal in JSON, illegal raw in a JavaScript string
+//             literal, so they break an inline x-data rather than the island.
+//
+// Escaping here rather than at a call site means no consumer of this helper
+// can forget it.
+const jsonH = (value) => JSON.stringify(value ?? null)
+  .replace(/</g, '\\u003c')
+  .replace(/>/g, '\\u003e')
+  .replace(/&/g, '\\u0026')
+  .replace(/\u2028/g, '\\u2028')
+  .replace(/\u2029/g, '\\u2029');
+
 module.exports = {
   times,
   customTrait: customTraitH,
@@ -276,5 +301,5 @@ module.exports = {
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
   nextPerkPosition: nextPerkPositionH,
-  json: (v) => JSON.stringify(v ?? null)
+  json: jsonH
 }

@@ -58,3 +58,52 @@ test('filterBy returns an empty array for a non-array list', () => {
   expect(filterBy(null, 'category', 'default')).toEqual([]);
   expect(filterBy(undefined, 'category', 'default')).toEqual([]);
 });
+
+// --- json -----------------------------------------------------------------
+//
+// The helper feeds two kinds of site: a <script type="application/json">
+// island (views/character-wizard.handlebars, views/character-form.handlebars)
+// and inline JavaScript expressions (Alpine x-data in views/character.hbs,
+// partials/stat-blocks.hbs, ...). Both are written with a triple-stache, so
+// Handlebars does no escaping of its own, and the values are not sanitised
+// upstream: a Signature name comes from class_gear.name, which any signed-in
+// user can write through class import.
+
+const { json } = require('./handlebars');
+
+test('json escapes a value that would otherwise close the script element', () => {
+  const out = json({ name: 'x</script><img src=x onerror=alert(1)>' });
+
+  expect(out).not.toContain('</script>');
+  expect(out).not.toContain('<');
+  expect(out).not.toContain('>');
+  // Still JSON, and still the same string once parsed.
+  expect(JSON.parse(out).name).toBe('x</script><img src=x onerror=alert(1)>');
+});
+
+test('json escapes an ampersand, so the output survives an HTML-escaping context too', () => {
+  const out = json('a & b');
+
+  expect(out).not.toContain('&');
+  expect(JSON.parse(out)).toBe('a & b');
+});
+
+test('json escapes the two separators that are legal in JSON but not in a JS string', () => {
+  const out = json('a b c');
+
+  expect(out).not.toContain(' ');
+  expect(out).not.toContain(' ');
+  expect(JSON.parse(out)).toBe('a b c');
+  // An inline x-data is parsed as JavaScript, not JSON -- so it has to hold
+  // up as an expression as well.
+  expect(new Function(`return ${out};`)()).toBe('a b c');
+});
+
+test('json renders an absent value as null rather than undefined', () => {
+  expect(json(undefined)).toBe('null');
+  expect(json(null)).toBe('null');
+});
+
+test('json leaves an ordinary value alone', () => {
+  expect(json({ a: 1, b: 'two' })).toBe('{"a":1,"b":"two"}');
+});

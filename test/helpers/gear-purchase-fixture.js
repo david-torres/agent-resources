@@ -15,6 +15,7 @@ const { JSDOM } = require('jsdom');
 const { economyFor, economyFigures } = require('../../util/merx-economy');
 const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
 const { twelveItems } = require('./wizard-fixture');
+const { json: jsonHelper } = require('../../util/handlebars');
 
 const OWN_CLASS_ID = 'c-v1';
 const OWN_CLASS_NAME = 'Test Class';
@@ -95,8 +96,9 @@ const fixtureCharacter = (overrides = {}) => {
 // signature-entry.js and character-gear-purchases.js against it in the order
 // the view loads them, and returns the mounted handle.
 const mountPurchases = (data, options = {}) => {
-  const islandJson = JSON.stringify(data).replace(/</g, '\\u003c');
-  const html = options.html || MOUNT_HTML(islandJson);
+  // The real view writes the island through the `json` Handlebars helper,
+  // which escapes what would otherwise close the script element early.
+  const html = options.html || MOUNT_HTML(jsonHelper(data));
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
     url: 'http://localhost/characters/abc/edit'
   });
@@ -105,10 +107,11 @@ const mountPurchases = (data, options = {}) => {
   globalThis.window = window;
   globalThis.document = window.document;
 
-  // A caller supplying its own markup (the rendered template) carries an
-  // empty island, so the data goes in after the DOM is built either way.
-  const island = window.document.getElementById('gear-purchase-data');
-  if (island) island.textContent = JSON.stringify(data);
+  // The island is filled by the markup, never patched in afterwards: a caller
+  // passing the rendered template has Handlebars' own `json` output in it, and
+  // the default markup above uses the same helper. Setting textContent here
+  // would go through the DOM and hide whether that helper escapes what would
+  // close the script element early.
 
   new Function(SIGNATURE_ENTRY_SOURCE)();
   new Function(PURCHASES_SOURCE)();

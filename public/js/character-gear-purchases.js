@@ -378,6 +378,24 @@
         + '>Buy for ' + price + ' Merx</button></p>';
     };
 
+    // The component gives its Enchantment radios a shared `name`, which is what
+    // makes them one group. This drawer sits inside the edit form, so that name
+    // would also ride along in the PUT body as a stray `enchantment` field --
+    // harmless on the atomic save (jsonb_populate_record drops what is not a
+    // column) but corrupting on the non-atomic updateCharacterRow fallback.
+    //
+    // Pointing them at a form id that does not exist leaves them with no form
+    // owner, so they are absent from the form's `elements` and never
+    // submitted, while radios that share no owner still group by name among
+    // themselves. Done here rather than in signature-entry.js: the component
+    // is shared with surfaces that are not inside a form, and it stays a pure
+    // function of its arguments.
+    var NO_FORM_OWNER = 'signature-entry-not-submitted';
+    var detachNamedControls = function () {
+      var named = drawer.querySelectorAll('input[name], select[name], textarea[name]');
+      for (var i = 0; i < named.length; i++) named[i].setAttribute('form', NO_FORM_OWNER);
+    };
+
     var renderDrawer = function () {
       if (!drawer) return;
       var entry = open ? findEntry(open.name, open.classId) : null;
@@ -394,6 +412,7 @@
         economy: ECONOMY,
         readOnly: false
       }) + renderPurchaseControls(entry, purchase);
+      detachNamedControls();
     };
 
     // The warning's prices are the `lines` describePurchase already priced

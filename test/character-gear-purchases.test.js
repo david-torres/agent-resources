@@ -196,6 +196,48 @@ describe('replacing a purchase warns first', () => {
   });
 });
 
+describe('only the hidden field submits', () => {
+  // SignatureEntry renders its Enchantment radios as a named group, and the
+  // drawer sits inside the edit form. Without a fix that name rides along in
+  // the PUT body as a stray `enchantment` field -- dropped by the atomic save
+  // but corrupting on the non-atomic updateCharacterRow fallback.
+  test('an open drawer adds no field of its own to the form', () => {
+    const form = mountPurchases(fixtureCharacter({ gear: [enchanted('Cowboy Hat')] }));
+    form.openSignature('Cowboy Hat');
+
+    const drawer = document.getElementById('purchaseDrawer');
+    // The radios are there and still grouped -- this is not a test that the
+    // controls were removed.
+    expect(drawer.querySelectorAll('input[name="enchantment"]').length).toBeGreaterThan(0);
+
+    const submitted = [...document.querySelector('form').elements].map((el) => el.name);
+    expect(submitted).not.toContain('enchantment');
+    expect(submitted).toContain('gear_json');
+  });
+
+  test('a Custom Enchantment\'s own fields are not submitted either', () => {
+    const form = mountPurchases(fixtureCharacter({ gear: [enchanted('Cowboy Hat')] }));
+    form.openSignature('Cowboy Hat');
+    form.setEnchantment('Cowboy Hat', { source: 'custom', name: 'Hex', description: 'Shades.' });
+
+    const submitted = [...document.querySelector('form').elements]
+      .map((el) => el.name).filter(Boolean);
+    expect(submitted).toEqual(['gear_json']);
+  });
+
+  test('the island survives a Signature name that would close the script element', () => {
+    const data = fixtureCharacter({ gear: [] });
+    data.entries[0].name = 'x</script><img src=x onerror=alert(1)>';
+    const form = mountPurchases(data);
+
+    // The mount parsed the island at all, which it could not have done if the
+    // element had been closed early.
+    expect(form).not.toBeNull();
+    expect(form.getState().entries[0].name).toBe('x</script><img src=x onerror=alert(1)>');
+    expect(document.querySelectorAll('img').length).toBe(0);
+  });
+});
+
 describe('the component stays a pure function of its arguments', () => {
   test('the mount reads the page; signature-entry.js reads no global', () => {
     const fs = require('fs');

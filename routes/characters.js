@@ -1099,7 +1099,14 @@ router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
     req.body.image_crop = image_crop;
   }
   if (!applyGearPurchases(req.body)) {
-    return sendError(req, res, null, { status: 400, message: 'Invalid Signature Gear payload.' });
+    // The title is passed explicitly: classifyError's no-error branch titles
+    // everything 'Not found' (util/http-error.js), which would tell the player
+    // their character is missing when what was wrong is their submission.
+    return sendError(req, res, null, {
+      status: 400,
+      title: 'Invalid submission',
+      message: 'This character\'s Signature Gear could not be read. Please refresh the page and try again.'
+    });
   }
   req.body = collectCharacterFormArrays(req.body);
   // updateCharacter throws AuthorizationError (caught by asyncHandler) when
