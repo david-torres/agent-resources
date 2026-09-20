@@ -1209,6 +1209,70 @@ test('normalizeCharacterInput leaves an advent character unenforced', () => {
   expect(result.error).toBeNull();
 });
 
+// --- normalizeCharacterInput wires the ability cap and Perk balance in ---
+//
+// validateEconomyLimits (util/perk-economy.js#buildBreaches) wants abilities
+// already tagged { crossClass, type }; normalizeCharacterInput is the caller
+// that tags them, via tagAbilities (util/character-derived.js), using the
+// class_id it already resolved for the Merx check just above.
+
+test('normalizeCharacterInput rejects an aspirant character over its Perk balance', () => {
+  const abilities = [
+    { name: 'A0', class_id: 'v1', type: 'core' },
+    { name: 'A1', class_id: 'v1', type: 'core' },
+    { name: 'A2', class_id: 'v1', type: 'core' },
+    { name: 'A3', class_id: 'v1', type: 'core' },
+    { name: 'A4', class_id: 'v1', type: 'advanced' }
+  ];
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', abilities
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.data).toBeNull();
+  // Three free Core Abilities waived, a fourth Core at 1 and an Advanced at
+  // 2: 3 Perks against the aspirant grant of 1.
+  expect(result.error).toMatch(/3 Perks spent of 1 earned/);
+});
+
+test('normalizeCharacterInput accepts an over-budget Ability list when enforceAbilityLimits is false', () => {
+  const abilities = [
+    { name: 'A0', class_id: 'v1', type: 'core' },
+    { name: 'A1', class_id: 'v1', type: 'core' },
+    { name: 'A2', class_id: 'v1', type: 'core' },
+    { name: 'A3', class_id: 'v1', type: 'core' },
+    { name: 'A4', class_id: 'v1', type: 'advanced' }
+  ];
+  const result = normalizeCharacterInput({
+    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', abilities,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceAbilityLimits: false });
+  expect(result.error).toBeNull();
+});
+
+// The update path (Task 6) submits no aspiring_abilities key at all -- the
+// stored pool only reaches this function through context.aspiringAbilities.
+// Reading the (absent) submitted value instead would fall back to an empty
+// pool, which prices everything own-class and never breach.
+test('normalizeCharacterInput prices an aspiring Ability against context.aspiringAbilities, not the submission', () => {
+  const pool = [
+    { class_id: 'a', name: 'A' },
+    { class_id: 'b', name: 'B' },
+    { class_id: 'c', name: 'C' }
+  ];
+  const result = normalizeCharacterInput({
+    name: 'Vesper', creator_mode: 'aspiring', class_id: null,
+    abilities: [
+      { name: 'A', class_id: 'a', type: 'core' },
+      { name: 'Outsider', class_id: 'd', type: 'core' }
+    ]
+  }, {
+    rulesVersion: 'v1', contentFormat: undefined, isCreation: false, aspiringAbilities: pool
+  });
+  expect(result.data).toBeNull();
+  // A (in the pool) costs 1; Outsider (outside it) costs the cross-class rate
+  // of 3: 4 Perks against the aspiring grant of 3.
+  expect(result.error).toMatch(/4 Perks spent of 3 earned/);
+});
+
 // --- the gate judges what will be STORED, not what was submitted ---------
 //
 // Whole-plan review, Important 2: validateEconomyLimits was handed the raw

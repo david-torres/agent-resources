@@ -9,6 +9,10 @@ const {
   COMMON_ITEM_PRICE,
   CREATION_GRANT
 } = require('./merx-economy');
+const {
+  perkBreakdown,
+  buildBreaches
+} = require('./perk-economy');
 
 // pg. 3's "three Default" Signatures, which an Advent character has without
 // paying. The fourth item is the Elective, and it is paid for out of
@@ -111,7 +115,68 @@ const deriveMerxBreakdown = ({
 
 const deriveMerx = (args) => deriveMerxBreakdown(args).reward;
 
-const deriveCharacterTotals = ({ character, realMissions, offscreenMissions, rulesVersion, economy }) => {
+const sameFamily = (a, b, classFamilyOf) => {
+  const of = typeof classFamilyOf === 'function' ? classFamilyOf : (id) => id;
+  return !!a && !!b && of(a) === of(b);
+};
+
+// An aspiring character's pool is matched on class_id AND name, the same pair
+// util/merx-economy.js's inAspiringPool uses for Signatures.
+const inAbilityPool = (ability, pool) => pool.some(
+  (pick) => pick.class_id === ability.class_id && pick.name === ability.name
+);
+
+// Each ability reduced to what util/perk-economy.js prices: whether it is
+// cross-class, and whether it is Core or Advanced. Resolving that is this
+// module's job, not the economy module's -- the economy resolves no class and
+// no pool.
+//
+// Cross-class is a VERSION FAMILY comparison, not a class_id one: an ability
+// carried over from an earlier version of the character's own class is the
+// same class, and 64 of the 88 differing-class_id rows in the live data are
+// exactly that.
+const tagAbilities = (abilities, { economy, characterClassId, aspiringAbilities, classFamilyOf } = {}) => {
+  const list = (Array.isArray(abilities) ? abilities : []).filter(Boolean);
+  if (economy === 'aspiring') {
+    // An empty pool prices own-class rather than cross-class: a character
+    // mid-creation has no pool yet and must not be told its first pick costs
+    // the cross-class rate. Filter BEFORE measuring length -- checking an
+    // unfiltered array is how the client and server disagreed about this rule
+    // for Signatures.
+    const pool = (Array.isArray(aspiringAbilities) ? aspiringAbilities : []).filter(Boolean);
+    return list.map((ability) => ({
+      crossClass: pool.length > 0 && !inAbilityPool(ability, pool),
+      type: ability.type === 'advanced' ? 'advanced' : 'core'
+    }));
+  }
+  return list.map((ability) => ({
+    crossClass: !!characterClassId && !!ability.class_id
+      && !sameFamily(ability.class_id, characterClassId, classFamilyOf),
+    type: ability.type === 'advanced' ? 'advanced' : 'core'
+  }));
+};
+
+const derivePerkBreakdown = ({
+  economy, level, abilities, abilityPerks, characterClassId, aspiringAbilities, classFamilyOf
+} = {}) => perkBreakdown({
+  economy,
+  level,
+  abilities: tagAbilities(abilities, { economy, characterClassId, aspiringAbilities, classFamilyOf }),
+  abilityPerks
+});
+
+const deriveBuildBreaches = ({
+  economy, level, abilities, abilityPerks, characterClassId, aspiringAbilities, classFamilyOf
+} = {}) => buildBreaches({
+  economy,
+  level,
+  abilities: tagAbilities(abilities, { economy, characterClassId, aspiringAbilities, classFamilyOf }),
+  abilityPerks
+});
+
+const deriveCharacterTotals = ({
+  character, realMissions, offscreenMissions, rulesVersion, economy, classFamilyOf
+}) => {
   const completed_missions = deriveCompletedMissions(realMissions, offscreenMissions);
   const merxParts = deriveMerxBreakdown({
     realMissions,
@@ -127,7 +192,18 @@ const deriveCharacterTotals = ({ character, realMissions, offscreenMissions, rul
     completed_missions,
     commissary_reward: merxParts.reward,
     merx_deficit: merxParts.deficit,
-    level
+    level,
+    // Derived for display, never persisted -- there is no perks column, by
+    // design: a stored total can disagree with the rows it summarises.
+    perks: derivePerkBreakdown({
+      economy,
+      level,
+      abilities: character && character.abilities,
+      abilityPerks: character && character.ability_perks,
+      characterClassId: character && character.class_id,
+      aspiringAbilities: character && character.aspiring_abilities,
+      classFamilyOf
+    })
   };
 };
 
@@ -138,5 +214,8 @@ module.exports = {
   deriveMissionMerx,
   deriveMerxBreakdown,
   deriveCharacterTotals,
+  tagAbilities,
+  derivePerkBreakdown,
+  deriveBuildBreaches,
   ADVENT_DEFAULT_SIGNATURES
 };

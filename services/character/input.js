@@ -24,6 +24,7 @@ const {
 const {
   ASPIRING_ABILITY_PICKS, ASPIRING_CORE_PICKS, ASPIRING_ADVANCED_PICKS, buildBreaches
 } = require('../../util/perk-economy');
+const { tagAbilities } = require('../../util/character-derived');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -642,6 +643,13 @@ const normalizeCharacterInput = (input, context = {}) => {
   // then reports as a deficit, and the next auto-calculated edit would
   // rewrite its stored leftover to zero.
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
+  // validateEconomyLimits wants abilities already tagged { crossClass, type }
+  // (see its own comment) -- this is the caller that tags them, using
+  // tagAbilities (util/character-derived.js) rather than a second copy of
+  // that logic. The aspiring pool comes from context.aspiringAbilities when
+  // the caller supplies it (updateCharacter, whose submission never carries
+  // the key -- see the aspiring_abilities handling above) and otherwise from
+  // data.aspiring_abilities, already normalized above for a creation.
   const economyValidation = validateEconomyLimits({
     economy,
     gear: normalizeClassItems(context.economyGear ?? childData.classGear),
@@ -649,7 +657,16 @@ const normalizeCharacterInput = (input, context = {}) => {
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
     aspiringSignatures: data.aspiring_signatures,
-    enforceMerxBudget: context.enforceMerxBudget ?? true
+    enforceMerxBudget: context.enforceMerxBudget ?? true,
+    abilities: tagAbilities(childData.classAbilities, {
+      economy,
+      characterClassId: data.class_id ?? null,
+      aspiringAbilities: context.aspiringAbilities ?? data.aspiring_abilities,
+      classFamilyOf: context.classFamilyOf
+    }),
+    abilityPerks: childData.abilityPerks,
+    level: data.level,
+    enforceAbilityLimits: context.enforceAbilityLimits ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };
 

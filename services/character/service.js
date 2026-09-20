@@ -194,7 +194,11 @@ class CharacterService {
     // would price every cross-class Signature as if it were own-class.
     const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
     const normalized = normalizeCharacterInput(prepared, {
-      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear, isCreation: true
+      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear, isCreation: true,
+      // A new character must be legal outright, so this pairs with
+      // enforceMerxBudget's implicit default the same way updateCharacter
+      // writes both out explicitly for its own edit-path decision.
+      enforceAbilityLimits: true
     });
     if (normalized.error) return { data: null, error: normalized.error };
 
@@ -219,7 +223,12 @@ class CharacterService {
           class_id: characterInput.class_id,
           gear: resolvedGear,
           common_items: characterInput.common_items,
-          aspiring_signatures: characterInput.aspiring_signatures
+          aspiring_signatures: characterInput.aspiring_signatures,
+          abilities: childData.classAbilities,
+          ability_perks: childData.abilityPerks,
+          // The pool comes from the submitted input, not a stored row -- the
+          // character does not exist yet on create.
+          aspiring_abilities: characterInput.aspiring_abilities
         },
         realMissions: [],
         offscreenMissions: [],
@@ -375,7 +384,13 @@ class CharacterService {
       storedGear: existing.data.gear,
       capPurchases: existing.data.stat_cap_purchases,
       enforceCreationAllotment: false,
-      isCreation: false
+      isCreation: false,
+      // Task 10 installs the ratchet on this path; an absolute check here
+      // would refuse every save by an already-breaching character.
+      enforceAbilityLimits: false,
+      // The submission never carries this key on update (Task 6) -- the
+      // stored value is the only truth.
+      aspiringAbilities: existing.data.aspiring_abilities
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
@@ -403,7 +418,13 @@ class CharacterService {
             existing.data.gear
           ),
           common_items: characterInput.common_items,
-          aspiring_signatures: existing.data.aspiring_signatures
+          aspiring_signatures: existing.data.aspiring_signatures,
+          abilities: childData.classAbilities,
+          ability_perks: childData.abilityPerks,
+          // The submission never carries this key on update (Task 6) -- the
+          // stored value is the only truth. Reading the submitted value here
+          // would price every ability cross-class.
+          aspiring_abilities: existing.data.aspiring_abilities
         },
         realMissions: missions.data || [],
         offscreenMissions: offscreenMissions.data || [],

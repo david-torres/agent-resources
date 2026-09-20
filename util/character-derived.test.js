@@ -232,11 +232,13 @@ test('deriveCharacterTotals returns all three derived fields together', () => {
   // merx earned: 2 (advent grant) + 2*1 + 3 = 7; spend: 2 items*1 + 1 on-class
   // (free, within the 3-item allotment) + 1 off-class*3 = 5; max(0, 7-5) = 2
   // level (v2, 4 missions): cumulative v2 is [2,4,7,...]; 4 >= 4 -> level 3
+  // no economy is passed, so perkAllotment has no grant figure and perks is null
   expect(result).toEqual({
     completed_missions: 4,
     commissary_reward: 2,
     merx_deficit: 0,
-    level: 3
+    level: 3,
+    perks: null
   });
 });
 
@@ -250,11 +252,13 @@ test('deriveCharacterTotals defaults to v1 when rulesVersion missing', () => {
   });
   // completed 5, level v1: cumulative [2,5,...] -> 5 >= 5 -> level 3
   // merx: earned = 2 (advent grant) + 5 = 7, no spend = 7
+  // no economy is passed, so perkAllotment has no grant figure and perks is null
   expect(result).toEqual({
     completed_missions: 5,
     commissary_reward: 7,
     merx_deficit: 0,
-    level: 3
+    level: 3,
+    perks: null
   });
 });
 
@@ -534,4 +538,78 @@ describe('advent: three Defaults and one Elective (pg. 3)', () => {
     });
     expect(result).toMatchObject({ earned: 4 });
   });
+});
+
+const { tagAbilities, derivePerkBreakdown } = require('./character-derived');
+
+test('an ability from the character own class is not cross-class', () => {
+  expect(tagAbilities(
+    [{ class_id: 'c1', name: 'A', type: 'core' }],
+    { economy: 'aspirant', characterClassId: 'c1' }
+  )).toEqual([{ crossClass: false, type: 'core' }]);
+});
+
+test('an ability from another version of the same class is not cross-class', () => {
+  // 64 of 88 differing-class_id rows are exactly this: version drift.
+  const classFamilyOf = (id) => (id === 'c1-v2' || id === 'c1' ? 'fam1' : id);
+  expect(tagAbilities(
+    [{ class_id: 'c1-v2', name: 'A', type: 'core' }],
+    { economy: 'aspirant', characterClassId: 'c1', classFamilyOf }
+  )).toEqual([{ crossClass: false, type: 'core' }]);
+});
+
+test('an ability from a genuinely different family is cross-class', () => {
+  const classFamilyOf = (id) => (id === 'c1' ? 'fam1' : 'fam2');
+  expect(tagAbilities(
+    [{ class_id: 'c9', name: 'A', type: 'advanced' }],
+    { economy: 'aspirant', characterClassId: 'c1', classFamilyOf }
+  )).toEqual([{ crossClass: true, type: 'advanced' }]);
+});
+
+test('an aspiring ability in the pool is own-class', () => {
+  const pool = [{ class_id: 'c1', name: 'Standoff', type: 'core' }];
+  expect(tagAbilities(
+    [{ class_id: 'c1', name: 'Standoff', type: 'core' }],
+    { economy: 'aspiring', aspiringAbilities: pool }
+  )).toEqual([{ crossClass: false, type: 'core' }]);
+});
+
+test('an aspiring ability outside the pool is cross-class', () => {
+  const pool = [{ class_id: 'c1', name: 'Standoff', type: 'core' }];
+  expect(tagAbilities(
+    [{ class_id: 'c1', name: 'Other', type: 'core' }],
+    { economy: 'aspiring', aspiringAbilities: pool }
+  )).toEqual([{ crossClass: true, type: 'core' }]);
+});
+
+test('an aspiring character with an empty pool is not charged cross-class for everything', () => {
+  // Mirrors isCrossClass in util/merx-economy.js: an empty pool prices
+  // own-class, because a character mid-creation has no pool yet and must not
+  // be told it owes 3 Perks for its first pick.
+  expect(tagAbilities(
+    [{ class_id: 'c1', name: 'A', type: 'core' }],
+    { economy: 'aspiring', aspiringAbilities: [] }
+  )).toEqual([{ crossClass: false, type: 'core' }]);
+});
+
+test('a null entry in the pool cannot make a real ability cross-class', () => {
+  // The client/server divergence slice 4 plan 3 found: one side checked
+  // length before filtering, the other after.
+  expect(tagAbilities(
+    [{ class_id: 'c1', name: 'A', type: 'core' }],
+    { economy: 'aspiring', aspiringAbilities: [null, null] }
+  )).toEqual([{ crossClass: false, type: 'core' }]);
+});
+
+test('derivePerkBreakdown prices an aspirant advanced ability at 2', () => {
+  expect(derivePerkBreakdown({
+    economy: 'aspirant', level: 3, characterClassId: 'c1',
+    abilities: [
+      { class_id: 'c1', name: 'A', type: 'core' },
+      { class_id: 'c1', name: 'B', type: 'core' },
+      { class_id: 'c1', name: 'C', type: 'core' },
+      { class_id: 'c1', name: 'D', type: 'advanced' }
+    ],
+    abilityPerks: []
+  })).toEqual({ earned: 3, spend: 2, remaining: 1, deficit: 0 });
 });

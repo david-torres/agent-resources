@@ -324,8 +324,13 @@ test('re-saving unchanged gear keeps its class_gear row id', async () => {
 
 test('re-saving a v2 character preserves its ability perk row and created_at', async () => {
   await setup();
+  // level: 2, not the fixture's 1: this class carries no content_format, so
+  // it resolves to the advent economy, which grants 0 Perks at level 1 (pg.
+  // 3: the starting Perk is Aspirant's addition). A single Ability Perk costs
+  // 1 against the level-2 allotment of 1, which is what creation's ability
+  // cap/Perk balance gate (creation must be legal outright) requires.
   const { data: created, error: createError } = await createCharacter({
-    ...v2Input(`Atomic perk survival ${suffix}`),
+    ...v2Input(`Atomic perk survival ${suffix}`), level: 2,
     ability_perks: [{ class_ability_id: v2AbilityName, text: 'Survives a resave', position: 0 }]
   }, profile);
   expect(createError).toBeNull();
@@ -451,8 +456,14 @@ test('duplicate gear items keep two stable rows and drop to one when one is remo
 // sends (services/character/service.js:328-331).
 test('save_character_atomic persists and updates the ability type', async () => {
   await setup();
+  // level: 3, not the fixture's 1: this class carries no content_format, so
+  // it resolves to the advent economy, which grants 0 Perks at level 1 (pg.
+  // 3: the starting Perk is Aspirant's addition). An own-class Advanced
+  // Ability costs 2 against the level-3 allotment of 2, which is what
+  // creation's ability cap/Perk balance gate (creation must be legal
+  // outright) requires.
   const { data: created } = await createCharacter({
-    ...input(`Atomic Typed ${suffix}`),
+    ...input(`Atomic Typed ${suffix}`), level: 3,
     abilities: [{ name: 'Atomic Ability', class_id: characterClass.id, type: 'advanced' }]
   }, profile);
   const first = await childRows('class_abilities', created.id);
@@ -475,8 +486,9 @@ test('save_character_atomic persists and updates the ability type', async () => 
 // Only a brand-new ability with no submitted type may default to 'core'.
 test('re-saving an ability without a type keeps its stored type and row id', async () => {
   await setup();
+  // level: 3 -- see the same-shaped comment on the previous test.
   const { data: created } = await createCharacter({
-    ...input(`Atomic Untyped ${suffix}`),
+    ...input(`Atomic Untyped ${suffix}`), level: 3,
     abilities: [{ name: 'Atomic Ability', class_id: characterClass.id, type: 'advanced' }]
   }, profile);
   const first = await childRows('class_abilities', created.id);

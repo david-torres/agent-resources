@@ -1642,3 +1642,128 @@ test('an ability submitted without a type keeps the stored type of an existing r
   expect(calls.some(c => c[0] === 'deleteChildRows' && c[3].length)).toBe(false);
   expect(calls.some(c => c[0] === 'insertChildRows' && c[3].length)).toBe(false);
 });
+
+// --- Task 9: the ability cap and Perk balance wired into both save paths ---
+//
+// Mirrors the Signature Cap split just above: a new character must be legal
+// outright (enforceAbilityLimits: true), but an edit delegates to Task 10's
+// ratchet (enforceAbilityLimits: false) so an already-breaching character
+// stays editable.
+
+test('createCharacter refuses a V1 payload over the Ability cap', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  // 7 own-class Core Abilities breach the aspirant cap of 6 outright, whether
+  // or not the Perk balance would also object.
+  const abilities = Array.from({ length: 7 }, (_, i) => ({ name: `A${i}`, class_id: ASPIRANT_CLASS_ID, type: 'core' }));
+  const result = await service.createCharacter(aspirantCreatePayload({ abilities }), { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/7 Abilities, and the cap is 6/);
+});
+
+test('createCharacter refuses a V1 payload over its Perk balance', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  // Aspirant's first three Core Abilities are free; a fourth Core and an
+  // Advanced spend 1 and 2 respectively -- 3 Perks against the aspirant
+  // grant of 1.
+  const abilities = [
+    { name: 'A0', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A1', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A2', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A3', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A4', class_id: ASPIRANT_CLASS_ID, type: 'advanced' }
+  ];
+  const result = await service.createCharacter(aspirantCreatePayload({ abilities }), { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/Perks spent of 1 earned/);
+});
+
+test('createCharacter accepts a V1 payload within the Ability cap and Perk balance', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantCreateAdapter(calls));
+  const abilities = [
+    { name: 'A0', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A1', class_id: ASPIRANT_CLASS_ID, type: 'core' },
+    { name: 'A2', class_id: ASPIRANT_CLASS_ID, type: 'core' }
+  ];
+  const result = await service.createCharacter(aspirantCreatePayload({ abilities }), { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// An aspiring character's three chosen Abilities are its own-class answer,
+// matched on class_id AND name (util/character-derived.js#tagAbilities),
+// exactly the pair util/merx-economy.js's inAspiringPool uses for Signatures.
+// An ability outside the pool prices at the cross-class rate even though the
+// pool can still afford it -- an empty-pool bug would price it own-class
+// instead and let this through.
+test('a created aspiring character prices an Ability outside the pool at the cross-class rate', async () => {
+  const { service } = makeServiceOnClass();
+  const pool = [
+    { class_id: 'a', name: 'A' },
+    { class_id: 'b', name: 'B' },
+    { class_id: 'c', name: 'C' }
+  ];
+  const result = await service.createCharacter({
+    name: 'Vesper', creator_mode: 'aspiring', class_id: null,
+    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+    aspiring_signatures: pool,
+    aspiring_abilities: pool,
+    gear: [],
+    abilities: [
+      { name: 'A', class_id: 'a', type: 'core' },
+      { name: 'B', class_id: 'b', type: 'core' },
+      { name: 'Outsider', class_id: 'd', type: 'core' }
+    ],
+    trait0: 'brave', trait1: 'calm', trait2: 'alert',
+    commissary_reward: 0
+  }, { id: 'profile-1' });
+  // 2 in-pool Core at 1 each, plus the out-of-pool Core at the cross-class
+  // rate of 3: 5 Perks against the aspiring grant of 3.
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/5 Perks spent of 3 earned/);
+});
+
+test('a created aspiring character prices all three pool Abilities as own-class', async () => {
+  const { service, saved } = makeServiceOnClass();
+  const pool = [
+    { class_id: 'a', name: 'A' },
+    { class_id: 'b', name: 'B' },
+    { class_id: 'c', name: 'C' }
+  ];
+  const result = await service.createCharacter({
+    name: 'Vesper', creator_mode: 'aspiring', class_id: null,
+    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+    aspiring_signatures: pool,
+    aspiring_abilities: pool,
+    gear: [],
+    abilities: [
+      { name: 'A', class_id: 'a', type: 'core' },
+      { name: 'B', class_id: 'b', type: 'core' },
+      { name: 'C', class_id: 'c', type: 'core' }
+    ],
+    trait0: 'brave', trait1: 'calm', trait2: 'alert',
+    commissary_reward: 0
+  }, { id: 'profile-1' });
+  // 3 own-class Core Abilities at 1 each spend exactly the 3-Perk grant.
+  expect(result.error).toBeNull();
+  // Derived for display only -- never a stored column.
+  expect('perks' in saved).toBe(false);
+});
+
+// The update path delegates the ability cap and Perk balance to Task 10's
+// ratchet: an absolute check here would refuse every save by an already-
+// breaching character, exactly as the Signature Cap split above documents
+// for Merx. Reuses aspirantUpdateAdapter (defined for the Signature Cap
+// tests), whose stored character already carries `abilities: []`.
+test('an update does not refuse an already-breaching Ability count', async () => {
+  const calls = [];
+  const service = new CharacterService(aspirantUpdateAdapter(calls));
+  // 7 own-class Core Abilities would refuse a creation outright (see above).
+  const abilities = Array.from({ length: 7 }, (_, i) => ({ name: `A${i}`, class_id: ASPIRANT_CLASS_ID, type: 'core' }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, abilities,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});

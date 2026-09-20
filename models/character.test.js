@@ -321,8 +321,16 @@ delete require.cache[require.resolve('../services/character/repository')];
   // invoked with (abilityPerks, []) — the perk is dropped because no new rows
   // matched its name-reference, which is the correct behavior. This exercises
   // the remap call path without requiring the mock to back the class catalog.
+  //
+  // level: 2, not 1: the mocked catalogue names no content_format for
+  // class-v2, so this resolves to the advent economy, which grants 0 Perks at
+  // level 1 (pg. 3: the starting Perk is Aspirant's addition). One submitted
+  // ability_perk costs 1 Perk against the level-2 allotment of 1, which is
+  // exactly what the ability cap/Perk balance gate (creation must be legal
+  // outright) requires -- the remap still drops it, since no ability row
+  // matches its name-reference.
   const payload = {
-    name: 'V2', class_id: 'class-v2', class: 'Thane-v2', level: 1,
+    name: 'V2', class_id: 'class-v2', class: 'Thane-v2', level: 2,
     vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
     sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
     completed_missions: 0, commissary_reward: 0,
