@@ -336,34 +336,80 @@ describe('the free-gear floor reads what syncBaseGear actually loaded, not a mod
       .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
   });
 
-  // Fix round 3: this is the same bug fix round 2 closed, mirrored. Six live
-  // pre-release classes carry content_format 'advent' but can be picked
-  // under aspirant mode; economyFor (util/merx-economy.js) resolves that
-  // combination to the 'advent' economy. A freeBaseCount() keyed on the
-  // resolved economy (round 2's fix) still claimed 3 free items here even
-  // though syncBaseGear's aspirant-mode no-op never loads anything, in any
-  // economy -- the identical defect in the identical direction (wizard
-  // under-charges, server refuses). freeBaseCount() no longer derives from
-  // any mode/economy rule; it counts the leading run of state.gear entries
-  // actually stamped cost: 0, so it can't disagree with what's loaded. Three
-  // real cross-class shop picks (the cost pickShopItem would stamp, never 0)
-  // must not be swallowed as free just because the class's economy is
-  // 'advent'.
-  test('an aspirant wizard on an advent-content class has no free base gear, and real picks are not skipped as free', () => {
+  // Three real shop picks carry the cost pickShopItem stamps, never 0, so the
+  // leading-run count must not swallow them as free however the class's
+  // economy resolves.
+  test('real picks are never counted as free base gear', () => {
     const wizard = bootWizard(fixture({
       mode: 'aspirant',
       classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', gear: [] }],
       economyByClassId: { 'c-v1': 'advent' }
     }));
     wizard.getState().classId = 'c-v1';
-    expect(wizard.getFreeBaseCount()).toBe(0);
-
     wizard.getState().gear = [
       { name: 'Item A', kind: 'class', cost: 2, origin_class_id: 'c-v1' },
       { name: 'Item B', kind: 'class', cost: 2, origin_class_id: 'c-v1' },
       { name: 'Item C', kind: 'class', cost: 3, origin_class_id: 'other' }
     ];
     expect(wizard.getFreeBaseCount()).toBe(0);
+  });
+
+  // Whole-plan review, Important 3: syncBaseGear returned on DATA.mode ===
+  // 'aspirant' before it ever consulted the economy. Six live pre-release
+  // classes carry content_format 'advent' and can be picked under aspirant
+  // mode, which economyFor (util/merx-economy.js) resolves to the ADVENT
+  // economy: a 2-Merx grant and three Default Signatures free. The player
+  // was handed one Signature instead of four, and the save reported spend 0
+  // either way -- a silent under-grant, not a rejection.
+  test('an aspirant wizard on an advent-content class still gets its 3 free Defaults', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant',
+      classes: [{
+        id: 'c-v1',
+        name: 'Old Guard',
+        content_format: 'advent',
+        gear: [],
+        base_gear: [{ name: 'Default A' }, { name: 'Default B' }, { name: 'Default C' }]
+      }],
+      economyByClassId: { 'c-v1': 'advent' }
+    }));
+    wizard.getState().classId = 'c-v1';
+    wizard.syncBaseGear();
+
+    const gear = wizard.getState().gear;
+    expect(gear).toHaveLength(3);
+    expect(gear.every((g) => g.cost === 0)).toBe(true);
+    expect(wizard.getFreeBaseCount())
+      .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.advent);
+    expect(wizard.getMerxSpent()).toBe(0);
+  });
+
+  // The free Defaults belong to the economy that granted them, so a class
+  // change that crosses economies must not carry them into a budget that
+  // charges for the same items.
+  test('changing to an aspirant-content class drops the Defaults advent granted', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant',
+      classes: [
+        {
+          id: 'c-advent', name: 'Old Guard', content_format: 'advent', gear: [],
+          base_gear: [{ name: 'Default A' }, { name: 'Default B' }, { name: 'Default C' }]
+        },
+        { id: 'c-v1', name: 'Gunslinger', content_format: 'aspirant', gear: [], base_gear: [] }
+      ],
+      economyByClassId: { 'c-advent': 'advent', 'c-v1': 'aspirant' }
+    }));
+    const state = wizard.getState();
+    state.classId = 'c-advent';
+    wizard.syncBaseGear();
+    expect(wizard.getFreeBaseCount()).toBe(3);
+
+    state.classId = 'c-v1';
+    wizard.syncBaseGear();
+    expect(state.gear).toEqual([]);
+    expect(wizard.getFreeBaseCount()).toBe(0);
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspirant);
   });
 
   // The regression this round closes: an aspirant-content (V1) class picked
@@ -664,8 +710,7 @@ describe('step 4 offers the whole class and its purchases', () => {
 
   // A walk back through the wizard is not a change of class. A Custom
   // Enchantment's and a Mod's text are the player's own writing, so losing
-  // them on a re-entry loses something no re-pick brings back. Advent MODE is
-  // what exercises this: syncBaseGear no-ops for aspirant mode.
+  // them on a re-entry loses something no re-pick brings back.
   test('returning to step 4 unchanged keeps the Signature, its Enchantment and its Mods', () => {
     const wizard = bootWizard(fixture({ mode: 'advent', classes: [v1Class()] }));
     wizard.getState().classId = 'c-v1';

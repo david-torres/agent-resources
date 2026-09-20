@@ -209,6 +209,7 @@ window.CharacterWizard = (function () {
   // Step 4
   const baseGearColumn = document.getElementById('baseGearColumn');
   const baseGearList = document.getElementById('baseGearList');
+  const spendColumn = document.getElementById('spendMerxColumn');
   const spendList = document.getElementById('spendList');
   // The printed Signature grid and the entry it opens into. The view renders
   // the panel in every mode; renderGearStep hides it where the economy has no
@@ -251,13 +252,11 @@ window.CharacterWizard = (function () {
   const submitEl = document.getElementById('wizardSubmit');
   // Advent's three Default Signatures (pg. 3), which arrive free. Every other
   // economy replaced them with a Merx grant, so there is nothing free to load.
-  // Not derived from a rule (DATA.mode, or the resolved economy) at all --
-  // both were tried and both went stale in one mode/economy combination or
-  // another (an aspirant-content class under advent mode; an advent-content
-  // class under aspirant mode), because a rule can say "free" for a count
-  // syncBaseGear never actually put in state.gear. This instead counts the
-  // leading run of state.gear entries syncBaseGear itself stamped cost: 0,
-  // so it can never disagree with what's actually there. Marker is cost, not
+  // Counted off state.gear rather than answered from a rule (DATA.mode, or
+  // the resolved economy): a rule says what OUGHT to be free, and what the
+  // player may spend against is what syncBaseGear actually put there. This
+  // counts the leading run of state.gear entries syncBaseGear itself stamped
+  // cost: 0, so it can never disagree with what is in the list. Marker is cost, not
   // subtype: 'base' -- a paid duplicate pick of a base-subtype shop item
   // (pickShopItem) also carries subtype: 'base', so subtype can't tell a
   // free auto-load apart from a paid re-pick of the same slot; only
@@ -2993,14 +2992,16 @@ window.CharacterWizard = (function () {
   };
 
   // ----- Left column: base gear (auto-loaded) -----
-  // Only the advent economy grants any. The view renders the column for
-  // advent MODE, which an aspirant-content class puts under the aspirant
-  // economy without changing -- so the column is hidden whenever the economy
+  // Only the advent economy grants any. The view renders the column
+  // unconditionally, because the mode the URL carries does not decide the
+  // economy -- so the column is hidden here whenever the resolved economy
   // grants nothing, rather than offering as free what the grid sells.
   const renderBaseGearList = () => {
     if (!baseGearList) return;
     const granted = economyForState() === 'advent';
     if (baseGearColumn) baseGearColumn.hidden = !granted;
+    // The shop takes the whole row when nothing free sits beside it.
+    if (spendColumn) spendColumn.className = 'column ' + (granted ? 'is-half' : 'is-full');
     if (!granted) {
       baseGearList.innerHTML = '';
       return;
@@ -3281,16 +3282,6 @@ window.CharacterWizard = (function () {
   // granted Defaults nor disturbs what has been bought. Picking a different
   // class in step 1 is what clears the gear and loads the new class's.
   const syncBaseGear = () => {
-    // Aspirant mode: gear is class-agnostic (cross-class pool built by
-    // getShopPool across every unlocked class), so re-entering step 4 with a
-    // new class must not wipe the user's picks. Just no-op -- this function
-    // never runs for aspirant mode, so it never loads anything free there,
-    // in any economy. freeBaseCount() reads that fact off state.gear itself
-    // rather than re-deriving it from DATA.mode or the resolved economy, so
-    // it can't disagree with this branch the way a second copy of the rule
-    // twice did (once for each direction: an aspirant-content class under
-    // advent mode, and an advent-content class under aspirant mode).
-    if (DATA.mode === 'aspirant') return;
     const c = selectedClass();
     if (!c) return;
     // Drop any class-gear picks the user made against the old class — they
@@ -3313,11 +3304,13 @@ window.CharacterWizard = (function () {
     if (DATA.mode === 'advent') {
       state.commonItems = [];
     }
-    // Only the advent economy grants free base gear. An aspirant-content
-    // class picked under advent mode resolves to the aspirant economy
-    // (economyFor, util/merx-economy.js) and has no free allotment, so
-    // nothing is auto-loaded for it -- the player buys every item instead,
-    // from the printed grid at the own-class Signature price.
+    // Only the advent economy grants free base gear, and the economy is the
+    // selected class's, never the URL's mode: an aspirant-content class has
+    // no free allotment whichever mode picked it, and an advent-content class
+    // keeps its three Defaults whichever mode picked it. The clearing above
+    // runs in every economy for the same reason -- a class change can cross
+    // that line, and carrying one economy's free Defaults into another's
+    // budget would hand the player items nothing charges for.
     if (economyForState() !== 'advent') return;
     const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.

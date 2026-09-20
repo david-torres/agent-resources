@@ -317,15 +317,16 @@
   </div>
 
   <div class="columns is-variable is-4">
-    {{#unless (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
+    <!-- Rendered in every mode: only the SELECTED CLASS's economy says whether
+         anything is granted free, and renderBaseGearList hides this column and
+         widens the shop beside it whenever nothing is. -->
     <div class="column is-half" id="baseGearColumn">
       <h4 class="title is-5">Base Gear <span class="tag is-success is-light ml-2">Free</span></h4>
       <div id="baseGearList">
         <!-- Auto-loaded base gear rendered by character-wizard.js -->
       </div>
     </div>
-    {{/unless}}
-    <div class="column {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}is-full{{else}}is-half{{/if}}">
+    <div class="column is-half" id="spendMerxColumn">
       <h4 class="title is-5">Spend Merx</h4>
       <div class="field is-grouped mb-2">
         <p class="control is-expanded">
