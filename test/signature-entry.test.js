@@ -183,6 +183,13 @@ describe('the component agrees with the server it cannot require', () => {
       .toBe(equipmentSpend(gear, opts));
     expect(SE.isCrossClass(gear[0], opts)).toBe(false);
   });
+
+  test('client and server agree that an all-null aspiring pool is all own-class', () => {
+    const gear = [{ name: 'Z', class_id: 'class-z', owned: true, enchantment: null, mods: [] }];
+    const opts = { economy: 'aspiring', characterClassId: null, aspiringSignatures: [null, null] };
+    expect(SE.totalOf(gear, { figures: FIGURES, ...opts })).toBe(equipmentSpend(gear, opts));
+    expect(SE.isCrossClass(gear[0], opts)).toBe(false);
+  });
 });
 
 describe('describePurchase (Ruling 5: a replacement destroys what it carries)', () => {

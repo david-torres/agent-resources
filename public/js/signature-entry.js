@@ -57,14 +57,14 @@
   // own-class, matching a row written before the pool was stored.
   var inAspiringPool = function (purchase, pool) {
     for (var i = 0; i < pool.length; i++) {
-      if (pool[i] && pool[i].class_id === purchase.class_id && pool[i].name === purchase.name) return true;
+      if (pool[i].class_id === purchase.class_id && pool[i].name === purchase.name) return true;
     }
     return false;
   };
 
   var isCrossClass = function (purchase, opts) {
     if (opts.economy === 'aspiring') {
-      var pool = Array.isArray(opts.aspiringSignatures) ? opts.aspiringSignatures : [];
+      var pool = (Array.isArray(opts.aspiringSignatures) ? opts.aspiringSignatures : []).filter(function (p) { return !!p; });
       return pool.length > 0 && !inAspiringPool(purchase, pool);
     }
     return !!opts.characterClassId && !!purchase.class_id
