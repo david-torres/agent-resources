@@ -161,8 +161,8 @@ describe('what the island carries', () => {
 });
 
 describe('the aspiring catalogue', () => {
-  // A class-less character has no roster, so before this its grid held only
-  // what it already owned and there was nothing to acquire.
+  // A class-less character has no roster, so the catalogue is the only
+  // source for anything it does not already own.
   test('an aspiring island offers every class Signature outside the pool', () => {
     const data = buildGearPurchaseData({
       economy: 'aspiring',
