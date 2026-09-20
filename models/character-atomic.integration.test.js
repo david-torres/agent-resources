@@ -121,9 +121,10 @@ const rpcSaveGear = async (characterId, gear) => {
 };
 
 // Drives save_character_atomic directly, the same way rpcSaveGear and the
-// ownership-check test above do: this task only ships the storage layer, not
-// the service-layer wiring that would let createCharacter/updateCharacter
-// forward aspiring_signatures, so the RPC itself is the unit under test.
+// ownership-check test above do: the RPC is the unit under test here. The
+// service-layer wiring that forwards aspiring_signatures into it
+// (services/character/service.js's createCharacter and updateCharacter) is
+// covered separately, by services/character/service.test.js.
 const saveAtomic = async ({ characterId, character, gear = [], abilities = [], traits = [], perks = [] }) => {
   const { data, error } = await supabaseAdmin.rpc('save_character_atomic', {
     p_character_id: characterId,
