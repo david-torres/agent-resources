@@ -20,6 +20,7 @@ const {
   SIGNATURE_CAP,
   COMMON_ITEM_PRICE
 } = require('../../util/merx-economy');
+const { declaredSuccessfulMissions, deriveMissionMerx } = require('../../util/character-derived');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -558,12 +559,20 @@ const normalizeCharacterInput = (input, context = {}) => {
   // the save will not store refuses builds the rules permit. Normalizing here
   // rather than re-deriving "what counts as stored equipment" keeps that
   // definition in one place.
-  // context.enforceMerxBudget defaults to true (creation: a brand-new
-  // character has no missions, so CREATION_GRANT alone IS its budget) and is
-  // passed false by updateCharacter (an edit may have mission-earned Merx
-  // this call has no way to know, and checking the bare grant would refuse a
-  // purchase the character can actually afford). The Signature Cap needs no
-  // such data and always runs for a non-advent economy either way.
+  // context.enforceMerxBudget defaults to true (creation) and is passed false
+  // by updateCharacter (an edit's real budget needs the character's mission
+  // ROWS, which this call has no way to fetch, and checking a budget built
+  // from the payload's counter would refuse a purchase the character can
+  // actually afford). The Signature Cap needs no such data and always runs
+  // for a non-advent economy either way.
+  //
+  // A creation's budget is the grant PLUS the mission history the payload
+  // declares -- the wizard's "Successful" input, posted as
+  // completed_missions, which its own budget adds and which
+  // CharacterService.createCharacter feeds to the same derivation to store
+  // the leftover. All three read the one field, so the budget the player
+  // spends against, the budget this enforces and the commissary_reward
+  // stored are the same number.
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
   const economyValidation = validateEconomyLimits({
     economy,
@@ -571,6 +580,9 @@ const normalizeCharacterInput = (input, context = {}) => {
     storedGear: context.storedGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
+    earnedMerx: deriveMissionMerx({
+      realMissions: declaredSuccessfulMissions(data.completed_missions)
+    }),
     enforceMerxBudget: context.enforceMerxBudget ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };

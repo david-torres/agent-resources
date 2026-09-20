@@ -1087,15 +1087,17 @@ test('string-format gear is resolved to its real class before the economy gate p
 // this fires without adding a query to every update.
 //
 // Review round 2: enforcing the bare Merx grant on every edit was ruled out --
-// validateEconomyLimits has no caller that supplies earnedMerx, so an edit
-// checked against the grant alone would refuse a purchase a character's real
-// mission income could fund, and that false rejection is worse than not
-// checking at all. So an edit enforces ONLY the Signature Cap, which needs no
-// mission data; the Merx budget is deliberately left unenforced on update
+// an edit's payload declares no mission history to credit (a creation's does,
+// and validateEconomyLimits prices it as earnedMerx), so an edit checked
+// against the grant alone would refuse a purchase a character's real mission
+// income could fund, and that false rejection is worse than not checking at
+// all. So an edit enforces ONLY the Signature Cap, which needs no mission
+// data; the Merx budget is deliberately left unenforced on update
 // (context.enforceMerxBudget: false in normalizeCharacterInput) until a
-// caller exists that can supply real earned Merx. The two tests below are
-// the two halves of that split, and the third confirms the cap's gear
-// resolution costs an advent update nothing it did not already pay.
+// caller exists that can supply the character's real earned Merx. The two
+// tests below are the two halves of that split, and the third confirms the
+// cap's gear resolution costs an advent update nothing it did not already
+// pay.
 const aspirantUpdateAdapter = (calls) => makeAdapter(calls, {
   getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
   getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })

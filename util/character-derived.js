@@ -88,6 +88,17 @@ const deriveMissionMerx = ({ realMissions, offscreenMissions } = {}) => {
     + offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
 };
 
+// A creation payload declares its mission history as a count rather than
+// rows -- the wizard's "Successful" input, posted as completed_missions --
+// and a character being created owns no mission rows to read. Shaping the
+// count back into rows lets deriveMissionMerx price a declared history and a
+// stored one through the same function, so a save and the character page it
+// leads to cannot value the same history differently.
+const declaredSuccessfulMissions = (count) => {
+  const successes = Math.max(0, Math.floor(Number(count) || 0));
+  return Array.from({ length: successes }, () => ({ outcome: 'success' }));
+};
+
 const deriveMerxBreakdown = ({
   realMissions, offscreenMissions, gear, commonItems, characterClassId, economy = 'advent'
 }) => {
@@ -134,6 +145,7 @@ module.exports = {
   deriveLevel,
   deriveMerx,
   deriveMissionMerx,
+  declaredSuccessfulMissions,
   deriveMerxBreakdown,
   deriveCharacterTotals,
   ADVENT_DEFAULT_SIGNATURES

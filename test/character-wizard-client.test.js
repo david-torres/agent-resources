@@ -1020,3 +1020,132 @@ describe('step 4 offers the whole class and its purchases', () => {
     });
   });
 });
+
+// Whole-plan review, Critical 1: getMerxBudget credits mission income in every
+// economy, but the save credited none of it -- validateEconomyLimits was handed
+// no earnedMerx and createCharacter derived the reward from an empty mission
+// list. A player who declared mission history was shown a budget the save then
+// refused, and a build under the bare grant stored a reward computed without
+// the income the character's own page would credit it. The declared count
+// (completed_missions) is now the one field all three read.
+describe('a declared mission history prices the same in the wizard and at the save', () => {
+  const { CharacterService } = require('../services/character/service');
+
+  const MISSION_CLASS = {
+    id: 'c1',
+    name: 'Test Class',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: twelveItems(),
+    abilities: [],
+    advanced_abilities: []
+  };
+
+  const ok = (data) => ({ data, error: null });
+  const UNREACHED_ADAPTER_METHODS = [
+    'levelUpAtomic', 'createBackfillMission', 'getAvailableHostedMissions',
+    'createOffscreenMissionRow', 'findUpgradeTargets', 'getOffscreenMissionRow',
+    'getSourceMissionForCredit', 'getConduitCredits', 'insertOffscreenMission',
+    'updateOffscreenMissionRow', 'deleteOffscreenMissionRow'
+  ];
+  const serviceOnAspirantClass = () => {
+    const saved = {};
+    const adapter = {
+      getRulesVersion: async () => 'v1',
+      resolveClassReference: async (input) => ({ ...input }),
+      getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', abilities: [] }),
+      createCharacterRow: async () => ok([{ id: 'new-character' }]),
+      updateCharacterRow: async (id) => ok([{ id }]),
+      getChildRows: async () => ok([]),
+      insertChildRows: async () => ok(true),
+      updateChildRow: async () => ok(true),
+      deleteChildRows: async () => ok(true),
+      getClassContentLookupMaps: async () => ({
+        gearNameToClassId: new Map(),
+        gearNameToDescription: new Map(),
+        abilityNameToClassId: new Map(),
+        abilityNameToDescription: new Map(),
+        itemsByClassId: new Map(),
+        classesByName: new Map(),
+        classRows: [{ id: 'c1', content_format: 'aspirant', rules_version: 'v1' }]
+      }),
+      getRealMissions: async () => ok([]),
+      listOffscreenMissions: async () => ok([]),
+      fetchCharacterOwnership: async () => ok({ id: 'character-1', creator_id: 'profile-1' }),
+      deleteCharacter: async () => ok(null),
+      setDeceased: async () => ok([{ id: 'character-1' }]),
+      updateClass: async () => ok([{ id: 'character-1' }]),
+      updateOwnedFields: async () => ok({ id: 'character-1' }),
+      getClassRulesVersion: async () => ok('v1'),
+      fetchAllowedAbilityIds: async () => ok([]),
+      fetchExistingPerks: async () => ok([]),
+      saveCharacterAtomic: async (args) => {
+        Object.assign(saved, args.character);
+        return ok({ id: 'character-1', ...args.character });
+      }
+    };
+    // Creation reaches none of these, but the constructor checks the whole
+    // adapter surface, so they stand present and unreachable.
+    for (const method of UNREACHED_ADAPTER_METHODS) {
+      adapter[method] = async () => { throw new Error(`${method} is not part of creation`); };
+    }
+    return { service: new CharacterService(adapter), saved };
+  };
+
+  // Seven own-class Signatures cost more than the aspirant grant and less than
+  // the grant plus four successes, so the build is legal only if the save
+  // credits the same income the wizard did.
+  const buyBeyondTheGrant = (wizard, successes) => {
+    const state = wizard.getState();
+    state.classId = 'c1';
+    state.level = 3;
+    state.successfulMissions = successes;
+    state.traits = ['brave', 'bold', 'lucky'];
+    state.gear = twelveItems().slice(0, 7).map((item) => ({
+      name: item.name, kind: 'class', subtype: 'elective', class_id: 'c1',
+      class_name: 'Test Class', owned: true, enchantment: null, mods: []
+    }));
+    return state;
+  };
+
+  const bootMissionWizard = () => bootWizard(fixture({
+    mode: 'aspirant',
+    preselectedClassId: 'c1',
+    classes: [MISSION_CLASS],
+    statList: STAT_LIST,
+    personalityMap: PERSONALITY_MAP
+  }));
+
+  test('the wizard budget is the grant plus the declared successes', () => {
+    const wizard = bootMissionWizard();
+    buyBeyondTheGrant(wizard, 4);
+    expect(wizard.getMerxBudget())
+      .toBe(economyFigures().grants.aspirant + 4 * MERX_PER_MISSION_SUCCESS);
+    expect(wizard.getMerxSpent()).toBeGreaterThan(economyFigures().grants.aspirant);
+  });
+
+  test('the save accepts that build and stores the remainder the wizard showed', async () => {
+    const wizard = bootMissionWizard();
+    buyBeyondTheGrant(wizard, 4);
+    const budget = wizard.getMerxBudget();
+    const spent = wizard.getMerxSpent();
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.completed_missions).toBe(4);
+
+    const { service, saved } = serviceOnAspirantClass();
+    const result = await service.createCharacter(payload, { id: 'profile-1' });
+    expect(result.error).toBeNull();
+    expect(saved.commissary_reward).toBe(budget - spent);
+    expect(saved.commissary_reward).toBe(payload.commissary_reward);
+  });
+
+  test('without the declared history the same build is refused', async () => {
+    const wizard = bootMissionWizard();
+    buyBeyondTheGrant(wizard, 0);
+    const payload = wizard.buildSubmitPayload();
+    const { service } = serviceOnAspirantClass();
+    const result = await service.createCharacter(payload, { id: 'profile-1' });
+    expect(result.data).toBeNull();
+    expect(result.error).toMatch(/Merx/);
+  });
+});

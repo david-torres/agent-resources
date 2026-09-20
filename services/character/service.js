@@ -7,7 +7,7 @@ const {
   parseInteger,
   normalizeStatsPayload
 } = require('./input');
-const { deriveCharacterTotals } = require('../../util/character-derived');
+const { deriveCharacterTotals, declaredSuccessfulMissions } = require('../../util/character-derived');
 const { economyFor } = require('../../util/merx-economy');
 const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
@@ -203,10 +203,14 @@ class CharacterService {
     // The client sends its own agreeing commissary_reward figure, but the
     // server recomputes it here for the two V1 economies rather than
     // trusting it -- a disagreement between what the player was shown and
-    // what gets stored is worse than a redundant computation. A brand-new
-    // character has no missions yet, so this is purely "grant minus spend"
-    // -- the same reward deriveCharacterTotals would compute once missions
-    // exist.
+    // what gets stored is worse than a redundant computation.
+    //
+    // A character created with mission history behind it declares it as a
+    // count (completed_missions) rather than as rows, so the count is shaped
+    // back into success rows for the derivation. That is the same income
+    // normalizeCharacterInput's budget check credits and the same income the
+    // character's own page will credit once those missions are recorded, so
+    // the stored leftover matches both.
     const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
     if (economy !== 'advent') {
       const derived = deriveCharacterTotals({
@@ -215,7 +219,7 @@ class CharacterService {
           gear: resolvedGear,
           common_items: characterInput.common_items
         },
-        realMissions: [],
+        realMissions: declaredSuccessfulMissions(characterInput.completed_missions),
         offscreenMissions: [],
         rulesVersion,
         economy
