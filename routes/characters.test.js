@@ -17,10 +17,50 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 const realBase = require('../models/_base');
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
+const realCharacter = require('../models/character');
+const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+
+const { statList } = require('../util/enclave-consts');
+
+const CHAR_ID = '22222222-2222-4222-8222-222222222222';
+
+// Mutable per-test state consulted by the models/character mock below,
+// reset before the two GET /characters/:id/:name? tests.
+const pageState = {};
+
+// A minimally complete character for the full character page (not the
+// /details fragment, which needs far less): statList stats, a class,
+// abilities and an advent economy (no content_format, no creator_mode).
+const makePageCharacter = (abilityCount) => ({
+  id: CHAR_ID,
+  name: 'Ash',
+  class: 'Mage',
+  class_id: 'class-a',
+  creator_id: 'profile-owner',
+  creator_mode: null,
+  is_public: true,
+  level: 3,
+  completed_missions: 0,
+  ...Object.fromEntries(statList.map(stat => [stat, 2])),
+  traits: [],
+  abilities: Array.from({ length: abilityCount }, (_, i) => ({
+    id: `ab-${i}`,
+    name: `Ability ${i}`,
+    class_id: 'class-a',
+    type: 'core',
+  })),
+  gear: [],
+  ability_perks: [],
+  quirks: [],
+  accessories: [],
+  common_items: [],
+  perks: '',
+  additional_gear: '',
+});
 
 // Minimal no-op PostgREST-shaped fake — the ability-perk-group handler only
 // checks query params and calls res.render, so an empty store is sufficient.
@@ -54,6 +94,7 @@ mock.module('../models/auth', () => ({
 }));
 mock.module('../models/profile', () => ({
   getProfile: async () => null,
+  getProfileById: async () => ({ data: null, error: null }),
 }));
 
 mock.module('../models/offscreen-mission', () => ({
@@ -66,10 +107,27 @@ mock.module('../models/offscreen-mission', () => ({
 }));
 
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
-mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
+mock.module('../models/lfg', () => ({
+  getPendingJoinRequestCount: async () => ({ count: 0 }),
+  getLfgPost: async () => ({ data: null, error: null }),
+}));
 mock.module('../util/nav-loader', () => ({
   populateNavItems: async () => {},
   loadNavItems: (req, res, next) => next(),
+}));
+
+// GET /characters/:id/:name? (the full character page) is the only test
+// below that needs models/character and models/class; pageState drives
+// what getCharacter returns.
+mock.module('../models/character', () => ({
+  getCharacter: async () => (pageState.character
+    ? { data: pageState.character, error: null }
+    : { data: null, error: { code: 'PGRST116', message: 'not found' } }),
+  getCharacterRecentMissions: async () => ({ data: [], error: null }),
+}));
+mock.module('../models/class', () => ({
+  getClass: async () => ({ data: { id: 'class-a', rules_version: 'v1' }, error: null }),
+  getUnlockedClassIdsForUser: async () => ({ data: new Set(), error: null }),
 }));
 
 const express = require('express');
@@ -127,6 +185,10 @@ beforeAll(async () => {
   app.set('view engine', 'handlebars');
   app.set('views', path.join(__dirname, '..', 'views'));
 
+  // The full character page builds its Open Graph card via res.locals.openGraph
+  // (util/open-graph.js), which app.js normally installs app-wide.
+  app.use(require('../util/open-graph').openGraphDefaults);
+
   // Minimal res.locals the route middleware and sendError expect.
   app.use((req, res, next) => {
     res.locals.supabaseUrl = process.env.SUPABASE_URL;
@@ -143,6 +205,8 @@ afterAll(async () => {
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
+  mock.module('../models/character', () => realCharacter);
+  mock.module('../models/class', () => realClass);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
@@ -182,4 +246,31 @@ test('GET /characters/ability-perk-group without key param falls back domKey to 
   const body = await res.text();
   expect(body).toContain('id="perks-list-Strike"');
   expect(body).toContain('data-ability-id="Strike"');
+});
+
+// GET /characters/:id/:name? — the Perk breakdown and build-breach notices
+// (Task 11). An advent character's Ability cap is 3 (util/perk-economy.js);
+// four Abilities is over it, so buildBreaches carries a 'hard' breach and
+// the page must read "Illegal Build". A clean, three-ability character has
+// no breach and must not.
+test('character page renders Illegal Build for an advent character over the Ability cap', async () => {
+  pageState.character = makePageCharacter(4);
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/Ash`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('Illegal Build');
+});
+
+test('character page does not render Illegal Build for a clean character', async () => {
+  pageState.character = makePageCharacter(3);
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/Ash`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).not.toContain('Illegal Build');
 });

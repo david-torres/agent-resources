@@ -30,7 +30,11 @@ const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
-const { deriveCharacterTotals, deriveMerxBreakdown, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
+const {
+  deriveCharacterTotals, deriveMerxBreakdown, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES,
+  derivePerkBreakdown, deriveBuildBreaches
+} = require('../util/character-derived');
+const { computeVersionFamily } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
@@ -1090,6 +1094,47 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         }
       }
 
+      // Maps every id in the character's own version family onto
+      // character.class_id (util/class-family.js#computeVersionFamily is the
+      // single definition of "version family" -- see its own comment on why a
+      // query that drops a column must not be reimplemented here). An ability
+      // carried over from an earlier version of the character's OWN class then
+      // tags as own-class instead of cross-class, the same pattern
+      // services/character/service.js#updateCharacter already uses, reusing
+      // its same getClassFamilyRows call rather than a route-local query.
+      let classFamilyOf = null;
+      if (character.class_id) {
+        try {
+          const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
+          const family = computeVersionFamily(classFamilyRows || [], character.class_id);
+          classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
+        } catch (_) {
+          // classFamilyOf stays null; abilities compare by class_id alone.
+        }
+      }
+
+      // Unlike merxBreakdown this is NOT gated on showGearPurchases: the Perk
+      // economy covers all three economies, and the 13 live characters outside
+      // one of its rules are every one of them advent.
+      const perkBreakdown = derivePerkBreakdown({
+        economy,
+        level: character.level,
+        abilities: character.abilities,
+        abilityPerks: character.ability_perks,
+        characterClassId: character.class_id,
+        aspiringAbilities: character.aspiring_abilities,
+        classFamilyOf
+      });
+      const buildBreaches = deriveBuildBreaches({
+        economy,
+        level: character.level,
+        abilities: character.abilities,
+        abilityPerks: character.ability_perks,
+        characterClassId: character.class_id,
+        aspiringAbilities: character.aspiring_abilities,
+        classFamilyOf
+      });
+
       const ownerCredit = ownerProfile && ownerProfile.is_public !== false
         ? `by ${ownerProfile.name}`
         : null;
@@ -1116,6 +1161,8 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         statList,
         showGearPurchases,
         merxBreakdown,
+        perkBreakdown,
+        buildBreaches,
         // Each Stat's real Cap, for the live stat editor and the level-up modal
         // this page mounts. Both write through routes that already judge a Stat
         // against the same Cap (statCapError, services/character/service.js), so

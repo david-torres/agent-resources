@@ -83,6 +83,18 @@
       {{else}}
       <p><strong>Commissary Reward:</strong> {{character.commissary_reward}}</p>
       {{/if}}
+      {{#if perkBreakdown}}
+      <p><strong>Perks earned:</strong> {{perkBreakdown.earned}}</p>
+      <p><strong>Perks spent:</strong> {{perkBreakdown.spend}}</p>
+      <p><strong>Perks remaining:</strong> {{perkBreakdown.remaining}}</p>
+      {{/if}}
+      {{#each buildBreaches}}
+        {{#if (eq this.severity "hard")}}
+        <p class="has-text-danger"><strong>Illegal Build:</strong> {{this.detail}}</p>
+        {{else}}
+        <p class="has-text-warning"><strong>Not available in this edition:</strong> {{this.detail}}</p>
+        {{/if}}
+      {{/each}}
     </div>
 
     <div class="box">
