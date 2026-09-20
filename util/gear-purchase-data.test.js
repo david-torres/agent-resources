@@ -21,6 +21,35 @@ const V1_CLASS = {
 
 const ADVENT_CLASS = { id: 'c-advent', name: 'Ranger', content_format: 'advent', gear: [{ name: 'Bow' }] };
 
+// Fixtures for the aspiring catalogue tests below: two distinct classes, each
+// shaped like V1_CLASS above (id, name, content_format, gear[] of printed
+// Signatures).
+const v1ClassRow = () => ({
+  id: 'c-v1',
+  name: 'Gunslinger',
+  content_format: 'aspirant',
+  gear: [
+    {
+      name: 'Cowboy Hat',
+      description: 'A hat.',
+      meters: [{ label: 'Wear', value: '3' }],
+      column: 1,
+      position: 1,
+      default_enchantment: { name: 'Shade', description: 'Keeps the sun off.' }
+    },
+    { name: 'Lasso', description: 'A rope.', column: 1, position: 2 }
+  ]
+});
+
+const otherClassRow = () => ({
+  id: 'c-other',
+  name: 'Alchemist',
+  content_format: 'aspirant',
+  gear: [
+    { name: 'Vial', description: 'A vial.', column: 1, position: 1 }
+  ]
+});
+
 const build = (overrides = {}) => buildGearPurchaseData({
   economy: 'aspirant',
   characterClass: V1_CLASS,
@@ -128,6 +157,53 @@ describe('what the island carries', () => {
     });
     expect(data.entries).toHaveLength(1);
     expect(data.purchases).toHaveLength(1);
+  });
+});
+
+describe('the aspiring catalogue', () => {
+  // A class-less character has no roster, so before this its grid held only
+  // what it already owned and there was nothing to acquire.
+  test('an aspiring island offers every class Signature outside the pool', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspiring',
+      characterClass: null,
+      allClasses: [v1ClassRow()],
+      character: {
+        class_id: null,
+        aspiring_signatures: [{ class_id: 'c-v1', name: 'Cowboy Hat' }],
+        gear: [{ name: 'Cowboy Hat', class_id: 'c-v1' }]
+      },
+      missionMerx: 0
+    });
+    const names = data.entries.map((e) => e.name);
+    expect(names).toContain('Cowboy Hat');
+    expect(names).toContain('Lasso');
+    expect(data.entries.filter((e) => e.name === 'Cowboy Hat')).toHaveLength(1);
+  });
+
+  test('the island carries the stored pool', () => {
+    const pool = [{ class_id: 'c-v1', name: 'Cowboy Hat' }];
+    const data = buildGearPurchaseData({
+      economy: 'aspiring',
+      characterClass: null,
+      allClasses: [v1ClassRow()],
+      character: { class_id: null, aspiring_signatures: pool, gear: [] },
+      missionMerx: 0
+    });
+    expect(data.aspiringSignatures).toEqual(pool);
+  });
+
+  // An aspirant character's own class comes from characterClass; the rest of
+  // the catalogue must not be duplicated into its grid.
+  test('an aspirant island is unchanged by the catalogue argument', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspirant',
+      characterClass: v1ClassRow(),
+      allClasses: [v1ClassRow(), otherClassRow()],
+      character: { class_id: 'c-v1', gear: [] },
+      missionMerx: 0
+    });
+    expect(data.entries.every((e) => e.class_id === 'c-v1')).toBe(true);
   });
 });
 

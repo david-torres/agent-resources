@@ -483,6 +483,15 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       contentFormat: characterClass && characterClass.content_format,
       creatorMode: character.creator_mode
     });
+    // Only a class-less/aspiring character needs the catalogue -- an aspirant
+    // character's own class already arrives via characterClass above. This
+    // costs no extra query: filterClassDataForUser already ran above for the
+    // Class <select>'s options, and latestClassVersions is the same
+    // pure collapse GET /wizard applies to build wizardClasses, so a player
+    // is never offered a class here they have not unlocked there.
+    const allClasses = economy === 'aspiring'
+      ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
+      : [];
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
@@ -528,6 +537,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       gearPurchaseData: buildGearPurchaseData({
         economy,
         characterClass,
+        allClasses,
         character,
         missionMerx: deriveMissionMerx({
           realMissions: missionsRes.data || [],

@@ -46,11 +46,28 @@ const toEntry = (item, classId, className) => ({
 // A stored class_gear row arrives merged with its class's printed entry
 // (services/character/repository.js#getCharacterGear), so it already carries
 // the description, meters and Default Enchantment the entry needs.
-const buildEntries = (characterClass, gear) => {
+const buildEntries = (characterClass, allClasses, gear, economy) => {
   const roster = Array.isArray(characterClass && characterClass.gear)
     ? characterClass.gear.map((item) => toEntry(item, characterClass.id, characterClass.name))
     : [];
   const seen = new Set(roster.map((entry) => entryKey(entry.class_id, entry.name)));
+  const catalogue = [];
+  // An aspiring character is class-less, so it has no roster of its own to
+  // list. Its Class is three named Signatures (pg. 90) and the rest of the
+  // catalogue is what it may acquire at the cross-class tier -- the same
+  // reach an aspirant character gets through the wizard's shop.
+  if (economy === 'aspiring') {
+    for (const cls of (Array.isArray(allClasses) ? allClasses : [])) {
+      if (!cls || !cls.id || !Array.isArray(cls.gear)) continue;
+      for (const item of cls.gear) {
+        if (!item || !item.name) continue;
+        const key = entryKey(cls.id, item.name);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        catalogue.push(toEntry(item, cls.id, cls.name));
+      }
+    }
+  }
   const carried = [];
   for (const row of gear) {
     if (!row || !row.name) continue;
@@ -59,7 +76,7 @@ const buildEntries = (characterClass, gear) => {
     seen.add(key);
     carried.push(toEntry(row, row.class_id, row.class_name));
   }
-  return [...roster, ...carried];
+  return [...roster, ...catalogue, ...carried];
 };
 
 // What the character already owns. `enchantment` and `mods` are read as they
@@ -76,18 +93,22 @@ const buildPurchases = (gear) => gear
 // Null for the advent economy: those characters keep the gear[] selects they
 // have always had, and a null island is what views/character-form.handlebars
 // gates the whole surface on. Only the two V1 economies buy here.
-const buildGearPurchaseData = ({ economy, characterClass, character, missionMerx }) => {
+const buildGearPurchaseData = ({ economy, characterClass, allClasses, character, missionMerx }) => {
   if (economy !== 'aspirant' && economy !== 'aspiring') return null;
   const gear = Array.isArray(character && character.gear) ? character.gear : [];
   return {
     economy,
     figures: economyFigures(),
     characterClassId: (character && character.class_id) || null,
+    // The three Signatures this character's Class is made of (pg. 90). The
+    // browser prices against the same pool the server will, or the surface
+    // would offer a purchase the save then refuses.
+    aspiringSignatures: (character && character.aspiring_signatures) || [],
     // Mission income alone. The surface adds the creation grant from the
     // figures above, so the budget is never written down as a single total
     // that could disagree with either half.
     earnedMerx: Math.max(0, Number(missionMerx) || 0),
-    entries: buildEntries(characterClass, gear),
+    entries: buildEntries(characterClass, allClasses, gear, economy),
     purchases: buildPurchases(gear)
   };
 };
