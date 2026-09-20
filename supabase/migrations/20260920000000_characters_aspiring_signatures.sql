@@ -18,6 +18,9 @@ ALTER TABLE public.characters
   ADD CONSTRAINT characters_aspiring_signatures_check
   CHECK (
     jsonb_typeof(aspiring_signatures) = 'array'
+    -- 3 is util/merx-economy.js's ASPIRING_SIGNATURE_PICKS. A SQL CHECK
+    -- cannot import a JS module, so this is an unavoidable copy -- named here
+    -- so the two are found together if the figure ever moves.
     AND jsonb_array_length(aspiring_signatures) <= 3
     AND (creator_mode IS NOT DISTINCT FROM 'aspiring' OR jsonb_array_length(aspiring_signatures) = 0)
     -- The .type() == "string" checks are load-bearing, not redundant: in lax

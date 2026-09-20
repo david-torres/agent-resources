@@ -309,10 +309,11 @@ test('a player can acquire a Signature the character never chose, charged at the
 
   // ---- Proof 5: the character page's own Merx breakdown agrees with what
   // both surfaces charged ----
-  // Total spend is the sum of what was actually charged at each step, read
-  // off the DOM above rather than restated as a fresh literal: 6 for the
-  // three picks (proof 1), 3 for the wizard's cross-class buy (proof 2), and
-  // 3 for the edit form's catalogue buy (proof 4).
+  // Total spend is the sum of what was actually charged at each step: 6 for
+  // the three own-class picks and 3 for the wizard's cross-class buy are the
+  // figures proofs 1 and 2 already asserted above, and cataloguePrice is the
+  // tag the edit form's catalogue served and proof 4 asserted, read off the
+  // DOM rather than restated as a fresh literal.
   const totalSpent = 6 + 3 + cataloguePrice;
   const totalEarned = Number(wizardGrant) + EXTRA_MISSION_MERX;
 
