@@ -7,9 +7,10 @@ const {
   parseInteger,
   normalizeStatsPayload
 } = require('./input');
-const { deriveCharacterTotals } = require('../../util/character-derived');
+const { deriveCharacterTotals, deriveBuildBreaches } = require('../../util/character-derived');
 const { economyFor, withPreservedEquipment } = require('../../util/merx-economy');
 const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
+const { worsenedBreaches } = require('../../util/perk-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
@@ -414,6 +415,11 @@ class CharacterService {
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
 
+    // Same resolution createCharacter uses (economyFor, contentFormat from
+    // the stored class, creator_mode pinned to the stored row) -- needed here
+    // for the ratchet below, which runs whether or not auto_calculate is on.
+    const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
+
     if (characterInput.auto_calculate) {
       const { gearNameToClassId, classRows } = await this.adapter.getClassContentLookupMaps();
       const classRow = (classRows || []).find(row => row.id === characterInput.class_id);
@@ -457,6 +463,34 @@ class CharacterService {
       characterInput.level = derived.level;
       characterInput.completed_missions = derived.completed_missions;
       characterInput.commissary_reward = derived.commissary_reward;
+    }
+
+    // The ratchet. An existing breach is grandfathered -- 13 of 327 live
+    // characters are outside a rule this slice introduced, and none of them
+    // becomes unsaveable. What is refused is a save that makes a hard breach
+    // WORSE. The allowance is the stored row itself, which is why no
+    // per-character exemption is stored anywhere.
+    const submittedAbilities = childData.classAbilities;
+    const ratchetArgs = {
+      economy,
+      level: existing.data.level,
+      abilityPerks: childData.abilityPerks,
+      characterClassId: characterInput.class_id,
+      aspiringAbilities: existing.data.aspiring_abilities,
+      classFamilyOf
+    };
+    const worsened = worsenedBreaches(
+      deriveBuildBreaches({ ...ratchetArgs, abilities: existing.data.abilities, abilityPerks: existing.data.ability_perks }),
+      deriveBuildBreaches({ ...ratchetArgs, abilities: submittedAbilities })
+    );
+    if (worsened.length > 0) {
+      return {
+        data: null,
+        error: {
+          status: 400,
+          message: `This change is not allowed while the build is illegal: ${worsened.map(b => b.detail).join(' ')}`
+        }
+      };
     }
 
     const previousAbilities = Array.isArray(existing.data.abilities) ? existing.data.abilities : [];

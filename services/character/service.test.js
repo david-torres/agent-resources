@@ -1756,15 +1756,107 @@ test('a created aspiring character prices all three pool Abilities as own-class'
 // ratchet: an absolute check here would refuse every save by an already-
 // breaching character, exactly as the Signature Cap split above documents
 // for Merx. Reuses aspirantUpdateAdapter (defined for the Signature Cap
-// tests), whose stored character already carries `abilities: []`.
-test('an update does not refuse an already-breaching Ability count', async () => {
+// tests), whose stored character carries `abilities: []` -- a LEGAL build,
+// so going to 7 is a fresh breach, not a grandfathered one, and the ratchet
+// (below) refuses it same as a creation would.
+test('an update introducing a fresh Ability-cap breach is refused', async () => {
   const calls = [];
   const service = new CharacterService(aspirantUpdateAdapter(calls));
-  // 7 own-class Core Abilities would refuse a creation outright (see above).
   const abilities = Array.from({ length: 7 }, (_, i) => ({ name: `A${i}`, class_id: ASPIRANT_CLASS_ID, type: 'core' }));
   const result = await service.updateCharacter('character-1', {
     name: 'Hero', class_id: ASPIRANT_CLASS_ID, abilities,
     trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/cap/);
+});
+
+// --- Task 10: the ratchet on the update path ----------------------------
+//
+// A character already outside the ability cap must stay renameable and
+// editable forever -- grandfathered, not locked out -- while a save that
+// makes the breach WORSE is refused. Aisuna Kor-Ragna: 6 Abilities under the
+// advent economy (cap 3, util/perk-economy.js#ABILITY_CAP), overage 3.
+const AISUNA_ABILITIES = Array.from({ length: 6 }, (_, i) => ({
+  id: `ability-${i}`, class_id: ADVENT_CLASS_ID, name: `Ability ${i}`, type: 'core'
+}));
+
+const aisunaAdapter = (calls) => makeAdapter(calls, {
+  getCharacter: async () => ok({
+    id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, creator_mode: null,
+    name: 'Aisuna Kor-Ragna', level: 1, gear: [], common_items: [], stat_cap_purchases: {},
+    aspiring_abilities: [], aspiring_signatures: [],
+    abilities: AISUNA_ABILITIES, ability_perks: []
+  })
+});
+
+const submittedAbilityPayload = (count) => Array.from({ length: count }, (_, i) => ({
+  name: `Ability ${i}`, class_id: ADVENT_CLASS_ID
+}));
+
+test('a grandfathered over-cap character still saves unchanged', async () => {
+  const calls = [];
+  const service = new CharacterService(aisunaAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Aisuna Kor-Ragna', class_id: ADVENT_CLASS_ID, abilities: submittedAbilityPayload(6)
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+test('a grandfathered character cannot add a seventh ability', async () => {
+  const calls = [];
+  const service = new CharacterService(aisunaAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Aisuna Kor-Ragna', class_id: ADVENT_CLASS_ID, abilities: submittedAbilityPayload(7)
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/cap/);
+});
+
+test('a grandfathered character may drop an ability', async () => {
+  const calls = [];
+  const service = new CharacterService(aisunaAdapter(calls));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Aisuna Kor-Ragna', class_id: ADVENT_CLASS_ID, abilities: submittedAbilityPayload(5)
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// --- Task 10 / controller ruling: classFamilyOf wired through the service
+// layer -----------------------------------------------------------------
+//
+// An ability row can carry an earlier or later version of the character's
+// OWN class as its class_id -- 22 of 327 live characters hold exactly such a
+// row. Without classFamilyOf (util/class-family.js#computeVersionFamily),
+// tagAbilities (util/character-derived.js) falls back to a raw class_id
+// comparison and mis-tags a same-family pick cross-class, pricing it 3 Perks
+// instead of free -- which the ratchet just above would then refuse as a
+// fresh perk-deficit breach that is not real. gunslinger-v1/gunslinger-v2
+// (GUNSLINGER_FAMILY_AND_FORK) are the same class's two versions: same
+// rules_edition and content_format, linked by base_class_id.
+test('an ability carried over from the same version family prices as own-class, not cross-class', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, creator_mode: null,
+      level: 1, gear: [], common_items: [], stat_cap_purchases: {},
+      aspiring_abilities: [], aspiring_signatures: [],
+      abilities: [{ id: 'a1', class_id: ADVENT_CLASS_ID, name: 'Quickdraw', type: 'core' }],
+      ability_perks: []
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    getClassFamilyRows: async () => ok(GUNSLINGER_FAMILY_AND_FORK)
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ADVENT_CLASS_ID,
+    abilities: [
+      { name: 'Quickdraw', class_id: ADVENT_CLASS_ID },
+      // gunslinger-v2: the same class's v2 fork -- same version family,
+      // a different class_id.
+      { name: 'Trick Shot', class_id: 'gunslinger-v2' }
+    ]
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
 });
