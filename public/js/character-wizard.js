@@ -63,6 +63,9 @@ window.CharacterWizard = (function () {
       // user cleared the textarea). Persisted via writeStorage so a draft
       // resumed from localStorage keeps the assignment.
       perkAbilityName: null,
+      // Which cell of step 4's printed Signature grid is open, as
+      // { name, classId }. Null means the drawer is closed.
+      openSignature: null,
       // Step 4 filter controls — both empty strings mean "no filter."
       // gearSearch does a case-insensitive name match against every pool
       // entry; gearClassFilter narrows class items to a single origin class.
@@ -119,6 +122,24 @@ window.CharacterWizard = (function () {
   } else {
     const stored = readStorage();
     state = stored && stored.mode ? stored : defaultState();
+    // Every gear entry is a purchase, and SignatureEntry prices one from its
+    // own shape -- an `owned` flag, the class_id that prints it, its
+    // Enchantment and its Mods. A restored entry that reaches the pricer
+    // without that shape prices at 0, a loadout the wizard would call free
+    // and the save would refuse, so the shape is stamped on the way in.
+    state.gear = (Array.isArray(state.gear) ? state.gear : [])
+      .filter((g) => g && g.name)
+      .map((g) => ({
+        name: g.name,
+        kind: 'class',
+        subtype: g.subtype || 'elective',
+        class_id: g.class_id || null,
+        class_name: g.class_name || '',
+        owned: true,
+        enchantment: g.enchantment || null,
+        mods: Array.isArray(g.mods) ? g.mods : [],
+        cost: g.cost
+      }));
     // If the query pins a mode that differs from storage and we're not forcing
     // fresh, honor the query (lets the selector's "Resume" still work because
     // it navigates with the stored mode; a direct ?mode= link updates it).
@@ -176,10 +197,20 @@ window.CharacterWizard = (function () {
   // Step 3
   const abilityPrimerList = document.getElementById('abilityPrimerList');
   // Step 4
+  const baseGearColumn = document.getElementById('baseGearColumn');
   const baseGearList = document.getElementById('baseGearList');
   const spendList = document.getElementById('spendList');
+  // The printed Signature grid and the entry it opens into. The view renders
+  // the panel in every mode; renderGearStep hides it where the economy has no
+  // grid to show.
+  const signaturePanel = document.getElementById('signaturePanel');
+  const signatureGrid = document.getElementById('signatureGrid');
+  const signatureDrawer = document.getElementById('signatureDrawer');
   const merxSpentEl = document.getElementById('merxSpent');
   const merxBudgetEl = document.getElementById('merxBudget');
+  const slotsReadout = document.getElementById('slotsReadout');
+  const slotsUsedEl = document.getElementById('slotsUsed');
+  const slotsCapEl = document.getElementById('slotsCap');
   const commonCountBadge = document.getElementById('commonCountBadge');
   const classCountBadge = document.getElementById('classCountBadge');
   const step4Next = document.getElementById('step4Next');
@@ -2435,41 +2466,73 @@ window.CharacterWizard = (function () {
   // and updateBuilderGate runs after each via the wrapping above.)
 
   // ---------- Step 4: Gear Selection ----------
-  // Layout: left column = class base gear (auto-loaded, free). Right column
-  // = a shop of common items and elective class gear the user can spend
-  // their economy's served Merx budget on. Duplicates are allowed
-  // (same item can be picked multiple times). State shape:
-  //   state.gear         = [ { name, kind: 'base' | 'elective' } ]   (left + right picks)
-  //   state.commonItems  = [ { name } ]                              (right picks that are common items)
-  //   state.merxSpent    = number (kept in sync with the rendered list)
-  // state.gear merges the auto-loaded base picks and any elective picks
-  // (the server model already keys off `class_id` to charge for on-class
-  // gear, so base picks don't need to be flagged separately — they're free
-  // via freeBaseCount()).
+  // Two surfaces. The printed grid (ENCLAVE: Aspirant, pg. 11) lists the
+  // character's own Class's Signatures in printed order; opening a cell
+  // reveals that Signature's entry -- description, meters, its Default
+  // Enchantment -- with the purchase controls beneath. The shop beside it
+  // sells what the grid does not: other Classes' Signatures at the
+  // Cross-Class tier, and common items. The advent economy prints no such
+  // entry (it has neither Enchantments nor Mods), so there its own Class
+  // stays a shop card and its free Defaults are auto-loaded by syncBaseGear.
+  //
+  // State shape:
+  //   state.gear          = [ { name, kind: 'class', subtype, class_id,
+  //                             class_name, owned, enchantment, mods, cost? } ]
+  //   state.commonItems   = [ { name, custom? } ]
+  //   state.openSignature = { name, classId } | null   -- the open grid cell
+  // A gear entry is the purchase shape SignatureEntry prices, so it carries
+  // no copy of a price: `cost` appears only as the 0 syncBaseGear stamps to
+  // mark a granted Default, which freeBaseCount() counts.
+  const SignatureEntry = window.SignatureEntry;
 
-  // Which Signature price tier an item's origin buys at (ECONOMY.prices.signature,
-  // util/merx-economy.js): own-class, or cross-class when the origin differs
-  // from the character's selected class. pg. 90: aspiring treats every pick
-  // as its own class, since the pseudo-class it is building has no class_id
-  // of its own to compare against.
-  const signaturePriceFor = (originClassId) => (
-    DATA.mode === 'aspiring' || originClassId === state.classId
-      ? ECONOMY.prices.signature.own
-      : ECONOMY.prices.signature.cross
-  );
+  // Which Signature price tier a Class's items buy at, decided by the rule
+  // the component and util/merx-economy.js share -- pg. 90's aspiring
+  // exemption included -- so a shop card and the total can never disagree.
+  const signaturePriceFor = (classId) => ECONOMY.prices.signature[
+    SignatureEntry.isCrossClass({ class_id: classId }, {
+      economy: economyForState(), characterClassId: state.classId
+    }) ? 'cross' : 'own'
+  ];
 
-  // Build a flat spend-pool = common items + class gear. Each entry is a
-  // "shop item" with { key, name, description_html, cost, kind, subtype }.
-  //   - advent/aspiring: only the selected class's gear (all 6 items, so the
-  //     user can re-pick a base item as a duplicate). Every item here is
-  //     own-class, so signaturePriceFor prices it at ECONOMY.prices.signature.own;
-  //     the first freeBaseCount() are free at pick time (syncBaseGear stamps
-  //     cost: 0 on the auto-loaded base rows).
-  //   - aspirant: every unlocked class's gear. signaturePriceFor prices items
-  //     from the user's selected class at ECONOMY.prices.signature.own and
-  //     items from any other unlocked class at ECONOMY.prices.signature.cross,
-  //     matching the post-creation purchase rate. No free allotment in
-  //     aspirant mode — the user pays for every pick.
+  // The printed grid is how the V1 economies sell a character's own Class.
+  const usesSignatureGrid = () => economyForState() !== 'advent';
+
+  const signatureIn = (classId, name) => {
+    const found = itemsForClass(classId).find((g) => g && g.name === name);
+    return found || null;
+  };
+
+  // The Signatures the grid offers, in printed order, each with the Class it
+  // is printed by. Aspirant reads the selected Class's roster; aspiring has
+  // no Class row of its own, so its grid is the three items picked in the
+  // step-1 builder, which pg. 90 treats as the character's own (hence
+  // signaturePriceFor's own-class answer for them).
+  const signatureEntries = () => {
+    if (!usesSignatureGrid()) return [];
+    if (DATA.mode === 'aspiring') {
+      const picks = (state.classBuild && state.classBuild.classGear) || [];
+      return picks.map((s) => {
+        if (!s || !s.classId || !s.itemName) return null;
+        const entry = signatureIn(s.classId, s.itemName);
+        return entry ? { entry: entry, classId: s.classId } : null;
+      }).filter(Boolean);
+    }
+    const c = selectedClass();
+    if (!c) return [];
+    return itemsForClass(c.id).map((entry) => ({ entry: entry, classId: c.id }));
+  };
+
+  // Build a flat spend-pool for the shop = common items + the class gear the
+  // grid does not sell. Each entry is a "shop item" with
+  // { key, name, description_html, cost, kind, subtype }.
+  //   - common items: every economy, ECONOMY.prices.commonItem each.
+  //   - aspirant mode: every unlocked Class's gear except the one the grid
+  //     holds, priced by signaturePriceFor at the Cross-Class tier.
+  //   - advent economy: the selected Class's own gear, own-class priced. The
+  //     first freeBaseCount() picks are already free in state.gear
+  //     (syncBaseGear stamps cost: 0 on what it auto-loads); a duplicate
+  //     bought here is paid for like any other pick, which is how Advent V2
+  //     pg. 16 lets the Elective double up on a Default.
   const getShopPool = () => {
     const pool = [];
     if (Array.isArray(DATA.commonItems)) {
@@ -2483,94 +2546,197 @@ window.CharacterWizard = (function () {
         });
       });
     }
+    const pushClassItem = (cls, g) => {
+      pool.push({
+        key: 'class:' + cls.id + ':' + g.name,
+        name: g.name,
+        description_html: g.description_html || '',
+        cost: signaturePriceFor(cls.id),
+        kind: 'class',
+        origin_class_id: cls.id,
+        origin_class_name: cls.name || '',
+        subtype: g.subtype || 'elective'
+      });
+    };
     if (DATA.mode === 'aspirant') {
       if (Array.isArray(DATA.classes)) {
         DATA.classes.forEach((cls) => {
           if (!cls || !cls.id || !Array.isArray(cls.class_gear)) return;
-          cls.class_gear.forEach((g) => {
-            if (!g || !g.name) return;
-            pool.push({
-              key: 'class:' + cls.id + ':' + g.name,
-              name: g.name,
-              description_html: g.description_html || '',
-              cost: signaturePriceFor(cls.id),
-              kind: 'class',
-              origin_class_id: cls.id,
-              origin_class_name: cls.name || '',
-              subtype: g.subtype || 'elective'
-            });
-          });
+          if (usesSignatureGrid() && cls.id === state.classId) return;
+          cls.class_gear.forEach((g) => { if (g && g.name) pushClassItem(cls, g); });
         });
       }
-    } else if (DATA.mode === 'aspiring') {
-      // Step 4 is the Merx spend step for aspiring. The shop sells the items
-      // picked in the step-1 builder (treated as the aspiring class's own
-      // elective gear, priced at the own-class Signature rate -- cheaper than
-      // the aspirant cross-class rate). Nothing is pre-picked; the user
-      // spends their served Merx grant across these plus common items,
-      // duplicates allowed, exactly like the advent shop.
-      const build = state.classBuild || {};
-      (build.classGear || []).forEach((s) => {
-        if (!s || !s.classId || !s.itemName) return;
-        const cls = builderClassMap[s.classId] || {};
-        const gearList = Array.isArray(cls.class_gear) ? cls.class_gear : [];
-        const hit = gearList.find((g) => g && g.name === s.itemName);
-        pool.push({
-          key: 'class:' + s.classId + ':' + s.itemName,
-          name: s.itemName,
-          description_html: (hit && hit.description_html) || s.itemDescription || '',
-          cost: signaturePriceFor(s.classId),
-          kind: 'class',
-          origin_class_id: s.classId,
-          origin_class_name: s.className || cls.name || '',
-          subtype: (hit && hit.subtype) || 'elective'
-        });
-      });
-    } else {
+    } else if (!usesSignatureGrid()) {
       const c = selectedClass();
       if (c && Array.isArray(c.class_gear)) {
-        c.class_gear.forEach((g) => {
-          if (!g || !g.name) return;
-          pool.push({
-            key: 'class:' + (c.id || '') + ':' + g.name,
-            name: g.name,
-            description_html: g.description_html || '',
-            cost: signaturePriceFor(c.id),
-            kind: 'class',
-            origin_class_id: c.id,
-            origin_class_name: c.name || '',
-            subtype: g.subtype || 'elective'
-          });
-        });
+        c.class_gear.forEach((g) => { if (g && g.name) pushClassItem(c, g); });
       }
     }
     return pool;
   };
 
-  // Sum the merx cost of the user's current right-column picks. Common items
-  // cost ECONOMY.prices.commonItem each. Class gear carries its own `cost`
-  // (stamped at pick time):
-  //   - 0 for the first freeBaseCount() entries — auto-loaded base, free
-  //     under advent's Default Signature grant.
-  //   - ECONOMY.prices.signature.own for own-class elective picks.
-  //   - ECONOMY.prices.signature.cross for cross-class picks (aspirant only).
-  // Items beyond the free allotment charge their per-item cost regardless.
-  const computeMerxSpent = () => {
-    let spent = 0;
-    if (Array.isArray(state.commonItems)) {
-      spent += state.commonItems.length * ECONOMY.prices.commonItem;
+  const gearList = () => (Array.isArray(state.gear) ? state.gear : []);
+
+  // The Signature a Class's entry was bought as, or null. The granted
+  // Defaults at the front of state.gear are skipped: they were never bought,
+  // and only the advent economy has any -- the one economy with no grid and
+  // no Enchantment to hang off a purchase.
+  const findPurchase = (name, classId) => {
+    const gear = gearList();
+    for (let i = freeBaseCount(); i < gear.length; i++) {
+      const g = gear[i];
+      if (g && g.name === name && (classId == null || g.class_id === classId)) return g;
     }
-    if (Array.isArray(state.gear)) {
-      const freeFloor = freeBaseCount();
-      state.gear.forEach((g, idx) => {
-        if (idx < freeFloor) return;
-        spent += (typeof g.cost === 'number' ? g.cost : signaturePriceFor(g.origin_class_id));
-      });
+    return null;
+  };
+
+  const purchaseFor = (entry, classId) => ({
+    name: entry.name,
+    kind: 'class',
+    subtype: entry.subtype || 'elective',
+    class_id: classId,
+    class_name: (classesById[classId] || {}).name || '',
+    owned: true,
+    enchantment: null,
+    mods: []
+  });
+
+  const crossClassFor = (classId) => SignatureEntry.isCrossClass({ class_id: classId }, {
+    economy: economyForState(), characterClassId: state.classId
+  });
+
+  const priceOfPurchase = (purchase) => SignatureEntry.priceOf(purchase, {
+    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id)
+  });
+
+  // pg. 85 and pg. 92: how many Signature slots this economy allows, or null
+  // where the rules the app models set no cap.
+  const signatureCap = () => ECONOMY.signatureCap[economyForState()];
+
+  // Granted Defaults are not handed to the pricer: they were never bought,
+  // and SignatureEntry.priceOf charges every owned purchase it is given.
+  const pricedGear = () => gearList().slice(freeBaseCount());
+
+  // Priced by the shared component, which test/signature-entry.test.js pins to
+  // util/merx-economy.js equipmentSpend for every shape this can produce.
+  const getMerxSpent = () => SignatureEntry.totalOf(pricedGear(), {
+    figures: ECONOMY,
+    economy: economyForState(),
+    characterClassId: state.classId
+  }) + (Array.isArray(state.commonItems) ? state.commonItems.length : 0) * ECONOMY.prices.commonItem;
+
+  // pg. 8: an Enchantment occupies a Signature slot of its own. The whole
+  // list goes in, granted Defaults included -- slotsOf answers 0 for anything
+  // not owned, so nothing is filtered out first.
+  const getSlotsUsed = () => gearList().reduce(
+    (slots, g) => slots + SignatureEntry.slotsOf(g), 0
+  );
+
+  // Both limits the save enforces (services/character/input.js
+  // validateEconomyLimits): the Merx budget, and the Signature Cap an
+  // Enchantment also occupies. A wizard that lets a player assemble either
+  // breach hands them a character they cannot save.
+  const affordsChange = (merxDelta, slotDelta) => {
+    if (getMerxSpent() + merxDelta > getMerxBudget()) return false;
+    const cap = signatureCap();
+    return cap === null || getSlotsUsed() + slotDelta <= cap;
+  };
+
+  const addSignature = (purchase) => {
+    if (!affordsChange(priceOfPurchase(purchase), SignatureEntry.slotsOf(purchase))) return false;
+    if (!Array.isArray(state.gear)) state.gear = [];
+    state.gear.push(purchase);
+    return true;
+  };
+
+  const refreshGearViews = () => {
+    renderGearStep();
+    renderSummary();
+  };
+
+  // Buy `name` as printed by `classId` (the character's own Class when the
+  // caller names none). A printed Signature is owned or not, so a second buy
+  // of an entry already owned is a no-op -- its Enchantment and Mods hang off
+  // the one purchase.
+  const buySignature = (name, classId) => {
+    const cid = classId || state.classId;
+    const entry = signatureIn(cid, name);
+    if (!entry) return;
+    if (findPurchase(name, cid)) return;
+    if (!addSignature(purchaseFor(entry, cid))) return;
+    refreshGearViews();
+  };
+
+  const sellSignature = (name, classId) => {
+    const gear = gearList();
+    for (let i = gear.length - 1; i >= freeBaseCount(); i--) {
+      const g = gear[i];
+      if (g && g.name === name && (classId == null || g.class_id === classId)) {
+        state.gear.splice(i, 1);
+        break;
+      }
     }
-    return spent;
+    refreshGearViews();
+  };
+
+  // A Default stores its source and nothing else: the text belongs to the
+  // Class, which serves it with the entry. A Signature that prints no Default
+  // cannot take one.
+  const normalizeEnchantment = (enchantment, entry) => {
+    if (!enchantment || !enchantment.source) return null;
+    if (enchantment.source === 'default') {
+      return (entry && entry.default_enchantment && entry.default_enchantment.name)
+        ? { source: 'default' }
+        : null;
+    }
+    return {
+      source: 'custom',
+      name: enchantment.name || '',
+      description: enchantment.description || ''
+    };
+  };
+
+  // pg. 8: an Enchantment is bought onto a Signature the character owns, and
+  // takes a slot as well as its price, so both gates apply to the change.
+  const setEnchantment = (name, enchantment, classId) => {
+    const purchase = findPurchase(name, classId);
+    if (!purchase) return false;
+    const next = normalizeEnchantment(enchantment, signatureIn(purchase.class_id, name));
+    const after = Object.assign({}, purchase, { enchantment: next });
+    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase),
+                       SignatureEntry.slotsOf(after) - SignatureEntry.slotsOf(purchase))) return false;
+    purchase.enchantment = next;
+    return true;
+  };
+
+  // pg. 87: a Mod is a purchase, so an unnamed row is not one -- otherwise an
+  // empty row between two named ones would charge the second at the dearer
+  // rate the table gives the Signature's second Mod. Mods take no slot.
+  const setMods = (name, classId, mods) => {
+    const purchase = findPurchase(name, classId);
+    if (!purchase) return false;
+    const next = (Array.isArray(mods) ? mods : [])
+      .map((m) => ({
+        name: ((m && m.name) || '').trim(),
+        description: ((m && m.description) || '').trim()
+      }))
+      .filter((m) => m.name.length > 0);
+    const after = Object.assign({}, purchase, { mods: next });
+    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase), 0)) return false;
+    purchase.mods = next;
+    return true;
   };
 
   // How many times has the user already picked `key` (across common + class)?
+  // Class keys name the origin Class as well as the item, so two Classes that
+  // print the same Signature name are counted apart.
+  const shopKeyParts = (key) => {
+    const rest = key.slice('class:'.length);
+    const colonAt = rest.indexOf(':');
+    if (colonAt < 0) return null;
+    return { classId: rest.slice(0, colonAt), name: rest.slice(colonAt + 1) };
+  };
+
   const countPicks = (key) => {
     let n = 0;
     if (key.indexOf('common:') === 0) {
@@ -2579,15 +2745,11 @@ window.CharacterWizard = (function () {
         state.commonItems.forEach((it) => { if (it && it.name === cname) n++; });
       }
     } else if (key.indexOf('class:') === 0) {
-      if (Array.isArray(state.gear)) {
-        const rest = key.slice('class:'.length);
-        const colonAt = rest.indexOf(':');
-        if (colonAt > -1) {
-          const gname = rest.slice(colonAt + 1);
-          state.gear.forEach((g) => {
-            if (g && g.kind === 'class' && g.name === gname) n++;
-          });
-        }
+      const parts = shopKeyParts(key);
+      if (parts) {
+        gearList().forEach((g) => {
+          if (g && g.kind === 'class' && g.name === parts.name && g.class_id === parts.classId) n++;
+        });
       }
     }
     return n;
@@ -2600,28 +2762,14 @@ window.CharacterWizard = (function () {
       if (pool[i].key === key) { shop = pool[i]; break; }
     }
     if (!shop) return;
-    const budget = getMerxBudget();
-    if (computeMerxSpent() + shop.cost > budget) return; // over budget
     if (shop.kind === 'common') {
+      if (getMerxSpent() + shop.cost > getMerxBudget()) return;
       if (!Array.isArray(state.commonItems)) state.commonItems = [];
       state.commonItems.push({ name: shop.name });
-    } else {
-      if (!Array.isArray(state.gear)) state.gear = [];
-      // Aspirant picks may originate from another class — carry the origin
-      // so the server can attribute the gear to the right class row, and
-      // the locked-in cost so computeMerxSpent charges the right Merx
-      // (2 for the user's own class, 3 for cross-class).
-      state.gear.push({
-        name: shop.name,
-        kind: 'class',
-        subtype: shop.subtype,
-        cost: shop.cost,
-        origin_class_id: shop.origin_class_id || state.classId,
-        origin_class_name: shop.origin_class_name || ''
-      });
+    } else if (!addSignature(purchaseFor(shop, shop.origin_class_id || state.classId))) {
+      return;
     }
-    renderGearStep();
-    renderSummary();
+    refreshGearViews();
   };
 
   // How many picks of `key` can the user remove? For common items this is
@@ -2639,16 +2787,13 @@ window.CharacterWizard = (function () {
       return n;
     }
     if (key.indexOf('class:') === 0) {
-      const rest = key.slice('class:'.length);
-      const colonAt = rest.indexOf(':');
-      if (colonAt < 0) return 0;
-      const gname = rest.slice(colonAt + 1);
+      const parts = shopKeyParts(key);
+      if (!parts) return 0;
       let n = 0;
-      if (Array.isArray(state.gear)) {
-        const floor = freeBaseCount();
-        state.gear.forEach((g, idx) => {
-          if (idx >= floor && g && g.kind === 'class' && g.name === gname) n++;
-        });
+      const gear = gearList();
+      for (let i = freeBaseCount(); i < gear.length; i++) {
+        const g = gear[i];
+        if (g && g.kind === 'class' && g.name === parts.name && g.class_id === parts.classId) n++;
       }
       return n;
     }
@@ -2666,21 +2811,11 @@ window.CharacterWizard = (function () {
         const it = state.commonItems[i];
         if (it && it.name === cname && !it.custom) { state.commonItems.splice(i, 1); break; }
       }
+      refreshGearViews();
     } else if (key.indexOf('class:') === 0) {
-      if (!Array.isArray(state.gear)) return;
-      const rest = key.slice('class:'.length);
-      const colonAt = rest.indexOf(':');
-      if (colonAt < 0) return;
-      const gname = rest.slice(colonAt + 1);
-      // Stop at freeBaseCount() so the free base slots stay put (advent's
-      // auto-loaded entries are protected; every other economy has none).
-      for (let i = state.gear.length - 1; i >= freeBaseCount(); i--) {
-        const g = state.gear[i];
-        if (g && g.kind === 'class' && g.name === gname) { state.gear.splice(i, 1); break; }
-      }
+      const parts = shopKeyParts(key);
+      if (parts) sellSignature(parts.name, parts.classId);
     }
-    renderGearStep();
-    renderSummary();
   };
 
   // Remove a user-typed custom common item by its index in state.commonItems.
@@ -2690,8 +2825,7 @@ window.CharacterWizard = (function () {
     const it = state.commonItems[idx];
     if (!it || !it.custom) return;
     state.commonItems.splice(idx, 1);
-    renderGearStep();
-    renderSummary();
+    refreshGearViews();
   };
 
   // Add a user-typed "make your own" common item. Trims input, rejects
@@ -2702,13 +2836,11 @@ window.CharacterWizard = (function () {
     let name = (rawName == null ? customCommonItemInput.value : rawName).trim();
     if (!name) return;
     if (name.length > 80) name = name.slice(0, 80);
-    const budget = getMerxBudget();
-    if (computeMerxSpent() + ECONOMY.prices.commonItem > budget) return; // over budget
+    if (getMerxSpent() + ECONOMY.prices.commonItem > getMerxBudget()) return; // over budget
     if (!Array.isArray(state.commonItems)) state.commonItems = [];
     state.commonItems.push({ name: name, custom: true });
     if (rawName == null) customCommonItemInput.value = '';
-    renderGearStep();
-    renderSummary();
+    refreshGearViews();
   };
 
   // Active tab in the shop ('class' | 'common'). Persisted on state so a
@@ -2718,47 +2850,122 @@ window.CharacterWizard = (function () {
     return state.shopTab === 'common' ? 'common' : 'class';
   };
 
-  const renderGearStep = () => {
+  const isOpenSignature = (cell) => !!state.openSignature
+    && state.openSignature.name === cell.entry.name
+    && state.openSignature.classId === cell.classId;
+
+  const renderSignatureCell = (cell) => {
+    const owned = !!findPurchase(cell.entry.name, cell.classId);
+    const tag = owned
+      ? '<span class="tag is-success is-light ml-2">Owned</span>'
+      : '<span class="tag is-warning is-light ml-2">' + signaturePriceFor(cell.classId) + ' Merx</span>';
+    return ''
+      + '<button type="button" class="button is-small is-fullwidth is-justify-content-space-between mb-2'
+      +   (isOpenSignature(cell) ? ' is-active' : '') + '"'
+      +   ' data-signature-name="' + esc(cell.entry.name) + '"'
+      +   ' data-signature-class="' + esc(cell.classId) + '">'
+      +   '<span>' + esc(cell.entry.name) + '</span>' + tag
+      + '</button>';
+  };
+
+  // The purchase controls the entry sits above: buy it, or give it back.
+  // Neither names the Signature -- the drawer only ever shows the open one,
+  // and only the grid's cells carry data-signature-name.
+  const renderPurchaseControls = (cell, purchase) => {
+    if (purchase) {
+      return '<p class="control mt-3"><button type="button"'
+        + ' class="button is-small is-danger is-light" data-signature-sell'
+        + '>Remove</button></p>';
+    }
+    const price = signaturePriceFor(cell.classId);
+    const affordable = affordsChange(price, 1);
+    return '<p class="control mt-3"><button type="button" class="button is-small is-primary"'
+      + (affordable ? '' : ' disabled') + ' data-signature-buy'
+      + '>Buy for ' + price + ' Merx</button></p>';
+  };
+
+  const renderSignatureDrawer = (cells) => {
+    if (!signatureDrawer) return;
+    const open = state.openSignature;
+    const cell = open
+      ? cells.find((x) => x.entry.name === open.name && x.classId === open.classId)
+      : null;
+    if (!cell) {
+      signatureDrawer.hidden = true;
+      signatureDrawer.innerHTML = '';
+      return;
+    }
+    const purchase = findPurchase(cell.entry.name, cell.classId);
+    signatureDrawer.hidden = false;
+    signatureDrawer.innerHTML = SignatureEntry.render(cell.entry, purchase, {
+      figures: ECONOMY,
+      crossClass: crossClassFor(cell.classId),
+      economy: economyForState(),
+      readOnly: false
+    }) + renderPurchaseControls(cell, purchase);
+  };
+
+  // The book prints a Class's Signatures down four columns; `column` and
+  // `position` carry that layout, so the grid groups the cells by column and
+  // keeps each column's printed order. A roster with no column recorded
+  // prints as the single column it arrives as.
+  const renderSignatureGrid = () => {
+    const cells = signatureEntries();
+    if (signaturePanel) signaturePanel.hidden = cells.length === 0;
+    if (!signatureGrid) return;
+    const columns = [];
+    cells.forEach((cell) => {
+      const key = cell.entry.column || 1;
+      let column = columns.find((x) => x.key === key);
+      if (!column) { column = { key: key, cells: [] }; columns.push(column); }
+      column.cells.push(cell);
+    });
+    columns.sort((a, b) => a.key - b.key);
+    signatureGrid.innerHTML = columns.length
+      ? '<div class="columns is-multiline">' + columns.map((column) => '<div class="column">'
+          + column.cells.map(renderSignatureCell).join('') + '</div>').join('') + '</div>'
+      : '';
+    renderSignatureDrawer(cells);
+  };
+
+  // ----- Left column: base gear (auto-loaded) -----
+  // Only the advent economy grants any. The view renders the column for
+  // advent MODE, which an aspirant-content class puts under the aspirant
+  // economy without changing -- so the column is hidden whenever the economy
+  // grants nothing, rather than offering as free what the grid sells.
+  const renderBaseGearList = () => {
+    if (!baseGearList) return;
+    const granted = economyForState() === 'advent';
+    if (baseGearColumn) baseGearColumn.hidden = !granted;
+    if (!granted) {
+      baseGearList.innerHTML = '';
+      return;
+    }
+    const c = selectedClass();
+    if (!c) {
+      baseGearList.innerHTML = '<p class="has-text-grey">No class selected.</p>';
+    } else if (!Array.isArray(c.base_gear) || c.base_gear.length === 0) {
+      baseGearList.innerHTML = '<p class="has-text-grey">This class has no base gear.</p>';
+    } else {
+      baseGearList.innerHTML = c.base_gear.map((g) => {
+        return ''
+          + '<div class="card mb-2">'
+          +   '<div class="card-content p-3">'
+          +     '<div class="content mb-0">'
+          +       '<h5 class="title is-6 mb-1">' + esc(g.name) + '</h5>'
+          +       (g.description_html || '')
+          +     '</div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+    }
+  };
+
+  const renderShop = () => {
     if (!spendList) return;
     const c = selectedClass();
-
-    // ----- Left column: base gear (auto-loaded) -----
-    // Aspirant and aspiring modes hide the base-gear column in the view
-    // (aspirant: no starting gear; aspiring: the picked items are sold from
-    // the shop, not granted free), so baseGearList may be absent from the
-    // DOM. Render it only when present; never block the spend list on its
-    // existence.
-    if (baseGearList) {
-      if (!c) {
-        baseGearList.innerHTML = '<p class="has-text-grey">No class selected.</p>';
-      } else if (!Array.isArray(c.base_gear) || c.base_gear.length === 0) {
-        baseGearList.innerHTML = '<p class="has-text-grey">This class has no base gear.</p>';
-      } else {
-        baseGearList.innerHTML = c.base_gear.map((g) => {
-          return ''
-            + '<div class="card mb-2">'
-            +   '<div class="card-content p-3">'
-            +     '<div class="content mb-0">'
-            +       '<h5 class="title is-6 mb-1">' + esc(g.name) + '</h5>'
-            +       (g.description_html || '')
-            +     '</div>'
-            +   '</div>'
-            + '</div>';
-        }).join('');
-      }
-    }
-
-    // ----- Right column: shop pool -----
-    // note: budget/spent are declared at function scope (not in the else
-    // block) because the budget-display and Next-button sections below read
-    // them; the original `var` hoisted them function-wide with the same
-    // undefined-when-pool-is-empty behavior preserved here.
     const pool = getShopPool();
-    // budget/spent are derived up front (not just inside the pool branch) so
-    // the budget display and Next-button sections always read sane values,
-    // even when the pool is empty.
-    const budget = getMerxBudget();
-    const spent = computeMerxSpent();
+    const remaining = getMerxBudget() - getMerxSpent();
 
     // ----- Step 4 gear filter controls -----
     // Two layered filters, both keyed off state.gearSearch /
@@ -2774,9 +2981,8 @@ window.CharacterWizard = (function () {
       || !classFilterId
       || it.origin_class_id === classFilterId;
 
-    // Populate the class filter dropdown once per (selected class, pool)
-    // change. We refresh the options on every render — cheap, and it keeps
-    // the choices in sync if the user picks a different class.
+    // Refresh the class filter's options on every render — cheap, and it
+    // keeps the choices in sync when the user picks a different class.
     if (gearClassFilterEl && gearClassFilterWrap) {
       const classNames = [];
       const seen = new Set();
@@ -2800,113 +3006,129 @@ window.CharacterWizard = (function () {
       }
     }
 
-    if (pool.length === 0) {
-      spendList.innerHTML = '<p class="has-text-grey">Nothing available to spend Merx on.</p>';
+    const tab = activeShopTab();
+    // Pre-filter: kind matches active tab, plus the two search filters.
+    const filtered = pool.filter((it) => it.kind === tab && matchesSearch(it) && matchesClass(it));
+    const renderCard = (it) => {
+        const picked = countPicks(it.key);
+        // A Signature takes a cap slot as well as Merx, so both gates decide
+        // whether this card can still be clicked -- the same pair
+        // pickShopItem enforces.
+        const canAfford = affordsChange(it.cost, it.kind === 'class' ? 1 : 0);
+        const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
+        const removable = removablePicks(it.key);
+        const removeCtl = removable
+          ? ' <a class="gear-remove has-text-danger ml-2" data-shop-remove="' + esc(it.key) + '">Remove</a>'
+          : '';
+        const status = (picked
+          ? '<span class="tag is-success is-light">Picked ×' + picked + '</span>'
+          : (canAfford
+              ? '<span class="has-text-grey">Click to add</span>'
+              : (remaining >= it.cost
+                  ? '<span class="has-text-grey">No Signature slots left</span>'
+                  : '<span class="has-text-grey">Not enough Merx</span>')))
+          + removeCtl;
+        // On class-gear cards, badge the subtype (Base / Elective) so the
+        // user knows which items are free on the left and which are paid.
+        let subtypeTag = '';
+        if (it.kind === 'class' && it.subtype) {
+          const subtypeLabel = it.subtype === 'base' ? 'Base' : 'Elective';
+          const subtypeCls = it.subtype === 'base' ? 'is-success is-light' : 'is-info is-light';
+          subtypeTag = '<span class="tag ' + subtypeCls + ' mr-1">' + subtypeLabel + '</span>';
+        }
+        // Class items also get a small "from <Class>" tag so the user
+        // knows which class a signature item originates from — important
+        // in aspirant mode where many classes share the pool.
+        let originTag = '';
+        if (it.kind === 'class' && it.origin_class_name) {
+          originTag = '<span class="tag is-light mr-1">' + esc(it.origin_class_name) + '</span>';
+        }
+        return ''
+          + '<div class="' + cardCls + '" data-shop-key="' + esc(it.key) + '">'
+          +   '<div class="card-content p-3">'
+          +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
+          +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
+          +       '<span class="tag is-warning is-light">' + it.cost + ' Merx</span>'
+          +     '</div>'
+          +     '<div class="mb-1">' + subtypeTag + originTag + '</div>'
+          +     '<div class="content mb-1 is-size-7">' + (it.description_html || '') + '</div>'
+          +     '<div class="is-size-7">' + status + '</div>'
+          +   '</div>'
+          + '</div>';
+    };
+    let cardsHtml = '';
+    if (tab === 'class' && c && c.id) {
+      // Own-class cards come first where there are any — the advent economy
+      // is the one that sells them here; the grid has them otherwise.
+      const yours = filtered.filter((it) => it.origin_class_id === c.id);
+      const others = filtered.filter((it) => it.origin_class_id !== c.id);
+      if (yours.length > 0) {
+        cardsHtml += '<h5 class="title is-6 mt-2 mb-2">Your class — ' + esc(c.name) + '</h5>';
+        cardsHtml += yours.map(renderCard).join('');
+      }
+      if (others.length > 0) {
+        cardsHtml += '<h5 class="title is-6 mt-4 mb-2">Other classes</h5>';
+        cardsHtml += others.map(renderCard).join('');
+      }
     } else {
-      const tab = activeShopTab();
-      // Pre-filter: kind matches active tab, plus the two search filters.
-      const filtered = pool.filter((it) => it.kind === tab && matchesSearch(it) && matchesClass(it));
-      const remaining = budget - spent;
-      const renderCard = (it) => {
-          const picked = countPicks(it.key);
-          const canAfford = remaining >= it.cost;
-          const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
-          const removable = removablePicks(it.key);
-          const removeCtl = removable
-            ? ' <a class="gear-remove has-text-danger ml-2" data-shop-remove="' + esc(it.key) + '">Remove</a>'
-            : '';
-          const status = (picked
-            ? '<span class="tag is-success is-light">Picked ×' + picked + '</span>'
-            : (canAfford
-                ? '<span class="has-text-grey">Click to add</span>'
-                : '<span class="has-text-grey">Not enough Merx</span>'))
-            + removeCtl;
-          // On class-gear cards, badge the subtype (Base / Elective) so the
-          // user knows which items are free on the left and which are paid.
-          let subtypeTag = '';
-          if (it.kind === 'class' && it.subtype) {
-            const subtypeLabel = it.subtype === 'base' ? 'Base' : 'Elective';
-            const subtypeCls = it.subtype === 'base' ? 'is-success is-light' : 'is-info is-light';
-            subtypeTag = '<span class="tag ' + subtypeCls + ' mr-1">' + subtypeLabel + '</span>';
-          }
-          // Class items also get a small "from <Class>" tag so the user
-          // knows which class a signature item originates from — important
-          // in aspirant mode where many classes share the pool.
-          let originTag = '';
-          if (it.kind === 'class' && it.origin_class_name) {
-            originTag = '<span class="tag is-light mr-1">' + esc(it.origin_class_name) + '</span>';
-          }
-          return ''
-            + '<div class="' + cardCls + '" data-shop-key="' + esc(it.key) + '">'
-            +   '<div class="card-content p-3">'
-            +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
-            +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
-            +       '<span class="tag is-warning is-light">' + it.cost + ' Merx</span>'
-            +     '</div>'
-            +     '<div class="mb-1">' + subtypeTag + originTag + '</div>'
-            +     '<div class="content mb-1 is-size-7">' + (it.description_html || '') + '</div>'
-            +     '<div class="is-size-7">' + status + '</div>'
-            +   '</div>'
-            + '</div>';
-      };
-      let cardsHtml = '';
-      if (tab === 'class' && c && c.id) {
-        // Aspirant-style pool: section "Your class — <name>" first, then
-        // "Other classes" below. Search/class-filter already happened above,
-        // so each section's items are pre-filtered.
-        const yours = filtered.filter((it) => it.origin_class_id === c.id);
-        const others = filtered.filter((it) => it.origin_class_id !== c.id);
-        if (yours.length > 0) {
-          cardsHtml += '<h5 class="title is-6 mt-2 mb-2">Your class — ' + esc(c.name) + '</h5>';
-          cardsHtml += yours.map(renderCard).join('');
-        }
-        if (others.length > 0) {
-          cardsHtml += '<h5 class="title is-6 mt-4 mb-2">Other classes</h5>';
-          cardsHtml += others.map(renderCard).join('');
-        }
-      } else {
-        cardsHtml = filtered.map(renderCard).join('');
-      }
-      // Custom "make your own" common items aren't in the shop pool, so render
-      // them here (Common Items tab only) as already-picked, removable cards.
-      if (tab === 'common' && Array.isArray(state.commonItems)) {
-        cardsHtml += state.commonItems.map((it, idx) => {
-          if (!it || !it.custom) return '';
-          return ''
-            + '<div class="card mb-2 gear-shop-item is-picked">'
-            +   '<div class="card-content p-3">'
-            +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
-            +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
-            +       '<span class="tag is-warning is-light">' + ECONOMY.prices.commonItem + ' Merx</span>'
-            +     '</div>'
-            +     '<div class="mb-1"><span class="tag is-link is-light mr-1">Custom</span></div>'
-            +     '<div class="is-size-7"><span class="tag is-success is-light">Picked</span>'
-            +       ' <a class="gear-remove has-text-danger ml-2" data-custom-remove="' + idx + '">Remove</a></div>'
-            +   '</div>'
-            + '</div>';
-        }).join('');
-      }
-      spendList.innerHTML = cardsHtml || '<p class="has-text-grey">No items match your search.</p>';
+      cardsHtml = filtered.map(renderCard).join('');
     }
+    // Custom "make your own" common items aren't in the shop pool, so render
+    // them here (Common Items tab only) as already-picked, removable cards.
+    if (tab === 'common' && Array.isArray(state.commonItems)) {
+      cardsHtml += state.commonItems.map((it, idx) => {
+        if (!it || !it.custom) return '';
+        return ''
+          + '<div class="card mb-2 gear-shop-item is-picked">'
+          +   '<div class="card-content p-3">'
+          +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
+          +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
+          +       '<span class="tag is-warning is-light">' + ECONOMY.prices.commonItem + ' Merx</span>'
+          +     '</div>'
+          +     '<div class="mb-1"><span class="tag is-link is-light mr-1">Custom</span></div>'
+          +     '<div class="is-size-7"><span class="tag is-success is-light">Picked</span>'
+          +       ' <a class="gear-remove has-text-danger ml-2" data-custom-remove="' + idx + '">Remove</a></div>'
+          +   '</div>'
+          + '</div>';
+      }).join('');
+    }
+    if (!cardsHtml) {
+      cardsHtml = searchText
+        ? '<p class="has-text-grey">No items match your search.</p>'
+        : (tab === 'class'
+            ? '<p class="has-text-grey">Your class\'s Signatures are in the grid above.</p>'
+            : '<p class="has-text-grey">Nothing available to spend Merx on.</p>');
+    }
+    spendList.innerHTML = cardsHtml;
 
     // ----- Shop tab state + counts -----
     shopTabs.forEach((li) => {
       const t = li.getAttribute('data-shop-tab');
       li.classList.toggle('is-active', t === activeShopTab());
     });
-    let commonCount = 0, classCount = 0;
+    let commonCount = 0;
     if (Array.isArray(state.commonItems)) commonCount = state.commonItems.length;
-    if (Array.isArray(state.gear)) {
-      // The badge shows "picks from the shop" — i.e., class gear beyond
-      // freeBaseCount(), which is the same thing computeMerxSpent charges.
-      classCount = Math.max(0, state.gear.length - freeBaseCount());
-    }
+    // The class badge shows the Signatures the player bought — everything in
+    // state.gear past the granted Defaults, wherever it was bought.
+    const classCount = Math.max(0, gearList().length - freeBaseCount());
     if (commonCountBadge) commonCountBadge.textContent = commonCount;
     if (classCountBadge) classCountBadge.textContent = classCount;
+  };
 
-    // ----- Merx budget display -----
+  // ----- Merx and Signature Cap readouts, and what they gate -----
+  const renderGearReadouts = () => {
+    const budget = getMerxBudget();
+    const spent = getMerxSpent();
     if (merxSpentEl) merxSpentEl.textContent = String(spent);
     if (merxBudgetEl) merxBudgetEl.textContent = String(budget);
+
+    // The cap readout is meaningless where the economy sets no cap.
+    const cap = signatureCap();
+    if (slotsReadout) slotsReadout.hidden = cap === null;
+    if (cap !== null) {
+      if (slotsUsedEl) slotsUsedEl.textContent = String(getSlotsUsed());
+      if (slotsCapEl) slotsCapEl.textContent = String(cap);
+    }
 
     // ----- Custom common item form gating -----
     // Disable the input + add button once the user is out of merx so they
@@ -2928,11 +3150,18 @@ window.CharacterWizard = (function () {
     // full 12-Merx spend on top of a free allotment the economy never granted.
     if (step4Next) {
       if (economyForState() === 'advent' || economyForState() === 'aspiring') {
-        step4Next.disabled = spent < getMerxBudget();
+        step4Next.disabled = spent < budget;
       } else {
         step4Next.disabled = false;
       }
     }
+  };
+
+  const renderGearStep = () => {
+    renderBaseGearList();
+    renderSignatureGrid();
+    renderShop();
+    renderGearReadouts();
   };
 
   // Auto-load the selected class's base gear into state.gear if no class
@@ -2957,33 +3186,35 @@ window.CharacterWizard = (function () {
     // stay, but the brief "safe" rule from the prior round (clear in
     // advent) is kept: the user is re-entering step 1 and should re-pick.
     state.gear = [];
+    state.openSignature = null;
     if (DATA.mode === 'advent') {
       state.commonItems = [];
     }
     // Only the advent economy grants free base gear. An aspirant-content
     // class picked under advent mode resolves to the aspirant economy
     // (economyFor, util/merx-economy.js) and has no free allotment, so
-    // nothing is auto-loaded for it -- the player buys every item from the
-    // shop pool instead, at the own-class Signature price
-    // (getShopPool/signaturePriceFor already price it that way).
+    // nothing is auto-loaded for it -- the player buys every item instead,
+    // from the printed grid at the own-class Signature price.
     if (economyForState() !== 'advent') return;
     const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.
     // All gear picks share kind 'class' — the cost: 0 stamp below is what
-    // freeBaseCount() (in computeMerxSpent and elsewhere) counts to tell
-    // free base slots apart from paid picks.
-    // Stamp cost: 0 on the auto-loaded base so computeMerxSpent treats
-    // them as free even if a user picks a duplicate of one of them later
-    // (the duplicate carries its own price from the pool and so charges
-    // correctly; the original free slot stays free).
+    // freeBaseCount() counts to tell free base slots apart from paid picks.
+    // Stamp cost: 0 on the auto-loaded base so getMerxSpent treats them as
+    // free even if a user picks a duplicate of one of them later (the
+    // duplicate is priced like any other purchase; the original free slot
+    // stays free).
     const additions = base.map((g) => {
       return {
         name: g.name,
         kind: 'class',
         subtype: 'base',
         cost: 0,
-        origin_class_id: c.id,
-        origin_class_name: c.name || ''
+        owned: true,
+        enchantment: null,
+        mods: [],
+        class_id: c.id,
+        class_name: c.name || ''
       };
     });
     state.gear = additions.concat(state.gear);
@@ -3101,6 +3332,111 @@ window.CharacterWizard = (function () {
       pickShopItem(card.getAttribute('data-shop-key'));
     });
   }
+  // Grid clicks open and close the entry drawer; nothing is bought by
+  // opening one.
+  if (signatureGrid) {
+    signatureGrid.addEventListener('click', (e) => {
+      const cell = e.target.closest('[data-signature-name]');
+      if (!cell) return;
+      e.preventDefault();
+      const name = cell.getAttribute('data-signature-name');
+      const classId = cell.getAttribute('data-signature-class');
+      const open = state.openSignature;
+      state.openSignature = (open && open.name === name && open.classId === classId)
+        ? null
+        : { name: name, classId: classId };
+      renderGearStep();
+    });
+  }
+
+  // Reads the drawer's text fields into the open purchase. The Enchantment
+  // name and description are only read when a Custom is the one chosen; the
+  // Mod rows are read whenever the entry offers them.
+  const readDrawerFields = () => {
+    const open = state.openSignature;
+    if (!open || !signatureDrawer) return;
+    const purchase = findPurchase(open.name, open.classId);
+    if (!purchase) return;
+    if (purchase.enchantment && purchase.enchantment.source === 'custom') {
+      const nameEl = signatureDrawer.querySelector('[data-custom-name]');
+      const descEl = signatureDrawer.querySelector('[data-custom-description]');
+      setEnchantment(open.name, {
+        source: 'custom',
+        name: nameEl ? nameEl.value : '',
+        description: descEl ? descEl.value : ''
+      }, open.classId);
+    }
+    const rows = Array.from(signatureDrawer.querySelectorAll('[data-mod-index]'));
+    if (rows.length) {
+      setMods(open.name, open.classId, rows.map((row) => {
+        const nameEl = row.querySelector('[data-mod-name]');
+        const descEl = row.querySelector('[data-mod-description]');
+        return {
+          name: nameEl ? nameEl.value : '',
+          description: descEl ? descEl.value : ''
+        };
+      }));
+    }
+  };
+
+  // What the Enchantment radios mean. Picking Custom keeps whatever text is
+  // already typed, so switching away and back does not wipe it.
+  const enchantmentChoice = (value, purchase) => {
+    if (value === 'default') return { source: 'default' };
+    if (value !== 'custom') return null;
+    const current = (purchase && purchase.enchantment) || {};
+    return {
+      source: 'custom',
+      name: current.source === 'custom' ? current.name : '',
+      description: current.source === 'custom' ? current.description : ''
+    };
+  };
+
+  const isDrawerTextField = (el) => !!el && !!el.closest(
+    '[data-custom-name],[data-custom-description],[data-mod-name],[data-mod-description]'
+  );
+
+  if (signatureDrawer) {
+    signatureDrawer.addEventListener('click', (e) => {
+      const open = state.openSignature;
+      if (!open) return;
+      if (e.target.closest('[data-signature-buy]')) {
+        e.preventDefault();
+        buySignature(open.name, open.classId);
+        return;
+      }
+      if (e.target.closest('[data-signature-sell]')) {
+        e.preventDefault();
+        sellSignature(open.name, open.classId);
+      }
+    });
+    signatureDrawer.addEventListener('change', (e) => {
+      const open = state.openSignature;
+      if (!open) return;
+      const radio = e.target.closest('input[name="enchantment"]');
+      if (radio) {
+        setEnchantment(open.name, enchantmentChoice(radio.value,
+          findPurchase(open.name, open.classId)), open.classId);
+        refreshGearViews();
+        return;
+      }
+      // A committed text field: re-render, which both settles the word count
+      // and puts back what a refused change (an unaffordable Mod) left typed.
+      if (isDrawerTextField(e.target)) {
+        readDrawerFields();
+        refreshGearViews();
+      }
+    });
+    signatureDrawer.addEventListener('input', (e) => {
+      // Typed text lands on the purchase as it is typed, but the drawer is
+      // not re-rendered: replacing the field mid-word would take the focus
+      // out of it. Only the readouts a Mod's price moves are refreshed.
+      if (!isDrawerTextField(e.target)) return;
+      readDrawerFields();
+      renderGearReadouts();
+    });
+  }
+
   shopTabs.forEach((li) => {
     li.addEventListener('click', () => {
       const t = li.getAttribute('data-shop-tab');
@@ -3309,14 +3645,12 @@ window.CharacterWizard = (function () {
     // Class gear: each entry becomes a class_gear row via setCharacterGear.
     // The shape matches the model's normalizeGearItems ({name, class_id?}).
     // For aspirant and aspiring modes a pick may originate from another
-    // class — use that origin as the class_id so the gear is attributed
-    // correctly server-side. Aspiring's step-4 shop records origin_class_id
-    // on every pick, so the generic branch handles it like the others.
+    // class — every purchase records the class that prints it, so the
+    // attribution is the entry's own class_id wherever it was bought.
     if (Array.isArray(state.gear) && state.gear.length) {
       payload.gear = state.gear.map((g) => {
         if (!g || !g.name) return null;
-        const cid = g.origin_class_id || state.classId;
-        return { name: g.name, class_id: cid };
+        return { name: g.name, class_id: g.class_id || state.classId };
       }).filter(Boolean);
     }
     // Common items: array of strings, normalized server-side.
@@ -3483,8 +3817,13 @@ window.CharacterWizard = (function () {
     onSubmitSuccess,
     getState: () => state,
     getMerxBudget,
+    getMerxSpent,
+    getSlotsUsed,
     getTotalPoints,
     getFreeBaseCount: freeBaseCount,
-    syncBaseGear
+    syncBaseGear,
+    renderGearStep,
+    buySignature,
+    setEnchantment
   };
 })();

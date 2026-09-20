@@ -279,17 +279,43 @@
   <h3 class="title is-4">4. Gear Selection</h3>
   <p class="has-text-grey is-size-7 mb-3">
     {{#if (eq mode 'aspiring')}}
-      Your picked items are sold here as your class's elective gear at <strong>2 Merx</strong> each. Spend your <strong>10 Merx</strong> across them and common items — duplicates are allowed.
+      The items you picked are your class's own Signatures: {{economy.prices.signature.own}} Merx each, and each may take its printed Enchantment for {{economy.prices.defaultEnchantment.own}} more. Spend your {{economy.grants.aspiring}} Merx across them and common items ({{economy.prices.commonItem}} Merx).
     {{else if (eq mode 'aspirant')}}
-      Aspirant mode: no starting gear. You have <strong>12 Merx</strong> to spend on any combination of common items (1 Merx), your own class's signature items (2 Merx), or another class's (3 Merx). Duplicates are allowed.
+      Aspirant mode: no starting gear. You have {{economy.grants.aspirant}} Merx. Your class's Signatures are printed below at {{economy.prices.signature.own}} Merx each; another class's cost {{economy.prices.signature.cross}} Merx, and common items {{economy.prices.commonItem}} Merx. Open a Signature to enchant it or fit it with Mods.
     {{else}}
-      Your class's base gear is included for free on the left. You have <strong>2 Merx</strong> to spend on the right — pick any combination of common items (1 Merx) or elective signature items (2 Merx). Duplicates are allowed.
+      Your class's base gear is included for free on the left. You have {{economy.grants.advent}} Merx to spend on the right — pick any combination of common items ({{economy.prices.commonItem}} Merx) or elective signature items ({{economy.prices.signature.own}} Merx). Duplicates are allowed.
     {{/if}}
   </p>
 
+  <div class="level is-mobile mb-3">
+    <div class="level-left">
+      <div class="level-item">
+        <span class="tag is-warning is-light">
+          <span id="merxSpent">0</span> / <span id="merxBudget">{{lookup economy.grants mode}}</span> Merx
+        </span>
+      </div>
+      <div class="level-item" id="slotsReadout" hidden>
+        <span class="tag is-info is-light">
+          <span id="slotsUsed">0</span> / <span id="slotsCap">0</span> Signature slots
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div id="signaturePanel" class="mb-4" hidden>
+    <h4 class="title is-5">Your Signature Items</h4>
+    <p class="has-text-grey is-size-7 mb-2">Open one to read its entry and buy it, its Enchantment and its Mods.</p>
+    <div id="signatureGrid">
+      <!-- The class's printed Signature grid, rendered by character-wizard.js -->
+    </div>
+    <div id="signatureDrawer" class="box" hidden>
+      <!-- The open Signature's entry, rendered by public/js/signature-entry.js -->
+    </div>
+  </div>
+
   <div class="columns is-variable is-4">
     {{#unless (or (eq mode 'aspirant') (eq mode 'aspiring'))}}
-    <div class="column is-half">
+    <div class="column is-half" id="baseGearColumn">
       <h4 class="title is-5">Base Gear <span class="tag is-success is-light ml-2">Free</span></h4>
       <div id="baseGearList">
         <!-- Auto-loaded base gear rendered by character-wizard.js -->
@@ -297,12 +323,7 @@
     </div>
     {{/unless}}
     <div class="column {{#if (or (eq mode 'aspirant') (eq mode 'aspiring'))}}is-full{{else}}is-half{{/if}}">
-      <h4 class="title is-5">
-        Spend Merx
-        <span class="tag is-warning is-light ml-2">
-          <span id="merxSpent">0</span> / <span id="merxBudget">{{#if (eq mode 'aspiring')}}10{{else if (eq mode 'aspirant')}}12{{else}}2{{/if}}</span> Merx
-        </span>
-      </h4>
+      <h4 class="title is-5">Spend Merx</h4>
       <div class="field is-grouped mb-2">
         <p class="control is-expanded">
           <input class="input is-small" type="search" id="gearSearch" placeholder="Search items by name…" autocomplete="off">
@@ -326,14 +347,14 @@
           <input class="input is-small" type="text" id="customCommonItemInput" placeholder="Make your own common item (e.g. Lucky Coin)" maxlength="80">
         </div>
         <div class="control">
-          <button type="button" class="button is-small is-link" id="customCommonItemAdd">Add (1 Merx)</button>
+          <button type="button" class="button is-small is-link" id="customCommonItemAdd">Add ({{economy.prices.commonItem}} Merx)</button>
         </div>
       </div>
       <div id="spendList">
         <!-- Common items / class gear rendered by character-wizard.js -->
       </div>
       <p class="has-text-grey is-size-7 mt-2">
-        Click an item to add it to your loadout. Each pick costs the listed Merx. Duplicates are allowed, and you can name your own common item above.
+        Click an item to add it to your loadout. Each pick costs the listed Merx, and you can name your own common item above.
       </p>
     </div>
   </div>
@@ -402,4 +423,5 @@
 </section>
 
 <script src="/js/character-common.js" defer></script>
+<script src="/js/signature-entry.js" defer></script>
 <script src="/js/character-wizard.js" defer></script>

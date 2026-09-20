@@ -19,9 +19,10 @@
 // builder) live in test/helpers/wizard-fixture.js so other test files can
 // reuse them.
 const { test, expect, describe } = require('bun:test');
-const { bootWizard, fixture } = require('./helpers/wizard-fixture');
+const { bootWizard, fixture, twelveItems, sixItems } = require('./helpers/wizard-fixture');
 const { economyFigures } = require('../util/merx-economy');
 const { statCapFigures } = require('../util/stat-caps');
+const { MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
 
 const STAT_LIST = [
   'vitality', 'might', 'resilience', 'spirit',
@@ -452,4 +453,228 @@ test('no economy or stat figure is written down in the wizard client', () => {
   ]) {
     expect(source).not.toContain(name);
   }
+});
+
+describe('step 4 offers the whole class and its purchases', () => {
+  const FIGURES = economyFigures();
+  const twelveNames = () => twelveItems().map((g) => g.name);
+  const v1Class = () => ({
+    id: 'c-v1',
+    name: 'Gunslinger',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: twelveItems(),
+    base_gear: [],
+    abilities: [],
+    advanced_abilities: []
+  });
+  const otherV1Class = () => ({
+    id: 'c-other',
+    name: 'Drifter',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: twelveItems(),
+    base_gear: [],
+    abilities: [],
+    advanced_abilities: []
+  });
+  const adventClass = () => ({
+    id: 'c-advent',
+    name: 'Vizier',
+    content_format: 'advent',
+    stat_spread: {},
+    gear: [],
+    class_gear: sixItems(),
+    base_gear: sixItems().slice(0, 3).map((g) => ({ name: g.name })),
+    abilities: [],
+    advanced_abilities: []
+  });
+  // An aspiring character has no class row: its Signatures are the three
+  // items picked in the step-1 builder, which pg. 90 treats as its own.
+  const seedAspiringPicks = (wizard, names) => {
+    wizard.getState().classBuild.classGear = names.map((name) => ({
+      classId: 'c-v1', itemName: name
+    }));
+  };
+
+  test('the grid lists every Signature the class carries, in printed order', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.renderGearStep();
+    const names = [...document.querySelectorAll('[data-signature-name]')]
+      .map((el) => el.getAttribute('data-signature-name'));
+    expect(names).toEqual(twelveNames());
+  });
+
+  test('buying a Signature and its Default spends both prices', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+    expect(wizard.getMerxSpent())
+      .toBe(FIGURES.prices.signature.own + FIGURES.prices.defaultEnchantment.own);
+  });
+
+  test('a Default stores its source alone -- the text stays on the class', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+    const bought = wizard.getState().gear[0];
+    expect(bought.enchantment).toEqual({ source: 'default' });
+    expect(bought.class_id).toBe('c-v1');
+    expect(bought.mods).toEqual([]);
+  });
+
+  test('an enchanted Signature uses two of the twelve slots', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+    expect(wizard.getSlotsUsed()).toBe(2);
+  });
+
+  test('a purchase that would breach the budget is refused', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    for (const name of twelveNames()) wizard.buySignature(name);
+    expect(wizard.getMerxSpent()).toBeLessThanOrEqual(wizard.getMerxBudget());
+    expect(wizard.getState().gear)
+      .toHaveLength(FIGURES.grants.aspirant / FIGURES.prices.signature.own);
+  });
+
+  test('a cross-class Signature is priced at the +1 tier', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant', classes: [v1Class(), otherV1Class()]
+    }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Sharps Rifle', 'c-other');
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.cross);
+  });
+
+  // The grid sells the character's own class; the shop's Signature tab is
+  // what is left, so an own-class item is never on sale twice.
+  test('the shop offers the other classes, not the one the grid holds', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant', classes: [v1Class(), otherV1Class()]
+    }));
+    wizard.getState().classId = 'c-v1';
+    wizard.renderGearStep();
+    const shop = document.getElementById('spendList').innerHTML;
+    expect(shop).toContain('Drifter');
+    expect(shop).not.toContain('Gunslinger');
+  });
+
+  test('an aspiring pick is own-class priced despite its origin (pg. 90)', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+    seedAspiringPicks(wizard, ['Cowboy Hat']);
+    wizard.buySignature('Cowboy Hat', 'c-v1');
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+  });
+
+  test('an aspiring grid holds the three picks the builder made', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+    seedAspiringPicks(wizard, ['Cowboy Hat', 'Lasso', 'Tin Star']);
+    wizard.renderGearStep();
+    const names = [...document.querySelectorAll('[data-signature-name]')]
+      .map((el) => el.getAttribute('data-signature-name'));
+    expect(names).toEqual(['Cowboy Hat', 'Lasso', 'Tin Star']);
+  });
+
+  test('an advent character sees no Enchantment controls', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    wizard.getState().classId = 'c-advent';
+    wizard.renderGearStep();
+    expect(document.body.innerHTML).not.toContain('Default Enchantment');
+    // The advent economy prints no entry to open: there is no grid, and its
+    // own class is sold as shop cards instead.
+    expect(document.querySelectorAll('[data-signature-name]')).toHaveLength(0);
+    expect(document.getElementById('signaturePanel').hidden).toBe(true);
+    expect(document.getElementById('spendList').innerHTML).toContain('Cowboy Hat');
+  });
+
+  // The advent economy grants three Defaults and 2 Merx; the grant is not a
+  // purchase, so the free run at the front of state.gear is never priced.
+  test('advent still spends nothing on the Defaults it is granted', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    wizard.getState().classId = 'c-advent';
+    wizard.syncBaseGear();
+    expect(wizard.getMerxSpent()).toBe(0);
+    wizard.renderGearStep();
+    expect(document.getElementById('step4Next').disabled).toBe(true);
+  });
+
+
+  // The wizard mounts the shared component: opening a cell is what puts the
+  // printed entry and its controls on the page.
+  test('opening a cell reveals the entry the component renders', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.renderGearStep();
+    document.querySelector('[data-signature-name="Cowboy Hat"]').click();
+    const drawer = document.getElementById('signatureDrawer');
+    expect(drawer.hidden).toBe(false);
+    expect(drawer.innerHTML).toContain('Cowboy Hat Enchantment');
+    expect(drawer.innerHTML).toContain('Default Enchantment');
+    // Enchantment and Mod controls belong to a Signature the character owns.
+    expect(drawer.querySelector('input[name="enchantment"]')).toBeNull();
+    expect(drawer.querySelector('[data-signature-buy]')).not.toBeNull();
+  });
+
+  test('the drawer buys the Signature and then its Default', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.renderGearStep();
+    document.querySelector('[data-signature-name="Cowboy Hat"]').click();
+    document.querySelector('[data-signature-buy]').click();
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+
+    const drawer = document.getElementById('signatureDrawer');
+    const defaultRadio = drawer.querySelector('input[name="enchantment"][value="default"]');
+    defaultRadio.checked = true;
+    defaultRadio.dispatchEvent(new window.Event('change', { bubbles: true }));
+    expect(wizard.getState().gear[0].enchantment).toEqual({ source: 'default' });
+    expect(document.getElementById('merxSpent').textContent)
+      .toBe(String(FIGURES.prices.signature.own + FIGURES.prices.defaultEnchantment.own));
+  });
+
+  // pg. 8: the cap is counted in slots, and an Enchantment takes one. It is
+  // judged apart from the Merx, exactly as validateEconomyLimits judges it.
+  test('an Enchantment that would breach the Signature Cap is refused, Merx in hand', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    const state = wizard.getState();
+    state.classId = 'c-v1';
+    const cap = FIGURES.signatureCap.aspirant;
+    const wanted = cap * FIGURES.prices.signature.own + FIGURES.prices.defaultEnchantment.own;
+    // Twelve Signatures cost more than the creation grant, so the rest is
+    // mission income -- which needs the levels to have run those missions.
+    state.level = 11;
+    state.successfulMissions = Math.ceil(
+      (wanted - FIGURES.grants.aspirant) / MERX_PER_MISSION_SUCCESS
+    );
+    for (const name of twelveNames()) wizard.buySignature(name);
+    expect(wizard.getSlotsUsed()).toBe(cap);
+    expect(wizard.getMerxBudget() - wizard.getMerxSpent())
+      .toBeGreaterThanOrEqual(FIGURES.prices.defaultEnchantment.own);
+
+    expect(wizard.setEnchantment('Cowboy Hat', { source: 'default' })).toBe(false);
+    expect(wizard.getSlotsUsed()).toBe(cap);
+  });
+
+  // pg. 85: an economy with no cap has no readout to show.
+  test('the slot readout appears only where the economy caps Signatures', () => {
+    const aspirant = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    aspirant.getState().classId = 'c-v1';
+    aspirant.renderGearStep();
+    expect(document.getElementById('slotsReadout').hidden).toBe(false);
+    expect(document.getElementById('slotsCap').textContent)
+      .toBe(String(FIGURES.signatureCap.aspirant));
+
+    const advent = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    advent.getState().classId = 'c-advent';
+    advent.renderGearStep();
+    expect(document.getElementById('slotsReadout').hidden).toBe(true);
+  });
 });

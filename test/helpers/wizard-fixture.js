@@ -36,6 +36,10 @@ const COMMON_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-common.js'),
   'utf8'
 );
+const SIGNATURE_ENTRY_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'public', 'js', 'signature-entry.js'),
+  'utf8'
+);
 const WIZARD_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-wizard.js'),
   'utf8'
@@ -43,9 +47,10 @@ const WIZARD_SOURCE = fs.readFileSync(
 
 // Minimal fixture markup: only the ids character-wizard.js reads via
 // getElementById/querySelectorAll on the paths these tests exercise (init,
-// step 1's kiosk shell + Next button, step 2's personality/stat panel, and
-// the always-present summary level input). Steps 3-5 are never visited here,
-// so their elements are omitted -- character-wizard.js guards every lookup
+// step 1's kiosk shell + Next button, step 2's personality/stat panel, step
+// 4's Signature grid, drawer, shop and readouts, and the always-present
+// summary level input). Steps 3 and 5 are never visited here, so their
+// elements are omitted -- character-wizard.js guards every lookup
 // with `if (el)` except the step-1 kiosk internals, which only run when
 // `DATA.mode !== 'aspiring'` and are included below for that case.
 const buildHtml = () => `
@@ -103,12 +108,32 @@ const buildHtml = () => `
     <div id="statGrid" hidden></div>
     <button id="step2Next"></button>
   </section>
+
+  <section class="wizard-step" data-step-panel="4" hidden>
+    <span id="merxSpent">0</span> / <span id="merxBudget">0</span>
+    <span id="slotsReadout" hidden><span id="slotsUsed">0</span> / <span id="slotsCap">0</span></span>
+    <div id="signaturePanel" hidden>
+      <div id="signatureGrid"></div>
+      <div id="signatureDrawer" hidden></div>
+    </div>
+    <div id="baseGearList"></div>
+    <input id="gearSearch">
+    <p id="gearClassFilterWrap" hidden><select id="gearClassFilter"></select></p>
+    <ul>
+      <li data-shop-tab="class"><span id="classCountBadge">0</span></li>
+      <li data-shop-tab="common"><span id="commonCountBadge">0</span></li>
+    </ul>
+    <input id="customCommonItemInput">
+    <button id="customCommonItemAdd"></button>
+    <div id="spendList"></div>
+    <button id="step4Next"></button>
+  </section>
 `;
 
 // Boots a fresh jsdom window, embeds `data` as the wizard's server-supplied
-// DATA, runs character-common.js then character-wizard.js against it (both
-// are `window.X = (function(){...})()` browser IIFEs -- no exports to
-// require), and returns the exposed CharacterWizard handle.
+// DATA, runs character-common.js, signature-entry.js and character-wizard.js
+// against it (all three are `window.X = (function(){...})()` browser IIFEs --
+// no exports to require), and returns the exposed CharacterWizard handle.
 const bootWizard = (data) => {
   const dom = new JSDOM(`<!doctype html><html><body>${buildHtml()}</body></html>`, {
     url: `http://localhost/characters/wizard?mode=${data.mode}`,
@@ -128,6 +153,10 @@ const bootWizard = (data) => {
 
   new Function(COMMON_SOURCE)();
   globalThis.CharacterCommon = window.CharacterCommon;
+  // The wizard reads window.SignatureEntry when it mounts, so the component
+  // goes in first -- the same order views/character-wizard.handlebars loads
+  // the two script tags in.
+  new Function(SIGNATURE_ENTRY_SOURCE)();
 
   new Function(WIZARD_SOURCE)();
 

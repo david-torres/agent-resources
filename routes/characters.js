@@ -294,6 +294,9 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     statList,
     personalityMap,
     commonItemsHtml,
+    // The same figures the client reads, for the copy the server renders:
+    // a price named in prose is the served one, never a second copy.
+    economy: economyFigures(),
     wizardData: {
       mode,
       preselectedClassId,
