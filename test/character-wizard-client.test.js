@@ -722,6 +722,48 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(wizard.getMerxSpent()).toBe(0);
   });
 
+
+  // A draft restored from localStorage may name the printing class
+  // `origin_class_id`. Losing that name is silent three times over, so the
+  // restore keeps it: the tier, the saved attribution and the shop's own
+  // sense of what is held all read it.
+  test('a restored draft keeps a Signature\'s printing class', () => {
+    const wizardData = () => fixture({
+      mode: 'aspirant', classes: [v1Class(), otherV1Class()]
+    });
+    // A whole saved state, as writeStorage persists it, with one Signature
+    // bought from the other class and named the way a draft names it.
+    const draft = {
+      ...bootWizard(wizardData()).getState(),
+      classId: 'c-v1',
+      gear: [{
+        name: 'Sharps Rifle',
+        kind: 'class',
+        subtype: 'elective',
+        cost: 3,
+        origin_class_id: 'c-other',
+        origin_class_name: 'Drifter'
+      }]
+    };
+    const wizard = bootWizard(wizardData(), { draft });
+
+    const restored = wizard.getState().gear[0];
+    expect(restored.class_id).toBe('c-other');
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.cross);
+    expect(wizard.buildSubmitPayload().gear)
+      .toEqual([{ name: 'Sharps Rifle', class_id: 'c-other' }]);
+  });
+
+  // The hidden attribute alone does not hide an element carrying a Bulma
+  // class that sets display -- the stylesheet has to say so. jsdom mounts
+  // these bare, so only the stylesheet itself can be asked.
+  test('step 4\'s hidden toggles are backed by the stylesheet', () => {
+    const css = require('fs').readFileSync('public/css/styles.css', 'utf8');
+    for (const id of ['slotsReadout', 'signatureDrawer', 'baseGearColumn']) {
+      expect(css).toContain('#' + id + '[hidden]');
+    }
+  });
+
   // pg. 85: an economy with no cap has no readout to show.
   test('the slot readout appears only where the economy caps Signatures', () => {
     const aspirant = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));

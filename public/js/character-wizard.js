@@ -131,14 +131,20 @@ window.CharacterWizard = (function () {
     // Enchantment and its Mods. A restored entry that reaches the pricer
     // without that shape prices at 0, a loadout the wizard would call free
     // and the save would refuse, so the shape is stamped on the way in.
+    //
+    // A draft may name the printing class `origin_class_id`. Dropping that
+    // name loses the origin silently three ways over: the Signature prices at
+    // the own-class tier instead of Cross-Class, its saved class_gear row is
+    // attributed to the character's own class, and the shop stops recognising
+    // it as held.
     state.gear = (Array.isArray(state.gear) ? state.gear : [])
       .filter((g) => g && g.name)
       .map((g) => ({
         name: g.name,
         kind: 'class',
         subtype: g.subtype || 'elective',
-        class_id: g.class_id || null,
-        class_name: g.class_name || '',
+        class_id: g.class_id || g.origin_class_id || null,
+        class_name: g.class_name || g.origin_class_name || '',
         owned: true,
         enchantment: g.enchantment || null,
         mods: Array.isArray(g.mods) ? g.mods : [],
@@ -3168,9 +3174,11 @@ window.CharacterWizard = (function () {
     renderGearReadouts();
   };
 
-  // Auto-load the selected class's base gear into state.gear if no class
-  // gear is currently recorded. Idempotent: changing class in step 1 then
-  // returning clears any prior gear and reloads.
+  // Load the selected class's base gear into state.gear, once per class.
+  // Idempotent: a second call for the same class does nothing, so stepping
+  // back through the wizard and returning to step 4 neither reloads the
+  // granted Defaults nor disturbs what has been bought. Picking a different
+  // class in step 1 is what clears the gear and loads the new class's.
   const syncBaseGear = () => {
     // Aspirant mode: gear is class-agnostic (cross-class pool built by
     // getShopPool across every unlocked class), so re-entering step 4 with a

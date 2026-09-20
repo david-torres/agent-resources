@@ -957,6 +957,13 @@ a.dropdown-item:hover {
    Bulma .box) or a future selector can override it. Belt-and-braces. */
 .wizard-step[hidden] { display: none !important; }
 
+/* Same reason, for step 4's own toggles: each sits on a Bulma class that
+   sets display in the author origin (.level-item is flex, .box and .column
+   are block), which outranks the user agent's [hidden] { display: none }. */
+#slotsReadout[hidden],
+#signatureDrawer[hidden],
+#baseGearColumn[hidden] { display: none !important; }
+
 /* Kiosk: single horizontal row of class cards. One card is centered in the
    frame at any time; the track scrolls horizontally and snaps card centers
    to the viewport center, so the center-frame overlay stays at 50% top.

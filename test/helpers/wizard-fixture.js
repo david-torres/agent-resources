@@ -32,6 +32,9 @@ const twelveItems = () => TWELVE_SIGNATURE_NAMES.map((name, i) =>
   signatureItem(name, Math.floor(i / 3) + 1, (i % 3) + 1));
 const sixItems = () => twelveItems().slice(0, 6);
 
+// character-wizard.js's own localStorage key, for seeding a draft to resume.
+const STORAGE_KEY = 'agentResources.characterWizard';
+
 const COMMON_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-common.js'),
   'utf8'
@@ -134,7 +137,7 @@ const buildHtml = () => `
 // DATA, runs character-common.js, signature-entry.js and character-wizard.js
 // against it (all three are `window.X = (function(){...})()` browser IIFEs --
 // no exports to require), and returns the exposed CharacterWizard handle.
-const bootWizard = (data) => {
+const bootWizard = (data, options = {}) => {
   const dom = new JSDOM(`<!doctype html><html><body>${buildHtml()}</body></html>`, {
     url: `http://localhost/characters/wizard?mode=${data.mode}`,
     pretendToBeVisual: true
@@ -150,6 +153,12 @@ const bootWizard = (data) => {
   globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
 
   window.document.getElementById('wizard-data').textContent = JSON.stringify(data);
+  // `options.draft` is a saved wizard draft to resume: it goes into THIS
+  // window's localStorage, which the wizard reads as it mounts. Each boot
+  // builds a new jsdom window, so a caller cannot write it beforehand.
+  if (options.draft) {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(options.draft));
+  }
 
   new Function(COMMON_SOURCE)();
   globalThis.CharacterCommon = window.CharacterCommon;
