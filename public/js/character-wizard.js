@@ -2512,6 +2512,15 @@ window.CharacterWizard = (function () {
   // mark a granted Default, which freeBaseCount() counts.
   const SignatureEntry = window.SignatureEntry;
 
+  // The step-1 builder's three filled slots, in the shape the server stores.
+  // Declared here, beside signaturePriceFor, rather than down by the submit
+  // code that also uses it: every pricing helper in this closure calls it,
+  // and a `const` used before its declaration executes is a TDZ
+  // ReferenceError, not a hoist.
+  const aspiringPool = () => ((state.classBuild && state.classBuild.classGear) || [])
+    .filter((slot) => slot && slot.classId && slot.itemName)
+    .map((slot) => ({ class_id: slot.classId, name: slot.itemName }));
+
   // Which Signature price tier a Class's items buy at, decided by the rule
   // the component and util/merx-economy.js share -- pg. 90's aspiring
   // exemption included -- so a shop card and the total can never disagree.
@@ -3761,10 +3770,6 @@ window.CharacterWizard = (function () {
   }
 
   // ---------- Submit ----------
-  // The step-1 builder's three filled slots, in the shape the server stores.
-  const aspiringPool = () => ((state.classBuild && state.classBuild.classGear) || [])
-    .filter((slot) => slot && slot.classId && slot.itemName)
-    .map((slot) => ({ class_id: slot.classId, name: slot.itemName }));
 
   // Reshape the wizard's localStorage-shaped state into the payload that
   // createCharacter (in models/character.js) expects. Mirrors the field
