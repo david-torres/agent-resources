@@ -858,7 +858,7 @@ test('counting Power Rating superscripts as words would breach the limit five ti
 // (neither route has an asyncHandler wrapper) and would lose its message on
 // PUT /characters/:id (classifyError's generic "unexpected error" text).
 
-const ASPIRANT = { economy: 'aspirant', characterClassId: 'v1', earnedMerx: 0 };
+const ASPIRANT = { economy: 'aspirant', characterClassId: 'v1' };
 const own = (n) => Array.from({ length: n }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
 
 test('six own-class Signatures fit the 12-Merx grant', () => {
@@ -880,12 +880,6 @@ test('an over-budget wizard-shaped payload names the spend and the budget', () =
   const result = validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [] });
   expect(result.ok).toBe(false);
   expect(result.errors.join(' ')).toMatch(/spends 14 Merx of 12/);
-});
-
-test('mission earnings raise the budget', () => {
-  expect(validateEconomyLimits({
-    ...ASPIRANT, gear: own(7), commonItems: [], earnedMerx: 2
-  })).toEqual({ ok: true });
 });
 
 test('an Enchantment is charged against the budget', () => {
@@ -910,11 +904,11 @@ test('common items are charged against the budget', () => {
 test('the Signature Cap counts an Enchantment as a slot', () => {
   const gear = own(6).map((g) => ({ ...g, enchantment: { source: 'default' } }));
   expect(validateEconomyLimits({
-    ...ASPIRANT, gear, commonItems: [], earnedMerx: 100
+    ...ASPIRANT, gear, commonItems: [], enforceMerxBudget: false
   })).toEqual({ ok: true });
   const result = validateEconomyLimits({
     ...ASPIRANT, gear: [...gear, { name: 'One More', class_id: 'v1' }],
-    commonItems: [], earnedMerx: 100
+    commonItems: [], enforceMerxBudget: false
   });
   expect(result.ok).toBe(false);
   expect(result.errors.join(' ')).toMatch(/Signature Cap|12/);
@@ -927,11 +921,12 @@ test('aspiring is capped at eight slots and granted ten Merx', () => {
     { name: 'C', class_id: 'class-c' }
   ];
   expect(validateEconomyLimits({
-    economy: 'aspiring', characterClassId: null, earnedMerx: 0, gear: picks, commonItems: []
+    economy: 'aspiring', characterClassId: null, gear: picks, commonItems: []
   })).toEqual({ ok: true });
   const nine = Array.from({ length: 9 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
   const result = validateEconomyLimits({
-    economy: 'aspiring', characterClassId: null, earnedMerx: 100, gear: nine, commonItems: []
+    economy: 'aspiring', characterClassId: null, gear: nine, commonItems: [],
+    enforceMerxBudget: false
   });
   expect(result.ok).toBe(false);
   expect(result.errors.join(' ')).toMatch(/Signature Cap|8/);
@@ -940,12 +935,13 @@ test('aspiring is capped at eight slots and granted ten Merx', () => {
 // Review round 1, Finding 3: the aspiring cap's passing side (exactly at the
 // boundary, not comfortably under it) was never asserted, so a `>` that
 // regressed to `>=` would reject a legal 8-slot build and nothing would catch
-// it. earnedMerx is generous enough that only the cap, not the budget, could
-// be doing the rejecting.
+// it. The budget is switched off so only the cap, not the spend, could be
+// doing the rejecting.
 test('exactly eight Signatures fit the aspiring cap', () => {
   const eight = Array.from({ length: 8 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
   expect(validateEconomyLimits({
-    economy: 'aspiring', characterClassId: null, earnedMerx: 100, gear: eight, commonItems: []
+    economy: 'aspiring', characterClassId: null, gear: eight, commonItems: [],
+    enforceMerxBudget: false
   })).toEqual({ ok: true });
 });
 
@@ -953,7 +949,7 @@ test('exactly eight Signatures fit the aspiring cap', () => {
 test('the advent economy enforces nothing', () => {
   const twenty = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: 'advent' }));
   expect(validateEconomyLimits({
-    economy: 'advent', characterClassId: 'advent', earnedMerx: 0, gear: twenty, commonItems: []
+    economy: 'advent', characterClassId: 'advent', gear: twenty, commonItems: []
   })).toEqual({ ok: true });
 });
 

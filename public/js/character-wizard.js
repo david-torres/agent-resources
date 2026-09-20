@@ -770,12 +770,20 @@ window.CharacterWizard = (function () {
     return Object.keys(c.stat_spread);
   };
 
-  // Budget = the economy's creation grant plus mission income, the same two
-  // terms deriveMerxBreakdown adds (util/character-derived.js). The server
-  // enforces this number for V1 economies, so a disagreement here is a build
-  // the player can assemble and not save.
+  // Budget = the economy's creation grant, and in advent the per-success
+  // bonus on top of it.
+  //
+  // The "Successful" input is a declared count, not mission rows: creating a
+  // character writes none, and every downstream reader prices a V1
+  // character's earned Merx off the rows it really has -- the save
+  // (validateEconomyLimits), the stored leftover (deriveCharacterTotals) and
+  // the character's own page alike. Adding the count here would show a
+  // budget none of them agree with, so the V1 economies spend the grant
+  // alone. Advent enforces no budget anywhere, and its bonus is the
+  // arrangement its 327 characters were built under, so it keeps it.
   const getMerxBudget = () => {
     const economy = economyForState();
+    if (economy !== 'advent') return ECONOMY.grants[economy];
     let successful = parseInt(state.successfulMissions, 10) || 0;
     if (successful < 0) successful = 0;
     return ECONOMY.grants[economy] + (successful * DATA.merxPerMissionSuccess);
@@ -1476,10 +1484,11 @@ window.CharacterWizard = (function () {
     summarySuccessfulInput.addEventListener('input', () => {
       state.successfulMissions = parseInt(summarySuccessfulInput.value, 10) || 0;
       renderSummaryMeta();
-      // The merx budget depends on successfulMissions in every economy now
-      // (getMerxBudget), so re-render the gear step so the budget badge +
-      // Next button reflect the new total. Safe to call when not on step 4
-      // (it just rewrites the same DOM).
+      // The advent budget moves with successfulMissions (getMerxBudget), so
+      // re-render the gear step to keep the budget badge and the shop's
+      // affordability gating in step with it. Safe to call when not on step
+      // 4, and in an economy the count does not move (it just rewrites the
+      // same DOM).
       if (typeof renderGearStep === 'function') renderGearStep();
     });
   }

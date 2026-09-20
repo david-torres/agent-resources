@@ -7,7 +7,7 @@ const {
   parseInteger,
   normalizeStatsPayload
 } = require('./input');
-const { deriveCharacterTotals, declaredSuccessfulMissions } = require('../../util/character-derived');
+const { deriveCharacterTotals } = require('../../util/character-derived');
 const { economyFor, withPreservedEquipment } = require('../../util/merx-economy');
 const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
@@ -205,12 +205,13 @@ class CharacterService {
     // trusting it -- a disagreement between what the player was shown and
     // what gets stored is worse than a redundant computation.
     //
-    // A character created with mission history behind it declares it as a
-    // count (completed_missions) rather than as rows, so the count is shaped
-    // back into success rows for the derivation. That is the same income
-    // normalizeCharacterInput's budget check credits and the same income the
-    // character's own page will credit once those missions are recorded, so
-    // the stored leftover matches both.
+    // A character being created owns no missions to be paid for: its
+    // completed_missions is a scalar count on the row, and creating one
+    // writes no mission rows. So the leftover stored here is the creation
+    // grant minus what the build spends -- the same figure
+    // normalizeCharacterInput's budget check enforces, and the same figure
+    // the character's own page derives from getRealMissions (routes/
+    // characters.js), which finds nothing to credit.
     const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
     if (economy !== 'advent') {
       const derived = deriveCharacterTotals({
@@ -219,7 +220,7 @@ class CharacterService {
           gear: resolvedGear,
           common_items: characterInput.common_items
         },
-        realMissions: declaredSuccessfulMissions(characterInput.completed_missions),
+        realMissions: [],
         offscreenMissions: [],
         rulesVersion,
         economy

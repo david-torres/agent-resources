@@ -20,7 +20,6 @@ const {
   SIGNATURE_CAP,
   COMMON_ITEM_PRICE
 } = require('../../util/merx-economy');
-const { declaredSuccessfulMissions, deriveMissionMerx } = require('../../util/character-derived');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -318,14 +317,15 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 //
 // `enforceMerxBudget` (default true) exists because the Signature Cap and the
 // Merx budget need different information: the cap is a fixed number that any
-// caller can check, but the budget is CREATION_GRANT plus whatever Merx a
-// character has earned from missions, and updateCharacter has no mission data
-// in hand outside its auto_calculate branch. Passing `earnedMerx: 0` there
-// instead of `enforceMerxBudget: false` would not "skip" the budget -- it
-// would enforce it against a budget of 0-plus-grant, refusing a purchase a
-// character's real (unfetched) earnings could afford. That false rejection
-// is worse than not checking at all, so the two rules are split explicitly
-// rather than left to whatever earnedMerx a caller happens to pass.
+// caller can check, but a character's real budget is CREATION_GRANT plus
+// whatever Merx its mission ROWS have earned, and updateCharacter has no
+// mission data in hand outside its auto_calculate branch. Enforcing the bare
+// grant on an edit would refuse a purchase a character's real (unfetched)
+// earnings could afford, and that false rejection is worse than not checking
+// at all, so an edit switches the budget off and keeps the cap.
+//
+// A creation needs no mission data: a character being created owns no
+// mission rows, so the grant alone is its whole budget.
 //
 // `storedGear` is the character's current class_gear rows, passed by
 // updateCharacter from the getCharacter call it already makes. The cap is
@@ -337,7 +337,7 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 // enforceMerxBudget: false, so no caller prices a list with stored rows
 // behind it.
 const validateEconomyLimits = ({
-  economy, gear, storedGear, commonItems, characterClassId, earnedMerx = 0, enforceMerxBudget = true
+  economy, gear, storedGear, commonItems, characterClassId, enforceMerxBudget = true
 }) => {
   if (economy === 'advent') return { ok: true };
 
@@ -357,7 +357,7 @@ const validateEconomyLimits = ({
   }
 
   if (enforceMerxBudget) {
-    const budget = CREATION_GRANT[economy] + Math.max(0, Number(earnedMerx) || 0);
+    const budget = CREATION_GRANT[economy];
     const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
     const spend = equipmentSpend(items, { economy, characterClassId })
       + itemCount * COMMON_ITEM_PRICE;
@@ -561,18 +561,16 @@ const normalizeCharacterInput = (input, context = {}) => {
   // definition in one place.
   // context.enforceMerxBudget defaults to true (creation) and is passed false
   // by updateCharacter (an edit's real budget needs the character's mission
-  // ROWS, which this call has no way to fetch, and checking a budget built
-  // from the payload's counter would refuse a purchase the character can
-  // actually afford). The Signature Cap needs no such data and always runs
-  // for a non-advent economy either way.
+  // ROWS, which this call has no way to fetch). The Signature Cap needs no
+  // such data and always runs for a non-advent economy either way.
   //
-  // A creation's budget is the grant PLUS the mission history the payload
-  // declares -- the wizard's "Successful" input, posted as
-  // completed_missions, which its own budget adds and which
-  // CharacterService.createCharacter feeds to the same derivation to store
-  // the leftover. All three read the one field, so the budget the player
-  // spends against, the budget this enforces and the commissary_reward
-  // stored are the same number.
+  // A creation's budget is the grant alone. The payload's completed_missions
+  // is a count the character declares, not mission rows -- a creation writes
+  // none, and the character page prices its earned Merx off the rows the
+  // character really has (routes/characters.js reads getRealMissions). So
+  // crediting the count here would accept a build that character's own page
+  // then reports as a deficit, and the next auto-calculated edit would
+  // rewrite its stored leftover to zero.
   const economy = economyFor({ contentFormat: context.contentFormat, creatorMode: data.creator_mode });
   const economyValidation = validateEconomyLimits({
     economy,
@@ -580,9 +578,6 @@ const normalizeCharacterInput = (input, context = {}) => {
     storedGear: context.storedGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
-    earnedMerx: deriveMissionMerx({
-      realMissions: declaredSuccessfulMissions(data.completed_missions)
-    }),
     enforceMerxBudget: context.enforceMerxBudget ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };

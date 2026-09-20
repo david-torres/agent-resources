@@ -703,24 +703,27 @@ describe('step 4 offers the whole class and its purchases', () => {
 
   // pg. 8: the cap is counted in slots, and an Enchantment takes one. It is
   // judged apart from the Merx, exactly as validateEconomyLimits judges it.
+  //
+  // The printed aspirant cap sits far above anything its grant can buy -- the
+  // cheapest slot costs a Signature's own-class price either way -- so a
+  // creation cannot reach it with the real figures. Every figure the wizard
+  // uses comes from the server, so the gate is exercised by serving a cap a
+  // creation can reach.
   test('an Enchantment that would breach the Signature Cap is refused, Merx in hand', () => {
-    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
-    const state = wizard.getState();
-    state.classId = 'c-v1';
-    const cap = FIGURES.signatureCap.aspirant;
-    const wanted = cap * FIGURES.prices.signature.own + FIGURES.prices.defaultEnchantment.own;
-    // Twelve Signatures cost more than the creation grant, so the rest is
-    // mission income -- which needs the levels to have run those missions.
-    state.level = 11;
-    state.successfulMissions = Math.ceil(
-      (wanted - FIGURES.grants.aspirant) / MERX_PER_MISSION_SUCCESS
-    );
-    for (const name of twelveNames()) wizard.buySignature(name);
+    const cap = 2;
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant',
+      classes: [v1Class()],
+      economy: { ...FIGURES, signatureCap: { ...FIGURES.signatureCap, aspirant: cap } }
+    }));
+    wizard.getState().classId = 'c-v1';
+    const names = twelveNames();
+    for (let i = 0; i < cap; i++) wizard.buySignature(names[i]);
     expect(wizard.getSlotsUsed()).toBe(cap);
     expect(wizard.getMerxBudget() - wizard.getMerxSpent())
       .toBeGreaterThanOrEqual(FIGURES.prices.defaultEnchantment.own);
 
-    expect(wizard.setEnchantment('Cowboy Hat', { source: 'default' })).toBe(false);
+    expect(wizard.setEnchantment(names[0], { source: 'default' })).toBe(false);
     expect(wizard.getSlotsUsed()).toBe(cap);
   });
 
@@ -1083,15 +1086,18 @@ describe('step 4 offers the whole class and its purchases', () => {
   });
 });
 
-// Whole-plan review, Critical 1: getMerxBudget credits mission income in every
-// economy, but the save credited none of it -- validateEconomyLimits was handed
-// no earnedMerx and createCharacter derived the reward from an empty mission
-// list. A player who declared mission history was shown a budget the save then
-// refused, and a build under the bare grant stored a reward computed without
-// the income the character's own page would credit it. The declared count
-// (completed_missions) is now the one field all three read.
-describe('a declared mission history prices the same in the wizard and at the save', () => {
+// A creation declares completed_missions as a scalar count and writes no
+// mission rows, and the character page prices earned Merx off the rows the
+// character really has (routes/characters.js reads getRealMissions). So in an
+// enforced economy the wizard's budget, the budget the save enforces, the
+// leftover the save stores and the `earned` the page derives are all the
+// creation grant -- crediting the declared count in any one of them puts that
+// one out of step with the other three, and a character saved against a
+// credit its own page will not repeat reads as a deficit whose next
+// auto-calculated edit zeroes the stored Merx.
+describe('an enforced creation prices the grant alone, everywhere', () => {
   const { CharacterService } = require('../services/character/service');
+  const { deriveMerxBreakdown } = require('../util/character-derived');
 
   const MISSION_CLASS = {
     id: 'c1',
@@ -1154,16 +1160,15 @@ describe('a declared mission history prices the same in the wizard and at the sa
     return { service: new CharacterService(adapter), saved };
   };
 
-  // Seven own-class Signatures cost more than the aspirant grant and less than
-  // the grant plus four successes, so the build is legal only if the save
-  // credits the same income the wizard did.
-  const buyBeyondTheGrant = (wizard, successes) => {
+  // `count` own-class Signatures, bought against a declared mission history.
+  // Six fit the aspirant grant exactly; seven do not, at any declared count.
+  const buildWith = (wizard, count, successes) => {
     const state = wizard.getState();
     state.classId = 'c1';
     state.level = 3;
     state.successfulMissions = successes;
     state.traits = ['brave', 'bold', 'lucky'];
-    state.gear = twelveItems().slice(0, 7).map((item) => ({
+    state.gear = twelveItems().slice(0, count).map((item) => ({
       name: item.name, kind: 'class', subtype: 'elective', class_id: 'c1',
       class_name: 'Test Class', owned: true, enchantment: null, mods: []
     }));
@@ -1178,17 +1183,15 @@ describe('a declared mission history prices the same in the wizard and at the sa
     personalityMap: PERSONALITY_MAP
   }));
 
-  test('the wizard budget is the grant plus the declared successes', () => {
+  test('the wizard budget is the grant, whatever history is declared', () => {
     const wizard = bootMissionWizard();
-    buyBeyondTheGrant(wizard, 4);
-    expect(wizard.getMerxBudget())
-      .toBe(economyFigures().grants.aspirant + 4 * MERX_PER_MISSION_SUCCESS);
-    expect(wizard.getMerxSpent()).toBeGreaterThan(economyFigures().grants.aspirant);
+    buildWith(wizard, 6, 4);
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspirant);
   });
 
-  test('the save accepts that build and stores the remainder the wizard showed', async () => {
+  test('the save stores the remainder the wizard showed, and the page derives it', async () => {
     const wizard = bootMissionWizard();
-    buyBeyondTheGrant(wizard, 4);
+    buildWith(wizard, 6, 4);
     const budget = wizard.getMerxBudget();
     const spent = wizard.getMerxSpent();
     const payload = wizard.buildSubmitPayload();
@@ -1199,11 +1202,27 @@ describe('a declared mission history prices the same in the wizard and at the sa
     expect(result.error).toBeNull();
     expect(saved.commissary_reward).toBe(budget - spent);
     expect(saved.commissary_reward).toBe(payload.commissary_reward);
+
+    // The character page's own figures, derived the way routes/characters.js
+    // derives them: off the mission ROWS the character has, of which a
+    // creation writes none.
+    const page = deriveMerxBreakdown({
+      realMissions: [],
+      offscreenMissions: [],
+      gear: payload.gear,
+      commonItems: payload.common_items,
+      characterClassId: payload.class_id,
+      economy: 'aspirant'
+    });
+    expect(page.earned).toBe(budget);
+    expect(page.spend).toBe(spent);
+    expect(page.reward).toBe(saved.commissary_reward);
+    expect(page.deficit).toBe(0);
   });
 
-  test('without the declared history the same build is refused', async () => {
+  test('a build past the grant is refused however much history it declares', async () => {
     const wizard = bootMissionWizard();
-    buyBeyondTheGrant(wizard, 0);
+    buildWith(wizard, 7, 4);
     const payload = wizard.buildSubmitPayload();
     const { service } = serviceOnAspirantClass();
     const result = await service.createCharacter(payload, { id: 'profile-1' });
@@ -1260,13 +1279,28 @@ describe('step 4 prose follows the class economy the readouts follow', () => {
     expect(introText()).toContain(String(economyFigures().prices.signature.cross) + ' Merx');
   });
 
-  test('the sentence reports the budget the badge reports, mission income included', () => {
-    const wizard = bootOnClass('aspirant', 'aspirant');
+  // Advent is the one economy whose budget still moves with the declared
+  // successes, so it is where the sentence and the badge can disagree.
+  test('the sentence reports the budget the badge reports, advent income included', () => {
+    const wizard = bootOnClass('advent', 'advent');
     wizard.getState().successfulMissions = 4;
     wizard.renderGearStep();
-    const budget = economyFigures().grants.aspirant + 4 * MERX_PER_MISSION_SUCCESS;
+    const budget = economyFigures().grants.advent + 4 * MERX_PER_MISSION_SUCCESS;
     expect(wizard.getMerxBudget()).toBe(budget);
     expect(introText()).toContain('You have ' + budget + ' Merx');
     expect(document.getElementById('merxBudget').textContent).toBe(String(budget));
+  });
+
+  // The enforced economies spend the grant alone: the count declares a
+  // history no mission row backs, and the save and the character page both
+  // price the rows.
+  test('a declared history moves neither the sentence nor the badge in aspirant', () => {
+    const wizard = bootOnClass('aspirant', 'aspirant');
+    wizard.getState().successfulMissions = 4;
+    wizard.renderGearStep();
+    const grant = economyFigures().grants.aspirant;
+    expect(wizard.getMerxBudget()).toBe(grant);
+    expect(introText()).toContain('You have ' + grant + ' Merx');
+    expect(document.getElementById('merxBudget').textContent).toBe(String(grant));
   });
 });
