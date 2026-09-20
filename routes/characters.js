@@ -30,7 +30,8 @@ const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
-const { deriveCharacterTotals, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
+const { deriveCharacterTotals, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
+const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -493,6 +494,20 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         capPurchases: character.stat_cap_purchases
       }),
       autoCalculate: character.auto_calculate,
+      // The V1 Merx purchase surface's data, served as a JSON island the way
+      // the wizard serves its own. Null for the advent economy, which is what
+      // the view gates the whole surface on -- those characters keep the
+      // gear[] selects. Built from the character, its class and the missions
+      // already fetched just above for `derived`; it costs no extra query.
+      gearPurchaseData: buildGearPurchaseData({
+        economy,
+        characterClass,
+        character,
+        missionMerx: deriveMissionMerx({
+          realMissions: missionsRes.data || [],
+          offscreenMissions: offscreenRes.data || []
+        })
+      }),
       statList,
       adventV1Classes: filteredAdventV1,
       adventV2Classes: filteredAdventV2,
@@ -1082,6 +1097,9 @@ router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
   const image_crop = parseImageCrop(req.body.image_crop);
   if (image_crop !== undefined) {
     req.body.image_crop = image_crop;
+  }
+  if (!applyGearPurchases(req.body)) {
+    return sendError(req, res, null, { status: 400, message: 'Invalid Signature Gear payload.' });
   }
   req.body = collectCharacterFormArrays(req.body);
   // updateCharacter throws AuthorizationError (caught by asyncHandler) when

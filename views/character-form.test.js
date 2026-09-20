@@ -474,3 +474,115 @@ test('a capitalized stored Trait selects its vocabulary option', () => {
   const vocabularySize = Object.values(personalityMap).flat().length;
   expect(html.match(/<option /g)).toHaveLength(vocabularySize * 3);
 });
+
+// --- the V1 Merx purchase surface ------------------------------------------
+//
+// This form is shared with every character in the database, nearly all of
+// them on the advent content format. The purchase surface is rendered for
+// the two V1 populations only -- a class whose content_format is 'aspirant',
+// or a creator_mode of 'aspiring' -- and `gearPurchaseData` (built by
+// util/gear-purchase-data.js, null for advent) is the single thing the
+// template gates on. Everyone else must see exactly today's form.
+
+const { buildGearPurchaseData } = require('../util/gear-purchase-data');
+const { mountPurchases } = require('../test/helpers/gear-purchase-fixture');
+
+const V1_CLASS = {
+  id: 'c-v1',
+  name: 'Gunslinger',
+  content_format: 'aspirant',
+  gear: [
+    { name: 'Cowboy Hat', description: 'A hat.', column: 1, position: 1 },
+    { name: 'Sharps Rifle', description: 'A rifle.', column: 1, position: 2 }
+  ]
+};
+
+const renderCharacterForm = (overrides = {}) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('range', rangeHelper);
+  // app.js registers `markdown` separately from the util/handlebars bundle;
+  // this form reaches it only through its partials.
+  hb.registerHelper('markdown', (value) => new Handlebars.SafeString(String(value ?? '')));
+  const partialsDir = path.join(__dirname, 'partials');
+  for (const file of fs.readdirSync(partialsDir)) {
+    if (!file.endsWith('.handlebars')) continue;
+    hb.registerPartial(file.replace('.handlebars', ''),
+      fs.readFileSync(path.join(partialsDir, file), 'utf8'));
+  }
+  const character = {
+    id: 'abc',
+    name: 'Vex Kalloway',
+    gear: [{ name: 'Cowboy Hat', class_id: 'c-v1' }],
+    common_items: [],
+    abilities: [],
+    traits: [],
+    ...overrides.character
+  };
+  return hb.compile(FORM_SRC)({
+    isNew: false,
+    character,
+    statList,
+    personalityMap,
+    statCaps: Object.fromEntries(statList.map((s) => [s, 5])),
+    classGearList: { Gunslinger: ['Cowboy Hat', 'Sharps Rifle'] },
+    adventDefaultSignatures: 3,
+    classAbilityList: {},
+    effectiveVersion: 'v1',
+    maxCreatedAt: '2026-09-19',
+    derived: {},
+    gearPurchaseData: overrides.gearPurchaseData ?? null
+  });
+};
+
+const purchaseDataFor = (economy, characterClass) => buildGearPurchaseData({
+  economy,
+  characterClass,
+  character: { class_id: characterClass ? characterClass.id : null, gear: [] },
+  missionMerx: 0
+});
+
+test('an advent character sees today\'s form, with no purchase controls', () => {
+  const html = renderCharacterForm({
+    gearPurchaseData: purchaseDataFor('advent', { id: 'c-a', name: 'Ranger', gear: [] })
+  });
+
+  expect(html).toContain('name="gear[]"');
+  expect(html).not.toContain('id="signaturePurchases"');
+  expect(html).not.toContain('gear-purchase-data');
+  expect(html).not.toContain('character-gear-purchases.js');
+});
+
+test('a V1 character sees the grid', () => {
+  const html = renderCharacterForm({ gearPurchaseData: purchaseDataFor('aspirant', V1_CLASS) });
+
+  // The grid's cells are rendered by the mount, not the template, so the
+  // template's part is the island and the mount points -- and the gear[]
+  // selects must be gone, or the same Signatures would be submitted twice.
+  expect(html).toContain('id="signaturePurchases"');
+  expect(html).toContain('id="gear-purchase-data"');
+  expect(html).toContain('name="gear_json"');
+  expect(html).toContain('/js/signature-entry.js');
+  expect(html).toContain('/js/character-gear-purchases.js');
+  expect(html).not.toContain('name="gear[]"');
+});
+
+test('the mounted V1 form renders the grid the component draws', () => {
+  const data = purchaseDataFor('aspirant', V1_CLASS);
+  const html = renderCharacterForm({ gearPurchaseData: data });
+
+  mountPurchases(data, { html });
+
+  const cells = document.querySelectorAll('[data-signature-name]');
+  expect([...cells].map((c) => c.getAttribute('data-signature-name')))
+    .toEqual(['Cowboy Hat', 'Sharps Rifle']);
+});
+
+test('no economy figure is written into the form', () => {
+  // Every price, grant and cap reaches the page through the island, never
+  // through rendered prose or markup.
+  const purchaseBlock = FORM_SRC.slice(FORM_SRC.indexOf('{{#if gearPurchaseData}}'));
+  expect(purchaseBlock).not.toMatch(/\b(\d+)\s*Merx\b/);
+  expect(purchaseBlock).not.toMatch(/Signature Cap of \d/);
+});

@@ -236,6 +236,33 @@
 
   <div class="block">
     <label class="label">Signature Gear</label>
+    {{#if gearPurchaseData}}
+    {{!-- The V1 Merx purchase surface, for a character under the aspirant or
+          aspiring economy. gearPurchaseData is null for everyone else
+          (util/gear-purchase-data.js), so the characters on the advent
+          content format keep the gear[] selects in the other branch,
+          unchanged.
+
+          It replaces those selects rather than joining them: both would
+          submit the same Signatures, and only this one can carry an
+          Enchantment.
+
+          Everything inside is drawn by public/js/character-gear-purchases.js
+          from the island -- the grid, the entry drawer, both readouts and the
+          hidden field that actually submits. No price, grant or cap is
+          written into this template. --}}
+    <div id="signaturePurchases">
+      <script type="application/json" id="gear-purchase-data">{{{json gearPurchaseData}}}</script>
+      <p class="help mb-3" id="purchaseReadouts">
+        Merx <span data-merx-spent>0</span> / <span data-merx-budget>0</span>
+        &middot; Signature slots <span data-slots-used>0</span> / <span data-slots-cap>0</span>
+      </p>
+      <div id="purchaseGrid"></div>
+      <div id="purchaseDrawer" hidden></div>
+      <div id="purchasePending" hidden></div>
+      <input type="hidden" name="gear_json" id="purchaseGearJson">
+    </div>
+    {{else}}
     <div class="columns is-multiline" id="class-gear-list">
       {{#if character.gear}}
       {{#each character.gear}}
@@ -246,6 +273,7 @@
     <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
       hx-swap="beforeend">Add
       Signature Gear</button>
+    {{/if}}
   </div>
 
   <hr />
@@ -501,4 +529,11 @@
 
 {{#if isNew}}
 <script src="/js/character-form-version.js" defer></script>
+{{/if}}
+
+{{#if gearPurchaseData}}
+{{!-- Same order as views/character-wizard.handlebars loads them: the shared
+      component first, then the mount that reads it. --}}
+<script src="/js/signature-entry.js" defer></script>
+<script src="/js/character-gear-purchases.js" defer></script>
 {{/if}}

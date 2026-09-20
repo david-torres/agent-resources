@@ -75,18 +75,27 @@ const gearSpendFor = (economy, gearList, characterClassId) => (economy === 'adve
   ? adventGearSpend(gearList, characterClassId)
   : equipmentSpend(gearList, { economy, characterClassId }));
 
+// Merx a character has earned since creation: mission successes plus whatever
+// each offscreen mission recorded. The creation grant is NOT part of it --
+// that is an economy figure, added by whoever knows which economy applies, so
+// a consumer that already holds the grants (the edit form's purchase surface,
+// served util/merx-economy.js's figures) is not handed it twice.
+const deriveMissionMerx = ({ realMissions, offscreenMissions } = {}) => {
+  const real = Array.isArray(realMissions) ? realMissions : [];
+  const offscreen = Array.isArray(offscreenMissions) ? offscreenMissions : [];
+  const successes = real.filter(m => m && m.outcome === 'success').length;
+  return successes * MERX_PER_MISSION_SUCCESS
+    + offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
+};
+
 const deriveMerxBreakdown = ({
   realMissions, offscreenMissions, gear, commonItems, characterClassId, economy = 'advent'
 }) => {
-  const real = Array.isArray(realMissions) ? realMissions : [];
-  const offscreen = Array.isArray(offscreenMissions) ? offscreenMissions : [];
   const gearList = Array.isArray(gear) ? gear : [];
   const itemList = Array.isArray(commonItems) ? commonItems : [];
 
-  const successes = real.filter(m => m && m.outcome === 'success').length;
-  const earnedFromReal = successes * MERX_PER_MISSION_SUCCESS;
-  const earnedFromOffscreen = offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
-  const earned = CREATION_GRANT[economy] + earnedFromReal + earnedFromOffscreen;
+  const earned = CREATION_GRANT[economy]
+    + deriveMissionMerx({ realMissions, offscreenMissions });
 
   const itemSpend = itemList.length * COMMON_ITEM_PRICE;
   const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId);
@@ -124,6 +133,7 @@ module.exports = {
   deriveCompletedMissions,
   deriveLevel,
   deriveMerx,
+  deriveMissionMerx,
   deriveMerxBreakdown,
   deriveCharacterTotals,
   ADVENT_DEFAULT_SIGNATURES
