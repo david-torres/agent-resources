@@ -113,6 +113,7 @@ const buildHtml = () => `
   </section>
 
   <section class="wizard-step" data-step-panel="4" hidden>
+    <p id="gearStepIntro"></p>
     <span id="merxSpent">0</span> / <span id="merxBudget">0</span>
     <p id="merxRemainderNote" hidden></p>
     <span id="slotsReadout" hidden><span id="slotsUsed">0</span> / <span id="slotsCap">0</span></span>
@@ -120,7 +121,8 @@ const buildHtml = () => `
       <div id="signatureGrid"></div>
       <div id="signatureDrawer" hidden></div>
     </div>
-    <div id="baseGearList"></div>
+    <div id="baseGearColumn"><div id="baseGearList"></div></div>
+    <div id="spendMerxColumn"></div>
     <input id="gearSearch">
     <p id="gearClassFilterWrap" hidden><select id="gearClassFilter"></select></p>
     <ul>

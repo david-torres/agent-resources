@@ -1194,3 +1194,53 @@ describe('a declared mission history prices the same in the wizard and at the sa
     expect(result.error).toMatch(/Merx/);
   });
 });
+
+// Whole-plan review, Important 4: step 4's opening sentence was keyed on the
+// URL's mode while the badge beside it reads the selected class's economy, so
+// an advent wizard on a V1 class read "base gear is included for free" and
+// "2 Merx" against a live 12 and no free column. The sentence is written by
+// the same render that writes the badge now, from the same two sources.
+describe('step 4 prose follows the class economy the readouts follow', () => {
+  const introText = () => document.getElementById('gearStepIntro').textContent;
+
+  const bootOnClass = (mode, contentFormat) => {
+    const wizard = bootWizard(fixture({
+      mode,
+      classes: [{
+        id: 'c1', name: 'Test Class', content_format: contentFormat, gear: twelveItems(),
+        base_gear: [{ name: 'Default A' }], stat_spread: {}, abilities: [], advanced_abilities: []
+      }],
+      statList: STAT_LIST,
+      personalityMap: PERSONALITY_MAP
+    }));
+    wizard.getState().classId = 'c1';
+    wizard.renderGearStep();
+    return wizard;
+  };
+
+  test('an advent wizard on a V1 class is told the aspirant budget, with no free column', () => {
+    const wizard = bootOnClass('advent', 'aspirant');
+    expect(introText()).toContain(String(wizard.getMerxBudget()));
+    expect(introText()).not.toContain('free');
+    expect(document.getElementById('merxBudget').textContent)
+      .toBe(String(economyFigures().grants.aspirant));
+  });
+
+  test('an aspirant wizard on an advent-content class is told about its free base gear', () => {
+    const wizard = bootOnClass('aspirant', 'advent');
+    expect(introText()).toContain('free');
+    expect(introText()).toContain(String(wizard.getMerxBudget()));
+    expect(document.getElementById('merxBudget').textContent)
+      .toBe(String(economyFigures().grants.advent));
+  });
+
+  test('the sentence reports the budget the badge reports, mission income included', () => {
+    const wizard = bootOnClass('aspirant', 'aspirant');
+    wizard.getState().successfulMissions = 4;
+    wizard.renderGearStep();
+    const budget = economyFigures().grants.aspirant + 4 * MERX_PER_MISSION_SUCCESS;
+    expect(wizard.getMerxBudget()).toBe(budget);
+    expect(introText()).toContain('You have ' + budget + ' Merx');
+    expect(document.getElementById('merxBudget').textContent).toBe(String(budget));
+  });
+});

@@ -277,15 +277,11 @@
 
 <section class="wizard-step" data-step-panel="4" hidden>
   <h3 class="title is-4">4. Gear Selection</h3>
-  <p class="has-text-grey is-size-7 mb-3">
-    {{#if (eq mode 'aspiring')}}
-      The items you picked are your class's own Signatures: {{economy.prices.signature.own}} Merx each, and each may take its printed Enchantment for {{economy.prices.defaultEnchantment.own}} more. Spend your {{economy.grants.aspiring}} Merx across them and common items ({{economy.prices.commonItem}} Merx).
-    {{else if (eq mode 'aspirant')}}
-      Aspirant mode: no starting gear. You have {{economy.grants.aspirant}} Merx. Your class's Signatures are printed below at {{economy.prices.signature.own}} Merx each; another class's cost {{economy.prices.signature.cross}} Merx, and common items {{economy.prices.commonItem}} Merx. Open a Signature to enchant it or fit it with Mods.
-    {{else}}
-      Your class's base gear is included for free on the left. You have {{economy.grants.advent}} Merx to spend on the right — pick any combination of common items ({{economy.prices.commonItem}} Merx) or elective signature items ({{economy.prices.signature.own}} Merx). Duplicates are allowed.
-    {{/if}}
-  </p>
+  <!-- Written by character-wizard.js renderGearReadouts, from the economy the
+       SELECTED CLASS resolves to and the live budget -- the mode in the URL
+       decides neither, so a sentence keyed on it would contradict the badge
+       below it. -->
+  <p id="gearStepIntro" class="has-text-grey is-size-7 mb-3"></p>
 
   <div class="level is-mobile mb-3">
     <div class="level-left">

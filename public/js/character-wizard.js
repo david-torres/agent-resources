@@ -210,6 +210,7 @@ window.CharacterWizard = (function () {
   const baseGearColumn = document.getElementById('baseGearColumn');
   const baseGearList = document.getElementById('baseGearList');
   const spendColumn = document.getElementById('spendMerxColumn');
+  const gearStepIntro = document.getElementById('gearStepIntro');
   const spendList = document.getElementById('spendList');
   // The printed Signature grid and the entry it opens into. The view renders
   // the panel in every mode; renderGearStep hides it where the economy has no
@@ -3181,11 +3182,39 @@ window.CharacterWizard = (function () {
   };
 
   // ----- Merx and Signature Cap readouts, and what they gate -----
+  // Step 4's opening sentence. Written here rather than in the view because
+  // only the client knows which economy the SELECTED CLASS resolves to, and
+  // every figure in it is the one the readouts below print -- the live budget
+  // and the served price table -- so the prose cannot contradict them.
+  const gearStepIntroText = (budget) => {
+    const economy = economyForState();
+    const prices = ECONOMY.prices;
+    if (economy === 'aspiring') {
+      return 'The items you picked are your class\u2019s own Signatures: '
+        + prices.signature.own + ' Merx each, and each may take its printed '
+        + 'Enchantment for ' + prices.defaultEnchantment.own + ' more. Spend your '
+        + budget + ' Merx across them and common items ('
+        + prices.commonItem + ' Merx).';
+    }
+    if (economy === 'advent') {
+      return 'Your class\u2019s base gear is included for free on the left. You have '
+        + budget + ' Merx to spend on the right \u2014 pick any combination of common '
+        + 'items (' + prices.commonItem + ' Merx) or elective signature items ('
+        + prices.signature.own + ' Merx). Duplicates are allowed.';
+    }
+    return 'No starting gear. You have ' + budget + ' Merx. Your class\u2019s '
+      + 'Signatures are printed below at ' + prices.signature.own
+      + ' Merx each; another class\u2019s cost ' + prices.signature.cross
+      + ' Merx, and common items ' + prices.commonItem
+      + ' Merx. Open a Signature to enchant it or fit it with Mods.';
+  };
+
   const renderGearReadouts = () => {
     const budget = getMerxBudget();
     const spent = getMerxSpent();
     if (merxSpentEl) merxSpentEl.textContent = String(spent);
     if (merxBudgetEl) merxBudgetEl.textContent = String(budget);
+    if (gearStepIntro) gearStepIntro.textContent = gearStepIntroText(budget);
 
     // pg. 3: the 12 Merx "may be spent however they like or save for later" --
     // an unspent remainder is not left behind, it becomes commissary_reward on
