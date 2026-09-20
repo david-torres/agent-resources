@@ -315,6 +315,19 @@ class CharacterService {
     prepared.class_id = storedClassId;
     delete prepared.class;
 
+    // creator_mode is immutable on update too, for the same reason class_id
+    // is just above: the classic/expert edit form submits no creator_mode
+    // field at all (it has none), so normalizeCharacterInput's own coercion
+    // (an absent value becomes explicit null, services/character/input.js)
+    // would otherwise overwrite it on every ordinary save. For an aspiring
+    // character that column is the ONLY signal economyFor has once class_id
+    // is null -- losing it silently reverts the character to the advent
+    // economy: its Signature pricing, Merx breakdown and edit-form purchase
+    // surface all disappear on the very next save. Preserved the same way
+    // class_id is, not deleted: normalizeCharacterInput still needs a value
+    // to validate.
+    prepared.creator_mode = existing.data.creator_mode ?? null;
+
     // Resolved from the stored class, never the submitted one: this gates both
     // the v2-only field strip below and the perk rebuild in saveCharacterAtomic.
     // content_format rides alongside rulesVersion from the same one-row query
