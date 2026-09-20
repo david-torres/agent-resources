@@ -23,7 +23,7 @@ const {
 } = require('../models/character');
 const characterRepository = require('../services/character/repository');
 const { applyDescriptionGate } = require('../services/character/description-gate');
-const { normalizeWizardPayload, collectCharacterFormArrays } = require('../services/character/input');
+const { normalizeWizardPayload, collectCharacterFormArrays, validateAspiringBuild } = require('../services/character/input');
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
@@ -722,6 +722,17 @@ router.post('/', isAuthenticated, async (req, res) => {
     req.body.image_crop = image_crop;
   }
   req.body = collectCharacterFormArrays(req.body);
+
+  // The wizard's create path runs this same check inside
+  // normalizeWizardPayload; a hand-crafted aspiring payload posted straight
+  // to this classic/expert route never passed through there, so without this
+  // it reached storage with neither the Signature nor the Ability pool
+  // checked.
+  if (req.body.creator_mode === 'aspiring') {
+    const buildError = validateAspiringBuild(req.body);
+    if (buildError) return sendRouteError(req, res, { status: 400, message: buildError });
+  }
+
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
     return sendCharacterSaveError(req, res, error);

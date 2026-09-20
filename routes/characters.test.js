@@ -89,11 +89,16 @@ mock.module('../models/_base', () => ({
 }));
 
 mock.module('../models/auth', () => ({
-  // Consumed by the real authOptional middleware:
-  getUserFromToken: async () => false,
+  // Consumed by the real authOptional/isAuthenticated middleware. No token
+  // (the ability-perk-group and character-page tests above) resolves false;
+  // the classic POST /characters test below sends a bearer token and needs a
+  // user back.
+  getUserFromToken: async (token) => (token ? { id: 'user-1' } : false),
 }));
 mock.module('../models/profile', () => ({
-  getProfile: async () => null,
+  // Consumed by isAuthenticated for the signed-in POST /characters test;
+  // no token means no call reaches this in the other tests above.
+  getProfile: async (user) => (user ? { id: 'profile-1', user_id: user.id } : null),
   getProfileById: async () => ({ data: null, error: null }),
 }));
 
@@ -124,6 +129,11 @@ mock.module('../models/character', () => ({
     ? { data: pageState.character, error: null }
     : { data: null, error: { code: 'PGRST116', message: 'not found' } }),
   getCharacterRecentMissions: async () => ({ data: [], error: null }),
+  // The classic-POST-bypass test (Task 12) must never reach this: a rejected
+  // build is refused by validateAspiringBuild before createCharacter is
+  // called. A distinct error here makes a guard that silently lets the
+  // request through fail loudly instead of passing for the wrong reason.
+  createCharacter: async () => ({ data: null, error: 'createCharacter should not have been called' }),
 }));
 mock.module('../models/class', () => ({
   getClass: async () => ({ data: { id: 'class-a', rules_version: 'v1' }, error: null }),
@@ -273,4 +283,38 @@ test('character page does not render Illegal Build for a clean character', async
   expect(res.status).toBe(200);
   const body = await res.text();
   expect(body).not.toContain('Illegal Build');
+});
+
+// POST /characters (classic/expert create) — closing the bypass (Task 12).
+// The wizard's create path runs validateAspiringBuild via
+// normalizeWizardPayload; this route called createCharacter directly, so a
+// hand-crafted aspiring payload posted here skipped it. A payload with a
+// valid three-Signature pool but only one Ability pick clears the Signature
+// check and must be refused by the Ability-pick rule specifically.
+test('POST /characters refuses an aspiring build missing its three Ability picks', async () => {
+  const res = await fetch(`${baseUrl}/characters`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer test-token',
+    },
+    body: JSON.stringify({
+      creator_mode: 'aspiring',
+      name: 'Ash',
+      pseudo_class: { name: 'Homebrew' },
+      aspiring_signatures: [
+        { class_id: 'class-a', name: 'Sig A' },
+        { class_id: 'class-b', name: 'Sig B' },
+        { class_id: 'class-c', name: 'Sig C' },
+      ],
+      aspiring_abilities: [
+        { class_id: 'class-a', name: 'Ability A', type: 'core' },
+      ],
+    }),
+  });
+
+  expect(res.status).toBe(400);
+  const body = await res.text();
+  expect(body).toContain('An Aspiring character needs exactly three Ability picks.');
 });
