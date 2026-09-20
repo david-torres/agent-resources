@@ -11,7 +11,7 @@ const {
   priceOfMod,
   equipmentSpend,
   signatureSlotsUsed,
-  withPreservedEnchantments,
+  withPreservedEquipment,
   countWordsExcludingRatings,
   COMMON_ITEM_PRICE,
   CREATION_GRANT,
@@ -163,19 +163,21 @@ test('an aspiring character has no class to read, so creator_mode decides', () =
   expect(economyFor({ contentFormat: undefined, creatorMode: 'aspiring' })).toBe('aspiring');
 });
 
-// --- withPreservedEnchantments: the cap counts what a save LEAVES ---------
+// --- withPreservedEquipment: limits judge what a save LEAVES --------------
 //
-// pg. 8 charges an Enchantment a cap slot, so the slot count has to be taken
-// against the equipment a save leaves on the character, not the equipment the
+// pg. 8 charges an Enchantment a cap slot, and every Enchantment and Mod
+// costs Merx, so both the slot count and the spend have to be taken against
+// the equipment a save leaves on the character, not the equipment the
 // submission happens to mention. A submitted item that omits `enchantment`
-// keeps whatever is stored (services/character/input.js normalizeGearEquipment
-// and the save_character_atomic RPC), so counting the submission alone lets
-// two saves walk a character past the cap.
+// and `mods` keeps whatever is stored (services/character/input.js
+// normalizeGearEquipment and the save_character_atomic RPC), so reading the
+// submission alone lets two saves walk a character past the cap and lets an
+// auto-calculated edit refund Merx that is still spent.
 
-const stored = (name, classId, enchantment) => ({ name, class_id: classId, enchantment });
+const stored = (name, classId, enchantment, mods = []) => ({ name, class_id: classId, enchantment, mods });
 
 test('an item that omits enchantment inherits the stored one', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
@@ -184,7 +186,7 @@ test('an item that omits enchantment inherits the stored one', () => {
 });
 
 test('an explicit null removes the stored Enchantment, so it costs no slot', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1', enchantment: null }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
@@ -192,7 +194,7 @@ test('an explicit null removes the stored Enchantment, so it costs no slot', () 
 });
 
 test('an item with its own Enchantment replaces the stored one, costing one slot', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1', enchantment: { source: 'custom', name: 'Hex' } }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
@@ -201,7 +203,7 @@ test('an item with its own Enchantment replaces the stored one, costing one slot
 });
 
 test('an unenchanted stored row leaves an omitting item unenchanted', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1' }],
     [stored('Blade', 'c1', null)]
   );
@@ -212,7 +214,7 @@ test('an unenchanted stored row leaves an omitting item unenchanted', () => {
 // pairing falls back to the name alone -- but an item that DOES carry a
 // class_id must not inherit another class's Enchantment.
 test('a class_id on the submitted item discriminates between same-named rows', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c2' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
@@ -220,7 +222,7 @@ test('a class_id on the submitted item discriminates between same-named rows', (
 });
 
 test('a name-only item pairs with a same-named row of any class', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
@@ -230,7 +232,7 @@ test('a name-only item pairs with a same-named row of any class', () => {
 // N identical items consume N stored rows, so a second copy of a name with
 // only one enchanted row inherits nothing.
 test('each stored row is claimed once', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1' }, { name: 'Blade', class_id: 'c1' }],
     [stored('Blade', 'c1', { source: 'default' }), stored('Blade', 'c1', null)]
   );
@@ -241,17 +243,51 @@ test('each stored row is claimed once', () => {
 // exactly the list it passed in.
 test('no stored rows leaves the submitted list alone', () => {
   const submitted = [{ name: 'Blade', class_id: 'c1' }, { name: 'Shield' }];
-  expect(withPreservedEnchantments(submitted, undefined)).toEqual(submitted);
-  expect(withPreservedEnchantments(submitted, [])).toEqual(submitted);
-  expect(signatureSlotsUsed(withPreservedEnchantments(submitted, []))).toBe(2);
+  expect(withPreservedEquipment(submitted, undefined)).toEqual(submitted);
+  expect(withPreservedEquipment(submitted, [])).toEqual(submitted);
+  expect(signatureSlotsUsed(withPreservedEquipment(submitted, []))).toBe(2);
 });
 
 test('an unmatched submitted item inherits nothing', () => {
-  const effective = withPreservedEnchantments(
+  const effective = withPreservedEquipment(
     [{ name: 'Shield', class_id: 'c1' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
   expect(signatureSlotsUsed(effective)).toBe(1);
+});
+
+// The Merx half of the same contract: Mods are priced, and an untouched row
+// submits neither key, so an omitted `mods` must be carried too or every
+// auto-calculated edit hands its Mods back as unspent Merx.
+test('an item that omits mods inherits the stored ones', () => {
+  const effective = withPreservedEquipment(
+    [{ name: 'Blade', class_id: 'c1' }],
+    [stored('Blade', 'c1', null, [{ name: 'Scope' }, { name: 'Sling' }])]
+  );
+  expect(effective[0].mods).toEqual([{ name: 'Scope' }, { name: 'Sling' }]);
+  expect(equipmentSpend(effective, { economy: 'aspirant', characterClassId: 'c1' }))
+    .toBe(equipmentSpend(
+      [stored('Blade', 'c1', null, [{ name: 'Scope' }, { name: 'Sling' }])],
+      { economy: 'aspirant', characterClassId: 'c1' }
+    ));
+});
+
+test('an explicit empty mods list strips the stored Mods', () => {
+  const effective = withPreservedEquipment(
+    [{ name: 'Blade', class_id: 'c1', enchantment: null, mods: [] }],
+    [stored('Blade', 'c1', null, [{ name: 'Scope' }])]
+  );
+  expect(effective[0].mods).toEqual([]);
+});
+
+// Same-named stored rows are ambiguous, so the claim is biased to the dearest
+// one: this can over-report a limit, never under-report it.
+test('the dearest same-named row is claimed first', () => {
+  const effective = withPreservedEquipment(
+    [{ name: 'Blade', class_id: 'c1' }],
+    [stored('Blade', 'c1', null, []), stored('Blade', 'c1', null, [{ name: 'Scope' }])]
+  );
+  expect(effective[0].mods).toEqual([{ name: 'Scope' }]);
 });
 
 describe('economyFigures', () => {

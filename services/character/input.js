@@ -15,7 +15,7 @@ const {
   economyFor,
   equipmentSpend,
   signatureSlotsUsed,
-  withPreservedEnchantments,
+  withPreservedEquipment,
   CREATION_GRANT,
   SIGNATURE_CAP,
   COMMON_ITEM_PRICE
@@ -329,10 +329,10 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 //
 // `storedGear` is the character's current class_gear rows, passed by
 // updateCharacter from the getCharacter call it already makes. The cap is
-// counted from the Enchantments the save will LEAVE, not only the ones it
-// mentions: an item that omits `enchantment` keeps its stored one, so the
+// counted from the equipment the save will LEAVE, not only what it mentions:
+// an item that omits `enchantment` and `mods` keeps its stored ones, so the
 // submitted list alone is breachable across two saves (see
-// withPreservedEnchantments). The spend below stays on the submitted list --
+// withPreservedEquipment). The spend below stays on the submitted list --
 // storedGear only ever arrives from updateCharacter, which passes
 // enforceMerxBudget: false, so no caller prices a list with stored rows
 // behind it.
@@ -348,7 +348,7 @@ const validateEconomyLimits = ({
   // This is checked independently of Merx -- a character who can afford a
   // seventh enchanted Signature may still not carry it if the slots are full.
   const cap = SIGNATURE_CAP[economy];
-  const slots = signatureSlotsUsed(withPreservedEnchantments(items, storedGear));
+  const slots = signatureSlotsUsed(withPreservedEquipment(items, storedGear));
   if (cap !== null && slots > cap) {
     errors.push(
       `Signature Cap is ${cap}; this character carries ${slots} `

@@ -98,13 +98,16 @@ const signatureSlotsUsed = (gear) => {
     return items.reduce((slots, item) => slots + 1 + (item.enchantment ? 1 : 0), 0);
 };
 
-// pg. 8 charges an Enchantment a cap slot, so the cap has to be judged against
-// the Enchantments a save LEAVES on a character, not only the ones its payload
-// mentions. A submitted item that omits its `enchantment` key keeps whatever
-// is stored -- the three-state model services/character/input.js
-// normalizeGearEquipment and the save_character_atomic RPC share -- so
-// counting the submission alone lets two saves walk a character past the cap:
-// six enchanted Signatures, then twelve bare ones.
+// pg. 8 charges an Enchantment a cap slot, and every Enchantment and Mod
+// costs Merx, so both have to be judged against the equipment a save LEAVES
+// on a character, not only the equipment its payload mentions. A submitted
+// item that omits `enchantment` and `mods` keeps whatever is stored -- the
+// three-state model services/character/input.js normalizeGearEquipment and
+// the save_character_atomic RPC share, and the contract the edit form's
+// purchase surface serialises to for any row the player did not touch.
+// Counting or pricing the submission alone lets an untouched character walk
+// past the cap (six enchanted Signatures, then twelve bare ones) and lets an
+// auto-calculated edit hand back Merx that is still spent.
 //
 // Pairing mirrors the RPC's (class_id, name, occurrence) matching, with one
 // concession: a bare "ClassName::ItemName" submission carries a class NAME,
@@ -112,33 +115,41 @@ const signatureSlotsUsed = (gear) => {
 // must match a stored row's name, and its class_id as well only when it
 // carries one. Claiming each row at most once is the occurrence index.
 //
-// Where several stored rows share a name, an enchanted one is claimed first,
-// and an item that submits its own `enchantment` claims nothing. Both choices
-// make the imprecision one-sided: the RPC resolves every bare copy of a name
-// to the ONE class_id the catalogue maps it to and deletes the same-named rows
-// of other classes, so the Enchantment it preserves may not be the one claimed
-// here. Claiming the enchanted row first means this can report a slot MORE
-// than the save will produce, never fewer. The worst case is refusing a save
-// that already sits exactly on the cap in an ambiguous same-name-across-
-// classes build; the opposite bias would leave the two-save breach open.
-const withPreservedEnchantments = (submitted, stored) => {
+// Where several stored rows share a name, the dearest is claimed first -- an
+// enchanted row over a bare one, and more Mods over fewer -- and an item that
+// submits its own equipment claims nothing. Both choices make the imprecision
+// one-sided: the RPC resolves every bare copy of a name to the ONE class_id
+// the catalogue maps it to and deletes the same-named rows of other classes,
+// so the equipment it preserves may not be the one claimed here. Claiming the
+// dearest row first means this can report MORE slots and MORE spend than the
+// save will produce, never fewer. The worst case is refusing a save that
+// already sits exactly on a limit in an ambiguous same-name-across-classes
+// build; the opposite bias would leave the two-save breach open.
+const withPreservedEquipment = (submitted, stored) => {
     const items = Array.isArray(submitted) ? submitted.filter(Boolean) : [];
     const rows = Array.isArray(stored) ? stored.filter(Boolean) : [];
     if (rows.length === 0) return items;
 
     const unclaimed = new Set(rows);
+    const dearest = (a, b) => (b.enchantment ? 1 : 0) - (a.enchantment ? 1 : 0)
+        || modsOf(b).length - modsOf(a).length;
     const claimFor = (item) => {
         const candidates = [...unclaimed].filter((row) => row.name === item.name
             && (!item.class_id || row.class_id === item.class_id));
-        const claimed = candidates.find((row) => row.enchantment) || candidates[0];
+        const claimed = candidates.sort(dearest)[0];
         if (claimed) unclaimed.delete(claimed);
         return claimed || null;
     };
 
     return items.map((item) => {
-        if (typeof item !== 'object' || 'enchantment' in item) return item;
+        if (typeof item !== 'object') return item;
+        if ('enchantment' in item && 'mods' in item) return item;
         const row = claimFor(item);
-        return { ...item, enchantment: (row && row.enchantment) || null };
+        return {
+            ...item,
+            enchantment: 'enchantment' in item ? item.enchantment : ((row && row.enchantment) || null),
+            mods: 'mods' in item ? item.mods : modsOf(row || {})
+        };
     });
 };
 
@@ -211,7 +222,7 @@ module.exports = {
     priceOfMod,
     equipmentSpend,
     signatureSlotsUsed,
-    withPreservedEnchantments,
+    withPreservedEquipment,
     countWordsExcludingRatings,
     COMMON_ITEM_PRICE,
     CREATION_GRANT,

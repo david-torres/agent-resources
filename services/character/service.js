@@ -8,7 +8,7 @@ const {
   normalizeStatsPayload
 } = require('./input');
 const { deriveCharacterTotals, declaredSuccessfulMissions } = require('../../util/character-derived');
-const { economyFor } = require('../../util/merx-economy');
+const { economyFor, withPreservedEquipment } = require('../../util/merx-economy');
 const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
@@ -342,9 +342,9 @@ class CharacterService {
     // (equipmentSpend reads class_id).
     //
     // storedGear is what makes the cap honest across two saves: an item that
-    // omits `enchantment` keeps its stored one, so counting only what the
-    // payload mentions would let 6 enchanted Signatures plus 12 bare ones
-    // through at a submitted 12 slots and a real 18.
+    // omits `enchantment` and `mods` keeps its stored ones, so counting only
+    // what the payload mentions would let 6 enchanted Signatures plus 12 bare
+    // ones through at a submitted 12 slots and a real 18.
     // The Stat Cap is enforced on every edit too, the same way the Signature
     // Cap is just above; capPurchases comes from the row this call already
     // fetched (existing.data.stat_cap_purchases), not a second lookup. The
@@ -374,10 +374,18 @@ class CharacterService {
       if (missions.error || offscreenMissions.error) {
         return { data: null, error: missions.error || offscreenMissions.error };
       }
+      // Priced on the equipment the save LEAVES, not the equipment it
+      // mentions: the edit form's purchase surface omits `enchantment` and
+      // `mods` for every row the player did not touch, so pricing the bare
+      // submission would refund Merx that is still spent and write the
+      // difference back as reward the character could spend again.
       const derived = deriveCharacterTotals({
         character: {
           class_id: characterInput.class_id,
-          gear: resolveSubmittedGear(childData.classGear, gearNameToClassId),
+          gear: withPreservedEquipment(
+            resolveSubmittedGear(childData.classGear, gearNameToClassId),
+            existing.data.gear
+          ),
           common_items: characterInput.common_items
         },
         realMissions: missions.data || [],

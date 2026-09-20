@@ -938,10 +938,12 @@ const ADVENT_CLASS_ID = 'gunslinger-v1';
 // Saves gear through updateCharacter with auto_calculate on, for a character
 // whose (immutable) stored class is `classId`. Mirrors saveGearAsClass above,
 // but exercises the derived Merx totals rather than gear-resolution.
-const autoCalculateOnClass = async (classId, gear) => {
+const autoCalculateOnClass = async (classId, gear, storedGear) => {
   let saved = null;
   const service = new CharacterService(makeAdapter([], {
-    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [] }),
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [], gear: storedGear
+    }),
     getClassContentLookupMaps: async () => ({
       gearNameToClassId: new Map(),
       gearNameToDescription: new Map(),
@@ -987,6 +989,56 @@ test('auto-calculate leaves an Advent character on the advent economy', async ()
   // so nothing is charged and the reward stays 0 -- unchanged from before
   // this task, since Advent was always the default economy.
   expect(saved.commissary_reward).toBe(0);
+});
+
+// Whole-plan review, Important 2: auto-calculate priced the SUBMITTED gear
+// list, but the edit form's purchase surface omits `enchantment` and `mods`
+// for every row the player did not touch -- the preserve-on-absent contract
+// normalizeGearEquipment keeps. So an untouched build was re-priced as bare
+// Signatures and the difference was written back as commissary_reward the
+// character could spend a second time. The derivation now prices what the
+// save LEAVES, the way the Signature Cap two calls earlier already did.
+test('auto-calculate keeps charging for Enchantments an untouched edit does not mention', async () => {
+  const storedGear = Array.from({ length: 3 }, (_, i) => ({
+    name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }, mods: []
+  }));
+  const submitted = storedGear.map(({ name, class_id }) => ({ name, class_id }));
+  const { result, saved } = await autoCalculateOnClass(ASPIRANT_CLASS_ID, submitted, storedGear);
+  expect(result.error).toBeNull();
+  // Three own-class Signatures at 2, each with a Default Enchantment at 2:
+  // 12 Merx of the 12-Merx grant, so nothing is left over. Priced on the bare
+  // submission it would read 6 spent and hand back 6.
+  expect(saved.commissary_reward).toBe(0);
+});
+
+test('auto-calculate keeps charging for Mods an untouched edit does not mention', async () => {
+  const storedGear = [{
+    name: 'S0', class_id: ASPIRANT_CLASS_ID, enchantment: null,
+    mods: [{ name: 'Scope' }, { name: 'Sling' }]
+  }];
+  const { result, saved } = await autoCalculateOnClass(
+    ASPIRANT_CLASS_ID, [{ name: 'S0', class_id: ASPIRANT_CLASS_ID }], storedGear
+  );
+  expect(result.error).toBeNull();
+  // One own-class Signature at 2 plus its first and second Mods at 1 and 2:
+  // 5 of the 12-Merx grant, leaving 7. Priced on the bare submission it would
+  // read 2 spent and leave 10.
+  expect(saved.commissary_reward).toBe(7);
+});
+
+test('an edit that explicitly strips its equipment is priced as stripped', async () => {
+  const storedGear = [{
+    name: 'S0', class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'custom', name: 'Hex', description: 'd' },
+    mods: [{ name: 'Scope' }]
+  }];
+  const { result, saved } = await autoCalculateOnClass(
+    ASPIRANT_CLASS_ID,
+    [{ name: 'S0', class_id: ASPIRANT_CLASS_ID, enchantment: null, mods: [] }],
+    storedGear
+  );
+  expect(result.error).toBeNull();
+  // A bare own-class Signature: 2 of 12.
+  expect(saved.commissary_reward).toBe(10);
 });
 
 // --- commissary_reward derived at creation -----------------------------
