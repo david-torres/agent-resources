@@ -375,22 +375,70 @@ test('an Enchantment and two Mods are charged on top of the Signature', () => {
   expect(parts.spend).toBe(7);
 });
 
-// pg. 90 treats an aspiring character's three picks as its own Class's, and it
-// has no class_id at all -- without the rule every pick would read as
-// cross-class and cost 3, overcharging a 10-Merx grant by 3.
-test('an aspiring character pays own-class price for picks from three classes', () => {
+const ASPIRING_POOL = [
+  { class_id: 'class-a', name: 'A' },
+  { class_id: 'class-b', name: 'B' },
+  { class_id: 'class-c', name: 'C' }
+];
+
+test('an aspiring character pays own-class price for its three chosen Signatures', () => {
   const parts = deriveMerxBreakdown({
-    realMissions: [], offscreenMissions: [],
+    realMissions: [],
+    offscreenMissions: [],
     gear: [
       { name: 'A', class_id: 'class-a' },
       { name: 'B', class_id: 'class-b' },
       { name: 'C', class_id: 'class-c' }
     ],
-    commonItems: [], characterClassId: null, economy: 'aspiring'
+    commonItems: [],
+    characterClassId: null,
+    economy: 'aspiring',
+    aspiringSignatures: ASPIRING_POOL
   });
   expect(parts.earned).toBe(10);
   expect(parts.spend).toBe(6);
   expect(parts.reward).toBe(4);
+});
+
+test('an aspiring character pays the surcharge for a fourth Signature', () => {
+  const parts = deriveMerxBreakdown({
+    realMissions: [],
+    offscreenMissions: [],
+    gear: [
+      { name: 'A', class_id: 'class-a' },
+      { name: 'B', class_id: 'class-b' },
+      { name: 'C', class_id: 'class-c' },
+      { name: 'D', class_id: 'class-d' }
+    ],
+    commonItems: [],
+    characterClassId: null,
+    economy: 'aspiring',
+    aspiringSignatures: ASPIRING_POOL
+  });
+  expect(parts.spend).toBe(9);
+  expect(parts.reward).toBe(1);
+});
+
+// deriveCharacterTotals reads the pool off the character row, so every caller
+// that already hands it a whole character keeps working untouched.
+test('deriveCharacterTotals reads the pool from the character row', () => {
+  const totals = deriveCharacterTotals({
+    character: {
+      class_id: null,
+      common_items: [],
+      aspiring_signatures: ASPIRING_POOL,
+      gear: [
+        { name: 'A', class_id: 'class-a' },
+        { name: 'D', class_id: 'class-d' }
+      ]
+    },
+    realMissions: [],
+    offscreenMissions: [],
+    rulesVersion: 'v1',
+    economy: 'aspiring'
+  });
+  expect(totals.commissary_reward).toBe(5);
+  expect(totals.merx_deficit).toBe(0);
 });
 
 // All 327 existing characters are in this branch. Three on-class Signatures

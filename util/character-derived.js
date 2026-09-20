@@ -71,9 +71,9 @@ const adventGearSpend = (gearList, characterClassId) => {
     + offClassCount * priceOfSignature({ crossClass: true });
 };
 
-const gearSpendFor = (economy, gearList, characterClassId) => (economy === 'advent'
+const gearSpendFor = (economy, gearList, characterClassId, aspiringSignatures) => (economy === 'advent'
   ? adventGearSpend(gearList, characterClassId)
-  : equipmentSpend(gearList, { economy, characterClassId }));
+  : equipmentSpend(gearList, { economy, characterClassId, aspiringSignatures }));
 
 // Merx a character has earned since creation: mission successes plus whatever
 // each offscreen mission recorded. The creation grant is NOT part of it --
@@ -89,7 +89,8 @@ const deriveMissionMerx = ({ realMissions, offscreenMissions } = {}) => {
 };
 
 const deriveMerxBreakdown = ({
-  realMissions, offscreenMissions, gear, commonItems, characterClassId, economy = 'advent'
+  realMissions, offscreenMissions, gear, commonItems, characterClassId,
+  economy = 'advent', aspiringSignatures
 }) => {
   const gearList = Array.isArray(gear) ? gear : [];
   const itemList = Array.isArray(commonItems) ? commonItems : [];
@@ -98,7 +99,7 @@ const deriveMerxBreakdown = ({
     + deriveMissionMerx({ realMissions, offscreenMissions });
 
   const itemSpend = itemList.length * COMMON_ITEM_PRICE;
-  const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId);
+  const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId, aspiringSignatures);
 
   return {
     earned,
@@ -118,6 +119,7 @@ const deriveCharacterTotals = ({ character, realMissions, offscreenMissions, rul
     gear: character && character.gear,
     commonItems: character && character.common_items,
     characterClassId: character && character.class_id,
+    aspiringSignatures: character && character.aspiring_signatures,
     economy
   });
   const level = deriveLevel(completed_missions, rulesVersion);

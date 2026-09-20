@@ -1072,6 +1072,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             gear: character.gear,
             commonItems: character.common_items,
             characterClassId: character.class_id,
+            aspiringSignatures: character.aspiring_signatures,
             economy
           });
         } catch (_) {
