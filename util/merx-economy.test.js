@@ -19,7 +19,8 @@ const {
   ABILITY_CAP,
   MODS_PER_SIGNATURE,
   ENCHANTMENT_WORD_LIMIT,
-  MOD_WORD_LIMIT
+  MOD_WORD_LIMIT,
+  ASPIRING_SIGNATURE_PICKS
 } = require('./merx-economy');
 
 // pg. 85, "Spending Merx". Cross-Class is uniformly +1 at every tier.
@@ -118,15 +119,55 @@ test('a Power Rating inside parentheses or before a comma behaves the same', () 
   expect(countWordsExcludingRatings('Deals damage (<sup>M</sup>), then burns')).toBe(4);
 });
 
-// pg. 90: an aspiring character's picks "are treated as belonging to your
-// Class for the purposes of acquisition and improvement", so no surcharge.
-test('aspiring prices every Signature own-class regardless of its class_id', () => {
+// pg. 90 names three specific Signatures and makes them a Class. The pool is
+// those three; everything else is out-of-class, exactly as it is to anyone
+// else. `characterClassId` is null for every aspiring character, so the pool
+// is the only signal these cases have.
+const POOL = [
+  { class_id: 'class-a', name: 'A' },
+  { class_id: 'class-b', name: 'B' },
+  { class_id: 'class-c', name: 'C' }
+];
+
+test('an aspiring character pays own-class for each of its three chosen Signatures', () => {
   const gear = [
     { name: 'A', class_id: 'class-a' },
     { name: 'B', class_id: 'class-b' },
     { name: 'C', class_id: 'class-c' }
   ];
-  expect(equipmentSpend(gear, { economy: 'aspiring', characterClassId: null })).toBe(6);
+  expect(equipmentSpend(gear, {
+    economy: 'aspiring', characterClassId: null, aspiringSignatures: POOL
+  })).toBe(6);
+});
+
+test('an aspiring character pays cross-class for a Signature outside its three', () => {
+  const gear = [{ name: 'D', class_id: 'class-d' }];
+  expect(equipmentSpend(gear, {
+    economy: 'aspiring', characterClassId: null, aspiringSignatures: POOL
+  })).toBe(3);
+});
+
+// The pool is three items, not three classes: sharing a class with a pick
+// buys nothing, because the character never had that class.
+test('a Signature from a chosen class but not the chosen item is still cross-class', () => {
+  const gear = [{ name: 'A2', class_id: 'class-a' }];
+  expect(equipmentSpend(gear, {
+    economy: 'aspiring', characterClassId: null, aspiringSignatures: POOL
+  })).toBe(3);
+});
+
+// A row written before characters.aspiring_signatures existed has no pool.
+// It derives exactly as it did before, rather than being repriced upward.
+test('an absent or empty pool prices every aspiring Signature own-class', () => {
+  const gear = [
+    { name: 'A', class_id: 'class-a' },
+    { name: 'D', class_id: 'class-d' }
+  ];
+  for (const pool of [undefined, [], null]) {
+    expect(equipmentSpend(gear, {
+      economy: 'aspiring', characterClassId: null, aspiringSignatures: pool
+    })).toBe(4);
+  }
 });
 
 test('aspirant charges the cross-class surcharge on another class Signature', () => {
@@ -297,6 +338,7 @@ describe('economyFigures', () => {
       grants: CREATION_GRANT,
       signatureCap: SIGNATURE_CAP,
       modsPerSignature: MODS_PER_SIGNATURE,
+      aspiringSignaturePicks: ASPIRING_SIGNATURE_PICKS,
       enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,
       modWordLimit: MOD_WORD_LIMIT,
       prices: {
@@ -307,6 +349,10 @@ describe('economyFigures', () => {
         mod: { own: [1, 2], cross: [2, 3] }
       }
     });
+  });
+
+  test('economyFigures carries the aspiring pick count', () => {
+    expect(economyFigures().aspiringSignaturePicks).toBe(3);
   });
 
   test('survives JSON, because that is how it reaches a browser', () => {

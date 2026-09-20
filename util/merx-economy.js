@@ -41,6 +41,10 @@ const ABILITY_CAP = { advent: null, aspirant: 6, aspiring: 4 };
 
 // pg. 87: "A given Signature may hold up to two Mods".
 const MODS_PER_SIGNATURE = 2;
+// pg. 90: an aspiring character chooses three Signatures, and those three are
+// its Class. A count rather than a price, but a rules figure all the same, so
+// it lives here with the rest of them.
+const ASPIRING_SIGNATURE_PICKS = 3;
 // pg. 86 and pg. 87.
 const ENCHANTMENT_WORD_LIMIT = 40;
 const MOD_WORD_LIMIT = 10;
@@ -63,21 +67,37 @@ const priceOfMod = ({ index, crossClass } = {}) => {
     return index in prices ? prices[index] : prices[prices.length - 1];
 };
 
-// pg. 90: an aspiring character's chosen Signatures "are treated as belonging
-// to your Class for the purposes of acquisition and improvement", so it never
-// pays the surcharge. It also has no class_id to compare against, which would
-// otherwise make every one of its items read as cross-class.
-const isCrossClass = (item, { economy, characterClassId }) => {
-    if (economy === 'aspiring') return false;
+// pg. 90: an aspiring character's three chosen Signatures "are treated as
+// belonging to your Class for the purposes of acquisition and improvement".
+// That sentence names three items and makes them a Class; it does not exempt
+// the character from the cross-class tier, so a fourth Signature -- including
+// one that shares a class with a pick -- costs the surcharge like anyone
+// else's. The three arrive as `aspiringSignatures`, the pool stored on
+// characters.aspiring_signatures.
+//
+// An empty or absent pool prices everything own-class, which is what a row
+// written before that column existed derives as. The permissive direction is
+// deliberate: the strict one would refuse saves for characters that did
+// nothing wrong. The wizard validates the pool, so this is a guard for the
+// API path and for legacy rows.
+const inAspiringPool = (item, pool) => pool.some(
+    (pick) => pick.class_id === item.class_id && pick.name === item.name
+);
+
+const isCrossClass = (item, { economy, characterClassId, aspiringSignatures } = {}) => {
+    if (economy === 'aspiring') {
+        const pool = (Array.isArray(aspiringSignatures) ? aspiringSignatures : []).filter(Boolean);
+        return pool.length > 0 && !inAspiringPool(item, pool);
+    }
     return !!characterClassId && !!item.class_id && item.class_id !== characterClassId;
 };
 
 const modsOf = (item) => (Array.isArray(item.mods) ? item.mods : []);
 
-const equipmentSpend = (gear, { economy, characterClassId } = {}) => {
+const equipmentSpend = (gear, { economy, characterClassId, aspiringSignatures } = {}) => {
     const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
     return items.reduce((total, item) => {
-        const crossClass = isCrossClass(item, { economy, characterClassId });
+        const crossClass = isCrossClass(item, { economy, characterClassId, aspiringSignatures });
         const enchantment = item.enchantment || null;
         const mods = modsOf(item);
         const modSpend = mods.reduce(
@@ -188,6 +208,7 @@ const economyFigures = () => ({
     grants: { ...CREATION_GRANT },
     signatureCap: { ...SIGNATURE_CAP },
     modsPerSignature: MODS_PER_SIGNATURE,
+    aspiringSignaturePicks: ASPIRING_SIGNATURE_PICKS,
     enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,
     modWordLimit: MOD_WORD_LIMIT,
     prices: {
@@ -229,6 +250,7 @@ module.exports = {
     SIGNATURE_CAP,
     ABILITY_CAP,
     MODS_PER_SIGNATURE,
+    ASPIRING_SIGNATURE_PICKS,
     ENCHANTMENT_WORD_LIMIT,
     MOD_WORD_LIMIT
 };
