@@ -2515,9 +2515,11 @@ window.CharacterWizard = (function () {
   // Which Signature price tier a Class's items buy at, decided by the rule
   // the component and util/merx-economy.js share -- pg. 90's aspiring
   // exemption included -- so a shop card and the total can never disagree.
-  const signaturePriceFor = (classId) => ECONOMY.prices.signature[
-    SignatureEntry.isCrossClass({ class_id: classId }, {
-      economy: economyForState(), characterClassId: state.classId
+  const signaturePriceFor = (classId, name) => ECONOMY.prices.signature[
+    SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
+      economy: economyForState(),
+      characterClassId: state.classId,
+      aspiringSignatures: aspiringPool()
     }) ? 'cross' : 'own'
   ];
 
@@ -2578,22 +2580,35 @@ window.CharacterWizard = (function () {
         key: 'class:' + cls.id + ':' + g.name,
         name: g.name,
         description_html: g.description_html || '',
-        cost: signaturePriceFor(cls.id),
+        cost: signaturePriceFor(cls.id, g.name),
         kind: 'class',
         origin_class_id: cls.id,
         origin_class_name: cls.name || '',
         subtype: g.subtype || 'elective'
       });
     };
-    if (DATA.mode === 'aspirant') {
+    // The grid sells whatever counts as the character's own Class; the shop
+    // sells everything else. For aspirant that is every class but the
+    // selected one; for aspiring, whose Class is three named items, it is
+    // every Signature outside the pool. Branching on the resolved economy
+    // rather than DATA.mode is what keeps this agreeing with
+    // usesSignatureGrid -- they disagreed before, and ?mode=advent on an
+    // aspirant-content class produced a shop with no class items at all.
+    if (usesSignatureGrid()) {
+      const picks = aspiringPool();
+      const inPool = (cls, g) => picks.some((pick) => pick.class_id === cls.id && pick.name === g.name);
       if (Array.isArray(DATA.classes)) {
         DATA.classes.forEach((cls) => {
           if (!cls || !cls.id || !Array.isArray(cls.class_gear)) return;
-          if (usesSignatureGrid() && cls.id === state.classId) return;
-          cls.class_gear.forEach((g) => { if (g && g.name) pushClassItem(cls, g); });
+          if (economyForState() !== 'aspiring' && cls.id === state.classId) return;
+          cls.class_gear.forEach((g) => {
+            if (!g || !g.name) return;
+            if (economyForState() === 'aspiring' && inPool(cls, g)) return;
+            pushClassItem(cls, g);
+          });
         });
       }
-    } else if (!usesSignatureGrid()) {
+    } else {
       const c = selectedClass();
       if (c && Array.isArray(c.class_gear)) {
         c.class_gear.forEach((g) => { if (g && g.name) pushClassItem(c, g); });
@@ -2628,19 +2643,21 @@ window.CharacterWizard = (function () {
     mods: []
   });
 
-  const crossClassFor = (classId) => SignatureEntry.isCrossClass({ class_id: classId }, {
-    economy: economyForState(), characterClassId: state.classId
+  const crossClassFor = (classId, name) => SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
+    economy: economyForState(),
+    characterClassId: state.classId,
+    aspiringSignatures: aspiringPool()
   });
 
   const priceOfPurchase = (purchase) => SignatureEntry.priceOf(purchase, {
-    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id)
+    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id, purchase.name)
   });
 
   // Same figures and tier as priceOfPurchase, so what a removal warning
   // reports can never disagree with what removing the purchase actually
   // refunds.
   const describePurchaseFor = (purchase) => SignatureEntry.describePurchase(purchase, {
-    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id)
+    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id, purchase.name)
   });
 
   // pg. 85 and pg. 92: how many Signature slots this economy allows, or null
@@ -2656,7 +2673,8 @@ window.CharacterWizard = (function () {
   const getMerxSpent = () => SignatureEntry.totalOf(pricedGear(), {
     figures: ECONOMY,
     economy: economyForState(),
-    characterClassId: state.classId
+    characterClassId: state.classId,
+    aspiringSignatures: aspiringPool()
   }) + (Array.isArray(state.commonItems) ? state.commonItems.length : 0) * ECONOMY.prices.commonItem;
 
   // pg. 8: an Enchantment occupies a Signature slot of its own. The whole
@@ -2934,7 +2952,7 @@ window.CharacterWizard = (function () {
     const owned = !!findPurchase(cell.entry.name, cell.classId);
     const tag = owned
       ? '<span class="tag is-success is-light ml-2">Owned</span>'
-      : '<span class="tag is-warning is-light ml-2">' + signaturePriceFor(cell.classId) + ' Merx</span>';
+      : '<span class="tag is-warning is-light ml-2">' + signaturePriceFor(cell.classId, cell.entry.name) + ' Merx</span>';
     return ''
       + '<button type="button" class="button is-small is-fullwidth is-justify-content-space-between mb-2'
       +   (isOpenSignature(cell) ? ' is-active' : '') + '"'
@@ -2953,7 +2971,7 @@ window.CharacterWizard = (function () {
         + ' class="button is-small is-danger is-light" data-signature-sell'
         + '>Remove</button></p>';
     }
-    const price = signaturePriceFor(cell.classId);
+    const price = signaturePriceFor(cell.classId, cell.entry.name);
     const affordable = affordsChange(price, 1);
     return '<p class="control mt-3"><button type="button" class="button is-small is-primary"'
       + (affordable ? '' : ' disabled') + ' data-signature-buy'
@@ -2975,7 +2993,7 @@ window.CharacterWizard = (function () {
     signatureDrawer.hidden = false;
     signatureDrawer.innerHTML = SignatureEntry.render(cell.entry, purchase, {
       figures: ECONOMY,
-      crossClass: crossClassFor(cell.classId),
+      crossClass: crossClassFor(cell.classId, cell.entry.name),
       economy: economyForState(),
       readOnly: false
     }) + renderPurchaseControls(cell, purchase);
@@ -4020,6 +4038,8 @@ window.CharacterWizard = (function () {
     removeSignature,
     getPendingConfirmation,
     confirmPending,
-    cancelPending
+    cancelPending,
+    getShopPool,
+    pickShopItem
   };
 })();

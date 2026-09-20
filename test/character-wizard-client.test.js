@@ -1379,6 +1379,18 @@ const v1Class = () => ({
   advanced_abilities: []
 });
 
+const otherV1Class = () => ({
+  id: 'c-other',
+  name: 'Drifter',
+  content_format: 'aspirant',
+  stat_spread: {},
+  gear: [],
+  class_gear: twelveItems(),
+  base_gear: [],
+  abilities: [],
+  advanced_abilities: []
+});
+
 const seedAspiringPicks = (wizard, names) => {
   wizard.getState().classBuild.classGear = names.map((name) => ({
     classId: 'c-v1', itemName: name
@@ -1400,4 +1412,51 @@ test('a non-aspiring submit carries no Signature pool', () => {
   const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
   wizard.getState().classId = 'c-v1';
   expect(wizard.serializePayload().aspiring_signatures).toBeUndefined();
+});
+
+// Task 7/8: the wizard shop prices against the aspiring pool and opens to it.
+const FIGURES = economyFigures();
+
+// The divergence the pool exists to express: a Signature the builder never
+// chose costs the surcharge, even from a class one of the picks came from.
+test('an aspiring Signature outside the three is cross-class priced', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+  seedAspiringPicks(wizard, ['Cowboy Hat', 'Sharps Rifle', 'Bandolier']);
+  wizard.buySignature('Cowboy Hat', 'c-v1');
+  const afterPick = wizard.getMerxSpent();
+  expect(afterPick).toBe(FIGURES.prices.signature.own);
+
+  wizard.pickShopItem('class:c-v1:Lasso');
+  expect(wizard.getMerxSpent() - afterPick).toBe(FIGURES.prices.signature.cross);
+});
+
+// Aspiring reaches the rest of the catalogue exactly as aspirant does; its
+// own three live in the grid, so the shop excludes them rather than listing
+// them twice at the wrong price.
+test('the aspiring shop offers every class Signature outside the three', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+  seedAspiringPicks(wizard, ['Cowboy Hat', 'Sharps Rifle', 'Bandolier']);
+  const keys = wizard.getShopPool().filter((p) => p.kind === 'class').map((p) => p.key);
+  expect(keys).toContain('class:c-v1:Lasso');
+  expect(keys).not.toContain('class:c-v1:Cowboy Hat');
+});
+
+test('every class Signature in the aspiring shop is cross-class priced', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+  seedAspiringPicks(wizard, ['Cowboy Hat', 'Sharps Rifle', 'Bandolier']);
+  const classItems = wizard.getShopPool().filter((p) => p.kind === 'class');
+  expect(classItems.length).toBeGreaterThan(0);
+  for (const item of classItems) expect(item.cost).toBe(FIGURES.prices.signature.cross);
+});
+
+// Pre-existing gap this task closes: getShopPool branched on DATA.mode while
+// usesSignatureGrid branched on the resolved economy, so ?mode=advent on an
+// aspirant-content class produced a shop with no class items in it.
+test('the shop follows the resolved economy, not the URL mode', () => {
+  const wizard = bootWizard(fixture({
+    mode: 'advent', classes: [v1Class(), otherV1Class()]
+  }));
+  wizard.getState().classId = 'c-v1';
+  const classItems = wizard.getShopPool().filter((p) => p.kind === 'class');
+  expect(classItems.length).toBeGreaterThan(0);
 });
