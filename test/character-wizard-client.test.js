@@ -905,4 +905,118 @@ describe('step 4 offers the whole class and its purchases', () => {
       expect(wizard.getSlotsUsed()).toBeLessThanOrEqual(FIGURES.signatureCap.aspiring);
     });
   });
+
+  // Ruling 5: a rename is a delete plus an insert, so a Signature that
+  // carries a paid Enchantment or Mods must be confirmed away, never
+  // silently dropped. Both removal paths -- the grid drawer's Remove
+  // button and the shop card's own Remove control -- are covered below.
+  describe('replacing a purchased Signature warns first (Ruling 5)', () => {
+    test('removing a bare Signature asks nothing', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.removeSignature('Cowboy Hat');
+      expect(wizard.getPendingConfirmation()).toBeNull();
+      expect(wizard.getState().gear).toHaveLength(0);
+    });
+
+    test('removing a purchased Signature asks first and keeps it until confirmed', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+      wizard.removeSignature('Cowboy Hat');
+      expect(wizard.getPendingConfirmation().lines).toContain(
+        'Default Enchantment  ' + FIGURES.prices.defaultEnchantment.own + 'm');
+      expect(wizard.getState().gear).toHaveLength(1);
+      wizard.confirmPending();
+      expect(wizard.getState().gear).toHaveLength(0);
+    });
+
+    test('cancelling leaves the purchase intact', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+      wizard.removeSignature('Cowboy Hat');
+      wizard.cancelPending();
+      expect(wizard.getState().gear[0].enchantment).toEqual({ source: 'default' });
+      expect(wizard.getPendingConfirmation()).toBeNull();
+    });
+
+    // Cancel must not remove-then-restore: a typed Custom name/description
+    // and a Mod both have to come back exactly, not just the Enchantment's
+    // source.
+    test('cancelling preserves a Custom Enchantment\'s typed text and every Mod', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.setEnchantment('Cowboy Hat',
+        { source: 'custom', name: 'Ricochet', description: 'Bounces once' });
+      wizard.getState().gear[0].mods = [{ name: 'Scope', description: 'Sees far' }];
+      wizard.removeSignature('Cowboy Hat');
+      wizard.cancelPending();
+      const kept = wizard.getState().gear[0];
+      expect(kept.enchantment).toEqual({
+        source: 'custom', name: 'Ricochet', description: 'Bounces once'
+      });
+      expect(kept.mods).toEqual([{ name: 'Scope', description: 'Sees far' }]);
+    });
+
+    // Path 1: the printed grid's drawer, whose Remove button (data-signature-
+    // sell) is the only way to drop a Signature from there.
+    test('the grid drawer\'s Remove button also asks before destroying a purchase', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+      wizard.renderGearStep();
+      document.querySelector('[data-signature-name="Cowboy Hat"]').click();
+      document.querySelector('[data-signature-sell]').click();
+      expect(wizard.getPendingConfirmation()).not.toBeNull();
+      expect(wizard.getState().gear).toHaveLength(1);
+      wizard.confirmPending();
+      expect(wizard.getState().gear).toHaveLength(0);
+    });
+
+    // Path 2: the shop-card list's own Remove control (data-shop-remove),
+    // reachable wherever a class Signature is sold as a card rather than in
+    // the grid -- the advent economy sells its own class this way.
+    test('the shop card\'s own Remove control also asks before destroying a purchase', () => {
+      const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+      const state = wizard.getState();
+      state.classId = 'c-advent';
+      // Advent's own creation grant (2, the Elective) leaves no room to also
+      // afford the Enchantment this test needs to be at stake -- mission
+      // income lifts the budget, same as the commissary_reward test above.
+      state.level = 3;
+      state.successfulMissions = 4;
+      wizard.syncBaseGear();
+      wizard.buySignature('Duster');
+      wizard.setEnchantment('Duster', { source: 'default' });
+      wizard.renderGearStep();
+      document.querySelector('[data-shop-remove="class:c-advent:Duster"]').click();
+      expect(wizard.getPendingConfirmation()).not.toBeNull();
+      expect(wizard.getState().gear.some((g) => g.name === 'Duster')).toBe(true);
+      wizard.confirmPending();
+      expect(wizard.getState().gear.some((g) => g.name === 'Duster')).toBe(false);
+    });
+
+    // The dialog itself: created lazily, shows the priced lines, and its own
+    // buttons drive confirm/cancel -- not just the exposed handle.
+    test('the dialog renders the priced lines and its buttons resolve it', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.buySignature('Cowboy Hat');
+      wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+      wizard.removeSignature('Cowboy Hat');
+      const dialog = document.getElementById('pendingRemovalDialog');
+      expect(dialog.hidden).toBe(false);
+      expect(dialog.textContent).toContain(
+        'Default Enchantment  ' + FIGURES.prices.defaultEnchantment.own + 'm');
+      document.querySelector('[data-cancel-removal]').click();
+      expect(dialog.hidden).toBe(true);
+      expect(wizard.getState().gear).toHaveLength(1);
+    });
+  });
 });

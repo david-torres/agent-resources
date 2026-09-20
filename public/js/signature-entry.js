@@ -58,6 +58,40 @@
       && purchase.class_id !== opts.characterClassId;
   };
 
+  // Ruling 5: a rename is a delete plus an insert, so replacing or removing
+  // a Signature destroys its Enchantment and Mods outright. This names what
+  // would be lost -- built from the same figures and tier priceOf uses, so
+  // its total always equals the Merx priceOf would stop charging for them.
+  // The bare Signature itself is not listed: owning one costs nothing to
+  // lose back, only what was paid on top of it.
+  var describePurchase = function (purchase, opts) {
+    var figures = opts.figures;
+    var t = tier(opts.crossClass);
+    var lines = [];
+    var total = 0;
+    var enchantment = purchase && purchase.enchantment;
+    if (enchantment && enchantment.source === 'default') {
+      var defaultPrice = figures.prices.defaultEnchantment[t];
+      total += defaultPrice;
+      lines.push('Default Enchantment  ' + defaultPrice + 'm');
+    } else if (enchantment && enchantment.source === 'custom') {
+      var customPrice = figures.prices.customEnchantment[t];
+      total += customPrice;
+      lines.push('Custom Enchantment  ' + customPrice + 'm');
+    }
+    var mods = Array.isArray(purchase && purchase.mods) ? purchase.mods : [];
+    var modTable = figures.prices.mod[t];
+    for (var i = 0; i < mods.length; i++) {
+      // Mirrors priceOf's own fallback: an index past the table still
+      // prices at the table's dearest entry rather than 0.
+      var price = i < modTable.length ? modTable[i] : modTable[modTable.length - 1];
+      if (typeof price !== 'number') price = 0;
+      total += price;
+      lines.push('Mod: ' + mods[i].name + '  ' + price + 'm');
+    }
+    return { total: total, lines: lines };
+  };
+
   var totalOf = function (purchases, opts) {
     var list = Array.isArray(purchases) ? purchases : [];
     var total = 0;
@@ -230,6 +264,7 @@
     priceOf: priceOf,
     slotsOf: slotsOf,
     totalOf: totalOf,
-    isCrossClass: isCrossClass
+    isCrossClass: isCrossClass,
+    describePurchase: describePurchase
   };
 })();

@@ -225,6 +225,10 @@ window.CharacterWizard = (function () {
   const commonCountBadge = document.getElementById('commonCountBadge');
   const classCountBadge = document.getElementById('classCountBadge');
   const step4Next = document.getElementById('step4Next');
+  // Host for the pending-removal dialog (created lazily by
+  // ensurePendingRemovalDialog): a plain descendant of the step 4 panel, so
+  // it hides with the rest of step 4 without its own hidden-step wiring.
+  const step4Panel = steps.find((el) => el.getAttribute('data-step-panel') === '4') || null;
   const shopTabs = Array.from(document.querySelectorAll('[data-shop-tab]'));
   const customCommonItemInput = document.getElementById('customCommonItemInput');
   const customCommonItemAdd = document.getElementById('customCommonItemAdd');
@@ -2620,6 +2624,13 @@ window.CharacterWizard = (function () {
     figures: ECONOMY, crossClass: crossClassFor(purchase.class_id)
   });
 
+  // Same figures and tier as priceOfPurchase, so what a removal warning
+  // reports can never disagree with what removing the purchase actually
+  // refunds.
+  const describePurchaseFor = (purchase) => SignatureEntry.describePurchase(purchase, {
+    figures: ECONOMY, crossClass: crossClassFor(purchase.class_id)
+  });
+
   // pg. 85 and pg. 92: how many Signature slots this economy allows, or null
   // where the rules the app models set no cap.
   const signatureCap = () => ECONOMY.signatureCap[economyForState()];
@@ -2688,6 +2699,48 @@ window.CharacterWizard = (function () {
       }
     }
     refreshGearViews();
+  };
+
+  // Ruling 5: a rename is a delete plus an insert, so dropping a Signature
+  // that carries a paid Enchantment or Mods destroys them outright. Every
+  // path that can drop a Signature from state.gear (the grid drawer's
+  // Remove button and the shop card's own Remove control) calls this
+  // instead of sellSignature directly, so neither can bypass the warning.
+  // A bare Signature -- describePurchase answers `total: 0` -- has nothing
+  // to lose and is removed at once.
+  const removeSignature = (name, classId) => {
+    const purchase = findPurchase(name, classId);
+    if (!purchase) return;
+    const described = describePurchaseFor(purchase);
+    if (described.total > 0) {
+      state.pendingRemoval = {
+        name: name, classId: classId, lines: described.lines, total: described.total
+      };
+      renderPendingRemoval();
+      return;
+    }
+    sellSignature(name, classId);
+  };
+
+  const getPendingConfirmation = () => state.pendingRemoval || null;
+
+  // Applies a removal `removeSignature` held back. sellSignature's own
+  // refreshGearViews re-renders the (now hidden) dialog, so nothing further
+  // is needed here beyond clearing the state it read from.
+  const confirmPending = () => {
+    const pending = state.pendingRemoval;
+    if (!pending) return;
+    state.pendingRemoval = null;
+    sellSignature(pending.name, pending.classId);
+  };
+
+  // Discards the pending removal without touching state.gear -- the
+  // Signature, its Enchantment (Custom name and description included) and
+  // its Mods were never removed, so there is nothing to restore.
+  const cancelPending = () => {
+    if (!state.pendingRemoval) return;
+    state.pendingRemoval = null;
+    renderPendingRemoval();
   };
 
   // A Default stores its source and nothing else: the text belongs to the
@@ -2825,7 +2878,7 @@ window.CharacterWizard = (function () {
       refreshGearViews();
     } else if (key.indexOf('class:') === 0) {
       const parts = shopKeyParts(key);
-      if (parts) sellSignature(parts.name, parts.classId);
+      if (parts) removeSignature(parts.name, parts.classId);
     }
   };
 
@@ -3170,11 +3223,56 @@ window.CharacterWizard = (function () {
     if (step4Next) step4Next.disabled = false;
   };
 
+  // Created on first use rather than in the view: the confirmation only
+  // ever needs to exist once a removal is pending, and views/character-
+  // wizard.handlebars carries no economy figures for it to print.
+  let pendingRemovalDialog = null;
+  const ensurePendingRemovalDialog = () => {
+    if (pendingRemovalDialog) return pendingRemovalDialog;
+    const host = step4Panel || document.body;
+    pendingRemovalDialog = document.createElement('div');
+    pendingRemovalDialog.id = 'pendingRemovalDialog';
+    pendingRemovalDialog.className = 'notification is-warning wizard-pending-removal';
+    pendingRemovalDialog.hidden = true;
+    pendingRemovalDialog.innerHTML = ''
+      + '<p class="wizard-pending-removal-message"></p>'
+      + '<ul class="wizard-pending-removal-lines"></ul>'
+      + '<div class="buttons">'
+      +   '<button type="button" class="button is-small is-danger" data-confirm-removal>Remove anyway</button>'
+      +   '<button type="button" class="button is-small" data-cancel-removal>Keep it</button>'
+      + '</div>';
+    pendingRemovalDialog.addEventListener('click', (e) => {
+      if (e.target.closest('[data-confirm-removal]')) {
+        e.preventDefault();
+        confirmPending();
+      } else if (e.target.closest('[data-cancel-removal]')) {
+        e.preventDefault();
+        cancelPending();
+      }
+    });
+    host.appendChild(pendingRemovalDialog);
+    return pendingRemovalDialog;
+  };
+
+  // The warning's prices are the `lines' describePurchase already priced
+  // from ECONOMY -- nothing here writes down a figure of its own.
+  const renderPendingRemoval = () => {
+    const dialog = ensurePendingRemovalDialog();
+    const pending = state.pendingRemoval;
+    dialog.hidden = !pending;
+    if (!pending) return;
+    dialog.querySelector('.wizard-pending-removal-message').textContent =
+      'Removing "' + pending.name + '" also removes what you paid for it:';
+    dialog.querySelector('.wizard-pending-removal-lines').innerHTML =
+      pending.lines.map((line) => '<li>' + esc(line) + '</li>').join('');
+  };
+
   const renderGearStep = () => {
     renderBaseGearList();
     renderSignatureGrid();
     renderShop();
     renderGearReadouts();
+    renderPendingRemoval();
   };
 
   // Load the selected class's base gear into state.gear, once per class.
@@ -3432,7 +3530,7 @@ window.CharacterWizard = (function () {
       }
       if (e.target.closest('[data-signature-sell]')) {
         e.preventDefault();
-        sellSignature(open.name, open.classId);
+        removeSignature(open.name, open.classId);
       }
     });
     signatureDrawer.addEventListener('change', (e) => {
@@ -3866,6 +3964,10 @@ window.CharacterWizard = (function () {
     syncBaseGear,
     renderGearStep,
     buySignature,
-    setEnchantment
+    setEnchantment,
+    removeSignature,
+    getPendingConfirmation,
+    confirmPending,
+    cancelPending
   };
 })();

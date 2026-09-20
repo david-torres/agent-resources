@@ -138,6 +138,53 @@ describe('the component agrees with the server it cannot require', () => {
   });
 });
 
+describe('describePurchase (Ruling 5: a replacement destroys what it carries)', () => {
+  const SE = boot();
+  test('describePurchase names what a replacement would destroy', () => {
+    const described = SE.describePurchase({
+      owned: true,
+      enchantment: { source: 'default' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    }, { figures: FIGURES });
+    expect(described.total)
+      .toBe(FIGURES.prices.defaultEnchantment.own + FIGURES.prices.mod.own[0]);
+    expect(described.lines).toEqual([
+      'Default Enchantment  ' + FIGURES.prices.defaultEnchantment.own + 'm',
+      'Mod: Scope  ' + FIGURES.prices.mod.own[0] + 'm'
+    ]);
+  });
+
+  test('a bare Signature has nothing to lose', () => {
+    expect(SE.describePurchase({ owned: true, enchantment: null, mods: [] }, { figures: FIGURES }))
+      .toEqual({ total: 0, lines: [] });
+  });
+
+  test('a Custom Enchantment is named by its source, not its typed name', () => {
+    const described = SE.describePurchase({
+      owned: true,
+      enchantment: { source: 'custom', name: 'Ricochet', description: 'Bounces once' },
+      mods: []
+    }, { figures: FIGURES });
+    expect(described.total).toBe(FIGURES.prices.customEnchantment.own);
+    expect(described.lines).toEqual([
+      'Custom Enchantment  ' + FIGURES.prices.customEnchantment.own + 'm'
+    ]);
+  });
+
+  test('cross-class prices the loss at the +1 tier, agreeing with priceOf', () => {
+    const purchase = {
+      owned: true,
+      enchantment: { source: 'default' },
+      mods: [{ name: 'Scope' }, { name: 'Sling' }]
+    };
+    const described = SE.describePurchase(purchase, { figures: FIGURES, crossClass: true });
+    const bareSignature = SE.priceOf({ owned: true, enchantment: null, mods: [] },
+      { figures: FIGURES, crossClass: true });
+    expect(described.total + bareSignature)
+      .toBe(SE.priceOf(purchase, { figures: FIGURES, crossClass: true }));
+  });
+});
+
 describe('render', () => {
   const SE = boot();
   test('shows the printed entry: name, description, meters, Default and its text', () => {
