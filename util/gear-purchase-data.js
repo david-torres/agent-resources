@@ -46,7 +46,7 @@ const toEntry = (item, classId, className) => ({
 // A stored class_gear row arrives merged with its class's printed entry
 // (services/character/repository.js#getCharacterGear), so it already carries
 // the description, meters and Default Enchantment the entry needs.
-const buildEntries = (characterClass, allClasses, gear, economy) => {
+const buildEntries = (characterClass, allClasses, gear, economy, aspiringSignatures) => {
   const roster = Array.isArray(characterClass && characterClass.gear)
     ? characterClass.gear.map((item) => toEntry(item, characterClass.id, characterClass.name))
     : [];
@@ -66,6 +66,27 @@ const buildEntries = (characterClass, allClasses, gear, economy) => {
         seen.add(key);
         catalogue.push(toEntry(item, cls.id, cls.name));
       }
+    }
+    // The pool has to outlive ownership (pg. 90 design intent): a character
+    // that bought none of its three picks at creation must still be able to
+    // buy its own invented Class later, even once a donor class's unlock has
+    // lapsed or a newer version has superseded it in allClasses -- the same
+    // reason routes/characters.js injects the character's own class into the
+    // Class <select> above. allClasses may still hold the donor and its full
+    // printed item; only fall back to a bare entry when it does not.
+    for (const pick of (Array.isArray(aspiringSignatures) ? aspiringSignatures : [])) {
+      if (!pick || !pick.class_id || !pick.name) continue;
+      const key = entryKey(pick.class_id, pick.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const donorClass = (Array.isArray(allClasses) ? allClasses : [])
+        .find((cls) => cls && cls.id === pick.class_id);
+      const donorItem = donorClass && Array.isArray(donorClass.gear)
+        ? donorClass.gear.find((item) => item && item.name === pick.name)
+        : null;
+      catalogue.push(donorItem
+        ? toEntry(donorItem, pick.class_id, donorClass.name)
+        : toEntry({ name: pick.name }, pick.class_id, ''));
     }
   }
   const carried = [];
@@ -108,7 +129,7 @@ const buildGearPurchaseData = ({ economy, characterClass, allClasses, character,
     // figures above, so the budget is never written down as a single total
     // that could disagree with either half.
     earnedMerx: Math.max(0, Number(missionMerx) || 0),
-    entries: buildEntries(characterClass, allClasses, gear, economy),
+    entries: buildEntries(characterClass, allClasses, gear, economy, character && character.aspiring_signatures),
     purchases: buildPurchases(gear)
   };
 };

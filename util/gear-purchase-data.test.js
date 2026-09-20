@@ -193,6 +193,22 @@ describe('the aspiring catalogue', () => {
     expect(data.aspiringSignatures).toEqual(pool);
   });
 
+  // The pool has to outlive ownership: a character that bought none of its
+  // three at creation must still be able to buy its own invented Class
+  // later, even once a donor class's unlock has lapsed or a newer version
+  // has superseded it in allClasses.
+  test('a pooled Signature the character does not own still appears, even absent from allClasses', () => {
+    const pool = [{ class_id: 'c-lapsed', name: 'Lapsed Item' }];
+    const data = buildGearPurchaseData({
+      economy: 'aspiring',
+      characterClass: null,
+      allClasses: [v1ClassRow()],
+      character: { class_id: null, aspiring_signatures: pool, gear: [] },
+      missionMerx: 0
+    });
+    expect(data.entries.map((e) => e.name)).toContain('Lapsed Item');
+  });
+
   // An aspirant character's own class comes from characterClass; the rest of
   // the catalogue must not be duplicated into its grid.
   test('an aspirant island is unchanged by the catalogue argument', () => {
