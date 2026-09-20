@@ -50,10 +50,23 @@
     return 1 + (purchase.enchantment ? 1 : 0);
   };
 
-  // pg. 90: an aspiring character's picks are treated as its own Class's, so it
-  // never pays the surcharge. Same rule as util/merx-economy.js isCrossClass.
+  // pg. 90: an aspiring character's three chosen Signatures are its Class, so
+  // those three price own-class and everything else pays the surcharge. Same
+  // rule as util/merx-economy.js isCrossClass, pinned to it by
+  // test/signature-entry.test.js. An empty or absent pool prices everything
+  // own-class, matching a row written before the pool was stored.
+  var inAspiringPool = function (purchase, pool) {
+    for (var i = 0; i < pool.length; i++) {
+      if (pool[i] && pool[i].class_id === purchase.class_id && pool[i].name === purchase.name) return true;
+    }
+    return false;
+  };
+
   var isCrossClass = function (purchase, opts) {
-    if (opts.economy === 'aspiring') return false;
+    if (opts.economy === 'aspiring') {
+      var pool = Array.isArray(opts.aspiringSignatures) ? opts.aspiringSignatures : [];
+      return pool.length > 0 && !inAspiringPool(purchase, pool);
+    }
     return !!opts.characterClassId && !!purchase.class_id
       && purchase.class_id !== opts.characterClassId;
   };

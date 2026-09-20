@@ -158,6 +158,31 @@ describe('the component agrees with the server it cannot require', () => {
         .toBe(equipmentSpend([crossDefault], { economy, characterClassId: CLASS_ID }));
     }
   });
+
+  test('client and server agree on aspiring pool membership', () => {
+    const pool = [
+      { class_id: 'class-a', name: 'A' },
+      { class_id: 'class-b', name: 'B' }
+    ];
+    const gear = [
+      { name: 'A', class_id: 'class-a', owned: true, enchantment: null, mods: [] },
+      { name: 'Z', class_id: 'class-z', owned: true, enchantment: null, mods: [] }
+    ];
+    const opts = { economy: 'aspiring', characterClassId: null, aspiringSignatures: pool };
+
+    expect(SE.totalOf(gear, { figures: FIGURES, ...opts }))
+      .toBe(equipmentSpend(gear, opts));
+    expect(SE.isCrossClass(gear[0], opts)).toBe(false);
+    expect(SE.isCrossClass(gear[1], opts)).toBe(true);
+  });
+
+  test('client and server agree that an empty aspiring pool is all own-class', () => {
+    const gear = [{ name: 'Z', class_id: 'class-z', owned: true, enchantment: null, mods: [] }];
+    const opts = { economy: 'aspiring', characterClassId: null, aspiringSignatures: [] };
+    expect(SE.totalOf(gear, { figures: FIGURES, ...opts }))
+      .toBe(equipmentSpend(gear, opts));
+    expect(SE.isCrossClass(gear[0], opts)).toBe(false);
+  });
 });
 
 describe('describePurchase (Ruling 5: a replacement destroys what it carries)', () => {
