@@ -120,10 +120,148 @@ const perkFigures = () => ({
     }
 });
 
+// An ability list is priced by waiving the first FREE_CORE_ABILITIES own-class
+// Core abilities and charging everything else at its cell. Each entry arrives
+// already tagged { crossClass, type }; resolving which class an ability
+// belongs to, or whether it sits in an aspiring character's pool, is the
+// caller's job.
+//
+// The waiver is order-independent: every waivable entry costs the same 1, so
+// which three of four own Cores are waived cannot change the total.
+const unlockSpend = (abilities, economy) => {
+    const list = (Array.isArray(abilities) ? abilities : []).filter(Boolean);
+    const free = FREE_CORE_ABILITIES[economy] ?? 0;
+    let waived = 0;
+    let spend = 0;
+    for (const ability of list) {
+        const crossClass = !!ability.crossClass;
+        const type = rank(ability.type);
+        if (!crossClass && type === 'core' && waived < free) {
+            waived += 1;
+            continue;
+        }
+        spend += priceOfAbility({ crossClass, type });
+    }
+    return spend;
+};
+
+// Deliberately no compound term. A Compound is its own character_perks row
+// pointing at the perk it improves, so counting rows already charges 2 Perks
+// for a compounded perk; adding a term for compounds_with would double-charge
+// it.
+const abilityPerkSpend = (abilityPerks) =>
+    (Array.isArray(abilityPerks) ? abilityPerks.filter(Boolean) : []).length * ABILITY_PERK_COST;
+
+const perkSpend = ({ economy, abilities, abilityPerks } = {}) =>
+    unlockSpend(abilities, economy) + abilityPerkSpend(abilityPerks);
+
+// null for an economy with no grant figure, mirroring perkAllotment, so a
+// caller decides rather than being handed a zero that looks like an answer.
+const perkBreakdown = ({ economy, level, abilities, abilityPerks } = {}) => {
+    const earned = perkAllotment({ economy, level });
+    if (earned == null) return null;
+    const spend = perkSpend({ economy, abilities, abilityPerks });
+    return {
+        earned,
+        spend,
+        remaining: Math.max(0, earned - spend),
+        deficit: Math.max(0, spend - earned)
+    };
+};
+
+// Two severities.
+//
+// `hard` is a rule the book states as absolute -- pg. 7's cap "cannot be
+// increased, even via Flavor" -- or a spend the character cannot pay for.
+// `soft` is content legal in another edition but not in this character's:
+// Advent has no Cross-Classing rule (pg. 3 lists it among Aspirant's
+// additions), so an Advent character holding another class's Ability is
+// outside its edition rather than over a limit.
+//
+// Every breach carries `overage`, the amount by which the rule is broken.
+// That, not the raw count, is what the ratchet compares: a character who
+// levels up and spends the new Perk has the same overage and is no worse off,
+// while comparing raw spend would refuse that save.
+const ABILITY_CAP_RULE = 'ability-cap';
+const PERK_DEFICIT_RULE = 'perk-deficit';
+const CROSS_CLASS_EDITION_RULE = 'cross-class-edition';
+
+const buildBreaches = ({ economy, level, abilities, abilityPerks } = {}) => {
+    const list = (Array.isArray(abilities) ? abilities : []).filter(Boolean);
+    const breaches = [];
+
+    const cap = ABILITY_CAP[economy];
+    const hasAbilityCap = cap != null && list.length > cap;
+    if (hasAbilityCap) {
+        breaches.push({
+            severity: 'hard',
+            rule: ABILITY_CAP_RULE,
+            count: list.length,
+            limit: cap,
+            overage: list.length - cap,
+            detail: `${list.length} Abilities, and the cap is ${cap}.`
+        });
+    }
+
+    // If abilities violate the cap, a perk deficit is secondary: fix the cap
+    // first. Report perk deficit only when the ability roster is legal.
+    if (!hasAbilityCap) {
+        const breakdown = perkBreakdown({ economy, level, abilities, abilityPerks });
+        if (breakdown && breakdown.deficit > 0) {
+            breaches.push({
+                severity: 'hard',
+                rule: PERK_DEFICIT_RULE,
+                count: breakdown.spend,
+                limit: breakdown.earned,
+                overage: breakdown.deficit,
+                detail: `${breakdown.spend} Perks spent of ${breakdown.earned} earned.`
+            });
+        }
+    }
+
+    if (economy === 'advent') {
+        const crossCount = list.filter((ability) => ability.crossClass).length;
+        if (crossCount > 0) {
+            breaches.push({
+                severity: 'soft',
+                rule: CROSS_CLASS_EDITION_RULE,
+                count: crossCount,
+                limit: 0,
+                overage: crossCount,
+                detail: `${crossCount} Cross-Class ${crossCount === 1 ? 'Ability' : 'Abilities'}; `
+                    + 'Cross-Classing is an Aspirant rule (pg. 3).'
+            });
+        }
+    }
+
+    return breaches;
+};
+
+// The ratchet. An existing breach is grandfathered: a save that leaves it as
+// it stands goes through, and only one that makes it WORSE is refused. This
+// is what lets 13 already-breaching characters stay editable without a stored
+// per-character allowance -- the allowance IS the stored row.
+//
+// Soft breaches are excluded: a notice is information, not a limit.
+const worsenedBreaches = (storedBreaches, submittedBreaches) => {
+    const storedOverage = new Map(
+        (Array.isArray(storedBreaches) ? storedBreaches : [])
+            .map((breach) => [breach.rule, breach.overage])
+    );
+    return (Array.isArray(submittedBreaches) ? submittedBreaches : [])
+        .filter((breach) => breach.severity === 'hard')
+        .filter((breach) => breach.overage > (storedOverage.get(breach.rule) ?? 0));
+};
+
 module.exports = {
     priceOfAbility,
     perkAllotment,
     perkFigures,
+    unlockSpend,
+    perkSpend,
+    perkBreakdown,
+    buildBreaches,
+    worsenedBreaches,
     ABILITY_PRICE,
     FREE_CORE_ABILITIES,
     PERK_GRANT,
@@ -132,5 +270,8 @@ module.exports = {
     PERK_WORD_LIMIT,
     COMPOUND_WORD_BONUS,
     PERKS_PER_ABILITY,
-    ABILITY_CAP
+    ABILITY_CAP,
+    ABILITY_CAP_RULE,
+    PERK_DEFICIT_RULE,
+    CROSS_CLASS_EDITION_RULE
 };

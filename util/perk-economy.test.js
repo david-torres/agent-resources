@@ -103,3 +103,251 @@ test('perk-economy requires nothing but stat-caps', () => {
   const requires = [...source.matchAll(/require\((['"])(.*?)\1\)/g)].map(m => m[2]);
   expect(requires).toEqual(['./stat-caps']);
 });
+
+const {
+  unlockSpend,
+  perkSpend,
+  perkBreakdown,
+  buildBreaches,
+  worsenedBreaches,
+  ABILITY_CAP_RULE,
+  PERK_DEFICIT_RULE,
+  CROSS_CLASS_EDITION_RULE
+} = require('./perk-economy');
+
+const own = (type) => ({ crossClass: false, type });
+const cross = (type) => ({ crossClass: true, type });
+
+test('an aspirant character pays nothing for its three own Core abilities', () => {
+  expect(unlockSpend([own('core'), own('core'), own('core')], 'aspirant')).toBe(0);
+});
+
+test('an aspirant character pays 2 for its own Advanced ability', () => {
+  expect(unlockSpend(
+    [own('core'), own('core'), own('core'), own('advanced')], 'aspirant'
+  )).toBe(2);
+});
+
+test('cross-class abilities are charged at 3 and 4 regardless of the allowance', () => {
+  expect(unlockSpend(
+    [own('core'), own('core'), own('core'), cross('core'), cross('advanced')], 'aspirant'
+  )).toBe(7);
+});
+
+test('a fourth own Core ability is charged, because the allowance is three', () => {
+  expect(unlockSpend(
+    [own('core'), own('core'), own('core'), own('core')], 'aspirant'
+  )).toBe(1);
+});
+
+test('the allowance is order-independent', () => {
+  const list = [cross('advanced'), own('core'), own('core'), own('advanced'), own('core')];
+  const reversed = [...list].reverse();
+  expect(unlockSpend(list, 'aspirant')).toBe(unlockSpend(reversed, 'aspirant'));
+});
+
+test('an aspiring character has no allowance and pays 1/1/2 for its picks', () => {
+  expect(unlockSpend([own('core'), own('core'), own('advanced')], 'aspiring')).toBe(4);
+});
+
+test('an aspiring character pays 3 or 4 for anything outside its pool', () => {
+  expect(unlockSpend([cross('core')], 'aspiring')).toBe(3);
+  expect(unlockSpend([cross('advanced')], 'aspiring')).toBe(4);
+});
+
+test('an advent character pays nothing for three own Core abilities', () => {
+  expect(unlockSpend([own('core'), own('core'), own('core')], 'advent')).toBe(0);
+});
+
+test('unlockSpend tolerates junk entries and a non-array', () => {
+  expect(unlockSpend(null, 'aspirant')).toBe(0);
+  expect(unlockSpend([null, undefined, false], 'aspirant')).toBe(0);
+  expect(unlockSpend([own('core')], 'nonsense')).toBe(1);
+});
+
+test('every Ability Perk costs one, and a compound costs one more by being a row', () => {
+  // A compound is a SEPARATE character_perks row pointing at the perk it
+  // improves, so counting rows already charges 2 Perks for a compounded perk.
+  const base = { id: 'p1', compounds_with: null };
+  const compound = { id: 'p2', compounds_with: 'p1' };
+  expect(perkSpend({ economy: 'aspirant', abilities: [], abilityPerks: [base] })).toBe(1);
+  expect(perkSpend({ economy: 'aspirant', abilities: [], abilityPerks: [base, compound] })).toBe(2);
+});
+
+test('perkSpend adds unlocks to Ability Perks', () => {
+  expect(perkSpend({
+    economy: 'aspirant',
+    abilities: [own('core'), own('core'), own('core'), own('advanced')],
+    abilityPerks: [{ id: 'p1' }, { id: 'p2' }]
+  })).toBe(4);
+});
+
+test('perkBreakdown reports earned, spend, remaining and deficit', () => {
+  expect(perkBreakdown({
+    economy: 'aspiring',
+    level: 1,
+    abilities: [own('core'), own('core')],
+    abilityPerks: []
+  })).toEqual({ earned: 3, spend: 2, remaining: 1, deficit: 0 });
+});
+
+test('perkBreakdown never reports a negative remaining', () => {
+  const result = perkBreakdown({
+    economy: 'aspiring',
+    level: 1,
+    abilities: [own('core'), own('core'), own('advanced')],
+    abilityPerks: []
+  });
+  expect(result).toEqual({ earned: 3, spend: 4, remaining: 0, deficit: 1 });
+});
+
+test('an aspiring character cannot buy all three picks at creation, by design', () => {
+  // pg. 90 grants 3 Perks for picks costing 1 + 1 + 2 = 4, and step 3b says
+  // the picks need not be acquired "immediately (or at all)".
+  const all = perkBreakdown({
+    economy: 'aspiring', level: 1,
+    abilities: [own('core'), own('core'), own('advanced')], abilityPerks: []
+  });
+  expect(all.deficit).toBe(1);
+  const two = perkBreakdown({
+    economy: 'aspiring', level: 1,
+    abilities: [own('core'), own('advanced')], abilityPerks: []
+  });
+  expect(two.deficit).toBe(0);
+  expect(two.remaining).toBe(0);
+});
+
+test('perkBreakdown returns null for an unknown economy', () => {
+  expect(perkBreakdown({ economy: 'nonsense', level: 1, abilities: [], abilityPerks: [] })).toBeNull();
+});
+
+test('a clean build produces no breaches', () => {
+  expect(buildBreaches({
+    economy: 'aspirant', level: 5,
+    abilities: [own('core'), own('core'), own('core')], abilityPerks: []
+  })).toEqual([]);
+});
+
+test('over the ability cap is a hard breach carrying its overage', () => {
+  const breaches = buildBreaches({
+    economy: 'advent', level: 1,
+    abilities: [own('core'), own('core'), own('core'), own('core'), own('core'), own('core')],
+    abilityPerks: []
+  });
+  const cap = breaches.find(b => b.rule === ABILITY_CAP_RULE);
+  expect(cap.severity).toBe('hard');
+  expect(cap.count).toBe(6);
+  expect(cap.limit).toBe(3);
+  expect(cap.overage).toBe(3);
+  expect(cap.detail).toBe('6 Abilities, and the cap is 3.');
+});
+
+test('spending more Perks than earned is a hard breach whose overage is the deficit', () => {
+  const breaches = buildBreaches({
+    economy: 'advent', level: 3,
+    abilities: [own('core')],
+    abilityPerks: [{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }]
+  });
+  const deficit = breaches.find(b => b.rule === PERK_DEFICIT_RULE);
+  expect(deficit.severity).toBe('hard');
+  expect(deficit.count).toBe(4);
+  expect(deficit.limit).toBe(2);
+  expect(deficit.overage).toBe(2);
+});
+
+test('an advent character holding a cross-class ability gets the softer notice', () => {
+  const breaches = buildBreaches({
+    economy: 'advent', level: 5,
+    abilities: [own('core'), own('core'), cross('core')], abilityPerks: []
+  });
+  const edition = breaches.find(b => b.rule === CROSS_CLASS_EDITION_RULE);
+  expect(edition.severity).toBe('soft');
+  expect(edition.count).toBe(1);
+  expect(edition.detail).toContain('Cross-Classing is an Aspirant rule');
+});
+
+test('an aspirant character holding a cross-class ability gets no edition notice', () => {
+  // Cross-Classing is legal there and priced, not flagged.
+  const breaches = buildBreaches({
+    economy: 'aspirant', level: 10,
+    abilities: [own('core'), own('core'), own('core'), cross('core')], abilityPerks: []
+  });
+  expect(breaches.find(b => b.rule === CROSS_CLASS_EDITION_RULE)).toBeUndefined();
+});
+
+test('the ratchet passes a stored breach through unchanged', () => {
+  // Aisuna Kor-Ragna: 6 abilities at level 1, advent. Must stay saveable.
+  const six = Array(6).fill(null).map(() => own('core'));
+  const args = { economy: 'advent', level: 1, abilities: six, abilityPerks: [] };
+  const stored = buildBreaches(args);
+  const submitted = buildBreaches(args);
+  expect(worsenedBreaches(stored, submitted)).toEqual([]);
+});
+
+test('the ratchet refuses a save that makes a stored breach worse', () => {
+  const six = Array(6).fill(null).map(() => own('core'));
+  const stored = buildBreaches({ economy: 'advent', level: 1, abilities: six, abilityPerks: [] });
+  const submitted = buildBreaches({
+    economy: 'advent', level: 1, abilities: [...six, own('core')], abilityPerks: []
+  });
+  const worsened = worsenedBreaches(stored, submitted);
+  expect(worsened).toHaveLength(1);
+  expect(worsened[0].rule).toBe(ABILITY_CAP_RULE);
+});
+
+test('the ratchet lets a breached character improve toward legality', () => {
+  const six = Array(6).fill(null).map(() => own('core'));
+  const stored = buildBreaches({ economy: 'advent', level: 1, abilities: six, abilityPerks: [] });
+  const submitted = buildBreaches({
+    economy: 'advent', level: 1, abilities: six.slice(0, 4), abilityPerks: []
+  });
+  expect(worsenedBreaches(stored, submitted)).toEqual([]);
+});
+
+test('the ratchet refuses a brand-new breach on a previously clean character', () => {
+  const stored = buildBreaches({
+    economy: 'advent', level: 1,
+    abilities: [own('core'), own('core'), own('core')], abilityPerks: []
+  });
+  expect(stored).toEqual([]);
+  const submitted = buildBreaches({
+    economy: 'advent', level: 1,
+    abilities: [own('core'), own('core'), own('core'), own('core')], abilityPerks: []
+  });
+  expect(worsenedBreaches(stored, submitted)).toHaveLength(1);
+});
+
+test('the ratchet compares overage, so levelling up and spending the Perk is allowed', () => {
+  // Khan Zahak Barzikani: 7 Ability Perks at level 7 (earned 6), deficit 1.
+  // At level 8 he earns 7, and spending the new Perk keeps the deficit at 1.
+  // Comparing raw spend would refuse that save; comparing overage allows it.
+  const stored = buildBreaches({
+    economy: 'advent', level: 7, abilities: [], abilityPerks: Array(7).fill({ id: 1 })
+  });
+  const submitted = buildBreaches({
+    economy: 'advent', level: 8, abilities: [], abilityPerks: Array(8).fill({ id: 1 })
+  });
+  expect(stored.find(b => b.rule === PERK_DEFICIT_RULE).overage).toBe(1);
+  expect(submitted.find(b => b.rule === PERK_DEFICIT_RULE).overage).toBe(1);
+  expect(worsenedBreaches(stored, submitted)).toEqual([]);
+});
+
+test('the ratchet ignores soft breaches entirely', () => {
+  // A soft notice is information, not a limit: an advent character swapping a
+  // Core ability for a cross-class one stays saveable.
+  const stored = buildBreaches({
+    economy: 'advent', level: 5,
+    abilities: [own('core'), own('core'), own('core')], abilityPerks: []
+  });
+  const submitted = buildBreaches({
+    economy: 'advent', level: 5,
+    abilities: [own('core'), own('core'), cross('core')], abilityPerks: []
+  });
+  expect(submitted.some(b => b.severity === 'soft')).toBe(true);
+  expect(worsenedBreaches(stored, submitted)).toEqual([]);
+});
+
+test('worsenedBreaches tolerates a missing or non-array side', () => {
+  expect(worsenedBreaches(null, null)).toEqual([]);
+  expect(worsenedBreaches(undefined, [])).toEqual([]);
+});
