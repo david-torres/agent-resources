@@ -3745,6 +3745,11 @@ window.CharacterWizard = (function () {
   }
 
   // ---------- Submit ----------
+  // The step-1 builder's three filled slots, in the shape the server stores.
+  const aspiringPool = () => ((state.classBuild && state.classBuild.classGear) || [])
+    .filter((slot) => slot && slot.classId && slot.itemName)
+    .map((slot) => ({ class_id: slot.classId, name: slot.itemName }));
+
   // Reshape the wizard's localStorage-shaped state into the payload that
   // createCharacter (in models/character.js) expects. Mirrors the field
   // names on the expert form at views/character-form.handlebars so the
@@ -3762,6 +3767,11 @@ window.CharacterWizard = (function () {
         tagline: (state.pseudoClass && state.pseudoClass.tagline || '').trim(),
         description: (state.pseudoClass && state.pseudoClass.description || '').trim()
       } : null,
+      // The three Signatures this invented Class is made of (pg. 90). Sent
+      // from the step-1 builder rather than derived from state.gear: the
+      // grant's remainder may buy a fourth Signature, and the server prices
+      // that one at the cross-class tier precisely because it is not here.
+      aspiring_signatures: DATA.mode === 'aspiring' ? aspiringPool() : undefined,
       level: state.level || 1,
       completed_missions: state.successfulMissions || 0,
       appearance: state.appearance || '',
@@ -3995,6 +4005,7 @@ window.CharacterWizard = (function () {
   // actually loads into state.gear.
   return {
     buildSubmitPayload,
+    serializePayload,
     onSubmitSuccess,
     getState: () => state,
     getMerxBudget,

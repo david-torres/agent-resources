@@ -1365,3 +1365,39 @@ describe('step 4 prose follows the class economy the readouts follow', () => {
     expect(document.getElementById('merxBudget').textContent).toBe(String(grant));
   });
 });
+
+// Aspiring signature submission tests
+const v1Class = () => ({
+  id: 'c-v1',
+  name: 'Gunslinger',
+  content_format: 'aspirant',
+  stat_spread: {},
+  gear: [],
+  class_gear: twelveItems(),
+  base_gear: [],
+  abilities: [],
+  advanced_abilities: []
+});
+
+const seedAspiringPicks = (wizard, names) => {
+  wizard.getState().classBuild.classGear = names.map((name) => ({
+    classId: 'c-v1', itemName: name
+  }));
+};
+
+test('an aspiring submit carries its three picks as the Signature pool', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+  seedAspiringPicks(wizard, ['Cowboy Hat', 'Sharps Rifle', 'Bandolier']);
+  const payload = wizard.serializePayload();
+  expect(payload.aspiring_signatures).toEqual([
+    { class_id: 'c-v1', name: 'Cowboy Hat' },
+    { class_id: 'c-v1', name: 'Sharps Rifle' },
+    { class_id: 'c-v1', name: 'Bandolier' }
+  ]);
+});
+
+test('a non-aspiring submit carries no Signature pool', () => {
+  const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+  wizard.getState().classId = 'c-v1';
+  expect(wizard.serializePayload().aspiring_signatures).toBeUndefined();
+});
