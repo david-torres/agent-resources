@@ -21,7 +21,9 @@ const {
   COMMON_ITEM_PRICE,
   ASPIRING_SIGNATURE_PICKS
 } = require('../../util/merx-economy');
-const { ASPIRING_ABILITY_PICKS, ASPIRING_CORE_PICKS, ASPIRING_ADVANCED_PICKS } = require('../../util/perk-economy');
+const {
+  ASPIRING_ABILITY_PICKS, ASPIRING_CORE_PICKS, ASPIRING_ADVANCED_PICKS, buildBreaches
+} = require('../../util/perk-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -337,35 +339,59 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 // withPreservedEquipment). The spend below stays on the submitted list --
 // storedGear only ever arrives from updateCharacter, which passes
 // enforceMerxBudget: false, so no caller prices a list with stored rows
-// behind it.
+// behind it. `abilities` arrive already tagged `{crossClass, type}` by the
+// caller -- this function does not resolve classes or pools -- and `level`
+// is needed because the Perk grant buildBreaches checks against scales with
+// it.
 const validateEconomyLimits = ({
   economy, gear, storedGear, commonItems, characterClassId, aspiringSignatures,
-  enforceMerxBudget = true
+  abilities, abilityPerks, level,
+  enforceMerxBudget = true, enforceAbilityLimits = true
 }) => {
-  if (economy === 'advent') return { ok: true };
-
-  const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
   const errors = [];
 
-  // pg. 8: an Enchantment counts as a second slot toward the Signature Cap.
-  // This is checked independently of Merx -- a character who can afford a
-  // seventh enchanted Signature may still not carry it if the slots are full.
-  const cap = SIGNATURE_CAP[economy];
-  const slots = signatureSlotsUsed(withPreservedEquipment(items, storedGear));
-  if (cap !== null && slots > cap) {
-    errors.push(
-      `Signature Cap is ${cap}; this character carries ${slots} `
-      + '(an Enchantment counts as a Signature).'
-    );
+  // Every economy answers to the ability cap and the Perk balance: Advent has
+  // no unlock path, so its three Core Abilities are the whole roster
+  // (util/perk-economy.js). Only SOFT breaches are excluded -- an edition
+  // notice is information for the player, not a reason to refuse a save.
+  //
+  // enforceAbilityLimits is false on the update path, which delegates to the
+  // ratchet (services/character/service.js): an absolute check here would
+  // refuse every save by a character that is already breaching, and the whole
+  // point of grandfathering is that those characters stay editable.
+  if (enforceAbilityLimits) {
+    for (const breach of buildBreaches({ economy, level, abilities, abilityPerks })) {
+      if (breach.severity !== 'hard') continue;
+      errors.push(breach.detail);
+    }
   }
 
-  if (enforceMerxBudget) {
-    const budget = CREATION_GRANT[economy];
-    const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
-    const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
-      + itemCount * COMMON_ITEM_PRICE;
-    if (spend > budget) {
-      errors.push(`This character spends ${spend} Merx of ${budget}.`);
+  // The Merx half is unchanged, and stays off for advent: 327 existing
+  // characters were built with no Merx budget and no measurement says they
+  // would pass one.
+  if (economy !== 'advent') {
+    const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
+
+    // pg. 8: an Enchantment counts as a second slot toward the Signature Cap.
+    // This is checked independently of Merx -- a character who can afford a
+    // seventh enchanted Signature may still not carry it if the slots are full.
+    const cap = SIGNATURE_CAP[economy];
+    const slots = signatureSlotsUsed(withPreservedEquipment(items, storedGear));
+    if (cap !== null && slots > cap) {
+      errors.push(
+        `Signature Cap is ${cap}; this character carries ${slots} `
+        + '(an Enchantment counts as a Signature).'
+      );
+    }
+
+    if (enforceMerxBudget) {
+      const budget = CREATION_GRANT[economy];
+      const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
+      const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
+        + itemCount * COMMON_ITEM_PRICE;
+      if (spend > budget) {
+        errors.push(`This character spends ${spend} Merx of ${budget}.`);
+      }
     }
   }
 

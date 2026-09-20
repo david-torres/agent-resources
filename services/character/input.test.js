@@ -1111,6 +1111,72 @@ test('the advent economy enforces nothing', () => {
   })).toEqual({ ok: true });
 });
 
+// --- validateEconomyLimits: the ability cap and Perk balance -------------
+
+const ownAbility = (type) => ({ crossClass: false, type });
+
+test('the ability cap is enforced for an advent character', () => {
+  const res = validateEconomyLimits({
+    economy: 'advent', gear: [], commonItems: [], level: 1,
+    abilities: Array(4).fill(null).map(() => ownAbility('core')), abilityPerks: []
+  });
+  expect(res.ok).toBe(false);
+  expect(res.errors.join(' ')).toContain('4 Abilities, and the cap is 3.');
+});
+
+test('an advent character within the cap still passes', () => {
+  const res = validateEconomyLimits({
+    economy: 'advent', gear: [], commonItems: [], level: 1,
+    abilities: [ownAbility('core'), ownAbility('core'), ownAbility('core')], abilityPerks: []
+  });
+  expect(res.ok).toBe(true);
+});
+
+test('the Merx budget is still not enforced for an advent character', () => {
+  // 327 existing characters were built with no Merx budget; slice 4 decided
+  // deliberately not to start enforcing one, and this task does not change it.
+  const res = validateEconomyLimits({
+    economy: 'advent', level: 1, abilities: [], abilityPerks: [],
+    gear: Array(20).fill({ name: 'X', class_id: 'c1' }), commonItems: []
+  });
+  expect(res.ok).toBe(true);
+});
+
+test('a Perk deficit is an error a player can read', () => {
+  const res = validateEconomyLimits({
+    economy: 'aspirant', gear: [], commonItems: [], level: 1,
+    abilities: [ownAbility('core'), ownAbility('core'), ownAbility('core'), ownAbility('advanced')],
+    abilityPerks: []
+  });
+  expect(res.ok).toBe(false);
+  expect(res.errors.join(' ')).toContain('2 Perks spent of 1 earned.');
+});
+
+test('a soft breach is never an error', () => {
+  const res = validateEconomyLimits({
+    economy: 'advent', gear: [], commonItems: [], level: 5, abilityPerks: [],
+    abilities: [ownAbility('core'), { crossClass: true, type: 'core' }]
+  });
+  expect(res.ok).toBe(true);
+});
+
+test('enforceAbilityLimits false drops BOTH the cap and the balance', () => {
+  // The update path passes false and delegates to the ratchet. If the cap
+  // still fired here, every grandfathered character would be unsaveable.
+  const overBalance = validateEconomyLimits({
+    economy: 'aspirant', gear: [], commonItems: [], level: 1, enforceAbilityLimits: false,
+    abilities: [ownAbility('core'), ownAbility('core'), ownAbility('core'), ownAbility('advanced')],
+    abilityPerks: []
+  });
+  expect(overBalance.ok).toBe(true);
+
+  const overCap = validateEconomyLimits({
+    economy: 'advent', gear: [], commonItems: [], level: 1, enforceAbilityLimits: false,
+    abilities: Array(6).fill(null).map(() => ownAbility('core')), abilityPerks: []
+  });
+  expect(overCap.ok).toBe(true);
+});
+
 // --- normalizeCharacterInput wires validateEconomyLimits in -------------
 //
 // context.contentFormat is what the caller (CharacterService.createCharacter)
