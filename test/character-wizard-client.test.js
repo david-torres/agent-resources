@@ -328,29 +328,41 @@ describe('the wizard reads its economy from the server', () => {
   });
 });
 
-describe('the free-gear floor follows the resolved economy, not the wizard mode', () => {
+describe('the free-gear floor reads what syncBaseGear actually loaded, not a mode/economy rule', () => {
   test('an advent wizard has the served free-base count', () => {
     const wizard = bootWizard(fixture({ mode: 'advent' }));
     expect(wizard.getFreeBaseCount())
       .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
   });
 
-  // Six live pre-release classes carry content_format 'advent' but can be
-  // picked under aspirant mode; economyFor (util/merx-economy.js) resolves
-  // that combination to the 'advent' economy, and freeBaseCount() is honest
-  // about it. syncBaseGear's own aspirant-mode no-op stays keyed on
-  // DATA.mode rather than economy (see its comment), so nothing is actually
-  // auto-loaded for this particular combination -- a known, narrower gap
-  // than the one this round closes, not asserted as fully wired up here.
-  test('an aspirant wizard on an advent-content class resolves the advent free-base count', () => {
+  // Fix round 3: this is the same bug fix round 2 closed, mirrored. Six live
+  // pre-release classes carry content_format 'advent' but can be picked
+  // under aspirant mode; economyFor (util/merx-economy.js) resolves that
+  // combination to the 'advent' economy. A freeBaseCount() keyed on the
+  // resolved economy (round 2's fix) still claimed 3 free items here even
+  // though syncBaseGear's aspirant-mode no-op never loads anything, in any
+  // economy -- the identical defect in the identical direction (wizard
+  // under-charges, server refuses). freeBaseCount() no longer derives from
+  // any mode/economy rule; it counts the leading run of state.gear entries
+  // actually stamped cost: 0, so it can't disagree with what's loaded. Three
+  // real cross-class shop picks (the cost pickShopItem would stamp, never 0)
+  // must not be swallowed as free just because the class's economy is
+  // 'advent'.
+  test('an aspirant wizard on an advent-content class has no free base gear, and real picks are not skipped as free', () => {
     const wizard = bootWizard(fixture({
       mode: 'aspirant',
       classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', gear: [] }],
       economyByClassId: { 'c-v1': 'advent' }
     }));
     wizard.getState().classId = 'c-v1';
-    expect(wizard.getFreeBaseCount())
-      .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
+    expect(wizard.getFreeBaseCount()).toBe(0);
+
+    wizard.getState().gear = [
+      { name: 'Item A', kind: 'class', cost: 2, origin_class_id: 'c-v1' },
+      { name: 'Item B', kind: 'class', cost: 2, origin_class_id: 'c-v1' },
+      { name: 'Item C', kind: 'class', cost: 3, origin_class_id: 'other' }
+    ];
+    expect(wizard.getFreeBaseCount()).toBe(0);
   });
 
   // The regression this round closes: an aspirant-content (V1) class picked

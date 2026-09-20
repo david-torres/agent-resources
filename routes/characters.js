@@ -30,7 +30,7 @@ const { asyncHandler } = require('../util/async-handler');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
-const { deriveCharacterTotals, ADVENT_DEFAULT_SIGNATURES } = require('../util/character-derived');
+const { deriveCharacterTotals } = require('../util/character-derived');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { filterClassListsByIds } = require('../util/class-filter');
@@ -313,11 +313,6 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       // require-free and this figure lives in util/enclave-consts.js, where
       // the derivation reads it. Served alongside rather than copied into it.
       merxPerMissionSuccess: MERX_PER_MISSION_SUCCESS,
-      // pg. 3's three free Default Signatures, advent only. Served rather than
-      // retyped so the wizard's free-gear count can never drift from
-      // util/character-derived.js, which prices a saved character by the same
-      // figure.
-      adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
       // Which economy each class puts a character under, decided here by the
       // same economyFor every save path calls. The client looks the answer up
       // rather than working it out, so the two can never disagree -- they did

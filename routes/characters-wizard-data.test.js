@@ -223,9 +223,3 @@ test('each served class carries its content_format', async () => {
   });
   expect(data.classes[0].content_format).toBe('aspirant');
 });
-
-test('the advent Default count is served, not retyped', async () => {
-  const data = await renderWizardData({ mode: 'advent' });
-  expect(data.adventDefaultSignatures)
-    .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
-});

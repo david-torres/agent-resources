@@ -205,17 +205,26 @@ window.CharacterWizard = (function () {
   const submitEl = document.getElementById('wizardSubmit');
   // Advent's three Default Signatures (pg. 3), which arrive free. Every other
   // economy replaced them with a Merx grant, so there is nothing free to load.
-  // Keyed on the resolved economy, not DATA.mode (the URL's wizard mode): an
-  // aspirant-content class picked under advent mode resolves to the
-  // 'aspirant' economy (economyFor, util/merx-economy.js), which has no free
-  // floor, and reading DATA.mode here used to force a full-budget spend on
-  // top of a free count the server never granted -- an un-savable,
-  // over-budget build. syncBaseGear below matches this for the direction
-  // that bug came from; see its comment for the narrower gap the reverse
-  // direction still has. The count itself is still the server's:
-  // util/character-derived.js ADVENT_DEFAULT_SIGNATURES decides the same
-  // count when it prices a saved character.
-  const freeBaseCount = () => (economyForState() === 'advent' ? DATA.adventDefaultSignatures : 0);
+  // Not derived from a rule (DATA.mode, or the resolved economy) at all --
+  // both were tried and both went stale in one mode/economy combination or
+  // another (an aspirant-content class under advent mode; an advent-content
+  // class under aspirant mode), because a rule can say "free" for a count
+  // syncBaseGear never actually put in state.gear. This instead counts the
+  // leading run of state.gear entries syncBaseGear itself stamped cost: 0,
+  // so it can never disagree with what's actually there. Marker is cost, not
+  // subtype: 'base' -- a paid duplicate pick of a base-subtype shop item
+  // (pickShopItem) also carries subtype: 'base', so subtype can't tell a
+  // free auto-load apart from a paid re-pick of the same slot; only
+  // syncBaseGear ever stamps cost: 0, and nothing else does. A gear entry
+  // rehydrated from an old localStorage draft with no `cost` at all reads as
+  // paid (undefined !== 0), not free -- the safe direction, so a stale draft
+  // over-charges rather than claims a free item that was never verified.
+  const freeBaseCount = () => {
+    const gear = Array.isArray(state.gear) ? state.gear : [];
+    let n = 0;
+    while (n < gear.length && gear[n] && gear[n].cost === 0) n++;
+    return n;
+  };
 
   // Aspiring mode hides the kiosk (step 1 is the pseudo-class form
   // instead). Don't bail on a missing kiosk/track in that mode — the rest
@@ -2932,19 +2941,13 @@ window.CharacterWizard = (function () {
   const syncBaseGear = () => {
     // Aspirant mode: gear is class-agnostic (cross-class pool built by
     // getShopPool across every unlocked class), so re-entering step 4 with a
-    // new class must not wipe the user's picks. Just no-op. Kept on
-    // DATA.mode rather than economyForState(): the pool-building branch this
-    // mirrors (getShopPool) is itself still keyed on DATA.mode, and changing
-    // one without the other would wipe or reload against a pool shape this
-    // function doesn't build. The known gap that leaves: an advent-content
-    // class picked under aspirant mode resolves to the advent economy
-    // (economyFor) and, per freeBaseCount() below, reports 3 free items that
-    // this function never actually loads for it -- narrower than the bug
-    // this round closes (advent mode is the wizard's default, so any advent
-    // playthrough on a V1 class hit it; this direction needs a player to
-    // pick one of six pre-release classes while specifically in aspirant
-    // mode) and left for the renderGearStep rewrite that already owns
-    // reconciling this pool structure with the resolved economy.
+    // new class must not wipe the user's picks. Just no-op -- this function
+    // never runs for aspirant mode, so it never loads anything free there,
+    // in any economy. freeBaseCount() reads that fact off state.gear itself
+    // rather than re-deriving it from DATA.mode or the resolved economy, so
+    // it can't disagree with this branch the way a second copy of the rule
+    // twice did (once for each direction: an aspirant-content class under
+    // advent mode, and an advent-content class under aspirant mode).
     if (DATA.mode === 'aspirant') return;
     const c = selectedClass();
     if (!c) return;
@@ -2957,17 +2960,18 @@ window.CharacterWizard = (function () {
     if (DATA.mode === 'advent') {
       state.commonItems = [];
     }
-    // Only the advent economy grants free base gear (freeBaseCount()). An
-    // aspirant-content class picked under advent mode resolves to the
-    // aspirant economy (economyFor, util/merx-economy.js) and has no free
-    // allotment, so nothing is auto-loaded for it -- the player buys every
-    // item from the shop pool instead, at the own-class Signature price
+    // Only the advent economy grants free base gear. An aspirant-content
+    // class picked under advent mode resolves to the aspirant economy
+    // (economyFor, util/merx-economy.js) and has no free allotment, so
+    // nothing is auto-loaded for it -- the player buys every item from the
+    // shop pool instead, at the own-class Signature price
     // (getShopPool/signaturePriceFor already price it that way).
     if (economyForState() !== 'advent') return;
     const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.
-    // All gear picks share kind 'class' — freeBaseCount() in computeMerxSpent
-    // is what separates free base slots from paid picks.
+    // All gear picks share kind 'class' — the cost: 0 stamp below is what
+    // freeBaseCount() (in computeMerxSpent and elsewhere) counts to tell
+    // free base slots apart from paid picks.
     // Stamp cost: 0 on the auto-loaded base so computeMerxSpent treats
     // them as free even if a user picks a duplicate of one of them later
     // (the duplicate carries its own price from the pool and so charges

@@ -12,7 +12,6 @@ const { JSDOM } = require('jsdom');
 const { economyFor, economyFigures } = require('../../util/merx-economy');
 const { statCapFigures } = require('../../util/stat-caps');
 const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
-const { ADVENT_DEFAULT_SIGNATURES } = require('../../util/character-derived');
 
 const COMMON_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-common.js'),
@@ -119,22 +118,34 @@ const bootWizard = (data) => {
 // Fills in the wizardData keys a bootWizard caller doesn't care about for its
 // own test, most of them the server-served figures the client reads instead
 // of keeping its own copy (economy, statCaps, merxPerMissionSuccess,
-// adventDefaultSignatures, economyByClassId, economyWhenClassless). The
-// per-class and classless economy defaults are resolved with the real
-// economyFor against the given mode/classes, the same function
-// routes/characters.js calls, so a test that doesn't care about the economy
-// mapping still gets a correct one.
+// economyByClassId, economyWhenClassless). The per-class and classless
+// economy defaults are resolved with the real economyFor against the given
+// mode/classes, the same function routes/characters.js calls, so a test
+// that doesn't care about the economy mapping still gets a correct one.
 // A non-aspiring boot with no classes on offer hits character-wizard.js's
 // own random-initial-class pick with nothing to pick from, so a caller who
 // doesn't care about the class roster still needs at least one entry here.
+// base_gear carries 3 entries, like a real class row, so a boot that reaches
+// step 4 (or calls syncBaseGear directly) has something realistic to
+// auto-load -- freeBaseCount() now counts what's actually in state.gear, not
+// a rule, so an empty base_gear here would silently read as "no free items"
+// regardless of economy.
 const DEFAULT_CLASS = {
   id: 'fixture-class',
   name: 'Fixture Class',
   content_format: 'advent',
   stat_spread: {},
   gear: [],
-  class_gear: [],
-  base_gear: [],
+  class_gear: [
+    { name: 'Default A', subtype: 'base' },
+    { name: 'Default B', subtype: 'base' },
+    { name: 'Default C', subtype: 'base' }
+  ],
+  base_gear: [
+    { name: 'Default A' },
+    { name: 'Default B' },
+    { name: 'Default C' }
+  ],
   abilities: [],
   advanced_abilities: []
 };
@@ -158,7 +169,6 @@ const fixture = (overrides = {}) => {
     economy: economyFigures(),
     statCaps: statCapFigures(),
     merxPerMissionSuccess: MERX_PER_MISSION_SUCCESS,
-    adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
     economyByClassId,
     economyWhenClassless,
     ...overrides
