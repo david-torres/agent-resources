@@ -138,6 +138,11 @@ const aspiringPayload = (overrides = {}) => ({
     { name: 'Parry', class_id: CLASS_B, type: 'core' },
     { name: 'Overdrive', class_id: CLASS_C, type: 'advanced' }
   ],
+  aspiring_abilities: [
+    { class_id: CLASS_A, name: 'Dodge', type: 'core' },
+    { class_id: CLASS_B, name: 'Parry', type: 'core' },
+    { class_id: CLASS_C, name: 'Overdrive', type: 'advanced' }
+  ],
   trait0: null, trait1: null, trait2: null,
   ...overrides
 });
@@ -181,7 +186,7 @@ test('an aspiring submit carries the core and advanced tags', async () => {
 // (routes/characters.js:291-326).
 test('a malformed aspiring submit is rejected before createCharacter runs', async () => {
   captured = null;
-  const res = await postWizard(aspiringPayload({ abilities: [] }));
+  const res = await postWizard(aspiringPayload({ aspiring_abilities: [] }));
 
   expect(res.status).toBe(400);
   expect(captured).toBeNull();

@@ -21,7 +21,7 @@ const {
   COMMON_ITEM_PRICE,
   ASPIRING_SIGNATURE_PICKS
 } = require('../../util/merx-economy');
-const { ASPIRING_ABILITY_PICKS } = require('../../util/perk-economy');
+const { ASPIRING_ABILITY_PICKS, ASPIRING_CORE_PICKS, ASPIRING_ADVANCED_PICKS } = require('../../util/perk-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -697,14 +697,12 @@ const normalizeStatsPayload = (body = {}) => {
   return out;
 };
 
-// Structural invariants only -- picks/counts, not price. The Perk budget this
-// function does not check stays client-side only
-// (public/js/character-wizard.js:1525 hardcodes its own ASPIRING_PERKS_BUDGET;
-// this task does not give it a server-side counterpart). The Merx budget and
-// Signature Cap are a different matter: normalizeCharacterInput runs
+// Structural invariants only -- picks/counts, not price. The Perk balance and
+// the ability cap are a different matter: normalizeCharacterInput runs
 // validateEconomyLimits on every submission after this structural check
-// passes, enforcing util/merx-economy.js's figures directly, so a build that
-// clears this structural check still answers to that one.
+// passes, enforcing util/perk-economy.js's and util/merx-economy.js's figures
+// directly, so a build that clears this structural check still answers to
+// those.
 const validateAspiringBuild = (body) => {
   const name = typeof body.pseudo_class?.name === 'string' ? body.pseudo_class.name.trim() : '';
   if (!name) return 'An Aspiring character needs a class name.';
@@ -718,11 +716,25 @@ const validateAspiringBuild = (body) => {
     return "An Aspiring character's three Signatures must come from three different classes.";
   }
 
-  const abilities = Array.isArray(body.abilities) ? body.abilities : [];
-  const core = abilities.filter(a => a && a.type === 'core').length;
-  const advanced = abilities.filter(a => a && a.type === 'advanced').length;
-  if (abilities.length !== 3 || core !== 2 || advanced !== 1) {
-    return 'An Aspiring character needs two core abilities and one advanced ability.';
+  // The three-ness is a property of the Class being invented, not of what the
+  // character walked out with. pg. 90 step 3b prices the Core picks at 1 Perk
+  // each "though you do not need to acquire them immediately (or at all)", so
+  // a legal aspiring character may own none of them -- what must be three is
+  // the pool.
+  const abilityPicks = normalizeAspiringAbilities(body.aspiring_abilities);
+  if (abilityPicks.length !== ASPIRING_ABILITY_PICKS) {
+    return 'An Aspiring character needs exactly three Ability picks.';
+  }
+  const corePicks = abilityPicks.filter((pick) => pick.type === 'core');
+  if (corePicks.length !== ASPIRING_CORE_PICKS
+      || abilityPicks.length - corePicks.length !== ASPIRING_ADVANCED_PICKS) {
+    return 'An Aspiring character needs two Core Ability picks and one Advanced.';
+  }
+  // pg. 90 step 3: "two Core Abilities from two different Classes". Step 4a
+  // then lets the Advanced pick repeat either of them, so only the Cores are
+  // checked for distinctness.
+  if (new Set(corePicks.map((pick) => pick.class_id)).size !== ASPIRING_CORE_PICKS) {
+    return "An Aspiring character's two Core Abilities must come from two different classes.";
   }
   return null;
 };
@@ -825,6 +837,7 @@ module.exports = {
   validateStatLimits,
   normalizeAbilityPerks,
   normalizeAspiringAbilities,
+  validateAspiringBuild,
   parseInteger,
   normalizeStatsPayload,
   normalizeWizardPayload,

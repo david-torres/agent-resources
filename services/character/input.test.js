@@ -2,7 +2,7 @@ const { test, expect } = require('bun:test');
 const {
   normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment,
   validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits, validateStatLimits,
-  normalizeAspiringAbilities
+  normalizeAspiringAbilities, validateAspiringBuild
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 const { personalityMap, statList } = require('../../util/enclave-consts');
@@ -318,6 +318,11 @@ const aspiringBody = (overrides = {}) => ({
     { class_id: 'class-b', name: 'Rope' },
     { class_id: 'class-c', name: 'Lamp' }
   ],
+  aspiring_abilities: [
+    { class_id: 'class-a', name: 'Dodge', type: 'core' },
+    { class_id: 'class-b', name: 'Parry', type: 'core' },
+    { class_id: 'class-c', name: 'Overdrive', type: 'advanced' }
+  ],
   ...overrides
 });
 
@@ -337,16 +342,16 @@ test('rejects an aspiring submit without three Signature picks', () => {
   expect(result.error).toMatch(/three Signature picks/i);
 });
 
-test('rejects an aspiring submit without two core and one advanced ability', () => {
+test('rejects an aspiring submit without two Core and one Advanced ability pick', () => {
   const result = normalizeWizardPayload(aspiringBody({
-    abilities: [
-      { name: 'Dodge', class_id: 'class-a', type: 'core' },
-      { name: 'Parry', class_id: 'class-b', type: 'core' },
-      { name: 'Guard', class_id: 'class-c', type: 'core' }
+    aspiring_abilities: [
+      { class_id: 'class-a', name: 'Dodge', type: 'core' },
+      { class_id: 'class-b', name: 'Parry', type: 'core' },
+      { class_id: 'class-c', name: 'Guard', type: 'core' }
     ]
   }));
   expect(result.data).toBeNull();
-  expect(result.error).toMatch(/two core/i);
+  expect(result.error).toMatch(/two Core Ability picks/i);
 });
 
 // Without a name there is nothing to put in characters.class, which is NOT NULL.
@@ -1301,4 +1306,79 @@ test('an aspiring creation carries the ability pool', () => {
 test('an update never sends the ability pool key at all', () => {
   const result = normalizeCharacterInput(aspiringInput({}), { ...aspiringContext(), isCreation: false });
   expect('aspiring_abilities' in result.data).toBe(false);
+});
+
+// validateAspiringBuild checks the name and the Signature pool before the
+// ability pool, so a body exercising the ability rule needs both already
+// satisfied -- otherwise these tests would pass for the wrong reason.
+const aspiringBodyWithPools = (overrides = {}) => ({
+  pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+  aspiring_signatures: [
+    { class_id: 'class-a', name: 'Knife' },
+    { class_id: 'class-b', name: 'Rope' },
+    { class_id: 'class-c', name: 'Lamp' }
+  ],
+  ...overrides
+});
+
+test('an aspiring character may be created owning none of its picks', () => {
+  // pg. 90 step 3b: "you do not need to acquire them immediately (or at all)".
+  const body = aspiringBodyWithPools({
+    aspiring_abilities: [
+      { class_id: 'c1', name: 'A', type: 'core' },
+      { class_id: 'c2', name: 'B', type: 'core' },
+      { class_id: 'c3', name: 'C', type: 'advanced' }
+    ],
+    abilities: []
+  });
+  expect(validateAspiringBuild(body)).toBeNull();
+});
+
+test('an aspiring character needs exactly three Ability picks', () => {
+  const body = aspiringBodyWithPools({
+    aspiring_abilities: [{ class_id: 'c1', name: 'A', type: 'core' }],
+    abilities: []
+  });
+  expect(validateAspiringBuild(body)).toBe('An Aspiring character needs exactly three Ability picks.');
+});
+
+test('the three picks must be two Core and one Advanced', () => {
+  const body = aspiringBodyWithPools({
+    aspiring_abilities: [
+      { class_id: 'c1', name: 'A', type: 'core' },
+      { class_id: 'c2', name: 'B', type: 'core' },
+      { class_id: 'c3', name: 'C', type: 'core' }
+    ],
+    abilities: []
+  });
+  expect(validateAspiringBuild(body))
+    .toBe('An Aspiring character needs two Core Ability picks and one Advanced.');
+});
+
+test('the two Core picks must come from two different classes', () => {
+  // pg. 90 step 3: "two Core Abilities from two different Classes".
+  const body = aspiringBodyWithPools({
+    aspiring_abilities: [
+      { class_id: 'c1', name: 'A', type: 'core' },
+      { class_id: 'c1', name: 'B', type: 'core' },
+      { class_id: 'c3', name: 'C', type: 'advanced' }
+    ],
+    abilities: []
+  });
+  expect(validateAspiringBuild(body))
+    .toBe("An Aspiring character's two Core Abilities must come from two different classes.");
+});
+
+test('the Advanced pick may repeat a class the Core picks used', () => {
+  // pg. 90 step 4a: "You may repeat Classes from those your Signature Items
+  // and/or Core Abilities were sourced from."
+  const body = aspiringBodyWithPools({
+    aspiring_abilities: [
+      { class_id: 'c1', name: 'A', type: 'core' },
+      { class_id: 'c2', name: 'B', type: 'core' },
+      { class_id: 'c1', name: 'C', type: 'advanced' }
+    ],
+    abilities: []
+  });
+  expect(validateAspiringBuild(body)).toBeNull();
 });
