@@ -1188,6 +1188,11 @@ test('an auto-calculated aspiring update recomputes commissary_reward from the s
   // signatures -- reading characterInput's (absent) pool instead would price
   // the fourth Signature as own-class too and leave 2, not 1.
   expect(saved.commissary_reward).toBe(1);
+  // save_character_atomic treats a PRESENT aspiring_signatures key as
+  // authoritative and an absent one as "keep whatever is stored" -- so a
+  // present empty key reaching it here would delete the character's invented
+  // Class, while the absence this asserts preserves it.
+  expect('aspiring_signatures' in saved).toBe(false);
 });
 
 // The classic/expert edit form has no creator_mode field at all, so its
