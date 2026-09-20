@@ -205,15 +205,17 @@ window.CharacterWizard = (function () {
   const submitEl = document.getElementById('wizardSubmit');
   // Advent's three Default Signatures (pg. 3), which arrive free. Every other
   // economy replaced them with a Merx grant, so there is nothing free to load.
-  // Keyed on DATA.mode rather than economyForState(): syncBaseGear below is
-  // what actually auto-loads these into state.gear, and it only does so in
-  // advent mode. An advent-content class picked under aspirant mode resolves
-  // to the 'advent' economy (economyFor, util/merx-economy.js) but is never
-  // auto-loaded here, so counting it free would claim gear the player never
-  // received and undercharge every real pick behind it. The count itself is
-  // still the server's: util/character-derived.js ADVENT_DEFAULT_SIGNATURES
-  // decides the same count when it prices a saved character.
-  const freeBaseCount = () => (DATA.mode === 'advent' ? DATA.adventDefaultSignatures : 0);
+  // Keyed on the resolved economy, not DATA.mode (the URL's wizard mode): an
+  // aspirant-content class picked under advent mode resolves to the
+  // 'aspirant' economy (economyFor, util/merx-economy.js), which has no free
+  // floor, and reading DATA.mode here used to force a full-budget spend on
+  // top of a free count the server never granted -- an un-savable,
+  // over-budget build. syncBaseGear below matches this for the direction
+  // that bug came from; see its comment for the narrower gap the reverse
+  // direction still has. The count itself is still the server's:
+  // util/character-derived.js ADVENT_DEFAULT_SIGNATURES decides the same
+  // count when it prices a saved character.
+  const freeBaseCount = () => (economyForState() === 'advent' ? DATA.adventDefaultSignatures : 0);
 
   // Aspiring mode hides the kiosk (step 1 is the pseudo-class form
   // instead). Don't bail on a missing kiosk/track in that mode — the rest
@@ -2907,12 +2909,16 @@ window.CharacterWizard = (function () {
       if (customCommonItemAdd) customCommonItemAdd.disabled = !canAffordAny;
     }
 
-    // ----- Next button gates on budget being spent (advent and aspiring) -----
-    // Both modes start with a fixed Merx budget to spend here; the gate stays
-    // locked until the whole budget is laid out (aspiring spends its served
-    // grant across the picked items and common items, duplicates allowed).
+    // ----- Next button gates on budget being spent (advent and aspiring economies) -----
+    // Both economies start with a fixed Merx budget to spend here; the gate
+    // stays locked until the whole budget is laid out (aspiring spends its
+    // served grant across the picked items and common items, duplicates
+    // allowed). Keyed on economyForState(), not DATA.mode: an aspirant-content
+    // class picked under advent mode resolves to the aspirant economy, which
+    // has no forced-full-spend rule, so gating on the URL mode here forced a
+    // full 12-Merx spend on top of a free allotment the economy never granted.
     if (step4Next) {
-      if (DATA.mode === 'advent' || DATA.mode === 'aspiring') {
+      if (economyForState() === 'advent' || economyForState() === 'aspiring') {
         step4Next.disabled = spent < getMerxBudget();
       } else {
         step4Next.disabled = false;
@@ -2924,12 +2930,24 @@ window.CharacterWizard = (function () {
   // gear is currently recorded. Idempotent: changing class in step 1 then
   // returning clears any prior gear and reloads.
   const syncBaseGear = () => {
-    // Aspirant mode: gear is class-agnostic (cross-class pool), so re-entering
-    // step 4 with a new class must not wipe the user's picks. Just no-op.
+    // Aspirant mode: gear is class-agnostic (cross-class pool built by
+    // getShopPool across every unlocked class), so re-entering step 4 with a
+    // new class must not wipe the user's picks. Just no-op. Kept on
+    // DATA.mode rather than economyForState(): the pool-building branch this
+    // mirrors (getShopPool) is itself still keyed on DATA.mode, and changing
+    // one without the other would wipe or reload against a pool shape this
+    // function doesn't build. The known gap that leaves: an advent-content
+    // class picked under aspirant mode resolves to the advent economy
+    // (economyFor) and, per freeBaseCount() below, reports 3 free items that
+    // this function never actually loads for it -- narrower than the bug
+    // this round closes (advent mode is the wizard's default, so any advent
+    // playthrough on a V1 class hit it; this direction needs a player to
+    // pick one of six pre-release classes while specifically in aspirant
+    // mode) and left for the renderGearStep rewrite that already owns
+    // reconciling this pool structure with the resolved economy.
     if (DATA.mode === 'aspirant') return;
     const c = selectedClass();
     if (!c) return;
-    const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Drop any class-gear picks the user made against the old class — they
     // are class-bound, and the user has not been able to evaluate them
     // against the new class's pool. Common items are class-agnostic and
@@ -2939,6 +2957,14 @@ window.CharacterWizard = (function () {
     if (DATA.mode === 'advent') {
       state.commonItems = [];
     }
+    // Only the advent economy grants free base gear (freeBaseCount()). An
+    // aspirant-content class picked under advent mode resolves to the
+    // aspirant economy (economyFor, util/merx-economy.js) and has no free
+    // allotment, so nothing is auto-loaded for it -- the player buys every
+    // item from the shop pool instead, at the own-class Signature price
+    // (getShopPool/signaturePriceFor already price it that way).
+    if (economyForState() !== 'advent') return;
+    const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.
     // All gear picks share kind 'class' — freeBaseCount() in computeMerxSpent
     // is what separates free base slots from paid picks.
@@ -3444,13 +3470,17 @@ window.CharacterWizard = (function () {
   // buildSubmitPayload / onSubmitSuccess are invoked from the Submit button in
   // views/character-wizard.handlebars; getState is a console debug handle.
   // getMerxBudget / getTotalPoints / getFreeBaseCount are exposed for the
-  // same reason -- pure reads the test harness needs to reach.
+  // same reason -- pure reads the test harness needs to reach. syncBaseGear
+  // touches only state (no DOM), so it's exposed too -- the test harness
+  // never visits step 4's DOM, and this is the only way to exercise what it
+  // actually loads into state.gear.
   return {
     buildSubmitPayload,
     onSubmitSuccess,
     getState: () => state,
     getMerxBudget,
     getTotalPoints,
-    getFreeBaseCount: freeBaseCount
+    getFreeBaseCount: freeBaseCount,
+    syncBaseGear
   };
 })();
