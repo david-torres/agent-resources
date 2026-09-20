@@ -32,8 +32,13 @@
     if (enchantment && enchantment.source === 'default') total += figures.prices.defaultEnchantment[t];
     if (enchantment && enchantment.source === 'custom') total += figures.prices.customEnchantment[t];
     var mods = Array.isArray(purchase.mods) ? purchase.mods : [];
+    var modTable = figures.prices.mod[t];
     for (var i = 0; i < mods.length; i++) {
-      var price = figures.prices.mod[t][i];
+      // Mirrors util/merx-economy.js priceOfMod: an index past the table
+      // (unreachable through the UI, which never renders more than
+      // modsPerSignature slots) falls back to the table's last, dearest
+      // entry -- never 0 -- so an impossible extra Mod is never undercharged.
+      var price = i < modTable.length ? modTable[i] : modTable[modTable.length - 1];
       total += (typeof price === 'number' ? price : 0);
     }
     return total;

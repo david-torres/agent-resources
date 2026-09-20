@@ -103,6 +103,26 @@ describe('the component agrees with the server it cannot require', () => {
     expect(FIGURES.prices.mod.own).toHaveLength(FIGURES.modsPerSignature);
     expect(FIGURES.prices.mod.cross).toHaveLength(FIGURES.modsPerSignature);
   });
+
+  // Unreachable through the UI today -- the DB CHECK caps mods at 2 and
+  // modRows only ever renders figures.modsPerSignature slots -- but the
+  // component exists to make the duplicated arithmetic PROVABLY the
+  // server's, so it must agree on every input, not only the reachable ones.
+  // A separate direct test rather than a 7th shape in the subset sweep
+  // above, which would double that sweep's size for one extra case.
+  test('a third Mod (past the priced table) still prices the same on both sides', () => {
+    const threeMods = { name: 'G', class_id: CLASS_ID, enchantment: null,
+      mods: [{ name: 'm1' }, { name: 'm2' }, { name: 'm3' }] };
+    for (const economy of ['aspirant', 'aspiring']) {
+      const purchases = [{ ...threeMods, owned: true }];
+      expect(SE.totalOf(purchases, { figures: FIGURES, economy, characterClassId: CLASS_ID }))
+        .toBe(equipmentSpend([threeMods], { economy, characterClassId: CLASS_ID }));
+    }
+    const crossItem = { ...threeMods, class_id: 'other-class' };
+    expect(SE.totalOf([{ ...crossItem, owned: true }],
+                      { figures: FIGURES, economy: 'aspirant', characterClassId: CLASS_ID }))
+      .toBe(equipmentSpend([crossItem], { economy: 'aspirant', characterClassId: CLASS_ID }));
+  });
 });
 
 describe('render', () => {
