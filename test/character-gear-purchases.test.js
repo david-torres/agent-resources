@@ -12,7 +12,9 @@
 // all, because this form has always submitted gear as bare "Class::Item"
 // strings and such a save must not wipe a purchase.
 const { test, expect, describe } = require('bun:test');
-const { mountPurchases, fixtureCharacter, OWN_CLASS_ID } = require('./helpers/gear-purchase-fixture');
+const {
+  mountPurchases, fixtureCharacter, OWN_CLASS_ID, OWN_CLASS_NAME
+} = require('./helpers/gear-purchase-fixture');
 const { economyFigures } = require('../util/merx-economy');
 
 const FIGURES = economyFigures();
@@ -235,6 +237,62 @@ describe('only the hidden field submits', () => {
     expect(form).not.toBeNull();
     expect(form.getState().entries[0].name).toBe('x</script><img src=x onerror=alert(1)>');
     expect(document.querySelectorAll('img').length).toBe(0);
+  });
+});
+
+describe('an aspiring character prices against its Signature pool', () => {
+  // pg. 90's three are own-class...
+  test('an aspiring character pays own-class for a Signature in its pool', () => {
+    const form = mountPurchases(fixtureCharacter({
+      economy: 'aspiring',
+      aspiringSignatures: [{ class_id: OWN_CLASS_ID, name: 'Cowboy Hat' }],
+      gear: []
+    }));
+    form.buySignature('Cowboy Hat');
+    expect(form.getSpent()).toBe(FIGURES.prices.signature.own);
+  });
+
+  // ...and everything else is not.
+  test('an aspiring character pays cross-class for a Signature outside its pool', () => {
+    const form = mountPurchases(fixtureCharacter({
+      economy: 'aspiring',
+      aspiringSignatures: [{ class_id: OWN_CLASS_ID, name: 'Cowboy Hat' }],
+      gear: []
+    }));
+    form.buySignature('Lasso');
+    expect(form.getSpent()).toBe(FIGURES.prices.signature.cross);
+  });
+
+  // An Enchantment on a cross-class Signature is dearer too (pg. 85).
+  test('an Enchantment on a Signature outside the pool prices cross-class', () => {
+    const form = mountPurchases(fixtureCharacter({
+      economy: 'aspiring',
+      aspiringSignatures: [{ class_id: OWN_CLASS_ID, name: 'Cowboy Hat' }],
+      gear: []
+    }));
+    form.buySignature('Lasso');
+    form.setEnchantment('Lasso', { source: 'default' });
+    expect(form.getSpent()).toBe(
+      FIGURES.prices.signature.cross + FIGURES.prices.defaultEnchantment.cross
+    );
+  });
+
+  // The origin badge (renderCell) names the class a cross-class Signature
+  // came from; a pooled Signature is not tagged, since it constitutes the
+  // character's own invented class.
+  test('the origin badge names the class of an acquired Signature but not a pooled one', () => {
+    mountPurchases(fixtureCharacter({
+      economy: 'aspiring',
+      aspiringSignatures: [{ class_id: OWN_CLASS_ID, name: 'Cowboy Hat' }],
+      gear: []
+    }));
+    const grid = document.getElementById('purchaseGrid');
+    const cells = [...grid.querySelectorAll('[data-signature-name]')];
+    const cowboyHat = cells.find((c) => c.getAttribute('data-signature-name') === 'Cowboy Hat');
+    const lasso = cells.find((c) => c.getAttribute('data-signature-name') === 'Lasso');
+    expect(cowboyHat.querySelector('.tag.is-info')).toBeNull();
+    expect(lasso.querySelector('.tag.is-info')).not.toBeNull();
+    expect(lasso.querySelector('.tag.is-info').textContent).toBe(OWN_CLASS_NAME);
   });
 });
 

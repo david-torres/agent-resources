@@ -88,7 +88,8 @@ const fixtureCharacter = (overrides = {}) => {
       ? overrides.earnedMerx
       : (overrides.successfulMissions || 0) * MERX_PER_MISSION_SUCCESS,
     entries: overrides.entries || rosterEntries(),
-    purchases
+    purchases,
+    aspiringSignatures: overrides.aspiringSignatures || []
   };
 };
 

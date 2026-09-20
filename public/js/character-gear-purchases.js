@@ -48,6 +48,7 @@
     var FIGURES = data.figures;
     var ECONOMY = data.economy;
     var CHARACTER_CLASS_ID = data.characterClassId || null;
+    var ASPIRING_SIGNATURES = Array.isArray(data.aspiringSignatures) ? data.aspiringSignatures : [];
     var EARNED_MERX = Math.max(0, Number(data.earnedMerx) || 0);
     var entries = Array.isArray(data.entries) ? data.entries : [];
 
@@ -94,26 +95,32 @@
       return null;
     };
 
-    var crossClassFor = function (classId) {
-      return SignatureEntry.isCrossClass({ class_id: classId },
-        { economy: ECONOMY, characterClassId: CHARACTER_CLASS_ID });
+    // Pool membership is by (class_id, name), not class_id alone: a
+    // cross-class rate applies to an item the character had, not a class it
+    // came from, so `crossClassFor` must take the item's name too.
+    var crossClassFor = function (classId, name) {
+      return SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
+        economy: ECONOMY,
+        characterClassId: CHARACTER_CLASS_ID,
+        aspiringSignatures: ASPIRING_SIGNATURES
+      });
     };
 
     var priceOfPurchase = function (purchase) {
       return SignatureEntry.priceOf(purchase,
-        { figures: FIGURES, crossClass: crossClassFor(purchase.class_id) });
+        { figures: FIGURES, crossClass: crossClassFor(purchase.class_id, purchase.name) });
     };
 
     // Same figures and tier as priceOfPurchase, so a removal warning can never
     // report a different sum than the purchase actually cost.
     var describePurchaseFor = function (purchase) {
       return SignatureEntry.describePurchase(purchase,
-        { figures: FIGURES, crossClass: crossClassFor(purchase.class_id) });
+        { figures: FIGURES, crossClass: crossClassFor(purchase.class_id, purchase.name) });
     };
 
     var priceOfEntry = function (entry) {
       return SignatureEntry.priceOf({ owned: true, enchantment: null, mods: [] },
-        { figures: FIGURES, crossClass: crossClassFor(entry.class_id) });
+        { figures: FIGURES, crossClass: crossClassFor(entry.class_id, entry.name) });
     };
 
     // The Common Items the form is carrying right now, read from the page:
@@ -137,7 +144,8 @@
 
     var getSpent = function () {
       return SignatureEntry.totalOf(purchases, {
-        figures: FIGURES, economy: ECONOMY, characterClassId: CHARACTER_CLASS_ID
+        figures: FIGURES, economy: ECONOMY, characterClassId: CHARACTER_CLASS_ID,
+        aspiringSignatures: ASPIRING_SIGNATURES
       }) + commonItemCount() * FIGURES.prices.commonItem;
     };
 
@@ -333,7 +341,7 @@
       var tag = purchase
         ? '<span class="tag is-success is-light ml-2">Owned</span>'
         : '<span class="tag is-warning is-light ml-2">' + priceOfEntry(entry) + ' Merx</span>';
-      var origin = crossClassFor(entry.class_id) && entry.class_name
+      var origin = crossClassFor(entry.class_id, entry.name) && entry.class_name
         ? '<span class="tag is-info is-light ml-2">' + esc(entry.class_name) + '</span>'
         : '';
       return '<button type="button"'
@@ -408,7 +416,7 @@
       drawer.hidden = false;
       drawer.innerHTML = SignatureEntry.render(entry, purchase, {
         figures: FIGURES,
-        crossClass: crossClassFor(entry.class_id),
+        crossClass: crossClassFor(entry.class_id, entry.name),
         economy: ECONOMY,
         readOnly: false
       }) + renderPurchaseControls(entry, purchase);
