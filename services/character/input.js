@@ -18,7 +18,8 @@ const {
   withPreservedEquipment,
   CREATION_GRANT,
   SIGNATURE_CAP,
-  COMMON_ITEM_PRICE
+  COMMON_ITEM_PRICE,
+  ASPIRING_SIGNATURE_PICKS
 } = require('../../util/merx-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
@@ -337,7 +338,8 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 // enforceMerxBudget: false, so no caller prices a list with stored rows
 // behind it.
 const validateEconomyLimits = ({
-  economy, gear, storedGear, commonItems, characterClassId, enforceMerxBudget = true
+  economy, gear, storedGear, commonItems, characterClassId, aspiringSignatures,
+  enforceMerxBudget = true
 }) => {
   if (economy === 'advent') return { ok: true };
 
@@ -359,7 +361,7 @@ const validateEconomyLimits = ({
   if (enforceMerxBudget) {
     const budget = CREATION_GRANT[economy];
     const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
-    const spend = equipmentSpend(items, { economy, characterClassId })
+    const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
       + itemCount * COMMON_ITEM_PRICE;
     if (spend > budget) {
       errors.push(`This character spends ${spend} Merx of ${budget}.`);
@@ -430,6 +432,17 @@ const normalizeClassItems = (items) => {
     return null;
   }).filter(Boolean);
 };
+
+// The three Signatures an Aspiring character's Class is made of (pg. 90),
+// shaped from the wizard's step-1 builder. Anything malformed is dropped
+// rather than rejected here; validateAspiringBuild is what refuses a build
+// that does not end up with three.
+const normalizeAspiringSignatures = (value) => (Array.isArray(value) ? value : [])
+  .map((pick) => (pick && typeof pick === 'object'
+    ? { class_id: blankToNull(pick.class_id), name: blankToNull(pick.name) }
+    : null))
+  .filter((pick) => pick && pick.class_id && pick.name)
+  .slice(0, ASPIRING_SIGNATURE_PICKS);
 
 const normalizeAbilityPerks = (perks) => {
   if (!Array.isArray(perks)) return [];
@@ -521,6 +534,17 @@ const normalizeCharacterInput = (input, context = {}) => {
   }
   delete data.pseudo_class;
 
+  // The pool is written once, by the creation that invents the Class. On an
+  // update the key must be ABSENT, not empty: save_character_atomic treats a
+  // present key as authoritative, so sending [] would delete the character's
+  // Class. Absence is also what makes the Class un-editable, without needing a
+  // server-side override to enforce it.
+  if (context.isCreation && data.creator_mode === 'aspiring') {
+    data.aspiring_signatures = normalizeAspiringSignatures(data.aspiring_signatures);
+  } else {
+    delete data.aspiring_signatures;
+  }
+
   if (rulesVersion === 'v2') {
     const validation = validateAbilityPerks(normalizeAbilityPerks(childData.abilityPerks));
     if (!validation.ok) return { data: null, childData: null, error: validation.errors.join(' ') };
@@ -578,6 +602,7 @@ const normalizeCharacterInput = (input, context = {}) => {
     storedGear: context.storedGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
+    aspiringSignatures: data.aspiring_signatures,
     enforceMerxBudget: context.enforceMerxBudget ?? true
   });
   if (!economyValidation.ok) return { data: null, childData: null, error: economyValidation.errors.join(' ') };
@@ -664,8 +689,14 @@ const validateAspiringBuild = (body) => {
   const name = typeof body.pseudo_class?.name === 'string' ? body.pseudo_class.name.trim() : '';
   if (!name) return 'An Aspiring character needs a class name.';
 
-  const gear = Array.isArray(body.gear) ? body.gear : [];
-  if (gear.length !== 3) return 'An Aspiring character needs exactly three gear picks.';
+  // The three-ness is a property of the Class being invented, not of what the
+  // character walked out with -- the grant's remainder may buy a fourth
+  // Signature, which the budget check governs instead.
+  const picks = normalizeAspiringSignatures(body.aspiring_signatures);
+  if (picks.length !== ASPIRING_SIGNATURE_PICKS) return 'An Aspiring character needs exactly three Signature picks.';
+  if (new Set(picks.map((pick) => pick.class_id)).size !== ASPIRING_SIGNATURE_PICKS) {
+    return "An Aspiring character's three Signatures must come from three different classes.";
+  }
 
   const abilities = Array.isArray(body.abilities) ? body.abilities : [];
   const core = abilities.filter(a => a && a.type === 'core').length;

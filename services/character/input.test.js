@@ -312,6 +312,11 @@ const aspiringBody = (overrides = {}) => ({
     { name: 'Parry', class_id: 'class-b', type: 'core' },
     { name: 'Overdrive', class_id: 'class-c', type: 'advanced' }
   ],
+  aspiring_signatures: [
+    { class_id: 'class-a', name: 'Knife' },
+    { class_id: 'class-b', name: 'Rope' },
+    { class_id: 'class-c', name: 'Lamp' }
+  ],
   ...overrides
 });
 
@@ -323,12 +328,12 @@ test('accepts a well-formed aspiring submit', () => {
   expect(result.error).toBeNull();
 });
 
-test('rejects an aspiring submit without three gear picks', () => {
+test('rejects an aspiring submit without three Signature picks', () => {
   const result = normalizeWizardPayload(aspiringBody({
-    gear: [{ name: 'Knife', class_id: 'class-a' }]
+    aspiring_signatures: [{ class_id: 'class-a', name: 'Knife' }]
   }));
   expect(result.data).toBeNull();
-  expect(result.error).toMatch(/three gear/i);
+  expect(result.error).toMatch(/three Signature picks/i);
 });
 
 test('rejects an aspiring submit without two core and one advanced ability', () => {
@@ -377,6 +382,153 @@ test('an advent payload carrying a pseudo_class keeps its own class', () => {
   expect(result.data).not.toHaveProperty('pseudo_class_tagline');
   expect(result.data).not.toHaveProperty('pseudo_class_description');
   expect(result.data).not.toHaveProperty('pseudo_class');
+});
+
+const aspiringInput = (overrides = {}) => ({
+  name: 'Vesper',
+  creator_mode: 'aspiring',
+  class_id: null,
+  aspiring_signatures: [
+    { class_id: 'a', name: 'A' },
+    { class_id: 'b', name: 'B' },
+    { class_id: 'c', name: 'C' }
+  ],
+  gear: [
+    { name: 'A', class_id: 'a' },
+    { name: 'B', class_id: 'b' },
+    { name: 'C', class_id: 'c' }
+  ],
+  trait0: 'brave', trait1: 'calm', trait2: 'alert',
+  ...overrides
+});
+
+const aspiringContext = (overrides = {}) => ({
+  rulesVersion: 'v1',
+  ...overrides
+});
+
+const adventInput = (overrides = {}) => ({
+  name: 'Kell',
+  creator_mode: 'advent',
+  class_id: 'class-a',
+  ...overrides
+});
+
+const adventContext = (overrides = {}) => ({
+  rulesVersion: 'v1',
+  contentFormat: 'advent',
+  ...overrides
+});
+
+// The pool is the Class an Aspiring character invents, so its three-ness
+// binds the pool, not the gear array -- which now also holds anything the
+// character bought with the rest of its grant.
+test('an aspiring build needs exactly three Signature picks', () => {
+  const { error } = normalizeWizardPayload(aspiringBody({
+    aspiring_signatures: [{ class_id: 'a', name: 'A' }, { class_id: 'b', name: 'B' }]
+  }));
+  expect(error).toMatch(/three Signature picks/);
+});
+
+test('an aspiring build needs its three picks from three different classes', () => {
+  const { error } = normalizeWizardPayload(aspiringBody({
+    aspiring_signatures: [
+      { class_id: 'a', name: 'A' },
+      { class_id: 'a', name: 'A2' },
+      { class_id: 'b', name: 'B' }
+    ]
+  }));
+  expect(error).toMatch(/three different classes/);
+});
+
+// The fourth Signature the pool makes affordable must not be refused by a
+// count check that used to live on the gear array.
+test('an aspiring build may own a fourth Signature', () => {
+  const { data, error } = normalizeWizardPayload(aspiringBody({
+    gear: [
+      { name: 'A', class_id: 'a' },
+      { name: 'B', class_id: 'b' },
+      { name: 'C', class_id: 'c' },
+      { name: 'D', class_id: 'd' }
+    ]
+  }));
+  expect(error).toBeNull();
+  expect(data.gear).toHaveLength(4);
+});
+
+// Choosing the three defines the Class; it does not compel buying them.
+// Creation spends the 10-Merx grant however it likes, exactly as aspirant
+// spends 12 (pg. 3). All three, some, or none are each a legal build.
+test('an aspiring build may own none of its three picks', () => {
+  const { data, error } = normalizeWizardPayload(aspiringBody({ gear: [] }));
+  expect(error).toBeNull();
+  expect(data.aspiring_signatures).toHaveLength(3);
+});
+
+// The wizard omits payload.gear entirely when nothing was bought
+// (public/js/character-wizard.js:3818 only sets it for a non-empty list),
+// so the absent key -- not just an empty array -- has to be a legal save.
+test('an aspiring build with no gear key at all is legal', () => {
+  const body = aspiringBody();
+  delete body.gear;
+  const { error } = normalizeWizardPayload(body);
+  expect(error).toBeNull();
+});
+
+// Buying none of the three and two cross-class Signatures instead is 6 of
+// 10 -- legal, and priced at the cross tier because neither is in the pool.
+test('an aspiring build may spend its grant entirely outside the pool', () => {
+  const { error } = normalizeCharacterInput(aspiringInput({
+    gear: [
+      { name: 'Y', class_id: 'y' },
+      { name: 'Z', class_id: 'z' }
+    ]
+  }), { ...aspiringContext(), isCreation: true });
+  expect(error).toBeNull();
+});
+
+// 3 own-class picks (6) plus one cross-class fourth (3) is 9 of 10.
+test('a creation is priced against the pool', () => {
+  const { error } = normalizeCharacterInput(aspiringInput({
+    gear: [
+      { name: 'A', class_id: 'a' },
+      { name: 'B', class_id: 'b' },
+      { name: 'C', class_id: 'c' },
+      { name: 'D', class_id: 'd' }
+    ]
+  }), { ...aspiringContext(), isCreation: true });
+  expect(error).toBeNull();
+});
+
+// Two cross-class extras is 6 + 3 + 3 = 12, over the 10-Merx grant.
+test('a creation over budget against the pool is refused', () => {
+  const { error } = normalizeCharacterInput(aspiringInput({
+    gear: [
+      { name: 'A', class_id: 'a' },
+      { name: 'B', class_id: 'b' },
+      { name: 'C', class_id: 'c' },
+      { name: 'D', class_id: 'd' },
+      { name: 'E', class_id: 'e' }
+    ]
+  }), { ...aspiringContext(), isCreation: true });
+  expect(error).toMatch(/spends 12 Merx of 10/);
+});
+
+// An update must not carry the key at all: a present key is authoritative to
+// save_character_atomic, so sending [] would wipe the character's Class.
+test('an update never carries the pool', () => {
+  const { data } = normalizeCharacterInput(aspiringInput({}), { ...aspiringContext(), isCreation: false });
+  expect('aspiring_signatures' in data).toBe(false);
+});
+
+// The column is the own-class answer for a class-less character; a crafted
+// payload must not hand a classed one a second answer.
+test('a non-aspiring creation never carries the pool', () => {
+  const { data } = normalizeCharacterInput(
+    { ...adventInput(), aspiring_signatures: [{ class_id: 'a', name: 'A' }] },
+    { ...adventContext(), isCreation: true }
+  );
+  expect('aspiring_signatures' in data).toBe(false);
 });
 
 test('an aspirant payload carrying a pseudo_class keeps its own class', () => {

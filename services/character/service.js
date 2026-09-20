@@ -194,7 +194,7 @@ class CharacterService {
     // would price every cross-class Signature as if it were own-class.
     const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
     const normalized = normalizeCharacterInput(prepared, {
-      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear
+      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear, isCreation: true
     });
     if (normalized.error) return { data: null, error: normalized.error };
 
@@ -218,7 +218,8 @@ class CharacterService {
         character: {
           class_id: characterInput.class_id,
           gear: resolvedGear,
-          common_items: characterInput.common_items
+          common_items: characterInput.common_items,
+          aspiring_signatures: characterInput.aspiring_signatures
         },
         realMissions: [],
         offscreenMissions: [],
@@ -360,7 +361,8 @@ class CharacterService {
       enforceMerxBudget: false,
       storedGear: existing.data.gear,
       capPurchases: existing.data.stat_cap_purchases,
-      enforceCreationAllotment: false
+      enforceCreationAllotment: false,
+      isCreation: false
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
@@ -387,7 +389,8 @@ class CharacterService {
             resolveSubmittedGear(childData.classGear, gearNameToClassId),
             existing.data.gear
           ),
-          common_items: characterInput.common_items
+          common_items: characterInput.common_items,
+          aspiring_signatures: existing.data.aspiring_signatures
         },
         realMissions: missions.data || [],
         offscreenMissions: offscreenMissions.data || [],

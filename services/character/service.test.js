@@ -1129,6 +1129,67 @@ test('string-format gear is resolved to its real class before the economy gate p
   expect(result.error).toMatch(/Merx/);
 });
 
+// Task 5: an Aspiring character's three chosen Signatures are its own-class
+// answer; anything else -- including a fourth Signature the grant can still
+// afford -- prices at the cross-class rate.
+test('a created aspiring character prices its fourth Signature against the pool', async () => {
+  const { service, saved } = makeServiceOnClass();
+  await service.createCharacter({
+    name: 'Vesper', creator_mode: 'aspiring', class_id: null,
+    pseudo_class: { name: 'Ashwalker', tagline: '', description: '' },
+    aspiring_signatures: [
+      { class_id: 'a', name: 'A' },
+      { class_id: 'b', name: 'B' },
+      { class_id: 'c', name: 'C' }
+    ],
+    gear: [
+      { name: 'A', class_id: 'a' },
+      { name: 'B', class_id: 'b' },
+      { name: 'C', class_id: 'c' },
+      { name: 'D', class_id: 'd' }
+    ],
+    trait0: 'brave', trait1: 'calm', trait2: 'alert',
+    commissary_reward: 0
+  }, { id: 'profile-1' });
+  // Three own-class picks at 2 (6) plus one cross-class fourth at 3 (9) of the
+  // 10-Merx grant leaves 1 -- priced against an empty pool the fourth would
+  // misread as own-class too and leave 2.
+  expect(saved.commissary_reward).toBe(1);
+});
+
+test('an auto-calculated aspiring update recomputes commissary_reward from the stored pool', async () => {
+  const pool = [
+    { class_id: 'a', name: 'A' },
+    { class_id: 'b', name: 'B' },
+    { class_id: 'c', name: 'C' }
+  ];
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: null, creator_mode: 'aspiring',
+      abilities: [], gear: [], aspiring_signatures: pool
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: undefined, error: null }),
+    saveCharacterAtomic: async (args) => { saved = args.character; return ok({ id: 'character-1' }); }
+  }));
+  const gear = [
+    { name: 'A', class_id: 'a' },
+    { name: 'B', class_id: 'b' },
+    { name: 'C', class_id: 'c' },
+    { name: 'D', class_id: 'd' }
+  ];
+  const result = await service.updateCharacter('character-1', {
+    name: 'Vesper', creator_mode: 'aspiring', gear, auto_calculate: true,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  // The submitted payload carries no pool at all (Step 4 deletes it on an
+  // update), so this figure can only come from existing.data.aspiring_
+  // signatures -- reading characterInput's (absent) pool instead would price
+  // the fourth Signature as own-class too and leave 2, not 1.
+  expect(saved.commissary_reward).toBe(1);
+});
+
 // Review round 1, Finding 2: updateCharacter threaded no contentFormat into
 // normalizeCharacterInput at all, so economyFor always fell back to 'advent'
 // for any class-bearing (non-aspiring) character on every edit, no matter its
