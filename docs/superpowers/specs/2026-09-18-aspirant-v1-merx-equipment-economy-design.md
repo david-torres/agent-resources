@@ -1,8 +1,9 @@
 # Aspirant V1: the Merx equipment economy
 
-Status: approved design. Plan 1 (the server foundation) has landed; plan 2
-(the purchase surfaces) is planned, and the decisions taken when it was designed
-are recorded under "Plan 2 rulings".
+Status: approved design. Plan 1 (the server foundation) and plan 2 (the purchase
+surfaces) have landed. Plan 3 (Aspiring Signature acquisition) is planned; the
+decisions taken when each was designed are recorded under "Plan 2 rulings" and
+"Plan 3: Aspiring Signature acquisition".
 Branch: `aspirant-v1-classes-and-characters`.
 
 ## Place in the stack
@@ -117,9 +118,12 @@ in this slice.
   hold up to two Mods" (pg. 87).
 - "A Signature may only hold one Enchantment" (pg. 8).
 - An Aspiring character's three chosen Signatures "are treated as belonging to
-  your Class for the purposes of acquisition and improvement" (pg. 90), so they
-  are priced own-class despite each coming from a different Class. This is what
-  `public/js/character-wizard.js:2449` already does.
+  your Class for the purposes of acquisition and improvement" (pg. 90). The
+  sentence names *three specific Signatures* and makes them a Class, rather than
+  exempting the character from the cross-class tier. So those three are acquired
+  and improved at the own-class rate despite each coming from a different Class,
+  and every other Signature in the game is out-of-class to an Aspiring character
+  exactly as it would be to anyone else. Plan 2 implemented only the first half.
 - Advent, which the Aspirant grant replaces, is **three Default Signatures and
   one Elective** — pg. 3's "Instead of four Signature Items (three Default and
   one Elective)". The Elective is a choice rather than a fixed item: Advent V2
@@ -170,8 +174,9 @@ class at all:
 - A character with `creator_mode = 'aspiring'`. It is class-less by construction
   (`pseudo_class` becomes `characters.class` text, `services/character/input.js:116-123`),
   so there is no `content_format` to read, and the book defines it inside this
-  book with its own figures: grant 10, Signature Cap 8, and every chosen
-  Signature priced own-class per pg. 90.
+  book with its own figures: grant 10, Signature Cap 8, and its three chosen
+  Signatures priced own-class per pg. 90. Everything else in the game is
+  out-of-class to it; see "Plan 3".
 
 `content_format` is the correct axis for the first population and `rules_edition`
 is not: the two are deliberately independent, and it is the *shape* of a class's
@@ -190,7 +195,9 @@ A consequence for the derivation: an Aspiring character has no `class_id`, so th
 `onClass` test at `util/character-derived.js:62` is false for every item it owns
 and would charge all three picks the cross-class 3. The pg. 90 rule is therefore
 not a refinement but a fix — without it the aspiring branch overcharges by 3 Merx
-against a 10-Merx grant.
+against a 10-Merx grant. The fix is a membership test against those three, not a
+blanket exemption: an Aspiring character that acquires a fourth Signature pays
+the cross-class 3 for it.
 
 The book's Advent-to-Aspirant conversion (pg. 2: "+4 Merx for free and delete
 underused existing Equipment if applicable, recovering any Merx spent on them")
@@ -246,6 +253,34 @@ text comparison.
 (same migration), so a client that does not send them cannot wipe them. Absent
 means "keep what is stored", never "reset to default".
 
+**One column on `characters`**, added by plan 3:
+
+- `aspiring_signatures jsonb NOT NULL DEFAULT '[]'` — the three
+  `{"class_id": …, "name": …}` pairs an Aspiring character chose at creation.
+  Empty for every other character, and a CHECK enforces that: at most three
+  entries, each with a non-empty `class_id` and `name`, and non-empty only when
+  `creator_mode = 'aspiring'`. Without that last clause the column would be a
+  second, contradictory answer to "is this Signature own-class?" for a character
+  that already has a `class_id`.
+
+**Why a pool on the character rather than a flag on the gear row.** The obvious
+alternative is `class_gear.is_origin_pick boolean`. It fails for the reason this
+section already gives: reconciliation is name-keyed, so a rename is a delete plus
+an insert, and the flag dies with the row. Worse, it conflates two different
+facts — a Signature the character *may buy at the own-class rate* and a Signature
+it *currently owns*. pg. 90 makes the three a Class, and a Class does not stop
+being yours because you sold an item. Selling and re-buying a pick must not
+reprice it from 2 to 3, and only a pool that outlives the gear rows gets that
+right.
+
+**Preserve-on-absent comes free here.** The RPC's update branch reads
+`jsonb_populate_record(saved, p_character)`, whose base is the stored row, so a
+key absent from `p_character` keeps its stored value
+(`supabase/migrations/20260919000002_save_character_atomic_trait_stat.sql:100`).
+The classic edit form never submits `pseudo_class` and its tagline survives
+edits for exactly this reason; `aspiring_signatures` inherits the same
+behaviour and the edit path needs no code at all to preserve it.
+
 ### One economy module
 
 `util/merx-economy.js`, CommonJS like the rest of `util/`, is the single
@@ -298,15 +333,20 @@ branches three ways:
   No free allotment: the book replaced the four starting Signatures with the
   12-Merx grant ("Instead of four Signature Items (three Default and one
   Elective), characters start with 12 Merx", pg. 3).
-- **`aspiring`** — the same spend formula with a grant of 10, and every Signature
-  the character owns priced own-class, because pg. 90 treats its picks as its
-  own Class's.
+- **`aspiring`** — the same spend formula with a grant of 10. Its three chosen
+  Signatures price own-class because pg. 90 makes them its Class; every other
+  Signature prices cross-class, because that is what being someone else's Class
+  item means. The three are read from `characters.aspiring_signatures` (see
+  "Storage"), not inferred from what the character happens to own, because once
+  it owns a fourth the two are no longer the same set.
 
 Cross-class stays derived rather than stored for the `aspirant` branch, exactly
 as `onClass` already does it (`util/character-derived.js:62`): a Signature is
 cross-class when its `class_id` differs from the character's. The `aspiring`
-branch does not ask the question, which is the point — it has no `class_id` to
-compare against.
+branch asks the same question against a different reference: not one `class_id`
+but the three `(class_id, name)` pairs in `characters.aspiring_signatures`. Both
+branches are one function, `isCrossClass` (`util/merx-economy.js:70`), so the two
+surfaces and the derivation cannot answer it three different ways.
 
 `commissary_reward` stops being hardcoded `0` at creation and carries the derived
 remainder, which makes it consistent with the level-up path
@@ -333,7 +373,8 @@ has to be spendable afterwards.
   divider and its text — with the purchase controls beneath it, so nobody buys an
   Enchantment without reading what it does. Cross-class Signatures stay reachable
   through the existing search and class filter at the +1 tier. An Aspiring
-  character's pool remains its three step-1 picks, priced own-class per pg. 90.
+  character's grid is its three step-1 picks at the own-class rate, and the same
+  search and filter reach every other class's roster at the +1 tier.
 - **The character edit form** offers the same purchases post-creation, through
   the same component, against the real post-creation budget of grant plus mission
   income.
@@ -383,6 +424,12 @@ the app has no approval machinery to hang it on.
 | Wizard client | `public/js/character-wizard.js` | Read prices from `wizardData`; delete local constants; stop hardcoding `commissary_reward: 0`; grant Core abilities. |
 | Edit form | `views/character-form.handlebars`, partials | Purchase surfaces for enchantments and mods. |
 | Display | `views/character.handlebars` | Show a character's Enchantments and Mods. |
+| Aspiring pool | `supabase/migrations/` | `characters.aspiring_signatures`, plus a full `save_character_atomic` restatement carrying it. |
+| Aspiring pool | `services/character/service.js` | Snapshot the three picks onto `characterInput` at create, after `resolveClassItem` has filled each `class_id`. |
+| Aspiring pricing | `util/merx-economy.js`, `public/js/signature-entry.js` | `isCrossClass` takes the pool and tests membership instead of exempting the economy. |
+| Aspiring shop | `public/js/character-wizard.js`, `util/gear-purchase-data.js` | Open every class's roster to an Aspiring character at the cross tier, on both surfaces. |
+| Aspiring pool | `services/character/input.js` | Shape and validate the submitted pool; move the "exactly three" check onto it. |
+| Aspiring pool | `util/gear-purchase-data.js`, `routes/characters.js` | Carry the stored pool into the edit form's island, so the browser prices what the server will. |
 
 ## Testing
 
@@ -411,6 +458,20 @@ the app has no approval machinery to hang it on.
 - An aspiring-branch case: three picks from three different classes cost 6, not
   9, and the 10-Merx grant leaves 4. This is the regression guard for the
   missing-`class_id` overcharge described under "Who is under this economy".
+- Its companion, which guards the opposite error: a fourth Signature costs 3, not
+  2, and a fourth taken from the same class as one of the three still costs 3 —
+  the pool is three items, not three classes. A pool that is empty or absent
+  prices every Signature own-class, which is exactly plan 2's behaviour, so a row
+  written before the column existed derives as it always did.
+- The same divergence on the edit form, which is where it actually bites: an
+  Aspiring character spending mission Merx on a Signature it did not choose at
+  creation. `test/character-gear-purchases.test.js` has no aspiring pricing case
+  in either direction today, and that surface is the one a player reaches after
+  creation.
+- Client/server parity for the new signal. `test/signature-entry.test.js` already
+  sweeps both V1 economies comparing `SignatureEntry.totalOf` against
+  `equipmentSpend`; the sweep gains a pooled and an unpooled case, or it will go
+  on proving the two sides agree about a rule neither applies any more.
 
 ## Plan 2 rulings
 
@@ -441,6 +502,95 @@ and the reason matters more than the choice.
    Enchantment and Mods it will destroy. The destruction is inherent — a rename
    is a delete plus an insert (see "Storage") — so the guard is a warning, not a
    repair.
+
+## Plan 3: Aspiring Signature acquisition
+
+Plan 2 shipped `isCrossClass` returning `false` for the whole `aspiring` economy.
+That is not what pg. 90 says, but no shipped code is wrong today: an Aspiring
+character cannot reach a fourth Signature on either surface. The wizard's
+`getShopPool` (`public/js/character-wizard.js:2563`) opens the all-classes roster
+only for `mode === 'aspirant'`, and the edit form's grid is built from
+`characterClass.gear` (`util/gear-purchase-data.js:49`); a class-less character
+has no roster, so its grid holds only the Signatures it already owns. The blanket exemption is therefore correct for every
+character that can currently exist, and becomes a live mispricing the moment
+acquisition opens. Plan 3 opens it and fixes it in the same change.
+
+Measured against the loaded local database on 2026-09-20: 327 characters, 318
+with `creator_mode` NULL and 9 `advent`; **zero `aspiring`, zero `aspirant`, and
+zero with a NULL `class_id`**. No backfill, and no existing character's price
+moves.
+
+### Rulings
+
+1. **The pool is three items, not three classes.** pg. 90 makes three named
+   Signatures a Class. A fourth Signature drawn from the same class as one of the
+   three is still cross-class, because the character never had that class — it had
+   that item. The alternative reading is defensible and cheaper to implement, and
+   it is rejected because it would silently hand an Aspiring character eleven more
+   own-class items per pick.
+2. **The pool is stored, not derived.** Once a character owns four Signatures,
+   nothing in `class_gear` says which three were the originals. Any derivation
+   would have to assume the first three rows, and row order is not a contract.
+3. **The pool is submitted, not snapshotted from the gear array.** The wizard
+   already holds it separately: `state.classBuild.classGear`
+   (`public/js/character-wizard.js:86-91`) is three `{classId, itemName}` slots,
+   filled on step 1 and validated as three items from three *distinct* classes
+   (`validateBuilder`, `:1818-1839`). It becomes its own payload field. Deriving
+   it from `data.gear` instead fails twice over: at creation the gear array is now
+   picks *plus* purchases, which is the very confusion this column exists to end,
+   and a gear item may still be a bare `"ClassName::ItemName"` string at
+   normalisation time — `class_id` is not resolved until `resolveClassItem`
+   (`services/character/service.js:455-486`), well after validation.
+4. **Shaped in `normalizeCharacterInput`, beside `pseudo_class`**
+   (`services/character/input.js:515-521`), under the same
+   `creator_mode === 'aspiring'` gate and the same delete-the-raw-key discipline.
+   This matters for more than symmetry: it puts the pool in front of
+   `validateEconomyLimits` (`:362`), so the save-time budget check prices a
+   character exactly as the client did. Shaping it later, in
+   `saveCharacterAtomic`, would leave the server validating at plan 2's prices
+   and accepting builds the wizard refused.
+5. **On update the field is absent and the RPC preserves it.** The classic edit
+   form never submits `pseudo_class` and its tagline survives edits for exactly
+   this reason. The edit form must likewise never submit the pool — a character's
+   Class is not editable, and an absent key is how that is enforced rather than a
+   server-side override.
+6. **`validateAspiringBuild`'s "exactly three" moves from the gear array to the
+   pool.** Today `services/character/input.js:668` reads
+   `if (gear.length !== 3) return 'An Aspiring character needs exactly three gear
+   picks.'` — which would refuse the fourth Signature outright. The three-ness is
+   a property of the Class being invented, not of what the character walked out
+   with, so the count check binds the pool and the gear array is left to the
+   budget and cap checks that already govern every other economy.
+7. **An empty or absent pool prices every Signature own-class** — plan 2's exact
+   behaviour — so a row written before the column existed derives as it always
+   did. The permissive direction is chosen deliberately: the strict one would
+   refuse saves for characters that did nothing wrong. It is unreachable through
+   the wizard, which validates the pool, so this is a guard for the API path and
+   for legacy rows, of which there are none.
+8. **The wizard's grid stays the pool; the shop becomes everything else.**
+   `signatureEntries` (`public/js/character-wizard.js:2529-2545`) already renders
+   the Aspiring grid from `state.classBuild.classGear`, so the printed grid is
+   the character's own Class and needs no change. The acquisition surface is the
+   shop, which is where cross-class purchases already live for `aspirant`. One
+   welcome side effect: `character-gear-purchases.js:336` gates its origin-class
+   badge on `crossClassFor`, so an acquired Signature starts naming the class it
+   came from without new markup.
+9. **The wizard's shop branches on economy, not `DATA.mode`.** `getShopPool`
+   tests `DATA.mode === 'aspirant'` while `usesSignatureGrid` tests the resolved
+   economy. That disagreement is a pre-existing gap — an `?mode=advent` wizard on
+   aspirant-content classes gets no class items in its shop — and it sits directly
+   in the way of opening the shop to `aspiring`. Plan 3 closes it rather than
+   adding a third branch beside it.
+10. **A fourth Signature is affordable at creation and that is intended.** Three
+   picks cost 6 of the 10-Merx grant; the remaining 4 buys one cross-class
+   Signature at 3, or common items. Nothing in the book reserves the remainder,
+   and pg. 3's "spend however they like or save for later" is the governing
+   sentence.
+
+**The character page needs no change.**
+`views/partials/signature-entry.handlebars` renders a Signature's name,
+description, Enchantment and Mods, and shows no price or tier at all, so nothing
+on it can disagree with the new pricing.
 
 ## Deliberately not in this slice
 
