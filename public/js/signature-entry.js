@@ -139,6 +139,12 @@
       return parts.join('');
     }
 
+    // The Default Enchantment's printed text above is book content and
+    // shows whether or not the Signature is owned, but you cannot buy an
+    // Enchantment on a Signature you have not bought -- these controls sit
+    // behind the same `owned` gate as modRows/modsReadOnly.
+    if (!opts.owned) return parts.join('');
+
     parts.push('<div class="entry-controls">');
     parts.push(radio('none', 'None', !chosen, null));
     if (hasDefault) {
@@ -190,8 +196,8 @@
 
   // Book order: name, description, meters, the Default Enchantment divider
   // and its text (always printed, whether or not the Signature is owned),
-  // then Mods -- editable when owned and interactive, read-only when owned
-  // and readOnly, absent when not owned.
+  // then the Enchantment controls and Mods -- both editable when owned and
+  // interactive, read-only when owned and readOnly, absent when not owned.
   var render = function (entry, purchase, opts) {
     var options = opts || {};
     var figures = options.figures;
@@ -209,7 +215,7 @@
     parts.push('</div>');
     parts.push('<div class="entry-description">' + (entry.description_html || '') + '</div>');
     parts.push(metersHtml(entry.meters));
-    parts.push(enchantmentSection(entry, p, { figures: figures, crossClass: crossClass, readOnly: readOnly }));
+    parts.push(enchantmentSection(entry, p, { figures: figures, crossClass: crossClass, readOnly: readOnly, owned: owned }));
 
     if (owned) {
       parts.push(readOnly ? modsReadOnly(p) : modRows(p, { figures: figures, crossClass: crossClass }));

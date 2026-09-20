@@ -123,6 +123,19 @@ describe('the component agrees with the server it cannot require', () => {
                       { figures: FIGURES, economy: 'aspirant', characterClassId: CLASS_ID }))
       .toBe(equipmentSpend([crossItem], { economy: 'aspirant', characterClassId: CLASS_ID }));
   });
+
+  // Of the six shapes above, only F is cross-class, and F carries a Custom
+  // Enchantment -- so figures.prices.defaultEnchantment.cross is never
+  // compared against equipmentSpend by the sweep. A direct comparison here
+  // closes that hole without doubling the sweep to a 7th shape.
+  test('a cross-class Default Enchantment prices the same on both sides', () => {
+    const crossDefault = { name: 'H', class_id: 'other-class', enchantment: { source: 'default' }, mods: [] };
+    for (const economy of ['aspirant', 'aspiring']) {
+      const purchases = [{ ...crossDefault, owned: true }];
+      expect(SE.totalOf(purchases, { figures: FIGURES, economy, characterClassId: CLASS_ID }))
+        .toBe(equipmentSpend([crossDefault], { economy, characterClassId: CLASS_ID }));
+    }
+  });
 });
 
 describe('render', () => {
@@ -136,6 +149,16 @@ describe('render', () => {
     expect(html).toContain('Default Enchantment');
     expect(html).toContain('Hats Off to You');
     expect(html).toContain('Portray a Turning Point.');
+  });
+
+  test('an unowned Signature shows the Default Enchantment text but no controls to buy it', () => {
+    const html = SE.render(entry, { owned: false, enchantment: null, mods: [] },
+                           { figures: FIGURES, economy: 'aspirant' });
+    expect(html).toContain('Hats Off to You');
+    expect(html).toContain('Portray a Turning Point.');
+    expect(html).not.toContain('<input');
+    expect(html).not.toContain('<input type="radio"');
+    expect(html).not.toContain('entry-controls');
   });
 
   test('a Signature with no Default offers only Custom', () => {
