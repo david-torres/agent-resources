@@ -16,7 +16,6 @@ const {
   COMMON_ITEM_PRICE,
   CREATION_GRANT,
   SIGNATURE_CAP,
-  ABILITY_CAP,
   MODS_PER_SIGNATURE,
   ENCHANTMENT_WORD_LIMIT,
   MOD_WORD_LIMIT,
@@ -60,11 +59,9 @@ test('advent grants the Elective, aspirant and aspiring their book figures', () 
   expect(CREATION_GRANT).toEqual({ advent: 2, aspirant: 12, aspiring: 10 });
 });
 
-test('caps are 12/8 Signatures and 6/4 Abilities (pp. 85, 92)', () => {
+test('caps are 12/8 Signatures (pp. 85, 92)', () => {
   expect(SIGNATURE_CAP.aspirant).toBe(12);
   expect(SIGNATURE_CAP.aspiring).toBe(8);
-  expect(ABILITY_CAP.aspirant).toBe(6);
-  expect(ABILITY_CAP.aspiring).toBe(4);
 });
 
 test('a Signature holds at most two Mods (pg. 87)', () => {

@@ -35,9 +35,6 @@ const CREATION_GRANT = { advent: 2, aspirant: 12, aspiring: 10 };
 // than four total Abilities". Advent has no cap in the rules the app models,
 // so null means "not capped" rather than zero.
 const SIGNATURE_CAP = { advent: null, aspirant: 12, aspiring: 8 };
-// pg. 7: "A character may never have more than six total Abilities, and this
-// cap cannot be increased". pg. 92: aspiring may never have more than four.
-const ABILITY_CAP = { advent: null, aspirant: 6, aspiring: 4 };
 
 // pg. 87: "A given Signature may hold up to two Mods".
 const MODS_PER_SIGNATURE = 2;
@@ -248,7 +245,6 @@ module.exports = {
     COMMON_ITEM_PRICE,
     CREATION_GRANT,
     SIGNATURE_CAP,
-    ABILITY_CAP,
     MODS_PER_SIGNATURE,
     ASPIRING_SIGNATURE_PICKS,
     ENCHANTMENT_WORD_LIMIT,
