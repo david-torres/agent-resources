@@ -187,6 +187,26 @@ const getClassRulesVersion = async (classId) => {
   }
 };
 
+// Powers services/character/service.js's classFamilyOf: every class row
+// needed to walk a character's own version family (util/class-family.js#
+// computeVersionFamily), so an ability carried over from an earlier version
+// of the SAME class prices as own-class rather than cross-class. The family
+// walk can reach any class in the catalogue, so this selects every row
+// rather than filtering to one -- and MUST select base_class_id,
+// rules_edition, and content_format together: computeVersionFamily's own
+// comment warns that a row missing one of these compares unequal and fails
+// closed, splitting a family instead of bridging it.
+const getClassFamilyRows = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('classes')
+    .select('id, base_class_id, rules_edition, content_format');
+  if (error) {
+    console.error(error);
+    return { data: [], error };
+  }
+  return { data: data || [], error: null };
+};
+
 const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
   let builder = supabaseAdmin
@@ -356,6 +376,7 @@ module.exports = {
     return { data, error };
   },
   getClassRulesVersion,
+  getClassFamilyRows,
 
   // Perk-build reads (level-up flow) — CharacterService#buildPerkRows uses
   // these to filter to allowed abilities and compute per-ability position

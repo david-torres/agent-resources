@@ -96,6 +96,7 @@ const makeAdapter = (calls, overrides = {}) => ({
     return ok({ id, name: 'Owned Hero', ...fields });
   },
   getClassRulesVersion: async () => ok('v1'),
+  getClassFamilyRows: async () => ok([]),
   fetchAllowedAbilityIds: async () => ok([]),
   fetchExistingPerks: async () => ok([]),
   levelUpAtomic: async ({ fields }) => ok({ id: 'character-1', name: 'Owned Hero', ...fields }),

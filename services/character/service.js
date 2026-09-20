@@ -39,6 +39,7 @@ const REQUIRED_ADAPTER_METHODS = [
   'updateClass',
   'updateOwnedFields',
   'getClassRulesVersion',
+  'getClassFamilyRows',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
   'levelUpAtomic',
@@ -353,6 +354,23 @@ class CharacterService {
     }
     prepared = await this.adapter.resolveClassReference(prepared);
 
+    // Maps every id in the character's own version family onto storedClassId
+    // (util/class-family.js#computeVersionFamily is the single definition of
+    // "version family" -- see its own comment on why a query that drops a
+    // column must not be reimplemented here). An ability row carried over
+    // from an earlier version of the character's OWN class then tags as
+    // own-class instead of cross-class; measured on live data, 22 of 327
+    // characters hold exactly such a row. An aspiring character has no
+    // class_id and its branch of tagAbilities (util/character-derived.js)
+    // never consults classFamilyOf, so this stays null rather than paying
+    // for a query that would go unused.
+    let classFamilyOf = null;
+    if (storedClassId) {
+      const { data: classFamilyRows } = await this.adapter.getClassFamilyRows();
+      const family = computeVersionFamily(classFamilyRows || [], storedClassId);
+      classFamilyOf = (classId) => (family.has(classId) ? storedClassId : classId);
+    }
+
     // The Signature Cap is enforced on every save, including an edit; the
     // Merx budget is NOT -- see validateEconomyLimits's own comment for why
     // (an edit's real budget needs mission-earned Merx this path does not
@@ -390,7 +408,8 @@ class CharacterService {
       enforceAbilityLimits: false,
       // The submission never carries this key on update (Task 6) -- the
       // stored value is the only truth.
-      aspiringAbilities: existing.data.aspiring_abilities
+      aspiringAbilities: existing.data.aspiring_abilities,
+      classFamilyOf
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
@@ -432,7 +451,8 @@ class CharacterService {
         economy: economyFor({
           contentFormat: classRow && classRow.content_format,
           creatorMode: characterInput.creator_mode
-        })
+        }),
+        classFamilyOf
       });
       characterInput.level = derived.level;
       characterInput.completed_missions = derived.completed_missions;
