@@ -3631,7 +3631,11 @@ window.CharacterWizard = (function () {
       is_public: state.isPublic !== false, // default true on the wizard
       hide_from_search: !!state.hideFromSearch,
       creator_mode: state.mode || null,
-      commissary_reward: 0,
+      // What the character did not spend. The server recomputes this for V1
+      // economies in CharacterService.createCharacter, so this is the client's
+      // agreeing figure rather than the authority -- but it must agree, or the
+      // player is shown one number and stored another.
+      commissary_reward: Math.max(0, getMerxBudget() - getMerxSpent()),
       // 3 trait rows. Use trait0/trait1/trait2 keys — the model pulls these
       // out before insert and writes them to the traits table.
       trait0: state.traits[0] || null,
@@ -3672,7 +3676,20 @@ window.CharacterWizard = (function () {
     if (Array.isArray(state.gear) && state.gear.length) {
       payload.gear = state.gear.map((g) => {
         if (!g || !g.name) return null;
-        return { name: g.name, class_id: g.class_id || state.classId };
+        // Each Signature carries what was bought on it. `enchantment: null` is
+        // explicit rather than omitted: absence means "keep what is stored" to
+        // save_character_atomic, and a character being created has nothing
+        // stored to keep, so saying null states the intent rather than relying
+        // on an empty row. A Default submits only its source -- the name and
+        // description live on the class and mergeClassItems attaches them at
+        // read time (services/character/repository.js:31-36), so copying them
+        // here would store a second copy that a class edit could not reach.
+        return {
+          name: g.name,
+          class_id: g.class_id || state.classId,
+          enchantment: g.enchantment || null,
+          mods: Array.isArray(g.mods) ? g.mods : []
+        };
       }).filter(Boolean);
     }
     // Common items: array of strings, normalized server-side.

@@ -751,7 +751,7 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(restored.class_id).toBe('c-other');
     expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.cross);
     expect(wizard.buildSubmitPayload().gear)
-      .toEqual([{ name: 'Sharps Rifle', class_id: 'c-other' }]);
+      .toEqual([{ name: 'Sharps Rifle', class_id: 'c-other', enchantment: null, mods: [] }]);
   });
 
   // The hidden attribute alone does not hide an element carrying a Bulma
@@ -777,5 +777,63 @@ describe('step 4 offers the whole class and its purchases', () => {
     advent.getState().classId = 'c-advent';
     advent.renderGearStep();
     expect(document.getElementById('slotsReadout').hidden).toBe(true);
+  });
+
+  // Everything bought against a Signature (its Enchantment, its Mods) rode
+  // in browser state only and was discarded at submit -- serializePayload
+  // sent bare {name, class_id}. setMods isn't on the exposed handle (only
+  // pure reads and buySignature/setEnchantment are), so a Mod is stamped
+  // directly on the purchase the same way other tests here reach into
+  // state.gear.
+  test('the payload carries each Signature\'s Enchantment and Mods', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+    wizard.getState().gear[0].mods = [{ name: 'Scope', description: 'Sees far' }];
+    const [item] = wizard.buildSubmitPayload().gear;
+    expect(item).toMatchObject({
+      name: 'Cowboy Hat',
+      class_id: 'c-v1',
+      enchantment: { source: 'default' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    });
+  });
+
+  test('a Default Enchantment submits no copy of the class\'s text', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
+    const [item] = wizard.buildSubmitPayload().gear;
+    expect(item.enchantment).toEqual({ source: 'default' });
+    expect(item.enchantment.name).toBeUndefined();
+    expect(item.enchantment.description).toBeUndefined();
+  });
+
+  test('an unenchanted Signature submits an explicit null, not an absent key', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    const [item] = wizard.buildSubmitPayload().gear;
+    expect('enchantment' in item).toBe(true);
+    expect(item.enchantment).toBeNull();
+  });
+
+  test('commissary_reward is no longer hardcoded to zero', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+    wizard.getState().classId = 'c-v1';
+    wizard.buySignature('Cowboy Hat');
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.commissary_reward).toBe(wizard.getMerxBudget() - wizard.getMerxSpent());
+  });
+
+  test('an advent payload is unchanged in shape', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
+    wizard.getState().classId = 'c-advent';
+    wizard.syncBaseGear();
+    const [item] = wizard.buildSubmitPayload().gear;
+    expect(item.enchantment).toBeNull();
+    expect(item.mods).toEqual([]);
   });
 });

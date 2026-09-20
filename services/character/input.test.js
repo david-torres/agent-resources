@@ -130,6 +130,31 @@ test('normalizeWizardPayload defaults is_public to true when unset', () => {
   expect(data.hide_from_search).toBe(false);
 });
 
+// normalizeWizardPayload only trims/coerces the top-level fields it names
+// (name, level, stats, ...); it never touches body.gear, so a Signature's
+// Enchantment and Mods -- the shape the wizard's serializePayload now sends --
+// ride through untouched, for validateGearEquipment/normalizeGearEquipment
+// further down normalizeCharacterInput's pipeline to judge and shape.
+test('normalizeWizardPayload leaves a Signature\'s Enchantment and Mods untouched', () => {
+  const { data, error } = normalizeWizardPayload({
+    name: 'Hero',
+    creator_mode: 'aspirant',
+    gear: [{
+      name: 'Cowboy Hat',
+      class_id: 'v1',
+      enchantment: { source: 'default' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    }]
+  });
+  expect(error).toBeNull();
+  expect(data.gear).toEqual([{
+    name: 'Cowboy Hat',
+    class_id: 'v1',
+    enchantment: { source: 'default' },
+    mods: [{ name: 'Scope', description: 'Sees far' }]
+  }]);
+});
+
 const { collectCharacterFormArrays } = require('./input');
 
 test('collectCharacterFormArrays assembles perks/quirks/accessories and strips raw keys', () => {
@@ -844,6 +869,17 @@ test('a seventh own-class Signature is over budget', () => {
   const result = validateEconomyLimits({ ...ASPIRANT, gear: own(7), commonItems: [] });
   expect(result.ok).toBe(false);
   expect(result.errors.join(' ')).toMatch(/Merx/);
+});
+
+// The wizard's own gear-payload shape (name, class_id, enchantment, mods)
+// run through the real check, naming both figures rather than only "Merx" --
+// a player refused a save needs to see what they spent against what they
+// were given, not just which currency broke.
+test('an over-budget wizard-shaped payload names the spend and the budget', () => {
+  const gear = own(7).map((g) => ({ ...g, enchantment: null, mods: [] }));
+  const result = validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [] });
+  expect(result.ok).toBe(false);
+  expect(result.errors.join(' ')).toMatch(/spends 14 Merx of 12/);
 });
 
 test('mission earnings raise the budget', () => {
