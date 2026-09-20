@@ -21,25 +21,19 @@
 // Modelled on 26-aspiring-wizard.spec.js for the donor-class setup and the
 // step-1/2/3 builder flow, and on 28-aspirant-v1-merx-purchases.spec.js for
 // how a Signature is actually bought: open its grid cell, then click
-// data-signature-buy in the drawer that opens. That second file's mechanism
-// -- not 26's -- is how the three picks are bought here.
+// data-signature-buy in the drawer that opens. Both 26 and 28 buy the same
+// way, and so does this spec.
 //
-// WHY THE PICKS ARE BOUGHT VIA THE GRID, NOT VIA #spendList LIKE 26 DOES:
-// 26-aspiring-wizard.spec.js buys its three picks through
-// `#spendList [data-shop-key="class:...`, and that is now BROKEN by this
-// same plan's own public/js/character-wizard.js#getShopPool (commit
-// a07c618): the shop explicitly excludes any item already in the aspiring
-// pool (`if (economyForState() === 'aspiring' && inPool(cls, g)) return;`),
-// so those shop-key locators never resolve and 26 times out. Verified by
-// running 26 directly against this branch: it fails at that exact line.
-// signatureEntries() (character-wizard.js) already builds the grid for
-// aspiring mode from the three picks (DATA.mode === 'aspiring' branch), and
-// grid cells were never a free grant -- clicking one only opens a drawer;
-// "nothing is bought by opening one" (character-wizard.js's own comment) --
-// so buying through the grid+drawer, exactly like 28 does for an aspirant's
-// own class, is the CORRECT and only working purchase path for the three
-// picks post-a07c618. This is a real regression in 26, reported separately;
-// this spec does not fix it, only avoids relying on the broken selector.
+// WHY THE PICKS ARE BOUGHT VIA THE GRID, NOT #spendList:
+// public/js/character-wizard.js#getShopPool deliberately excludes an
+// aspiring character's three pool picks from the shop, so the same
+// Signature is never offered at two prices at once. signatureEntries()
+// builds the grid for aspiring mode from exactly those three picks instead;
+// a grid cell only opens the drawer -- "nothing is bought by opening one"
+// (character-wizard.js's own comment) -- and the drawer's own
+// data-signature-buy is what actually buys it. That grid+drawer path is
+// therefore how the three picks are bought here, the same mechanism 26 and
+// 28 use for their own Signatures.
 //
 // CLEANUP: every row this spec creates -- the character, its class_gear,
 // class_abilities, traits, the one offscreen mission seeded for Merx
@@ -298,6 +292,9 @@ test('a player can acquire a Signature the character never chose, charged at the
     'select name from class_gear where character_id = $1', [id]
   );
   expect(gearRowsAfterEdit, 'the edit form save must add the fifth Signature without disturbing the pool').toHaveLength(5);
+  expect(gearRowsAfterEdit.map((r) => r.name).sort()).toEqual(
+    [poolItemName('alpha'), poolItemName('beta'), poolItemName('gamma'), ALPHA_SECOND_ITEM, CATALOGUE_ITEM_NAME].sort()
+  );
   const { rows: poolAfterEdit } = await db.query(
     'select aspiring_signatures, creator_mode from characters where id = $1', [id]
   );
