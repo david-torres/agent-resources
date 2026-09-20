@@ -20,7 +20,7 @@
 - **Before any database-touching step**, run `eval "$(supabase status -o env)"; echo "API_URL=$API_URL"; grep -E '^SUPABASE_URL=' .env` — `API_URL` must print `http://127.0.0.1:54321` and `.env` must name the same host, or stop and report.
 - **Row counts must not change:** characters 327, traits 981, class_gear 1492, class_abilities 916, classes 62. Any exploratory insert happens inside a transaction you `ROLLBACK`.
 - **`bun run test:unit` is always safe** (it overrides `SUPABASE_URL` to `https://test.invalid`). `bun test <file>` directly does **not** get that override.
-- **Baseline:** `bun run test:unit` is green (169 files, 0 failures). `bun run test:http` has one pre-existing failure (`routes/open-graph.test.js`) and `bun run test:integration` has three pre-existing red files. Do not attempt to fix those; do not let them mask a new failure.
+- **Baseline:** `bun run test:unit` is green (185 files, 0 failures). `bun run test:http` has one pre-existing failure (`routes/open-graph.test.js`) and `bun run test:integration` has three pre-existing red files. Do not attempt to fix those; do not let them mask a new failure.
 - **Delete what you replace.** No `_old` copies, no commented-out blocks, no fallback paths kept "just in case".
 - **Comments describe the code as it is now**, never what it used to be. Explain *why* only when the reason is non-obvious.
 - **The three-state `enchantment` contract is unchanged and must stay unchanged:** key absent = keep stored; explicit `null` = remove; object = set.
@@ -180,7 +180,7 @@ Leave the rest of the reducer untouched.
 - [ ] **Step 6: Run the tests to verify they pass**
 
 Run: `bun run test:unit`
-Expected: green across all 169 files, `util/character-derived.test.js` included. Nothing downstream breaks yet: every existing caller omits `aspiringSignatures`, which reads as an empty pool and prices own-class exactly as before. That is the point of the fallback, and it is why this task can land on its own.
+Expected: green across all 185 files, `util/character-derived.test.js` included. Nothing downstream breaks yet: every existing caller omits `aspiringSignatures`, which reads as an empty pool and prices own-class exactly as before. That is the point of the fallback, and it is why this task can land on its own.
 
 - [ ] **Step 7: Confirm the module is still require-free**
 
@@ -338,7 +338,7 @@ In its `deriveMerxBreakdown` call (around line 115), add one line after `charact
 - [ ] **Step 7: Run the tests to verify they pass**
 
 Run: `bun run test:unit`
-Expected: green across all 169 files.
+Expected: green across all 185 files.
 
 - [ ] **Step 8: Commit**
 
