@@ -114,6 +114,7 @@ const buildHtml = () => `
 
   <section class="wizard-step" data-step-panel="4" hidden>
     <span id="merxSpent">0</span> / <span id="merxBudget">0</span>
+    <p id="merxRemainderNote" hidden></p>
     <span id="slotsReadout" hidden><span id="slotsUsed">0</span> / <span id="slotsCap">0</span></span>
     <div id="signaturePanel" hidden>
       <div id="signatureGrid"></div>

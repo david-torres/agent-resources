@@ -602,8 +602,6 @@ describe('step 4 offers the whole class and its purchases', () => {
     wizard.getState().classId = 'c-advent';
     wizard.syncBaseGear();
     expect(wizard.getMerxSpent()).toBe(0);
-    wizard.renderGearStep();
-    expect(document.getElementById('step4Next').disabled).toBe(true);
   });
 
 
@@ -856,5 +854,55 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(wizard.getMerxSpent()).toBeGreaterThan(0);
     expect(wizard.getMerxSpent()).toBeLessThan(wizard.getMerxBudget());
     expect(payload.commissary_reward).toBe(wizard.getMerxBudget() - wizard.getMerxSpent());
+  });
+
+  // pg. 3: 12 Merx "may be spent however they like or save for later" -- Next
+  // is never gated on the budget being fully spent, and the unspent
+  // remainder (asserted on above via commissary_reward) is called out for
+  // the player rather than treated as an error.
+  describe('the Next button is never gated on spending the whole budget (pg. 3)', () => {
+    const classFor = (mode) => (mode === 'advent' ? adventClass() : v1Class());
+
+    test.each(['advent', 'aspirant', 'aspiring'])(
+      '%s may leave step 4 with Merx unspent', (mode) => {
+        const wizard = bootWizard(fixture({ mode, classes: [classFor(mode)] }));
+        wizard.getState().classId = classFor(mode).id;
+        wizard.renderGearStep();
+        expect(document.getElementById('step4Next').disabled).toBe(false);
+      }
+    );
+
+    test('the remainder is shown as saved, not as an error', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      wizard.renderGearStep();
+      expect(document.body.textContent).toContain('saved');
+    });
+
+    // Buying every printed Signature and enchanting each one costs far more
+    // than the aspirant grant -- affordsChange (the gate on the purchase
+    // itself, not on Next) must keep the total at or under budget throughout.
+    test('over-budget is still impossible: purchases stop at the budget', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
+      wizard.getState().classId = 'c-v1';
+      for (const name of twelveNames()) {
+        wizard.buySignature(name);
+        wizard.setEnchantment(name, { source: 'custom', name: 'x', description: 'y' });
+      }
+      expect(wizard.getMerxSpent()).toBeLessThanOrEqual(wizard.getMerxBudget());
+    });
+
+    // Mission income lifts the budget well above what 8 Signatures cost, so
+    // the Signature Cap -- not the budget -- is what has to stop this purchase
+    // run; a low budget would let the test pass for the wrong reason.
+    test('a purchase that would breach the Signature Cap is refused (aspiring)', () => {
+      const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
+      const state = wizard.getState();
+      state.level = 12;
+      state.successfulMissions = 20;
+      seedAspiringPicks(wizard, twelveNames());
+      for (const name of twelveNames()) wizard.buySignature(name, 'c-v1');
+      expect(wizard.getSlotsUsed()).toBeLessThanOrEqual(FIGURES.signatureCap.aspiring);
+    });
   });
 });

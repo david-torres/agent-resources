@@ -218,6 +218,7 @@ window.CharacterWizard = (function () {
   const signatureDrawer = document.getElementById('signatureDrawer');
   const merxSpentEl = document.getElementById('merxSpent');
   const merxBudgetEl = document.getElementById('merxBudget');
+  const merxRemainderNote = document.getElementById('merxRemainderNote');
   const slotsReadout = document.getElementById('slotsReadout');
   const slotsUsedEl = document.getElementById('slotsUsed');
   const slotsCapEl = document.getElementById('slotsCap');
@@ -3132,6 +3133,18 @@ window.CharacterWizard = (function () {
     if (merxSpentEl) merxSpentEl.textContent = String(spent);
     if (merxBudgetEl) merxBudgetEl.textContent = String(budget);
 
+    // pg. 3: the 12 Merx "may be spent however they like or save for later" --
+    // an unspent remainder is not left behind, it becomes commissary_reward on
+    // the created character. The figure is the budget/spent this render
+    // already computed, never a literal.
+    if (merxRemainderNote) {
+      const remainder = budget - spent;
+      merxRemainderNote.hidden = remainder <= 0;
+      merxRemainderNote.textContent = remainder > 0
+        ? remainder + ' Merx will be saved for later.'
+        : '';
+    }
+
     // The cap readout is meaningless where the economy sets no cap.
     const cap = signatureCap();
     if (slotsReadout) slotsReadout.hidden = cap === null;
@@ -3150,21 +3163,11 @@ window.CharacterWizard = (function () {
       if (customCommonItemAdd) customCommonItemAdd.disabled = !canAffordAny;
     }
 
-    // ----- Next button gates on budget being spent (advent and aspiring economies) -----
-    // Both economies start with a fixed Merx budget to spend here; the gate
-    // stays locked until the whole budget is laid out (aspiring spends its
-    // served grant across the picked items and common items, duplicates
-    // allowed). Keyed on economyForState(), not DATA.mode: an aspirant-content
-    // class picked under advent mode resolves to the aspirant economy, which
-    // has no forced-full-spend rule, so gating on the URL mode here forced a
-    // full 12-Merx spend on top of a free allotment the economy never granted.
-    if (step4Next) {
-      if (economyForState() === 'advent' || economyForState() === 'aspiring') {
-        step4Next.disabled = spent < budget;
-      } else {
-        step4Next.disabled = false;
-      }
-    }
+    // pg. 3: 12 Merx "may be spent however they like or save for later", so
+    // Next is never gated on the budget being fully spent, in any economy.
+    // Over-budget and over-cap purchases are refused where a purchase is
+    // made (affordsChange), not here.
+    if (step4Next) step4Next.disabled = false;
   };
 
   const renderGearStep = () => {
