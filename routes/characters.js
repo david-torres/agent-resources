@@ -58,6 +58,36 @@ const sendRouteError = (req, res, error) => {
   return sendError(req, res, error);
 };
 
+// createCharacter/updateCharacter return a bare STRING for every validation
+// failure normalizeCharacterInput reports (over-budget, over-cap, invalid
+// creator_mode, malformed gear/mods, ...) -- by construction a message meant
+// for the player, never an exception. Passed to sendError with no opts, a
+// string has no `.code` for classifyError's switch to match, so it falls
+// into the `default` branch and is reported as a 500 "Something went wrong",
+// with the actual reason suppressed outright once NODE_ENV isn't literally
+// 'development' (util/http-error.js#isProd) -- which is every real
+// deployment. Refusing an over-budget or over-cap build is an expected,
+// everyday outcome of the Merx economy this app enforces; the player is
+// entitled to be told why, not just that something broke.
+//
+// This gives a string that shape explicitly, so the real message reaches the
+// player. An Error/object-shaped failure (a genuine 500, a Postgres error
+// carrying its own `.code`) is left untouched and keeps classifying exactly
+// as it did before this existed.
+const sendCharacterSaveError = (req, res, error) => {
+  if (typeof error === 'string') {
+    // `message` is passed in the fallback, not left for classifyError to
+    // derive: its own default branch's message is isProd()-gated exactly
+    // because it does not know an unclassified error is safe to show. This
+    // one is -- it is the validation string this route asked
+    // createCharacter/updateCharacter for -- so the fallback states all
+    // three of status/title/message and none of classifyError's own
+    // (null-error) base values survive to the response.
+    return sendError(req, res, null, { status: 400, title: 'Invalid submission', message: error });
+  }
+  return sendError(req, res, error);
+};
+
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user) => {
   
@@ -356,11 +386,7 @@ router.post('/wizard', isAuthenticated, async (req, res) => {
 
   const { data, error } = await createCharacter(normalized, profile);
   if (error) {
-    // createCharacter returns string errors for some validation paths
-    // (e.g. invalid creator_mode, v2 ability-perk validation). Wrap those
-    // so sendError gets a recognizable shape.
-    const errObj = typeof error === 'string' ? { message: error } : error;
-    return sendError(req, res, errObj);
+    return sendCharacterSaveError(req, res, error);
   }
   const character = Array.isArray(data) ? data[0] : data;
   if (!character) {
@@ -684,7 +710,7 @@ router.post('/', isAuthenticated, async (req, res) => {
   req.body = collectCharacterFormArrays(req.body);
   const { data, error } = await createCharacter(req.body, profile);
   if (error) {
-    return sendError(req, res, error);
+    return sendCharacterSaveError(req, res, error);
   } else {
     const character = Array.isArray(data) ? data[0] : data;
     if (!character) {
@@ -1150,7 +1176,7 @@ router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
   // the actor doesn't own the character; other failures are still returned.
   const { data, error } = await updateCharacter(id, req.body, profile);
   if (error) {
-    return sendError(req, res, error);
+    return sendCharacterSaveError(req, res, error);
   } else {
     return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
   }

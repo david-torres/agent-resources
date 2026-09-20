@@ -211,24 +211,16 @@ test('buying a Default, swapping to a Custom and adding two Mods prices exactly 
     page.locator('#wizardSubmit').click()
   ]);
 
-  // KNOWN GAP, measured against the real local server while writing this
-  // spec (not asserted on faith): services/character/input.js's
-  // validateEconomyLimits DOES compute the specific "This character spends
-  // N Merx of 12." message, but routes/characters.js's wizard handler loses
-  // it before it reaches the browser. normalizeWizardPayload's own
-  // structural errors are sent with an explicit `{ status: 400 }` (line
-  // ~354), but createCharacter's error two lines below is not -- it falls
-  // into util/http-error.js classifyError's `default` branch, which has no
-  // case for a bare validation string and, once NODE_ENV isn't literally
-  // 'development' (true for this suite's webServer), replaces it with the
-  // generic 500 below. So the save IS refused and NO character is created --
-  // proven below against the database, not just the page -- but "with the
-  // server's message" is not something the current app can show; only this
-  // generic fallback is. That specific gap belongs to whoever picks up this
-  // finding, not to this spec.
-  expect(response.status()).toBe(500);
+  // routes/characters.js's wizard handler now passes createCharacter's
+  // validation string straight through as a 400 (sendCharacterSaveError),
+  // rather than letting it fall into util/http-error.js classifyError's
+  // `default` branch and lose the real reason behind a generic 500 --
+  // see task-13-report.md for how that gap was found and fixed. The
+  // message itself is asserted by naming the spend and the budget this
+  // spec already read off the served DOM, not by a literal.
+  expect(response.status(), 'an over-budget save must be refused as a 4xx, not a 500').toBe(400);
   await expect(page.locator('#alerts .notification.is-danger'))
-    .toHaveText('An unexpected error occurred. Please try again.');
+    .toHaveText(`This character spends ${overBudgetSpend} Merx of ${budget}.`);
   expect(page.url(), 'a refused save must not navigate away from the wizard').toContain('/characters/wizard');
 
   const { rows } = await db.query('select id from characters where name = $1', [name]);
