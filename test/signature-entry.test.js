@@ -12,7 +12,7 @@
 const { test, expect, describe } = require('bun:test');
 const fs = require('fs');
 const { JSDOM } = require('jsdom');
-const { economyFigures, equipmentSpend } = require('../util/merx-economy');
+const { economyFigures, equipmentSpend, countWordsExcludingRatings } = require('../util/merx-economy');
 
 const SOURCE = fs.readFileSync('public/js/signature-entry.js', 'utf8');
 const boot = () => {
@@ -122,6 +122,28 @@ describe('the component agrees with the server it cannot require', () => {
     expect(SE.totalOf([{ ...crossItem, owned: true }],
                       { figures: FIGURES, economy: 'aspirant', characterClassId: CLASS_ID }))
       .toBe(equipmentSpend([crossItem], { economy: 'aspirant', characterClassId: CLASS_ID }));
+  });
+
+  // The word count is the other arithmetic the two sides duplicate. A Latin-
+  // only test passes either way; a Custom written in another script is what
+  // told them apart -- the client counted 0 and let the player type past the
+  // limit, and the save refused what the counter had called empty.
+  test('the word counter agrees with the server, in any script', () => {
+    const texts = [
+      '',
+      '   ',
+      'Ward against sun and glare',
+      'damage<sup>M</sup>.',
+      'A <sup>H</sup> B <sup>L</sup> C',
+      '-- ... !',
+      '\u65e5\u672c\u8a9e \u306e \u546a\u3044',
+      '\u0417\u0430\u0449\u0438\u0442\u0430 \u043e\u0442 \u043e\u0433\u043d\u044f',
+      '\u0645\u0642\u0627\u0648\u0645\u0629 \u0627\u0644\u0646\u0627\u0631<sup>M</sup>',
+      'caf\u00e9 na\u00efve \u00fcber'
+    ];
+    for (const text of texts) {
+      expect(SE.countWords(text)).toBe(countWordsExcludingRatings(text));
+    }
   });
 
   // Of the six shapes above, only F is cross-class, and F carries a Custom

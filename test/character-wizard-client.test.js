@@ -319,6 +319,23 @@ describe('the wizard reads its economy from the server', () => {
     expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspiring);
   });
 
+  // Whole-plan review, Minor 6: the allotment read STAT_FIGURES.creationPluses
+  // [DATA.mode] while the server keys CREATION_PLUSES on the resolved economy
+  // (util/stat-caps.js plusAllotment). The two agree on today's figures, so
+  // only the served mapping can tell them apart: the client must take the
+  // economy the server assigned this class, whatever mode the URL carries.
+  test('the plus allotment follows the class economy the server served, not the mode', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant',
+      classes: [{ id: 'c1', name: 'Borrowed', content_format: 'aspirant', gear: [] }],
+      economyByClassId: { c1: 'aspiring' },
+      statCaps: statCapFigures()
+    }));
+    wizard.getState().classId = 'c1';
+    wizard.getState().level = 1;
+    expect(wizard.getTotalPoints()).toBe(statCapFigures().creationPluses.aspiring);
+  });
+
   test('the plus allotment comes from the served stat figures', () => {
     const wizard = bootWizard(fixture({ mode: 'aspiring', statCaps: statCapFigures() }));
     wizard.getState().level = 1;
@@ -1232,6 +1249,15 @@ describe('step 4 prose follows the class economy the readouts follow', () => {
     expect(introText()).toContain(String(wizard.getMerxBudget()));
     expect(document.getElementById('merxBudget').textContent)
       .toBe(String(economyFigures().grants.advent));
+  });
+
+  // pg. 85: 2 Merx for your own class's Signature, 3 for a cross-class one.
+  // The wizard charges both, so the sentence that introduces the step has to
+  // name both.
+  test('the aspirant sentence names both Signature prices', () => {
+    bootOnClass('aspirant', 'aspirant');
+    expect(introText()).toContain(String(economyFigures().prices.signature.own) + ' Merx');
+    expect(introText()).toContain(String(economyFigures().prices.signature.cross) + ' Merx');
   });
 
   test('the sentence reports the budget the badge reports, mission income included', () => {

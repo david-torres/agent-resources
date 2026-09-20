@@ -887,8 +887,11 @@ window.CharacterWizard = (function () {
   // "locked" (dashed), which at level 1 is every box above the third.
   const getBoxesPerStat = (stat) => getStatCap(stat);
 
+  // Keyed on the resolved economy, which is how util/stat-caps.js keys the
+  // served allotment table -- the mode in the URL does not decide it.
   const getTotalPoints = () => {
-    const base = STAT_FIGURES.creationPluses[DATA.mode] || STAT_FIGURES.creationPluses.aspirant;
+    const base = STAT_FIGURES.creationPluses[economyForState()]
+      || STAT_FIGURES.creationPluses.aspirant;
     return base + Math.max(0, (state.level - 1) * STAT_FIGURES.levelPlusesPerLevel);
   };
 

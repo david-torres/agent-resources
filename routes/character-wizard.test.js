@@ -27,6 +27,7 @@ const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
 const realCharacter = require('../models/character');
+const { economyFigures } = require('../util/merx-economy');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -219,12 +220,18 @@ test('POST /characters/wizard responds with HX-Location and empty body', async (
   expect(await res.text()).toBe('');
 });
 
-test('the aspirant gear step names both Signature prices', async () => {
+test('the gear step is served both Signature prices to name', async () => {
   const body = await getWizard('?mode=aspirant');
   // pg. 85: 2 Merx for your own Class's Signature, 3 for a Cross-Class one.
-  // public/js/character-wizard.js charges both; the copy has to say both.
-  expect(body).toContain('3 Merx');
-  expect(body).not.toMatch(/signature items from any class \(2 Merx\)/i);
+  // public/js/character-wizard.js charges both and writes the step-4 sentence
+  // that names both (the sentence is keyed on the selected class's economy,
+  // which only the client knows), so what the page must carry is the price
+  // table it writes them from.
+  const { prices } = economyFigures();
+  const island = body.match(/id="wizard-data">([\s\S]*?)<\/script>/)[1];
+  const served = JSON.parse(island).economy.prices.signature;
+  expect(served.own).toBe(prices.signature.own);
+  expect(served.cross).toBe(prices.signature.cross);
 });
 
 // The old copy claimed "Custom names save as flavor with no stat bonus" for

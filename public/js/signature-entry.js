@@ -129,11 +129,14 @@
   // The word counter is an aid, not a gate: util/merx-economy.js
   // countWordsExcludingRatings is the authority and the save rejects an
   // over-long Custom. Counting here too means the player finds out while
-  // typing rather than at submit.
+  // typing rather than at submit -- so it counts a token as a word by the
+  // same Unicode letter-or-number test the server uses, or a Custom written
+  // in a non-Latin script would count 0 here and be refused at save.
   var countWords = function (text) {
-    var stripped = String(text || '').replace(/<sup>[\s\S]*?<\/sup>/g, ' ');
+    var stripped = String(text || '').replace(/<sup>[\s\S]*?<\/sup>/g, ' ').trim();
+    if (!stripped) return 0;
     return stripped.split(/\s+/).filter(function (token) {
-      return /[A-Za-z0-9]/.test(token);
+      return /[\p{L}\p{N}]/u.test(token);
     }).length;
   };
 
@@ -264,6 +267,7 @@
     priceOf: priceOf,
     slotsOf: slotsOf,
     totalOf: totalOf,
+    countWords: countWords,
     isCrossClass: isCrossClass,
     describePurchase: describePurchase
   };
