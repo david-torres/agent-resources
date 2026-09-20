@@ -32,6 +32,7 @@ const STAT_LIST = [
 const ASPIRANT_CLASS = {
   id: 'c1',
   name: 'Test Class',
+  content_format: 'aspirant',
   stat_spread: { vitality: 2, might: 1 },
   gear: [],
   abilities: [],
@@ -258,6 +259,11 @@ test('advent gets no Trait Cap bonus, at any level', () => {
     mode: 'advent',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
+    // Pinned to the advent economy explicitly: ASPIRANT_CLASS carries
+    // content_format 'aspirant' for the tests that need the aspirant
+    // economy, but getStatCap now branches on the resolved economy, and
+    // this test is about the advent branch specifically.
+    economyByClassId: { 'c1': 'advent' },
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
@@ -320,6 +326,57 @@ describe('the wizard reads its economy from the server', () => {
     expect(wizard.getTotalPoints())
       .toBe(statCapFigures().creationPluses.aspiring + 2 * statCapFigures().levelPlusesPerLevel);
   });
+});
+
+describe('the free-gear floor follows what syncBaseGear actually loads, not the resolved economy', () => {
+  test('an advent wizard has the served free-base count', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent' }));
+    expect(wizard.getFreeBaseCount())
+      .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
+  });
+
+  // Six live pre-release classes carry content_format 'advent' but can be
+  // picked under aspirant mode; economyFor (util/merx-economy.js) resolves
+  // that combination to the 'advent' economy, but syncBaseGear never
+  // auto-loads base gear in aspirant mode (it returns early for
+  // DATA.mode === 'aspirant'). A free-base count keyed on the resolved
+  // economy instead of DATA.mode would claim gear nothing ever loaded,
+  // letting computeMerxSpent skip charging the player's first real picks.
+  test('an aspirant wizard on an advent-content class has no free base gear', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant',
+      classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', gear: [] }],
+      economyByClassId: { 'c-v1': 'advent' }
+    }));
+    wizard.getState().classId = 'c-v1';
+    expect(wizard.getFreeBaseCount()).toBe(0);
+  });
+});
+
+test('an aspirant wizard on an advent-content class gets no Trait Cap bonus, like advent', () => {
+  const wizard = bootWizard(fixture({
+    mode: 'aspirant',
+    preselectedClassId: 'c-v1',
+    classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', stat_spread: { might: 1 }, gear: [] }],
+    economyByClassId: { 'c-v1': 'advent' },
+    statList: STAT_LIST,
+    personalityMap: PERSONALITY_MAP,
+    commonItems: []
+  }));
+  const state = wizard.getState();
+  state.traits[0] = 'brave';
+  state.traitStats[0] = 'might';
+  state.traits[1] = 'bold';
+  state.traitStats[1] = 'vitality';
+  state.traits[2] = 'lucky';
+  state.traitStats[2] = 'luck';
+  document.getElementById('step1Next').click();
+  setLevel(2);
+
+  // luck carries Trait 3 and would read as a Cap of 6 under the Aspirant
+  // rule; statCapMap (util/stat-caps.js) grants advent's flat Cap here
+  // because the resolved economy is 'advent', not because DATA.mode is.
+  expect(statBoxes('luck')).toHaveLength(5);
 });
 
 test('no economy or stat figure is written down in the wizard client', () => {

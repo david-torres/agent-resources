@@ -72,9 +72,10 @@ window.CharacterWizard = (function () {
       // picks (one item each from 3 distinct classes) and 3 ability picks
       // (2 core abilities + 1 advanced ability, from 3 distinct classes;
       // a class can appear in both lists, but at most once in each). Cost
-      // is tracked separately in merx (items: 3 each) and perks (core: 1,
-      // advanced: 2) against the budget. Only populated in aspiring mode;
-      // other modes leave every slot null.
+      // is tracked separately in merx (items priced at
+      // ECONOMY.prices.signature.own, signaturePriceFor below) and perks
+      // (core: 1, advanced: 2) against the budget. Only populated in
+      // aspiring mode; other modes leave every slot null.
       classBuild: {
         classGear: [
           { classId: null, itemName: null },
@@ -204,9 +205,15 @@ window.CharacterWizard = (function () {
   const submitEl = document.getElementById('wizardSubmit');
   // Advent's three Default Signatures (pg. 3), which arrive free. Every other
   // economy replaced them with a Merx grant, so there is nothing free to load.
-  // The figure is the server's: util/character-derived.js ADVENT_DEFAULT_SIGNATURES
+  // Keyed on DATA.mode rather than economyForState(): syncBaseGear below is
+  // what actually auto-loads these into state.gear, and it only does so in
+  // advent mode. An advent-content class picked under aspirant mode resolves
+  // to the 'advent' economy (economyFor, util/merx-economy.js) but is never
+  // auto-loaded here, so counting it free would claim gear the player never
+  // received and undercharge every real pick behind it. The count itself is
+  // still the server's: util/character-derived.js ADVENT_DEFAULT_SIGNATURES
   // decides the same count when it prices a saved character.
-  const freeBaseCount = () => (economyForState() === 'advent' ? DATA.adventDefaultSignatures : 0);
+  const freeBaseCount = () => (DATA.mode === 'advent' ? DATA.adventDefaultSignatures : 0);
 
   // Aspiring mode hides the kiosk (step 1 is the pseudo-class form
   // instead). Don't bail on a missing kiosk/track in that mode — the rest
@@ -797,11 +804,12 @@ window.CharacterWizard = (function () {
   // box the server then refuses. Cap purchases are not part of creation, so
   // they are absent.
   // advent is flatly STAT_FIGURES.baseStatCap: the +1 per Trait is an
-  // Aspirant rule, step 2's own copy scopes the claim to the two V1 modes,
-  // and advent is this wizard's default mode. Mirrors statCapMap
-  // (util/stat-caps.js), which makes the same branch for every server surface.
+  // Aspirant rule. Branches on economyForState(), not DATA.mode, so it makes
+  // the same branch statCapMap (util/stat-caps.js) makes off the resolved
+  // economy -- an advent-content class picked under aspirant mode resolves
+  // to the advent economy (economyFor) and gets the flat Cap there too.
   const getStatCap = (stat) => {
-    if (DATA.mode === 'advent') return STAT_FIGURES.baseStatCap;
+    if (economyForState() === 'advent') return STAT_FIGURES.baseStatCap;
     for (let idx = 0; idx < 3; idx++) {
       if (getTraitStat(idx) === stat) return STAT_FIGURES.baseStatCap + 1;
     }
@@ -1408,10 +1416,10 @@ window.CharacterWizard = (function () {
     summarySuccessfulInput.addEventListener('input', () => {
       state.successfulMissions = parseInt(summarySuccessfulInput.value, 10) || 0;
       renderSummaryMeta();
-      // The merx budget depends on successfulMissions in advent mode, so
-      // re-render the gear step so the budget badge + Next button reflect
-      // the new total. Safe to call when not on step 4 (it just rewrites
-      // the same DOM).
+      // The merx budget depends on successfulMissions in every economy now
+      // (getMerxBudget), so re-render the gear step so the budget badge +
+      // Next button reflect the new total. Safe to call when not on step 4
+      // (it just rewrites the same DOM).
       if (typeof renderGearStep === 'function') renderGearStep();
     });
   }
@@ -2787,10 +2795,10 @@ window.CharacterWizard = (function () {
       const tab = activeShopTab();
       // Pre-filter: kind matches active tab, plus the two search filters.
       const filtered = pool.filter((it) => it.kind === tab && matchesSearch(it) && matchesClass(it));
-      const remaining = budget === Infinity ? Infinity : budget - spent;
+      const remaining = budget - spent;
       const renderCard = (it) => {
           const picked = countPicks(it.key);
-          const canAfford = remaining === Infinity || remaining >= it.cost;
+          const canAfford = remaining >= it.cost;
           const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
           const removable = removablePicks(it.key);
           const removeCtl = removable
@@ -2887,14 +2895,14 @@ window.CharacterWizard = (function () {
 
     // ----- Merx budget display -----
     if (merxSpentEl) merxSpentEl.textContent = String(spent);
-    if (merxBudgetEl) merxBudgetEl.textContent = budget === Infinity ? '∞' : String(budget);
+    if (merxBudgetEl) merxBudgetEl.textContent = String(budget);
 
     // ----- Custom common item form gating -----
     // Disable the input + add button once the user is out of merx so they
     // can't add a freebie by typing their own. The actual check lives in
     // addCustomCommonItem (defense in depth).
     if (customCommonItemInput || customCommonItemAdd) {
-      const canAffordAny = budget === Infinity || (budget - spent) >= ECONOMY.prices.commonItem;
+      const canAffordAny = (budget - spent) >= ECONOMY.prices.commonItem;
       if (customCommonItemInput) customCommonItemInput.disabled = !canAffordAny;
       if (customCommonItemAdd) customCommonItemAdd.disabled = !canAffordAny;
     }
@@ -3435,13 +3443,14 @@ window.CharacterWizard = (function () {
 
   // buildSubmitPayload / onSubmitSuccess are invoked from the Submit button in
   // views/character-wizard.handlebars; getState is a console debug handle.
-  // getMerxBudget / getTotalPoints are exposed for the same reason -- pure
-  // reads the test harness needs to reach.
+  // getMerxBudget / getTotalPoints / getFreeBaseCount are exposed for the
+  // same reason -- pure reads the test harness needs to reach.
   return {
     buildSubmitPayload,
     onSubmitSuccess,
     getState: () => state,
     getMerxBudget,
-    getTotalPoints
+    getTotalPoints,
+    getFreeBaseCount: freeBaseCount
   };
 })();
