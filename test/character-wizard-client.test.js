@@ -761,19 +761,80 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(wizard.getMerxSpent()).toBe(spent);
   });
 
-  test('changing class still drops the picks made against the old one', () => {
+  // A V1 shop pool spans every class, so a Signature bought before a change
+  // of class is still offered, still priced and still removable after it --
+  // and it carries the player's own writing, which no re-pick brings back.
+  test('a V1 change of class keeps a bought Signature, its Enchantment and its Mods', () => {
     const wizard = bootWizard(fixture({
-      mode: 'advent', classes: [v1Class(), otherV1Class()]
+      mode: 'aspirant', classes: [v1Class(), otherV1Class()]
     }));
     const state = wizard.getState();
     state.classId = 'c-v1';
     wizard.syncBaseGear();
-    wizard.buySignature('Cowboy Hat');
-    expect(state.gear).toHaveLength(1);
+    wizard.renderGearStep();
+    document.querySelector('[data-signature-name="Cowboy Hat"]').click();
+    document.querySelector('[data-signature-buy]').click();
+
+    const drawer = document.getElementById('signatureDrawer');
+    const custom = drawer.querySelector('input[name="enchantment"][value="custom"]');
+    custom.checked = true;
+    custom.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const customName = drawer.querySelector('[data-custom-name]');
+    customName.value = 'Hex of the Long Ride';
+    customName.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const modName = drawer.querySelector('[data-mod-name]');
+    modName.value = 'Wide Brim';
+    modName.dispatchEvent(new window.Event('change', { bubbles: true }));
 
     state.classId = 'c-other';
     wizard.syncBaseGear();
-    expect(state.gear).toEqual([]);
+
+    const gear = state.gear;
+    expect(gear).toHaveLength(1);
+    expect(gear[0].name).toBe('Cowboy Hat');
+    expect(gear[0].class_id).toBe('c-v1');
+    expect(gear[0].enchantment)
+      .toEqual({ source: 'custom', name: 'Hex of the Long Ride', description: '' });
+    expect(gear[0].mods).toEqual([{ name: 'Wide Brim', description: '' }]);
+    // Repriced against the new class as a Cross-Class Signature, and still
+    // inside the grant -- nothing about the change strands the player.
+    expect(wizard.getMerxSpent()).toBeLessThanOrEqual(wizard.getMerxBudget());
+  });
+
+  // Advent's shop offers the selected class's gear alone, so anything held
+  // from the previous class would have no card to remove it from and would
+  // reprice as Cross-Class above the whole grant. It drops the lot.
+  test('an advent change of class drops the old class\u2019s free Defaults and its picks', () => {
+    const otherAdvent = {
+      ...adventClass(),
+      id: 'c-advent-2',
+      name: 'Warden',
+      class_gear: sixItems().map((g) => ({ ...g, name: 'Warden ' + g.name })),
+      base_gear: sixItems().slice(0, 3).map((g) => ({ name: 'Warden ' + g.name }))
+    };
+    const wizard = bootWizard(fixture({
+      mode: 'advent', classes: [adventClass(), otherAdvent]
+    }));
+    const state = wizard.getState();
+    state.classId = 'c-advent';
+    wizard.syncBaseGear();
+    const granted = state.gear.map((g) => g.name);
+    expect(granted).toHaveLength(adventClass().base_gear.length);
+    state.gear.push({
+      name: 'Bought Elective', kind: 'class', subtype: 'elective', class_id: 'c-advent',
+      class_name: 'Vizier', owned: true, enchantment: null, mods: [],
+      cost: FIGURES.prices.signature.own
+    });
+    state.commonItems = [{ name: 'Bedroll' }];
+
+    state.classId = 'c-advent-2';
+    wizard.syncBaseGear();
+
+    const after = state.gear.map((g) => g.name);
+    expect(after).toEqual(otherAdvent.base_gear.map((g) => g.name));
+    for (const name of granted) expect(after).not.toContain(name);
+    expect(state.commonItems).toEqual([]);
+    expect(wizard.getMerxSpent()).toBe(0);
   });
 
   test('re-entering advent step 4 does not reload the Defaults it was granted', () => {

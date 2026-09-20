@@ -3325,14 +3325,8 @@ window.CharacterWizard = (function () {
   const syncBaseGear = () => {
     const c = selectedClass();
     if (!c) return;
-    // Drop any class-gear picks the user made against the old class — they
-    // are class-bound, and the user has not been able to evaluate them
-    // against the new class's pool. Common items are class-agnostic and
-    // stay, but the brief "safe" rule from the prior round (clear in
-    // advent) is kept: the user is re-entering step 1 and should re-pick.
-    //
-    // Only a change of class drops them. Walking back through the wizard and
-    // returning to step 4 is not one, and a purchase carries writing a
+    // Only a change of class drops anything. Walking back through the wizard
+    // and returning to step 4 is not one, and a purchase carries writing a
     // re-pick cannot restore: the name and text of a Custom Enchantment, and
     // of every Mod. state.gearClassId records which class the current picks
     // were made against, so the two cases are told apart even before
@@ -3340,19 +3334,32 @@ window.CharacterWizard = (function () {
     // empty list belongs to no class.
     if (state.gearClassId === c.id) return;
     state.gearClassId = c.id;
-    state.gear = [];
     state.openSignature = null;
-    if (DATA.mode === 'advent') {
-      state.commonItems = [];
+    // What a change of class drops is what the new class's step 4 can no
+    // longer account for, judged by the economy that class resolves to.
+    //
+    // Always: the leading run of granted Defaults. syncBaseGear is the only
+    // thing that stamps cost: 0, they belong to the class that granted them,
+    // and the new class's are loaded below.
+    //
+    // Paid picks survive a V1 change of class. A Signature bought against the
+    // old class prices there as an ordinary Cross-Class one and sits well
+    // inside those grants, so the change costs the player nothing they have
+    // to be saved from -- while binning the pick would cost them the name and
+    // text of a Custom Enchantment and of every Mod, which no re-pick brings
+    // back.
+    //
+    // Advent is the exception, and drops the paid picks and the common items
+    // with them. A Cross-Class Signature is on its own dearer than the whole
+    // advent grant, and advent's shop offers the selected class's gear alone,
+    // so the card that would sell the pick back is gone too: keeping it would
+    // strand the player over budget with no way down.
+    if (economyForState() !== 'advent') {
+      state.gear = gearList().slice(freeBaseCount());
+      return;
     }
-    // Only the advent economy grants free base gear, and the economy is the
-    // selected class's, never the URL's mode: an aspirant-content class has
-    // no free allotment whichever mode picked it, and an advent-content class
-    // keeps its three Defaults whichever mode picked it. The clearing above
-    // runs in every economy for the same reason -- a class change can cross
-    // that line, and carrying one economy's free Defaults into another's
-    // budget would hand the player items nothing charges for.
-    if (economyForState() !== 'advent') return;
+    state.gear = [];
+    state.commonItems = [];
     const base = Array.isArray(c.base_gear) ? c.base_gear : [];
     // Push the current class's base items onto the front of state.gear.
     // All gear picks share kind 'class' — the cost: 0 stamp below is what
