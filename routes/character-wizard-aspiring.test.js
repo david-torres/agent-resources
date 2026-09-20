@@ -128,6 +128,11 @@ const aspiringPayload = (overrides = {}) => ({
     { name: 'Rope', class_id: CLASS_B },
     { name: 'Lamp', class_id: CLASS_C }
   ],
+  aspiring_signatures: [
+    { class_id: CLASS_A, name: 'Knife' },
+    { class_id: CLASS_B, name: 'Rope' },
+    { class_id: CLASS_C, name: 'Lamp' }
+  ],
   abilities: [
     { name: 'Dodge', class_id: CLASS_A, type: 'core' },
     { name: 'Parry', class_id: CLASS_B, type: 'core' },
@@ -177,6 +182,16 @@ test('an aspiring submit carries the core and advanced tags', async () => {
 test('a malformed aspiring submit is rejected before createCharacter runs', async () => {
   captured = null;
   const res = await postWizard(aspiringPayload({ abilities: [] }));
+
+  expect(res.status).toBe(400);
+  expect(captured).toBeNull();
+});
+
+// The three picks are what makes the character a Class at all (pg. 90); a
+// submit that never names them is refused the same way one with too few is.
+test('an aspiring submit with no Signature picks is rejected before createCharacter runs', async () => {
+  captured = null;
+  const res = await postWizard(aspiringPayload({ aspiring_signatures: undefined }));
 
   expect(res.status).toBe(400);
   expect(captured).toBeNull();
