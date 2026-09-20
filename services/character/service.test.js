@@ -1190,6 +1190,32 @@ test('an auto-calculated aspiring update recomputes commissary_reward from the s
   expect(saved.commissary_reward).toBe(1);
 });
 
+// The classic/expert edit form has no creator_mode field at all, so its
+// payload never carries one. Guards updateCharacter's own class_id-style
+// preservation: without it, normalizeCharacterInput coerces the absent key
+// to explicit null and that null reaches the save, which for an aspiring
+// character (class_id already null) is the only signal economyFor has --
+// silently reverting it to the advent economy on its next edit.
+test('an update never drops creator_mode from an aspiring character', async () => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: null, creator_mode: 'aspiring',
+      abilities: [], gear: [], aspiring_signatures: [
+        { class_id: 'a', name: 'A' }, { class_id: 'b', name: 'B' }, { class_id: 'c', name: 'C' }
+      ]
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: undefined, error: null }),
+    saveCharacterAtomic: async (args) => { saved = args.character; return ok({ id: 'character-1' }); }
+  }));
+  // No creator_mode key at all -- matches what the classic edit form sends.
+  const result = await service.updateCharacter('character-1', {
+    name: 'Vesper', trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(saved.creator_mode).toBe('aspiring');
+});
+
 // Review round 1, Finding 2: updateCharacter threaded no contentFormat into
 // normalizeCharacterInput at all, so economyFor always fell back to 'advent'
 // for any class-bearing (non-aspiring) character on every edit, no matter its
