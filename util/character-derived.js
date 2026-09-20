@@ -125,5 +125,6 @@ module.exports = {
   deriveLevel,
   deriveMerx,
   deriveMerxBreakdown,
-  deriveCharacterTotals
+  deriveCharacterTotals,
+  ADVENT_DEFAULT_SIGNATURES
 };

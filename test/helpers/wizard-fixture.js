@@ -1,0 +1,168 @@
+// test/helpers/wizard-fixture.js
+//
+// Shared boot recipe for public/js/character-wizard.js's jsdom tests. Moved
+// out of test/character-wizard-client.test.js so any test file under test/
+// can boot the wizard IIFE the same way, and so `fixture()` is the one place
+// that fills in the wizardData keys every boot needs -- economy, statCaps and
+// the other server-served figures the client now reads instead of keeping
+// its own copies.
+const fs = require('fs');
+const path = require('path');
+const { JSDOM } = require('jsdom');
+const { economyFor, economyFigures } = require('../../util/merx-economy');
+const { statCapFigures } = require('../../util/stat-caps');
+const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
+const { ADVENT_DEFAULT_SIGNATURES } = require('../../util/character-derived');
+
+const COMMON_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'public', 'js', 'character-common.js'),
+  'utf8'
+);
+const WIZARD_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'public', 'js', 'character-wizard.js'),
+  'utf8'
+);
+
+// Minimal fixture markup: only the ids character-wizard.js reads via
+// getElementById/querySelectorAll on the paths these tests exercise (init,
+// step 1's kiosk shell + Next button, step 2's personality/stat panel, and
+// the always-present summary level input). Steps 3-5 are never visited here,
+// so their elements are omitted -- character-wizard.js guards every lookup
+// with `if (el)` except the step-1 kiosk internals, which only run when
+// `DATA.mode !== 'aspiring'` and are included below for that case.
+const buildHtml = () => `
+  <script type="application/json" id="wizard-data"></script>
+  <div id="summaryClass"></div>
+  <div id="summaryStats"></div>
+  <div id="summaryAbilities"></div>
+  <div id="summaryGear"></div>
+  <input id="wizardLevel" value="1">
+  <input id="summarySuccessful" value="0">
+  <ul class="wizard-steps">
+    <li data-step="1"></li><li data-step="2"></li><li data-step="3"></li>
+    <li data-step="4"></li><li data-step="5"></li>
+  </ul>
+
+  <section class="wizard-step" data-step-panel="1" hidden>
+    <div class="wizard-kiosk" id="classKiosk">
+      <div class="wizard-kiosk-frame"></div>
+      <div class="wizard-kiosk-track" id="classKioskTrack"></div>
+      <p id="classKioskEmpty" hidden></p>
+      <span id="classKioskEmptyTerm"></span>
+    </div>
+    <input id="classSearch">
+    <div id="selectedClassPanel"></div>
+    <button id="step1Next"></button>
+    <input id="pseudoClassName">
+    <input id="pseudoClassTagline">
+    <textarea id="pseudoClassDescription"></textarea>
+    <div id="builderStep"></div>
+  </section>
+
+  <section class="wizard-step" data-step-panel="2" hidden>
+    <span id="trait1StatLabel"></span>
+    <span id="trait2StatLabel"></span>
+    <select id="trait1Select"><option value="">-</option></select>
+    <select id="trait2Select"><option value="">-</option></select>
+    <select id="trait3Select"><option value="">-</option></select>
+    <select id="trait1StatSelect"></select>
+    <input id="trait1Custom">
+    <datalist id="trait1Datalist"></datalist>
+    <select id="trait2StatSelect"></select>
+    <input id="trait2Custom">
+    <datalist id="trait2Datalist"></datalist>
+    <select id="trait3StatSelect"></select>
+    <input id="trait3Custom">
+    <datalist id="trait3Datalist"></datalist>
+    <div id="statsBox">
+      <p class="wizard-stats-prompt"></p>
+    </div>
+    <p id="statPointsLine" hidden>
+      <strong id="statPointsTotal">0</strong>
+      <strong id="statPointsAssigned">0</strong>
+      <strong id="statPointsRemaining">0</strong>
+    </p>
+    <div id="statGrid" hidden></div>
+    <button id="step2Next"></button>
+  </section>
+`;
+
+// Boots a fresh jsdom window, embeds `data` as the wizard's server-supplied
+// DATA, runs character-common.js then character-wizard.js against it (both
+// are `window.X = (function(){...})()` browser IIFEs -- no exports to
+// require), and returns the exposed CharacterWizard handle.
+const bootWizard = (data) => {
+  const dom = new JSDOM(`<!doctype html><html><body>${buildHtml()}</body></html>`, {
+    url: `http://localhost/characters/wizard?mode=${data.mode}`,
+    pretendToBeVisual: true
+  });
+  const { window } = dom;
+
+  globalThis.window = window;
+  globalThis.document = window.document;
+  globalThis.localStorage = window.localStorage;
+  // jsdom's own rAF is fine functionally, but firing it on a real frame
+  // schedule slows every boot for no benefit here -- these tests never
+  // assert on the kiosk's visual ring, only on state and rendered text.
+  globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
+
+  window.document.getElementById('wizard-data').textContent = JSON.stringify(data);
+
+  new Function(COMMON_SOURCE)();
+  globalThis.CharacterCommon = window.CharacterCommon;
+
+  new Function(WIZARD_SOURCE)();
+
+  return window.CharacterWizard;
+};
+
+// Fills in the wizardData keys a bootWizard caller doesn't care about for its
+// own test, most of them the server-served figures the client reads instead
+// of keeping its own copy (economy, statCaps, merxPerMissionSuccess,
+// adventDefaultSignatures, economyByClassId, economyWhenClassless). The
+// per-class and classless economy defaults are resolved with the real
+// economyFor against the given mode/classes, the same function
+// routes/characters.js calls, so a test that doesn't care about the economy
+// mapping still gets a correct one.
+// A non-aspiring boot with no classes on offer hits character-wizard.js's
+// own random-initial-class pick with nothing to pick from, so a caller who
+// doesn't care about the class roster still needs at least one entry here.
+const DEFAULT_CLASS = {
+  id: 'fixture-class',
+  name: 'Fixture Class',
+  content_format: 'advent',
+  stat_spread: {},
+  gear: [],
+  class_gear: [],
+  base_gear: [],
+  abilities: [],
+  advanced_abilities: []
+};
+
+const fixture = (overrides = {}) => {
+  const mode = overrides.mode || 'advent';
+  const classes = overrides.classes || [DEFAULT_CLASS];
+  const economyByClassId = overrides.economyByClassId || Object.fromEntries(
+    classes.map((c) => [c.id, economyFor({ contentFormat: c.content_format, creatorMode: mode })])
+  );
+  const economyWhenClassless = overrides.economyWhenClassless
+    || economyFor({ contentFormat: null, creatorMode: mode });
+
+  return {
+    mode,
+    preselectedClassId: null,
+    classes,
+    statList: [],
+    personalityMap: {},
+    commonItems: [],
+    economy: economyFigures(),
+    statCaps: statCapFigures(),
+    merxPerMissionSuccess: MERX_PER_MISSION_SUCCESS,
+    adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
+    economyByClassId,
+    economyWhenClassless,
+    ...overrides
+  };
+};
+
+module.exports = { bootWizard, fixture };

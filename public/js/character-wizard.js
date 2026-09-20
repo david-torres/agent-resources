@@ -11,44 +11,25 @@ window.CharacterWizard = (function () {
   // the raw delta makes the row whip past. Dialing it down keeps the scroll
   // feeling deliberate without losing the link between input and motion.
   const SCROLL_SENSITIVITY = 0.5;
-  // Step 4 gear costs. Mirrors util/character-derived.js so the wizard
-  // matches what the server will charge at submit time.
-  const COMMON_ITEM_COST = 1;
-  const CLASS_GEAR_COST = 2;
-  // Cross-class (aspirant) signature items cost more than on-class elective
-  // gear — the aspirant-mode rule is "borrow from any class, but pay the
-  // same rate as buying after creation." 3 Merx matches the post-creation
-  // purchase rate; the constant lives here so advent/aspiring modes don't
-  // see it (their pool is selected-class only).
-  const CROSS_CLASS_GEAR_COST = 3;
-  // Advent mode hands every new character 2 merx to spend on common items
-  // and class gear. Other modes have a richer merx economy (earned per
-  // mission); the wizard for those is out of scope for now.
-  const ADVENT_MERX_BUDGET = 2;
-  // Aspirant mode: 12 merx base, no per-mission bonus (character is brand
-  // new, no mission history). Unlocks broader gear choices across classes.
-  const ASPIRANT_MERX_BUDGET = 12;
-  // Bonus merx awarded per successful mission in advent mode. 1 merx per
-  // successful mission on top of the base 2. Unbounded — character history
-  // matters.
-  const BONUS_MERX_PER_SUCCESSFUL = 1;
-  // Total creation pluses before level growth, the per-level growth rate, a
-  // Stat's base Cap, and the creation ceiling. Second copy of
-  // util/stat-caps.js's CREATION_PLUSES / LEVEL_PLUSES_PER_LEVEL /
-  // BASE_STAT_CAP / CREATION_STAT_CAP — that module is deliberately
-  // require-free CommonJS and nothing yet serves it to the browser
-  // (routes/characters.js does not put it on `wizardData`), so this file
-  // mirrors it the same way it already mirrors util/character-derived.js's
-  // gear costs above rather than leaving the figures unsourced.
-  const CREATION_PLUSES = { advent: 6, aspirant: 6, aspiring: 4 };
-  const LEVEL_PLUSES_PER_LEVEL = 2;
-  const BASE_STAT_CAP = 5;
-  const CREATION_STAT_CAP = 3;
 
   // ---------- Data ----------
   const dataEl = document.getElementById('wizard-data');
   const DATA = dataEl ? JSON.parse(dataEl.textContent || 'null') : null;
   if (!DATA) { console.warn('wizard: no data'); return; }
+
+  // Every price, grant, cap and limit comes from the server. util/merx-economy.js
+  // and util/stat-caps.js are the only places these are written down; the route
+  // serves them through the JSON island above. Nothing here may hold its own copy.
+  const ECONOMY = DATA.economy;
+  const STAT_FIGURES = DATA.statCaps;
+
+  // Which economy the character being built is under. Resolved on the server by
+  // economyFor and served per class id, so this cannot drift from the save path
+  // the way a mirrored rule did: `?mode=advent` on a V1 class priced at 2 here
+  // and 12 there.
+  const economyForState = () => (
+    (state.classId && DATA.economyByClassId[state.classId]) || DATA.economyWhenClassless
+  );
 
   const params = new URLSearchParams(window.location.search);
   const forceFresh = params.get('fresh') === '1';
@@ -221,14 +202,11 @@ window.CharacterWizard = (function () {
   const isPublicEl = document.getElementById('wizardIsPublic');
   const hideFromSearchEl = document.getElementById('wizardHideFromSearch');
   const submitEl = document.getElementById('wizardSubmit');
-  // The first 3 class gear items ("base") are auto-loaded for free; the
-  // 4th and beyond are charged. Used to derive the merx cost of class gear
-  // from state.gear.length. Aspirant and aspiring modes skip auto-loaded
-  // base gear entirely (aspiring's picked items are sold from the shop at
-  // their full cost), so their effective base count is 0 (every pick is paid).
-  const FREE_BASE_GEAR_COUNT = 3;
-  const effectiveFreeBaseCount = () =>
-    (DATA.mode === 'aspirant' || DATA.mode === 'aspiring') ? 0 : FREE_BASE_GEAR_COUNT;
+  // Advent's three Default Signatures (pg. 3), which arrive free. Every other
+  // economy replaced them with a Merx grant, so there is nothing free to load.
+  // The figure is the server's: util/character-derived.js ADVENT_DEFAULT_SIGNATURES
+  // decides the same count when it prices a saved character.
+  const freeBaseCount = () => (economyForState() === 'advent' ? DATA.adventDefaultSignatures : 0);
 
   // Aspiring mode hides the kiosk (step 1 is the pseudo-class form
   // instead). Don't bail on a missing kiosk/track in that mode — the rest
@@ -490,10 +468,10 @@ window.CharacterWizard = (function () {
 
     // ----- Gear column -----
     // List each class gear entry with a Base / Picked tag (the first
-    // FREE_BASE_GEAR_COUNT entries are auto-loaded and free; anything beyond
-    // that was picked from the shop at 2 merx). Custom common items get a
-    // "Custom" tag so the user can tell apart their typed-in items from the
-    // seeded list.
+    // freeBaseCount() entries are auto-loaded and free; anything beyond
+    // that was picked from the shop at its Signature price). Custom common
+    // items get a "Custom" tag so the user can tell apart their typed-in
+    // items from the seeded list.
     let gearHtml = '';
     const hasGear = (Array.isArray(state.gear) && state.gear.length)
       || (Array.isArray(state.commonItems) && state.commonItems.length);
@@ -502,7 +480,7 @@ window.CharacterWizard = (function () {
       if (Array.isArray(state.gear)) {
         state.gear.forEach((g, idx) => {
           if (!g || !g.name) return;
-          const isFree = idx < effectiveFreeBaseCount();
+          const isFree = idx < freeBaseCount();
           const tag = isFree
             ? ' <span class="tag is-success is-light is-small">Base</span>'
             : ' <span class="tag is-warning is-light is-small">Picked</span>';
@@ -728,18 +706,15 @@ window.CharacterWizard = (function () {
     return Object.keys(c.stat_spread);
   };
 
-  // Merx budget. In advent mode the base budget (2) is bumped by 1 per
-  // successful mission, so a veteran can spend more on elective gear.
-// Aspirant mode uses a flat 12 merx (no per-mission bonus — fresh character).
-// Aspiring mode uses a flat 10 merx (the step-4 shop sells the picked items
-// plus common items; duplicates are allowed so the budget can always be met).
-const getMerxBudget = () => {
-    if (DATA.mode === 'aspirant') return ASPIRANT_MERX_BUDGET;
-    if (DATA.mode === 'aspiring') return ASPIRING_MERX_BUDGET;
-    if (DATA.mode !== 'advent') return Infinity;
+  // Budget = the economy's creation grant plus mission income, the same two
+  // terms deriveMerxBreakdown adds (util/character-derived.js). The server
+  // enforces this number for V1 economies, so a disagreement here is a build
+  // the player can assemble and not save.
+  const getMerxBudget = () => {
+    const economy = economyForState();
     let successful = parseInt(state.successfulMissions, 10) || 0;
     if (successful < 0) successful = 0;
-    return ADVENT_MERX_BUDGET + (successful * BONUS_MERX_PER_SUCCESSFUL);
+    return ECONOMY.grants[economy] + (successful * DATA.merxPerMissionSuccess);
   };
 
   // Map a trait name back to the stat it belongs to (via personalityMap).
@@ -814,22 +789,23 @@ const getMerxBudget = () => {
     return pts;
   };
 
-  // pg. 3, restated pg. 6: a Stat's Cap is BASE_STAT_CAP plus one for each
-  // Personality Trait affiliated with it. Read off getTraitStat, the Stat each
-  // slot SUBMITS, because statCapFor (util/stat-caps.js) grants the +1 against
-  // the stored trait.stat and never a name lookup — granting it here against
-  // getPersonalityPoints' priority order instead would offer a box the server
-  // then refuses. Cap purchases are not part of creation, so they are absent.
-  // advent is flatly BASE_STAT_CAP: the +1 per Trait is an Aspirant rule, step
-  // 2's own copy scopes the claim to the two V1 modes, and advent is this
-  // wizard's default mode. Mirrors statCapMap (util/stat-caps.js), which makes
-  // the same branch for every server surface.
+  // pg. 3, restated pg. 6: a Stat's Cap is STAT_FIGURES.baseStatCap plus one
+  // for each Personality Trait affiliated with it. Read off getTraitStat, the
+  // Stat each slot SUBMITS, because statCapFor (util/stat-caps.js) grants the
+  // +1 against the stored trait.stat and never a name lookup — granting it
+  // here against getPersonalityPoints' priority order instead would offer a
+  // box the server then refuses. Cap purchases are not part of creation, so
+  // they are absent.
+  // advent is flatly STAT_FIGURES.baseStatCap: the +1 per Trait is an
+  // Aspirant rule, step 2's own copy scopes the claim to the two V1 modes,
+  // and advent is this wizard's default mode. Mirrors statCapMap
+  // (util/stat-caps.js), which makes the same branch for every server surface.
   const getStatCap = (stat) => {
-    if (DATA.mode === 'advent') return BASE_STAT_CAP;
+    if (DATA.mode === 'advent') return STAT_FIGURES.baseStatCap;
     for (let idx = 0; idx < 3; idx++) {
-      if (getTraitStat(idx) === stat) return BASE_STAT_CAP + 1;
+      if (getTraitStat(idx) === stat) return STAT_FIGURES.baseStatCap + 1;
     }
-    return BASE_STAT_CAP;
+    return STAT_FIGURES.baseStatCap;
   };
 
   // What one Stat may be raised to right now. At level 1 the +++ creation
@@ -839,7 +815,7 @@ const getMerxBudget = () => {
   // level 1. The server enforces the same split: creationCeilingBreaches at
   // level 1, capBreaches always (util/stat-caps.js).
   const getMaxAssignable = (stat) => {
-    return state.level > 1 ? getStatCap(stat) : CREATION_STAT_CAP;
+    return state.level > 1 ? getStatCap(stat) : STAT_FIGURES.creationStatCap;
   };
 
   // One box per point of that Stat's Cap. Boxes above getMaxAssignable render
@@ -847,8 +823,8 @@ const getMerxBudget = () => {
   const getBoxesPerStat = (stat) => getStatCap(stat);
 
   const getTotalPoints = () => {
-    const base = CREATION_PLUSES[DATA.mode] || CREATION_PLUSES.aspirant;
-    return base + Math.max(0, (state.level - 1) * LEVEL_PLUSES_PER_LEVEL);
+    const base = STAT_FIGURES.creationPluses[DATA.mode] || STAT_FIGURES.creationPluses.aspirant;
+    return base + Math.max(0, (state.level - 1) * STAT_FIGURES.levelPlusesPerLevel);
   };
 
   const sumPoints = (pts) => {
@@ -1574,19 +1550,18 @@ const getMerxBudget = () => {
   // picking an origin class (dropdown of unlocked classes) and then an item
   // or ability within that class. Selection-only: this page just defines
   // WHAT the aspiring class owns. The budget is spent later — the picked
-  // items are sold on step 4's gear page at CLASS_GEAR_COST (2 Merx) each,
-  // and the picked abilities are the Perk cost on step 3 (core = 1 Perk,
-  // advanced = 2 Perks).
-  //   - Class Gear slot (3x) -> step 4 shop item (2 Merx each).
+  // items are sold on step 4's gear page at the own-class Signature price
+  // (ECONOMY.prices.signature.own), and the picked abilities are the Perk
+  // cost on step 3 (core = 1 Perk, advanced = 2 Perks).
+  //   - Class Gear slot (3x) -> step 4 shop item (own-class Signature price).
   //   - Core Ability slot (2x): cheapest abilities, 1 Perk each.
   //   - Advanced Ability slot (1x): 2 Perks.
-  // Budgets: 10 Merx (gear page) + 4 Perks (abilities primer). Validation:
-  // every slot filled, classes unique within the items list, classes unique
-  // within the abilities list (a class can appear in both lists, but at most
-  // once in each).
+  // Budgets: the served aspiring Merx grant (gear page) + 4 Perks (abilities
+  // primer). Validation: every slot filled, classes unique within the items
+  // list, classes unique within the abilities list (a class can appear in
+  // both lists, but at most once in each).
   const ASPIRING_CORE_PERKS = 1;
   const ASPIRING_ADVANCED_PERKS = 2;
-  const ASPIRING_MERX_BUDGET = 10;
   // Perk budget = 2 cores (1 each) + 1 advanced (2) = 4. Don't try to make
   // this smaller without also dropping a slot — the user has to pick all
   // three abilities, and the costs are what they are.
@@ -2144,7 +2119,7 @@ const getMerxBudget = () => {
       + '</div>'
       + '</div>'
       + '<div class="box mt-4 has-background-light">'
-      +   '<p class="has-text-grey is-size-7 mb-2">Your budget is spent later: the items you pick show up on the gear page at <strong>2 Merx</strong> each, and the abilities are the <strong>Perk</strong> cost on the abilities primer (core = 1, advanced = 2).</p>'
+      +   '<p class="has-text-grey is-size-7 mb-2">Your budget is spent later: the items you pick show up on the gear page at <strong>' + ECONOMY.prices.signature.own + ' Merx</strong> each, and the abilities are the <strong>Perk</strong> cost on the abilities primer (core = 1, advanced = 2).</p>'
       + (validation.errors.length
             ? '<p class="help is-danger">' + esc(validation.errors.join(' · ')) + '</p>'
             : '')
@@ -2442,8 +2417,8 @@ const getMerxBudget = () => {
 
   // ---------- Step 4: Gear Selection ----------
   // Layout: left column = class base gear (auto-loaded, free). Right column
-  // = a shop of common items (1 merx) and elective class gear (2 merx) the
-  // user can spend an advent-mode 2-merx budget on. Duplicates are allowed
+  // = a shop of common items and elective class gear the user can spend
+  // their economy's served Merx budget on. Duplicates are allowed
   // (same item can be picked multiple times). State shape:
   //   state.gear         = [ { name, kind: 'base' | 'elective' } ]   (left + right picks)
   //   state.commonItems  = [ { name } ]                              (right picks that are common items)
@@ -2451,29 +2426,40 @@ const getMerxBudget = () => {
   // state.gear merges the auto-loaded base picks and any elective picks
   // (the server model already keys off `class_id` to charge for on-class
   // gear, so base picks don't need to be flagged separately — they're free
-  // via ADVENT_DEFAULT_SIGNATURES).
+  // via freeBaseCount()).
+
+  // Which Signature price tier an item's origin buys at (ECONOMY.prices.signature,
+  // util/merx-economy.js): own-class, or cross-class when the origin differs
+  // from the character's selected class. pg. 90: aspiring treats every pick
+  // as its own class, since the pseudo-class it is building has no class_id
+  // of its own to compare against.
+  const signaturePriceFor = (originClassId) => (
+    DATA.mode === 'aspiring' || originClassId === state.classId
+      ? ECONOMY.prices.signature.own
+      : ECONOMY.prices.signature.cross
+  );
 
   // Build a flat spend-pool = common items + class gear. Each entry is a
   // "shop item" with { key, name, description_html, cost, kind, subtype }.
   //   - advent/aspiring: only the selected class's gear (all 6 items, so the
-  //     user can re-pick a base item as a duplicate). All items cost 2 Merx
-  //     (CLASS_GEAR_COST) here; the first 3 are free via ADVENT_DEFAULT_SIGNATURES
-  //     at pick time (syncBaseGear stamps cost: 0 on the auto-loaded base rows).
-  //   - aspirant: every unlocked class's gear. Cost depends on origin:
-  //     items from the user's selected class cost CLASS_GEAR_COST (2 Merx);
-  //     items from any other unlocked class cost CROSS_CLASS_GEAR_COST (3 Merx)
-  //     to match the post-creation purchase rate. No free allotment in
+  //     user can re-pick a base item as a duplicate). Every item here is
+  //     own-class, so signaturePriceFor prices it at ECONOMY.prices.signature.own;
+  //     the first freeBaseCount() are free at pick time (syncBaseGear stamps
+  //     cost: 0 on the auto-loaded base rows).
+  //   - aspirant: every unlocked class's gear. signaturePriceFor prices items
+  //     from the user's selected class at ECONOMY.prices.signature.own and
+  //     items from any other unlocked class at ECONOMY.prices.signature.cross,
+  //     matching the post-creation purchase rate. No free allotment in
   //     aspirant mode — the user pays for every pick.
   const getShopPool = () => {
     const pool = [];
-    const selectedId = (DATA.mode === 'aspirant') ? (state.classId || null) : null;
     if (Array.isArray(DATA.commonItems)) {
       DATA.commonItems.forEach((it) => {
         pool.push({
           key: 'common:' + (it.name || ''),
           name: it.name || '',
           description_html: it.description_html || '',
-          cost: COMMON_ITEM_COST,
+          cost: ECONOMY.prices.commonItem,
           kind: 'common'
         });
       });
@@ -2484,12 +2470,11 @@ const getMerxBudget = () => {
           if (!cls || !cls.id || !Array.isArray(cls.class_gear)) return;
           cls.class_gear.forEach((g) => {
             if (!g || !g.name) return;
-            const isOwnClass = cls.id === selectedId;
             pool.push({
               key: 'class:' + cls.id + ':' + g.name,
               name: g.name,
               description_html: g.description_html || '',
-              cost: isOwnClass ? CLASS_GEAR_COST : CROSS_CLASS_GEAR_COST,
+              cost: signaturePriceFor(cls.id),
               kind: 'class',
               origin_class_id: cls.id,
               origin_class_name: cls.name || '',
@@ -2501,10 +2486,10 @@ const getMerxBudget = () => {
     } else if (DATA.mode === 'aspiring') {
       // Step 4 is the Merx spend step for aspiring. The shop sells the items
       // picked in the step-1 builder (treated as the aspiring class's own
-      // elective gear, so they cost CLASS_GEAR_COST each — cheaper than the
-      // aspirant cross-class rate). Nothing is pre-picked; the user spends
-      // their 10-Merx budget across these plus common items, duplicates
-      // allowed, exactly like the advent shop.
+      // elective gear, priced at the own-class Signature rate -- cheaper than
+      // the aspirant cross-class rate). Nothing is pre-picked; the user
+      // spends their served Merx grant across these plus common items,
+      // duplicates allowed, exactly like the advent shop.
       const build = state.classBuild || {};
       (build.classGear || []).forEach((s) => {
         if (!s || !s.classId || !s.itemName) return;
@@ -2515,7 +2500,7 @@ const getMerxBudget = () => {
           key: 'class:' + s.classId + ':' + s.itemName,
           name: s.itemName,
           description_html: (hit && hit.description_html) || s.itemDescription || '',
-          cost: CLASS_GEAR_COST,
+          cost: signaturePriceFor(s.classId),
           kind: 'class',
           origin_class_id: s.classId,
           origin_class_name: s.className || cls.name || '',
@@ -2531,7 +2516,7 @@ const getMerxBudget = () => {
             key: 'class:' + (c.id || '') + ':' + g.name,
             name: g.name,
             description_html: g.description_html || '',
-            cost: CLASS_GEAR_COST,
+            cost: signaturePriceFor(c.id),
             kind: 'class',
             origin_class_id: c.id,
             origin_class_name: c.name || '',
@@ -2544,22 +2529,23 @@ const getMerxBudget = () => {
   };
 
   // Sum the merx cost of the user's current right-column picks. Common items
-  // cost 1 each. Class gear carries its own `cost` (stamped at pick time):
-  //   - 0 for the first effectiveFreeBaseCount() entries — auto-loaded base,
-  //     free under ADVENT_DEFAULT_SIGNATURES.
-  //   - CLASS_GEAR_COST (2) for own-class elective picks.
-  //   - CROSS_CLASS_GEAR_COST (3) for cross-class picks (aspirant only).
+  // cost ECONOMY.prices.commonItem each. Class gear carries its own `cost`
+  // (stamped at pick time):
+  //   - 0 for the first freeBaseCount() entries — auto-loaded base, free
+  //     under advent's Default Signature grant.
+  //   - ECONOMY.prices.signature.own for own-class elective picks.
+  //   - ECONOMY.prices.signature.cross for cross-class picks (aspirant only).
   // Items beyond the free allotment charge their per-item cost regardless.
   const computeMerxSpent = () => {
     let spent = 0;
     if (Array.isArray(state.commonItems)) {
-      spent += state.commonItems.length * COMMON_ITEM_COST;
+      spent += state.commonItems.length * ECONOMY.prices.commonItem;
     }
     if (Array.isArray(state.gear)) {
-      const freeFloor = effectiveFreeBaseCount();
+      const freeFloor = freeBaseCount();
       state.gear.forEach((g, idx) => {
         if (idx < freeFloor) return;
-        spent += (typeof g.cost === 'number' ? g.cost : CLASS_GEAR_COST);
+        spent += (typeof g.cost === 'number' ? g.cost : signaturePriceFor(g.origin_class_id));
       });
     }
     return spent;
@@ -2622,7 +2608,7 @@ const getMerxBudget = () => {
   // How many picks of `key` can the user remove? For common items this is
   // every seeded pick (custom items are removed via removeCustomCommonItem).
   // For class gear it EXCLUDES the auto-loaded free base slots (the first
-  // FREE_BASE_GEAR_COUNT entries of state.gear) — those are free and
+  // freeBaseCount() entries of state.gear) — those are free and
   // class-defining, so they aren't deselectable from the shop.
   const removablePicks = (key) => {
     if (key.indexOf('common:') === 0) {
@@ -2640,7 +2626,7 @@ const getMerxBudget = () => {
       const gname = rest.slice(colonAt + 1);
       let n = 0;
       if (Array.isArray(state.gear)) {
-        const floor = effectiveFreeBaseCount();
+        const floor = freeBaseCount();
         state.gear.forEach((g, idx) => {
           if (idx >= floor && g && g.kind === 'class' && g.name === gname) n++;
         });
@@ -2667,9 +2653,9 @@ const getMerxBudget = () => {
       const colonAt = rest.indexOf(':');
       if (colonAt < 0) return;
       const gname = rest.slice(colonAt + 1);
-      // Stop at the effective free-base count so the free base slots stay put
-// (advent's 3 auto-loaded entries are protected; aspirant has none).
-      for (let i = state.gear.length - 1; i >= effectiveFreeBaseCount(); i--) {
+      // Stop at freeBaseCount() so the free base slots stay put (advent's
+      // auto-loaded entries are protected; every other economy has none).
+      for (let i = state.gear.length - 1; i >= freeBaseCount(); i--) {
         const g = state.gear[i];
         if (g && g.kind === 'class' && g.name === gname) { state.gear.splice(i, 1); break; }
       }
@@ -2698,7 +2684,7 @@ const getMerxBudget = () => {
     if (!name) return;
     if (name.length > 80) name = name.slice(0, 80);
     const budget = getMerxBudget();
-    if (computeMerxSpent() + COMMON_ITEM_COST > budget) return; // over budget
+    if (computeMerxSpent() + ECONOMY.prices.commonItem > budget) return; // over budget
     if (!Array.isArray(state.commonItems)) state.commonItems = [];
     state.commonItems.push({ name: name, custom: true });
     if (rawName == null) customCommonItemInput.value = '';
@@ -2872,7 +2858,7 @@ const getMerxBudget = () => {
             +   '<div class="card-content p-3">'
             +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
             +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
-            +       '<span class="tag is-warning is-light">' + COMMON_ITEM_COST + ' Merx</span>'
+            +       '<span class="tag is-warning is-light">' + ECONOMY.prices.commonItem + ' Merx</span>'
             +     '</div>'
             +     '<div class="mb-1"><span class="tag is-link is-light mr-1">Custom</span></div>'
             +     '<div class="is-size-7"><span class="tag is-success is-light">Picked</span>'
@@ -2892,9 +2878,9 @@ const getMerxBudget = () => {
     let commonCount = 0, classCount = 0;
     if (Array.isArray(state.commonItems)) commonCount = state.commonItems.length;
     if (Array.isArray(state.gear)) {
-      // The badge shows "picks from the shop" — i.e., class gear beyond the
-      // 3 free base slots, which is the same thing computeMerxSpent charges.
-      classCount = Math.max(0, state.gear.length - effectiveFreeBaseCount());
+      // The badge shows "picks from the shop" — i.e., class gear beyond
+      // freeBaseCount(), which is the same thing computeMerxSpent charges.
+      classCount = Math.max(0, state.gear.length - freeBaseCount());
     }
     if (commonCountBadge) commonCountBadge.textContent = commonCount;
     if (classCountBadge) classCountBadge.textContent = classCount;
@@ -2908,15 +2894,15 @@ const getMerxBudget = () => {
     // can't add a freebie by typing their own. The actual check lives in
     // addCustomCommonItem (defense in depth).
     if (customCommonItemInput || customCommonItemAdd) {
-      const canAffordAny = budget === Infinity || (budget - spent) >= COMMON_ITEM_COST;
+      const canAffordAny = budget === Infinity || (budget - spent) >= ECONOMY.prices.commonItem;
       if (customCommonItemInput) customCommonItemInput.disabled = !canAffordAny;
       if (customCommonItemAdd) customCommonItemAdd.disabled = !canAffordAny;
     }
 
     // ----- Next button gates on budget being spent (advent and aspiring) -----
     // Both modes start with a fixed Merx budget to spend here; the gate stays
-    // locked until the whole budget is laid out (aspiring spends its 10 Merx
-    // across the picked items and common items, duplicates allowed).
+    // locked until the whole budget is laid out (aspiring spends its served
+    // grant across the picked items and common items, duplicates allowed).
     if (step4Next) {
       if (DATA.mode === 'advent' || DATA.mode === 'aspiring') {
         step4Next.disabled = spent < getMerxBudget();
@@ -2946,11 +2932,11 @@ const getMerxBudget = () => {
       state.commonItems = [];
     }
     // Push the current class's base items onto the front of state.gear.
-    // All gear picks share kind 'class' — the FREE_BASE_GEAR_COUNT constant
-    // in computeMerxSpent is what separates free base slots from paid picks.
+    // All gear picks share kind 'class' — freeBaseCount() in computeMerxSpent
+    // is what separates free base slots from paid picks.
     // Stamp cost: 0 on the auto-loaded base so computeMerxSpent treats
     // them as free even if a user picks a duplicate of one of them later
-    // (the duplicate carries CLASS_GEAR_COST from the pool and so charges
+    // (the duplicate carries its own price from the pool and so charges
     // correctly; the original free slot stays free).
     const additions = base.map((g) => {
       return {
@@ -3449,5 +3435,13 @@ const getMerxBudget = () => {
 
   // buildSubmitPayload / onSubmitSuccess are invoked from the Submit button in
   // views/character-wizard.handlebars; getState is a console debug handle.
-  return { buildSubmitPayload, onSubmitSuccess, getState: () => state };
+  // getMerxBudget / getTotalPoints are exposed for the same reason -- pure
+  // reads the test harness needs to reach.
+  return {
+    buildSubmitPayload,
+    onSubmitSuccess,
+    getState: () => state,
+    getMerxBudget,
+    getTotalPoints
+  };
 })();

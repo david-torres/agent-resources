@@ -142,12 +142,12 @@ const capBreachMessage = ({ stat, value, cap }) => `${stat} is ${value}, over it
 // one Stat and every one of them is advent, so counting Traits there would read
 // as a Cap of 7 on a rule advent does not have.
 //
-// getStatCap in public/js/character-wizard.js is a MIRROR of this function --
-// a second implementation of the same branch, for the one surface this module
-// cannot reach, since nothing serves it to the browser. Nothing enforces that
-// the two agree; a change to the rule here has to be made there by hand. The
-// mirror is also where the advent branch was missed while every caller of this
-// function had it right.
+// getStatCap in public/js/character-wizard.js mirrors this function's
+// arithmetic, because a wizard recomputes a cap as the player types and this
+// module is CommonJS. It no longer mirrors the figures: routes/characters.js
+// serves statCapFigures() on wizardData and the client reads them. What is
+// still unpinned is the rule itself -- the client's copy ignores capPurchases,
+// which is correct only because no creation surface can buy one.
 //
 // The stat names come from the caller (util/enclave-consts.js statList) rather
 // than from here, so this module stays require-free.

@@ -14,118 +14,20 @@
 // or `test:http`. This file lives under test/ instead, matching where the
 // existing app.js client-logic tests already live (toast-editor-autofocus,
 // history-restore-auth-header, ...).
-const { test, expect } = require('bun:test');
-const fs = require('fs');
-const path = require('path');
-const { JSDOM } = require('jsdom');
-
-const COMMON_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'public', 'js', 'character-common.js'),
-  'utf8'
-);
-const WIZARD_SOURCE = fs.readFileSync(
-  path.join(__dirname, '..', 'public', 'js', 'character-wizard.js'),
-  'utf8'
-);
+//
+// bootWizard (the jsdom boot recipe) and fixture (the wizardData defaults
+// builder) live in test/helpers/wizard-fixture.js so other test files can
+// reuse them.
+const { test, expect, describe } = require('bun:test');
+const { bootWizard, fixture } = require('./helpers/wizard-fixture');
+const { economyFigures } = require('../util/merx-economy');
+const { statCapFigures } = require('../util/stat-caps');
 
 const STAT_LIST = [
   'vitality', 'might', 'resilience', 'spirit',
   'arcane', 'will', 'sensory', 'reflex',
   'vigor', 'skill', 'intelligence', 'luck'
 ];
-
-// Minimal fixture markup: only the ids character-wizard.js reads via
-// getElementById/querySelectorAll on the paths these tests exercise (init,
-// step 1's kiosk shell + Next button, step 2's personality/stat panel, and
-// the always-present summary level input). Steps 3-5 are never visited here,
-// so their elements are omitted -- character-wizard.js guards every lookup
-// with `if (el)` except the step-1 kiosk internals, which only run when
-// `DATA.mode !== 'aspiring'` and are included below for that case.
-const buildHtml = () => `
-  <script type="application/json" id="wizard-data"></script>
-  <div id="summaryClass"></div>
-  <div id="summaryStats"></div>
-  <div id="summaryAbilities"></div>
-  <div id="summaryGear"></div>
-  <input id="wizardLevel" value="1">
-  <input id="summarySuccessful" value="0">
-  <ul class="wizard-steps">
-    <li data-step="1"></li><li data-step="2"></li><li data-step="3"></li>
-    <li data-step="4"></li><li data-step="5"></li>
-  </ul>
-
-  <section class="wizard-step" data-step-panel="1" hidden>
-    <div class="wizard-kiosk" id="classKiosk">
-      <div class="wizard-kiosk-frame"></div>
-      <div class="wizard-kiosk-track" id="classKioskTrack"></div>
-      <p id="classKioskEmpty" hidden></p>
-      <span id="classKioskEmptyTerm"></span>
-    </div>
-    <input id="classSearch">
-    <div id="selectedClassPanel"></div>
-    <button id="step1Next"></button>
-    <input id="pseudoClassName">
-    <input id="pseudoClassTagline">
-    <textarea id="pseudoClassDescription"></textarea>
-    <div id="builderStep"></div>
-  </section>
-
-  <section class="wizard-step" data-step-panel="2" hidden>
-    <span id="trait1StatLabel"></span>
-    <span id="trait2StatLabel"></span>
-    <select id="trait1Select"><option value="">-</option></select>
-    <select id="trait2Select"><option value="">-</option></select>
-    <select id="trait3Select"><option value="">-</option></select>
-    <select id="trait1StatSelect"></select>
-    <input id="trait1Custom">
-    <datalist id="trait1Datalist"></datalist>
-    <select id="trait2StatSelect"></select>
-    <input id="trait2Custom">
-    <datalist id="trait2Datalist"></datalist>
-    <select id="trait3StatSelect"></select>
-    <input id="trait3Custom">
-    <datalist id="trait3Datalist"></datalist>
-    <div id="statsBox">
-      <p class="wizard-stats-prompt"></p>
-    </div>
-    <p id="statPointsLine" hidden>
-      <strong id="statPointsTotal">0</strong>
-      <strong id="statPointsAssigned">0</strong>
-      <strong id="statPointsRemaining">0</strong>
-    </p>
-    <div id="statGrid" hidden></div>
-    <button id="step2Next"></button>
-  </section>
-`;
-
-// Boots a fresh jsdom window, embeds `data` as the wizard's server-supplied
-// DATA, runs character-common.js then character-wizard.js against it (both
-// are `window.X = (function(){...})()` browser IIFEs -- no exports to
-// require), and returns the exposed CharacterWizard handle.
-const bootWizard = (data) => {
-  const dom = new JSDOM(`<!doctype html><html><body>${buildHtml()}</body></html>`, {
-    url: `http://localhost/characters/wizard?mode=${data.mode}`,
-    pretendToBeVisual: true
-  });
-  const { window } = dom;
-
-  globalThis.window = window;
-  globalThis.document = window.document;
-  globalThis.localStorage = window.localStorage;
-  // jsdom's own rAF is fine functionally, but firing it on a real frame
-  // schedule slows every boot for no benefit here -- these tests never
-  // assert on the kiosk's visual ring, only on state and rendered text.
-  globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 0);
-
-  window.document.getElementById('wizard-data').textContent = JSON.stringify(data);
-
-  new Function(COMMON_SOURCE)();
-  globalThis.CharacterCommon = window.CharacterCommon;
-
-  new Function(WIZARD_SOURCE)();
-
-  return window.CharacterWizard;
-};
 
 const ASPIRANT_CLASS = {
   id: 'c1',
@@ -143,14 +45,14 @@ const PERSONALITY_MAP = {
 };
 
 test('aspirant submit payload: an explicit Stat pick wins over a vocabulary match, a vocabulary match still resolves when nothing was picked, and a custom word keeps its picked Stat', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'aspirant',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
-  });
+  }));
 
   const state = wizard.getState();
   // Slot 0: "brave" maps to `might` via the vocabulary, but the player
@@ -179,14 +81,14 @@ test('aspirant submit payload: an explicit Stat pick wins over a vocabulary matc
 });
 
 test('advent submit payload: every Trait Stat resolves via the vocabulary even though advent has no Stat picker', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'advent',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
-  });
+  }));
 
   const state = wizard.getState();
   // Advent's trait selects are vocabulary-only <select>s -- traitStats is
@@ -204,14 +106,14 @@ test('advent submit payload: every Trait Stat resolves via the vocabulary even t
 });
 
 test('aspiring creation allots 4 pluses: one pinned to each of the three Traits\' Stats, one free', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'aspiring',
     preselectedClassId: null,
     classes: [],
     statList: STAT_LIST,
     personalityMap: {},
     commonItems: []
-  });
+  }));
 
   const state = wizard.getState();
   // Names deliberately outside the vocabulary -- ruling 8 pins one plus to
@@ -235,14 +137,14 @@ test('aspiring creation allots 4 pluses: one pinned to each of the three Traits\
 });
 
 test('aspiring creation grows by 2 pluses per level, same as the other two economies', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'aspiring',
     preselectedClassId: null,
     classes: [],
     statList: STAT_LIST,
     personalityMap: {},
     commonItems: []
-  });
+  }));
 
   const state = wizard.getState();
   state.traits[0] = 'first-word';
@@ -262,14 +164,14 @@ test('aspiring creation grows by 2 pluses per level, same as the other two econo
 });
 
 test('aspirant creation keeps its 6-plus allotment: 3 to the class spread, 1 to the third Trait, 2 free', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'aspirant',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
-  });
+  }));
 
   const state = wizard.getState();
   state.traits[0] = 'brave';
@@ -300,14 +202,14 @@ const statBoxes = (stat) => Array.from(
 const classesOn = (stat) => statBoxes(stat).map((box) => box.className.replace('wizard-stat-box ', ''));
 
 const bootAspirantAtStep2 = () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'aspirant',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
-  });
+  }));
   const state = wizard.getState();
   state.traits[0] = 'brave';
   state.traitStats[0] = 'might';
@@ -352,14 +254,14 @@ test('at level 1 the +++ ceiling still binds on a Trait-raised Stat', () => {
 // (routes/characters.js), so an unbranched Cap here is what most wizard sessions
 // would get.
 test('advent gets no Trait Cap bonus, at any level', () => {
-  const wizard = bootWizard({
+  const wizard = bootWizard(fixture({
     mode: 'advent',
     preselectedClassId: 'c1',
     classes: [ASPIRANT_CLASS],
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
-  });
+  }));
   const state = wizard.getState();
   state.traits[0] = 'brave';
   state.traits[1] = 'bold';
@@ -370,4 +272,64 @@ test('advent gets no Trait Cap bonus, at any level', () => {
   // luck carries Trait 3 and would read as a Cap of 6 under the Aspirant rule.
   expect(statBoxes('luck')).toHaveLength(5);
   for (const stat of STAT_LIST) expect(statBoxes(stat)).toHaveLength(5);
+});
+
+describe('the wizard reads its economy from the server', () => {
+  test('an advent wizard on a V1 class uses the aspirant budget', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'advent',
+      classes: [{ id: 'c-v1', name: 'Gunslinger', content_format: 'aspirant', gear: [] }],
+      economyByClassId: { 'c-v1': 'aspirant' }
+    }));
+    wizard.getState().classId = 'c-v1';
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspirant);
+  });
+
+  test('the budget follows a change of class', () => {
+    const wizard = bootWizard(fixture({
+      mode: 'advent',
+      classes: [
+        { id: 'c-advent', name: 'Vizier', content_format: 'advent', gear: [] },
+        { id: 'c-v1', name: 'Gunslinger', content_format: 'aspirant', gear: [] }
+      ],
+      economyByClassId: { 'c-advent': 'advent', 'c-v1': 'aspirant' }
+    }));
+    wizard.getState().classId = 'c-advent';
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.advent);
+    wizard.getState().classId = 'c-v1';
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspirant);
+  });
+
+  test('advent still earns per successful mission, from the served figure', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', economyWhenClassless: 'advent' }));
+    wizard.getState().successfulMissions = 3;
+    expect(wizard.getMerxBudget())
+      .toBe(economyFigures().grants.advent + 3 * require('../util/enclave-consts').MERX_PER_MISSION_SUCCESS);
+  });
+
+  test('a class-less wizard uses the served fallback', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspiring', economyWhenClassless: 'aspiring' }));
+    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.aspiring);
+  });
+
+  test('the plus allotment comes from the served stat figures', () => {
+    const wizard = bootWizard(fixture({ mode: 'aspiring', statCaps: statCapFigures() }));
+    wizard.getState().level = 1;
+    expect(wizard.getTotalPoints()).toBe(statCapFigures().creationPluses.aspiring);
+    wizard.getState().level = 3;
+    expect(wizard.getTotalPoints())
+      .toBe(statCapFigures().creationPluses.aspiring + 2 * statCapFigures().levelPlusesPerLevel);
+  });
+});
+
+test('no economy or stat figure is written down in the wizard client', () => {
+  const source = require('fs').readFileSync('public/js/character-wizard.js', 'utf8');
+  for (const name of [
+    'CLASS_GEAR_COST', 'CROSS_CLASS_GEAR_COST', 'ADVENT_MERX_BUDGET',
+    'ASPIRANT_MERX_BUDGET', 'ASPIRING_MERX_BUDGET', 'FREE_BASE_GEAR_COUNT',
+    'BONUS_MERX_PER_SUCCESSFUL', 'COMMON_ITEM_COST',
+    'CREATION_PLUSES', 'LEVEL_PLUSES_PER_LEVEL', 'BASE_STAT_CAP', 'CREATION_STAT_CAP'
+  ]) {
+    expect(source).not.toContain(name);
+  }
 });
