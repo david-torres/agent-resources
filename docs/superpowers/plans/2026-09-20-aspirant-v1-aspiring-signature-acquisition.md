@@ -665,6 +665,37 @@ test('an aspiring build may own a fourth Signature', () => {
   expect(data.gear).toHaveLength(4);
 });
 
+// Choosing the three defines the Class; it does not compel buying them.
+// Creation spends the 10-Merx grant however it likes, exactly as aspirant
+// spends 12 (pg. 3). All three, some, or none are each a legal build.
+test('an aspiring build may own none of its three picks', () => {
+  const { data, error } = normalizeWizardPayload(aspiringBody({ gear: [] }));
+  expect(error).toBeNull();
+  expect(data.aspiring_signatures).toHaveLength(3);
+});
+
+// The wizard omits payload.gear entirely when nothing was bought
+// (public/js/character-wizard.js:3818 only sets it for a non-empty list),
+// so the absent key -- not just an empty array -- has to be a legal save.
+test('an aspiring build with no gear key at all is legal', () => {
+  const body = aspiringBody();
+  delete body.gear;
+  const { error } = normalizeWizardPayload(body);
+  expect(error).toBeNull();
+});
+
+// Buying none of the three and two cross-class Signatures instead is 6 of
+// 10 -- legal, and priced at the cross tier because neither is in the pool.
+test('an aspiring build may spend its grant entirely outside the pool', () => {
+  const { error } = normalizeCharacterInput(aspiringInput({
+    gear: [
+      { name: 'Y', class_id: 'y' },
+      { name: 'Z', class_id: 'z' }
+    ]
+  }), { ...aspiringContext(), isCreation: true });
+  expect(error).toBeNull();
+});
+
 // 3 own-class picks (6) plus one cross-class fourth (3) is 9 of 10.
 test('a creation is priced against the pool', () => {
   const { error } = normalizeCharacterInput(aspiringInput({
@@ -803,6 +834,39 @@ This mirrors the client's `validateBuilder` (`public/js/character-wizard.js:1818
 - [ ] **Step 8: Set `isCreation` at both service call sites**
 
 In `services/character/service.js`, the `createCharacter` call to `normalizeCharacterInput` (around `:196-198`) passes `isCreation: true`; the `updateCharacter` call (around `:356-365`) passes `isCreation: false`. Add the key explicitly at both — do not let either rely on a default.
+
+- [ ] **Step 9: Feed the pool to both `deriveCharacterTotals` calls**
+
+`services/character/service.js` recomputes `commissary_reward` before writing the row, and both call sites build a *synthetic* character out of `{ class_id, gear, common_items }`. Neither carries the pool, so both would price a cross-class Signature at the own-class rate and store a leftover that is too generous — 2 Merx instead of 1 on a three-picks-plus-one build.
+
+The two read the pool from **different places**, and getting that backwards is the likely mistake:
+
+```js
+// createCharacter, around :217 -- the creation shaped it onto characterInput
+// in Step 4, so it is present here.
+        character: {
+          class_id: characterInput.class_id,
+          gear: resolvedGear,
+          common_items: characterInput.common_items,
+          aspiring_signatures: characterInput.aspiring_signatures
+        },
+```
+
+```js
+// updateCharacter, around :383 -- an update DELETES the key (Step 4), because
+// the RPC must preserve the stored pool. So the stored row is the only source.
+        character: {
+          class_id: characterInput.class_id,
+          gear: withPreservedEquipment(
+            resolveSubmittedGear(childData.classGear, gearNameToClassId),
+            existing.data.gear
+          ),
+          common_items: characterInput.common_items,
+          aspiring_signatures: existing.data.aspiring_signatures
+        },
+```
+
+Add a test for each path in `services/character/service.test.js`, following that file's existing patterns: a created aspiring character with three pooled picks plus one outside the pool stores `commissary_reward` 1 (not 2); an auto-calculated update of the same character recomputes the same figure from the stored pool.
 
 - [ ] **Step 9: Run the tests to verify they pass**
 
@@ -1393,7 +1457,7 @@ git commit -m "feat: price the aspiring edit form against its Signature pool"
 
 Model it on `e2e/specs/26-aspiring-wizard.spec.js`, which seeds three donor classes with `seedClass`/`unlockClassForProfile` from `e2e/fixtures/class.js` and drives the step-1 builder. The new spec must prove the divergence end to end:
 
-1. Create an aspiring character through the wizard, picking three Signatures from three donor classes and buying all three. Assert `#merxSpent` reads `6` — three own-class picks.
+1. Create an aspiring character through the wizard, picking three Signatures from three donor classes. Buy only **two** of them and assert `#merxSpent` reads `4` — choosing the three defines the Class, it does not compel buying them. Then buy the third and assert `6`.
 2. From the wizard's shop, buy one Signature the builder did not choose. Assert `#merxSpent` rises by **3**, not 2.
 3. Submit, and assert the stored row's `aspiring_signatures` holds exactly the three picks — not the four owned Signatures.
 4. Open the character's edit form, buy a fifth Signature from the catalogue, and assert the surface charges 3 for it.
