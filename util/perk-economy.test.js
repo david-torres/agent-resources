@@ -291,8 +291,7 @@ test('the ratchet refuses a save that makes a stored breach worse', () => {
     economy: 'advent', level: 1, abilities: [...six, own('core')], abilityPerks: []
   });
   const worsened = worsenedBreaches(stored, submitted);
-  expect(worsened).toHaveLength(1);
-  expect(worsened[0].rule).toBe(ABILITY_CAP_RULE);
+  expect(worsened.map(b => b.rule).sort()).toEqual([ABILITY_CAP_RULE, PERK_DEFICIT_RULE].sort());
 });
 
 test('the ratchet lets a breached character improve toward legality', () => {
@@ -314,7 +313,8 @@ test('the ratchet refuses a brand-new breach on a previously clean character', (
     economy: 'advent', level: 1,
     abilities: [own('core'), own('core'), own('core'), own('core')], abilityPerks: []
   });
-  expect(worsenedBreaches(stored, submitted)).toHaveLength(1);
+  expect(worsenedBreaches(stored, submitted).map(b => b.rule).sort())
+    .toEqual([ABILITY_CAP_RULE, PERK_DEFICIT_RULE].sort());
 });
 
 test('the ratchet compares overage, so levelling up and spending the Perk is allowed', () => {
@@ -350,4 +350,26 @@ test('the ratchet ignores soft breaches entirely', () => {
 test('worsenedBreaches tolerates a missing or non-array side', () => {
   expect(worsenedBreaches(null, null)).toEqual([]);
   expect(worsenedBreaches(undefined, [])).toEqual([]);
+});
+
+test('the cap and the balance are reported together, not one at a time', () => {
+  // Independent rules: pg. 7 states the cap, the balance is separate
+  // accounting. Suppressing one while the other holds lets a character over
+  // the cap spend Perks with nothing to ratchet against.
+  const breaches = buildBreaches({
+    economy: 'advent', level: 1,
+    abilities: Array(6).fill(null).map(() => own('core')),
+    abilityPerks: [{ id: 1 }, { id: 2 }]
+  });
+  expect(breaches.filter(b => b.severity === 'hard').map(b => b.rule).sort())
+    .toEqual([ABILITY_CAP_RULE, PERK_DEFICIT_RULE].sort());
+});
+
+test('a character over the cap cannot quietly add Ability Perks', () => {
+  const six = Array(6).fill(null).map(() => own('core'));
+  const stored = buildBreaches({ economy: 'advent', level: 1, abilities: six, abilityPerks: [] });
+  const submitted = buildBreaches({
+    economy: 'advent', level: 1, abilities: six, abilityPerks: Array(20).fill({ id: 1 })
+  });
+  expect(worsenedBreaches(stored, submitted).map(b => b.rule)).toEqual([PERK_DEFICIT_RULE]);
 });

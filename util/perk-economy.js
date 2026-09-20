@@ -191,8 +191,7 @@ const buildBreaches = ({ economy, level, abilities, abilityPerks } = {}) => {
     const breaches = [];
 
     const cap = ABILITY_CAP[economy];
-    const hasAbilityCap = cap != null && list.length > cap;
-    if (hasAbilityCap) {
+    if (cap != null && list.length > cap) {
         breaches.push({
             severity: 'hard',
             rule: ABILITY_CAP_RULE,
@@ -203,20 +202,16 @@ const buildBreaches = ({ economy, level, abilities, abilityPerks } = {}) => {
         });
     }
 
-    // If abilities violate the cap, a perk deficit is secondary: fix the cap
-    // first. Report perk deficit only when the ability roster is legal.
-    if (!hasAbilityCap) {
-        const breakdown = perkBreakdown({ economy, level, abilities, abilityPerks });
-        if (breakdown && breakdown.deficit > 0) {
-            breaches.push({
-                severity: 'hard',
-                rule: PERK_DEFICIT_RULE,
-                count: breakdown.spend,
-                limit: breakdown.earned,
-                overage: breakdown.deficit,
-                detail: `${breakdown.spend} Perks spent of ${breakdown.earned} earned.`
-            });
-        }
+    const breakdown = perkBreakdown({ economy, level, abilities, abilityPerks });
+    if (breakdown && breakdown.deficit > 0) {
+        breaches.push({
+            severity: 'hard',
+            rule: PERK_DEFICIT_RULE,
+            count: breakdown.spend,
+            limit: breakdown.earned,
+            overage: breakdown.deficit,
+            detail: `${breakdown.spend} Perks spent of ${breakdown.earned} earned.`
+        });
     }
 
     if (economy === 'advent') {
