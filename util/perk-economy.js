@@ -38,6 +38,13 @@ const ABILITY_PRICE = {
 // own/core cell is ever reached.
 const FREE_CORE_ABILITIES = { advent: 3, aspirant: 3, aspiring: 0 };
 
+// pg. 90 steps 3 and 4: two Core Abilities and one Advanced, three picks in
+// all, and those three are the aspiring character's Class. A count rather than
+// a price, but a rules figure all the same.
+const ASPIRING_ABILITY_PICKS = 3;
+const ASPIRING_CORE_PICKS = 2;
+const ASPIRING_ADVANCED_PICKS = 1;
+
 // pg. 3: "Characters start with a Perk, which they may use immediately or save
 // for later", listed under "Changes to Character Creation" beside the 12-Merx
 // change -- so the starting Perk is Aspirant's addition and Advent grants none.
@@ -102,6 +109,9 @@ const perkFigures = () => ({
     perksPerLevel: PERKS_PER_LEVEL,
     abilityCap: { ...ABILITY_CAP },
     freeCoreAbilities: { ...FREE_CORE_ABILITIES },
+    aspiringAbilityPicks: ASPIRING_ABILITY_PICKS,
+    aspiringCorePicks: ASPIRING_CORE_PICKS,
+    aspiringAdvancedPicks: ASPIRING_ADVANCED_PICKS,
     abilityPerkCost: ABILITY_PERK_COST,
     perkWordLimit: PERK_WORD_LIMIT,
     compoundWordBonus: COMPOUND_WORD_BONUS,
@@ -259,6 +269,9 @@ module.exports = {
     worsenedBreaches,
     ABILITY_PRICE,
     FREE_CORE_ABILITIES,
+    ASPIRING_ABILITY_PICKS,
+    ASPIRING_CORE_PICKS,
+    ASPIRING_ADVANCED_PICKS,
     PERK_GRANT,
     PERKS_PER_LEVEL,
     ABILITY_PERK_COST,

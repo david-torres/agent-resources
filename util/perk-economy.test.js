@@ -5,6 +5,9 @@ const {
   perkFigures,
   ABILITY_CAP,
   FREE_CORE_ABILITIES,
+  ASPIRING_ABILITY_PICKS,
+  ASPIRING_CORE_PICKS,
+  ASPIRING_ADVANCED_PICKS,
   PERK_GRANT,
   PERKS_PER_LEVEL,
   ABILITY_PERK_COST,
@@ -46,6 +49,9 @@ test('the figures match the book and the supplied Advent rates', () => {
   expect(PERK_WORD_LIMIT).toBe(25);
   expect(COMPOUND_WORD_BONUS).toBe(5);
   expect(PERKS_PER_ABILITY).toBe(5);
+  expect(ASPIRING_ABILITY_PICKS).toBe(3);
+  expect(ASPIRING_CORE_PICKS).toBe(2);
+  expect(ASPIRING_ADVANCED_PICKS).toBe(1);
 });
 
 test('a level-1 character holds only its creation grant', () => {
@@ -96,6 +102,9 @@ test('perkFigures is plain data and a fresh object each call', () => {
   expect(perkFigures().grants.advent).toBe(0);
   expect(a.prices.ability.cross.advanced).toBe(4);
   expect(a.abilityCap.aspiring).toBe(4);
+  expect(a.aspiringAbilityPicks).toBe(3);
+  expect(a.aspiringCorePicks).toBe(2);
+  expect(a.aspiringAdvancedPicks).toBe(1);
 });
 
 test('perk-economy requires nothing but stat-caps', () => {

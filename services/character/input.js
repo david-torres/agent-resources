@@ -21,6 +21,7 @@ const {
   COMMON_ITEM_PRICE,
   ASPIRING_SIGNATURE_PICKS
 } = require('../../util/merx-economy');
+const { ASPIRING_ABILITY_PICKS } = require('../../util/perk-economy');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -444,6 +445,23 @@ const normalizeAspiringSignatures = (value) => (Array.isArray(value) ? value : [
   .filter((pick) => pick && pick.class_id && pick.name)
   .slice(0, ASPIRING_SIGNATURE_PICKS);
 
+// pg. 90 steps 3 and 4: two Core picks and one Advanced. The type is narrowed
+// here rather than trusted, because the database CHECK admits only 'core' and
+// 'advanced' and a rejected save is a worse error message than a corrected
+// one. The 2-and-1 split is validateAspiringBuild's rule, not this shaper's:
+// shaping and validating are separate so a malformed payload still reaches the
+// validator that can explain it.
+const normalizeAspiringAbilities = (value) => (Array.isArray(value) ? value : [])
+  .map((pick) => (pick && typeof pick === 'object'
+    ? {
+        class_id: blankToNull(pick.class_id),
+        name: blankToNull(pick.name),
+        type: pick.type === 'advanced' ? 'advanced' : 'core'
+      }
+    : null))
+  .filter((pick) => pick && pick.class_id && pick.name)
+  .slice(0, ASPIRING_ABILITY_PICKS);
+
 const normalizeAbilityPerks = (perks) => {
   if (!Array.isArray(perks)) return [];
   return perks.map((perk, index) => {
@@ -534,15 +552,17 @@ const normalizeCharacterInput = (input, context = {}) => {
   }
   delete data.pseudo_class;
 
-  // The pool is written once, by the creation that invents the Class. On an
+  // The pools is written once, by the creation that invents the Class. On an
   // update the key must be ABSENT, not empty: save_character_atomic treats a
   // present key as authoritative, so sending [] would delete the character's
   // Class. Absence is also what makes the Class un-editable, without needing a
   // server-side override to enforce it.
   if (context.isCreation && data.creator_mode === 'aspiring') {
     data.aspiring_signatures = normalizeAspiringSignatures(data.aspiring_signatures);
+    data.aspiring_abilities = normalizeAspiringAbilities(data.aspiring_abilities);
   } else {
     delete data.aspiring_signatures;
+    delete data.aspiring_abilities;
   }
 
   if (rulesVersion === 'v2') {
@@ -804,6 +824,7 @@ module.exports = {
   validateTraits,
   validateStatLimits,
   normalizeAbilityPerks,
+  normalizeAspiringAbilities,
   parseInteger,
   normalizeStatsPayload,
   normalizeWizardPayload,

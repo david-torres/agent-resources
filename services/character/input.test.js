@@ -1,7 +1,8 @@
 const { test, expect } = require('bun:test');
 const {
   normalizeCharacterInput, normalizeGearItems, normalizeAbilityItems, normalizeGearEquipment,
-  validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits, validateStatLimits
+  validateGearEquipment, validateEconomyLimits, shapeTrait, validateTraits, validateStatLimits,
+  normalizeAspiringAbilities
 } = require('./input');
 const { countWordsExcludingRatings, ENCHANTMENT_WORD_LIMIT, MOD_WORD_LIMIT } = require('../../util/merx-economy');
 const { personalityMap, statList } = require('../../util/enclave-consts');
@@ -1254,4 +1255,50 @@ test('normalizeCharacterInput threads context.storedGear into the cap', () => {
     storedGear: enchanted(6)
   });
   expect(result.error).toMatch(/Signature Cap|18/);
+});
+
+test('the aspiring ability shaper keeps only well-formed picks', () => {
+  expect(normalizeAspiringAbilities([
+    { class_id: 'c1', name: 'Standoff', type: 'core' },
+    null,
+    { class_id: '', name: 'Blank', type: 'core' },
+    { class_id: 'c2', name: '   ', type: 'core' },
+    { class_id: 'c3', name: 'Viewpoint', type: 'advanced' },
+    'not an object'
+  ])).toEqual([
+    { class_id: 'c1', name: 'Standoff', type: 'core' },
+    { class_id: 'c3', name: 'Viewpoint', type: 'advanced' }
+  ]);
+});
+
+test('an unknown ability type is shaped to core rather than passed through', () => {
+  expect(normalizeAspiringAbilities([{ class_id: 'c1', name: 'X', type: 'elite' }]))
+    .toEqual([{ class_id: 'c1', name: 'X', type: 'core' }]);
+});
+
+test('the aspiring ability shaper truncates a payload over three', () => {
+  const four = Array(4).fill(null).map((_, i) => ({ class_id: `c${i}`, name: `N${i}`, type: 'core' }));
+  expect(normalizeAspiringAbilities(four)).toHaveLength(3);
+});
+
+test('the aspiring ability shaper tolerates a non-array', () => {
+  expect(normalizeAspiringAbilities(null)).toEqual([]);
+  expect(normalizeAspiringAbilities('nope')).toEqual([]);
+});
+
+test('an aspiring creation carries the ability pool', () => {
+  const result = normalizeCharacterInput(aspiringInput({
+    aspiring_abilities: [
+      { class_id: 'a', name: 'Dodge', type: 'core' },
+      { class_id: 'b', name: 'Parry', type: 'core' },
+      { class_id: 'c', name: 'Overdrive', type: 'advanced' }
+    ]
+  }), { ...aspiringContext(), isCreation: true });
+  expect(result.data.aspiring_abilities).toHaveLength(3);
+});
+
+// A present empty key would delete the character's Class.
+test('an update never sends the ability pool key at all', () => {
+  const result = normalizeCharacterInput(aspiringInput({}), { ...aspiringContext(), isCreation: false });
+  expect('aspiring_abilities' in result.data).toBe(false);
 });
