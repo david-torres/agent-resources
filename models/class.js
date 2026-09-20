@@ -585,8 +585,19 @@ const buildClassContentLookupMaps = async () => {
             }
           }
         }
-        if (Array.isArray(cls?.abilities)) {
-          for (const a of cls.abilities) {
+        // Both tiers: a class's core abilities (cls.abilities) and its
+        // Advanced ones (cls.advanced_abilities, pg. 87 -- unlocked with
+        // Perks rather than started with). The classic/expert edit form
+        // resubmits an existing ability as a bare "ClassName::AbilityName"
+        // string with no class_id of its own (views/partials/character-
+        // class-abilities.handlebars), so this map is the ONLY way
+        // reconcileAbilities/saveCharacterAtomic (services/character/
+        // service.js) can resolve one back to a class_id -- an Advanced
+        // ability missing from here cannot be saved through that form at
+        // all, not priced differently.
+        for (const list of [cls?.abilities, cls?.advanced_abilities]) {
+          if (!Array.isArray(list)) continue;
+          for (const a of list) {
             if (a && a.name) {
               const abilityName = a.name.trim();
               abilityNameToClassId.set(abilityName, cls.id);
