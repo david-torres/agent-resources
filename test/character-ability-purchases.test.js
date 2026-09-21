@@ -17,6 +17,9 @@ const { json: jsonHelper } = require('../util/handlebars');
 const SOURCE = fs.readFileSync(
   path.join(__dirname, '..', 'public', 'js', 'character-ability-purchases.js'), 'utf8'
 );
+const CATALOGUE_CONTROLS_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', 'public', 'js', 'catalogue-controls.js'), 'utf8'
+);
 
 const FIGURES = perkFigures();
 
@@ -92,6 +95,7 @@ const mountAbilities = (data) => {
   globalThis.window = window;
   globalThis.document = window.document;
 
+  new Function(CATALOGUE_CONTROLS_SOURCE)();
   new Function(SOURCE)();
 
   if (!window.CharacterAbilityPurchases.instance) {

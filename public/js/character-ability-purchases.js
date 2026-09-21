@@ -37,7 +37,7 @@
   };
 
   var mount = function (root) {
-    if (!root) return null;
+    if (!root || !window.CatalogueControls) return null;
     var island = root.querySelector('script[type="application/json"]');
     var data = null;
     try { data = JSON.parse((island && island.textContent) || 'null'); } catch (e) { data = null; }
@@ -189,9 +189,9 @@
     };
 
     // ---- rendering ------------------------------------------------------
-    // Kept apart from renderCatalogue below so a later change to what lays
-    // the entries out (grouping, search) can replace only that, not the
-    // markup for a single entry.
+    // Kept apart from renderCatalogue below: renderEntry draws one entry,
+    // renderCatalogue lays the whole set out through CatalogueControls,
+    // which groups by class and searches by name.
     var renderEntry = function (entry) {
       var purchase = findPurchase(entry.name, entry.class_id);
       var origin = entry.crossClass && entry.class_name
@@ -216,9 +216,22 @@
         + '</div>';
     };
 
+    // The catalogue's body, per class group: every entry CatalogueControls
+    // hands back after search, each drawn by renderEntry above.
+    var renderGroupBody = function (groupEntries) {
+      return groupEntries.map(renderEntry).join('');
+    };
+
+    var catalogueControl = null;
     var renderCatalogue = function () {
       if (!catalogue) return;
-      catalogue.innerHTML = entries.map(renderEntry).join('');
+      if (catalogueControl) { catalogueControl.render(); return; }
+      catalogueControl = window.CatalogueControls.mount(catalogue, {
+        entries: entries,
+        groupBy: function (entry) { return entry.class_name; },
+        searchOf: function (entry) { return entry.name; },
+        renderEntry: renderGroupBody
+      });
     };
 
     var renderReadouts = function () {

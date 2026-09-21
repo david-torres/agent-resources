@@ -38,7 +38,7 @@
   };
 
   var mount = function (root) {
-    if (!root || !window.SignatureEntry) return null;
+    if (!root || !window.SignatureEntry || !window.CatalogueControls) return null;
     var island = root.querySelector('script[type="application/json"]');
     var data = null;
     try { data = JSON.parse((island && island.textContent) || 'null'); } catch (e) { data = null; }
@@ -354,12 +354,12 @@
     };
 
     // The book prints a class's Signatures down columns; `column` carries that
-    // layout, so the grid keeps it. An entry with no column recorded (a
-    // carried cross-class row) prints in the first.
-    var renderGrid = function () {
-      if (!grid) return;
+    // layout, so a group's body keeps it. An entry with no column recorded (a
+    // carried cross-class row) prints in the first. Given only the entries
+    // CatalogueControls hands it for one class group, not the whole roster.
+    var renderColumnsFor = function (groupEntries) {
       var columns = [];
-      entries.forEach(function (entry) {
+      groupEntries.forEach(function (entry) {
         var key = entry.column || 1;
         var column = null;
         for (var i = 0; i < columns.length; i++) if (columns[i].key === key) column = columns[i];
@@ -367,11 +367,23 @@
         column.cells.push(entry);
       });
       columns.sort(function (a, b) { return a.key - b.key; });
-      grid.innerHTML = columns.length
+      return columns.length
         ? '<div class="columns is-multiline">' + columns.map(function (column) {
             return '<div class="column">' + column.cells.map(renderCell).join('') + '</div>';
           }).join('') + '</div>'
         : '';
+    };
+
+    var gridControl = null;
+    var renderGrid = function () {
+      if (!grid) return;
+      if (gridControl) { gridControl.render(); return; }
+      gridControl = window.CatalogueControls.mount(grid, {
+        entries: entries,
+        groupBy: function (entry) { return entry.class_name; },
+        searchOf: function (entry) { return entry.name; },
+        renderEntry: renderColumnsFor
+      });
     };
 
     var renderPurchaseControls = function (entry, purchase) {

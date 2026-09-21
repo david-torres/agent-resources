@@ -557,11 +557,17 @@
 
 {{#if gearPurchaseData}}
 {{!-- Same order as views/character-wizard.handlebars loads them: the shared
-      component first, then the mount that reads it. --}}
+      component first, then the mount that reads it. catalogue-controls.js is
+      the grouping/search control both purchase mounts share -- loaded here,
+      or below if only the ability surface is present. --}}
+<script src="/js/catalogue-controls.js" defer></script>
 <script src="/js/signature-entry.js" defer></script>
 <script src="/js/character-gear-purchases.js" defer></script>
 {{/if}}
 
 {{#if abilityPurchaseData}}
+{{#unless gearPurchaseData}}
+<script src="/js/catalogue-controls.js" defer></script>
+{{/unless}}
 <script src="/js/character-ability-purchases.js" defer></script>
 {{/if}}

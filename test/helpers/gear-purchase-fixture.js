@@ -24,6 +24,10 @@ const SIGNATURE_ENTRY_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'signature-entry.js'),
   'utf8'
 );
+const CATALOGUE_CONTROLS_SOURCE = fs.readFileSync(
+  path.join(__dirname, '..', '..', 'public', 'js', 'catalogue-controls.js'),
+  'utf8'
+);
 const PURCHASES_SOURCE = fs.readFileSync(
   path.join(__dirname, '..', '..', 'public', 'js', 'character-gear-purchases.js'),
   'utf8'
@@ -115,6 +119,7 @@ const mountPurchases = (data, options = {}) => {
   // close the script element early.
 
   new Function(SIGNATURE_ENTRY_SOURCE)();
+  new Function(CATALOGUE_CONTROLS_SOURCE)();
   new Function(PURCHASES_SOURCE)();
 
   // jsdom leaves readyState at 'loading' unless it runs scripts itself, so the
