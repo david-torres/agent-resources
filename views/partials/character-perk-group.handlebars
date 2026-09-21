@@ -5,13 +5,15 @@
     domKey    – DOM-safe token for element ids / hx-target (must be valid in a
                 CSS selector; equals the ability id on the edit/server path)
   abilityName – heading text. abilityPerks – full ability_perks list (filtered
-  here by linkValue).
+  here by linkValue). perkFigures – the Perk figures the route serves
+  (util/perk-economy.js#perkFigures), handed down so each perk row names the
+  word limit without holding a copy of it.
 --}}
 <div class="box perk-group" data-ability-id="{{linkValue}}">
   <h4 class="title is-5">{{capitalize abilityName}}</h4>
   <div class="columns is-multiline" id="perks-list-{{domKey}}">
     {{#each (perksForAbility abilityPerks linkValue) }}
-      {{> character-ability-perk perk=this abilityId=../linkValue position=this.position siblingPerks=(perksForAbility ../abilityPerks ../linkValue) }}
+      {{> character-ability-perk perk=this abilityId=../linkValue position=this.position siblingPerks=(perksForAbility ../abilityPerks ../linkValue) perkFigures=../perkFigures }}
     {{/each}}
   </div>
   <button type="button" class="button is-primary is-small"

@@ -5,9 +5,9 @@
     <div class="control is-expanded">
       <div x-data="{ text: {{json perk.text}} || '' }">
         <textarea class="textarea perk-text" name="ability_perk_text[]"
-                   placeholder="Perk text (≤25 words)" x-model="text"
+                   placeholder="Perk text (≤{{perkFigures.perkWordLimit}} words)" x-model="text"
                    maxlength="500" required>{{perk.text}}</textarea>
-        <p class="help"><span class="word-count" x-text="text.trim() ? text.trim().split(/\s+/).length : 0">{{wordCount perk.text}}</span> / 25 words</p>
+        <p class="help"><span class="word-count" x-text="text.trim() ? text.trim().split(/\s+/).length : 0">{{wordCount perk.text}}</span> / {{perkFigures.perkWordLimit}} words</p>
       </div>
     </div>
     <div class="control ml-2">

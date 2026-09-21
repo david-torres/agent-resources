@@ -34,10 +34,10 @@
 
   <div class="block">
     <label class="label">Ability Perks</label>
-    <p class="help mb-2">Each perk is at most 25 words; max five per ability. Use the "Compounds with" picker to stack a perk onto another perk for the same ability.</p>
+    <p class="help mb-2">Each perk is at most {{perkFigures.perkWordLimit}} words; max {{perkFigures.perksPerAbility}} per ability. Use the "Compounds with" picker to stack a perk onto another perk for the same ability.</p>
     <div id="perk-groups">
       {{#each character.abilities}}
-        {{> character-perk-group linkValue=this.id domKey=this.id abilityName=this.name abilityPerks=../character.ability_perks}}
+        {{> character-perk-group linkValue=this.id domKey=this.id abilityName=this.name abilityPerks=../character.ability_perks perkFigures=../perkFigures}}
       {{/each}}
     </div>
     <p id="perk-groups-empty" class="has-text-grey"{{#if character.abilities.length}} hidden{{/if}}>Add at least one Class Ability above before authoring perks.</p>

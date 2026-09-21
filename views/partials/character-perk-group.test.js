@@ -4,6 +4,7 @@ const path = require('path');
 const Handlebars = require('handlebars');
 const customHelpers = require('../../util/handlebars');
 const handlebarsHelpers = require('handlebars-helpers')();
+const { perkFigures } = require('../../util/perk-economy');
 
 function render(context) {
   const hb = Handlebars.create();
@@ -42,4 +43,22 @@ test('perk group renders existing perks for the ability (edit/server path keyed 
   });
   expect(html).toContain('>Deal +1</textarea>');
   expect(html).toContain('value="ability-1"');
+});
+
+// This partial is the only path a served figure has into
+// character-ability-perk on the edit form, so it has to hand it down through
+// the #each -- a bare `perkFigures` there resolves against the perk row, not
+// the group's own context, and the word limit would render empty.
+test('perk group hands the served Perk figures down to each perk row', () => {
+  const figures = perkFigures();
+  const html = render({
+    linkValue: 'ability-1',
+    domKey: 'ability-1',
+    abilityName: 'Strike',
+    perkFigures: figures,
+    abilityPerks: [
+      { class_ability_id: 'ability-1', text: 'Deal +1', position: 0, compounds_with: null }
+    ]
+  });
+  expect(html).toContain('/ ' + figures.perkWordLimit + ' words');
 });

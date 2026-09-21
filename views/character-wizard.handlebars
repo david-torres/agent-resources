@@ -258,9 +258,9 @@
   <h3 class="title is-4">3. Ability Primer</h3>
   <p class="has-text-grey is-size-7 mb-3">
     {{#if (eq mode 'aspiring')}}
-      Your class's abilities — the ones you picked on the first page. This is where your <strong>Perks</strong> are spent: core abilities cost 1 Perk each, the advanced ability costs 2 (4 Perks total).
+      Your class's abilities — the ones you picked on the first page. This is where your <strong>Perks</strong> are spent: a core ability costs {{perks.prices.ability.own.core}}, the advanced ability costs {{perks.prices.ability.own.advanced}}, and you are granted {{perks.grants.aspiring}} to spend. pg. 90 lets you buy some of them, all of them, or none.
     {{else if (eq mode 'aspirant')}}
-      A quick look at what your class can do. Tap <strong>+ Add Perk</strong> on one ability to spend your starting perk on it — that ability gets a small advantage written just for your character.
+      A quick look at what your class can do. Tap <strong>+ Add Perk</strong> on one ability to spend a Perk on it — that ability gets a small advantage written just for your character. Below the primer, the ability shop sells an Advanced Ability from your own class, and Core or Advanced Abilities Cross-Classed from any other class you have unlocked.
     {{else}}
       A quick look at what your class can do. These come straight from the class rules.
     {{/if}}

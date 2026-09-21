@@ -203,6 +203,10 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
     profile,
     isNew: true,
     effectiveVersion: 'v1',
+    // The Ability-Perk editor's own limits, for the copy the server renders
+    // beside it. Every figure in views/partials/character-v2-fields.handlebars
+    // and views/partials/character-ability-perk.handlebars comes from here.
+    perkFigures: perkFigures(),
     statList,
     // No character and no class yet, so every Stat is at its base Cap. Passed
     // anyway: the stat-blocks partial interpolates `max` straight into its
@@ -344,6 +348,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     // The same figures the client reads, for the copy the server renders:
     // a price named in prose is the served one, never a second copy.
     economy: economyFigures(),
+    perks: perkFigures(),
     wizardData: {
       mode,
       preselectedClassId,
@@ -554,6 +559,9 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       profile,
       isNew: false,
       character,
+      // See the create render above: the Ability-Perk editor's limits, served
+      // rather than written into the partials that name them.
+      perkFigures: perkFigures(),
       // Bounds the Created date input client-side so the browser blocks a
       // future date before submit -- normalizeCharacterInput rejects it
       // server-side too (services/character/input.js), but that rejection
@@ -828,6 +836,7 @@ router.get('/ability-perk', authOptional, (req, res) => {
   if (!abilityId) return sendError(req, res, null, { status: 400, message: 'ability_id required' });
   res.render('partials/character-ability-perk', {
     layout: false,
+    perkFigures: perkFigures(),
     perk: { text: '', compounds_with: null },
     abilityId,
     position,
@@ -841,6 +850,7 @@ router.get('/ability-perk-group', authOptional, (req, res) => {
   if (!ability) return sendError(req, res, null, { status: 400, message: 'ability required' });
   res.render('partials/character-perk-group', {
     layout: false,
+    perkFigures: perkFigures(),
     linkValue: ability,
     domKey: key || ability,
     abilityName: ability,
@@ -866,6 +876,7 @@ router.get('/version-fields', authOptional, async (req, res) => {
 
   res.render('partials/character-v2-fields', {
     layout: false,
+    perkFigures: perkFigures(),
     // No existing character context yet (this is the change-on-select path);
     // render with an empty character so the v2 fields show as blank rows.
     character: { quirks: [], accessories: [], ability_perks: [], abilities: [] }

@@ -305,10 +305,10 @@
           It replaces those pickers rather than joining them: both would
           submit the same Abilities.
 
-          Everything inside is drawn from the island by a browser mount a
-          later change adds -- the catalogue, both readouts and the hidden
-          field that actually submits. No price, grant or cap is written into
-          this template. --}}
+          Everything inside is drawn by public/js/character-ability-purchases.js
+          from the island -- the catalogue, both readouts and the hidden field
+          that actually submits. No price, grant or cap is written into this
+          template. --}}
     <div id="abilityPurchases">
       <script type="application/json" id="ability-purchase-data">{{{json abilityPurchaseData}}}</script>
       <p class="help mb-3" id="abilityReadouts">
@@ -337,7 +337,7 @@
           matching the selected class and preserves hidden values. The server
           strips the non-matching version's fields on save. --}}
     <div data-version-block="v2" hidden>
-      {{> character-v2-fields character=character}}
+      {{> character-v2-fields character=character perkFigures=perkFigures}}
     </div>
 
     <hr />
@@ -350,7 +350,7 @@
     </div>
   {{else}}
     {{#if (eq effectiveVersion 'v2')}}
-      {{> character-v2-fields character=character}}
+      {{> character-v2-fields character=character perkFigures=perkFigures}}
       {{> character-v1-perks-legacy character=character}}
     {{else}}
       <div id="v2-fields-container"></div>

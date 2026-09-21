@@ -28,6 +28,7 @@ const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
 const realCharacter = require('../models/character');
 const { economyFigures } = require('../util/merx-economy');
+const { perkFigures } = require('../util/perk-economy');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
@@ -254,4 +255,32 @@ test('the personality copy for aspiring Traits states the true four-plus, three-
   expect(body).not.toContain('Custom names save as flavor with no stat bonus');
   expect(body).toContain('three of your four creation pluses, one per Trait');
   expect(body).toContain("each also raises that Stat's Cap by +1, whether the name is recognized or your own");
+});
+
+// The step-3 subtitle sits directly above the aspiring primer's "Perks spent
+// x / y" badge, so a figure written into the copy by hand is a figure that can
+// contradict the widget one element below it. Both prices and the grant come
+// from the served figures, and the copy states no total of its own -- pg. 90
+// step 3b makes buying every pick optional, so a sum presented as a budget
+// would describe a build the grant is not meant to cover.
+test('the aspiring ability-primer copy names only served Perk figures', async () => {
+  const body = await getWizard('?mode=aspiring');
+  const { prices, grants } = perkFigures();
+  expect(body).toContain(
+    'a core ability costs ' + prices.ability.own.core
+    + ', the advanced ability costs ' + prices.ability.own.advanced
+    + ', and you are granted ' + grants.aspiring + ' to spend'
+  );
+  expect(body).toContain('pg. 90 lets you buy some of them, all of them, or none.');
+  expect(body).not.toContain('Perks total');
+});
+
+// Step 3 carries two surfaces in the aspirant economy -- the per-ability Perk
+// editor and the ability shop -- so copy naming only the first leaves the
+// second undescribed.
+test('the aspirant ability-primer copy describes both the Perk editor and the ability shop', async () => {
+  const body = await getWizard('?mode=aspirant');
+  expect(body).toContain('<strong>+ Add Perk</strong>');
+  expect(body).toContain('the ability shop sells an Advanced Ability from your own class');
+  expect(body).toContain('Cross-Classed from any other class you have unlocked');
 });

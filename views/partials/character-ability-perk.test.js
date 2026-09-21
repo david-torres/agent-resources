@@ -5,6 +5,7 @@ const Handlebars = require('handlebars');
 const customHelpers = require('../../util/handlebars');
 
 const handlebarsHelpers = require('handlebars-helpers')();
+const { perkFigures, PERK_WORD_LIMIT } = require('../../util/perk-economy');
 
 function renderPartial(context) {
   const hb = Handlebars.create();
@@ -140,4 +141,28 @@ test('character-ability-perk Alpine expression handles apostrophes and special c
   ta.dispatchEvent(new window.Event('input', { bubbles: true }));
   await tick();
   expect(countSpan.textContent).toBe('3');
+});
+
+// The word limit is util/perk-economy.js's PERK_WORD_LIMIT, served to this
+// partial rather than typed into it -- the placeholder and the counter below
+// it both named the figure by hand, so a change to the rule left two views
+// stating the old one.
+test('character-ability-perk names the served word limit, not a figure of its own', () => {
+  const figures = perkFigures();
+  const html = renderPartial({
+    abilityId: 'ability-1',
+    position: 0,
+    perk: { text: 'Deal extra damage', compounds_with: '' },
+    siblingPerks: [],
+    perkFigures: figures
+  });
+
+  expect(html).toContain('placeholder="Perk text (\u2264' + figures.perkWordLimit + ' words)"');
+  expect(html).toContain('/ ' + figures.perkWordLimit + ' words');
+  expect(figures.perkWordLimit).toBe(PERK_WORD_LIMIT);
+
+  const src = fs.readFileSync(
+    path.join(__dirname, 'character-ability-perk.handlebars'), 'utf8'
+  );
+  expect(src).not.toContain(String(PERK_WORD_LIMIT) + ' words');
 });

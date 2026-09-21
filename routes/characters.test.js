@@ -224,7 +224,26 @@ const TRAILBLAZER_V2 = {
   advanced_abilities: [],
   created_at: '2024-01-01T00:00:00Z',
 };
-const CLASS_BY_ID = { [TRAILBLAZER_V1.id]: TRAILBLAZER_V1 };
+// The one class on the v2 rules in this file, so GET /characters/version-fields
+// has something that resolves to the v2 field block rather than the empty
+// container the v1 branch sends.
+const V2_RULES_CLASS = {
+  id: 'class-v2-rules',
+  name: 'Wayfinder',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'advent',
+  rules_version: 'v2',
+  content_format: 'advent',
+  gear: [],
+  abilities: [],
+  advanced_abilities: [],
+  created_at: '2024-01-01T00:00:00Z',
+};
+const CLASS_BY_ID = {
+  [TRAILBLAZER_V1.id]: TRAILBLAZER_V1,
+  [V2_RULES_CLASS.id]: V2_RULES_CLASS
+};
 
 mock.module('../models/class', () => ({
   getClass: async (id) => ({ data: CLASS_BY_ID[id] || { id: 'class-a', rules_version: 'v1' }, error: null }),
@@ -543,4 +562,37 @@ test('PUT /characters/:id with malformed abilities_json is rejected before it re
 
   expect(res.status).toBe(400);
   expect(pageState.lastUpdateBody).toBeNull();
+});
+
+// The Ability-Perk limits are util/perk-economy.js's PERK_WORD_LIMIT and
+// PERKS_PER_ABILITY. Every route that renders a Perk editor serves them, so
+// the views that name them hold no figure of their own.
+test('GET /characters/ability-perk serves the Perk word limit to the row it renders', async () => {
+  const { perkFigures } = require('../util/perk-economy');
+  const figures = perkFigures();
+  const res = await fetch(
+    `${baseUrl}/characters/ability-perk?ability_id=ability-1&position=0`,
+    { headers: { Accept: 'text/html' } }
+  );
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('placeholder="Perk text (\u2264' + figures.perkWordLimit + ' words)"');
+  expect(body).toContain('/ ' + figures.perkWordLimit + ' words');
+});
+
+test('GET /characters/version-fields serves both Ability-Perk limits to the v2 block', async () => {
+  const { perkFigures } = require('../util/perk-economy');
+  const figures = perkFigures();
+  const res = await fetch(
+    `${baseUrl}/characters/version-fields?class_id=${V2_RULES_CLASS.id}`,
+    { headers: { Accept: 'text/html' } }
+  );
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain(
+    'Each perk is at most ' + figures.perkWordLimit
+    + ' words; max ' + figures.perksPerAbility + ' per ability.'
+  );
 });
