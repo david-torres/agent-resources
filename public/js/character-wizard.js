@@ -1510,13 +1510,12 @@ window.CharacterWizard = (function () {
   //                    these, so the + buttons live on the Core cards: every
   //                    class has three Core Abilities, but not every class
   //                    has a populated Advanced roster to attach to instead.
-  //   - 'aspiring'  -> the class-build's picked abilities, rendered as the
-  //                    Perk spend step below.
-  // Aspiring mode renders the class-build's picked abilities as the Perk
-  // spend step. The three picks (from step 1) are fixed, so this page is a
-  // confirmation of what they'd cost in Perks rather than a picker --
-  // PERKS.grants.aspiring is short of what buying all three costs, which is
-  // the rule, not an error (see the Class Builder comment above).
+  //   - 'aspiring'  -> the class-build's three picks (pg. 90 steps 3a/4b), as
+  //                    a purchase surface: each pick gets a Buy or Drop
+  //                    button, disabled when unaffordable. pg. 90 step 3b
+  //                    says the picks need not be acquired "immediately (or
+  //                    at all)", so the grant is deliberately short of what
+  //                    buying all three costs.
   const renderAbilityPrimer = () => {
     if (!abilityPrimerList) return;
     if (DATA.mode === 'aspiring') {
@@ -1541,9 +1540,24 @@ window.CharacterWizard = (function () {
         return (hit && hit.description_html)
           || (a.abilityDescription ? '<p>' + esc(a.abilityDescription) + '</p>' : '<p class="has-text-grey">No description.</p>');
       };
-      const perksSpent = combos.reduce((n, c) => n + c.cost, 0);
       abilityPrimerList.innerHTML = combos.map((c) => {
         const cls = builderClassMap[c.slot.classId] || {};
+        const pick = { classId: c.slot.classId, abilityName: c.slot.abilityName, type: c.type };
+        const owned = (state.acquiredAbilities || []).some((a) => samePick(a, pick));
+        const affordable = owned || canAcquire(state, pick);
+        const actionBtn = owned
+          ? ''
+            + '<button type="button" class="button is-small is-light wizard-pick-drop"'
+            +         ' data-pick-class="' + esc(c.slot.classId) + '" data-pick-name="' + esc(c.slot.abilityName) + '">'
+            +   'Drop'
+            + '</button>'
+          : ''
+            + '<button type="button" class="button is-small is-link wizard-pick-buy"'
+            +         (affordable ? '' : ' disabled')
+            +         ' data-pick-class="' + esc(c.slot.classId) + '" data-pick-name="' + esc(c.slot.abilityName) + '"'
+            +         ' data-pick-type="' + c.type + '">'
+            +   'Buy'
+            + '</button>';
         return ''
           + '<div class="card mb-3">'
           +   '<div class="card-content">'
@@ -1554,7 +1568,10 @@ window.CharacterWizard = (function () {
           +           ' <span class="tag is-light ml-1">' + esc(cls.name || c.slot.className || '') + '</span>'
           +           (c.type === 'advanced' ? ' <span class="tag is-info is-light ml-1">advanced</span>' : '')
           +         '</div>'
-          +         '<span class="tag is-warning is-light">' + c.cost + ' Perk' + (c.cost === 1 ? '' : 's') + '</span>'
+          +         '<div class="is-flex is-align-items-center">'
+          +           '<span class="tag is-warning is-light mr-2">' + c.cost + ' Perk' + (c.cost === PERKS.prices.ability.own.core ? '' : 's') + '</span>'
+          +           actionBtn
+          +         '</div>'
           +       '</div>'
           +       perkHtml(cls, c.slot)
           +     '</div>'
@@ -1562,10 +1579,8 @@ window.CharacterWizard = (function () {
           + '</div>';
       }).join('')
       + '<div class="box mt-4 has-background-light">'
-      +   '<p class="mb-0">These are your class&#39;s abilities — spending '
-      +     '<strong>' + perksSpent + ' / ' + PERKS.grants.aspiring + '</strong> '
-      +     'Perks in total (core abilities cost ' + PERKS.prices.ability.own.core + ' Perk each, '
-      +     'the advanced ability costs ' + PERKS.prices.ability.own.advanced + ').</p>'
+      +   '<p class="mb-0"><strong>Perks spent ' + perksSpent(state) + ' / ' + perksGrant() + '</strong></p>'
+      +   '<p class="help mb-0 mt-1">Buying is optional here — a pick may be acquired later instead.</p>'
       + '</div>';
       return;
     }
@@ -1812,9 +1827,39 @@ window.CharacterWizard = (function () {
     return -1;
   };
 
-  // Compute the merx / perks spent on the current builder picks. The class
-  // gear picks cost merx; the ability picks cost perks. Used both for the
-  // live totals and for the Next-button gate.
+  // pg. 90 step 3b: the picks are the character's Class, and it pays for them
+  // "though you do not need to acquire them immediately (or at all)". So the
+  // grant deliberately cannot cover all three -- 1 + 1 + 2 against a grant of
+  // 3 -- and a player choosing two of the three is the expected outcome, not
+  // an under-spend to warn about.
+  const priceOfPick = (pick) => (
+    pick && pick.type === 'advanced'
+      ? PERKS.prices.ability.own.advanced
+      : PERKS.prices.ability.own.core
+  );
+
+  const samePick = (a, b) => !!(a && b && a.classId === b.classId && a.abilityName === b.abilityName);
+
+  const perksSpent = (s) => (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0);
+
+  const perksGrant = () => PERKS.grants.aspiring;
+
+  const perksRemaining = (s) => Math.max(0, perksGrant() - perksSpent(s));
+
+  const canAcquire = (s, pick) => {
+    if ((s.acquiredAbilities || []).some((a) => samePick(a, pick))) return false;
+    return perksSpent(s) + priceOfPick(pick) <= perksGrant();
+  };
+
+  const acquireAbility = (s, pick) => {
+    if (!canAcquire(s, pick)) return false;
+    s.acquiredAbilities = (s.acquiredAbilities || []).concat([pick]);
+    return true;
+  };
+
+  const dropAbility = (s, pick) => {
+    s.acquiredAbilities = (s.acquiredAbilities || []).filter((a) => !samePick(a, pick));
+  };
 
   // Validate the builder: every slot filled, classes unique within items,
   // the two Core Abilities from different classes. Returns { ok: bool,
@@ -3733,18 +3778,42 @@ window.CharacterWizard = (function () {
       state.pseudoClass.description = pseudoClassDescriptionEl.value;
     });
   }
-  // Step 3 perk interactions live on abilityPrimerList. Two delegated handlers:
-  //   .wizard-perk-btn   — "+ Add Perk" on an unassigned card. Click
-  //                        assigns the perk to that card and re-renders so
-  //                        the editor appears inline on the chosen card.
-  //   .wizard-perk-remove — "Remove perk" on the assigned card. Clears both
-  //                        the text and the assignment, re-renders so the
-  //                        + buttons come back on every card.
-  //   [data-wizard-perk-editor] — the inline textarea. Updates state.perk
-  //                        without re-rendering (re-rendering would yank
-  //                        the caret mid-keystroke).
+  // Step 3 interactions live on abilityPrimerList. Aspirant's perk editor and
+  // aspiring's Buy/Drop buttons render on mutually exclusive branches of
+  // renderAbilityPrimer, so their delegated handlers share this one listener
+  // without colliding.
+  //   .wizard-perk-btn   — aspirant: "+ Add Perk" on an unassigned card.
+  //                        Click assigns the perk to that card and re-renders
+  //                        so the editor appears inline on the chosen card.
+  //   .wizard-perk-remove — aspirant: "Remove perk" on the assigned card.
+  //                        Clears both the text and the assignment,
+  //                        re-renders so the + buttons come back everywhere.
+  //   [data-wizard-perk-editor] — aspirant: the inline textarea. Updates
+  //                        state.perk without re-rendering (re-rendering
+  //                        would yank the caret mid-keystroke).
+  //   .wizard-pick-buy / .wizard-pick-drop — aspiring: acquires or drops the
+  //                        pick named on the button's data-pick-* attributes.
   if (abilityPrimerList) {
     abilityPrimerList.addEventListener('click', (e) => {
+      const dropBtn = e.target.closest && e.target.closest('.wizard-pick-drop');
+      if (dropBtn) {
+        dropAbility(state, {
+          classId: dropBtn.getAttribute('data-pick-class'),
+          abilityName: dropBtn.getAttribute('data-pick-name')
+        });
+        renderAbilityPrimer();
+        return;
+      }
+      const buyBtn = e.target.closest && e.target.closest('.wizard-pick-buy');
+      if (buyBtn) {
+        acquireAbility(state, {
+          classId: buyBtn.getAttribute('data-pick-class'),
+          abilityName: buyBtn.getAttribute('data-pick-name'),
+          type: buyBtn.getAttribute('data-pick-type')
+        });
+        renderAbilityPrimer();
+        return;
+      }
       const removeBtn = e.target.closest && e.target.closest('.wizard-perk-remove');
       if (removeBtn) {
         state.perk = '';
@@ -4065,6 +4134,11 @@ window.CharacterWizard = (function () {
     confirmPending,
     cancelPending,
     getShopPool,
-    pickShopItem
+    pickShopItem,
+    perksSpent,
+    perksRemaining,
+    canAcquire,
+    acquireAbility,
+    dropAbility
   };
 })();

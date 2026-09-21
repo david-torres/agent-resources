@@ -1576,3 +1576,58 @@ describe('the aspiring builder relaxes distinct-class to the Core picks only (pg
     expect(result.errors).toContain('Core Abilities must come from different classes.');
   });
 });
+
+// Task 2 of the Perk Economy Surfaces plan. pg. 90 step 3b grants an aspiring
+// character 3 Perks against three picks costing 1 + 1 + 2 = 4, and says
+// outright the picks need not be acquired "immediately (or at all)" -- so
+// the primer has to let a player buy none, some or all of them rather than
+// forcing the whole spend, as the old confirmation-only page did.
+describe('the aspiring primer is a purchase surface, not a forced spend (pg. 90 step 3b)', () => {
+  const threePicks = {
+    coreAbilities: [
+      { classId: 'c1', abilityName: 'Standoff' },
+      { classId: 'c2', abilityName: 'Viewpoint' }
+    ],
+    advancedAbility: { classId: 'c1', abilityName: 'Last Word' }
+  };
+
+  test('an aspiring character starts owning none of its picks', () => {
+    const wizard = aspiringStateWithBuild(threePicks);
+    expect(wizard.getState().acquiredAbilities).toEqual([]);
+  });
+
+  test('buying a Core pick spends one Perk', () => {
+    const wizard = aspiringStateWithBuild(threePicks);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, { classId: 'c1', abilityName: 'Standoff', type: 'core' });
+    expect(wizard.perksSpent(state)).toBe(1);
+    expect(wizard.perksRemaining(state)).toBe(2);
+  });
+
+  test('buying two Cores and the Advanced overspends the three-Perk grant', () => {
+    const wizard = aspiringStateWithBuild(threePicks);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, { classId: 'c1', abilityName: 'Standoff', type: 'core' });
+    wizard.acquireAbility(state, { classId: 'c2', abilityName: 'Viewpoint', type: 'core' });
+    expect(wizard.canAcquire(state, { classId: 'c1', abilityName: 'Last Word', type: 'advanced' })).toBe(false);
+  });
+
+  test('two of the three picks are affordable, which is the book intent', () => {
+    const wizard = aspiringStateWithBuild(threePicks);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, { classId: 'c1', abilityName: 'Standoff', type: 'core' });
+    expect(wizard.canAcquire(state, { classId: 'c1', abilityName: 'Last Word', type: 'advanced' })).toBe(true);
+    wizard.acquireAbility(state, { classId: 'c1', abilityName: 'Last Word', type: 'advanced' });
+    expect(wizard.perksSpent(state)).toBe(3);
+    expect(wizard.perksRemaining(state)).toBe(0);
+  });
+
+  test('a pick can be dropped and its Perk refunded before the character exists', () => {
+    const wizard = aspiringStateWithBuild(threePicks);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, { classId: 'c1', abilityName: 'Standoff', type: 'core' });
+    wizard.dropAbility(state, { classId: 'c1', abilityName: 'Standoff' });
+    expect(wizard.perksSpent(state)).toBe(0);
+    expect(state.acquiredAbilities).toEqual([]);
+  });
+});
