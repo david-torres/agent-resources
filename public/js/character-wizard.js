@@ -24,13 +24,18 @@ window.CharacterWizard = (function () {
   const STAT_FIGURES = DATA.statCaps;
   const PERKS = DATA.perks;
 
-  // Which economy the character being built is under. Resolved on the server by
-  // economyFor and served per class id, so this cannot drift from the save path
-  // the way a mirrored rule did: `?mode=advent` on a V1 class priced at 2 here
-  // and 12 there.
-  const economyForState = () => (
-    (state.classId && DATA.economyByClassId[state.classId]) || DATA.economyWhenClassless
+  // Which economy a character is under. Resolved on the server by economyFor
+  // and served per class id, so this cannot drift from the save path the way
+  // a mirrored rule did: `?mode=advent` on a V1 class priced at 2 here and 12
+  // there. Parameterised on `s` so the ability-shop helpers below can resolve
+  // the economy of a state a caller hands them (a test fixture, most often)
+  // rather than only the module's own live `state`; economyForState is that
+  // same lookup pinned to the live state, which is what every other call
+  // site in this file still wants.
+  const economyOf = (s) => (
+    (s && s.classId && DATA.economyByClassId[s.classId]) || DATA.economyWhenClassless
   );
+  const economyForState = () => economyOf(state);
 
   const params = new URLSearchParams(window.location.search);
   const forceFresh = params.get('fresh') === '1';
@@ -1579,7 +1584,7 @@ window.CharacterWizard = (function () {
           + '</div>';
       }).join('')
       + '<div class="box mt-4 has-background-light">'
-      +   '<p class="mb-0"><strong>Perks spent ' + perksSpent(state) + ' / ' + perksGrant() + '</strong></p>'
+      +   '<p class="mb-0"><strong>Perks spent ' + perksSpent(state) + ' / ' + perksGrant(state) + '</strong></p>'
       +   '<p class="help mb-0 mt-1">Buying is optional here — a pick may be acquired later instead.</p>'
       + '</div>';
       return;
@@ -1644,7 +1649,7 @@ window.CharacterWizard = (function () {
         +     '</div>'
         +   '</div>'
         + '</div>';
-    }).join('');
+    }).join('') + (DATA.mode === 'aspirant' ? renderAbilityShop(state) : '');
   };
 
   // ---------- Step 1 (aspiring): Class Builder ----------
@@ -1834,23 +1839,36 @@ window.CharacterWizard = (function () {
   // PERKS.prices.ability.own.advanced summed together, and a player choosing
   // two of the three is the expected outcome, not an under-spend to warn
   // about.
-  const priceOfPick = (pick) => (
-    pick && pick.type === 'advanced'
-      ? PERKS.prices.ability.own.advanced
-      : PERKS.prices.ability.own.core
-  );
+  //
+  // `crossClass` picks the tier (pg. 7: Cross-Classing costs more than
+  // buying from your own roster); an aspiring pick carries no `crossClass`
+  // field at all, which falls to the `own` tier exactly as it always has.
+  const priceOfPick = (pick) => {
+    const tier = pick && pick.crossClass ? 'cross' : 'own';
+    const rank = pick && pick.type === 'advanced' ? 'advanced' : 'core';
+    return PERKS.prices.ability[tier][rank];
+  };
 
   const samePick = (a, b) => !!(a && b && a.classId === b.classId && a.abilityName === b.abilityName);
 
   const perksSpent = (s) => (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0);
 
-  const perksGrant = () => PERKS.grants.aspiring;
+  // grant + perLevel * (level - 1), the same shape util/perk-economy.js's
+  // perkAllotment uses server-side, so a character created above level 1
+  // starts this surface with the Perks it would already have earned. At
+  // level 1 this is exactly the base grant, so nothing changes for the
+  // aspiring primer above, which has only ever been rendered at level 1.
+  const perksGrant = (s) => {
+    const base = PERKS.grants[economyOf(s)] || 0;
+    const level = Math.max(1, (s && s.level) || 1);
+    return base + PERKS.perksPerLevel * (level - 1);
+  };
 
-  const perksRemaining = (s) => Math.max(0, perksGrant() - perksSpent(s));
+  const perksRemaining = (s) => Math.max(0, perksGrant(s) - perksSpent(s));
 
   const canAcquire = (s, pick) => {
     if ((s.acquiredAbilities || []).some((a) => samePick(a, pick))) return false;
-    return perksSpent(s) + priceOfPick(pick) <= perksGrant();
+    return perksSpent(s) + priceOfPick(pick) <= perksGrant(s);
   };
 
   const acquireAbility = (s, pick) => {
@@ -1861,6 +1879,106 @@ window.CharacterWizard = (function () {
 
   const dropAbility = (s, pick) => {
     s.acquiredAbilities = (s.acquiredAbilities || []).filter((a) => !samePick(a, pick));
+  };
+
+  // ---------- Step 3 (aspirant): Ability Shop ----------
+  // pg. 7's unlock path: an Advanced Ability from the character's own Class,
+  // or any Core or Advanced Ability Cross-Classed from another. Advent has no
+  // such path (pg. 3 lists it among Aspirant's additions) and aspiring buys
+  // its Class's own three picks through the primer above instead of shopping
+  // a roster, so this only ever has anything to sell in the aspirant economy
+  // -- economyOf(s) gates both siblings out to an empty roster and an empty
+  // render below.
+  //
+  // Reuses DATA.classes as its roster exactly as the Signature shop's
+  // getShopPool does (character-wizard.js, "Build a flat spend-pool"): the
+  // route already reduces DATA.classes to what the player has unlocked
+  // (routes/characters.js#filterClassDataForUser), so iterating it here is
+  // the whole of "offer only classes the player has unlocked" -- there is no
+  // separate filter to re-derive.
+  const abilityShopEntries = (s) => {
+    const ownClassId = s && s.classId;
+    const entries = [];
+    (Array.isArray(DATA.classes) ? DATA.classes : []).forEach((cls) => {
+      if (!cls || !cls.id) return;
+      const isOwn = cls.id === ownClassId;
+      // Own-Class Core Abilities are the free allowance every class starts
+      // with (pg. 7), never a shop row. Another Class's Core is always a
+      // Cross-Class buy.
+      if (!isOwn) {
+        (Array.isArray(cls.abilities) ? cls.abilities : []).forEach((a) => {
+          if (!a || !a.name) return;
+          entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: 'core', crossClass: true });
+        });
+      }
+      (Array.isArray(cls.advanced_abilities) ? cls.advanced_abilities : []).forEach((a) => {
+        if (!a || !a.name) return;
+        entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: 'advanced', crossClass: !isOwn });
+      });
+    });
+    return entries;
+  };
+
+  // pg. 3: an aspirant character's starting grant (PERKS.grants.aspirant)
+  // falls short of even the cheapest unlock, so no aspirant character can
+  // buy anything the moment it is created. Showing an empty-looking shop
+  // would read as broken, so this always renders the roster, the balance
+  // and a line explaining the accrual rather than hiding the roster until
+  // something is affordable.
+  const renderAbilityShop = (s) => {
+    if (economyOf(s) !== 'aspirant') return '';
+    const grant = perksGrant(s);
+    const spent = perksSpent(s);
+    const remaining = Math.max(0, grant - spent);
+    const rows = abilityShopEntries(s).map((entry) => {
+      const pick = { classId: entry.classId, abilityName: entry.abilityName, type: entry.type, crossClass: entry.crossClass };
+      const owned = (s.acquiredAbilities || []).some((a) => samePick(a, pick));
+      const price = priceOfPick(pick);
+      const affordable = owned || canAcquire(s, pick);
+      const actionBtn = owned
+        ? ''
+          + '<button type="button" class="button is-small is-light wizard-pick-drop"'
+          +         ' data-pick-class="' + esc(entry.classId) + '" data-pick-name="' + esc(entry.abilityName) + '">'
+          +   'Drop'
+          + '</button>'
+        : ''
+          + '<button type="button" class="button is-small is-link wizard-pick-buy"'
+          +         (affordable ? '' : ' disabled')
+          +         ' data-pick-class="' + esc(entry.classId) + '" data-pick-name="' + esc(entry.abilityName) + '"'
+          +         ' data-pick-type="' + entry.type + '"'
+          +         ' data-pick-cross="' + (entry.crossClass ? '1' : '') + '">'
+          +   'Buy'
+          + '</button>';
+      return ''
+        + '<div class="card mb-3">'
+        +   '<div class="card-content">'
+        +     '<div class="content">'
+        +       '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-2">'
+        +         '<div>'
+        +           '<h4 class="title is-5 mb-0">' + esc(entry.abilityName) + '</h4>'
+        +           ' <span class="tag is-light ml-1">' + esc(entry.className) + '</span>'
+        +           (entry.crossClass
+              ? ' <span class="tag is-info is-light ml-1">cross-class</span>'
+              : ' <span class="tag is-info is-light ml-1">advanced</span>')
+        +         '</div>'
+        +         '<div class="is-flex is-align-items-center">'
+        +           '<span class="tag is-warning is-light mr-2">' + price + ' Perk' + (price === PERKS.prices.ability.own.core ? '' : 's') + '</span>'
+        +           actionBtn
+        +         '</div>'
+        +       '</div>'
+        +     '</div>'
+        +   '</div>'
+        + '</div>';
+    }).join('');
+    const perLevelWord = PERKS.perksPerLevel === 1 ? 'one' : String(PERKS.perksPerLevel);
+    return ''
+      + '<div class="wizard-ability-shop">'
+      +   rows
+      +   '<div class="box mt-4 has-background-light">'
+      +     '<p class="mb-0"><strong>Perks spent ' + spent + ' / ' + grant + '</strong> (' + remaining + ' remaining)</p>'
+      +     '<p class="help mb-0 mt-1">Perks accrue ' + perLevelWord + ' Perk per level — spend one here once you can afford an unlock.</p>'
+      +   '</div>'
+      + '</div>';
   };
 
   // Validate the builder: every slot filled, classes unique within items,
@@ -3793,8 +3911,12 @@ window.CharacterWizard = (function () {
   //   [data-wizard-perk-editor] — aspirant: the inline textarea. Updates
   //                        state.perk without re-rendering (re-rendering
   //                        would yank the caret mid-keystroke).
-  //   .wizard-pick-buy / .wizard-pick-drop — aspiring: acquires or drops the
+  //   .wizard-pick-buy / .wizard-pick-drop — aspiring's picks and the
+  //                        aspirant shop's rows alike: acquires or drops the
   //                        pick named on the button's data-pick-* attributes.
+  //                        data-pick-cross is only ever "1" on a shop row --
+  //                        aspiring's own picks render without it, which
+  //                        priceOfPick's crossClass check reads as `own`.
   if (abilityPrimerList) {
     abilityPrimerList.addEventListener('click', (e) => {
       const dropBtn = e.target.closest && e.target.closest('.wizard-pick-drop');
@@ -3811,7 +3933,8 @@ window.CharacterWizard = (function () {
         acquireAbility(state, {
           classId: buyBtn.getAttribute('data-pick-class'),
           abilityName: buyBtn.getAttribute('data-pick-name'),
-          type: buyBtn.getAttribute('data-pick-type')
+          type: buyBtn.getAttribute('data-pick-type'),
+          crossClass: buyBtn.getAttribute('data-pick-cross') === '1'
         });
         renderAbilityPrimer();
         return;
@@ -4141,6 +4264,8 @@ window.CharacterWizard = (function () {
     perksRemaining,
     canAcquire,
     acquireAbility,
-    dropAbility
+    dropAbility,
+    renderAbilityPrimer,
+    renderAbilityShop
   };
 })();

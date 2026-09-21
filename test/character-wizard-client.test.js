@@ -19,7 +19,9 @@
 // builder) live in test/helpers/wizard-fixture.js so other test files can
 // reuse them.
 const { test, expect, describe } = require('bun:test');
-const { bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild } = require('./helpers/wizard-fixture');
+const {
+  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState
+} = require('./helpers/wizard-fixture');
 const { economyFigures } = require('../util/merx-economy');
 const { statCapFigures } = require('../util/stat-caps');
 const { MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
@@ -1629,5 +1631,66 @@ describe('the aspiring primer is a purchase surface, not a forced spend (pg. 90 
     wizard.dropAbility(state, { classId: 'c1', abilityName: 'Standoff' });
     expect(wizard.perksSpent(state)).toBe(0);
     expect(state.acquiredAbilities).toEqual([]);
+  });
+});
+
+// Task 7 of the Perk Economy Surfaces plan. pg. 7's unlock path: spend Perks
+// on an Advanced Ability from your own Class, or Cross-Class any Core or
+// Advanced Ability from another. An aspirant character starts with a single
+// Perk against a two-Perk cheapest unlock, so it cannot afford anything the
+// moment it is created -- the shop has to say so rather than look broken.
+// Advent has no unlock path at all (pg. 3), and aspiring buys its three
+// picks through the primer above instead of shopping a roster; both read as
+// an empty string from renderAbilityShop.
+describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
+  test('an aspirant character cannot afford any unlock at creation', () => {
+    const wizard = aspirantStateAtLevel(1);
+    const state = wizard.getState();
+    expect(wizard.canAcquire(state, { type: 'advanced', crossClass: false })).toBe(false);
+  });
+
+  test('the wizard explains why, rather than showing an empty shop', () => {
+    const wizard = aspirantStateAtLevel(1);
+    expect(wizard.renderAbilityShop(wizard.getState())).toContain('one Perk per level');
+  });
+
+  test('an advent character is offered no ability shop at all', () => {
+    const wizard = adventState();
+    expect(wizard.renderAbilityShop(wizard.getState())).toBe('');
+  });
+
+  test('the shop lists Advanced and Cross-Class abilities with their Perk prices', () => {
+    const wizard = aspirantStateAtLevel(1);
+    const html = wizard.renderAbilityShop(wizard.getState());
+    expect(html).toContain('Own Advanced');
+    expect(html).toContain('2 Perks');
+    expect(html).toContain('Other Core');
+    expect(html).toContain('3 Perks');
+    expect(html).toContain('Other Advanced');
+    expect(html).toContain('4 Perks');
+  });
+
+  test('a Cross-Class pick prices at the cross tier, not the own tier', () => {
+    const wizard = aspirantStateAtLevel(4);
+    const state = wizard.getState();
+    const pick = { classId: 'fixture-aspirant-other', abilityName: 'Other Core', type: 'core', crossClass: true };
+    expect(wizard.canAcquire(state, pick)).toBe(true);
+    wizard.acquireAbility(state, pick);
+    expect(wizard.perksSpent(state)).toBe(3);
+  });
+
+  test('buying a shop row through the rendered primer unlocks the ability', () => {
+    const wizard = aspirantStateAtLevel(4);
+    const state = wizard.getState();
+    state.step = 3;
+    wizard.renderAbilityPrimer();
+    const buyBtn = document.querySelector(
+      '[data-pick-class="fixture-aspirant-other"][data-pick-name="Other Core"]'
+    );
+    expect(buyBtn).not.toBeNull();
+    buyBtn.click();
+    expect(state.acquiredAbilities).toEqual([
+      { classId: 'fixture-aspirant-other', abilityName: 'Other Core', type: 'core', crossClass: true }
+    ]);
   });
 });

@@ -35,6 +35,61 @@ const aspiringStateWithBuild = (build = {}) => {
   return wizard;
 };
 
+// Task 7's aspirant ability shop: an own Class with a populated Core roster
+// (so renderAbilityPrimer's non-aspiring branch has something to show
+// before the shop) plus one Advanced ability, and a second unlocked Class so
+// the shop has a Cross-Class row to offer. Both carry content_format
+// 'aspirant', which is what resolves the fixture's classes to the aspirant
+// economy (util/merx-economy.js#economyFor) rather than advent's.
+const abilityHtml = (name) => ({ name, description_html: `<p>${name} description.</p>` });
+
+const ASPIRANT_OWN_CLASS = {
+  id: 'fixture-aspirant-own',
+  name: 'Fixture Aspirant Class',
+  content_format: 'aspirant',
+  stat_spread: {},
+  gear: [],
+  class_gear: [],
+  base_gear: [],
+  abilities: [{ name: 'Own Core A' }, { name: 'Own Core B' }, { name: 'Own Core C' }],
+  abilities_html: [abilityHtml('Own Core A'), abilityHtml('Own Core B'), abilityHtml('Own Core C')],
+  advanced_abilities: [{ name: 'Own Advanced' }],
+  advanced_abilities_html: [abilityHtml('Own Advanced')]
+};
+
+const ASPIRANT_OTHER_CLASS = {
+  id: 'fixture-aspirant-other',
+  name: 'Fixture Other Class',
+  content_format: 'aspirant',
+  stat_spread: {},
+  gear: [],
+  class_gear: [],
+  base_gear: [],
+  abilities: [{ name: 'Other Core' }],
+  abilities_html: [abilityHtml('Other Core')],
+  advanced_abilities: [{ name: 'Other Advanced' }],
+  advanced_abilities_html: [abilityHtml('Other Advanced')]
+};
+
+// Boots an aspirant character at `level`, its own Class preselected so
+// economyOf resolves to 'aspirant' without a randomized kiosk pick.
+const aspirantStateAtLevel = (level, overrides = {}) => {
+  const classes = overrides.classes || [ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS];
+  const wizard = bootWizard(fixture({
+    mode: 'aspirant',
+    classes,
+    preselectedClassId: ASPIRANT_OWN_CLASS.id,
+    ...overrides
+  }));
+  wizard.getState().level = level;
+  return wizard;
+};
+
+// Boots an advent character -- a single content_format 'advent' Class, which
+// the kiosk auto-selects since it is the only option -- so economyOf
+// resolves to 'advent' and the ability shop has no unlock path to offer.
+const adventState = (overrides = {}) => bootWizard(fixture({ mode: 'advent', ...overrides }));
+
 // A V1 class's twelve printed Signatures, three to a column across the four
 // columns the book prints (ENCLAVE: Aspirant, pg. 11). `sixItems()` is the
 // first two columns, the shape an Advent class's six-item roster carries.
@@ -73,11 +128,11 @@ const WIZARD_SOURCE = fs.readFileSync(
 // Minimal fixture markup: only the ids character-wizard.js reads via
 // getElementById/querySelectorAll on the paths these tests exercise (init,
 // step 1's kiosk shell + Next button, step 2's personality/stat panel, step
-// 4's Signature grid, drawer, shop and readouts, and the always-present
-// summary level input). Steps 3 and 5 are never visited here, so their
-// elements are omitted -- character-wizard.js guards every lookup
-// with `if (el)` except the step-1 kiosk internals, which only run when
-// `DATA.mode !== 'aspiring'` and are included below for that case.
+// 3's ability primer list, step 4's Signature grid, drawer, shop and
+// readouts, and the always-present summary level input). Step 5 is never
+// visited here, so its elements are omitted -- character-wizard.js guards
+// every lookup with `if (el)` except the step-1 kiosk internals, which only
+// run when `DATA.mode !== 'aspiring'` and are included below for that case.
 const buildHtml = () => `
   <script type="application/json" id="wizard-data"></script>
   <div id="summaryClass"></div>
@@ -132,6 +187,10 @@ const buildHtml = () => `
     </p>
     <div id="statGrid" hidden></div>
     <button id="step2Next"></button>
+  </section>
+
+  <section class="wizard-step" data-step-panel="3" hidden>
+    <div id="abilityPrimerList"></div>
   </section>
 
   <section class="wizard-step" data-step-panel="4" hidden>
@@ -258,4 +317,6 @@ const fixture = (overrides = {}) => {
   };
 };
 
-module.exports = { bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild };
+module.exports = {
+  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState
+};
