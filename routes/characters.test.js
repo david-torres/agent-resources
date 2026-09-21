@@ -12,9 +12,57 @@ process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 process.env.SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key';
 process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secret-key';
 
+// Mutable per-test state consulted by the mocks below. Reset before every
+// test so no test inherits state another one installed: with it left
+// standing, a test that never sets it up still gets a stale character (or
+// class list, or family map) back and can pass on the previous test's
+// fixture.
+const pageState = {};
+
+// Minimal no-op PostgREST-shaped fake — the ability-perk-group handler only
+// checks query params and calls res.render, so an empty store is sufficient
+// for most tests. The edit-form test below needs `classes` rows out of it
+// too, for services/character/repository.js#getClassFamilyRows (reached via
+// supabaseAdmin, which this same factory backs) — every other table keeps
+// resolving to an empty list, unchanged.
+const makeClient = () => ({
+  from(table) {
+    const chain = {
+      select() { return chain; },
+      eq() { return chain; },
+      order() { return chain; },
+      limit() { return chain; },
+      update() { return chain; },
+      insert() { return chain; },
+      single() { return Promise.resolve({ data: null, error: null }); },
+      maybeSingle() { return Promise.resolve({ data: null, error: null }); },
+      then(onF, onR) {
+        const data = table === 'classes' ? (pageState.classFamilyRows || []) : [];
+        return Promise.resolve({ data, error: null }).then(onF, onR);
+      },
+    };
+    return chain;
+  },
+});
+
 // Capture real modules so afterAll can restore them — bun's mock.module is
 // process-global and would otherwise leak into other test files.
+//
+// models/_base is captured and mocked FIRST, before any other require below:
+// models/character.js (required next) pulls in services/character/
+// repository.js, which destructures supabaseAdmin out of models/_base at
+// REQUIRE TIME. Mocking _base after that require has already run would leave
+// repository.js holding the real client for the rest of this process --
+// every getClassFamilyRows/getRealMissions call the edit-form route makes
+// would then hit a real, unreachable network address instead of this fake.
 const realBase = require('../models/_base');
+mock.module('../models/_base', () => ({
+  supabase: makeClient(),
+  supabaseAdmin: makeClient(),
+  createUserClient: () => makeClient(),
+  anonKey: 'test-anon-key',
+}));
+
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
 const realCharacter = require('../models/character');
@@ -27,12 +75,6 @@ const realOffscreen = require('../models/offscreen-mission');
 const { statList } = require('../util/enclave-consts');
 
 const CHAR_ID = '22222222-2222-4222-8222-222222222222';
-
-// Mutable per-test state consulted by the models/character mock below. Reset
-// before every test so no test inherits the character another one installed:
-// with it left standing, a test that never sets it up still gets a character
-// back and can pass on the previous test's fixture.
-const pageState = {};
 
 // A minimally complete character for the full character page (not the
 // /details fragment, which needs far less): statList stats, a class,
@@ -63,32 +105,6 @@ const makePageCharacter = (abilityCount) => ({
   perks: '',
   additional_gear: '',
 });
-
-// Minimal no-op PostgREST-shaped fake — the ability-perk-group handler only
-// checks query params and calls res.render, so an empty store is sufficient.
-const makeClient = () => ({
-  from() {
-    const chain = {
-      select() { return chain; },
-      eq() { return chain; },
-      order() { return chain; },
-      limit() { return chain; },
-      update() { return chain; },
-      insert() { return chain; },
-      single() { return Promise.resolve({ data: null, error: null }); },
-      maybeSingle() { return Promise.resolve({ data: null, error: null }); },
-      then(onF, onR) { return Promise.resolve({ data: [], error: null }).then(onF, onR); },
-    };
-    return chain;
-  },
-});
-
-mock.module('../models/_base', () => ({
-  supabase: makeClient(),
-  supabaseAdmin: makeClient(),
-  createUserClient: () => makeClient(),
-  anonKey: 'test-anon-key',
-}));
 
 mock.module('../models/auth', () => ({
   // Consumed by the real authOptional/isAuthenticated middleware. No token
@@ -136,6 +152,11 @@ mock.module('../models/character', () => ({
   // called. A distinct error here makes a guard that silently lets the
   // request through fail loudly instead of passing for the wrong reason.
   createCharacter: async () => ({ data: null, error: 'createCharacter should not have been called' }),
+  // Reached by GET /:id/edit whenever characterClass resolves (every test
+  // below that authenticates does). Unused by upgradeTargets assertions here,
+  // so an empty list is enough to keep the handler from throwing on a
+  // destructured function it never got.
+  findUpgradeTargetsFor: async () => [],
 }));
 // A V1 aspirant class carrying three Core Abilities and three Advanced ones
 // (Task 3 of the Perk Economy Surfaces plan) -- the shape filterClassDataForUser
@@ -161,14 +182,51 @@ const ABILITY_CLASS = {
   ],
 };
 
+// Two versions of one class family (Task 4 fix round 2), the shape
+// util/class-list-grouping.js#latestClassVersions collapses: TRAILBLAZER_V2
+// prints an ability TRAILBLAZER_V1 does not, and carries a different id even
+// though base_class_id (below, via pageState.classFamilyRows) links them as
+// the same family. A character whose own class is the OLDER version must
+// still see that ability priced at the own rate in the ability island, not
+// the cross rate its differing class_id would suggest without classFamilyOf.
+const TRAILBLAZER_V1 = {
+  id: 'class-tb-v1',
+  name: 'Trailblazer',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'aspirant',
+  rules_version: 'v1',
+  content_format: 'aspirant',
+  gear: [],
+  abilities: [{ name: 'Trailmark' }],
+  advanced_abilities: [],
+  created_at: '2020-01-01T00:00:00Z',
+};
+const TRAILBLAZER_V2 = {
+  id: 'class-tb-v2',
+  base_class_id: 'class-tb-v1',
+  name: 'Trailblazer',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'aspirant',
+  rules_version: 'v1',
+  content_format: 'aspirant',
+  gear: [],
+  abilities: [{ name: 'Trailmark' }, { name: 'Long Stride' }],
+  advanced_abilities: [],
+  created_at: '2024-01-01T00:00:00Z',
+};
+const CLASS_BY_ID = { [TRAILBLAZER_V1.id]: TRAILBLAZER_V1 };
+
 mock.module('../models/class', () => ({
-  getClass: async () => ({ data: { id: 'class-a', rules_version: 'v1' }, error: null }),
-  getUnlockedClassIdsForUser: async () => ({ data: new Set(), error: null }),
+  getClass: async (id) => ({ data: CLASS_BY_ID[id] || { id: 'class-a', rules_version: 'v1' }, error: null }),
+  getUnlockedClassIdsForUser: async () => ({ data: pageState.unlockedClassIds || new Set(), error: null }),
   // filterClassDataForUser fans out to advent, aspirant and player-created
-  // pools; only the aspirant pool carries ABILITY_CLASS.
+  // pools; only the aspirant pool carries ABILITY_CLASS and whatever a test
+  // adds via pageState.extraAspirantClasses.
   getClasses: async (filters) => ({
     data: filters && filters.rules_edition === 'aspirant' && !filters.is_player_created
-      ? [ABILITY_CLASS]
+      ? [ABILITY_CLASS, ...(pageState.extraAspirantClasses || [])]
       : [],
     error: null,
   }),
@@ -177,14 +235,10 @@ mock.module('../models/class', () => ({
 const express = require('express');
 const exphbs = require('express-handlebars');
 const hbsHelpers = require('handlebars-helpers')();
+const customHelpers = require('../util/handlebars');
 const range = require('handlebars-helper-range');
 const path = require('path');
-const {
-  times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
-  setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
-  substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
-} = require('../util/handlebars');
-const { renderMarkdown } = require('../util/markdown');
+const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 
 let server;
@@ -197,33 +251,22 @@ beforeAll(async () => {
   app.use(express.json());
   app.use(express.urlencoded({ extended: true }));
 
-  // Full Handlebars engine — same config as index.js so partials and helpers
-  // that the character-perk-group partial relies on are available.
+  // Full Handlebars engine — same helpers as app.js's engineHelpers (spread
+  // wholesale, the same reason app.js gives: a helper added to
+  // util/handlebars.js must not go silently unregistered here either). The
+  // edit-form template (character-form.handlebars) reaches helpers the
+  // character-perk-group partial never needed -- customTrait among them --
+  // so a hand-picked subset drifts out of date the moment the form grows.
   app.engine('handlebars', exphbs.engine({
     layoutsDir: path.join(__dirname, '..', 'views', 'layouts'),
     partialsDir: path.join(__dirname, '..', 'views', 'partials'),
     defaultLayout: 'main',
     helpers: {
       ...hbsHelpers,
-      times,
+      ...customHelpers,
       range,
-      date_tz,
-      calendar_link,
-      encodeURIComponentH,
-      getTotalV1MissionsNeeded,
-      getTotalV2MissionsNeeded,
-      setVariable,
-      dump,
-      videoEmbed,
-      isSupportedVideoUrl,
-      substring,
-      concat,
-      effectiveRulesVersion,
-      wordCount,
-      perksForAbility,
-      nextPerkPosition,
-      json,
       markdown: renderMarkdown,
+      powerRatings: renderPowerRatings,
     },
   }));
   app.set('view engine', 'handlebars');
@@ -260,6 +303,9 @@ afterAll(async () => {
 
 beforeEach(() => {
   pageState.character = null;
+  pageState.unlockedClassIds = null;
+  pageState.extraAspirantClasses = null;
+  pageState.classFamilyRows = null;
 });
 
 test('GET /characters/ability-perk-group renders scaffold with ability name and dom key', async () => {
@@ -393,4 +439,62 @@ test('an Advanced option carries its type, so it is not stored as core', async (
   expect(body).toContain('Trick Shot (Gunslinger — Advanced)');
   expect(body).toContain('Quickdraw (Gunslinger)');
   expect(body).not.toContain('Quickdraw (Gunslinger — Advanced)');
+});
+
+// GET /characters/:id/edit — the ability island (Task 4 fix round 2).
+// routes/characters.js resolves classFamilyOf once and feeds it to both
+// deriveCharacterTotals and buildAbilityPurchaseData; this guards that
+// wiring at the tier a future edit that drops the argument, feeds only one
+// of the two call sites, or resolves it twice would actually break -- the
+// module-level test in util/ability-purchase-data.test.js exercises the same
+// pricing rule directly, but passes with or without the route doing its part
+// and so does not guard the wiring itself.
+//
+// allClasses has already been collapsed to TRAILBLAZER_V2 by
+// latestClassVersions (TRAILBLAZER_V1, the character's own class, is the
+// older half of the same family and drops out of the catalogue walk).
+// Without a resolved classFamilyOf, TRAILBLAZER_V2's Long Stride prices as
+// cross-class purely because its class_id differs from the character's own.
+test('the ability island prices a newer-version own-class ability at the own rate', async () => {
+  pageState.character = {
+    id: CHAR_ID,
+    name: 'Rue',
+    class: 'Trailblazer',
+    class_id: TRAILBLAZER_V1.id,
+    creator_id: 'profile-1',
+    creator_mode: null,
+    is_public: true,
+    level: 3,
+    completed_missions: 0,
+    ...Object.fromEntries(statList.map(stat => [stat, 2])),
+    traits: [],
+    abilities: [],
+    gear: [],
+    ability_perks: [],
+    quirks: [],
+    accessories: [],
+    common_items: [],
+    perks: '',
+    additional_gear: '',
+  };
+  pageState.unlockedClassIds = new Set([TRAILBLAZER_V2.id]);
+  pageState.extraAspirantClasses = [TRAILBLAZER_V2];
+  pageState.classFamilyRows = [
+    { id: TRAILBLAZER_V1.id, base_class_id: null, rules_edition: 'aspirant', content_format: 'aspirant' },
+    { id: TRAILBLAZER_V2.id, base_class_id: TRAILBLAZER_V1.id, rules_edition: 'aspirant', content_format: 'aspirant' },
+  ];
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const match = body.match(/<script type="application\/json" id="ability-purchase-data">([^<]*)<\/script>/);
+  expect(match).not.toBeNull();
+  const island = JSON.parse(match[1]);
+  const entry = island.entries.find((e) => e.name === 'Long Stride');
+  expect(entry).toBeTruthy();
+  expect(entry.crossClass).toBe(false);
+  expect(entry.price).toBe(1);
 });
