@@ -339,9 +339,13 @@ test('re-saving a v2 character preserves its ability perk row and created_at', a
   expect(before).toHaveLength(1);
   const [ability] = await childRows('class_abilities', created.id);
 
+  // level: 2 again, for the reason the creation above gives: v2Input carries
+  // the fixture's level 1, and the ratchet scores the submission at the level
+  // the save will STORE -- a save that demotes this character to level 1 puts
+  // its one Perk beyond what level 1 earns, and is refused for it.
   const { error } = await updateCharacter(created.id, {
     ...v2Input(`Atomic perk survived ${suffix}`),
-    id: created.id,
+    id: created.id, level: 2,
     ability_perks: [{ class_ability_id: ability.id, text: 'Survives a resave', position: 0 }]
   }, profile);
   expect(error).toBeFalsy();

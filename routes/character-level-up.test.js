@@ -89,7 +89,13 @@ let backfilledMissions;
 let perkIdSeq;
 
 mock.module('../services/character/repository', () => ({
-  getCharacter: async () => ({ data: { ...characterRow }, error: null }),
+  // ability_perks ride along the way getCharacterAdmin returns them, so the
+  // ratchet levelUp runs sees the Perks the character already carries rather
+  // than an empty list that makes every level-up look affordable.
+  getCharacter: async () => ({
+    data: { ...characterRow, ability_perks: characterPerks.map(p => ({ ...p })) },
+    error: null
+  }),
   fetchCharacterOwnership: async () => ({ data: { ...characterRow }, error: null }),
   updateOwnedFields: async ({ fields }) => {
     Object.assign(characterRow, fields);
@@ -317,6 +323,12 @@ test('level-up resolves compounds_with links for newly-added perks', async () =>
   characterPerks = [
     { id: 'perk-existing', character_id: CHAR_ID, class_ability_id: 'ab1', text: 'Base perk', position: 0, compounds_with: null },
   ];
+  // Nine successful missions carry a v1 character to level 4
+  // (v1LevelingSequence, util/enclave-consts.js) and so to three earned Perks
+  // -- what the existing perk plus the two added below cost. levelUp runs the
+  // same ratchet updateCharacter does, so without them the save is refused as
+  // a Perk deficit and this test never reaches the links it asserts on.
+  backfilledMissions = Array.from({ length: 9 }, () => ({ outcome: 'success' }));
 
   const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/level-up`, {
     method: 'POST',

@@ -96,8 +96,15 @@ test('level-up terminal writes commit together', async () => {
 test('level-up compound links resolve to same-batch positions inside the RPC', async () => {
   await setup();
   const character = await createOwnedCharacter();
+  // Five completed missions is level 3 for a v1 character (v1LevelingSequence,
+  // util/enclave-consts.js) and so two earned Perks -- what the two below
+  // cost. levelUp runs the same ratchet updateCharacter does, so a level-up
+  // that cannot pay for its Perks is refused before the RPC ever resolves a
+  // compound link.
   const { error } = await levelUpCharacter(ACTOR, character.id, {
-    level: 2,
+    level: 3,
+    completed_missions: 5,
+    mission_names: ['Op Alpha', 'Op Bravo', 'Op Charlie', 'Op Delta', 'Op Echo'],
     ability_perks: [
       { class_ability_id: character.abilityId, text: 'Base perk', ref: 'r1' },
       { class_ability_id: character.abilityId, text: 'Compounding perk', ref: 'r2', compounds_with: 'new:r1' }
