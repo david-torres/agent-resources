@@ -211,23 +211,37 @@ character has yet been created on a V1 class. Slice 4 measured the same.
 **No character has ever bought an Advanced Ability, and none exceeds six
 abilities.** The new rules therefore flag a small, nameable population:
 
-| Character | Level | Abilities | Ability Perks | Perks earned |
-| --- | --- | --- | --- | --- |
-| Aisuna Kor-Ragna | 1 | 6 | 0 | 0 |
-| Zahak (Aspirant) | 8 | 4 | 8 | 7 |
-| Caroline Denton | 10 | 4 | 7 | 9 |
-| Annabelle Cyrington | 4 | 4 | 0 | 3 |
-| Gertrude | 4 | 4 | 0 | 3 |
-| Scarlet Ravenmore | 3 | 4 | 0 | 2 |
-| Khan Zahak Barzikani | 7 | 3 | 7 | 6 |
-| Seamus McGlide | 3 | 3 | 4 | 2 |
+| Character | Level | Abilities | Ability Perks | Perks earned | Hard breach |
+| --- | --- | --- | --- | --- | --- |
+| Aisuna Kor-Ragna | 1 | 6 | 0 | 0 | cap +3, deficit 18 |
+| Zahak (Aspirant) | 8 | 4 | 8 | 7 | cap +1, deficit 4 |
+| Caroline Denton | 10 | 4 | 7 | 9 | cap +1, deficit 1 |
+| Annabelle Cyrington | 4 | 4 | 0 | 3 | cap +1 |
+| Gertrude | 4 | 4 | 0 | 3 | cap +1 |
+| Scarlet Ravenmore | 3 | 4 | 0 | 2 | cap +1, deficit 1 |
+| Khan Zahak Barzikani | 7 | 3 | 7 | 6 | deficit 1 |
+| Seamus McGlide | 3 | 3 | 4 | 2 | deficit 2 |
+| teset | 3 | 3 | 2 | 2 | deficit 9 |
+| Storm (Ororo Monroe) | 1 | 3 | 0 | 0 | deficit 9 |
+| Charliana "Charlie" Parnassus | 3 | 3 | 0 | 2 | deficit 7 |
+| Claire | 6 | 3 | 0 | 5 | deficit 4 |
 
-Eight characters breach a hard rule: six exceed an advent cap of three
-abilities, three have spent more Ability Perks than their level earned, worst
-overspend 2. Eleven more hold a genuinely cross-family ability, but six of
-those eleven are already among the eight — so the flagged population is
-**13 of 327**, not 19. No backfill is required for any of them — see
-"Enforcement".
+**Twelve** characters breach a hard rule, measured with a cross-class ability
+priced at the 3 Perks `unlockSpend` charges for it: six exceed an advent cap of
+three abilities, and **ten** have spent more Perks than their level earned,
+worst overspend **18**. Eleven hold a genuinely cross-family ability and carry
+the soft edition notice; ten of those eleven are also among the twelve — so
+the flagged population is **13 of 327**, not 19, and exactly one character is
+soft-flagged alone.
+
+The deficit count is ten rather than three because a cross-class ability is
+itself a 3-Perk unlock, not only an edition notice. An advent character earns
+one Perk per level above the first, so a cross-classer below roughly level 4
+cannot pay for even one cross-class pick: it reads "Illegal Build" for the Perk
+deficit **in addition to** the softer "not available in this edition" notice.
+Storm (Ororo Monroe) is the plainest case — level 1, three cross-family
+abilities, 9 Perks spent against 0 earned. No backfill is required for any of
+them — see "Enforcement".
 
 ## Design
 
@@ -394,7 +408,9 @@ ability from a different class **family**. Family is resolved through
 `base_class_id`, not raw `class_id`, so the 64 version-drift rows stay silent
 and only the 24 genuine ones speak. Advent has no Cross-Classing rule — pg. 3
 lists it among the things Aspirant adds — so those 11 characters are outside
-their edition rather than over a cap, and the app says which.
+their edition, and the app says which. Outside the edition is not instead of
+over a limit: the same pick also costs 3 Perks, so ten of the eleven are hard-
+flagged for a Perk deficit as well and see both notices at once.
 
 **The ratchet.** Enforcement is a comparison, not an absolute:
 
@@ -594,10 +610,11 @@ Each was a real choice; the reason matters more than the choice.
 2. An aspiring character selects two Core and one Advanced ability at
    creation, receives 3 Perks, and may buy none, some or all of them later, at
    1/1/2 — the Signature rule, over abilities.
-3. Every existing character remains saveable. The 8 hard-flagged ones say
-   exactly which rule they are outside and cannot worsen; the 11 cross-class
-   ones carry the softer edition notice (6 carry both); the remaining 314 show
-   a Perk balance and no notice at all.
+3. Every existing character remains saveable. The 12 hard-flagged ones — 6
+   over the ability cap, 10 with a Perk deficit, 4 with both — say exactly
+   which rule they are outside and cannot worsen; the 11 cross-class ones
+   carry the softer edition notice (10 of them carry a hard one as well); the
+   remaining 314 show a Perk balance and no notice at all.
 4. No Perk price, grant, cap or word limit is written down anywhere but
    `util/perk-economy.js`.
 5. Row counts unchanged.

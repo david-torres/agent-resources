@@ -244,8 +244,8 @@ const buildBreaches = ({ economy, level, abilities, abilityPerks } = {}) => {
 
 // The ratchet. An existing breach is grandfathered: a save that leaves it as
 // it stands goes through, and only one that makes it WORSE is refused. This
-// is what lets 13 already-breaching characters stay editable without a stored
-// per-character allowance -- the allowance IS the stored row.
+// is what lets the 12 hard-breaching characters of the live 327 stay editable
+// without a stored per-character allowance -- the allowance IS the stored row.
 //
 // Soft breaches are excluded: a notice is information, not a limit.
 const worsenedBreaches = (storedBreaches, submittedBreaches) => {
