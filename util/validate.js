@@ -48,9 +48,9 @@ function assertNonEmptyImportText(inputText, subject = 'content') {
 }
 
 // `wordLimit` is the BASELINE limit; a perk that compounds another gets
-// COMPOUND_WORD_BONUS more (Advent pg. 30, via util/perk-economy.js). Callers
-// that pass an explicit wordLimit still get the bonus applied on top of it,
-// which is what the custom-limit test expects.
+// COMPOUND_WORD_BONUS more (Advent pg. 30, via util/perk-economy.js). The
+// bonus is added on top of whatever baseline is in force, an explicit
+// `wordLimit` from the caller included.
 function validateAbilityPerks(perks, { wordLimit = PERK_WORD_LIMIT, perAbility = PERKS_PER_ABILITY } = {}) {
   if (!Array.isArray(perks)) return { ok: true };
 

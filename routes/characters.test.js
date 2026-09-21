@@ -6,7 +6,7 @@
 // The harness mirrors routes/character-wizard.test.js: mock the data layer,
 // boot a real Express app with the full Handlebars engine (helpers + partials),
 // and hit the live server with fetch.
-const { test, expect, mock, beforeAll, afterAll } = require('bun:test');
+const { test, expect, mock, beforeAll, beforeEach, afterAll } = require('bun:test');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'http://localhost:54321';
 process.env.SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key';
@@ -28,8 +28,10 @@ const { statList } = require('../util/enclave-consts');
 
 const CHAR_ID = '22222222-2222-4222-8222-222222222222';
 
-// Mutable per-test state consulted by the models/character mock below,
-// reset before the two GET /characters/:id/:name? tests.
+// Mutable per-test state consulted by the models/character mock below. Reset
+// before every test so no test inherits the character another one installed:
+// with it left standing, a test that never sets it up still gets a character
+// back and can pass on the previous test's fixture.
 const pageState = {};
 
 // A minimally complete character for the full character page (not the
@@ -222,6 +224,10 @@ afterAll(async () => {
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
   delete require.cache[require.resolve('./characters')];
+});
+
+beforeEach(() => {
+  pageState.character = null;
 });
 
 test('GET /characters/ability-perk-group renders scaffold with ability name and dom key', async () => {
