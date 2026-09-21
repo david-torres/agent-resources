@@ -367,9 +367,8 @@ const validateEconomyLimits = ({
     }
   }
 
-  // The Merx half is unchanged, and stays off for advent: 327 existing
-  // characters were built with no Merx budget and no measurement says they
-  // would pass one.
+  // The Merx half stays off for advent: 327 existing characters were built
+  // with no Merx budget and no measurement says they would pass one.
   if (economy !== 'advent') {
     const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
 
@@ -646,7 +645,16 @@ const normalizeCharacterInput = (input, context = {}) => {
   // validateEconomyLimits wants abilities already tagged { crossClass, type }
   // (see its own comment) -- this is the caller that tags them, using
   // tagAbilities (util/character-derived.js) rather than a second copy of
-  // that logic. The aspiring pool comes from context.aspiringAbilities when
+  // that logic.
+  //
+  // Tagged from context.economyAbilities when the caller supplies it, for the
+  // same reason the gear above is priced on context.economyGear: the classic/
+  // expert form submits an ability as a bare "ClassName::AbilityName" string
+  // with neither class_id nor type, and tagAbilities reads exactly those two
+  // fields, so the raw list prices every cross-class unlock at the own-class
+  // rate. CharacterService resolves them once (resolveSubmittedAbilities) and
+  // hands the result in, rather than this module re-implementing a catalogue
+  // lookup it has no client for. The aspiring pool comes from context.aspiringAbilities when
   // the caller supplies it (updateCharacter, whose submission never carries
   // the key -- see the aspiring_abilities handling above) and otherwise from
   // data.aspiring_abilities, already normalized above for a creation.
@@ -658,7 +666,7 @@ const normalizeCharacterInput = (input, context = {}) => {
     characterClassId: data.class_id ?? null,
     aspiringSignatures: data.aspiring_signatures,
     enforceMerxBudget: context.enforceMerxBudget ?? true,
-    abilities: tagAbilities(childData.classAbilities, {
+    abilities: tagAbilities(context.economyAbilities ?? childData.classAbilities, {
       economy,
       characterClassId: data.class_id ?? null,
       aspiringAbilities: context.aspiringAbilities ?? data.aspiring_abilities,

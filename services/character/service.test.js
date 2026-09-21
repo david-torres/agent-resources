@@ -355,12 +355,16 @@ test('CharacterService.levelUp surfaces a backfill mission error without throwin
   expect(result.error).toBeInstanceOf(AuthorizationError);
 });
 
+// The two missions are what pays for the Perk: levelUp runs the same ratchet
+// updateCharacter does, and an advent character earns its first Perk by
+// reaching level 2 (util/perk-economy.js). Without them the save is refused
+// as a Perk deficit and this test would never reach the payload it asserts on.
 test('levelUp persists via a single levelUpAtomic call (not updateOwnedFields + insertPerks)', async () => {
   const calls = [];
   const adapter = {
     ...minimalRequiredAdapter(),
     getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 1, completed_missions: 0, commissary_reward: 0, abilities: [] }),
-    getRealMissions: async () => ok([]),
+    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }]),
     listOffscreenMissions: async () => ok([]),
     getClassRulesVersion: async () => ok('v2'),
     fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
@@ -391,7 +395,12 @@ test('levelUp allows a compounded perk five more words than the baseline limit',
   const adapter = {
     ...minimalRequiredAdapter(),
     getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 1, completed_missions: 0, commissary_reward: 0, abilities: [] }),
-    getRealMissions: async () => ok([]),
+    // Four missions carry an advent character to level 3 and so to two earned
+    // Perks, which is what the two Perks below cost; see the ratchet note on
+    // the test above.
+    getRealMissions: async () => ok([
+      { outcome: 'success' }, { outcome: 'success' }, { outcome: 'success' }, { outcome: 'success' }
+    ]),
     listOffscreenMissions: async () => ok([]),
     getClassRulesVersion: async () => ok('v2'),
     fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
@@ -1384,12 +1393,12 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
 // counts entries and Enchantment presence (signatureSlotsUsed) and pairs the
 // submission against the stored rows getCharacter already returned, using the
 // class_id each side carries rather than resolving a name to one -- see the
-// comment on updateCharacter in service.js. The only getClassContentLookupMaps call an
-// update ever makes is saveCharacterAtomic's own, for its unrelated gear/
-// ability class-id resolution, and it happens exactly once regardless of
-// gear count or economy. Pinning the count at 1 (not 0) for BOTH an advent
-// and an aspirant-content update, rather than checking just one economy,
-// proves no economy triggers a second, economy-gated read.
+// comment on updateCharacter in service.js. These payloads submit no
+// abilities, so the only getClassContentLookupMaps call they make is
+// saveCharacterAtomic's own, and it happens exactly once regardless of gear
+// count or economy. Pinning the count at 1 (not 0) for BOTH an advent and an
+// aspirant-content update, rather than checking just one economy, proves no
+// economy triggers a second, economy-gated read.
 const expectExactlyOneCatalogueFetch = async (contentFormat, classId) => {
   const calls = [];
   const adapter = makeAdapter(calls, {
@@ -1859,4 +1868,204 @@ test('an ability carried over from the same version family prices as own-class, 
     ]
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
+});
+
+// --- The economy gate prices RESOLVED abilities --------------------------
+//
+// Every other ability fixture in this file hand-supplies `class_id` and
+// `type`. The classic/expert form does not: it submits an ability as a bare
+// "ClassName::AbilityName" string carrying neither (views/partials/character-
+// class-abilities.handlebars). tagAbilities (util/character-derived.js) reads
+// exactly those two fields, so an unresolved list tags every ability
+// own-class Core -- and for an aspirant character an own-class Core is one of
+// the three the economy gives away (FREE_CORE_ABILITIES, util/perk-economy.js),
+// i.e. free. Resolving the list before the gate is what makes the bare form
+// cost what it should.
+const SNIPER_CLASS_ID = 'sniper-aspirant-v1';
+const BARE_STRING_CLASS_ROWS = [
+  ...GUNSLINGER_FAMILY_AND_FORK,
+  // A different class in the same edition and content format, so it is not in
+  // the Gunslinger version family and a pick from it is genuinely cross-class.
+  {
+    id: SNIPER_CLASS_ID, name: 'Sniper', rules_edition: 'aspirant',
+    rules_version: 'v1', content_format: 'aspirant', base_class_id: null
+  }
+];
+
+const bareStringMaps = () => ({
+  gearNameToClassId: new Map(),
+  gearNameToDescription: new Map(),
+  abilityNameToClassId: new Map([['Cross Shot', SNIPER_CLASS_ID], ['Quick Draw', ASPIRANT_CLASS_ID]]),
+  abilityNameToDescription: new Map(),
+  itemsByClassId: new Map([
+    [ASPIRANT_CLASS_ID, { gear: new Map(), abilities: new Map([['Quick Draw', 'Draw first.']]) }],
+    [SNIPER_CLASS_ID, { gear: new Map(), abilities: new Map([['Cross Shot', 'Shoot far.']]) }]
+  ]),
+  classesByName: new Map([['gunslinger', [ASPIRANT_CLASS_ID]], ['sniper', [SNIPER_CLASS_ID]]]),
+  classRows: BARE_STRING_CLASS_ROWS
+});
+
+const createWithBareAbilities = (abilities) => new CharacterService(makeAdapter([], {
+  getClassContentLookupMaps: async () => bareStringMaps()
+})).createCharacter({
+  name: 'Hero', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+  trait0: 'calm', trait1: 'alert', trait2: 'giving',
+  commissary_reward: 0, abilities
+}, { id: 'profile-1' });
+
+test('a bare "Class::Ability" string from another class is priced at the cross-class rate on create', async () => {
+  const result = await createWithBareAbilities(['Sniper::Cross Shot']);
+  expect(result.data).toBeNull();
+  // 3 is ABILITY_PRICE.cross.core against an aspirant's level-1 grant of 1
+  // (PERK_GRANT, util/perk-economy.js). Tagged own-class -- which is what an
+  // unresolved list produces -- this same pick is a free Core and the
+  // creation is accepted, so the figure is what pins the fix.
+  expect(result.error).toMatch(/3 Perks spent of 1 earned/);
+});
+
+test('a bare "Class::Ability" string from the character\'s own class stays free on create', async () => {
+  const result = await createWithBareAbilities(['Gunslinger::Quick Draw']);
+  expect(result.error).toBeNull();
+});
+
+// The ratchet compared the stored rows (which carry class_id and type) with
+// the raw submission (which carries neither), so a clean character could add a
+// cross-class ability, register no new breach, save, and be grandfathered from
+// then on -- while its own page, reading the stored rows, called the result
+// illegal.
+test('adding a bare cross-class ability to a clean character is refused, not grandfathered', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+      level: 1, gear: [], common_items: [], stat_cap_purchases: {},
+      aspiring_abilities: [], aspiring_signatures: [], abilities: [], ability_perks: []
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ok(BARE_STRING_CLASS_ROWS),
+    getClassContentLookupMaps: async () => bareStringMaps()
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, abilities: ['Sniper::Cross Shot'],
+    trait0: 'calm', trait1: 'alert', trait2: 'giving'
+  }, { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/3 Perks spent of 1 earned/);
+});
+
+// --- The ratchet scores each side at its own level ------------------------
+//
+// `overage` is what the ratchet compares precisely so that levelling up and
+// spending the newly-earned Perk saves cleanly. Scoring the submission against
+// the STORED level defeats that: the two Perks below cost exactly the two an
+// aspirant character has earned by level 2 (PERK_GRANT 1 + PERKS_PER_LEVEL),
+// but only one at the level the save replaces.
+test('a save that raises the level may spend the Perk that level earns', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+      level: 1, gear: [], common_items: [], stat_cap_purchases: {},
+      aspiring_abilities: [], aspiring_signatures: [],
+      abilities: [{ id: 'ability-1', class_id: ASPIRANT_CLASS_ID, name: 'Quick Draw', type: 'core' }],
+      ability_perks: []
+    }),
+    getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ok(BARE_STRING_CLASS_ROWS),
+    getClassContentLookupMaps: async () => bareStringMaps()
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, level: 2,
+    abilities: ['Gunslinger::Quick Draw'],
+    trait0: 'calm', trait1: 'alert', trait2: 'giving',
+    ability_perks: [
+      { class_ability_id: 'ability-1', text: 'Hits harder.' },
+      { class_ability_id: 'ability-1', text: 'Hits faster.' }
+    ]
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// --- The ratchet on the level-up path -------------------------------------
+//
+// buildPerkRows checks a Perk's word count and how many one Ability may carry,
+// and nothing else -- so without the ratchet POST /:id/level-up was a way to
+// attach Perks the character cannot pay for and have the deficit grandfathered
+// by the next ordinary save. This character gains no mission, so it stays at
+// level 1 and an advent character's Perk balance there is zero.
+test('levelUp refuses a Perk the character has not earned', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, creator_mode: null,
+      level: 1, completed_missions: 0, commissary_reward: 0, gear: [], common_items: [],
+      abilities: [{ id: 'ab-1', class_id: ADVENT_CLASS_ID, name: 'Quickdraw', type: 'core' }],
+      ability_perks: []
+    }),
+    getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'advent', error: null }),
+    getClassFamilyRows: async () => ok(GUNSLINGER_FAMILY_AND_FORK),
+    fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
+    levelUpAtomic: async () => { throw new Error('levelUpAtomic must not be reached by an unaffordable level-up'); }
+  }));
+  const result = await service.levelUp(CREATOR, 'character-1', {
+    level: 2,
+    ability_perks: [{ class_ability_id: 'ab-1', text: 'New perk', ref: 'r1' }]
+  });
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 400 });
+  expect(result.error.message).toMatch(/1 Perks spent of 0 earned/);
+});
+
+// --- classFamilyOf on the create path -------------------------------------
+//
+// Unlocks span a whole version family, so the ability picker offers another
+// version of the character's own class. Without classFamilyOf the gate falls
+// back to a raw class_id comparison and prices such a pick cross-class, which
+// refuses a legal creation and disagrees with the character page about the
+// very build it just rejected. gunslinger-v1/gunslinger-v2 are one family.
+test('an ability from another version of the character\'s own class is own-class on create', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getClassContentLookupMaps: async () => ({
+      gearNameToClassId: new Map(),
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map([['Trick Shot', 'gunslinger-v2']]),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map(),
+      classesByName: new Map(),
+      classRows: GUNSLINGER_FAMILY_AND_FORK
+    })
+  }));
+  const result = await service.createCharacter({
+    name: 'Hero', class_id: ADVENT_CLASS_ID, creator_mode: 'advent', commissary_reward: 0,
+    // Priced cross-class this is 3 Perks against an advent grant of 0
+    // (PERK_GRANT, util/perk-economy.js) and the creation is refused; priced
+    // own-class it is one of the three free Core abilities.
+    abilities: [{ name: 'Trick Shot', class_id: 'gunslinger-v2', type: 'core' }]
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+});
+
+// Resolving abilities before the gate must not cost a second catalogue read:
+// updateCharacter fetches the maps at most once and hands them to
+// saveCharacterAtomic rather than letting it fetch its own.
+test('an update that submits abilities still fetches the class catalogue exactly once', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+      level: 1, gear: [], common_items: [], stat_cap_purchases: {},
+      aspiring_abilities: [], aspiring_signatures: [], abilities: [], ability_perks: []
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ok(BARE_STRING_CLASS_ROWS),
+    getClassContentLookupMaps: async () => {
+      calls.push(['getClassContentLookupMaps']);
+      return bareStringMaps();
+    },
+    saveCharacterAtomic: async () => ok({ id: 'character-1' })
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Hero', class_id: ASPIRANT_CLASS_ID, abilities: ['Gunslinger::Quick Draw'],
+    trait0: 'calm', trait1: 'alert', trait2: 'giving'
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
 });

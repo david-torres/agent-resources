@@ -159,6 +159,93 @@ const resolveSubmittedGear = (gear, gearNameToClassId) => {
   }).filter(Boolean);
 };
 
+// Maps every id in `classId`'s own version family onto `classId`, which is
+// what tagAbilities (util/character-derived.js) consults to decide whether an
+// ability is cross-class. util/class-family.js#computeVersionFamily is the
+// single definition of "version family" -- see its own comment on why a query
+// that drops a column must not be reimplemented here. An ability row carried
+// over from an earlier version of the character's OWN class tags as own-class
+// through this; measured on live data, 22 of 327 characters hold exactly such
+// a row. Null for a character with no class_id: an aspiring character's branch
+// of tagAbilities never consults it.
+const familyResolver = (classRows, classId) => {
+  if (!classId) return null;
+  const family = computeVersionFamily(classRows || [], classId);
+  return (candidateId) => (family.has(candidateId) ? classId : candidateId);
+};
+
+// Resolves a submitted gear item or ability to the class it belongs to, and to
+// that class's text for it. An item that names its own class_id is taken at
+// its word; otherwise the character's own class and the rest of its version
+// family are tried first, then the submitted class NAME, and the global
+// name map is the last resort.
+const classItemResolver = ({ maps, ownClassId }) => {
+  const itemsByClassId = maps.itemsByClassId ?? new Map();
+  const classesByName = maps.classesByName ?? new Map();
+  const familyClassIds = ownClassId
+    ? computeVersionFamily(maps.classRows ?? [], ownClassId)
+    : new Set();
+  return (kind, item, nameToClassId, nameToDescription) => {
+    if (item.class_id) {
+      return {
+        class_id: item.class_id,
+        description: item.description ?? nameToDescription.get(item.name) ?? null
+      };
+    }
+    for (const classId of [ownClassId, ...familyClassIds].filter(Boolean)) {
+      const classItems = itemsByClassId.get(classId)?.[kind];
+      // The description has to come from the class that resolved the id, or a
+      // row gets one class's id paired with another class's text.
+      if (classItems?.has(item.name)) {
+        return {
+          class_id: classId,
+          description: item.description ?? classItems.get(item.name) ?? null
+        };
+      }
+    }
+    const namedCandidates = (classesByName.get(item.class_name?.trim().toLowerCase()) ?? [])
+      .filter(classId => itemsByClassId.get(classId)?.[kind]?.has(item.name));
+    const namedClassId = namedCandidates.find(classId => familyClassIds.has(classId)) ?? namedCandidates[0];
+    if (namedClassId) {
+      return {
+        class_id: namedClassId,
+        description: item.description ?? itemsByClassId.get(namedClassId)[kind].get(item.name) ?? null
+      };
+    }
+    return {
+      class_id: nameToClassId.get(item.name) ?? ownClassId ?? undefined,
+      description: item.description ?? nameToDescription.get(item.name) ?? null
+    };
+  };
+};
+
+// The ability equivalent of resolveSubmittedGear, and for the same reason: the
+// classic/expert form submits an ability as a bare "ClassName::AbilityName"
+// string carrying neither class_id nor type (views/partials/character-class-
+// abilities.handlebars), while tagAbilities (util/character-derived.js) reads
+// exactly those two fields. Pricing the raw submission would charge every
+// cross-class unlock at the own-class rate, and would leave the ratchet
+// comparing stored rows that carry both fields against a submission that
+// carries neither.
+//
+// Resolution runs through the same classItemResolver the write below uses, and
+// an absent type falls back the way save_character_atomic does -- the stored
+// row's tag, or Core for a genuinely new row -- so what the gate prices is
+// what the save will store.
+const resolveSubmittedAbilities = (abilities, { maps, ownClassId, storedAbilities }) => {
+  const resolve = classItemResolver({ maps, ownClassId });
+  const storedTypeByName = new Map(
+    (Array.isArray(storedAbilities) ? storedAbilities : [])
+      .filter(Boolean)
+      .map(ability => [ability.name, ability.type])
+  );
+  return normalizeAbilityItems(abilities).map(item => ({
+    name: item.name,
+    class_id: resolve('abilities', item, maps.abilityNameToClassId, maps.abilityNameToDescription).class_id ?? null,
+    type: submittedAbilityType(item.type) ?? storedTypeByName.get(item.name) ?? 'core'
+  }));
+};
+
 /**
  * Application boundary for character writes. The adapter owns storage and
  * catalog queries; this service owns validation, authorization, sequencing,
@@ -195,8 +282,20 @@ class CharacterService {
     // both the economy check and the reward derivation below now avoid doing,
     // would price every cross-class Signature as if it were own-class.
     const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
+    // The ability half of the same problem -- see resolveSubmittedAbilities.
+    // The character does not exist yet, so there are no stored types to
+    // inherit from.
+    const resolvedAbilities = resolveSubmittedAbilities(prepared.abilities, {
+      maps, ownClassId: prepared.class_id ?? null
+    });
+    // Built from the family rows this catalogue lookup already returned, so
+    // the gate agrees with the character's own page about which of its
+    // abilities are cross-class rather than falling back to an identity
+    // comparison that prices another version of its own class as cross.
+    const classFamilyOf = familyResolver(classRows, prepared.class_id ?? null);
     const normalized = normalizeCharacterInput(prepared, {
-      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear, isCreation: true,
+      rulesVersion, creatorId: actor.id, contentFormat, economyGear: resolvedGear,
+      economyAbilities: resolvedAbilities, classFamilyOf, isCreation: true,
       // A new character must be legal outright, so this pairs with
       // enforceMerxBudget's implicit default the same way updateCharacter
       // writes both out explicitly for its own edit-path decision.
@@ -226,7 +325,7 @@ class CharacterService {
           gear: resolvedGear,
           common_items: characterInput.common_items,
           aspiring_signatures: characterInput.aspiring_signatures,
-          abilities: childData.classAbilities,
+          abilities: resolvedAbilities,
           ability_perks: childData.abilityPerks,
           // The pool comes from the submitted input, not a stored row -- the
           // character does not exist yet on create.
@@ -235,7 +334,8 @@ class CharacterService {
         realMissions: [],
         offscreenMissions: [],
         rulesVersion,
-        economy
+        economy,
+        classFamilyOf
       });
       characterInput.commissary_reward = derived.commissary_reward;
     }
@@ -355,22 +455,38 @@ class CharacterService {
     }
     prepared = await this.adapter.resolveClassReference(prepared);
 
-    // Maps every id in the character's own version family onto storedClassId
-    // (util/class-family.js#computeVersionFamily is the single definition of
-    // "version family" -- see its own comment on why a query that drops a
-    // column must not be reimplemented here). An ability row carried over
-    // from an earlier version of the character's OWN class then tags as
-    // own-class instead of cross-class; measured on live data, 22 of 327
-    // characters hold exactly such a row. An aspiring character has no
-    // class_id and its branch of tagAbilities (util/character-derived.js)
-    // never consults classFamilyOf, so this stays null rather than paying
-    // for a query that would go unused.
+    // See familyResolver. The query is skipped entirely for a class-less
+    // (aspiring) character, whose branch of tagAbilities would not use it.
     let classFamilyOf = null;
     if (storedClassId) {
       const { data: classFamilyRows } = await this.adapter.getClassFamilyRows();
-      const family = computeVersionFamily(classFamilyRows || [], storedClassId);
-      classFamilyOf = (classId) => (family.has(classId) ? storedClassId : classId);
+      classFamilyOf = familyResolver(classFamilyRows, storedClassId);
     }
+
+    // The catalogue, fetched at most once per save and shared by everything
+    // below that needs it: the ability resolution the economy gate and the
+    // ratchet price, the auto_calculate derivation, and saveCharacterAtomic's
+    // own class-item resolution. An edit that submits no abilities and is not
+    // auto-calculated never pays for it here at all.
+    let catalogueMaps = null;
+    const loadCatalogueMaps = async () => {
+      if (!catalogueMaps) catalogueMaps = await this.adapter.getClassContentLookupMaps();
+      return catalogueMaps;
+    };
+
+    // See resolveSubmittedAbilities. The stored rows supply the type for an
+    // ability the edit form resubmits as a bare string, which is the same
+    // thing save_character_atomic does with an absent type.
+    const submittedAbilityList = Array.isArray(prepared.abilities)
+      ? prepared.abilities
+      : (prepared.abilities ? [prepared.abilities] : []);
+    const resolvedAbilities = submittedAbilityList.length > 0
+      ? resolveSubmittedAbilities(submittedAbilityList, {
+        maps: await loadCatalogueMaps(),
+        ownClassId: storedClassId,
+        storedAbilities: existing.data.abilities
+      })
+      : [];
 
     // The Signature Cap is enforced on every save, including an edit; the
     // Merx budget is NOT -- see validateEconomyLimits's own comment for why
@@ -404,9 +520,10 @@ class CharacterService {
       capPurchases: existing.data.stat_cap_purchases,
       enforceCreationAllotment: false,
       isCreation: false,
-      // Task 10 installs the ratchet on this path; an absolute check here
-      // would refuse every save by an already-breaching character.
+      // The ratchet below is what this path enforces instead; an absolute
+      // check here would refuse every save by an already-breaching character.
       enforceAbilityLimits: false,
+      economyAbilities: resolvedAbilities,
       // The submission never carries this key on update (Task 6) -- the
       // stored value is the only truth.
       aspiringAbilities: existing.data.aspiring_abilities,
@@ -421,7 +538,7 @@ class CharacterService {
     const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
 
     if (characterInput.auto_calculate) {
-      const { gearNameToClassId, classRows } = await this.adapter.getClassContentLookupMaps();
+      const { gearNameToClassId, classRows } = await loadCatalogueMaps();
       const classRow = (classRows || []).find(row => row.id === characterInput.class_id);
       const [missions, offscreenMissions] = await Promise.all([
         this.adapter.getRealMissions(id),
@@ -444,7 +561,7 @@ class CharacterService {
           ),
           common_items: characterInput.common_items,
           aspiring_signatures: existing.data.aspiring_signatures,
-          abilities: childData.classAbilities,
+          abilities: resolvedAbilities,
           ability_perks: childData.abilityPerks,
           // The submission never carries this key on update (Task 6) -- the
           // stored value is the only truth. Reading the submitted value here
@@ -465,23 +582,37 @@ class CharacterService {
       characterInput.commissary_reward = derived.commissary_reward;
     }
 
-    // The ratchet. An existing breach is grandfathered -- 13 of 327 live
-    // characters are outside a rule this slice introduced, and none of them
-    // becomes unsaveable. What is refused is a save that makes a hard breach
+    // The ratchet. An existing breach is grandfathered -- 12 of 327 live
+    // characters are outside a HARD rule of this economy (13 are outside one of
+    // either severity), and none of them becomes unsaveable. What is refused is a save that makes a hard breach
     // WORSE. The allowance is the stored row itself, which is why no
     // per-character exemption is stored anywhere.
-    const submittedAbilities = childData.classAbilities;
+    //
+    // Each side is scored against the level it belongs to: the stored row's
+    // level for what is on disk, and the level this save will write for what
+    // is submitted. That is what makes `overage` comparable across a save
+    // that raises the level -- scoring the submission against the old level
+    // would refuse a character who levels up and spends the Perk the level
+    // just earned, which is exactly the save the ratchet exists to allow.
     const ratchetArgs = {
       economy,
-      level: existing.data.level,
       abilityPerks: childData.abilityPerks,
       characterClassId: characterInput.class_id,
       aspiringAbilities: existing.data.aspiring_abilities,
       classFamilyOf
     };
     const worsened = worsenedBreaches(
-      deriveBuildBreaches({ ...ratchetArgs, abilities: existing.data.abilities, abilityPerks: existing.data.ability_perks }),
-      deriveBuildBreaches({ ...ratchetArgs, abilities: submittedAbilities })
+      deriveBuildBreaches({
+        ...ratchetArgs,
+        level: existing.data.level,
+        abilities: existing.data.abilities,
+        abilityPerks: existing.data.ability_perks
+      }),
+      deriveBuildBreaches({
+        ...ratchetArgs,
+        level: characterInput.level ?? existing.data.level,
+        abilities: resolvedAbilities
+      })
     );
     if (worsened.length > 0) {
       return {
@@ -496,7 +627,8 @@ class CharacterService {
     const previousAbilities = Array.isArray(existing.data.abilities) ? existing.data.abilities : [];
     if (typeof this.adapter.saveCharacterAtomic === 'function') {
       return this.saveCharacterAtomic({
-        id, actor, characterInput, childData, rulesVersion, previousAbilities
+        id, actor, characterInput, childData, rulesVersion, previousAbilities,
+        maps: catalogueMaps ?? undefined
       });
     }
     const updated = await this.adapter.updateCharacterRow(id, characterInput, actor);
@@ -537,44 +669,7 @@ class CharacterService {
     // resolve content_format/gear before this ever runs) hands it in rather
     // than paying for the same four sub-queries again.
     const maps = providedMaps ?? await this.adapter.getClassContentLookupMaps();
-    const itemsByClassId = maps.itemsByClassId ?? new Map();
-    const classesByName = maps.classesByName ?? new Map();
-    const ownClassId = characterInput.class_id ?? null;
-    const familyClassIds = ownClassId
-      ? computeVersionFamily(maps.classRows ?? [], ownClassId)
-      : new Set();
-    const resolveClassItem = (kind, item, nameToClassId, nameToDescription) => {
-      if (item.class_id) {
-        return {
-          class_id: item.class_id,
-          description: item.description ?? nameToDescription.get(item.name) ?? null
-        };
-      }
-      for (const classId of [ownClassId, ...familyClassIds].filter(Boolean)) {
-        const classItems = itemsByClassId.get(classId)?.[kind];
-        // The description has to come from the class that resolved the id, or a
-        // row gets one class's id paired with another class's text.
-        if (classItems?.has(item.name)) {
-          return {
-            class_id: classId,
-            description: item.description ?? classItems.get(item.name) ?? null
-          };
-        }
-      }
-      const namedCandidates = (classesByName.get(item.class_name?.trim().toLowerCase()) ?? [])
-        .filter(classId => itemsByClassId.get(classId)?.[kind]?.has(item.name));
-      const namedClassId = namedCandidates.find(classId => familyClassIds.has(classId)) ?? namedCandidates[0];
-      if (namedClassId) {
-        return {
-          class_id: namedClassId,
-          description: item.description ?? itemsByClassId.get(namedClassId)[kind].get(item.name) ?? null
-        };
-      }
-      return {
-        class_id: nameToClassId.get(item.name) ?? ownClassId ?? undefined,
-        description: item.description ?? nameToDescription.get(item.name) ?? null
-      };
-    };
+    const resolveClassItem = classItemResolver({ maps, ownClassId: characterInput.class_id ?? null });
     // save_character_atomic reads an absent 'enchantment'/'mods' key on a
     // p_gear item as "keep what is stored" and an explicit JSON null as
     // "remove the Enchantment" (20260918000001_save_character_atomic_gear_
@@ -916,6 +1011,42 @@ class CharacterService {
     };
     const { data: perkRows, error: perkBuildError } = await this.buildPerkRows(id, Array.isArray(body.ability_perks) ? body.ability_perks : []);
     if (perkBuildError) return { data: null, error: perkBuildError };
+
+    // The same ratchet updateCharacter runs, for the same reason: buildPerkRows
+    // checks a Perk's word count and how many an Ability may carry, but nothing
+    // there asks whether the character can afford the Perks it is attaching, so
+    // a level-up is otherwise a way to spend Perks the character has not earned
+    // and have the result grandfathered on its next ordinary save.
+    //
+    // A level-up raises the level, so the submitted side is scored against the
+    // level being written while the stored side keeps the level being replaced
+    // -- that is what lets a character spend the Perk the new level earns. The
+    // roster is untouched by a level-up, so both sides hold the same Abilities
+    // and only the Perk balance can worsen.
+    const classFamilyOf = character.class_id
+      ? familyResolver((await this.adapter.getClassFamilyRows()).data, character.class_id)
+      : null;
+    const storedPerks = Array.isArray(character.ability_perks) ? character.ability_perks : [];
+    const ratchetArgs = {
+      economy,
+      abilities: character.abilities,
+      characterClassId: character.class_id,
+      aspiringAbilities: character.aspiring_abilities,
+      classFamilyOf
+    };
+    const worsened = worsenedBreaches(
+      deriveBuildBreaches({ ...ratchetArgs, level: character.level, abilityPerks: storedPerks }),
+      deriveBuildBreaches({ ...ratchetArgs, level: derived.level, abilityPerks: [...storedPerks, ...perkRows] })
+    );
+    if (worsened.length > 0) {
+      return {
+        data: null,
+        error: {
+          status: 400,
+          message: `This change is not allowed while the build is illegal: ${worsened.map(b => b.detail).join(' ')}`
+        }
+      };
+    }
 
     const { data, error } = await this.adapter.levelUpAtomic({
       characterId: id,
