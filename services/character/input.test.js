@@ -240,6 +240,24 @@ test('normalizeAbilityItems keeps the submitted type', () => {
   ]);
 });
 
+// The classic picker posts an ability as a single "ClassName::AbilityName"
+// string (views/partials/character-class-abilities.handlebars) and now adds
+// an optional third segment for the type. A two-segment value must keep
+// meaning core exactly as it does today -- saved data and the expert/agent
+// form already use that form.
+test('normalizeAbilityItems reads an optional third segment as the type', () => {
+  const [advanced, core, bare] = normalizeAbilityItems([
+    'Gunslinger::Trick Shot::advanced',
+    'Gunslinger::Quickdraw::core',
+    'Gunslinger::Quickdraw'
+  ]);
+
+  expect(advanced).toEqual({ name: 'Trick Shot', class_name: 'Gunslinger', type: 'advanced' });
+  expect(core).toEqual({ name: 'Quickdraw', class_name: 'Gunslinger', type: 'core' });
+  expect(bare).toEqual({ name: 'Quickdraw', class_name: 'Gunslinger' });
+  expect(bare).not.toHaveProperty('type');
+});
+
 // pseudo_class used to ride through normalizeWizardPayload (no allowlist) into
 // jsonb_populate_record, which silently ignores keys that are not columns
 // (20260905000001:33-49). No error, no data -- the wizard comment at

@@ -446,10 +446,28 @@ const normalizeClassItems = (items) => {
       const value = item.trim();
       if (!value) return null;
       const separator = value.indexOf('::');
-      const name = separator === -1 ? value : value.slice(separator + 2).trim();
-      if (!name) return null;
+      let rest = separator === -1 ? value : value.slice(separator + 2).trim();
       const className = separator === -1 ? '' : value.slice(0, separator).trim();
-      return className ? { name, class_name: className } : { name };
+      // The classic picker's <select> posts an ability as a single string and
+      // now adds an optional third "::type" segment (views/partials/character-
+      // class-abilities.handlebars). A two-segment value keeps meaning core
+      // exactly as it does today -- saved data and the expert/agent form both
+      // still submit that form -- so only a trailing 'core'/'advanced' segment
+      // is read as a type; anything else stays part of the name.
+      const typeSeparator = rest.lastIndexOf('::');
+      let type;
+      if (typeSeparator !== -1) {
+        const candidateType = rest.slice(typeSeparator + 2).trim();
+        if (candidateType === 'advanced' || candidateType === 'core') {
+          type = candidateType;
+          rest = rest.slice(0, typeSeparator).trim();
+        }
+      }
+      const name = rest;
+      if (!name) return null;
+      const result = className ? { name, class_name: className } : { name };
+      if (type) result.type = type;
+      return result;
     }
     if (typeof item === 'object' && typeof item.name === 'string') {
       const name = item.name.trim();

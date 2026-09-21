@@ -137,9 +137,41 @@ mock.module('../models/character', () => ({
   // request through fail loudly instead of passing for the wrong reason.
   createCharacter: async () => ({ data: null, error: 'createCharacter should not have been called' }),
 }));
+// A V1 aspirant class carrying three Core Abilities and three Advanced ones
+// (Task 3 of the Perk Economy Surfaces plan) -- the shape filterClassDataForUser
+// reads via getClasses to build the classic picker's roster.
+const ABILITY_CLASS = {
+  id: 'class-adv',
+  name: 'Gunslinger',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'aspirant',
+  rules_version: 'v1',
+  content_format: 'aspirant',
+  gear: [],
+  abilities: [
+    { name: 'Quickdraw', description: '' },
+    { name: 'Steady Aim', description: '' },
+    { name: 'Fan the Hammer', description: '' },
+  ],
+  advanced_abilities: [
+    { name: 'Trick Shot', description: '' },
+    { name: 'Ricochet', description: '' },
+    { name: 'Last Stand', description: '' },
+  ],
+};
+
 mock.module('../models/class', () => ({
   getClass: async () => ({ data: { id: 'class-a', rules_version: 'v1' }, error: null }),
   getUnlockedClassIdsForUser: async () => ({ data: new Set(), error: null }),
+  // filterClassDataForUser fans out to advent, aspirant and player-created
+  // pools; only the aspirant pool carries ABILITY_CLASS.
+  getClasses: async (filters) => ({
+    data: filters && filters.rules_edition === 'aspirant' && !filters.is_player_created
+      ? [ABILITY_CLASS]
+      : [],
+    error: null,
+  }),
 }));
 
 const express = require('express');
@@ -323,4 +355,33 @@ test('POST /characters refuses an aspiring build missing its three Ability picks
   expect(res.status).toBe(400);
   const body = await res.text();
   expect(body).toContain('An Aspiring character needs exactly three Ability picks.');
+});
+
+// GET /characters/class-abilities -- the htmx "Add Class Abilities" endpoint
+// (Task 3). A V1 class carries three Core Abilities and three Advanced ones,
+// and both must be offerable from the classic picker: it is the one form
+// that can otherwise add any ability in the game.
+test('the classic ability picker offers a class Advanced Abilities', async () => {
+  const res = await fetch(`${baseUrl}/characters/class-abilities`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('Quickdraw');
+  expect(body).toContain('Trick Shot');
+});
+
+// The option value posts as a single string, so the type has to travel with
+// it -- without it an Advanced pick is stored as core and priced at the
+// wrong rate by the Perk engine (services/character/service.js's
+// submittedAbilityType falls back to 'core').
+test('an Advanced option carries its type, so it is not stored as core', async () => {
+  const res = await fetch(`${baseUrl}/characters/class-abilities`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  const body = await res.text();
+  expect(body).toContain('value="Gunslinger::Trick Shot::advanced"');
+  expect(body).toContain('value="Gunslinger::Quickdraw::core"');
 });

@@ -115,7 +115,15 @@ const filterClassDataForUser = async (user) => {
   // Build lookup maps for gear and abilities keyed by class name
   const allClasses = [...advent, ...aspirant, ...pcc];
   let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
-  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.abilities) ? c.abilities.map(a => a.name) : []]));
+  // A V1 class carries three Core Abilities and three Advanced ones, and an
+  // Advanced Ability costs Perks to unlock (pg. 7). The type travels with the
+  // name because the option posts as a single string: without it an Advanced
+  // pick is stored as core and priced as though it were free.
+  const abilityOptions = (c) => [
+    ...(Array.isArray(c.abilities) ? c.abilities.map(a => ({ name: a.name, type: 'core' })) : []),
+    ...(Array.isArray(c.advanced_abilities) ? c.advanced_abilities.map(a => ({ name: a.name, type: 'advanced' })) : [])
+  ];
+  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, abilityOptions(c)]));
 
   // If user provided, reduce to unlocked set. Unlocks match by class id and
   // extend to same-edition version families (a v1 unlock covers its v2 fork)
@@ -477,7 +485,9 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         }
         if (!className) continue;
         if (!filteredAbilities[className]) filteredAbilities[className] = [];
-        if (!filteredAbilities[className].includes(a.name)) filteredAbilities[className].push(a.name);
+        if (!filteredAbilities[className].some(opt => opt.name === a.name)) {
+          filteredAbilities[className].push({ name: a.name, type: a.type === 'advanced' ? 'advanced' : 'core' });
+        }
       }
     }
 
