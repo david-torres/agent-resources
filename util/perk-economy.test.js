@@ -168,6 +168,45 @@ test('an advent character pays nothing for three own Core abilities', () => {
   expect(unlockSpend([own('core'), own('core'), own('core')], 'advent')).toBe(0);
 });
 
+test('advent has no unlock economy: a cross-class ability costs 0, not 3 or 4', () => {
+  // pg. 3 lists "Perks can now be spent to unlock additional Abilities,
+  // including Cross-Class" as an Aspirant ADDITION, so Advent has no rate to
+  // charge. Fails if unlockSpend ever again returns ABILITY_PRICE.cross.core
+  // (3) or .advanced (4) for economy 'advent'.
+  expect(unlockSpend([cross('core')], 'advent')).toBe(0);
+  expect(unlockSpend([cross('advanced')], 'advent')).toBe(0);
+  expect(unlockSpend([own('core'), own('core'), own('core'), cross('core')], 'advent')).toBe(0);
+});
+
+test('advent has no unlock economy: a fourth own-class Core ability costs 0, not 1', () => {
+  // Fails if unlockSpend ever again charges ABILITY_PRICE.own.core (1) for
+  // the fourth own-class Core in economy 'advent' — the cap, not a price, is
+  // what is supposed to flag this character.
+  expect(unlockSpend([own('core'), own('core'), own('core'), own('core')], 'advent')).toBe(0);
+});
+
+test('an advent character\'s Perk spend is exactly its Ability Perk count', () => {
+  // Fails if perkSpend ever again adds a nonzero unlockSpend term for advent,
+  // e.g. from a cross-class or fourth-Core ability.
+  const abilities = [own('core'), own('core'), own('core'), own('core'), cross('advanced')];
+  const abilityPerks = [{ id: 1 }, { id: 2 }, { id: 3 }];
+  expect(perkSpend({ economy: 'advent', abilities, abilityPerks })).toBe(3);
+});
+
+test('aspirant and aspiring unlock pricing is unchanged by the advent guard', () => {
+  // Asserts the exact live cells so the advent early return cannot silently
+  // widen and swallow aspirant or aspiring pricing too.
+  expect(unlockSpend(
+    [own('core'), own('core'), own('core'), cross('core'), cross('advanced')], 'aspirant'
+  )).toBe(7);
+  expect(unlockSpend(
+    [own('core'), own('core'), own('core'), own('core')], 'aspirant'
+  )).toBe(1);
+  expect(unlockSpend([own('core'), own('core'), own('advanced')], 'aspiring')).toBe(4);
+  expect(unlockSpend([cross('core')], 'aspiring')).toBe(3);
+  expect(unlockSpend([cross('advanced')], 'aspiring')).toBe(4);
+});
+
 test('unlockSpend tolerates junk entries and a non-array', () => {
   expect(unlockSpend(null, 'aspirant')).toBe(0);
   expect(unlockSpend([null, undefined, false], 'aspirant')).toBe(0);
@@ -294,13 +333,16 @@ test('the ratchet passes a stored breach through unchanged', () => {
 });
 
 test('the ratchet refuses a save that makes a stored breach worse', () => {
+  // Advent has no unlock spend (util/perk-economy.js#unlockSpend), so a
+  // seventh own-class Core ability worsens only the ability cap, not a Perk
+  // deficit -- there is nothing to charge it against.
   const six = Array(6).fill(null).map(() => own('core'));
   const stored = buildBreaches({ economy: 'advent', level: 1, abilities: six, abilityPerks: [] });
   const submitted = buildBreaches({
     economy: 'advent', level: 1, abilities: [...six, own('core')], abilityPerks: []
   });
   const worsened = worsenedBreaches(stored, submitted);
-  expect(worsened.map(b => b.rule).sort()).toEqual([ABILITY_CAP_RULE, PERK_DEFICIT_RULE].sort());
+  expect(worsened.map(b => b.rule)).toEqual([ABILITY_CAP_RULE]);
 });
 
 test('the ratchet lets a breached character improve toward legality', () => {
@@ -313,6 +355,8 @@ test('the ratchet lets a breached character improve toward legality', () => {
 });
 
 test('the ratchet refuses a brand-new breach on a previously clean character', () => {
+  // Advent has no unlock spend, so the fourth own-class Core ability trips
+  // only the ability cap -- the cap is the entire enforcement for this case.
   const stored = buildBreaches({
     economy: 'advent', level: 1,
     abilities: [own('core'), own('core'), own('core')], abilityPerks: []
@@ -322,8 +366,7 @@ test('the ratchet refuses a brand-new breach on a previously clean character', (
     economy: 'advent', level: 1,
     abilities: [own('core'), own('core'), own('core'), own('core')], abilityPerks: []
   });
-  expect(worsenedBreaches(stored, submitted).map(b => b.rule).sort())
-    .toEqual([ABILITY_CAP_RULE, PERK_DEFICIT_RULE].sort());
+  expect(worsenedBreaches(stored, submitted).map(b => b.rule)).toEqual([ABILITY_CAP_RULE]);
 });
 
 test('the ratchet compares overage, so levelling up and spending the Perk is allowed', () => {

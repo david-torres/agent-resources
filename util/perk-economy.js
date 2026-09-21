@@ -130,15 +130,25 @@ const perkFigures = () => ({
     }
 });
 
-// An ability list is priced by waiving the first FREE_CORE_ABILITIES own-class
-// Core abilities and charging everything else at its cell. Each entry arrives
-// already tagged { crossClass, type }; resolving which class an ability
-// belongs to, or whether it sits in an aspiring character's pool, is the
-// caller's job.
+// pg. 3, "Changes to Character Progression": Aspirant lists "Perks can now be
+// spent to unlock additional Abilities, including Cross-Class" as one of its
+// ADDITIONS to Advent progression. Listed as a change means Advent itself has
+// no such spend -- there is no unlock path, and Cross-Classing is not a
+// mechanic that exists there at all, so there is no 3-or-4-Perk rate to
+// charge for it. An advent character's only Perk sink is the Ability Perk
+// (Advent pg. 30, ABILITY_PERK_COST); its three-ability roster is enforced by
+// ABILITY_CAP.advent, a cap, not a price.
+//
+// For aspirant and aspiring, an ability list is priced by waiving the first
+// FREE_CORE_ABILITIES own-class Core abilities and charging everything else
+// at its cell. Each entry arrives already tagged { crossClass, type };
+// resolving which class an ability belongs to, or whether it sits in an
+// aspiring character's pool, is the caller's job.
 //
 // The waiver is order-independent: every waivable entry costs the same 1, so
 // which three of four own Cores are waived cannot change the total.
 const unlockSpend = (abilities, economy) => {
+    if (economy === 'advent') return 0;
     const list = (Array.isArray(abilities) ? abilities : []).filter(Boolean);
     const free = FREE_CORE_ABILITIES[economy] ?? 0;
     let waived = 0;

@@ -2018,9 +2018,12 @@ test('levelUp refuses a Perk the character has not earned', async () => {
 //
 // Unlocks span a whole version family, so the ability picker offers another
 // version of the character's own class. Without classFamilyOf the gate falls
-// back to a raw class_id comparison and prices such a pick cross-class, which
-// refuses a legal creation and disagrees with the character page about the
-// very build it just rejected. gunslinger-v1/gunslinger-v2 are one family.
+// back to a raw class_id comparison and tags such a pick cross-class, which
+// disagrees with the character page about the very build it just accepted --
+// an advent character carrying it would wrongly get the soft "not available
+// in this edition" notice (util/perk-economy.js#CROSS_CLASS_EDITION_RULE) for
+// an ability that is genuinely its own class at another version.
+// gunslinger-v1/gunslinger-v2 are one family.
 test('an ability from another version of the character\'s own class is own-class on create', async () => {
   const service = new CharacterService(makeAdapter([], {
     getClassContentLookupMaps: async () => ({
@@ -2035,9 +2038,6 @@ test('an ability from another version of the character\'s own class is own-class
   }));
   const result = await service.createCharacter({
     name: 'Hero', class_id: ADVENT_CLASS_ID, creator_mode: 'advent', commissary_reward: 0,
-    // Priced cross-class this is 3 Perks against an advent grant of 0
-    // (PERK_GRANT, util/perk-economy.js) and the creation is refused; priced
-    // own-class it is one of the three free Core abilities.
     abilities: [{ name: 'Trick Shot', class_id: 'gunslinger-v2', type: 'core' }]
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();

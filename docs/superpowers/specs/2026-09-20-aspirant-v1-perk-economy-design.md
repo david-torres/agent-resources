@@ -209,39 +209,39 @@ Every character resolves to `advent` because `economyFor`
 character has yet been created on a V1 class. Slice 4 measured the same.
 
 **No character has ever bought an Advanced Ability, and none exceeds six
-abilities.** The new rules therefore flag a small, nameable population:
+abilities.** The new rules therefore flag a small, nameable population.
+Measured against the fixed rule — Advent has no unlock economy at all
+(`unlockSpend` returns 0 for `economy === 'advent'`), so a cross-class or
+extra own-class ability never appears in a hard breach; only the Ability Perk
+count (`character_perks` rows) and the three-ability cap do:
 
 | Character | Level | Abilities | Ability Perks | Perks earned | Hard breach |
 | --- | --- | --- | --- | --- | --- |
-| Aisuna Kor-Ragna | 1 | 6 | 0 | 0 | cap +3, deficit 18 |
-| Zahak (Aspirant) | 8 | 4 | 8 | 7 | cap +1, deficit 4 |
-| Caroline Denton | 10 | 4 | 7 | 9 | cap +1, deficit 1 |
+| Aisuna Kor-Ragna | 1 | 6 | 0 | 0 | cap +3 |
+| Zahak (Aspirant) | 8 | 4 | 8 | 7 | cap +1, deficit +1 |
+| Caroline Denton | 10 | 4 | 7 | 9 | cap +1 |
 | Annabelle Cyrington | 4 | 4 | 0 | 3 | cap +1 |
 | Gertrude | 4 | 4 | 0 | 3 | cap +1 |
-| Scarlet Ravenmore | 3 | 4 | 0 | 2 | cap +1, deficit 1 |
-| Khan Zahak Barzikani | 7 | 3 | 7 | 6 | deficit 1 |
-| Seamus McGlide | 3 | 3 | 4 | 2 | deficit 2 |
-| teset | 3 | 3 | 2 | 2 | deficit 9 |
-| Storm (Ororo Monroe) | 1 | 3 | 0 | 0 | deficit 9 |
-| Charliana "Charlie" Parnassus | 3 | 3 | 0 | 2 | deficit 7 |
-| Claire | 6 | 3 | 0 | 5 | deficit 4 |
+| Scarlet Ravenmore | 3 | 4 | 0 | 2 | cap +1 |
+| Khan Zahak Barzikani | 7 | 3 | 7 | 6 | deficit +1 |
+| Seamus McGlide | 3 | 3 | 4 | 2 | deficit +2 |
 
-**Twelve** characters breach a hard rule, measured with a cross-class ability
-priced at the 3 Perks `unlockSpend` charges for it: six exceed an advent cap of
-three abilities, and **ten** have spent more Perks than their level earned,
-worst overspend **18**. Eleven hold a genuinely cross-family ability and carry
-the soft edition notice; ten of those eleven are also among the twelve — so
-the flagged population is **13 of 327**, not 19, and exactly one character is
-soft-flagged alone.
+**Eight** characters breach a hard rule: six exceed the advent cap of three
+abilities, and three have spent more Ability Perks than their level earned,
+worst overspend **2**. Eleven hold a genuinely cross-family ability and carry
+the soft edition notice; six of those eleven are also among the eight — so the
+flagged population is **13 of 327**, not 19.
 
-The deficit count is ten rather than three because a cross-class ability is
-itself a 3-Perk unlock, not only an edition notice. An advent character earns
-one Perk per level above the first, so a cross-classer below roughly level 4
-cannot pay for even one cross-class pick: it reads "Illegal Build" for the Perk
-deficit **in addition to** the softer "not available in this edition" notice.
-Storm (Ororo Monroe) is the plainest case — level 1, three cross-family
-abilities, 9 Perks spent against 0 earned. No backfill is required for any of
-them — see "Enforcement".
+The deficit count is three, not ten, precisely because a cross-class ability
+is *never* a Perk unlock in Advent — pg. 3 lists Cross-Classing itself among
+Aspirant's additions, so Advent has no rate to charge for one. teset, Storm
+(Ororo Monroe), Charliana "Charlie" Parnassus and Claire each hold a
+cross-family ability and carry the soft edition notice, but none of them
+spends a single Ability Perk beyond what their level earned, so none is
+hard-flagged. Only Zahak, Khan Zahak Barzikani and Seamus McGlide have
+genuinely spent more Ability Perks (`character_perks` rows) than
+`PERK_GRANT.advent + PERKS_PER_LEVEL * (level - 1)` allows. No backfill is
+required for any of them — see "Enforcement".
 
 ## Design
 
@@ -301,6 +301,24 @@ plus one allowance number, rather than a per-economy price fork.
 "Own" means the same thing it means for Signatures: the character's class —
 or, for an aspiring character, membership of its selected pool. The identical
 rule, over a different pool.
+
+**Advent has no unlock economy.** pg. 3's "Changes to Character Progression"
+lists "Perks can now be spent to unlock additional Abilities, including
+Cross-Class (pg. 7)" as one of Aspirant's ADDITIONS to Advent progression —
+so in Advent, Perks cannot be spent to unlock an Ability at all, and
+Cross-Classing does not exist there as a mechanic to have a rate. `unlockSpend`
+returns 0 unconditionally for `economy === 'advent'`, before it ever reaches
+the price table. A cross-class or Advanced ability held by an advent
+character is therefore never priced; it is only ever an edition notice
+(`CROSS_CLASS_EDITION_RULE`, soft) — never a hard breach, and never a Perk
+charge. The three own-class Core abilities `FREE_CORE_ABILITIES.advent`
+describes are the entire purchasable roster for an advent character (zero of
+them), and what actually bounds that roster is `ABILITY_CAP.advent`, a cap,
+not a price. Known non-case: zero advent characters currently hold an
+Advanced ability, so today the edition notice is observed for cross-class
+abilities only — an Advanced ability held by an advent character would carry
+the same soft notice and the same non-price, untested against live data
+because no live character exercises it.
 
 **Word limits.** `PERK_WORD_LIMIT` and `PERKS_PER_ABILITY` move here from the
 default parameters at `util/validate.js:48`, where they sit today as bare
@@ -408,9 +426,12 @@ ability from a different class **family**. Family is resolved through
 `base_class_id`, not raw `class_id`, so the 64 version-drift rows stay silent
 and only the 24 genuine ones speak. Advent has no Cross-Classing rule — pg. 3
 lists it among the things Aspirant adds — so those 11 characters are outside
-their edition, and the app says which. Outside the edition is not instead of
-over a limit: the same pick also costs 3 Perks, so ten of the eleven are hard-
-flagged for a Perk deficit as well and see both notices at once.
+their edition, and the app says which. Outside the edition is never instead of
+over a limit, but it is also never the SAME as one: Advent has no unlock
+economy at all (see "The price table"), so the pick costs nothing and carries
+only the notice — it is coincidence, not consequence, that 6 of the 11 also
+happen to be hard-flagged, over the ability cap or a Perk deficit run up some
+other way, and see both notices at once.
 
 **The ratchet.** Enforcement is a comparison, not an absolute:
 
@@ -610,11 +631,10 @@ Each was a real choice; the reason matters more than the choice.
 2. An aspiring character selects two Core and one Advanced ability at
    creation, receives 3 Perks, and may buy none, some or all of them later, at
    1/1/2 — the Signature rule, over abilities.
-3. Every existing character remains saveable. The 12 hard-flagged ones — 6
-   over the ability cap, 10 with a Perk deficit, 4 with both — say exactly
-   which rule they are outside and cannot worsen; the 11 cross-class ones
-   carry the softer edition notice (10 of them carry a hard one as well); the
-   remaining 314 show a Perk balance and no notice at all.
+3. Every existing character remains saveable. The 8 hard-flagged ones say
+   exactly which rule they are outside and cannot worsen; the 11 cross-class
+   ones carry the softer edition notice (6 of them carry a hard one as well);
+   the remaining 314 show a Perk balance and no notice at all.
 4. No Perk price, grant, cap or word limit is written down anywhere but
    `util/perk-economy.js`.
 5. Row counts unchanged.
