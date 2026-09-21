@@ -36,7 +36,7 @@ const {
 } = require('../util/character-derived');
 const { computeVersionFamily } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
-const { buildAbilityPurchaseData } = require('../util/ability-purchase-data');
+const { buildAbilityPurchaseData, applyAbilityPurchases } = require('../util/ability-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
@@ -1289,6 +1289,13 @@ router.put('/:id/:name?', isAuthenticated, asyncHandler(async (req, res) => {
       status: 400,
       title: 'Invalid submission',
       message: 'This character\'s Signature Gear could not be read. Please refresh the page and try again.'
+    });
+  }
+  if (!applyAbilityPurchases(req.body)) {
+    return sendError(req, res, null, {
+      status: 400,
+      title: 'Invalid submission',
+      message: 'This character\'s Abilities could not be read. Please refresh the page and try again.'
     });
   }
   req.body = collectCharacterFormArrays(req.body);

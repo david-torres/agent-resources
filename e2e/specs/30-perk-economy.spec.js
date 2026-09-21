@@ -48,28 +48,6 @@
 // on the shared prefix -- including the grandfathered character's raw-
 // inserted 7th class_abilities row (deleted by character_id, same as any
 // other). Row counts must be identical before and after this spec runs.
-//
-// CONFIRMED DEFECT (journeys 1 and 3 fail against it, honestly, on purpose):
-// routes/characters.js's PUT /:id handler calls applyGearPurchases(req.body)
-// (util/gear-purchase-data.js), which reads the submitted gear_json field and
-// turns it into body.gear before updateCharacter ever runs. There is no such
-// call for Abilities: views/character-form.handlebars's #abilityJson hidden
-// input (name="abilities_json") is correctly populated by
-// public/js/character-ability-purchases.js -- verified directly against a
-// live PUT request body, which does carry a correct abilities_json string --
-// but nothing on the server ever reads it. body.abilities is therefore never
-// set, normalizeCharacterInput's childData.classAbilities comes out
-// undefined, and services/character/service.js's
-// `if (childData.classAbilities) { reconcileAbilities(...) }` guard (both
-// the create and update paths) skips the write entirely. Every purchase made
-// through the edit-form's ability catalogue is real in the browser and in
-// the submitted request, and vanishes on save without any error -- there is
-// no applyAbilityPurchases counterpart to util/gear-purchase-data.js's
-// applyGearPurchases. Journeys 2, 4 and 5 do not depend on this path and are
-// unaffected. This is a routes/services gap left by Tasks 6/7, not a mistake
-// in this spec or its fixtures -- see the two `expect(...).toEqual(...)`
-// assertions below marked DEFECT for exactly where it bites, and task-8-
-// report.md for the full writeup.
 const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass, unlockClassForProfile } = require('../fixtures/class');
@@ -290,11 +268,6 @@ test('an aspirant character buys an own-class Advanced Ability for 2 Perks, and 
   await page.locator('form[hx-put] button[type="submit"]').first().click();
   await page.waitForURL((url) => !url.pathname.endsWith('/edit'));
 
-  // DEFECT: this is expected to hold -- a save must persist what the
-  // catalogue just sold -- and currently does not. See the file header's
-  // "CONFIRMED DEFECT" note: routes/characters.js's PUT handler never reads
-  // the submitted abilities_json field, so this purchase never reaches the
-  // database no matter how correctly the browser drove it.
   const { rows: abilityRows } = await db.query(
     'select name, type, class_id from class_abilities where character_id = $1 order by name', [aspirant1.id]
   );
@@ -461,10 +434,6 @@ test('an aspiring character selects three picks from three donor classes, buys n
   await page.locator('form[hx-put] button[type="submit"]').first().click();
   await page.waitForURL((url) => !url.pathname.endsWith('/edit'));
 
-  // DEFECT: same gap as journey 1 (see the file header's "CONFIRMED DEFECT"
-  // note) -- this is the rule the whole slice turns on, and the save that is
-  // supposed to make "buy two of the three later" real currently persists
-  // nothing at all (ownedAfter comes back empty).
   const { rows: ownedAfter } = await db.query(
     'select name, type, class_id from class_abilities where character_id = $1 order by name', [id]
   );

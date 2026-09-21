@@ -157,6 +157,14 @@ mock.module('../models/character', () => ({
   // so an empty list is enough to keep the handler from throwing on a
   // destructured function it never got.
   findUpgradeTargetsFor: async () => [],
+  // PUT /:id (Task 8's fix) never reaches a real save layer here -- captures
+  // the body applyAbilityPurchases and applyGearPurchases produced, the way
+  // pageState feeds every other mock, so the abilities_json test below can
+  // assert on what the route handed downstream without a real database.
+  updateCharacter: async (id, body) => {
+    pageState.lastUpdateBody = body;
+    return { data: { id, name: body.name || 'Ash' }, error: null };
+  },
 }));
 // A V1 aspirant class carrying three Core Abilities and three Advanced ones
 // (Task 3 of the Perk Economy Surfaces plan) -- the shape filterClassDataForUser
@@ -306,6 +314,7 @@ beforeEach(() => {
   pageState.unlockedClassIds = null;
   pageState.extraAspirantClasses = null;
   pageState.classFamilyRows = null;
+  pageState.lastUpdateBody = null;
 });
 
 test('GET /characters/ability-perk-group renders scaffold with ability name and dom key', async () => {
@@ -497,4 +506,46 @@ test('the ability island prices a newer-version own-class ability at the own rat
   expect(entry).toBeTruthy();
   expect(entry.crossClass).toBe(false);
   expect(entry.price).toBe(1);
+});
+
+// PUT /:id (Task 8's fix) — the defect this task closes: the edit form's
+// ability purchase surface (public/js/character-ability-purchases.js) has
+// always submitted its purchases as abilities_json, the way the Signature
+// surface submits gear_json, but nothing on the server turned it into
+// body.abilities before updateCharacter ran. util/ability-purchase-data.js's
+// applyAbilityPurchases (mirroring util/gear-purchase-data.js's
+// applyGearPurchases) is what now does that, wired in beside the existing
+// applyGearPurchases(req.body) call.
+test('PUT /characters/:id turns a submitted abilities_json into body.abilities', async () => {
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: 'Bearer test-token',
+    },
+    body: new URLSearchParams({
+      name: 'Ash',
+      abilities_json: JSON.stringify([{ name: 'Trick Shot', class_id: 'class-adv', type: 'advanced' }]),
+    }).toString(),
+  });
+
+  expect(res.status).toBe(200);
+  expect(pageState.lastUpdateBody.abilities).toEqual([
+    { name: 'Trick Shot', class_id: 'class-adv', type: 'advanced' },
+  ]);
+  expect('abilities_json' in pageState.lastUpdateBody).toBe(false);
+});
+
+test('PUT /characters/:id with malformed abilities_json is rejected before it reaches updateCharacter', async () => {
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: 'Bearer test-token',
+    },
+    body: new URLSearchParams({ name: 'Ash', abilities_json: '{oops' }).toString(),
+  });
+
+  expect(res.status).toBe(400);
+  expect(pageState.lastUpdateBody).toBeNull();
 });

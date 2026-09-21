@@ -1,5 +1,5 @@
-const { test, expect } = require('bun:test');
-const { buildAbilityPurchaseData } = require('./ability-purchase-data');
+const { test, expect, describe } = require('bun:test');
+const { buildAbilityPurchaseData, applyAbilityPurchases } = require('./ability-purchase-data');
 const { normalizeLevel, LEVEL_CEILING } = require('./stat-caps');
 const { abilityPerkSpend } = require('./perk-economy');
 
@@ -114,4 +114,61 @@ test('the served abilityPerkSpend is the character\'s existing Ability-Perk spen
   });
   expect(data.abilityPerkSpend).toBe(abilityPerkSpend(perks));
   expect(data.abilityPerkSpend).toBe(2);
+});
+
+// --- what comes back in -----------------------------------------------------
+// Mirrors util/gear-purchase-data.test.js's "the submitted gear field" block:
+// applyAbilityPurchases is applyGearPurchases's shape, naming and failure
+// signalling, for abilities_json -> body.abilities instead of
+// gear_json -> body.gear.
+
+describe('the submitted abilities field', () => {
+  test('a body without the field is left alone', () => {
+    const body = { name: 'Vex', abilities: [{ name: 'Standoff', class_id: 'a', type: 'core' }] };
+    expect(applyAbilityPurchases(body)).toBe(true);
+    expect(body.abilities).toEqual([{ name: 'Standoff', class_id: 'a', type: 'core' }]);
+  });
+
+  test('the parsed list becomes the submission\'s abilities', () => {
+    const body = { abilities_json: JSON.stringify([{ name: 'Standoff', class_id: 'a', type: 'core' }]) };
+    expect(applyAbilityPurchases(body)).toBe(true);
+    expect(body.abilities).toEqual([{ name: 'Standoff', class_id: 'a', type: 'core' }]);
+    expect('abilities_json' in body).toBe(false);
+  });
+
+  // The browser always sends `type` explicit (public/js/character-ability-
+  // purchases.js#serialize), but a caller that omits it must not be silently
+  // upgraded to 'core' by this function -- services/character/service.js's
+  // resolveSubmittedAbilities is what falls back, and it falls back to the
+  // stored type, not to Core.
+  test('an absent type key survives the round trip, so the resolver falls back to the stored type', () => {
+    const body = { abilities_json: JSON.stringify([{ name: 'Standoff', class_id: 'a' }]) };
+    applyAbilityPurchases(body);
+    expect('type' in body.abilities[0]).toBe(false);
+  });
+
+  // The field renders empty and is filled by the mount. A page whose script
+  // never ran must still be able to save everything else, and must not read
+  // as "this character now has no Abilities".
+  test('an empty field is silence: abilities is left for the save to keep', () => {
+    const body = { abilities_json: '', name: 'Vex' };
+    expect(applyAbilityPurchases(body)).toBe(true);
+    expect('abilities' in body).toBe(false);
+    expect('abilities_json' in body).toBe(false);
+  });
+
+  test('an emptied list is a real instruction, not silence', () => {
+    const body = { abilities_json: '[]' };
+    expect(applyAbilityPurchases(body)).toBe(true);
+    expect(body.abilities).toEqual([]);
+  });
+
+  test('malformed JSON is reported, never thrown', () => {
+    const body = { abilities_json: '{oops' };
+    expect(applyAbilityPurchases(body)).toBe(false);
+  });
+
+  test('JSON that is not a list is reported too', () => {
+    expect(applyAbilityPurchases({ abilities_json: '{"name":"Standoff"}' })).toBe(false);
+  });
 });

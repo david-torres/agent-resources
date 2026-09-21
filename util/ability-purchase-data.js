@@ -164,4 +164,33 @@ const buildAbilityPurchaseData = ({ character, characterClass, allClasses, econo
   };
 };
 
-module.exports = { buildAbilityPurchaseData };
+// The inverse of the island: what the purchase surface submits. Mirrors
+// util/gear-purchase-data.js#applyGearPurchases exactly, for the Ability
+// half of the same problem -- see that function's comment for why JSON
+// rather than the classic pickers' bare strings, why an empty field is
+// silence rather than an instruction, and why this answers usability instead
+// of throwing.
+//
+// public/js/character-ability-purchases.js#serialize always writes an
+// explicit `type` on every purchased row (from the priced catalogue entry,
+// never guessed), so a row that omits it here reaches
+// services/character/service.js#resolveSubmittedAbilities with no type of
+// its own -- which that resolver reads as "keep whatever is stored", not as
+// Core.
+const applyAbilityPurchases = (body) => {
+  if (!body || typeof body.abilities_json !== 'string') return true;
+  const submitted = body.abilities_json.trim();
+  delete body.abilities_json;
+  if (!submitted) return true;
+  let parsed;
+  try {
+    parsed = JSON.parse(submitted);
+  } catch (_) {
+    return false;
+  }
+  if (!Array.isArray(parsed)) return false;
+  body.abilities = parsed;
+  return true;
+};
+
+module.exports = { buildAbilityPurchaseData, applyAbilityPurchases };
