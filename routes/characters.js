@@ -36,6 +36,7 @@ const {
 } = require('../util/character-derived');
 const { computeVersionFamily } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
+const { buildAbilityPurchaseData } = require('../util/ability-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
@@ -499,13 +500,15 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       contentFormat: characterClass && characterClass.content_format,
       creatorMode: character.creator_mode
     });
-    // Only a class-less/aspiring character needs the catalogue -- an aspirant
-    // character's own class already arrives via characterClass above. This
-    // costs no extra query: filterClassDataForUser already ran above for the
-    // Class <select>'s options, and latestClassVersions is the same
-    // pure collapse GET /wizard applies to build wizardClasses, so a player
-    // is never offered a class here they have not unlocked there.
-    const allClasses = economy === 'aspiring'
+    // Only a V1 character needs the catalogue: an aspirant character's own
+    // Signatures already arrive via characterClass above, but its Abilities
+    // can Cross-Class against every other unlocked class (pg. 3), and an
+    // aspiring character has no class of its own at all. This costs no extra
+    // query: filterClassDataForUser already ran above for the Class
+    // <select>'s options, and latestClassVersions is the same pure collapse
+    // GET /wizard applies to build wizardClasses, so a player is never
+    // offered a class here they have not unlocked there.
+    const allClasses = economy === 'aspiring' || economy === 'aspirant'
       ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
       : [];
     const derived = deriveCharacterTotals({
@@ -559,6 +562,15 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
           realMissions: missionsRes.data || [],
           offscreenMissions: offscreenRes.data || []
         })
+      }),
+      // The same surface for Abilities. Null under the same rule
+      // (util/ability-purchase-data.js), so the advent economy keeps the
+      // classAbilityList picker in the other branch below, unchanged.
+      abilityPurchaseData: buildAbilityPurchaseData({
+        economy,
+        characterClass,
+        allClasses,
+        character
       }),
       statList,
       adventV1Classes: filteredAdventV1,

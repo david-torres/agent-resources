@@ -296,6 +296,29 @@
 
   <div class="field">
     <label class="label">Class Abilities</label>
+    {{#if abilityPurchaseData}}
+    {{!-- The V1 Perk purchase surface, for a character under the aspirant or
+          aspiring economy. abilityPurchaseData is null for everyone else
+          (util/ability-purchase-data.js), so the characters on the advent
+          content format keep the ability pickers below, unchanged.
+
+          It replaces those pickers rather than joining them: both would
+          submit the same Abilities.
+
+          Everything inside is drawn from the island by a browser mount a
+          later change adds -- the catalogue, both readouts and the hidden
+          field that actually submits. No price, grant or cap is written into
+          this template. --}}
+    <div id="abilityPurchases">
+      <script type="application/json" id="ability-purchase-data">{{{json abilityPurchaseData}}}</script>
+      <p class="help mb-3" id="abilityReadouts">
+        Perks <span data-perks-spent>0</span> / <span data-perks-earned>0</span>
+        &middot; Abilities <span data-abilities-used>0</span> / <span data-abilities-cap>0</span>
+      </p>
+      <div id="abilityCatalogue"></div>
+      <input type="hidden" name="abilities_json" id="abilityJson">
+    </div>
+    {{else}}
     <div class="columns is-multiline" id="class-ability-list">
       {{#if character.abilities}}
       {{#each character.abilities}}
@@ -306,6 +329,7 @@
     <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list"
       hx-swap="beforeend">Add
       Class Abilities</button>
+    {{/if}}
   </div>
 
   {{#if isNew}}
