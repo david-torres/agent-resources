@@ -26,9 +26,13 @@
   // one shared, unlabelled group rather than being dropped -- both the
   // ability and Signature catalogues carry rows a donor class no longer
   // resolves.
+  // `byKey` has no prototype: its keys are player-authored class names, and a
+  // class called `constructor` or `toString` would otherwise find an inherited
+  // value where this looks for a group it has already made, then push onto
+  // something that is not a group and take the whole catalogue down with it.
   var groupEntries = function (entries, groupBy) {
     var order = [];
-    var byKey = {};
+    var byKey = Object.create(null);
     entries.forEach(function (entry) {
       var label = groupBy(entry);
       var key = (label == null || label === '') ? '' : label;
@@ -80,6 +84,14 @@
     };
 
     input.addEventListener('input', function () { setSearch(input.value); });
+
+    // Both catalogues mount inside the character form (views/character-form.
+    // handlebars), which submits on Enter through its own submit button. A
+    // search box is not a way to save a character, so Enter here narrows the
+    // list and goes no further.
+    input.addEventListener('keydown', function (event) {
+      if (event.key === 'Enter') event.preventDefault();
+    });
 
     render();
 

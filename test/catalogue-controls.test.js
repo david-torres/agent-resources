@@ -107,4 +107,47 @@ describe('CatalogueControls', () => {
     expect(unnamed.textContent).toContain('Borrowed Blade');
     expect(unnamed.textContent).toContain('Stray Charm');
   });
+
+  // Group keys are class names, and a class name is player-authored. On a
+  // plain object `byKey['constructor']` is inherited and truthy, so the group
+  // is never created and the push lands on Object's constructor -- the whole
+  // catalogue blanks instead of rendering.
+  test('a class named after an Object prototype key still gets its own group', () => {
+    const entries = [
+      { name: 'Inherited Blade', class: 'constructor' },
+      { name: 'Stringly Charm', class: 'toString' },
+      { name: 'Valued Hat', class: 'valueOf' },
+      { name: 'Cowboy Hat', class: 'Gunslinger' }
+    ];
+    const { root } = mountControls(baseOptions(entries));
+    const groups = [...root.querySelectorAll('[data-catalogue-group]')];
+    expect(groups.length).toBe(4);
+    expect(groups.map((g) => g.querySelector('[data-catalogue-group-heading]').textContent))
+      .toEqual(['constructor', 'toString', 'valueOf', 'Gunslinger']);
+    expect(root.querySelectorAll('[data-entry]').length).toBe(4);
+  });
+
+  // Both catalogues mount inside <form hx-put=...>, which carries a
+  // type="submit" button (views/character-form.handlebars), so Enter in any
+  // field it owns is an implicit submit -- Enter in a search box would save
+  // the character.
+  test('Enter in the search box never submits the form the catalogue sits in', () => {
+    const { root } = mountControls(baseOptions(entriesFixture()));
+    const input = root.querySelector('[data-catalogue-search]');
+    const event = new root.ownerDocument.defaultView.KeyboardEvent('keydown', {
+      key: 'Enter', bubbles: true, cancelable: true
+    });
+    input.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  test('a keystroke that is not Enter is left alone', () => {
+    const { root } = mountControls(baseOptions(entriesFixture()));
+    const input = root.querySelector('[data-catalogue-search]');
+    const event = new root.ownerDocument.defaultView.KeyboardEvent('keydown', {
+      key: 'a', bubbles: true, cancelable: true
+    });
+    input.dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
+  });
 });
