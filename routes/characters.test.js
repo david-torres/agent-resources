@@ -375,7 +375,11 @@ test('the classic ability picker offers a class Advanced Abilities', async () =>
 // The option value posts as a single string, so the type has to travel with
 // it -- without it an Advanced pick is stored as core and priced at the
 // wrong rate by the Perk engine (services/character/service.js's
-// submittedAbilityType falls back to 'core').
+// submittedAbilityType falls back to 'core'). The value attribute alone is
+// invisible to the player, though, so the label text must carry the same
+// distinction (views/class-view.handlebars:320 gives Advanced Abilities
+// their own heading; this picker marks each option instead, since options
+// can't be headed).
 test('an Advanced option carries its type, so it is not stored as core', async () => {
   const res = await fetch(`${baseUrl}/characters/class-abilities`, {
     headers: { Accept: 'text/html' },
@@ -384,4 +388,9 @@ test('an Advanced option carries its type, so it is not stored as core', async (
   const body = await res.text();
   expect(body).toContain('value="Gunslinger::Trick Shot::advanced"');
   expect(body).toContain('value="Gunslinger::Quickdraw::core"');
+  // Visible label text, not just the value attribute: a player choosing an
+  // option must be able to see it costs Perks before selecting it.
+  expect(body).toContain('Trick Shot (Gunslinger — Advanced)');
+  expect(body).toContain('Quickdraw (Gunslinger)');
+  expect(body).not.toContain('Quickdraw (Gunslinger — Advanced)');
 });

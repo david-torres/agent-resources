@@ -6,7 +6,7 @@
         {{#each classAbilityList}}
         <optgroup label="{{capitalize @key}}">
           {{#each this}}
-          <option value="{{@../key}}::{{this.name}}::{{this.type}}" {{#if (eq this.name (lookup ../../characterAbility 'name'))}}selected{{/if}}>{{capitalize this.name}} ({{capitalize @../key}})</option>
+          <option value="{{@../key}}::{{this.name}}::{{this.type}}" {{#if (eq this.name (lookup ../../characterAbility 'name'))}}selected{{/if}}>{{capitalize this.name}} ({{capitalize @../key}}{{#if (eq this.type 'advanced')}} — Advanced{{/if}})</option>
           {{/each}}
         </optgroup>
         {{/each}}
