@@ -3881,11 +3881,12 @@ window.CharacterWizard = (function () {
         .filter(Boolean);
     }
     // Class abilities: the chosen class's three Core Abilities are what a
-    // character starts with. Advanced Abilities are not auto-granted: one
-    // costs 2 Perks (ENCLAVE: Aspirant V1, pg. 7), and a new character has a
-    // single Perk. A class's Advanced roster is surfaced only in the
-    // aspiring class-builder and its step 3 summary, never here. We send
-    // abilities as {name, class_id, type} so the server's
+    // character starts with. Advanced Abilities are not auto-granted: an
+    // own-class one (ENCLAVE: Aspirant V1, pg. 7 -- PERKS.prices.ability.own
+    // .advanced) costs more than a new character's starting grant
+    // (PERKS.grants.aspirant) covers. A class's Advanced roster is surfaced
+    // only in the aspiring class-builder and its step 3 summary, never here.
+    // We send abilities as {name, class_id, type} so the server's
     // normalizeAbilityItems + setCharacterAbilities writes rows into
     // public.class_abilities. `type` must be explicit on every row: an absent
     // one means "keep whatever is stored" to the reconcile path, not 'core'.
