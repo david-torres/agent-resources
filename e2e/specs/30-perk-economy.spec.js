@@ -16,7 +16,10 @@
 //   2. An aspirant character buys a Cross-Class Core ability for 3 Perks, and
 //      the catalogue entry itself carries an origin badge naming the donor
 //      class -- proof the rate and the badge agree about which class an
-//      ability actually comes from.
+//      ability actually comes from. It then saves and reads the row back:
+//      class_id is what the Cross-Class rate is derived from, so a save that
+//      dropped or rewrote it would leave a 3-Perk purchase stored as a
+//      1-Perk own-class row.
 //   3. The rule the whole slice turns on: an aspiring character is created
 //      selecting three picks (from three DISTINCT donor classes) and buying
 //      none, then buys two of the three later from the edit form's
@@ -282,7 +285,7 @@ test('an aspirant character buys an own-class Advanced Ability for 2 Perks, and 
   await expect(page.locator('p').filter({ hasText: 'Perks remaining:' })).toContainText('3');
 });
 
-test('an aspirant character buys a Cross-Class Core ability for 3 Perks, and the entry carries the origin badge naming the donor class', async ({ page }) => {
+test('an aspirant character buys a Cross-Class Core ability for 3 Perks, the entry carries the origin badge naming the donor class, and the donor class_id survives the save', async ({ page }) => {
   await page.goto(`/characters/${aspirant2.id}/edit`);
   await page.waitForLoadState('networkidle');
 
@@ -306,6 +309,32 @@ test('an aspirant character buys a Cross-Class Core ability for 3 Perks, and the
   // tag, it sits alongside it (renderEntry concatenates origin + priceTag).
   await expect(entry.locator('.tag.is-info'), 'the origin badge must still name the donor class after the purchase').toHaveText(crossClass.name);
   await expect(entry.locator('.tag.is-success')).toHaveText('Owned');
+
+  // The round trip. Every other journey saves an own-class row, where a lost
+  // class_id would be repaired by the character's own class; only here does
+  // class_id carry a price of its own, and a Cross-Class row stored against
+  // the character's own class would re-read as a 1-Perk own-class Core.
+  await page.locator('form[hx-put] button[type="submit"]').first().click();
+  await page.waitForURL((url) => !url.pathname.endsWith('/edit'));
+
+  const { rows: abilityRows } = await db.query(
+    'select name, type, class_id from class_abilities where character_id = $1 order by name', [aspirant2.id]
+  );
+  const storedCross = abilityRows.find((r) => r.name === CROSS_CORE);
+  expect(storedCross, 'the save must persist the Cross-Class ability the catalogue just sold').toBeTruthy();
+  expect(storedCross.type).toBe('core');
+  expect(storedCross.class_id, 'the stored row must attribute the ability to the DONOR class, which is what priced it at 3 Perks').toBe(crossClass.id);
+  expect(storedCross.class_id).not.toBe(ownClass.id);
+
+  // Read back through the app, not just the table: the character page derives
+  // the spend from the stored rows, so a 3 here is the persisted class_id
+  // being priced as Cross-Class a second time.
+  await page.goto(`/characters/${aspirant2.id}`);
+  await page.waitForLoadState('networkidle');
+  await expect(
+    page.locator('p').filter({ hasText: 'Perks spent:' }),
+    'the reloaded character must still be charged the Cross-Class rate'
+  ).toContainText('3');
 });
 
 test('an aspiring character selects three picks from three donor classes, buys none at creation, then buys two of them later', async ({ page }) => {
