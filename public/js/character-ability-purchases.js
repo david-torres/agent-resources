@@ -8,8 +8,10 @@
 // for Signatures).
 //
 // This file reads the page (its JSON island); the catalogue it draws reads
-// nothing at all. Every price, grant and cap comes from the served figures
-// -- no economy number is written down here.
+// nothing at all. Every price, grant and cap the code uses comes from the
+// served figures -- no economy number is computed from a literal here. Where
+// the comments below name a figure, they are citing the rulebook page the
+// code implements, not supplying it.
 //
 // The rule that matters most: affordability consults both the balance and
 // the cap. pg. 7's six-Ability cap "cannot be increased, even via Flavor",

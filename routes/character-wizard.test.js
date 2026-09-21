@@ -278,6 +278,20 @@ test('the aspiring ability-primer copy names only served Perk figures', async ()
 // Step 3 carries two surfaces in the aspirant economy -- the per-ability Perk
 // editor and the ability shop -- so copy naming only the first leaves the
 // second undescribed.
+// Step 1's aspiring blurb names both economies in one sentence: the Merx price
+// per picked Signature and the Perk price per picked ability. Both come from
+// the served figures, so neither can drift from what the next pages charge.
+test('the aspiring class-builder copy names served prices for both economies', async () => {
+  const body = await getWizard('?mode=aspiring');
+  const { prices } = perkFigures();
+  expect(body).toContain(
+    '(core = ' + prices.ability.own.core + ', advanced = ' + prices.ability.own.advanced + ')'
+  );
+  expect(body).toContain(
+    '<strong>' + economyFigures().prices.signature.own + ' Merx</strong> for each picked item'
+  );
+});
+
 test('the aspirant ability-primer copy describes both the Perk editor and the ability shop', async () => {
   const body = await getWizard('?mode=aspirant');
   expect(body).toContain('<strong>+ Add Perk</strong>');
