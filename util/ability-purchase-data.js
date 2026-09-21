@@ -160,6 +160,18 @@ const buildAbilityPurchaseData = ({ character, characterClass, allClasses, econo
     owned: buildOwned(character),
     aspiringAbilities: (character && character.aspiring_abilities) || [],
     level: normalizeLevel(character && character.level),
+    // A page-load snapshot of the stored Ability-Perk spend. The v2
+    // per-ability Perk editor on the same form
+    // (views/partials/character-v2-fields.handlebars) can add and remove rows
+    // after this is served, and public/js/character-ability-purchases.js's
+    // balance keeps showing the figure served here, so the two surfaces
+    // disagree about the spend the moment a row is added live.
+    //
+    // That holds together only while no aspirant-or-aspiring class carries
+    // `rules_version = 'v2'`: services/character/input.js strips ability_perks
+    // off every non-v2 character, and this island is built only for those two
+    // economies, so no form can currently show both. The snapshot has to be
+    // reconciled with the live editor before that combination exists.
     abilityPerkSpend: abilityPerkSpend(character && character.ability_perks)
   };
 };
