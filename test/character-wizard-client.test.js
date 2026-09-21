@@ -1694,11 +1694,11 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     ]);
   });
 
-  // pg. 7's cap counts the character's whole roster -- the three free Core
-  // Abilities every class grants (PERKS.freeCoreAbilities.aspirant) plus
-  // whatever has been acquired -- not just what was bought here. A level
-  // high enough to afford a fourth purchase outright still has to be
-  // refused once the third acquisition reaches the cap.
+  // pg. 7's cap counts the character's whole roster -- the Core Abilities the
+  // selected class prints (three, for this fixture) plus whatever has been
+  // acquired -- not just what was bought here. A level high enough to afford
+  // a fourth purchase outright still has to be refused once the third
+  // acquisition reaches the cap.
   test('an aspirant character at the cap cannot buy another ability even with Perks in hand', () => {
     const wizard = aspirantStateAtLevel(20);
     const state = wizard.getState();
@@ -1739,5 +1739,109 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
       { name: 'Own Core A', class_id: 'fixture-aspirant-own', type: 'core' }
     );
     expect(payload.abilities).toHaveLength(4);
+  });
+});
+
+// util/class-abilities.js#normalizeAbilities applies no count limit, so a
+// class's printed Core roster is whatever the class row holds -- three is a
+// convention, not a rule, and this plan's own e2e fixture class prints two.
+// Both the Ability cap and the own-Core charge have to be counted against that
+// roster, because it is exactly what buildSubmitPayload submits and what
+// util/perk-economy.js prices and caps on the other end.
+describe('the wizard counts the roster it submits, not a fixed free allowance', () => {
+  const coreNames = (count) => Array.from({ length: count }, (_, i) => ({ name: `Printed Core ${i + 1}` }));
+
+  const ownClassPrinting = (coreCount) => ({
+    id: 'roster-own',
+    name: 'Roster Own Class',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: [],
+    base_gear: [],
+    abilities: coreNames(coreCount),
+    advanced_abilities: [{ name: 'Roster Own Advanced' }]
+  });
+
+  // Three Advanced rows so a cap test has a fifth purchasable entry to be
+  // refused after four buys.
+  const DONOR_CLASS = {
+    id: 'roster-donor',
+    name: 'Roster Donor Class',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: [],
+    base_gear: [],
+    abilities: [{ name: 'Donor Core' }],
+    advanced_abilities: [
+      { name: 'Donor Advanced' }, { name: 'Donor Advanced 2' }, { name: 'Donor Advanced 3' }
+    ]
+  };
+
+  const rosterWizard = (coreCount, level) => {
+    const own = ownClassPrinting(coreCount);
+    return aspirantStateAtLevel(level, {
+      classes: [own, DONOR_CLASS],
+      preselectedClassId: own.id
+    });
+  };
+
+  const OWN_ADVANCED = { classId: 'roster-own', abilityName: 'Roster Own Advanced', type: 'advanced', crossClass: false };
+  const DONOR_CORE = { classId: 'roster-donor', abilityName: 'Donor Core', type: 'core', crossClass: true };
+  const DONOR_ADVANCED = { classId: 'roster-donor', abilityName: 'Donor Advanced', type: 'advanced', crossClass: true };
+  const DONOR_ADVANCED_2 = { classId: 'roster-donor', abilityName: 'Donor Advanced 2', type: 'advanced', crossClass: true };
+  const DONOR_ADVANCED_3 = { classId: 'roster-donor', abilityName: 'Donor Advanced 3', type: 'advanced', crossClass: true };
+
+  // Four printed Core rows against a free allowance of three: unlockSpend
+  // waives the first three and charges the fourth 1 Perk, so a surface that
+  // showed nothing spent would sell a build the server refuses as a deficit.
+  test('a fourth printed Core Ability is charged at the own-Core price', () => {
+    const wizard = rosterWizard(4, 20);
+    expect(wizard.perksSpent(wizard.getState())).toBe(1);
+  });
+
+  test('a class printing fewer Core Abilities than the free allowance is charged nothing', () => {
+    const wizard = rosterWizard(2, 20);
+    expect(wizard.perksSpent(wizard.getState())).toBe(0);
+  });
+
+  test('the unspent remainder of the free allowance is not handed to a Cross-Class buy', () => {
+    const wizard = rosterWizard(2, 20);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, DONOR_CORE);
+    expect(wizard.perksSpent(state)).toBe(3);
+  });
+
+  // Grant 3 at level 3, 1 already charged for the fourth printed Core: a
+  // 3-Perk Cross-Class Core would total 4 and be refused server-side as a
+  // Perk deficit, so the shop must not sell it.
+  test('a build the fourth printed Core leaves unaffordable is refused', () => {
+    const wizard = rosterWizard(4, 3);
+    expect(wizard.canAcquire(wizard.getState(), DONOR_CORE)).toBe(false);
+    expect(wizard.canAcquire(wizard.getState(), OWN_ADVANCED)).toBe(true);
+  });
+
+  test('a four-Core class fills the cap two purchases sooner, and submits six Abilities', () => {
+    const wizard = rosterWizard(4, 20);
+    const state = wizard.getState();
+    expect(wizard.acquireAbility(state, OWN_ADVANCED)).toBe(true);
+    expect(wizard.acquireAbility(state, DONOR_CORE)).toBe(true);
+    expect(wizard.canAcquire(state, DONOR_ADVANCED)).toBe(false);
+    expect(wizard.buildSubmitPayload().abilities).toHaveLength(6);
+  });
+
+  // The mirror failure: against a fixed allowance of three the wizard believed
+  // a two-Core class already held three Abilities and refused the fourth legal
+  // purchase.
+  test('a two-Core class may buy four abilities before the cap refuses a fifth', () => {
+    const wizard = rosterWizard(2, 20);
+    const state = wizard.getState();
+    [OWN_ADVANCED, DONOR_CORE, DONOR_ADVANCED, DONOR_ADVANCED_2].forEach((pick) => {
+      expect(wizard.canAcquire(state, pick)).toBe(true);
+      expect(wizard.acquireAbility(state, pick)).toBe(true);
+    });
+    expect(wizard.canAcquire(state, DONOR_ADVANCED_3)).toBe(false);
+    expect(wizard.buildSubmitPayload().abilities).toHaveLength(6);
   });
 });

@@ -1509,12 +1509,12 @@ window.CharacterWizard = (function () {
   // ---------- Step 3: Ability Primer ----------
   // Renders the selected class's abilities as read-only cards. The list shown
   // depends on the wizard mode:
-  //   - 'advent'    -> class.abilities_html (the 3 base abilities)
-  //   - 'aspirant'  -> class.abilities_html (the 3 base abilities) — the
+  //   - 'advent'    -> class.abilities_html (the printed Core roster)
+  //   - 'aspirant'  -> class.abilities_html (the printed Core roster) — the
   //                    aspirant's single free-form perk attaches to one of
   //                    these, so the + buttons live on the Core cards: every
-  //                    class has three Core Abilities, but not every class
-  //                    has a populated Advanced roster to attach to instead.
+  //                    class prints a Core roster, but not every class has a
+  //                    populated Advanced roster to attach to instead.
   //   - 'aspiring'  -> the class-build's three picks (pg. 90 steps 3a/4b), as
   //                    a purchase surface: each pick gets a Buy or Drop
   //                    button, disabled when unaffordable. pg. 90 step 3b
@@ -1851,7 +1851,47 @@ window.CharacterWizard = (function () {
 
   const samePick = (a, b) => !!(a && b && a.classId === b.classId && a.abilityName === b.abilityName);
 
-  const perksSpent = (s) => (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0);
+  // The Abilities this state will submit as ordinary rows: the selected
+  // class's printed Core roster plus everything acquired here. Aspiring has no
+  // selected class -- its roster IS its acquired picks (buildSubmitPayload's
+  // aspiring branch sends `abilities: acquiredRows`), so the printed half is
+  // empty there. Counted from the roster rather than from
+  // PERKS.freeCoreAbilities, because nothing limits how many Core Abilities a
+  // class prints (util/class-abilities.js#normalizeAbilities applies no count
+  // limit) and the server prices and caps what is actually submitted.
+  const printedCoreRoster = (s) => {
+    if (economyOf(s) === 'aspiring') return [];
+    const cls = (s && s.classId) ? classesById[s.classId] : null;
+    const printed = cls && Array.isArray(cls.abilities) ? cls.abilities : [];
+    return printed.filter((a) => a && a.name);
+  };
+
+  // pg. 7: a character's own Core roster is its free allowance, and only the
+  // first PERKS.freeCoreAbilities of it. A class printing more than that
+  // charges the full own-Core price for every row past the allowance, exactly
+  // as util/perk-economy.js#unlockSpend does over the submitted array -- the
+  // ability shop never sells an own-class Core row, so the printed roster is
+  // the only place a waiver can be consumed.
+  const ownCoreSpend = (s) => {
+    const free = (PERKS.freeCoreAbilities && PERKS.freeCoreAbilities[economyOf(s)]) || 0;
+    const charged = Math.max(0, printedCoreRoster(s).length - free);
+    return charged * PERKS.prices.ability.own.core;
+  };
+
+  // Ability unlocks only. Step 3's "+ Add Perk" editor writes `state.perk` and
+  // `state.perkAbilityName`, which buildSubmitPayload ships as
+  // `payload.ability_perks`, and util/perk-economy.js#perkSpend charges a Perk
+  // for each of those rows through abilityPerkSpend -- a spend this figure
+  // omits, so a build carrying both an unlock and an Ability Perk shows a
+  // smaller spend here than the server will compute.
+  //
+  // That holds together only while no aspirant-or-aspiring class carries
+  // `rules_version = 'v2'`: services/character/input.js strips ability_perks
+  // off every non-v2 character, and these Ability surfaces exist only in those
+  // two economies, so no character can currently submit both. The two counts
+  // have to be reconciled before that combination exists.
+  const perksSpent = (s) => ownCoreSpend(s)
+    + (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0);
 
   // grant + perLevel * (level - 1), the same shape util/perk-economy.js's
   // perkAllotment uses server-side, so a character created above level 1
@@ -1867,15 +1907,11 @@ window.CharacterWizard = (function () {
   const perksRemaining = (s) => Math.max(0, perksGrant(s) - perksSpent(s));
 
   // pg. 7's cap counts a character's whole Ability roster, not just what was
-  // bought: the free Core allowance (PERKS.freeCoreAbilities, same figure
-  // unlockSpend waives against) is submitted as ordinary Ability rows
-  // alongside anything acquired here (character-wizard.js's serializePayload,
-  // non-aspiring branch), and util/perk-economy.js#buildBreaches's
-  // ABILITY_CAP_RULE counts that whole stored array's length -- it applies no
-  // waiver of its own. Matching that count is what lets this refuse a
-  // purchase the server would refuse too, instead of disagreeing about how
-  // many Abilities the character already has.
-  const abilitiesUsed = (s) => (PERKS.freeCoreAbilities[economyOf(s)] || 0) + (s.acquiredAbilities || []).length;
+  // bought, and util/perk-economy.js#buildBreaches's ABILITY_CAP_RULE counts
+  // the submitted array's length with no waiver of its own. So this counts
+  // exactly what buildSubmitPayload will carry -- the printed Core roster plus
+  // the acquired rows -- and refuses only what the server would refuse.
+  const abilitiesUsed = (s) => printedCoreRoster(s).length + (s.acquiredAbilities || []).length;
 
   const canAcquire = (s, pick) => {
     if ((s.acquiredAbilities || []).some((a) => samePick(a, pick))) return false;
@@ -4087,9 +4123,10 @@ window.CharacterWizard = (function () {
         .map((i) => i && i.name ? i.name : null)
         .filter(Boolean);
     }
-    // Class abilities: the chosen class's three Core Abilities are what a
-    // character starts with, auto-granted at no Perk cost. Anything beyond
-    // that -- an own-class Advanced Ability, or a Cross-Class Core or
+    // Class abilities: the Core roster the chosen class prints is what a
+    // character starts with, waived up to PERKS.freeCoreAbilities and charged
+    // the own-Core price for every row past it (see perksSpent). Anything
+    // beyond that -- an own-class Advanced Ability, or a Cross-Class Core or
     // Advanced from another unlocked class -- is what state.acquiredAbilities
     // holds: the aspirant ability shop's purchases (renderAbilityShop) for a
     // classed character, or this economy's three class-builder picks for an
