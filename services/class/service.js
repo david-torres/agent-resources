@@ -2,7 +2,7 @@ const { normalizeClassInput } = require('./input');
 const { AuthorizationError } = require('../../util/errors');
 const { isSystem } = require('../../util/actor');
 const { canManageClass, canMintUnlockCodes } = require('./policy');
-const { findItemNameConflicts } = require('./item-uniqueness');
+const { findItemNameConflicts, ITEM_FIELDS } = require('./item-uniqueness');
 
 const REQUIRED_REPOSITORY_METHODS = [
   'insertClass',
@@ -14,7 +14,7 @@ const REQUIRED_REPOSITORY_METHODS = [
   'fetchClassItemOwnership'
 ];
 
-const carriesItems = (data) => Array.isArray(data?.gear) || Array.isArray(data?.abilities);
+const carriesItems = (data) => ITEM_FIELDS.some(field => Array.isArray(data?.[field]));
 
 const itemConflictError = async (repo, candidate, previous) => {
   const classRows = await repo.fetchClassItemOwnership();

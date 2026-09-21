@@ -129,3 +129,69 @@ test('flags an ability name conflict independently of gear names', () => {
     { field: 'abilities', name: 'Dead Reckoning', ownerClassId: 'bucc', ownerClassName: 'Buccaneer' }
   ]);
 });
+
+// Advanced Abilities are authored into their own column (classes.advanced_
+// abilities) and share the Ability name space with Core ones. The Perk economy
+// prices a submitted ability by resolving its type from its NAME, and Core vs
+// Advanced is the 1-vs-2 Perk difference (util/perk-economy.js), so a name that
+// is Core for one class and Advanced for another has no single price.
+test('flags an advanced ability name already defined by a public class in another family', () => {
+  const classRows = [classRow('th-v1', 'Thane', { advanced_abilities: [{ name: 'Shieldwall' }] })];
+  const candidate = candidateClass({ advanced_abilities: [{ name: 'Shieldwall' }] });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([
+    { field: 'advanced_abilities', name: 'Shieldwall', ownerClassId: 'th-v1', ownerClassName: 'Thane' }
+  ]);
+});
+
+test('flags an advanced ability name another family already defines as a core ability', () => {
+  const classRows = [classRow('th-v1', 'Thane', { abilities: [{ name: 'Shieldwall' }] })];
+  const candidate = candidateClass({ advanced_abilities: [{ name: 'Shieldwall' }] });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([
+    { field: 'advanced_abilities', name: 'Shieldwall', ownerClassId: 'th-v1', ownerClassName: 'Thane' }
+  ]);
+});
+
+test('flags a core ability name another family already defines as an advanced ability', () => {
+  const classRows = [classRow('th-v1', 'Thane', { advanced_abilities: [{ name: 'To Arms' }] })];
+  const candidate = candidateClass({ abilities: [{ name: 'To Arms' }] });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([
+    { field: 'abilities', name: 'To Arms', ownerClassId: 'th-v1', ownerClassName: 'Thane' }
+  ]);
+});
+
+// Gear stays its own name space: a Signature and an Ability may share a name.
+test('allows an advanced ability name that only collides with another family\'s gear', () => {
+  const classRows = [classRow('gs-v1', 'Gunslinger', { gear: [{ name: 'Revolver' }] })];
+  const candidate = candidateClass({ advanced_abilities: [{ name: 'Revolver' }] });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([]);
+});
+
+test('allows an advanced ability name shared with a sibling in the same version family', () => {
+  const classRows = [
+    classRow('gs-v1', 'Gunslinger', { advanced_abilities: [{ name: 'Trickshot' }] }),
+    classRow('gs-v2', 'Gunslinger v2', { base_class_id: 'gs-v1', advanced_abilities: [{ name: 'Trickshot' }] })
+  ];
+  const candidate = candidateClass({
+    id: 'gs-v2', base_class_id: 'gs-v1', advanced_abilities: [{ name: 'Trickshot' }]
+  });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([]);
+});
+
+// A class may promote a Core Ability to Advanced between versions, so the
+// grandfather set has to span the whole Ability name space, not one column.
+test('grandfathers an advanced ability the class previously stored as a core ability', () => {
+  const classRows = [
+    classRow('th-v1', 'Thane', { abilities: [{ name: 'Gairethinx' }] }),
+    classRow('gs-v1', 'Gunslinger', { abilities: [{ name: 'Gairethinx' }] })
+  ];
+  const candidate = candidateClass({ id: 'th-v1', advanced_abilities: [{ name: 'Gairethinx' }] });
+
+  expect(findItemNameConflicts({
+    candidate, classRows, previous: { abilities: [{ name: 'Gairethinx' }] }
+  })).toEqual([]);
+});

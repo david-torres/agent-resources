@@ -59,7 +59,7 @@ module.exports = {
     try {
       const { data, error } = await supabaseAdmin
         .from('classes')
-        .select('id, name, is_public, base_class_id, rules_edition, content_format, gear, abilities');
+        .select('id, name, is_public, base_class_id, rules_edition, content_format, gear, abilities, advanced_abilities');
       if (error || !Array.isArray(data)) {
         if (error) console.error(error);
         return [];
