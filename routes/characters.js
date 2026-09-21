@@ -511,12 +511,36 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     const allClasses = economy === 'aspiring' || economy === 'aspirant'
       ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
       : [];
+
+    // Maps every id in the character's own version family onto
+    // character.class_id (util/class-family.js#computeVersionFamily is the
+    // single definition of "version family"), the same resolution the
+    // character-show route below already does and
+    // services/character/service.js#updateCharacter uses on save. Without
+    // it, an ability carried over from an EARLIER version of the character's
+    // own class -- now a different class_id after allClasses was collapsed
+    // to the newest version above -- prices as cross-class in the ability
+    // island while `derived` counted it own-class, two disagreeing readings
+    // of the same pick shown on the same page. Fed to both below so they
+    // never can.
+    let classFamilyOf = null;
+    if (character.class_id) {
+      try {
+        const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
+        const family = computeVersionFamily(classFamilyRows || [], character.class_id);
+        classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
+      } catch (_) {
+        // classFamilyOf stays null; abilities compare by class_id alone.
+      }
+    }
+
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
       rulesVersion: effectiveVersion,
-      economy
+      economy,
+      classFamilyOf
     });
 
     let upgradeTargets = [];
@@ -570,7 +594,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
         economy,
         characterClass,
         allClasses,
-        character
+        character,
+        classFamilyOf
       }),
       statList,
       adventV1Classes: filteredAdventV1,

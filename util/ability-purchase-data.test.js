@@ -65,3 +65,21 @@ test('the island carries the served figures, not its own numbers', () => {
   expect(data.figures.prices.ability.cross.advanced).toBe(4);
   expect(data.figures.abilityCap.aspirant).toBe(6);
 });
+
+test('an ability from a newer version of the character own class family is priced at the own rate', () => {
+  // allClasses has already been collapsed to the newest version per family
+  // (util/class-list-grouping.js#latestClassVersions), so the character's
+  // OLDER own class and the catalogue's version of that same family arrive
+  // under two different class_ids. Without classFamilyOf resolving them to
+  // the same family, this ability prices as cross-class instead of own.
+  const OLD_GUNSLINGER = { id: 'a-v1', name: 'Gunslinger', abilities: [{ name: 'Standoff' }], advanced_abilities: [] };
+  const NEW_GUNSLINGER = { id: 'a-v2', name: 'Gunslinger', abilities: [{ name: 'Standoff' }, { name: 'Quick Draw' }], advanced_abilities: [] };
+  const classFamilyOf = (id) => (id === 'a-v1' || id === 'a-v2' ? 'fam-gunslinger' : id);
+  const data = buildAbilityPurchaseData({
+    character: { class_id: 'a-v1', abilities: [], ability_perks: [], level: 5 },
+    characterClass: OLD_GUNSLINGER, allClasses: [NEW_GUNSLINGER], economy: 'aspirant', classFamilyOf
+  });
+  const entry = data.entries.find(e => e.name === 'Quick Draw');
+  expect(entry.crossClass).toBe(false);
+  expect(entry.price).toBe(1);
+});
