@@ -486,6 +486,7 @@ test('a capitalized stored Trait selects its vocabulary option', () => {
 
 const { buildGearPurchaseData } = require('../util/gear-purchase-data');
 const { mountPurchases } = require('../test/helpers/gear-purchase-fixture');
+const { buildAbilityPurchaseData } = require('../util/ability-purchase-data');
 
 const V1_CLASS = {
   id: 'c-v1',
@@ -532,7 +533,8 @@ const renderCharacterForm = (overrides = {}) => {
     effectiveVersion: 'v1',
     maxCreatedAt: '2026-09-19',
     derived: {},
-    gearPurchaseData: overrides.gearPurchaseData ?? null
+    gearPurchaseData: overrides.gearPurchaseData ?? null,
+    abilityPurchaseData: overrides.abilityPurchaseData ?? null
   });
 };
 
@@ -552,6 +554,33 @@ test('an advent character sees today\'s form, with no purchase controls', () => 
   expect(html).not.toContain('id="signaturePurchases"');
   expect(html).not.toContain('gear-purchase-data');
   expect(html).not.toContain('character-gear-purchases.js');
+  expect(html).not.toContain('character-ability-purchases.js');
+});
+
+test('an advent character sees no ability purchase surface', () => {
+  const html = renderCharacterForm({
+    character: { abilities: [{ name: 'Standoff', class_id: 'c-v1' }] }
+  });
+
+  expect(html).toContain('name="abilities[]"');
+  expect(html).not.toContain('id="abilityPurchases"');
+  expect(html).not.toContain('ability-purchase-data');
+  expect(html).not.toContain('character-ability-purchases.js');
+});
+
+test('a V1 character sees the ability purchase surface script', () => {
+  const html = renderCharacterForm({
+    abilityPurchaseData: buildAbilityPurchaseData({
+      character: { class_id: V1_CLASS.id, abilities: [], ability_perks: [], level: 1 },
+      characterClass: V1_CLASS, allClasses: [V1_CLASS], economy: 'aspirant'
+    })
+  });
+
+  expect(html).toContain('id="abilityPurchases"');
+  expect(html).toContain('id="ability-purchase-data"');
+  expect(html).toContain('name="abilities_json"');
+  expect(html).toContain('/js/character-ability-purchases.js');
+  expect(html).not.toContain('name="abilities[]"');
 });
 
 test('a V1 character sees the grid', () => {
