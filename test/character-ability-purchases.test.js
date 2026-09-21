@@ -56,7 +56,12 @@ const fixtureIsland = (overrides = {}) => ({
   entries: overrides.entries || baseEntries(),
   owned: overrides.owned || [],
   aspiringAbilities: overrides.aspiringAbilities || [],
-  level: overrides.level != null ? overrides.level : 10
+  level: overrides.level != null ? overrides.level : 10,
+  // util/ability-purchase-data.js serves this already computed
+  // (util/perk-economy.js#abilityPerkSpend); a test that wants it non-zero
+  // states the number directly, the same way it states any other served
+  // figure.
+  abilityPerkSpend: overrides.abilityPerkSpend || 0
 });
 
 const MOUNT_HTML = (islandJson) => `
@@ -150,6 +155,31 @@ describe('affordability consults both the balance and the cap', () => {
     const form = mountAbilities(fixtureIsland({ owned: [], level: 1 }));
     expect(form.buyAbility('Last Word', CLASS_ID)).toBe(false);
     expect(form.serialize().abilities).toHaveLength(0);
+  });
+
+  // util/perk-economy.js#perkSpend charges unlockSpend PLUS abilityPerkSpend,
+  // and services/character/service.js ratchets a save against that combined
+  // figure. A surface that only tallied unlockSpend would show a purchase
+  // the server then refuses at save.
+  test('a character with existing Ability-Perk spend cannot afford a purchase its unlock spend alone would allow', () => {
+    // Level 3 earns three Perks -- enough for Last Word's own-Advanced price
+    // of two by unlock spend alone, but not once two Perks are already spent
+    // on Ability Perks.
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3, abilityPerkSpend: 2 }));
+    expect(form.getEarned()).toBe(3);
+    expect(form.getSpent()).toBe(2);
+    expect(form.buyAbility('Last Word', CLASS_ID)).toBe(false);
+    expect(form.serialize().abilities).toHaveLength(0);
+  });
+
+  // util/ability-purchase-data.js serves the level already run through
+  // normalizeLevel, so a character stored above the ceiling arrives at this
+  // mount already capped -- this pins that the earned balance follows the
+  // served (capped) level, not a runaway total the raw stored value would
+  // give.
+  test('a character stored above the level ceiling earns no more than the ceiling grants', () => {
+    const atCeiling = mountAbilities(fixtureIsland({ owned: [], level: 20 }));
+    expect(atCeiling.getEarned()).toBe(FIGURES.grants.aspirant + FIGURES.perksPerLevel * 19);
   });
 });
 

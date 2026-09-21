@@ -1,5 +1,7 @@
 const { test, expect } = require('bun:test');
 const { buildAbilityPurchaseData } = require('./ability-purchase-data');
+const { normalizeLevel, LEVEL_CEILING } = require('./stat-caps');
+const { abilityPerkSpend } = require('./perk-economy');
 
 const CLASS_A = { id: 'a', name: 'Gunslinger', abilities: [{ name: 'Standoff' }], advanced_abilities: [{ name: 'Last Word' }] };
 const CLASS_B = { id: 'b', name: 'Illusionist', abilities: [{ name: 'Viewpoint' }], advanced_abilities: [] };
@@ -82,4 +84,34 @@ test('an ability from a newer version of the character own class family is price
   const entry = data.entries.find(e => e.name === 'Quick Draw');
   expect(entry.crossClass).toBe(false);
   expect(entry.price).toBe(1);
+});
+
+// The browser must not re-derive this clamp itself (it only guards against a
+// non-numeric value) -- services/character/service.js's ratchet, and
+// util/perk-economy.js#perkAllotment underneath it, both score a level
+// through normalizeLevel, so a served level past the ceiling would let the
+// purchase surface show an earned balance the server does not agree with.
+test('a character stored above the level ceiling is served the ceiling, not the raw value', () => {
+  const data = buildAbilityPurchaseData({
+    character: { class_id: 'a', abilities: [], ability_perks: [], level: 999 },
+    characterClass: CLASS_A, allClasses: [CLASS_A], economy: 'aspirant'
+  });
+  expect(data.level).toBe(LEVEL_CEILING);
+  expect(data.level).toBe(normalizeLevel(999));
+  const earnedFromServed = data.figures.grants.aspirant + data.figures.perksPerLevel * (data.level - 1);
+  const earnedAtCeiling = data.figures.grants.aspirant + data.figures.perksPerLevel * (LEVEL_CEILING - 1);
+  expect(earnedFromServed).toBe(earnedAtCeiling);
+});
+
+// util/perk-economy.js#perkSpend charges unlockSpend PLUS abilityPerkSpend;
+// the island must serve the second term too, or the surface only ever shows
+// the first half of what the server ratchets a save against.
+test('the served abilityPerkSpend is the character\'s existing Ability-Perk spend, not recomputed by a caller', () => {
+  const perks = [{ id: 'p1' }, { id: 'p2' }];
+  const data = buildAbilityPurchaseData({
+    character: { class_id: 'a', abilities: [], ability_perks: perks, level: 5 },
+    characterClass: CLASS_A, allClasses: [CLASS_A], economy: 'aspirant'
+  });
+  expect(data.abilityPerkSpend).toBe(abilityPerkSpend(perks));
+  expect(data.abilityPerkSpend).toBe(2);
 });

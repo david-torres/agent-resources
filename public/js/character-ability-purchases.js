@@ -45,7 +45,17 @@
 
     var FIGURES = data.figures;
     var ECONOMY = data.economy;
-    var LEVEL = Math.max(1, Math.floor(Number(data.level)) || 1);
+    // util/ability-purchase-data.js serves the level already run through
+    // normalizeLevel (the same clamp util/stat-caps.js applies both ends
+    // of), so this file only guards against a non-numeric value -- it never
+    // re-derives the ceiling itself.
+    var LEVEL = Number(data.level) || 1;
+    // What the character has already spent on Ability Perks
+    // (util/perk-economy.js#abilityPerkSpend), served rather than
+    // recomputed: the server's budget is unlock spend PLUS this, and a
+    // surface that only tracked unlock spend would show a balance the
+    // server does not agree with.
+    var ABILITY_PERK_SPEND = Math.max(0, Number(data.abilityPerkSpend) || 0);
     var entries = Array.isArray(data.entries) ? data.entries : [];
 
     // The character's current roster: what it already owns, plus whatever
@@ -100,7 +110,9 @@
     // other ability spends its full price. Every own-Core row prices
     // identically (see util/perk-economy.js#unlockSpend), so the running
     // total does not depend on which ones happen to be waived -- only how
-    // many are.
+    // many are. ABILITY_PERK_SPEND is added on top, matching
+    // util/perk-economy.js#perkSpend's unlockSpend + abilityPerkSpend: the
+    // save the server ratchets against charges both.
     var getSpent = function () {
       var free = (FIGURES.freeCoreAbilities && FIGURES.freeCoreAbilities[ECONOMY]) || 0;
       var waived = 0;
@@ -115,7 +127,7 @@
         }
         spend += entry ? priceOfEntry(entry) : 0;
       });
-      return spend;
+      return spend + ABILITY_PERK_SPEND;
     };
 
     var getAbilitiesUsed = function () { return purchases.length; };

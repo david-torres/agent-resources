@@ -8,8 +8,9 @@
 //
 // It is built from data the edit GET already holds: the character, its
 // class, and every class the player has unlocked. Nothing here queries.
-const { perkFigures, priceOfAbility } = require('./perk-economy');
+const { perkFigures, priceOfAbility, abilityPerkSpend } = require('./perk-economy');
 const { tagAbilities } = require('./character-derived');
+const { normalizeLevel } = require('./stat-caps');
 
 // An ability is identified by the class that prints it plus its name -- two
 // classes may print the same name, and they are different abilities. See
@@ -140,6 +141,14 @@ const buildOwned = (character) => ((character && character.abilities) || [])
 // character's version-family map may omit it, and cross-class then compares
 // by class_id alone -- the same default util/character-derived.js#sameFamily
 // falls back to when nothing is supplied.
+//
+// The level is served through normalizeLevel rather than raw, and the
+// character's existing Ability-Perk spend is served as its own figure,
+// because both are inputs to services/character/service.js's ratchet
+// (util/perk-economy.js#perkSpend = unlockSpend + abilityPerkSpend) that a
+// browser file must be told rather than re-derive -- a stored level past the
+// ceiling, or an un-served Ability-Perk spend, would let the surface show an
+// earned balance the server does not agree with.
 const buildAbilityPurchaseData = ({ character, characterClass, allClasses, economy, classFamilyOf }) => {
   if (economy !== 'aspirant' && economy !== 'aspiring') return null;
   const { rows, seen } = buildCatalogue(characterClass, allClasses);
@@ -150,7 +159,8 @@ const buildAbilityPurchaseData = ({ character, characterClass, allClasses, econo
     entries: priceRows(rows, { economy, characterClass, character, classFamilyOf }),
     owned: buildOwned(character),
     aspiringAbilities: (character && character.aspiring_abilities) || [],
-    level: (character && character.level) || 1
+    level: normalizeLevel(character && character.level),
+    abilityPerkSpend: abilityPerkSpend(character && character.ability_perks)
   };
 };
 

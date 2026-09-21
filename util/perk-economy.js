@@ -273,6 +273,7 @@ module.exports = {
     perkAllotment,
     perkFigures,
     unlockSpend,
+    abilityPerkSpend,
     perkSpend,
     perkBreakdown,
     buildBreaches,
