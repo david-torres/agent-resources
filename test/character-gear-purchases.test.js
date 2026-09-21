@@ -143,6 +143,63 @@ describe('the surface', () => {
   });
 });
 
+// Proves the real grid is actually wired to CatalogueControls's own grouping
+// and search -- not just that cells still render (the tests above), which
+// would stay green even if groupBy or searchOf were mis-wired or swapped for
+// the wrong field.
+describe('grouping and search, through the real grid', () => {
+  const OTHER_CLASS_ID = 'c-other';
+  const OTHER_CLASS_NAME = 'Other Class';
+
+  const twoClassEntries = () => ([
+    { name: 'Cowboy Hat', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 1 },
+    { name: 'Duster', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 2 },
+    { name: 'Lasso', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 1 },
+    { name: 'Spurs', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 2 }
+  ]);
+
+  test('the group headings are the class names entries are grouped by', () => {
+    mountPurchases(fixtureCharacter({ gear: [], entries: twoClassEntries() }));
+    const grid = document.getElementById('purchaseGrid');
+    const headings = [...grid.querySelectorAll('[data-catalogue-group-heading]')]
+      .map((h) => h.textContent);
+    expect(headings).toEqual([OWN_CLASS_NAME, OTHER_CLASS_NAME]);
+  });
+
+  test('typing into the real search input filters by name across every group, and hides an empty group', () => {
+    mountPurchases(fixtureCharacter({ gear: [], entries: twoClassEntries() }));
+    const grid = document.getElementById('purchaseGrid');
+    const searchInput = grid.querySelector('[data-catalogue-search]');
+    expect(searchInput).not.toBeNull();
+
+    // 'o' is in Cowboy Hat (own) and Lasso (other) but not Duster (own) or
+    // Spurs (other) -- a term that survives in both groups at once, proving
+    // search reaches every group rather than only the first.
+    const Event = document.defaultView.Event;
+    searchInput.value = 'o';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const visible = [...grid.querySelectorAll('[data-signature-name]')]
+      .map((el) => el.getAttribute('data-signature-name'));
+    expect(visible.sort()).toEqual(['Cowboy Hat', 'Lasso']);
+
+    // A term only one class's entries match hides the other group entirely.
+    searchInput.value = 'Cowboy';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const headingsNarrowed = [...grid.querySelectorAll('[data-catalogue-group-heading]')]
+      .map((h) => h.textContent);
+    expect(headingsNarrowed).toEqual([OWN_CLASS_NAME]);
+    expect(grid.textContent).not.toContain('Lasso');
+    expect(grid.textContent).not.toContain('Spurs');
+
+    // Clearing the search restores both groups and every cell.
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const restored = [...grid.querySelectorAll('[data-signature-name]')]
+      .map((el) => el.getAttribute('data-signature-name')).sort();
+    expect(restored).toEqual(['Cowboy Hat', 'Duster', 'Lasso', 'Spurs']);
+  });
+});
+
 describe('replacing a purchase warns first', () => {
   test('replacing a purchased Signature warns here too', () => {
     const form = mountPurchases(fixtureCharacter({ gear: [enchanted('Cowboy Hat')] }));

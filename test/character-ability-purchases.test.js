@@ -201,6 +201,55 @@ describe('rendering', () => {
   });
 });
 
+// Proves the real catalogue is actually wired to CatalogueControls's own
+// grouping and search -- not just that entries still render (the test
+// above), which would stay green even if groupBy or searchOf were mis-wired
+// or swapped for the wrong field.
+describe('grouping and search, through the real catalogue', () => {
+  test('the group headings are the class names entries are grouped by', () => {
+    mountAbilities(fixtureIsland({ owned: [] }));
+    const catalogue = document.getElementById('abilityCatalogue');
+    const headings = [...catalogue.querySelectorAll('[data-catalogue-group-heading]')]
+      .map((h) => h.textContent);
+    expect(headings).toEqual([CLASS_NAME, OTHER_CLASS_NAME]);
+  });
+
+  test('typing into the real search input filters by name across every group, and hides an empty group', () => {
+    mountAbilities(fixtureIsland({ owned: [] }));
+    const catalogue = document.getElementById('abilityCatalogue');
+    const searchInput = catalogue.querySelector('[data-catalogue-search]');
+    expect(searchInput).not.toBeNull();
+
+    // 'n' is in Standoff (own) and Viewpoint (cross) but not Last Word (own)
+    // or Deep Cut (cross) -- a term that survives in both groups at once,
+    // proving search reaches every group rather than only the first.
+    const Event = document.defaultView.Event;
+    searchInput.value = 'n';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+
+    const visible = [...catalogue.querySelectorAll('[data-ability-entry]')]
+      .map((el) => el.getAttribute('data-ability-name'));
+    expect(visible.sort()).toEqual(['Standoff', 'Viewpoint']);
+
+    // A term that only one class's entries match hides the other group
+    // entirely, not just its entries.
+    searchInput.value = 'Standoff';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const headingsNarrowed = [...catalogue.querySelectorAll('[data-catalogue-group-heading]')]
+      .map((h) => h.textContent);
+    expect(headingsNarrowed).toEqual([CLASS_NAME]);
+    expect(catalogue.textContent).not.toContain('Viewpoint');
+    expect(catalogue.textContent).not.toContain('Deep Cut');
+
+    // Clearing the search restores both groups and every entry.
+    searchInput.value = '';
+    searchInput.dispatchEvent(new Event('input', { bubbles: true }));
+    const restored = [...catalogue.querySelectorAll('[data-ability-entry]')]
+      .map((el) => el.getAttribute('data-ability-name')).sort();
+    expect(restored).toEqual(['Deep Cut', 'Last Word', 'Standoff', 'Viewpoint']);
+  });
+});
+
 describe('serialization', () => {
   test('the serialized payload carries each ability class_id and type', () => {
     const form = mountAbilities(fixtureIsland({ owned: [] }));

@@ -555,6 +555,7 @@ test('an advent character sees today\'s form, with no purchase controls', () => 
   expect(html).not.toContain('gear-purchase-data');
   expect(html).not.toContain('character-gear-purchases.js');
   expect(html).not.toContain('character-ability-purchases.js');
+  expect(html).not.toContain('catalogue-controls.js');
 });
 
 test('an advent character sees no ability purchase surface', () => {
@@ -566,6 +567,7 @@ test('an advent character sees no ability purchase surface', () => {
   expect(html).not.toContain('id="abilityPurchases"');
   expect(html).not.toContain('ability-purchase-data');
   expect(html).not.toContain('character-ability-purchases.js');
+  expect(html).not.toContain('catalogue-controls.js');
 });
 
 test('a V1 character sees the ability purchase surface script', () => {
@@ -580,6 +582,7 @@ test('a V1 character sees the ability purchase surface script', () => {
   expect(html).toContain('id="ability-purchase-data"');
   expect(html).toContain('name="abilities_json"');
   expect(html).toContain('/js/character-ability-purchases.js');
+  expect(html).toContain('/js/catalogue-controls.js');
   expect(html).not.toContain('name="abilities[]"');
 });
 
@@ -594,6 +597,7 @@ test('a V1 character sees the grid', () => {
   expect(html).toContain('name="gear_json"');
   expect(html).toContain('/js/signature-entry.js');
   expect(html).toContain('/js/character-gear-purchases.js');
+  expect(html).toContain('/js/catalogue-controls.js');
   expect(html).not.toContain('name="gear[]"');
 });
 
