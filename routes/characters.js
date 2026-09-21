@@ -283,11 +283,13 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             description_html: renderMarkdown(a.description || '')
           }))
         : [],
-      // Advanced abilities: consumed only in aspiring mode, by the
-      // class-builder's ability picker and its step 3 Perk-spend summary
-      // (public/js/character-wizard.js). Advent and aspirant modes never
-      // read this list — both render `abilities_html` above instead. Same
-      // shape — {name, description_html}[].
+      // Advanced abilities: consumed by aspiring mode's class-builder ability
+      // picker and its step 3 Perk-spend summary, and by aspirant mode's
+      // step 3 ability shop, which also reads other classes' plain
+      // `abilities` for its Cross-Class rows (public/js/character-wizard.js,
+      // abilityShopEntries). Advent never reads this list — it renders
+      // `abilities_html` above instead. Same shape — {name,
+      // description_html}[].
       advanced_abilities: Array.isArray(c.advanced_abilities) ? c.advanced_abilities : [],
       advanced_abilities_html: Array.isArray(c.advanced_abilities)
         ? c.advanced_abilities.map((a) => ({

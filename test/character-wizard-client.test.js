@@ -1693,4 +1693,29 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
       { classId: 'fixture-aspirant-other', abilityName: 'Other Core', type: 'core', crossClass: true }
     ]);
   });
+
+  // pg. 7's cap counts the character's whole roster -- the three free Core
+  // Abilities every class grants (PERKS.freeCoreAbilities.aspirant) plus
+  // whatever has been acquired -- not just what was bought here. A level
+  // high enough to afford a fourth purchase outright still has to be
+  // refused once the third acquisition reaches the cap.
+  test('an aspirant character at the cap cannot buy another ability even with Perks in hand', () => {
+    const wizard = aspirantStateAtLevel(20);
+    const state = wizard.getState();
+    const picks = [
+      { classId: 'fixture-aspirant-own', abilityName: 'Own Advanced', type: 'advanced', crossClass: false },
+      { classId: 'fixture-aspirant-other', abilityName: 'Other Core', type: 'core', crossClass: true },
+      { classId: 'fixture-aspirant-other', abilityName: 'Other Advanced', type: 'advanced', crossClass: true }
+    ];
+    picks.forEach((pick) => {
+      expect(wizard.canAcquire(state, pick)).toBe(true);
+      wizard.acquireAbility(state, pick);
+    });
+    const fourth = {
+      classId: 'fixture-aspirant-other', abilityName: 'Other Advanced 2', type: 'advanced', crossClass: true
+    };
+    expect(wizard.canAcquire(state, fourth)).toBe(false);
+    expect(wizard.acquireAbility(state, fourth)).toBe(false);
+    expect(state.acquiredAbilities).toHaveLength(3);
+  });
 });

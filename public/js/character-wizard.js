@@ -1866,8 +1866,21 @@ window.CharacterWizard = (function () {
 
   const perksRemaining = (s) => Math.max(0, perksGrant(s) - perksSpent(s));
 
+  // pg. 7's cap counts a character's whole Ability roster, not just what was
+  // bought: the free Core allowance (PERKS.freeCoreAbilities, same figure
+  // unlockSpend waives against) is submitted as ordinary Ability rows
+  // alongside anything acquired here (character-wizard.js's serializePayload,
+  // non-aspiring branch), and util/perk-economy.js#buildBreaches's
+  // ABILITY_CAP_RULE counts that whole stored array's length -- it applies no
+  // waiver of its own. Matching that count is what lets this refuse a
+  // purchase the server would refuse too, instead of disagreeing about how
+  // many Abilities the character already has.
+  const abilitiesUsed = (s) => (PERKS.freeCoreAbilities[economyOf(s)] || 0) + (s.acquiredAbilities || []).length;
+
   const canAcquire = (s, pick) => {
     if ((s.acquiredAbilities || []).some((a) => samePick(a, pick))) return false;
+    const cap = PERKS.abilityCap[economyOf(s)];
+    if (cap != null && abilitiesUsed(s) + 1 > cap) return false;
     return perksSpent(s) + priceOfPick(pick) <= perksGrant(s);
   };
 

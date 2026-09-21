@@ -38,9 +38,12 @@ const aspiringStateWithBuild = (build = {}) => {
 // Task 7's aspirant ability shop: an own Class with a populated Core roster
 // (so renderAbilityPrimer's non-aspiring branch has something to show
 // before the shop) plus one Advanced ability, and a second unlocked Class so
-// the shop has a Cross-Class row to offer. Both carry content_format
-// 'aspirant', which is what resolves the fixture's classes to the aspirant
-// economy (util/merx-economy.js#economyFor) rather than advent's.
+// the shop has a Cross-Class row to offer. The other Class carries two
+// Advanced abilities rather than one, so a cap test has a fourth purchasable
+// entry to be refused after three have been bought. Both carry
+// content_format 'aspirant', which is what resolves the fixture's classes to
+// the aspirant economy (util/merx-economy.js#economyFor) rather than
+// advent's.
 const abilityHtml = (name) => ({ name, description_html: `<p>${name} description.</p>` });
 
 const ASPIRANT_OWN_CLASS = {
@@ -67,8 +70,8 @@ const ASPIRANT_OTHER_CLASS = {
   base_gear: [],
   abilities: [{ name: 'Other Core' }],
   abilities_html: [abilityHtml('Other Core')],
-  advanced_abilities: [{ name: 'Other Advanced' }],
-  advanced_abilities_html: [abilityHtml('Other Advanced')]
+  advanced_abilities: [{ name: 'Other Advanced' }, { name: 'Other Advanced 2' }],
+  advanced_abilities_html: [abilityHtml('Other Advanced'), abilityHtml('Other Advanced 2')]
 };
 
 // Boots an aspirant character at `level`, its own Class preselected so
