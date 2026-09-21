@@ -19,7 +19,7 @@
 // builder) live in test/helpers/wizard-fixture.js so other test files can
 // reuse them.
 const { test, expect, describe } = require('bun:test');
-const { bootWizard, fixture, twelveItems, sixItems } = require('./helpers/wizard-fixture');
+const { bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild } = require('./helpers/wizard-fixture');
 const { economyFigures } = require('../util/merx-economy');
 const { statCapFigures } = require('../util/stat-caps');
 const { MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
@@ -1473,4 +1473,106 @@ test('the shop follows the resolved economy, not the URL mode', () => {
   wizard.getState().classId = 'c-v1';
   const classItems = wizard.getShopPool().filter((p) => p.kind === 'class');
   expect(classItems.length).toBeGreaterThan(0);
+});
+
+// Task 1 of the Perk Economy Surfaces plan: the wizard submits its own three
+// picks (pg. 90 steps 3a/4b) as `aspiring_abilities`, separately from
+// whatever it has actually bought with its starting Perks (`abilities`).
+describe('the wizard submits its Ability pool separately from what it owns', () => {
+  test('the wizard submits an aspiring character two Core and one Advanced pick', () => {
+    const wizard = aspiringStateWithBuild({
+      coreAbilities: [
+        { classId: 'c1', abilityName: 'Standoff' },
+        { classId: 'c2', abilityName: 'Viewpoint' }
+      ],
+      advancedAbility: { classId: 'c1', abilityName: 'Last Word' }
+    });
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.aspiring_abilities).toEqual([
+      { class_id: 'c1', name: 'Standoff', type: 'core' },
+      { class_id: 'c2', name: 'Viewpoint', type: 'core' },
+      { class_id: 'c1', name: 'Last Word', type: 'advanced' }
+    ]);
+  });
+
+  test('an unbought pick is not submitted as an owned ability', () => {
+    // pg. 90 step 3b: the picks need not be acquired "immediately (or at all)".
+    const wizard = aspiringStateWithBuild({
+      coreAbilities: [
+        { classId: 'c1', abilityName: 'Standoff' },
+        { classId: 'c2', abilityName: 'Viewpoint' }
+      ],
+      advancedAbility: { classId: 'c1', abilityName: 'Last Word' },
+      acquired: []
+    });
+    expect(wizard.buildSubmitPayload().abilities).toEqual([]);
+  });
+
+  test('a bought pick is submitted as an owned ability as well as a pick', () => {
+    const wizard = aspiringStateWithBuild({
+      coreAbilities: [
+        { classId: 'c1', abilityName: 'Standoff' },
+        { classId: 'c2', abilityName: 'Viewpoint' }
+      ],
+      advancedAbility: { classId: 'c1', abilityName: 'Last Word' },
+      acquired: [{ classId: 'c1', abilityName: 'Standoff', type: 'core' }]
+    });
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.aspiring_abilities).toHaveLength(3);
+    expect(payload.abilities).toEqual([
+      { class_id: 'c1', name: 'Standoff', type: 'core' }
+    ]);
+  });
+
+  test('the wizard holds no Perk figure of its own', () => {
+    const source = require('fs').readFileSync(
+      require.resolve('../public/js/character-wizard.js'), 'utf8'
+    );
+    expect(source).not.toContain('ASPIRING_PERKS_BUDGET');
+    expect(source).not.toContain('ASPIRING_CORE_PERKS');
+    expect(source).not.toContain('ASPIRING_ADVANCED_PERKS');
+  });
+});
+
+// pg. 90 step 4a: "You may repeat Classes from those your Signature Items
+// and/or Core Abilities were sourced from" -- so only the two Core picks
+// need distinct classes, matching validateAspiringBuild's corePicks-only
+// check (services/character/input.js).
+describe('the aspiring builder relaxes distinct-class to the Core picks only (pg. 90 step 4a)', () => {
+  const builderWith = (coreAbilities, advancedAbility) => {
+    const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [] }));
+    const state = wizard.getState();
+    state.classBuild.classGear = [
+      { classId: 'g1', itemName: 'Item A' },
+      { classId: 'g2', itemName: 'Item B' },
+      { classId: 'g3', itemName: 'Item C' }
+    ];
+    state.classBuild.coreAbilities = coreAbilities;
+    state.classBuild.advancedAbility = advancedAbility;
+    return wizard;
+  };
+
+  test('the Advanced pick may repeat a class already used by a Core pick', () => {
+    const wizard = builderWith(
+      [
+        { classId: 'c1', abilityName: 'Standoff' },
+        { classId: 'c2', abilityName: 'Viewpoint' }
+      ],
+      { classId: 'c1', abilityName: 'Last Word' }
+    );
+    expect(wizard.validateBuilder()).toEqual({ ok: true, errors: [] });
+  });
+
+  test('two Core picks from the same class are still rejected', () => {
+    const wizard = builderWith(
+      [
+        { classId: 'c1', abilityName: 'Standoff' },
+        { classId: 'c1', abilityName: 'Viewpoint' }
+      ],
+      { classId: 'c2', abilityName: 'Last Word' }
+    );
+    const result = wizard.validateBuilder();
+    expect(result.ok).toBe(false);
+    expect(result.errors).toContain('Core Abilities must come from different classes.');
+  });
 });

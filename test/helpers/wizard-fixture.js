@@ -11,7 +11,29 @@ const path = require('path');
 const { JSDOM } = require('jsdom');
 const { economyFor, economyFigures } = require('../../util/merx-economy');
 const { statCapFigures } = require('../../util/stat-caps');
+const { perkFigures } = require('../../util/perk-economy');
 const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
+
+// Boots a wizard in aspiring mode with its class-build slots (and, for
+// mode-aware assertions, the acquired-abilities list) pre-filled, skipping
+// the step-1 UI walkthrough entirely. `build.coreAbilities` and
+// `build.advancedAbility` take the same { classId, abilityName } shape the
+// builder itself stores; `build.acquired` takes { classId, abilityName,
+// type } and becomes state.acquiredAbilities.
+const aspiringStateWithBuild = (build = {}) => {
+  const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [], preselectedClassId: null }));
+  const state = wizard.getState();
+  state.classBuild.coreAbilities = (build.coreAbilities || []).map((c) => ({
+    classId: c.classId, abilityName: c.abilityName
+  }));
+  state.classBuild.advancedAbility = build.advancedAbility
+    ? { classId: build.advancedAbility.classId, abilityName: build.advancedAbility.abilityName }
+    : { classId: null, abilityName: null };
+  state.acquiredAbilities = (build.acquired || []).map((a) => ({
+    classId: a.classId, abilityName: a.abilityName, type: a.type
+  }));
+  return wizard;
+};
 
 // A V1 class's twelve printed Signatures, three to a column across the four
 // columns the book prints (ENCLAVE: Aspirant, pg. 11). `sixItems()` is the
@@ -177,7 +199,7 @@ const bootWizard = (data, options = {}) => {
 
 // Fills in the wizardData keys a bootWizard caller doesn't care about for its
 // own test, most of them the server-served figures the client reads instead
-// of keeping its own copy (economy, statCaps, merxPerMissionSuccess,
+// of keeping its own copy (economy, statCaps, perks, merxPerMissionSuccess,
 // economyByClassId, economyWhenClassless). The per-class and classless
 // economy defaults are resolved with the real economyFor against the given
 // mode/classes, the same function routes/characters.js calls, so a test
@@ -228,6 +250,7 @@ const fixture = (overrides = {}) => {
     commonItems: [],
     economy: economyFigures(),
     statCaps: statCapFigures(),
+    perks: perkFigures(),
     merxPerMissionSuccess: MERX_PER_MISSION_SUCCESS,
     economyByClassId,
     economyWhenClassless,
@@ -235,4 +258,4 @@ const fixture = (overrides = {}) => {
   };
 };
 
-module.exports = { bootWizard, fixture, twelveItems, sixItems };
+module.exports = { bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild };

@@ -22,6 +22,7 @@ window.CharacterWizard = (function () {
   // serves them through the JSON island above. Nothing here may hold its own copy.
   const ECONOMY = DATA.economy;
   const STAT_FIGURES = DATA.statCaps;
+  const PERKS = DATA.perks;
 
   // Which economy the character being built is under. Resolved on the server by
   // economyFor and served per class id, so this cannot drift from the save path
@@ -54,6 +55,12 @@ window.CharacterWizard = (function () {
       quirks: [],
       accessories: [],
       abilityPerks: [],
+      // Which of the class-build's own picks an aspiring character has paid
+      // Perks to actually own, as { classId, abilityName, type }. Nothing
+      // adds to this yet -- the buy surface lands in a later task -- so an
+      // aspiring character created now owns none of its picks, which pg. 90
+      // step 3b allows.
+      acquiredAbilities: [],
       name: '',
       appearance: '',
       background: '',
@@ -77,12 +84,13 @@ window.CharacterWizard = (function () {
       gearClassFilter: '',
       // Aspiring-mode class builder. The user fills 6 slots — 3 class-gear
       // picks (one item each from 3 distinct classes) and 3 ability picks
-      // (2 core abilities + 1 advanced ability, from 3 distinct classes;
-      // a class can appear in both lists, but at most once in each). Cost
-      // is tracked separately in merx (items priced at
+      // (2 core abilities from 2 distinct classes, + 1 advanced ability that
+      // may repeat either core's class — pg. 90 step 4a). A class-gear pick
+      // can also repeat an ability pick's class; the two lists are checked
+      // separately. Cost is tracked separately in merx (items priced at
       // ECONOMY.prices.signature.own, signaturePriceFor below) and perks
-      // (core: 1, advanced: 2) against the budget. Only populated in
-      // aspiring mode; other modes leave every slot null.
+      // (PERKS.prices.ability.own.core / .advanced) against the grant. Only
+      // populated in aspiring mode; other modes leave every slot null.
       classBuild: {
         classGear: [
           { classId: null, itemName: null },
@@ -1505,9 +1513,10 @@ window.CharacterWizard = (function () {
   //   - 'aspiring'  -> the class-build's picked abilities, rendered as the
   //                    Perk spend step below.
   // Aspiring mode renders the class-build's picked abilities as the Perk
-  // spend step. The three abilities are fixed (2 cores at 1 Perk each + 1
-  // advanced at 2 Perks = the full 4-Perk budget), so this page is a
-  // confirmation of the spend rather than a picker.
+  // spend step. The three picks (from step 1) are fixed, so this page is a
+  // confirmation of what they'd cost in Perks rather than a picker --
+  // PERKS.grants.aspiring is short of what buying all three costs, which is
+  // the rule, not an error (see the Class Builder comment above).
   const renderAbilityPrimer = () => {
     if (!abilityPrimerList) return;
     if (DATA.mode === 'aspiring') {
@@ -1515,11 +1524,11 @@ window.CharacterWizard = (function () {
       const combos = [];
       (build.coreAbilities || []).forEach((s) => {
         if (s && s.classId && s.abilityName) {
-          combos.push({ slot: s, cost: ASPIRING_CORE_PERKS, type: 'core' });
+          combos.push({ slot: s, cost: PERKS.prices.ability.own.core, type: 'core' });
         }
       });
       if (build.advancedAbility && build.advancedAbility.classId && build.advancedAbility.abilityName) {
-        combos.push({ slot: build.advancedAbility, cost: ASPIRING_ADVANCED_PERKS, type: 'advanced' });
+        combos.push({ slot: build.advancedAbility, cost: PERKS.prices.ability.own.advanced, type: 'advanced' });
       }
       if (combos.length === 0) {
         abilityPrimerList.innerHTML = '<p class="has-text-grey">No abilities picked yet — go back to step 1 to choose your class&#39;s core and advanced abilities.</p>';
@@ -1554,8 +1563,9 @@ window.CharacterWizard = (function () {
       }).join('')
       + '<div class="box mt-4 has-background-light">'
       +   '<p class="mb-0">These are your class&#39;s abilities — spending '
-      +     '<strong>' + perksSpent + ' / ' + ASPIRING_PERKS_BUDGET + '</strong> '
-      +     'Perks in total (core abilities cost 1 Perk each, the advanced ability costs 2).</p>'
+      +     '<strong>' + perksSpent + ' / ' + PERKS.grants.aspiring + '</strong> '
+      +     'Perks in total (core abilities cost ' + PERKS.prices.ability.own.core + ' Perk each, '
+      +     'the advanced ability costs ' + PERKS.prices.ability.own.advanced + ').</p>'
       + '</div>';
       return;
     }
@@ -1628,22 +1638,18 @@ window.CharacterWizard = (function () {
   // or ability within that class. Selection-only: this page just defines
   // WHAT the aspiring class owns. The budget is spent later — the picked
   // items are sold on step 4's gear page at the own-class Signature price
-  // (ECONOMY.prices.signature.own), and the picked abilities are the Perk
-  // cost on step 3 (core = 1 Perk, advanced = 2 Perks).
+  // (ECONOMY.prices.signature.own), and the picked abilities are priced in
+  // Perks on step 3 (PERKS.prices.ability.own.core / .advanced).
   //   - Class Gear slot (3x) -> step 4 shop item (own-class Signature price).
-  //   - Core Ability slot (2x): cheapest abilities, 1 Perk each.
-  //   - Advanced Ability slot (1x): 2 Perks.
-  // Budgets: the served aspiring Merx grant (gear page) + 4 Perks (abilities
-  // primer). Validation: every slot filled, classes unique within the items
-  // list, classes unique within the abilities list (a class can appear in
-  // both lists, but at most once in each).
-  const ASPIRING_CORE_PERKS = 1;
-  const ASPIRING_ADVANCED_PERKS = 2;
-  // Perk budget = 2 cores (1 each) + 1 advanced (2) = 4. Don't try to make
-  // this smaller without also dropping a slot — the user has to pick all
-  // three abilities, and the costs are what they are.
-  const ASPIRING_PERKS_BUDGET = 4;
-
+  //   - Core Ability slot (2x): PERKS.prices.ability.own.core each.
+  //   - Advanced Ability slot (1x): PERKS.prices.ability.own.advanced.
+  // The three picks are the aspiring character's Class (pg. 90 steps 3a/4b);
+  // the grant it starts with is PERKS.grants.aspiring, which is less than
+  // what buying all three would cost -- acquiring a pick is a separate,
+  // optional spend (step 3b: "though you do not need to acquire them
+  // immediately (or at all)"). Validation: every slot filled, classes unique
+  // within the items list, the two Core Abilities from different classes (the
+  // Advanced pick may repeat either -- pg. 90 step 4a).
   const builderList = document.getElementById('builderStep');
 
   // Cheap accessor: does this class have any items/abilities to offer?
@@ -1811,10 +1817,10 @@ window.CharacterWizard = (function () {
   // live totals and for the Next-button gate.
 
   // Validate the builder: every slot filled, classes unique within items,
-  // classes unique within abilities. Returns { ok: bool, errors: [] } so the
-  // UI can surface per-problem messages. Budgets are NOT checked here — the
-  // picks are spent on steps 3 (abilities) and 4 (gear), not gate-tested on
-  // the selection page.
+  // the two Core Abilities from different classes. Returns { ok: bool,
+  // errors: [] } so the UI can surface per-problem messages. Budgets are NOT
+  // checked here — the picks are spent on steps 3 (abilities) and 4 (gear),
+  // not gate-tested on the selection page.
   const validateBuilder = () => {
     const errors = [];
     const build = state.classBuild || {};
@@ -1832,10 +1838,14 @@ window.CharacterWizard = (function () {
     if (gearClasses.length === new Set(gearClasses).size) {/* ok */}
     else errors.push('Each Class Gear item must come from a different class.');
 
-    // Class uniqueness within abilities list.
-    const abilityClasses = [...coreFilled, ...advFilled].map((s) => s.classId);
-    if (abilityClasses.length === new Set(abilityClasses).size) {/* ok */}
-    else errors.push('Core and Advanced abilities must come from different classes.');
+    // pg. 90 step 4a: "You may repeat Classes from those your Signature
+    // Items and/or Core Abilities were sourced from" -- so only the two Core
+    // picks are checked against each other; the Advanced pick may repeat
+    // either. Matches validateAspiringBuild's corePicks-only check
+    // (services/character/input.js).
+    const coreClasses = coreFilled.map((s) => s.classId);
+    if (coreClasses.length === new Set(coreClasses).size) {/* ok */}
+    else errors.push('Core Abilities must come from different classes.');
 
     return { ok: errors.length === 0, errors };
   };
@@ -2045,22 +2055,21 @@ window.CharacterWizard = (function () {
       const togglerBtnLabel = picksCount === 0
         ? 'Add ' + title.toLowerCase()
         : 'Add another ' + title.toLowerCase();
-      // Exclusion set: classes already picked in this section. Hides
-      // already-picked classes from the dropdown.
-      const usedClassIds = new Set(picks.map((p) => p.classId));
-      // Filter options: drop classes already picked, drop options whose
-      // kind doesn't match the available slot (e.g., advanced when 1 is
-      // already picked, or when no advanced slot is open).
+      // Exclusion set: classes already picked in this section, for hiding
+      // already-picked classes from the dropdown. For abilities this is
+      // Core classes only -- the Advanced pick may repeat either Core's
+      // class (pg. 90 step 4a), so an Advanced option is never excluded by
+      // class, only once the single Advanced slot is already filled.
+      const usedClassIds = section === 'abilities'
+        ? new Set(picks.filter((p) => p.abilityType !== 'advanced').map((p) => p.classId))
+        : new Set(picks.map((p) => p.classId));
       const visibleOptions = options.filter((o) => {
         if (!o || !o.classId || !o.name) return false;
-        if (usedClassIds.has(o.classId)) return false;
-        // For abilities: if option is advanced and advanced slot is taken,
-        // hide. For gear: no such restriction (all slots are gear).
         if (section === 'abilities' && o.type === 'advanced') {
           const adv = build.advancedAbility;
-          if (adv && adv.classId && adv.abilityName) return false;
+          return !(adv && adv.classId && adv.abilityName);
         }
-        return true;
+        return !usedClassIds.has(o.classId);
       });
       const optionLis = visibleOptions.map((o) => {
         return '<li role="option" data-class-id="' + esc(o.classId) + '" data-item-name="' + esc(o.name) + '" data-type="' + esc(o.type || 'gear') + '" data-description="' + esc(o.description || '') + '">'
@@ -2196,7 +2205,7 @@ window.CharacterWizard = (function () {
       + '</div>'
       + '</div>'
       + '<div class="box mt-4 has-background-light">'
-      +   '<p class="has-text-grey is-size-7 mb-2">Your budget is spent later: the items you pick show up on the gear page at <strong>' + ECONOMY.prices.signature.own + ' Merx</strong> each, and the abilities are the <strong>Perk</strong> cost on the abilities primer (core = 1, advanced = 2).</p>'
+      +   '<p class="has-text-grey is-size-7 mb-2">Your budget is spent later: the items you pick show up on the gear page at <strong>' + ECONOMY.prices.signature.own + ' Merx</strong> each, and the abilities are the <strong>Perk</strong> cost on the abilities primer (core = ' + PERKS.prices.ability.own.core + ', advanced = ' + PERKS.prices.ability.own.advanced + ').</p>'
       + (validation.errors.length
             ? '<p class="help is-danger">' + esc(validation.errors.join(' · ')) + '</p>'
             : '')
@@ -3880,20 +3889,31 @@ window.CharacterWizard = (function () {
     // normalizeAbilityItems + setCharacterAbilities writes rows into
     // public.class_abilities. `type` must be explicit on every row: an absent
     // one means "keep whatever is stored" to the reconcile path, not 'core'.
-    // Aspiring is class-less: abilities come from state.classBuild.coreAbilities
-    // + .advancedAbility, each potentially from a different unlocked class.
+    // Aspiring is class-less: its Class is the three picks from
+    // state.classBuild.coreAbilities + .advancedAbility, each potentially
+    // from a different unlocked class. Those picks and what the character
+    // actually owns are different things (pg. 90 step 3b: the picks need not
+    // be acquired "immediately (or at all)"), so they go into separate keys.
     const c = (typeof selectedClass === 'function') ? selectedClass() : null;
     if (DATA.mode === 'aspiring') {
       const build = state.classBuild || {};
-      const corePicks = (build.coreAbilities || [])
-        .filter((s) => s && s.classId && s.abilityName)
-        .map((s) => ({ name: s.abilityName, class_id: s.classId, type: 'core' }));
-      const adv = build.advancedAbility;
-      const advPicks = (adv && adv.classId && adv.abilityName)
-        ? [{ name: adv.abilityName, class_id: adv.classId, type: 'advanced' }]
-        : [];
-      const abilityPicks = corePicks.concat(advPicks);
-      if (abilityPicks.length) payload.abilities = abilityPicks;
+      const picks = [];
+      (build.coreAbilities || []).forEach((slot) => {
+        if (slot && slot.classId && slot.abilityName) {
+          picks.push({ class_id: slot.classId, name: slot.abilityName, type: 'core' });
+        }
+      });
+      if (build.advancedAbility && build.advancedAbility.classId && build.advancedAbility.abilityName) {
+        picks.push({
+          class_id: build.advancedAbility.classId,
+          name: build.advancedAbility.abilityName,
+          type: 'advanced'
+        });
+      }
+      payload.aspiring_abilities = picks;
+      payload.abilities = (state.acquiredAbilities || []).map((a) => ({
+        class_id: a.classId, name: a.abilityName, type: a.type === 'advanced' ? 'advanced' : 'core'
+      }));
     } else {
       const abilityList = c && c.abilities;
       if (c && Array.isArray(abilityList) && abilityList.length) {
@@ -4019,11 +4039,11 @@ window.CharacterWizard = (function () {
 
   // buildSubmitPayload / onSubmitSuccess are invoked from the Submit button in
   // views/character-wizard.handlebars; getState is a console debug handle.
-  // getMerxBudget / getTotalPoints / getFreeBaseCount are exposed for the
-  // same reason -- pure reads the test harness needs to reach. syncBaseGear
-  // touches only state (no DOM), so it's exposed too -- the test harness
-  // never visits step 4's DOM, and this is the only way to exercise what it
-  // actually loads into state.gear.
+  // getMerxBudget / getTotalPoints / getFreeBaseCount / validateBuilder are
+  // exposed for the same reason -- pure reads the test harness needs to
+  // reach. syncBaseGear touches only state (no DOM), so it's exposed too --
+  // the test harness never visits step 4's DOM, and this is the only way to
+  // exercise what it actually loads into state.gear.
   return {
     buildSubmitPayload,
     serializePayload,
@@ -4034,6 +4054,7 @@ window.CharacterWizard = (function () {
     getSlotsUsed,
     getTotalPoints,
     getFreeBaseCount: freeBaseCount,
+    validateBuilder,
     syncBaseGear,
     renderGearStep,
     buySignature,

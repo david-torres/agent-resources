@@ -38,6 +38,7 @@ const { computeVersionFamily } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
+const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
@@ -341,6 +342,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       commonItems: commonItemsHtml,
       economy: economyFigures(),
       statCaps: statCapFigures(),
+      perks: perkFigures(),
       // Mission income is not the economy module's to hold -- that module is
       // require-free and this figure lives in util/enclave-consts.js, where
       // the derivation reads it. Served alongside rather than copied into it.
