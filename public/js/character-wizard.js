@@ -1828,10 +1828,12 @@ window.CharacterWizard = (function () {
   };
 
   // pg. 90 step 3b: the picks are the character's Class, and it pays for them
-  // "though you do not need to acquire them immediately (or at all)". So the
-  // grant deliberately cannot cover all three -- 1 + 1 + 2 against a grant of
-  // 3 -- and a player choosing two of the three is the expected outcome, not
-  // an under-spend to warn about.
+  // "though you do not need to acquire them immediately (or at all)". So
+  // PERKS.grants.aspiring deliberately falls short of the two Core picks'
+  // PERKS.prices.ability.own.core plus the Advanced pick's
+  // PERKS.prices.ability.own.advanced summed together, and a player choosing
+  // two of the three is the expected outcome, not an under-spend to warn
+  // about.
   const priceOfPick = (pick) => (
     pick && pick.type === 'advanced'
       ? PERKS.prices.ability.own.advanced
