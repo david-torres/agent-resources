@@ -4088,13 +4088,13 @@ window.CharacterWizard = (function () {
         .filter(Boolean);
     }
     // Class abilities: the chosen class's three Core Abilities are what a
-    // character starts with. Advanced Abilities are not auto-granted: an
-    // own-class one (ENCLAVE: Aspirant V1, pg. 7 -- PERKS.prices.ability.own
-    // .advanced) costs more than a new character's starting grant
-    // (PERKS.grants.aspirant) covers. A class's Advanced roster is surfaced
-    // only in the aspiring class-builder and its step 3 summary, never here.
-    // We send abilities as {name, class_id, type} so the server's
-    // normalizeAbilityItems + setCharacterAbilities writes rows into
+    // character starts with, auto-granted at no Perk cost. Anything beyond
+    // that -- an own-class Advanced Ability, or a Cross-Class Core or
+    // Advanced from another unlocked class -- is what state.acquiredAbilities
+    // holds: the aspirant ability shop's purchases (renderAbilityShop) for a
+    // classed character, or this economy's three class-builder picks for an
+    // aspiring one. We send abilities as {name, class_id, type} so the
+    // server's normalizeAbilityItems + setCharacterAbilities writes rows into
     // public.class_abilities. `type` must be explicit on every row: an absent
     // one means "keep whatever is stored" to the reconcile path, not 'core'.
     // Aspiring is class-less: its Class is the three picks from
@@ -4103,6 +4103,16 @@ window.CharacterWizard = (function () {
     // actually owns are different things (pg. 90 step 3b: the picks need not
     // be acquired "immediately (or at all)"), so they go into separate keys.
     const c = (typeof selectedClass === 'function') ? selectedClass() : null;
+    // Shared by both branches: whatever has been bought beyond the free Core
+    // roster, each row already carrying its own class_id and tier. Aspiring
+    // is the only economy this concats onto its own picks rather than a free
+    // roster -- aspiring's roster IS its three picks, and PERKS.freeCoreAbilities
+    // grants aspiring no free allowance to waive their price against; advent
+    // never populates state.acquiredAbilities, since renderAbilityShop offers
+    // it no shop to buy from, so this is a no-op there.
+    const acquiredRows = (state.acquiredAbilities || []).map((a) => (a && a.classId && a.abilityName
+      ? { class_id: a.classId, name: a.abilityName, type: a.type === 'advanced' ? 'advanced' : 'core' }
+      : null)).filter(Boolean);
     if (DATA.mode === 'aspiring') {
       const build = state.classBuild || {};
       const picks = [];
@@ -4119,18 +4129,16 @@ window.CharacterWizard = (function () {
         });
       }
       payload.aspiring_abilities = picks;
-      payload.abilities = (state.acquiredAbilities || []).map((a) => ({
-        class_id: a.classId, name: a.abilityName, type: a.type === 'advanced' ? 'advanced' : 'core'
-      }));
+      payload.abilities = acquiredRows;
     } else {
       const abilityList = c && c.abilities;
-      if (c && Array.isArray(abilityList) && abilityList.length) {
-        payload.abilities = abilityList
-          .map((a) => (a && a.name
+      const coreRows = (c && Array.isArray(abilityList))
+        ? abilityList.map((a) => (a && a.name
             ? { name: a.name, class_id: state.classId, type: 'core' }
-            : null))
-          .filter(Boolean);
-      }
+            : null)).filter(Boolean)
+        : [];
+      const abilities = coreRows.concat(acquiredRows);
+      if (abilities.length) payload.abilities = abilities;
     }
     return payload;
   };

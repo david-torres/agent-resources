@@ -1718,4 +1718,26 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     expect(wizard.acquireAbility(state, fourth)).toBe(false);
     expect(state.acquiredAbilities).toHaveLength(3);
   });
+
+  // A purchase that only updates state.acquiredAbilities and never reaches
+  // the submit payload has not unlocked anything -- the server never hears
+  // about it. class_id and an explicit type both matter: type absent reads
+  // as "keep whatever is stored" to the server's reconcile path, not 'core'.
+  test('an ability bought in the shop is submitted with its class_id and type', () => {
+    const wizard = aspirantStateAtLevel(4);
+    const state = wizard.getState();
+    wizard.acquireAbility(state, {
+      classId: 'fixture-aspirant-other', abilityName: 'Other Core', type: 'core', crossClass: true
+    });
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.abilities).toContainEqual(
+      { name: 'Other Core', class_id: 'fixture-aspirant-other', type: 'core' }
+    );
+    // The free Core roster is still submitted too -- buying does not replace
+    // it, only adds to it.
+    expect(payload.abilities).toContainEqual(
+      { name: 'Own Core A', class_id: 'fixture-aspirant-own', type: 'core' }
+    );
+    expect(payload.abilities).toHaveLength(4);
+  });
 });
