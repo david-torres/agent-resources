@@ -11,7 +11,14 @@
 // This is the only test that drives that mapping over a real request: the
 // route-level harness at routes/character-wizard-aspiring.test.js mocks the
 // model layer, so the pseudo_class -> characters columns translation and the
-// class_abilities.type write are otherwise unproven end to end.
+// aspiring_abilities pool write are otherwise unproven end to end.
+//
+// Selection is not purchase. The three picks land in the
+// characters.aspiring_abilities pool, and the character owns none of them
+// until it spends Perks (docs/.../2026-09-20-aspirant-v1-perk-economy-design.md).
+// It could not own all three in any case: the picks cost 1 + 1 + 2 against a
+// grant of 3 (util/perk-economy.js). Buying them later is 30-perk-economy's
+// third journey; this spec proves the pool itself persists.
 //
 // It shares 19-character-wizard-crud.spec.js's traps: every step panel is in
 // the DOM from first paint and merely toggled with .hidden, so assert
@@ -216,16 +223,20 @@ test('the wizard creates an aspiring character end to end', async ({ page }) => 
   expect(rows[0].pseudo_class_tagline).toBe(tagline);
   expect(rows[0].pseudo_class_description).toBe(description);
 
-  const { rows: abilityRows } = await db.query(
-    'select name, type from class_abilities where character_id = $1 order by type, name',
-    [id]
+  const { rows: poolRows } = await db.query(
+    'select aspiring_abilities from characters where id = $1', [id]
   );
-  expect(abilityRows.map((r) => r.type)).toEqual(['advanced', 'core', 'core']);
-  expect(abilityRows.map((r) => r.name)).toEqual([
-    `${prefix} gamma Advanced`,
-    `${prefix} alpha Core`,
-    `${prefix} beta Core`
-  ]);
+  const sortByName = (list) => list.slice().sort((a, b) => a.name.localeCompare(b.name));
+  expect(sortByName(poolRows[0].aspiring_abilities)).toEqual(sortByName([
+    { class_id: donors.alpha.id, name: `${prefix} alpha Core`, type: 'core' },
+    { class_id: donors.beta.id, name: `${prefix} beta Core`, type: 'core' },
+    { class_id: donors.gamma.id, name: `${prefix} gamma Advanced`, type: 'advanced' }
+  ]));
+
+  const { rows: ownedRows } = await db.query(
+    'select name from class_abilities where character_id = $1', [id]
+  );
+  expect(ownedRows, 'selection is not purchase -- nothing was bought').toHaveLength(0);
 
   // The rendered page is the point of the whole slice: the invented name has
   // to read as the character's class even though no class row backs it.
@@ -233,5 +244,7 @@ test('the wizard creates an aspiring character end to end', async ({ page }) => 
   const abilityBox = page.locator('.box').filter({
     has: page.locator('h3', { hasText: 'Class Abilities' })
   });
-  await expect(abilityBox.locator('.column')).toHaveCount(3);
+  // Empty, for the same reason: the box renders character.abilities, which
+  // holds only bought abilities (views/character.handlebars:258-265).
+  await expect(abilityBox.locator('.column')).toHaveCount(0);
 });
