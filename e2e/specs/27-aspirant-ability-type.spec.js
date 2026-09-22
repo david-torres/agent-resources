@@ -1,19 +1,17 @@
 // e2e/specs/27-aspirant-ability-type.spec.js
 //
-// Aspirant characters are auto-granted their class's ADVANCED abilities, not
-// its base ones (public/js/character-wizard.js#serializePayload). Every one of
-// those rows must land in class_abilities with type='advanced' -- the same
-// tagging migration 20260913000000's corrective backfill applies to history.
-// Nothing else covers the forward path: 19-character-wizard-crud drives advent
-// (all-core) and 26-aspiring-wizard drives aspiring (which tags its picks
-// explicitly), so aspirant is the one mode where the tag is inferred from
-// which list the wizard read.
+// Aspirant characters are auto-granted their class's CORE abilities and never
+// its Advanced ones (public/js/character-wizard.js#serializePayload). Advanced
+// Abilities cost 2 Perks (ENCLAVE: Aspirant V1, pg. 7) against a starting
+// grant of 1 (util/perk-economy.js#PERK_GRANT), so no aspirant character can
+// own one the moment it is created -- the edit form is the only path, and
+// 30-perk-economy covers it.
 //
-// The defect this guards against is invisible against ordinary fixtures: the
-// seeded classes in 19 and 26 aside, no local class carries a non-empty
-// advanced_abilities, so an aspirant character's abilities all happen to be
-// core-tagged for the right answer by accident. advancedAbilities below is
-// what makes the distinction observable.
+// This spec's value is the NEGATIVE assertion. 19-character-wizard-crud drives
+// advent against classes with an empty advanced_abilities, so it cannot tell a
+// class's Advanced roster being skipped from its being absent. The seeded
+// advancedAbilities below is what makes the distinction observable: the class
+// carries two Advanced abilities and the character must still own neither.
 //
 // Shares 19-character-wizard-crud.spec.js's traps: every step panel is in the
 // DOM from first paint and merely toggled with .hidden, so assert VISIBILITY
@@ -27,6 +25,7 @@ test.use({ storageState: PLAYER_STATE });
 
 const prefix = newPrefix('aspirant-type');
 
+const CORE_NAMES = [`${prefix} Core One`, `${prefix} Core Two`];
 const ADVANCED_NAMES = [`${prefix} Advanced One`, `${prefix} Advanced Two`];
 
 let db;
@@ -40,10 +39,10 @@ test.beforeAll(async () => {
     rulesVersion: 'v1',
     // >= 2 stats or populatePersonalitySelects locks the trait selects.
     statSpread: { vitality: 2, might: 2 },
-    abilities: [
-      { name: `${prefix} Core One`, description: 'base ability one' },
-      { name: `${prefix} Core Two`, description: 'base ability two' }
-    ],
+    abilities: CORE_NAMES.map((name, i) => ({
+      name,
+      description: `base ability ${i + 1}`
+    })),
     advancedAbilities: ADVANCED_NAMES.map((name) => ({ name, description: `${name} description` }))
   });
   await unlockClassForProfile(profile, classRow);
@@ -57,7 +56,7 @@ test.afterAll(async () => {
   }
 });
 
-test('an aspirant character persists its advanced abilities as type=advanced', async ({ page }) => {
+test('an aspirant character is granted its class\'s Core abilities, never its Advanced ones', async ({ page }) => {
   const name = `${prefix} Aspirant Hero`;
 
   await page.goto('/characters/wizard?mode=aspirant&fresh=1');
@@ -123,6 +122,16 @@ test('an aspirant character persists its advanced abilities as type=advanced', a
   const { rows: abilityRows } = await db.query(
     'select name, type from class_abilities where character_id = $1 order by name', [id]
   );
-  expect(abilityRows.map((r) => r.name)).toEqual(ADVANCED_NAMES.slice().sort());
-  expect(abilityRows.map((r) => r.type)).toEqual(['advanced', 'advanced']);
+  expect(abilityRows.map((r) => r.name)).toEqual(CORE_NAMES.slice().sort());
+  expect(abilityRows.map((r) => r.type)).toEqual(['core', 'core']);
+
+  // The point of the spec: the class carries two Advanced abilities and the
+  // character was granted neither. Stated separately from the equality above
+  // so a future change to the Core roster cannot quietly take this with it.
+  for (const advanced of ADVANCED_NAMES) {
+    expect(
+      abilityRows.map((r) => r.name),
+      'an Advanced ability must be bought with Perks, never auto-granted'
+    ).not.toContain(advanced);
+  }
 });
