@@ -320,8 +320,11 @@ test('a player can acquire a Signature the character never chose, charged at the
   await page.goto(`/characters/${id}`);
   await page.waitForLoadState('networkidle');
 
-  const spentLine = page.locator('p').filter({ hasText: 'Spent:' });
-  const earnedLine = page.locator('p').filter({ hasText: 'Earned:' });
+  // Anchored regexes, not bare strings: `hasText` matches substrings
+  // case-insensitively, so 'Spent:' also catches the Perk economy's
+  // "Perks spent:" line beside it (views/character.handlebars:78,88).
+  const spentLine = page.locator('p').filter({ hasText: /^Spent:/ });
+  const earnedLine = page.locator('p').filter({ hasText: /^Earned:/ });
   await expect(spentLine, 'the character page must charge the same total the two purchase surfaces charged').toContainText(String(totalSpent));
   await expect(earnedLine).toContainText(String(totalEarned));
 });
