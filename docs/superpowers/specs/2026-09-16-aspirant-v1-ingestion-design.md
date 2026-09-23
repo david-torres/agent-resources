@@ -132,15 +132,18 @@ The three cases then state themselves:
 | row | `rules_edition` | `content_format` | `rules_version` |
 | --- | --- | --- | --- |
 | Gunslinger (Advent) | advent | advent | v1 → v2 |
-| Berserker (pre-release) | aspirant | advent | v1 |
+| Berserker (pre-release) | aspirant | advent | v2 |
 | Berserker (V1) | aspirant | aspirant | v1 |
 | Gunslinger (Aspirant V1) | aspirant | aspirant | v1 |
 
-`rules_version` is left alone. It is `CHECK (rules_version IN ('v1','v2'))`
+`rules_version` is `CHECK (rules_version IN ('v1','v2'))`
 (`supabase/migrations/20240101000000_baseline_schema.sql:132`) and means Advent's
-v1/v2 character rules. Forking within `rules_edition = 'aspirant'` would
-otherwise have to call V1 content `'v2'`, which inverts the meaning of both
-values.
+v1/v2 character rules. A pre-release class is Advent-format content at the
+latest Advent version, so every row with `prerelease_section` set is `'v2'` and
+`status 'release'` (`supabase/migrations/20260922000000_prerelease_classes_v2.sql`),
+and the pre-release loader inserts at `'v2'`. The twelve V1 rows are inserted at
+`'v1'`: a class in the Aspirant format does not advance Advent's rules version,
+and calling V1 content `'v2'` would invert the meaning of both values.
 
 The default is `'advent'`, so every existing row is correct without a backfill.
 Only the twelve rows this slice creates carry `'aspirant'`.
