@@ -211,6 +211,72 @@ test('re-running after a fork updates the fork and never creates a second one', 
   expect(plan.row.id).toBe('id-v1fork');
 });
 
+// Six of the Advent-format parents (Berserker among them) are themselves
+// pre-release rows carrying art the extraction never printed. That art has to
+// travel onto the fork it seeds, since nothing else will ever set it.
+test('a fork carries art from a pre-release aspirant-section parent', () => {
+  const parent = parentRow('Berserker', {
+    rules_edition: 'aspirant', prerelease_section: 'aspirant',
+    image_url: 'https://example.com/berserker.png', image_crop: { x: 1, y: 2 }
+  });
+  const [plan] = planLoad([berserkerRecord], [parent], forkBook);
+  expect(plan.payload.image_url).toBe('https://example.com/berserker.png');
+  expect(plan.payload.image_crop).toEqual({ x: 1, y: 2 });
+});
+
+// The six Advent originals (Gunslinger among them) lend their art the same way.
+test('a fork of an Advent class carries its Advent parent\'s art', () => {
+  const parent = parentRow('Gunslinger', {
+    image_url: 'https://example.com/gunslinger.png', image_crop: { x: 0, y: 0 }
+  });
+  const [plan] = planLoad([gunslingerRecord], [parent], forkBook);
+  expect(plan.payload.image_url).toBe('https://example.com/gunslinger.png');
+  expect(plan.payload.image_crop).toEqual({ x: 0, y: 0 });
+});
+
+test('a fork of a parent with no art carries no art', () => {
+  const parent = parentRow('Gunslinger', { image_url: null, image_crop: null });
+  const [plan] = planLoad([gunslingerRecord], [parent], forkBook);
+  expect(plan.payload).not.toHaveProperty('image_url');
+  expect(plan.payload).not.toHaveProperty('image_crop');
+});
+
+// A re-run finds the fork it made last time; if that fork never received its
+// parent's art, the update has to carry it the way the original fork would
+// have.
+test("an update carries art from its parent when the fork's own art is unset", () => {
+  const parent = parentRow('Berserker', {
+    rules_edition: 'aspirant', prerelease_section: 'aspirant',
+    image_url: 'https://example.com/berserker.png', image_crop: { x: 1, y: 2 }
+  });
+  const existingFork = row('Berserker', {
+    id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant',
+    base_class_id: PARENT_IDS.Berserker, image_url: null, image_crop: null
+  });
+  const [plan] = planLoad([berserkerRecord], [parent, existingFork], forkBook);
+  expect(plan.disposition).toBe('update');
+  expect(plan.payload.image_url).toBe('https://example.com/berserker.png');
+  expect(plan.payload.image_crop).toEqual({ x: 1, y: 2 });
+});
+
+// Once a fork carries its own art -- set by whoever owns the row -- a later
+// re-run must never clobber it with the parent's.
+test("an update never overwrites art the fork's own row already carries", () => {
+  const parent = parentRow('Berserker', {
+    rules_edition: 'aspirant', prerelease_section: 'aspirant',
+    image_url: 'https://example.com/berserker.png', image_crop: { x: 1, y: 2 }
+  });
+  const existingFork = row('Berserker', {
+    id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant',
+    base_class_id: PARENT_IDS.Berserker,
+    image_url: 'https://example.com/owner-set.png', image_crop: { x: 9, y: 9 }
+  });
+  const [plan] = planLoad([berserkerRecord], [parent, existingFork], forkBook);
+  expect(plan.disposition).toBe('update');
+  expect(plan.payload).not.toHaveProperty('image_url');
+  expect(plan.payload).not.toHaveProperty('image_crop');
+});
+
 // Both axes decide it: a row in this book's content format but another
 // rules_edition is not this book's fork, and reading it as one would overwrite a
 // class this book never described.

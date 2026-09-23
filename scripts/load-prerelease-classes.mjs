@@ -189,6 +189,14 @@ const mintedId = (name) => {
 export const forkParentId = (name) =>
   (CORE_CLASS_UNLOCKS.advent[name] ?? CORE_CLASS_UNLOCKS.aspirant[name])?.[0] ?? null;
 
+// The book prints no art, so a fork shows its parent's -- unless it already
+// has art of its own.
+const inheritedArt = (parent, fork) => (
+  parent?.image_url && !fork?.image_url
+    ? { image_url: parent.image_url, image_crop: parent.image_crop ?? null }
+    : {}
+);
+
 // A fork of this book already in the catalogue means the load has run before, so
 // the second run updates the fork it made rather than making another. Otherwise
 // the load descends from the parent, which it leaves untouched. Two forks of one
@@ -198,9 +206,11 @@ const forkPlan = (payload, matches, book) => {
   const existing = matches.filter((row) => row.content_format === book.contentFormat
       && row.rules_edition === book.rulesEdition);
   if (existing.length) {
+    const row = existing.length === 1 ? existing[0] : null;
+    const parent = row && matches.find((candidate) => candidate.id === row.base_class_id);
     return {
-      payload, matches: existing, row: existing.length === 1 ? existing[0] : null,
-      parent: null, disposition: 'update'
+      payload: { ...payload, ...inheritedArt(parent, row) },
+      matches: existing, row, parent: null, disposition: 'update'
     };
   }
   const id = mintedId(payload.name);
@@ -220,7 +230,8 @@ const forkPlan = (payload, matches, book) => {
   return {
     payload: {
       ...payload, id, base_class_id: parent.id,
-      rules_edition: book.rulesEdition, content_format: book.contentFormat
+      rules_edition: book.rulesEdition, content_format: book.contentFormat,
+      ...inheritedArt(parent, null)
     },
     matches: [parent], row: null, parent, disposition: 'fork'
   };

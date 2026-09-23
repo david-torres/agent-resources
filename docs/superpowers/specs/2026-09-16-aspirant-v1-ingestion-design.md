@@ -350,6 +350,9 @@ Changes:
   `FIELDS` (`:50-53`) and the allowlist test's `FORBIDDEN` list
   (`test/load-prerelease-classes.test.js:31`) both move; `base_class_id` stops
   being forbidden for fork plans specifically.
+- A fork takes its parent's `image_url` and `image_crop`, since the book prints
+  no art. An update fills them the same way while the fork has no art, and never
+  replaces art the fork already carries.
 - `scripts/lib/character-impact.mjs#projectImport` (`:52-61`) models exactly two
   post-import shapes, updated and created. A fork is neither: the base row
   survives unchanged and keeps its item names while the fork adds new ones. The
