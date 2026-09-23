@@ -66,6 +66,39 @@ const STALKER_ASPIRANT = {
   rules_edition: 'aspirant', rules_version: 'v1', is_player_created: false,
   created_at: '2026-03-01T00:00:00Z', gear: [], abilities: []
 };
+// content_format is independent of rules_edition: this class lives in the
+// advent-edition pool but carries Aspirant-shaped content, so ?mode must
+// read content_format rather than rules_edition to sort it correctly.
+const RANGER_ASPIRANT_FORMAT = {
+  id: 'ranger-aspirant-format', name: 'Ranger', base_class_id: null,
+  rules_edition: 'advent', rules_version: 'v1', is_player_created: false,
+  content_format: 'aspirant',
+  created_at: '2026-01-15T00:00:00Z', gear: [], abilities: []
+};
+const SCOUT_PRERELEASE = {
+  id: 'scout-prerelease', name: 'Scout', base_class_id: null,
+  rules_edition: 'advent', rules_version: 'v1', is_player_created: false,
+  prerelease_section: 'Upcoming',
+  created_at: '2026-01-20T00:00:00Z', gear: [], abilities: []
+};
+const MEDIC_PCC_DRAFT = {
+  id: 'medic-pcc-draft', name: 'Medic', base_class_id: null,
+  rules_edition: 'advent', rules_version: 'v1', is_player_created: true,
+  status: 'draft', prerelease_section: null,
+  created_at: '2026-04-01T00:00:00Z', gear: [], abilities: []
+};
+const MEDIC_PCC_RELEASED = {
+  id: 'medic-pcc-released', name: 'Medic Prime', base_class_id: null,
+  rules_edition: 'advent', rules_version: 'v1', is_player_created: true,
+  status: 'release', prerelease_section: null,
+  created_at: '2026-04-02T00:00:00Z', gear: [], abilities: []
+};
+const GUARD_PCC_PRERELEASE = {
+  id: 'guard-pcc-prerelease', name: 'Guard', base_class_id: null,
+  rules_edition: 'advent', rules_version: 'v1', is_player_created: true,
+  status: 'draft', prerelease_section: 'Beta',
+  created_at: '2026-04-03T00:00:00Z', gear: [], abilities: []
+};
 
 mock.module('../models/_base', () => ({
   supabase: makeClient(),
@@ -84,13 +117,19 @@ mock.module('../models/profile', () => ({
 mock.module('../models/class', () => ({
   ...realClass,
   getClasses: async (filters = {}) => {
-    if (filters.is_player_created === true) return { data: [], error: null };
+    if (filters.is_player_created === true) {
+      return { data: [MEDIC_PCC_DRAFT, MEDIC_PCC_RELEASED, GUARD_PCC_PRERELEASE], error: null };
+    }
     if (filters.rules_edition === 'aspirant') return { data: [STALKER_ASPIRANT], error: null };
-    return { data: [STALKER_V1, STALKER_V2, WARDEN_V1], error: null };
+    return { data: [STALKER_V1, STALKER_V2, WARDEN_V1, RANGER_ASPIRANT_FORMAT, SCOUT_PRERELEASE], error: null };
   },
   // Everything unlocked, so filterClassDataForUser passes the lists through.
   getUnlockedClassIdsForUser: async () => ({
-    data: new Set(['stalker-v1', 'stalker-v2', 'warden-v1', 'stalker-aspirant']),
+    data: new Set([
+      'stalker-v1', 'stalker-v2', 'warden-v1', 'stalker-aspirant',
+      'ranger-aspirant-format', 'scout-prerelease',
+      'medic-pcc-draft', 'medic-pcc-released', 'guard-pcc-prerelease',
+    ]),
     error: null,
   }),
 }));
@@ -276,4 +315,64 @@ test('the wizard grants a class its Core abilities, never its Advanced ones', ()
   // state.classBuild.advancedAbility, not this field, so this holds for
   // every mode the builder serializes.)
   expect(payloadBuilder).not.toContain('advanced_abilities');
+});
+
+// A class's `content_format` — not its `rules_edition` — decides which mode's
+// kiosk it belongs in. RANGER_ASPIRANT_FORMAT sits in the advent-edition pool
+// but is Aspirant-shaped content; STALKER_ASPIRANT is the opposite (Aspirant
+// edition, Advent-shaped content, per the six real pre-release classes).
+test('?mode=aspirant keeps only classes whose content_format is aspirant', async () => {
+  const ids = (await fetchWizardClasses('?mode=aspirant')).map(c => c.id);
+  expect(ids).toContain('ranger-aspirant-format');
+  expect(ids).not.toContain('stalker-aspirant');
+  expect(ids).not.toContain('stalker-v2');
+  expect(ids).not.toContain('warden-v1');
+});
+
+test('the default mode (advent) excludes aspirant-format classes', async () => {
+  const ids = (await fetchWizardClasses()).map(c => c.id);
+  expect(ids).not.toContain('ranger-aspirant-format');
+  expect(ids).toContain('warden-v1');
+});
+
+test('?mode=aspiring returns every class, unfiltered by content_format', async () => {
+  const ids = (await fetchWizardClasses('?mode=aspiring')).map(c => c.id);
+  expect(ids).toContain('ranger-aspirant-format');
+  expect(ids).toContain('stalker-aspirant');
+  expect(ids).toContain('warden-v1');
+  expect(ids).toContain('stalker-v2');
+});
+
+test('a class preselected via ?class stays in the kiosk even when its format does not match the mode', async () => {
+  const ids = (await fetchWizardClasses('?mode=aspirant&class=warden-v1')).map(c => c.id);
+  expect(ids).toContain('warden-v1');
+  expect(ids).toContain('ranger-aspirant-format');
+});
+
+test('a class with a prerelease_section carries section "prerelease"', async () => {
+  const scout = (await fetchWizardClasses()).find(c => c.id === 'scout-prerelease');
+  expect(scout).toBeDefined();
+  expect(scout.section).toBe('prerelease');
+});
+
+test('an unreleased player-created class carries section "pcc"', async () => {
+  const medic = (await fetchWizardClasses()).find(c => c.id === 'medic-pcc-draft');
+  expect(medic).toBeDefined();
+  expect(medic.section).toBe('pcc');
+});
+
+test('a released player-created class carries section "yours", same as an official class', async () => {
+  const classes = await fetchWizardClasses();
+  const medic = classes.find(c => c.id === 'medic-pcc-released');
+  const warden = classes.find(c => c.id === 'warden-v1');
+  expect(medic.section).toBe('yours');
+  expect(warden.section).toBe('yours');
+});
+
+// Precedence: a player-created class that is also a prerelease submission
+// reports 'prerelease', never 'pcc' -- prerelease_section wins first.
+test('a prerelease player-created class carries section "prerelease", not "pcc"', async () => {
+  const guard = (await fetchWizardClasses()).find(c => c.id === 'guard-pcc-prerelease');
+  expect(guard).toBeDefined();
+  expect(guard.section).toBe('prerelease');
 });

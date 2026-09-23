@@ -40,7 +40,7 @@ const { buildAbilityPurchaseData, applyAbilityPurchases } = require('../util/abi
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
-const { filterClassListsByIds } = require('../util/class-filter');
+const { filterClassListsByIds, isUnreleasedPcc } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -241,22 +241,25 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   }
   const preselectedClassId = (req.query.class || '').toString() || null;
 
-// Union class list (mode does not filter the class pool per requirements).
+  // The class pool, filtered to the mode's content_format ('aspiring' shows
+  // every format), then collapsed so version families show one card each
+  // (same rule as the /classes list). A preselected class is exempt from
+  // both: a link from an older version's page, or one whose format does not
+  // match the mode, must still find its card.
   // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
   // and display fields for the slider card. Teaser and tips are stored as
   // markdown and rendered to safe HTML here so the client can drop them into
   // the wizard panel verbatim (no client-side markdown lib).
-  // The kiosk shows one card per class, so version families collapse to their
-  // latest member (same rule as the /classes list). A preselected class is
-  // exempt: a link from an older version's page must still find its card.
   const { filteredAdvent, filteredAspirant, filteredPCC } = await filterClassDataForUser(user);
   const wizardClasses = latestClassVersions(
     [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
     { keep: [preselectedClassId] }
   )
+    .filter((c) => mode === 'aspiring' || (c.content_format || 'advent') === mode || c.id === preselectedClassId)
     .map((c) => ({
       id: c.id,
       name: c.name,
+      section: c.prerelease_section ? 'prerelease' : (isUnreleasedPcc(c) ? 'pcc' : 'yours'),
       overview_html: renderMarkdown(c.overview || ''),
       teaser_html: renderMarkdown(c.teaser || ''),
       tips_html: renderMarkdown(c.tips || ''),

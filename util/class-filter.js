@@ -66,4 +66,4 @@ const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
   return { ownedReleases, otherReleases, prerelease, pcc };
 };
 
-module.exports = { filterClassListsByIds, partitionProfileClasses, partitionClassGroups, partitionClassCatalog };
+module.exports = { filterClassListsByIds, isUnreleasedPcc, partitionProfileClasses, partitionClassGroups, partitionClassCatalog };

@@ -166,12 +166,13 @@ afterAll(async () => {
 
 // Renders GET /wizard with the given classes on offer and returns the parsed
 // wizard-data JSON island the view embeds for the client.
-const renderWizardData = async ({ mode, classes = [] }) => {
+const renderWizardData = async ({ mode, classes = [], preselect = null }) => {
   classPool = classes.map((c) => ({
     name: c.id, base_class_id: null, rules_edition: 'advent', rules_version: 'v1',
     is_player_created: false, gear: [], abilities: [], ...c,
   }));
-  const res = await fetch(`${baseUrl}/characters/wizard?mode=${mode}`, {
+  const preselectQuery = preselect ? `&class=${preselect}` : '';
+  const res = await fetch(`${baseUrl}/characters/wizard?mode=${mode}${preselectQuery}`, {
     headers: { Accept: 'text/html', Authorization: 'Bearer valid-jwt' },
   });
   expect(res.status).toBe(200);
@@ -190,6 +191,7 @@ test('wizardData carries the economy figures, not a copy of them', async () => {
 test('wizardData resolves each class to an economy on the server', async () => {
   const data = await renderWizardData({
     mode: 'advent',
+    preselect: 'c-v1',
     classes: [
       { id: 'c-advent', content_format: 'advent' },
       { id: 'c-v1', content_format: 'aspirant' }
