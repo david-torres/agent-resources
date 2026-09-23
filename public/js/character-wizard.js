@@ -359,24 +359,71 @@ window.CharacterWizard = (function () {
   }
 
   // ---------- Render: kiosk cards ----------
+  const STAMPS = {
+    prerelease: { label: 'Pre-release', cls: '' },
+    pcc: { label: 'In development', cls: ' is-in-development' }
+  };
+  // FNV-1a: ids that differ in one character still land far apart on the wheel.
+  const cardHue = (id) => {
+    let h = 0x811c9dc5;
+    const s = String(id);
+    for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+    return (h >>> 0) % 360;
+  };
+  const plainText = (html) => {
+    const el = document.createElement('div');
+    el.innerHTML = html || '';
+    return el.textContent.trim();
+  };
+  const capitalize = (s) => {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  };
+  const dossierHtml = (c) => {
+    const stampDef = STAMPS[sectionOf(c)];
+    const stamp = stampDef
+      ? '<span class="wizard-kiosk-stamp' + stampDef.cls + '">' + esc(stampDef.label) + '</span>'
+      : '';
+    const teaser = plainText(c.teaser_html) || plainText(c.overview_html);
+    const spread = c.stat_spread || {};
+    const chips = Object.keys(spread)
+      .filter((k) => spread[k] > 0)
+      .sort((a, b) => spread[b] - spread[a])
+      .map((k) => '<span class="wizard-kiosk-stat">' + esc('+'.repeat(spread[k]) + capitalize(k)) + '</span>')
+      .join('');
+    return ''
+      + '<div class="wizard-kiosk-dossier">'
+      +   stamp
+      +   (teaser ? '<p class="wizard-kiosk-dossier-teaser">' + esc(teaser) + '</p>' : '')
+      +   (chips ? '<div class="wizard-kiosk-stats">' + chips + '</div>' : '')
+      + '</div>';
+  };
+  const kioskCardHtml = (c, { summary }) => {
+    const artless = !c.image_url;
+    const pccTag = c.is_player_created
+      ? '<span class="wizard-kiosk-ribbon-pcc">PCC</span>'
+      : '';
+    const classes = 'wizard-kiosk-card'
+      + (summary ? ' is-summary mb-3' : '')
+      + (artless ? ' is-artless' : '');
+    const attrs = summary ? '' : ' data-id="' + esc(c.id) + '" data-name="' + esc(c.name) + '"';
+    const style = artless ? ' style="--card-hue:' + cardHue(c.id) + '"' : '';
+    const body = artless
+      ? dossierHtml(c)
+      : '<div class="wizard-kiosk-art" style="' + artBackgroundStyle(c) + '"></div>';
+    return ''
+      + '<div class="' + classes + '"' + attrs + style + '>'
+      +   body
+      +   '<div class="wizard-kiosk-ribbon-top">'
+      +     '<span class="wizard-kiosk-ribbon-name">' + esc(c.name) + '</span>'
+      +     pccTag
+      +   '</div>'
+      +   '<div class="wizard-kiosk-ribbon-bottom">'
+      +     '<span class="wizard-kiosk-ribbon-edition">' + esc(editionLabel(c)) + '</span>'
+      +   '</div>'
+      + '</div>';
+  };
   const renderKiosk = () => {
-    track.innerHTML = DATA.classes.map((c) => {
-      const bg = artBackgroundStyle(c);
-      const pccTag = c.is_player_created
-        ? '<span class="wizard-kiosk-ribbon-pcc">PCC</span>'
-        : '';
-      return ''
-        + '<div class="wizard-kiosk-card" data-id="' + esc(c.id) + '" data-name="' + esc(c.name) + '">'
-        +   '<div class="wizard-kiosk-art" style="' + bg + '"></div>'
-        +   '<div class="wizard-kiosk-ribbon-top">'
-        +     '<span class="wizard-kiosk-ribbon-name">' + esc(c.name) + '</span>'
-        +     pccTag
-        +   '</div>'
-        +   '<div class="wizard-kiosk-ribbon-bottom">'
-        +     '<span class="wizard-kiosk-ribbon-edition">' + esc(editionLabel(c)) + '</span>'
-        +   '</div>'
-        + '</div>';
-    }).join('');
+    track.innerHTML = DATA.classes.map((c) => kioskCardHtml(c, { summary: false })).join('');
   };
 
   // ---------- Selection ring positioning ----------
@@ -517,21 +564,7 @@ window.CharacterWizard = (function () {
     if (c) {
       // Render the same kiosk-card markup (scaled down via .is-summary) so
       // the selected class is visible at a glance after step 1.
-      const bg = artBackgroundStyle(c);
-      const pccTag = c.is_player_created
-        ? '<span class="wizard-kiosk-ribbon-pcc">PCC</span>'
-        : '';
-      headerHtml += ''
-        + '<div class="wizard-kiosk-card is-summary mb-3">'
-        +   '<div class="wizard-kiosk-art" style="' + bg + '"></div>'
-        +   '<div class="wizard-kiosk-ribbon-top">'
-        +     '<span class="wizard-kiosk-ribbon-name">' + esc(c.name) + '</span>'
-        +     pccTag
-        +   '</div>'
-        +   '<div class="wizard-kiosk-ribbon-bottom">'
-        +     '<span class="wizard-kiosk-ribbon-edition">' + esc(editionLabel(c)) + '</span>'
-        +   '</div>'
-        + '</div>';
+      headerHtml += kioskCardHtml(c, { summary: true });
     } else if (DATA.mode === 'aspiring' && (state.pseudoClass && state.pseudoClass.name || '').trim()) {
       const pc = state.pseudoClass;
       headerHtml += '<p class="is-size-7"><strong>' + esc(pc.name.trim()) + '</strong></p>';
@@ -803,10 +836,6 @@ window.CharacterWizard = (function () {
   document.addEventListener('keydown', onKioskKeydown);
 
   // ---------- Step 2: Personality & Stats ----------
-
-  const capitalize = (s) => {
-    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
-  };
 
   // Stats that the selected class puts points into, in insertion order.
   const getClassSpreadStats = () => {
