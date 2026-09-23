@@ -530,7 +530,7 @@ const renderCharacterForm = (overrides = {}) => {
     classGearList: { Gunslinger: ['Cowboy Hat', 'Sharps Rifle'] },
     adventDefaultSignatures: 3,
     classAbilityList: {},
-    effectiveVersion: 'v1',
+    effectiveVersion: overrides.effectiveVersion ?? 'v1',
     maxCreatedAt: '2026-09-19',
     derived: {},
     gearPurchaseData: overrides.gearPurchaseData ?? null,
@@ -618,4 +618,45 @@ test('no economy figure is written into the form', () => {
   const purchaseBlock = FORM_SRC.slice(FORM_SRC.indexOf('{{#if gearPurchaseData}}'));
   expect(purchaseBlock).not.toMatch(/\b(\d+)\s*Merx\b/);
   expect(purchaseBlock).not.toMatch(/Signature Cap of \d/);
+});
+
+// --- Deprecated fields -------------------------------------------------------
+//
+// A character whose class became v2 keeps its v1-only text. The edit form shows
+// each non-empty field read-only with a clear control, and nothing else can
+// change it (services/character/input.js).
+
+const DEPRECATED = { perks: 'Old perk prose', additional_gear: 'Old gear prose' };
+
+test('a v2 character sees its stored v1-only text as read-only Deprecated fields', () => {
+  const html = renderCharacterForm({ effectiveVersion: 'v2', character: DEPRECATED });
+
+  expect(html).toContain('Deprecated fields');
+  expect(html).toContain('Old perk prose');
+  expect(html).toContain('Old gear prose');
+  expect(html).toMatch(/<input type="checkbox" name="clear_perks"/);
+  expect(html).toMatch(/<input type="checkbox" name="clear_additional_gear"/);
+  expect(html).not.toMatch(/name="perks"/);
+  expect(html).not.toMatch(/name="additional_gear"/);
+});
+
+test('a v2 character is offered a clear control only for a field it has', () => {
+  const html = renderCharacterForm({ effectiveVersion: 'v2', character: { perks: 'Old perk prose' } });
+
+  expect(html).toContain('name="clear_perks"');
+  expect(html).not.toContain('name="clear_additional_gear"');
+});
+
+test('a v2 character with neither field sees no Deprecated fields section', () => {
+  const html = renderCharacterForm({ effectiveVersion: 'v2', character: { perks: '', additional_gear: null } });
+
+  expect(html).not.toContain('Deprecated fields');
+});
+
+test('a v1 character edits its perks as before and sees no Deprecated fields section', () => {
+  const html = renderCharacterForm({ character: DEPRECATED });
+
+  expect(html).not.toContain('Deprecated fields');
+  expect(html).toMatch(/<textarea[^>]*name="perks"/);
+  expect(html).toMatch(/<textarea[^>]*name="additional_gear"/);
 });

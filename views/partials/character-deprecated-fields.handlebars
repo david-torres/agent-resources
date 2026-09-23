@@ -1,0 +1,31 @@
+{{!-- A v2 class has no free-text Ability Perks or Additional Gear. A character
+      that had them before its class became v2 keeps them stored: each is shown
+      here read-only, and its checkbox is the only change a save can make to it
+      (services/character/input.js reads clear_<field>). --}}
+{{#if (or character.perks character.additional_gear)}}
+<hr />
+<div class="box" id="deprecated-fields">
+  <h3 class="title is-5">Deprecated fields</h3>
+  <p class="help mb-3">These fields belong to this class's earlier rules. They can no longer be edited, only cleared.</p>
+  {{#if character.perks}}
+  <div class="field">
+    <label class="label">Ability Perks</label>
+    <div class="content">{{{markdown character.perks}}}</div>
+    <label class="checkbox">
+      <input type="checkbox" name="clear_perks" value="on">
+      Clear Ability Perks when saving
+    </label>
+  </div>
+  {{/if}}
+  {{#if character.additional_gear}}
+  <div class="field">
+    <label class="label">Additional Gear</label>
+    <div class="content">{{{markdown character.additional_gear}}}</div>
+    <label class="checkbox">
+      <input type="checkbox" name="clear_additional_gear" value="on">
+      Clear Additional Gear when saving
+    </label>
+  </div>
+  {{/if}}
+</div>
+{{/if}}

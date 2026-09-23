@@ -116,7 +116,7 @@ same breath as the Signature rule it states at step 2a.
   (baseline schema `:180`, `NOT NULL`), so cross-class provenance is already
   recorded on every row. 4b prices it; it does not store it.
 - **The legacy `characters.perks` TEXT field** is v1-only freeform prose,
-  already read-only on v2 (`views/partials/character-v1-perks-legacy.handlebars`).
+  read-only and clear-only on v2 (`views/partials/character-deprecated-fields.handlebars`).
   It stays out of the economy entirely.
 
 ## What the book says

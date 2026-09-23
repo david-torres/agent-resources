@@ -596,3 +596,29 @@ test('GET /characters/version-fields serves both Ability-Perk limits to the v2 b
     + ' words; max ' + figures.perksPerAbility + ' per ability.'
   );
 });
+
+// GET /characters/:id/edit resolves effectiveVersion from the character's
+// stored class; a v2 class must reach the form's Deprecated fields section.
+test('the edit form shows a v2 character its stored v1-only text as Deprecated fields', async () => {
+  pageState.character = {
+    ...makePageCharacter(0),
+    class: V2_RULES_CLASS.name,
+    class_id: V2_RULES_CLASS.id,
+    creator_id: 'profile-1',
+    perks: 'Old perk prose',
+    additional_gear: 'Old gear prose',
+  };
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('Deprecated fields');
+  expect(body).toContain('Old perk prose');
+  expect(body).toContain('name="clear_perks"');
+  expect(body).toContain('name="clear_additional_gear"');
+  expect(body).not.toMatch(/<textarea[^>]*name="perks"/);
+  expect(body).not.toMatch(/<textarea[^>]*name="additional_gear"/);
+});

@@ -218,3 +218,39 @@ test('both export dropdowns really carry the directives', () => {
     expect(src).not.toContain("export-dropdown').classList.toggle");
   }
 });
+
+// -- v1-only fields on a v2 character ---------------------------------------
+//
+// A character whose class became v2 keeps its v1-only text stored. The sheet
+// shows none of it; views/partials/character-details.test.js pins the same for
+// the /details fragment.
+const renderFromPerksToAppearance = (locals) => {
+  const section = CHARACTER_SRC.slice(
+    CHARACTER_SRC.indexOf("{{#if (eq effectiveVersion 'v1')}}"),
+    CHARACTER_SRC.indexOf('{{#if character.appearance}}')
+  );
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
+  registerSignatureEntryPartials(hb);
+  return hb.compile(section)(locals);
+};
+
+test('a v2 character sheet shows none of its stored v1-only text', () => {
+  const character = {
+    perks: 'Old perk prose', additional_gear: 'Old gear prose',
+    gear: [], common_items: [], quirks: [], accessories: [], ability_perks: [], abilities: []
+  };
+
+  const v2 = renderFromPerksToAppearance({ character, effectiveVersion: 'v2' });
+  expect(v2).not.toContain('Old perk prose');
+  expect(v2).not.toContain('Old gear prose');
+
+  // The same slice at v1 shows both, so the v2 assertions above are not
+  // passing on a slice that simply misses the fields.
+  const v1 = renderFromPerksToAppearance({ character, effectiveVersion: 'v1' });
+  expect(v1).toContain('Old perk prose');
+  expect(v1).toContain('Old gear prose');
+});

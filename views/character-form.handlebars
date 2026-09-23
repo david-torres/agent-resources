@@ -351,7 +351,7 @@
   {{else}}
     {{#if (eq effectiveVersion 'v2')}}
       {{> character-v2-fields character=character perkFigures=perkFigures}}
-      {{> character-v1-perks-legacy character=character}}
+      {{> character-deprecated-fields character=character}}
     {{else}}
       <div id="v2-fields-container"></div>
     {{/if}}
