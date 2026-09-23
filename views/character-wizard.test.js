@@ -55,3 +55,24 @@ test.each(['advent', 'aspirant', 'aspiring'])(
     expect(rendered).toBe(String(economyFigures().grants[mode]));
   }
 );
+
+// Step 1's Advent | Aspirant toggle reloads the wizard in the other mode, so
+// the class cards and the creation rules always come from the same mode.
+test.each(['advent', 'aspirant'])('the %s wizard offers a toggle to either mode, marking its own', (mode) => {
+  const html = renderWizardView({ mode, wizardData: fixture({ mode }) });
+  const toggle = html.match(/<div class="buttons has-addons[^"]*" id="wizardModeToggle"[^>]*>([\s\S]*?)<\/div>/);
+  expect(toggle).toBeTruthy();
+  const links = [...toggle[1].matchAll(/<a([^>]*)>\s*([^<]*?)\s*<\/a>/g)]
+    .map(([, attrs, label]) => ({ attrs, label }));
+  expect(links.map((l) => l.label)).toEqual(['Advent', 'Aspirant']);
+  expect(links[0].attrs).toContain('href="/characters/wizard?mode=advent"');
+  expect(links[1].attrs).toContain('href="/characters/wizard?mode=aspirant"');
+  const selected = links.filter((l) => l.attrs.includes('is-selected'));
+  expect(selected.map((l) => l.label.toLowerCase())).toEqual([mode]);
+  expect(selected[0].attrs).toContain('aria-current="true"');
+});
+
+test('the aspiring wizard has no mode toggle', () => {
+  const html = renderWizardView({ mode: 'aspiring', wizardData: fixture({ mode: 'aspiring' }) });
+  expect(html).not.toContain('wizardModeToggle');
+});

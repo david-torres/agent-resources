@@ -94,12 +94,19 @@
   {{else}}
   <h3 class="title is-4">1. Class Selection</h3>
 
+  <div class="buttons has-addons mb-3" id="wizardModeToggle" role="group" aria-label="Rules">
+    <a href="/characters/wizard?mode=advent" class="button is-small{{#if (eq mode 'advent')}} is-primary is-selected{{/if}}"{{#if (eq mode 'advent')}} aria-current="true"{{/if}}>Advent</a>
+    <a href="/characters/wizard?mode=aspirant" class="button is-small{{#if (eq mode 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq mode 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
+  </div>
+
   <div class="field">
     <div class="control has-icons-left">
       <input class="input" type="search" id="classSearch" placeholder="Search classes…" autocomplete="off">
       <span class="icon is-small is-left"><i class="fas fa-search"></i></span>
     </div>
   </div>
+
+  <div class="tabs is-small mb-2" id="classKioskTabs"></div>
 
   <div class="wizard-kiosk" id="classKiosk" aria-label="Class selector">
     <div class="wizard-kiosk-frame" aria-hidden="true">
@@ -115,7 +122,7 @@
       No classes match <strong id="classKioskEmptyTerm"></strong>. Clear the search to see them all.
     </p>
     <p class="wizard-kiosk-hint has-text-grey is-size-7">
-      Click a card to select it. Scroll or use the arrow keys to browse, scroll past either end to roll a random class.
+      Click a card to select it. Scroll or use the arrow keys to browse, scroll past either end to roll a random class from this tab. Search looks across every tab.
     </p>
   </div>
 

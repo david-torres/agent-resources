@@ -174,6 +174,7 @@ window.CharacterWizard = (function () {
   const kiosk = document.getElementById('classKiosk');
   if (kiosk && DATA.mode === 'aspiring') kiosk.classList.add('is-readonly');
   const track = document.getElementById('classKioskTrack');
+  const kioskTabs = document.getElementById('classKioskTabs');
   const search = document.getElementById('classSearch');
   const selectedPanel = document.getElementById('selectedClassPanel');
   const step1Next = document.getElementById('step1Next');
@@ -320,13 +321,42 @@ window.CharacterWizard = (function () {
       + 'background-color:#222;';
   };
 
-  // Edition label for the bottom ribbon, e.g. "Advent v1" / "Aspirant Preview v2".
+  // Edition label for the bottom ribbon, e.g. "Advent v1" / "Aspirant v2".
   const editionLabel = (c) => {
     const edRaw = (c.rules_edition || 'advent');
-    const ed = edRaw === 'aspirant' ? 'Aspirant Preview' : (edRaw.charAt(0).toUpperCase() + edRaw.slice(1));
+    const ed = edRaw === 'aspirant' ? 'Aspirant' : (edRaw.charAt(0).toUpperCase() + edRaw.slice(1));
     const ver = (c.rules_version || 'v1').toUpperCase();
     return ed + ' · ' + ver;
   };
+
+  // ---------- Section tabs ----------
+  // Server-stamped section ('yours' | 'prerelease' | 'pcc'); classes without
+  // one (older fixtures, aspirant-format rows) default to 'yours'.
+  const SECTION_ORDER = ['yours', 'prerelease', 'pcc'];
+  const SECTION_LABELS = { yours: 'Your classes', prerelease: 'Pre-release', pcc: 'PCCs' };
+  const sectionOf = (c) => (c && c.section) || 'yours';
+  let activeSection = null;
+  const nonEmptySections = () => SECTION_ORDER.filter((sec) =>
+    DATA.classes.some((c) => sectionOf(c) === sec));
+  const renderKioskTabs = () => {
+    if (!kioskTabs) return;
+    kioskTabs.innerHTML = '<ul>' + nonEmptySections().map((sec) => {
+      const count = DATA.classes.filter((c) => sectionOf(c) === sec).length;
+      const activeCls = sec === activeSection ? ' class="is-active"' : '';
+      return '<li' + activeCls + ' data-section="' + sec + '">'
+        + '<a role="button">' + esc(SECTION_LABELS[sec]) + ' (' + count + ')</a>'
+        + '</li>';
+    }).join('') + '</ul>';
+  };
+  if (kioskTabs) {
+    kioskTabs.addEventListener('click', (e) => {
+      const tab = e.target.closest('[data-section]');
+      if (!tab) return;
+      activeSection = tab.getAttribute('data-section');
+      renderKioskTabs();
+      applySearch();
+    });
+  }
 
   // ---------- Render: kiosk cards ----------
   const renderKiosk = () => {
@@ -667,7 +697,9 @@ window.CharacterWizard = (function () {
     let visibleCount = 0;
     track.querySelectorAll('.wizard-kiosk-card').forEach((el) => {
       const name = (el.getAttribute('data-name') || '').toLowerCase();
-      const hit = !q || name.indexOf(q) !== -1;
+      // A search term overrides the active tab and matches across every
+      // section; an empty search shows only the active section's cards.
+      const hit = q ? name.indexOf(q) !== -1 : sectionOf(classesById[el.getAttribute('data-id')]) === activeSection;
       el.style.display = hit ? '' : 'none';
       if (hit) visibleCount += 1;
     });
@@ -4262,12 +4294,23 @@ window.CharacterWizard = (function () {
   // null and the gear/ability pulls come from the builder on step 3.
   let initialId = null;
   if (DATA.mode !== 'aspiring') {
-    initialId = (state.classId && classesById[state.classId])
+    const startingId = (state.classId && classesById[state.classId])
       ? state.classId
-      : (DATA.preselectedClassId && classesById[DATA.preselectedClassId]
-          ? DATA.preselectedClassId
-          : DATA.classes[Math.floor(Math.random() * DATA.classes.length)].id);
+      : (DATA.preselectedClassId && classesById[DATA.preselectedClassId] ? DATA.preselectedClassId : null);
+    // The active tab follows a draft/preselected class into its section;
+    // with neither, it starts on the first non-empty section in order, and
+    // the random pick is drawn from that section alone.
+    if (startingId) {
+      activeSection = sectionOf(classesById[startingId]);
+      initialId = startingId;
+    } else {
+      activeSection = nonEmptySections()[0];
+      const sectionClasses = DATA.classes.filter((c) => sectionOf(c) === activeSection);
+      initialId = sectionClasses[Math.floor(Math.random() * sectionClasses.length)].id;
+    }
+    renderKioskTabs();
     setClassId(initialId);
+    applySearch();
     renderSelectedPanel();
     renderSummary();
   }

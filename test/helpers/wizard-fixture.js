@@ -152,6 +152,7 @@ const buildHtml = () => `
   <section class="wizard-step" data-step-panel="1" hidden>
     <div class="wizard-kiosk" id="classKiosk">
       <div class="wizard-kiosk-frame"></div>
+      <div id="classKioskTabs"></div>
       <div class="wizard-kiosk-track" id="classKioskTrack"></div>
       <p id="classKioskEmpty" hidden></p>
       <span id="classKioskEmptyTerm"></span>
