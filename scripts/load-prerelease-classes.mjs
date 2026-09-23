@@ -8,8 +8,9 @@
 // A book whose descriptor sets `forks` never writes over the class it shares a
 // name with. It inserts a row of its own instead, carrying `base_class_id`, its
 // own `content_format` and `rules_edition`, and an id minted in
-// util/starter-content.js; the parent is left exactly as it stands. A second run
-// finds that row and updates it, which is what keeps a repeated --apply a no-op.
+// util/starter-content.js; the parent -- the row that module's roster names --
+// is left exactly as it stands. A second run finds that row and updates it,
+// which is what keeps a repeated --apply a no-op.
 //
 // An --apply run does three things in order: writes the class rows, renames the
 // character-held item rows this document renames, and publishes the classes
@@ -35,7 +36,7 @@ import { readFileSync } from 'node:fs';
 
 import { createClient } from '@supabase/supabase-js';
 
-import { ASPIRANT_V1_CLASS_IDS } from '../util/starter-content.js';
+import { ASPIRANT_V1_CLASS_IDS, CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
 import { bookFor } from './lib/books.mjs';
 import {
   ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
@@ -55,15 +56,6 @@ const CONTENT_FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'qu
 // record without one rather than store a null.
 export const fieldsFor = (book) => CONTENT_FIELDS
     .filter((field) => field !== 'prerelease_section' || book.key === 'prerelease');
-
-// The row a fork descends from: the same name in the Advent content format, at
-// v1, and not somebody's own class. `content_format` and `is_player_created`
-// guard against a player naming their own class 'Berserker' being taken as a
-// parent -- but the existing-fork check resolves all twelve ENCLAVE: Aspirant
-// V1 names before parent resolution is ever consulted, so on an ordinary run
-// neither clause is exercised. Keep them anyway: they are what stops a fork
-// being taken as its own parent, once one exists.
-const FORK_PARENT = { content_format: 'advent', rules_version: 'v1', is_player_created: false };
 
 // Rich-text trees whose `text` leaves are runs within a line rather than whole
 // values: trimming each leaf independently would delete the space between two
@@ -188,17 +180,20 @@ const mintedId = (name) => {
   return id;
 };
 
-const isParent = (row) => Object.entries(FORK_PARENT)
-    .every(([column, value]) => row[column] === value);
+// The row a fork descends from, named by id: the first id the roster lists for
+// the class, which is the row already in the catalogue before its V1 fork. The
+// Advent roster is read first because the Aspirant roster lists only the fork
+// under an Advent name. These ids are the same in every environment. No rule
+// over name and columns picks the parent out -- an Advent class has a v1 and a
+// v2 row of one name, and the pre-release parents carry v2 as well.
+export const forkParentId = (name) =>
+  (CORE_CLASS_UNLOCKS.advent[name] ?? CORE_CLASS_UNLOCKS.aspirant[name])?.[0] ?? null;
 
 // A fork of this book already in the catalogue means the load has run before, so
 // the second run updates the fork it made rather than making another. Otherwise
-// the load descends from the parent, which it leaves untouched.
-//
-// `matches` narrows to whichever side decided that, because two candidates there
-// is a name the loader cannot resolve -- while a parent and its own fork sharing
-// a name is the steady state, not an ambiguity. An ambiguous plan is reported
-// and aborts the run before anything reads the rest of it.
+// the load descends from the parent, which it leaves untouched. Two forks of one
+// name is a name the loader cannot resolve, reported through `matches`; the
+// parent is a single row by construction.
 const forkPlan = (payload, matches, book) => {
   const existing = matches.filter((row) => row.content_format === book.contentFormat
       && row.rules_edition === book.rulesEdition);
@@ -208,10 +203,12 @@ const forkPlan = (payload, matches, book) => {
       parent: null, disposition: 'update'
     };
   }
-  const parents = matches.filter(isParent);
-  if (!parents.length) {
+  const id = mintedId(payload.name);
+  const parentId = forkParentId(payload.name);
+  const parent = matches.find((row) => row.id === parentId);
+  if (!parent) {
     throw new Error(`no fork parent for ${JSON.stringify(payload.name)}: the catalogue holds no ` +
-        `${FORK_PARENT.content_format} ${FORK_PARENT.rules_version} row of that name`);
+        `row of that name with the roster id ${parentId ?? '(none)'}`);
   }
   // A fork states its own identity, its parent and the two axes that separate
   // it from that parent, because it must not inherit any of the four. The pair
@@ -220,14 +217,12 @@ const forkPlan = (payload, matches, book) => {
   // Librarian, Thane, Thunderbird, Wanderer) -- the other six already carry
   // 'aspirant'. A create takes the four from the row's column defaults; an
   // update leaves the columns alone entirely.
-  const parent = parents.length === 1 ? parents[0] : null;
-  const forked = (row) => ({
-    ...payload, id: mintedId(payload.name), base_class_id: row.id,
-    rules_edition: book.rulesEdition, content_format: book.contentFormat
-  });
   return {
-    payload: parent ? forked(parent) : payload,
-    matches: parents, row: null, parent, disposition: 'fork'
+    payload: {
+      ...payload, id, base_class_id: parent.id,
+      rules_edition: book.rulesEdition, content_format: book.contentFormat
+    },
+    matches: [parent], row: null, parent, disposition: 'fork'
   };
 };
 
@@ -235,9 +230,9 @@ const forkPlan = (payload, matches, book) => {
 // util/class-family.js draws when it refuses an edge whose ends disagree on
 // `content_format`. A name shared across formats names two different classes,
 // so the scoped list is what decides the disposition and what the ambiguity
-// report prints. A forking book is deliberately not scoped here: forkPlan does
-// its own two-way scoping, and a fork's parent is by definition in another
-// format.
+// report prints. A forking book is deliberately not scoped here: forkPlan picks
+// its fork by both axes and its parent by id, and a fork's parent is by
+// definition in another format.
 export const planLoad = (records, rows, book) => records.map((record) => {
   const payload = buildPayload(record, book);
   const matches = resolveTarget(payload, rows, book);

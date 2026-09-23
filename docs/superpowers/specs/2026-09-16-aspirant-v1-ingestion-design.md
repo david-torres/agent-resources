@@ -186,8 +186,15 @@ the row they descend from:
 
 - The six Aspirant-only classes fork their pre-release row. Same
   `rules_edition`, `content_format` advent → aspirant.
-- The six Advent base classes fork their `rules_version = 'v1'` row.
-  `rules_edition` advent → aspirant, `content_format` advent → aspirant.
+- The six Advent base classes fork their original row, the `rules_version =
+  'v1'` one `seed:classes` creates. `rules_edition` advent → aspirant,
+  `content_format` advent → aspirant.
+
+The loader names each parent by id: `CORE_CLASS_UNLOCKS.advent[name][0]` for
+the six Advent classes and `CORE_CLASS_UNLOCKS.aspirant[name][0]` for the six
+Aspirant-only ones (`util/starter-content.js`). No rule over name and columns
+picks it out: an Advent class has a v1 and a v2 row of one name, and the
+pre-release parents are at `rules_version 'v2'`.
 
 Forking the v1 rather than the v2 row of an Advent class is deliberate: v2 is
 itself a fork of v1, and the V1 Aspirant class is a sibling of both rather than a

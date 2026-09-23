@@ -249,7 +249,8 @@ ids in `CORE_CLASS_UNLOCKS` (`util/starter-content.js`), so
 `util/core-roster.integration.test.js` fails until it has run. `seed:local` runs
 it in the right place; the standalone command is here for an environment seeded
 step by step. It loads the committed extraction artifact and forks each class off
-the same-named row, which must therefore already exist, so it follows
+the row `CORE_CLASS_UNLOCKS` names for it (`util/starter-content.js`) -- the id
+`seed:classes` gives that row -- which must therefore already exist, so it follows
 `seed:classes`. It is idempotent: a second run resolves the same twelve rows as
 updates and, finding nothing changed, issues no statement.
 
