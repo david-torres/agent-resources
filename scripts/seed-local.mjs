@@ -21,6 +21,7 @@ import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import { bookFor } from "./lib/books.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -129,8 +130,11 @@ async function main() {
     const aspirantV1 = (
       await client.query("select count(*)::int as n from classes where content_format = 'aspirant'")
     ).rows[0].n;
+    const aspirantV1Artifact = bookFor("aspirant-v1").artifact;
     if (aspirantV1 > 0) {
       skip(`Aspirant V1 classes already loaded (${aspirantV1})`);
+    } else if (!existsSync(aspirantV1Artifact)) {
+      skip(`Aspirant V1 classes not loaded: no extracted book at ${aspirantV1Artifact}`);
     } else {
       run("loading ENCLAVE: Aspirant V1 classes", ["bun", "run", "load:aspirant-v1"]);
     }

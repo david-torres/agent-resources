@@ -1,14 +1,19 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'docs', 'data');
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+const DATA = join(REPO_ROOT, 'docs', 'data');
+// Extracted book content is never committed: it resolves from a gitignored
+// folder (private-data/ by default, overridable for a non-standard checkout),
+// never from docs/data alongside the committed remap.
+const ARTIFACT_DIR = process.env.CLASS_DATA_DIR || join(REPO_ROOT, 'private-data');
 
 // One book's ingestion in one place: where its artifact lives, what names it
 // resolves under, and what the load is authorised to make visible.
 export const BOOKS = {
   prerelease: {
     key: 'prerelease',
-    artifact: join(DATA, 'prerelease-classes-2026-08.json'),
+    artifact: join(ARTIFACT_DIR, 'prerelease-classes-2026-08.json'),
     remap: join(DATA, 'prerelease-name-remap.json'),
     // The document renames this class; the catalogue still holds the old
     // spelling until a load lands. Resolution accepts both, so a second run
@@ -25,7 +30,7 @@ export const BOOKS = {
   },
   'aspirant-v1': {
     key: 'aspirant-v1',
-    artifact: join(DATA, 'aspirant-v1-classes-2026-09.json'),
+    artifact: join(ARTIFACT_DIR, 'aspirant-v1-classes-2026-09.json'),
     // V1 introduces no name this catalogue already holds under a different
     // spelling, and it renames nothing: it only adds rows.
     remap: null,

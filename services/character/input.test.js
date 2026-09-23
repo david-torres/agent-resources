@@ -1030,7 +1030,14 @@ test('normalizeCharacterInput rejects a submitted ability item with a third Mod'
   expect(result.error).toMatch(/two Mods/i);
 });
 
-const V1_ARTIFACT = require('../../docs/data/aspirant-v1-classes-2026-09.json');
+const { existsSync } = require('node:fs');
+const { bookFor } = require('../../scripts/lib/books.mjs');
+
+// The extracted book content is gitignored (private-data/, or CLASS_DATA_DIR)
+// and absent on CI and a fresh clone, so the two tests below that need it are
+// skipped rather than failed when it's gone.
+const v1Artifact = bookFor('aspirant-v1').artifact;
+const V1_ARTIFACT = existsSync(v1Artifact) ? require(v1Artifact) : null;
 
 const everyDefaultEnchantment = () => {
   const classes = Array.isArray(V1_ARTIFACT) ? V1_ARTIFACT : V1_ARTIFACT.classes;
@@ -1042,7 +1049,7 @@ const everyDefaultEnchantment = () => {
 // The 40-word limit governs a player's Custom Enchantment, not the book's
 // printed Defaults -- but the Defaults are the only rated prose of this kind
 // that exists, so they are what the counter can be measured against.
-test('every printed Default Enchantment counts within 40 words once ratings are excluded', () => {
+test.skipIf(!V1_ARTIFACT)('every printed Default Enchantment counts within 40 words once ratings are excluded', () => {
   const enchantments = everyDefaultEnchantment();
   expect(enchantments).toHaveLength(144);
   const over = enchantments.filter(
@@ -1054,7 +1061,7 @@ test('every printed Default Enchantment counts within 40 words once ratings are 
 // This is the case that makes the exclusion rule load-bearing rather than
 // decorative. Counting a <sup>L-H</sup> as a word puts five of the book's own
 // Enchantments over the book's own limit -- Thane's Billhook at 41 against 40.
-test('counting Power Rating superscripts as words would breach the limit five times', () => {
+test.skipIf(!V1_ARTIFACT)('counting Power Rating superscripts as words would breach the limit five times', () => {
   const naiveCount = (text) => String(text ?? '').trim().split(/\s+/).length;
   const breaches = everyDefaultEnchantment()
     .filter((e) => naiveCount(e.description) > ENCHANTMENT_WORD_LIMIT);

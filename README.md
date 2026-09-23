@@ -248,11 +248,18 @@ does not create the twelve Aspirant V1 classes, and they hold 12 of the 24 class
 ids in `CORE_CLASS_UNLOCKS` (`util/starter-content.js`), so
 `util/core-roster.integration.test.js` fails until it has run. `seed:local` runs
 it in the right place; the standalone command is here for an environment seeded
-step by step. It loads the committed extraction artifact and forks each class off
-the row `CORE_CLASS_UNLOCKS` names for it (`util/starter-content.js`) -- the id
-`seed:classes` gives that row -- which must therefore already exist, so it follows
-`seed:classes`. It is idempotent: a second run resolves the same twelve rows as
-updates and, finding nothing changed, issues no statement.
+step by step. It loads the extracted book-content artifact and forks each class
+off the row `CORE_CLASS_UNLOCKS` names for it (`util/starter-content.js`) -- the
+id `seed:classes` gives that row -- which must therefore already exist, so it
+follows `seed:classes`. It is idempotent: a second run resolves the same twelve
+rows as updates and, finding nothing changed, issues no statement.
+
+Extracted book content (the JSON artifacts `load:aspirant-v1` and the
+pre-release loader read) is never committed. It lives in the gitignored
+`private-data/` folder at the repo root -- override the location with the
+`CLASS_DATA_DIR` env var -- and `scripts/lib/books.mjs` resolves each book's
+artifact path from there. Tests that read an artifact skip (rather than fail)
+when it's absent, which is the normal state for CI and a fresh clone.
 
 ### Checking the schema and tables
 

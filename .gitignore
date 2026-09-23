@@ -22,3 +22,6 @@ e2e/report/
 
 # Subagent-driven-development scratch workspace (ledger, briefs, review packages)
 .superpowers/
+
+# Extracted book content: kept local, never committed (scripts/lib/books.mjs)
+private-data/

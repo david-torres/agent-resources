@@ -1,10 +1,14 @@
 import { test, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
+import { sep } from 'node:path';
 import { BOOKS, bookFor } from '../scripts/lib/books.mjs';
 
-test('every descriptor names an artifact that exists on disk', () => {
+// The artifact is extracted book content, never committed: its path must
+// never resolve under docs/ (or anywhere else git tracks), whether or not the
+// gitignored file happens to be present on this machine.
+test('every descriptor names an artifact that resolves outside a committed location', () => {
   for (const book of Object.values(BOOKS)) {
-    expect(existsSync(book.artifact)).toBe(true);
+    expect(book.artifact.split(sep)).not.toContain('docs');
   }
 });
 
