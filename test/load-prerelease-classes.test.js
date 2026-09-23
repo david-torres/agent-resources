@@ -6,8 +6,8 @@ import { test, expect } from 'bun:test';
 import { readFileSync } from 'node:fs';
 
 import {
-  buildPayload, diffFields, displayName, fieldsFor, fold, isLocalTarget, planLoad, reportPlan,
-  resolveTarget, sectionEnum, trimEnds, unremapped, unresolvableTargets
+  buildPayload, diffFields, displayName, fieldsFor, fold, insertRow, isLocalTarget, planLoad,
+  publishPatch, reportPlan, resolveTarget, sectionEnum, trimEnds, unremapped, unresolvableTargets
 } from '../scripts/load-prerelease-classes.mjs';
 import { bookFor } from '../scripts/lib/books.mjs';
 import {
@@ -531,4 +531,46 @@ test('reportPlan prints the FORK heading with the class name and parent id', () 
     console.log = originalLog;
   }
   expect(lines).toContain('\nFORK Berserker from parent-id-1');
+});
+
+// ENCLAVE: Aspirant V1 is released content gated by owning the book, and
+// `classes.status` defaults to 'alpha' -- which the class list files under
+// Pre-release. The pre-release book's classes genuinely are pre-release, so
+// that book never writes the column at all.
+test('an Aspirant V1 fork is inserted with release status', () => {
+  const [plan] = planLoad([berserkerRecord], [row('Berserker', { rules_edition: 'aspirant' })], forkBook);
+  const inserted = insertRow(plan, forkBook);
+  expect(inserted.status).toBe('release');
+  expect(inserted.rules_version).toBe('v1');
+  expect(inserted.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
+});
+
+test('a pre-release create is inserted without a status of its own', () => {
+  const charlatan = records.find((record) => displayName(record.name) === 'Charlatan');
+  const [plan] = planLoad([charlatan], [], book);
+  const inserted = insertRow(plan, book);
+  expect(inserted).not.toHaveProperty('status');
+  expect(inserted.rules_version).toBe('v1');
+});
+
+// Re-running the Aspirant V1 load is what corrects rows an earlier load left
+// at 'alpha', so its publish step brings status along with visibility.
+test('publishing an Aspirant V1 row already public brings its status to release', () => {
+  expect(publishPatch({ id: 'x', is_public: true, status: 'alpha' }, forkBook))
+      .toEqual({ status: 'release' });
+});
+
+test('publishing a private Aspirant V1 row sets both visibility and release status', () => {
+  expect(publishPatch({ id: 'x', is_public: false, status: 'alpha' }, forkBook))
+      .toEqual({ is_public: true, status: 'release' });
+});
+
+test('an Aspirant V1 row already public and released needs no publish write', () => {
+  expect(publishPatch({ id: 'x', is_public: true, status: 'release' }, forkBook)).toBeNull();
+});
+
+test('publishing a pre-release row flips visibility and never touches status', () => {
+  expect(publishPatch({ id: 'x', is_public: false, status: 'alpha' }, book))
+      .toEqual({ is_public: true });
+  expect(publishPatch({ id: 'x', is_public: true, status: 'alpha' }, book)).toBeNull();
 });

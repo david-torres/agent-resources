@@ -12,8 +12,9 @@
 // finds that row and updates it, which is what keeps a repeated --apply a no-op.
 //
 // An --apply run does three things in order: writes the class rows, renames the
-// character-held item rows this document renames, and publishes the four
-// classes the owner authorised. The rename comes from
+// character-held item rows this document renames, and publishes the
+// classes the owner authorised -- making them visible and, where the book
+// carries a status, setting it. The rename comes from
 // docs/data/prerelease-name-remap.json: the document renames items live
 // characters hold, and a held name that no class in the runtime map carries
 // fails that character's next save outright, so a name this import removes with
@@ -86,7 +87,9 @@ const REMAP_KIND = { ability: 'abilities', gear: 'gear' };
 // name map the save path resolves through. `book.publishedByLoad` is the
 // owner's named set, and it is the only thing here that may set a row's
 // visibility -- is_public is deliberately absent from every field list so the
-// general write path cannot.
+// general write path cannot. `book.status` is written the same way: on the
+// rows this load inserts and the rows it publishes, never by the field diff.
+// `classes.status` defaults to 'alpha', which lists a class as pre-release.
 
 const LOCAL_TARGET = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
 const PREVIEW_WIDTH = 140;
@@ -254,6 +257,19 @@ export const planLoad = (records, rows, book) => records.map((record) => {
     payload, matches: ownFormat, row, parent: null, disposition: row ? 'update' : 'create'
   };
 });
+
+export const insertRow = (plan, book) => ({
+  ...plan.payload,
+  rules_version: NEW_ROW_RULES_VERSION,
+  ...(book.status ? { status: book.status } : {})
+});
+
+export const publishPatch = (row, book) => {
+  const patch = {};
+  if (!row.is_public) patch.is_public = true;
+  if (book.status && row.status !== book.status) patch.status = book.status;
+  return Object.keys(patch).length ? patch : null;
+};
 
 const reportInsert = (plan, heading) => {
   console.log(`\n${heading}`);
@@ -444,8 +460,8 @@ const main = async (argv) => {
   // renamed class.
   if (inserts.length) {
     const { data, error: insertError } = await supabase.from('classes')
-        .insert(inserts.map((plan) => ({ ...plan.payload, rules_version: NEW_ROW_RULES_VERSION })))
-        .select('id, name, is_public');
+        .insert(inserts.map((plan) => insertRow(plan, book)))
+        .select('id, name, is_public, status');
     if (insertError) {
       console.error(`\nfailed to create ${inserts.length} classes: ${insertError.message}`);
       console.error('nothing written');
@@ -499,18 +515,20 @@ const main = async (argv) => {
   for (const plan of plans.filter((candidate) => published.includes(candidate.payload.name))) {
     const { name } = plan.payload;
     const target = plan.row;
-    if (target.is_public) {
-      console.log(`already public: ${name} (${target.id})`);
+    const patch = publishPatch(target, book);
+    if (!patch) {
+      console.log(`already published: ${name} (${target.id})`);
       continue;
     }
     const { error: publishError } = await supabase.from('classes')
-        .update({ is_public: true }).eq('id', target.id);
+        .update(patch).eq('id', target.id);
     if (publishError) {
       console.error(`\nfailed to publish "${name}": ${publishError.message}`);
       console.error('partial load - classes and remaps written; re-run to converge');
       return 1;
     }
-    console.log(`published: ${name} (${target.id})`);
+    const set = Object.entries(patch).map(([field, value]) => `${field}=${value}`).join(', ');
+    console.log(`published: ${name} (${target.id}) ${set}`);
   }
   return 0;
 };

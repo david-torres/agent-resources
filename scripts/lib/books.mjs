@@ -17,6 +17,9 @@ export const BOOKS = {
     publishedByLoad: ['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan'],
     contentFormat: 'advent',
     rulesEdition: null,
+    // This book's classes genuinely are pre-release, so the load leaves the
+    // column at its default.
+    status: null,
     forks: false
   },
   'aspirant-v1': {
@@ -31,6 +34,8 @@ export const BOOKS = {
       'Witchfinder'],
     contentFormat: 'aspirant',
     rulesEdition: 'aspirant',
+    // Released content, gated by owning the book rather than by status.
+    status: 'release',
     forks: true
   }
 };
