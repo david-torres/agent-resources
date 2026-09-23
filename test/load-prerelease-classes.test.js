@@ -38,9 +38,11 @@ const row = (name, over = {}) => ({ id: `id-${name}`, name, rules_edition: 'adve
   content_format: 'advent', rules_version: 'v1', is_player_created: false, ...over });
 
 // Columns the owner controls: no payload may flip a row's visibility, its
-// status, its marketing copy, or the `rules_version` an owner set -- the insert
-// that creates a row is the only thing that writes that one.
-const FORBIDDEN = ['is_public', 'status', 'teaser', 'image_url', 'image_crop', 'rules_version'];
+// status, whether it is player-created, its marketing copy, or the
+// `rules_version` an owner set -- the insert that creates a row is the only
+// thing that writes those.
+const FORBIDDEN = ['is_public', 'status', 'is_player_created', 'teaser', 'image_url', 'image_crop',
+  'rules_version'];
 
 // A fork mints these four itself. An update or a create must leave every one of
 // them to the row's own column defaults.
@@ -514,47 +516,72 @@ test('every committed remap target survives the import into its own kind', () =>
   expect(unresolvableTargets(remap, after)).toEqual([]);
 });
 
+const captureLog = (run) => {
+  const lines = [];
+  const originalLog = console.log;
+  console.log = (line) => lines.push(line);
+  try {
+    run();
+  } finally {
+    console.log = originalLog;
+  }
+  return lines;
+};
+
 // The FORK heading is how a human running the dry run confirms the twelve
-// parents before the next task writes anything -- it names both the class and
-// the parent id it is about to descend from.
+// parents before anything is written -- it names both the class and the parent
+// id it is about to descend from.
 test('reportPlan prints the FORK heading with the class name and parent id', () => {
   const plan = {
     payload: { name: 'Berserker' }, row: null, parent: { id: 'parent-id-1' },
     disposition: 'fork', changes: []
   };
-  const lines = [];
-  const originalLog = console.log;
-  console.log = (line) => lines.push(line);
-  try {
-    reportPlan([plan]);
-  } finally {
-    console.log = originalLog;
-  }
+  const lines = captureLog(() => reportPlan([plan], forkBook));
   expect(lines).toContain('\nFORK Berserker from parent-id-1');
+  expect(lines).toContain('  + rules_version: "v1"');
 });
 
-// ENCLAVE: Aspirant V1 is released content gated by owning the book, and
-// `classes.status` defaults to 'alpha' -- which the class list files under
-// Pre-release. The pre-release book's classes genuinely are pre-release, so
-// that book never writes the column at all.
-test('an Aspirant V1 fork is inserted with release status', () => {
+test('the dry run reports the fields only an insert writes', () => {
+  const charlatan = records.find((record) => displayName(record.name) === 'Charlatan');
+  const [plan] = planLoad([charlatan], [], book);
+  plan.changes = diffFields(plan.payload, plan.row);
+  const lines = captureLog(() => reportPlan([plan], book));
+  expect(lines).toContain('\nCREATE Charlatan');
+  expect(lines).toContain('  + rules_version: "v2"');
+  expect(lines).toContain('  + status: "release"');
+  expect(lines).toContain('  + is_player_created: true');
+});
+
+// `rules_version` has no column default, `status` defaults to 'alpha' and
+// `is_player_created` to false, so the insert is where a book states all
+// three. Both books' classes are released content, each at its own rules
+// version, and only a pre-release PCC is player-created.
+test('an Aspirant V1 fork is inserted released, at v1, and not player-created', () => {
   const [plan] = planLoad([berserkerRecord], [row('Berserker', { rules_edition: 'aspirant' })], forkBook);
   const inserted = insertRow(plan, forkBook);
   expect(inserted.status).toBe('release');
   expect(inserted.rules_version).toBe('v1');
+  expect(inserted.is_player_created).toBe(false);
   expect(inserted.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
 });
 
-test('a pre-release create is inserted without a status of its own', () => {
+test('a pre-release create is inserted released, at v2', () => {
   const charlatan = records.find((record) => displayName(record.name) === 'Charlatan');
   const [plan] = planLoad([charlatan], [], book);
   const inserted = insertRow(plan, book);
-  expect(inserted).not.toHaveProperty('status');
-  expect(inserted.rules_version).toBe('v1');
+  expect(inserted.status).toBe('release');
+  expect(inserted.rules_version).toBe('v2');
 });
 
-// Re-running the Aspirant V1 load is what corrects rows an earlier load left
-// at 'alpha', so its publish step brings status along with visibility.
+test('a pre-release PCC is inserted player-created and an exclusive is not', () => {
+  const recordFor = (name) => records.find((record) => displayName(record.name) === name);
+  const [charlatan, ardent] = planLoad([recordFor('Charlatan'), recordFor('Ardent')], [], book);
+  expect(insertRow(charlatan, book).is_player_created).toBe(true);
+  expect(insertRow(ardent, book).is_player_created).toBe(false);
+});
+
+// Re-running a load is what corrects rows an earlier load left at another
+// status, so its publish step brings status along with visibility.
 test('publishing an Aspirant V1 row already public brings its status to release', () => {
   expect(publishPatch({ id: 'x', is_public: true, status: 'alpha' }, forkBook))
       .toEqual({ status: 'release' });
@@ -569,8 +596,8 @@ test('an Aspirant V1 row already public and released needs no publish write', ()
   expect(publishPatch({ id: 'x', is_public: true, status: 'release' }, forkBook)).toBeNull();
 });
 
-test('publishing a pre-release row flips visibility and never touches status', () => {
+test('publishing a pre-release row brings its status to release', () => {
   expect(publishPatch({ id: 'x', is_public: false, status: 'alpha' }, book))
-      .toEqual({ is_public: true });
-  expect(publishPatch({ id: 'x', is_public: true, status: 'alpha' }, book)).toBeNull();
+      .toEqual({ is_public: true, status: 'release' });
+  expect(publishPatch({ id: 'x', is_public: true, status: 'release' }, book)).toBeNull();
 });

@@ -12,9 +12,9 @@
 // finds that row and updates it, which is what keeps a repeated --apply a no-op.
 //
 // An --apply run does three things in order: writes the class rows, renames the
-// character-held item rows this document renames, and publishes the
-// classes the owner authorised -- making them visible and, where the book
-// carries a status, setting it. The rename comes from
+// character-held item rows this document renames, and publishes the classes
+// the owner authorised -- making them visible and setting the book's status.
+// The rename comes from
 // docs/data/prerelease-name-remap.json: the document renames items live
 // characters hold, and a held name that no class in the runtime map carries
 // fails that character's next save outright, so a name this import removes with
@@ -65,14 +65,6 @@ export const fieldsFor = (book) => CONTENT_FIELDS
 // being taken as its own parent, once one exists.
 const FORK_PARENT = { content_format: 'advent', rules_version: 'v1', is_player_created: false };
 
-// `rules_version` is NOT NULL with no column default, so a new row cannot be
-// inserted without it. It is never part of an update payload -- an existing row
-// keeps whatever the owner set. This constant supplies 'v1' unconditionally to
-// every insert, create or fork alike, regardless of what a fork's parent row
-// carries; the parent-resolution rule's own 'v1' requirement is a separate
-// fact, stated where FORK_PARENT is defined.
-const NEW_ROW_RULES_VERSION = 'v1';
-
 // Rich-text trees whose `text` leaves are runs within a line rather than whole
 // values: trimming each leaf independently would delete the space between two
 // adjacent runs, which is interior whitespace and must survive.
@@ -89,7 +81,6 @@ const REMAP_KIND = { ability: 'abilities', gear: 'gear' };
 // visibility -- is_public is deliberately absent from every field list so the
 // general write path cannot. `book.status` is written the same way: on the
 // rows this load inserts and the rows it publishes, never by the field diff.
-// `classes.status` defaults to 'alpha', which lists a class as pre-release.
 
 const LOCAL_TARGET = /^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/;
 const PREVIEW_WIDTH = 140;
@@ -258,34 +249,42 @@ export const planLoad = (records, rows, book) => records.map((record) => {
   };
 });
 
-export const insertRow = (plan, book) => ({
-  ...plan.payload,
-  rules_version: NEW_ROW_RULES_VERSION,
-  ...(book.status ? { status: book.status } : {})
+// What only an insert writes. `rules_version` is NOT NULL with no column
+// default, `status` defaults to 'alpha' and `is_player_created` to false, so a
+// new row states all three. None is ever part of an update payload: an existing
+// row keeps whatever the owner set.
+const insertOnly = (plan, book) => ({
+  rules_version: book.rulesVersion,
+  status: book.status,
+  is_player_created: plan.payload.prerelease_section === 'pcc'
 });
+
+export const insertRow = (plan, book) => ({ ...plan.payload, ...insertOnly(plan, book) });
 
 export const publishPatch = (row, book) => {
   const patch = {};
   if (!row.is_public) patch.is_public = true;
-  if (book.status && row.status !== book.status) patch.status = book.status;
+  if (row.status !== book.status) patch.status = book.status;
   return Object.keys(patch).length ? patch : null;
 };
 
-const reportInsert = (plan, heading) => {
+const reportInsert = (plan, book, heading) => {
   console.log(`\n${heading}`);
   for (const { field, after } of plan.changes) console.log(`  + ${field}: ${preview(after)}`);
-  console.log(`  + rules_version: ${JSON.stringify(NEW_ROW_RULES_VERSION)}`);
+  for (const [field, value] of Object.entries(insertOnly(plan, book))) {
+    console.log(`  + ${field}: ${JSON.stringify(value)}`);
+  }
 };
 
-export const reportPlan = (plans) => {
+export const reportPlan = (plans, book) => {
   for (const plan of plans) {
     const { payload, row, parent, disposition } = plan;
     if (disposition === 'create') {
-      reportInsert(plan, `CREATE ${payload.name}`);
+      reportInsert(plan, book, `CREATE ${payload.name}`);
       continue;
     }
     if (disposition === 'fork') {
-      reportInsert(plan, `FORK ${payload.name} from ${parent.id}`);
+      reportInsert(plan, book, `FORK ${payload.name} from ${parent.id}`);
       continue;
     }
     console.log(`\nUPDATE ${row.name} (${row.id})`);
@@ -373,7 +372,7 @@ const main = async (argv) => {
   }
 
   for (const plan of plans) plan.changes = diffFields(plan.payload, plan.row);
-  reportPlan(plans);
+  reportPlan(plans, book);
 
   const updates = plans.filter((plan) => plan.disposition === 'update');
   const creates = plans.filter((plan) => plan.disposition === 'create');
