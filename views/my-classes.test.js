@@ -119,3 +119,18 @@ test('a close-modal event scoped to row 1 does not close row 3 while it is open'
   expect(document.getElementById('duplicateModal-class-3').classList.contains('is-active')).toBe(true);
   expect(document.body.classList.contains('modal-open')).toBe(true);
 });
+
+const aspirantFilterOption = (html) => html.match(/<option value="aspirant"[^>]*>/)[0];
+
+test('the Aspirant rules-edition filter option is selectable', () => {
+  const html = renderMyClasses(THREE_CLASSES);
+  expect(aspirantFilterOption(html)).not.toContain('disabled');
+});
+
+test('the Aspirant rules-edition filter option is selected when filtering by Aspirant', () => {
+  const html = renderMyClasses({
+    ...THREE_CLASSES,
+    filters: { rules_edition: 'aspirant', rules_version: '', status: '' }
+  });
+  expect(aspirantFilterOption(html)).toContain('selected');
+});

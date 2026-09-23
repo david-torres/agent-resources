@@ -134,3 +134,17 @@ test('unowned releases and prerelease classes never render art', () => {
   expect(html).toContain('Pre-release Classes');
   expect(html).not.toContain('image-crop-render');
 });
+
+const aspirantFilterOption = (html) => html.match(/<option value="aspirant"[^>]*>/)[0];
+
+test('the Aspirant rules-edition filter option is selectable', () => {
+  const html = renderClasses(baseContext());
+  expect(aspirantFilterOption(html)).not.toContain('disabled');
+});
+
+test('the Aspirant rules-edition filter option is selected when filtering by Aspirant', () => {
+  const html = renderClasses(baseContext({
+    filters: { rules_edition: 'aspirant', rules_version: '', status: '' }
+  }));
+  expect(aspirantFilterOption(html)).toContain('selected');
+});
