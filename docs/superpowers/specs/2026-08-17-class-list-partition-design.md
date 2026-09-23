@@ -1,74 +1,60 @@
-# Class List Page: Released / PCC Partition — Design
+# Class List Page: Catalog Sections — Design
 
 **Date:** 2026-08-17
 **Status:** Approved
 
 ## Goal
 
-Reorganize the public class list page (`GET /classes`) so official/released
-classes appear first, with player-created classes (PCCs) in a second section
-below. PCC cards do not show thumbnail art.
+The public class list page (`GET /classes`) sorts every class into one of four
+sections, so the released classes a viewer owns come first and teasers and
+unfinished player-created classes (PCCs) are kept apart from released content.
+Only the viewer's own released classes show thumbnail art.
 
 ## Partition Rule
 
-Reuse the semantics already established on the profile page
-(`partitionProfileClasses` in `util/class-filter.js`):
+Classes are grouped into version families first (`groupClassVersions`), and each
+group is placed by its primary (latest) member. The rules are checked in this
+order, and a group lands in the first section whose rule it meets:
 
-- A class belongs to the **PCC section** when `is_player_created` is true AND
-  `status !== 'release'`.
-- Everything else — official classes and released PCCs — belongs to the
-  **Released section**. A released PCC has been incorporated into the game, so
-  it graduates: it shows with the officials (thumbnail included) and never
-  appears in both sections.
+1. **Pre-release Classes** — `prerelease_section` is set (`pcc`, `exclusive` or
+   `aspirant`), whatever the class's `status` and whether or not a book the
+   viewer owns grants it. A pre-release class is the Enclave creator's teaser of
+   an upcoming product: released Advent-format content at `rules_version 'v2'`.
+   This rule comes first because the Aspirant book's roster
+   (`CORE_CLASS_UNLOCKS.aspirant` in `util/starter-content.js`) grants the six
+   pre-release aspirant-section classes.
+2. **Player-Created Classes (PCCs)** — `is_player_created` is true and
+   `status !== 'release'`. Only an unfinished PCC carries `alpha` or `beta`; a
+   released PCC has been incorporated into the game and is a released class.
+3. **Your Released Classes** — the primary's id is one a book the viewer owns
+   grants (`getEffectiveClassUnlocks(...).bookIds`).
+4. **Other Released Classes** — everything else.
 
-## Changes
+For a viewer who owns only the Advent book: the six Advent classes (each at its
+latest version) are under Your Released, the twelve ENCLAVE: Aspirant V1 classes
+under Other Released, the twenty pre-release classes under Pre-release, and the
+alpha and beta PCCs under PCCs. A signed-out visitor owns no book, so Your
+Released is absent and the Advent six are under Other Released.
 
-### `util/class-filter.js`
+The profile page keeps its own two-way split (`partitionProfileClasses`,
+`partitionClassGroups`): unreleased PCCs in one section, everything else in the
+other.
 
-- Extract the released/PCC predicate shared by `partitionProfileClasses` so the
-  rule lives in one place.
-- Add `partitionClassGroups(groups)`: takes the version-grouped array of
-  `{ primary, previous }` produced by `groupClassVersions` and returns
-  `{ released, pcc }`, partitioning by each group's `primary`. Group order is
-  preserved within each partition.
-- `partitionProfileClasses` behavior is unchanged; the profile page is
-  unaffected.
+## Where it lives
 
-### `routes/classes.js` — `GET /`
+- `util/class-filter.js` — `partitionClassCatalog(groups, bookClassIds)` returns
+  `{ ownedReleases, otherReleases, prerelease, pcc }`, preserving group order
+  within each section. `isUnreleasedPcc` is the shared PCC predicate.
+- `routes/classes.js` — `GET /` applies the filters, groups by version family
+  (or, when a `rules_version` filter is set, shows each match flat), and
+  partitions with the viewer's `bookIds`. Filters apply before partitioning.
+- `views/classes.handlebars` — renders the four sections in the order Your
+  Released, Other Released, Pre-release, PCCs, each (heading and card grid) only
+  when non-empty, through `views/partials/class-group-card.handlebars`.
+  `showImage` is true only for Your Released Classes.
 
-- After version grouping (both the grouped and the version-filtered flat
-  paths), call `partitionClassGroups` on the result.
-- Render `classes` with `releasedGroups` and `pccGroups` instead of the single
-  `classGroups` variable (replacing it — no dual support).
-- Filters are applied before partitioning, so they keep working unchanged.
-  E.g. Type = "Player Created" yields unreleased PCCs in the PCC section and
-  any released PCCs in the Released section.
+## Testing
 
-### `views/classes.handlebars`
-
-- Extract the current ~55-line class card markup into a partial
-  (`views/partials/class-group-card.handlebars`) accepting the group plus a
-  `showImage` flag. The `card-image`
-  block renders only when `showImage` is true and `primary.image_url` is set.
-- Render two sections, matching the profile page's heading language:
-  1. **"Released Classes"** — existing card grid, `showImage` true.
-  2. **"Player-Created Classes (PCCs)"** — same card grid, `showImage` false
-     (no `card-image` markup at all, even when the class has art).
-- Each section (heading + grid) renders only when its partition is non-empty.
-  When both are empty the page shows what it shows today for zero results.
-- Admin-only "Private" tag, status tags, previous-version links, and teaser
-  text behave exactly as today in both sections.
-
-## Testing (TDD)
-
-- Unit tests for `partitionClassGroups`: official → released; unreleased PCC →
-  pcc; released PCC → released; order preserved; empty input.
-- View test alongside the existing handlebars tests verifying: both sections
-  render with their headings, PCC cards contain no image markup, released
-  cards keep thumbnails, and an empty partition hides its section.
-
-## Out of Scope
-
-- No changes to filters, `my-classes`, the profile page, or the underlying
-  queries.
-- No literal HTML table — the PCC section stays a card grid (user decision).
+- `util/class-filter.test.js` pins the rule order, pre-release winning over book
+  ownership and over status, and the Advent-book owner's sections.
+- `views/classes.test.js` pins that only owned released cards render art.

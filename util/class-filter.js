@@ -44,9 +44,12 @@ const partitionClassGroups = (groups) => {
   return { released, pcc };
 };
 
-// The catalog keeps differently shaped cards out of the same grid. Artwork is
+// The /classes catalog's four sections, decided per version group by its
+// primary and checked in this order. Pre-release comes first because it must
+// win over book ownership: the Aspirant book's roster grants the six
+// pre-release aspirant-section classes (util/starter-content.js). Artwork is
 // release content and appears only for released classes covered by a book the
-// viewer owns; official previews and PCCs remain deliberately art-free.
+// viewer owns; the other sections stay art-free (views/classes.handlebars).
 const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
   const list = Array.isArray(groups) ? groups : [];
   const ownedReleases = [];
@@ -55,9 +58,9 @@ const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
   const pcc = [];
   for (const group of list) {
     const cls = group && group.primary;
-    if (isUnreleasedPcc(cls)) pcc.push(group);
-    else if (cls?.status !== 'release') prerelease.push(group);
-    else if (bookClassIds.has(cls.id)) ownedReleases.push(group);
+    if (cls?.prerelease_section) prerelease.push(group);
+    else if (isUnreleasedPcc(cls)) pcc.push(group);
+    else if (bookClassIds.has(cls?.id)) ownedReleases.push(group);
     else otherReleases.push(group);
   }
   return { ownedReleases, otherReleases, prerelease, pcc };

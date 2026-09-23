@@ -83,21 +83,70 @@ describe('partitionProfileClasses', () => {
 });
 
 describe('partitionClassCatalog', () => {
-  const group = (id, status = 'release', is_player_created = false) => ({
-    primary: { id, status, is_player_created }, previous: []
+  const group = (id, { status = 'release', is_player_created = false, prerelease_section = null } = {}) => ({
+    primary: { id, status, is_player_created, prerelease_section }, previous: []
   });
 
-  test('separates book-owned art cards from every art-free catalog section', () => {
+  test('places each group in the first section whose rule its primary meets', () => {
+    const teaser = group('teaser', { prerelease_section: 'exclusive' });
+    const pcc = group('pcc', { status: 'alpha', is_player_created: true });
     const owned = group('owned');
-    const released = group('released');
-    const preview = group('preview', 'beta');
-    const pcc = group('pcc', 'alpha', true);
-    expect(partitionClassCatalog([owned, released, preview, pcc], new Set(['owned']))).toEqual({
+    const other = group('other');
+    expect(partitionClassCatalog([teaser, pcc, owned, other], new Set(['owned']))).toEqual({
       ownedReleases: [owned],
-      otherReleases: [released],
-      prerelease: [preview],
+      otherReleases: [other],
+      prerelease: [teaser],
       pcc: [pcc]
     });
+  });
+
+  // The Aspirant book's roster grants the six pre-release aspirant-section
+  // classes (util/starter-content.js), so ownership must not pull them out.
+  test('a pre-release class stays pre-release when a book the viewer owns grants it', () => {
+    const teaser = group('berserker-teaser', { prerelease_section: 'aspirant' });
+    const out = partitionClassCatalog([teaser], new Set(['berserker-teaser']));
+    expect(out.prerelease).toEqual([teaser]);
+    expect(out.ownedReleases).toEqual([]);
+  });
+
+  test('a pre-release PCC is pre-release whatever its status', () => {
+    const released = group('pcc-teaser', { prerelease_section: 'pcc', is_player_created: true });
+    const alpha = group('pcc-alpha-teaser', {
+      status: 'alpha', prerelease_section: 'pcc', is_player_created: true
+    });
+    const out = partitionClassCatalog([released, alpha]);
+    expect(out.prerelease).toEqual([released, alpha]);
+    expect(out.pcc).toEqual([]);
+  });
+
+  // Only an unfinished PCC carries alpha or beta; status alone never makes an
+  // official class a teaser.
+  test('an official class with no pre-release section is released whatever its status', () => {
+    const beta = group('official-beta', { status: 'beta' });
+    const out = partitionClassCatalog([beta]);
+    expect(out.otherReleases).toEqual([beta]);
+    expect(out.prerelease).toEqual([]);
+  });
+
+  test('a released PCC with no pre-release section is a released class', () => {
+    const graduated = group('graduated', { is_player_created: true });
+    const out = partitionClassCatalog([graduated], new Set(['graduated']));
+    expect(out.ownedReleases).toEqual([graduated]);
+    expect(out.pcc).toEqual([]);
+  });
+
+  test("an Advent-book owner's catalog: the Advent six theirs, the Aspirant twelve other", () => {
+    const advent = ['gun', 'ill', 'lib', 'tha', 'thu', 'wan'].map((id) => group(`${id}-v2`));
+    const aspirant = Array.from({ length: 12 }, (_, i) => group(`v1-${i}`));
+    const teasers = Array.from({ length: 20 }, (_, i) => group(`pre-${i}`, {
+      prerelease_section: i < 11 ? 'pcc' : i < 14 ? 'exclusive' : 'aspirant',
+      is_player_created: i < 11
+    }));
+    const pccs = [group('alpha-pcc', { status: 'alpha', is_player_created: true }),
+      group('beta-pcc', { status: 'beta', is_player_created: true })];
+    const bookIds = new Set(advent.map((g) => g.primary.id));
+    const out = partitionClassCatalog([...teasers, ...aspirant, ...pccs, ...advent], bookIds);
+    expect(out).toEqual({ ownedReleases: advent, otherReleases: aspirant, prerelease: teasers, pcc: pccs });
   });
 });
 
