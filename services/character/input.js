@@ -28,6 +28,7 @@ const { tagAbilities } = require('../../util/character-derived');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
+const clearFlag = (field) => `clear_${field}`;
 const CREATOR_MODES = ['advent', 'aspiring', 'aspirant'];
 const ENCHANTMENT_SOURCES = ['default', 'custom'];
 const TRAIT_SLOTS = ['trait0', 'trait1', 'trait2'];
@@ -538,6 +539,15 @@ const normalizeCharacterInput = (input, context = {}) => {
 
   if (context.creatorId) data.creator_id = context.creatorId;
   for (const field of rulesVersion === 'v2' ? V1_ONLY_FIELDS : V2_ONLY_FIELDS) delete data[field];
+
+  // A v2 character keeps the v1-only text it had before its class became v2:
+  // the strip above leaves the key absent, which save_character_atomic reads as
+  // "keep what is stored". A clear flag from the edit form's Deprecated fields
+  // section is the one way to change it, and only to null.
+  for (const field of V1_ONLY_FIELDS) {
+    if (rulesVersion === 'v2' && data[clearFlag(field)] === 'on') data[field] = null;
+    delete data[clearFlag(field)];
+  }
 
   // Each of trait0/trait1/trait2 is shaped (and, for a submitted name, judged)
   // independently; a blank slot shapes to null and is simply omitted rather

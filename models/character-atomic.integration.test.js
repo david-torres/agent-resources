@@ -700,3 +700,55 @@ test('an aspiring_abilities entry with a non-string class_id is rejected', async
   await expect(insertWithAspiringAbilities([{ class_id: 123, name: 'X', type: 'core' }]))
     .rejects.toThrow(/characters_aspiring_abilities_check/);
 });
+
+// A class that becomes v2 does not convert its characters: their v1-only text
+// stays stored, and the only change a v2 save may make to it is clearing it
+// (services/character/input.js). Through the whole path -- updateCharacter,
+// saveCharacterAtomic, save_character_atomic -- an absent key must keep the
+// stored value and a JSON null must write NULL, because the RPC's UPDATE reads
+// jsonb_populate_record(saved, p_character) with no COALESCE on either column.
+// v2Class carries rules_version 'v2', so the service strips both fields.
+const storeDeprecatedFields = async (characterId) => {
+  await db.query('update characters set perks = $1, additional_gear = $2 where id = $3',
+    ['Old perk prose', 'Old gear prose', characterId]);
+};
+
+const deprecatedFields = async (characterId) => {
+  const { rows } = await db.query(
+    'select perks, additional_gear from characters where id = $1', [characterId]
+  );
+  return rows[0];
+};
+
+test('a v2 save clears a deprecated field only when its clear flag is submitted', async () => {
+  await setup();
+  const name = `Atomic deprecated clear ${suffix}`;
+  const { data: created, error: createError } = await createCharacter(v2Input(name), profile);
+  expect(createError).toBeNull();
+  await storeDeprecatedFields(created.id);
+
+  const { error } = await updateCharacter(created.id, {
+    ...v2Input(name), id: created.id, clear_perks: 'on'
+  }, profile);
+  expect(error).toBeFalsy();
+
+  expect(await deprecatedFields(created.id))
+    .toEqual({ perks: null, additional_gear: 'Old gear prose' });
+});
+
+test('a v2 save never writes a submitted deprecated field', async () => {
+  await setup();
+  const name = `Atomic deprecated keep ${suffix}`;
+  const { data: created, error: createError } = await createCharacter(v2Input(name), profile);
+  expect(createError).toBeNull();
+  await storeDeprecatedFields(created.id);
+
+  const { error } = await updateCharacter(created.id, {
+    ...v2Input(name), id: created.id,
+    perks: 'Rewritten perk prose', additional_gear: 'Rewritten gear prose'
+  }, profile);
+  expect(error).toBeFalsy();
+
+  expect(await deprecatedFields(created.id))
+    .toEqual({ perks: 'Old perk prose', additional_gear: 'Old gear prose' });
+});

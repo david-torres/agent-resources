@@ -72,6 +72,41 @@ test('normalizes v2 fields and strips legacy free-text fields', () => {
   expect(result.childData.abilityPerks[0].text).toBe('Deal more damage');
 });
 
+// A v2 character keeps the v1-only text it carried before its class became v2.
+// An absent key is what preserves it (save_character_atomic keeps the stored
+// value); a null is what clears it, and only a clear flag produces one.
+test('a v2 save turns a submitted clear flag into a null for that field only', () => {
+  const result = normalizeCharacterInput({ clear_perks: 'on' }, { rulesVersion: 'v2' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.perks).toBeNull();
+  expect(result.data).not.toHaveProperty('additional_gear');
+  expect(result.data).not.toHaveProperty('clear_perks');
+});
+
+test('a v2 save never carries a submitted value into a deprecated field', () => {
+  const result = normalizeCharacterInput({
+    perks: 'rewritten', additional_gear: 'rewritten', clear_additional_gear: 'on'
+  }, { rulesVersion: 'v2' });
+
+  expect(result.error).toBeNull();
+  expect(result.data).not.toHaveProperty('perks');
+  expect(result.data.additional_gear).toBeNull();
+  expect(result.data).not.toHaveProperty('clear_additional_gear');
+});
+
+test('a v1 save ignores the clear flags and keeps its editable text', () => {
+  const result = normalizeCharacterInput({
+    perks: 'kept', additional_gear: 'kept gear', clear_perks: 'on', clear_additional_gear: 'on'
+  }, { rulesVersion: 'v1' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.perks).toBe('kept');
+  expect(result.data.additional_gear).toBe('kept gear');
+  expect(result.data).not.toHaveProperty('clear_perks');
+  expect(result.data).not.toHaveProperty('clear_additional_gear');
+});
+
 test('returns established validation errors for invalid creator mode and perks', () => {
   expect(normalizeCharacterInput({ creator_mode: 'nope' }, { rulesVersion: 'v1' })).toMatchObject({
     data: null, error: 'Invalid creator_mode: nope'
