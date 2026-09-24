@@ -266,47 +266,55 @@ describe('normalizeGear column contract', () => {
   });
 });
 
-const { signatureColumns } = require('./class-gear');
+const { signatureSides } = require('./class-gear');
 
-describe('signatureColumns', () => {
-  test('a six-item class fills two columns and leaves two empty', () => {
+const sideNames = (sides) => sides.map((side) => side.map((item) => item.name));
+
+describe('signatureSides', () => {
+  test('a six-item class puts book column 1 on the left and column 2 on the right', () => {
     const items = ['A', 'B', 'C', 'D', 'E', 'F'].map(named);
-    const columns = signatureColumns(items);
-    expect(columns.map((column) => column.map((item) => item.name))).toEqual([
+    expect(sideNames(signatureSides(items))).toEqual([
       ['A', 'B', 'C'],
-      ['D', 'E', 'F'],
-      [],
-      []
+      ['D', 'E', 'F']
     ]);
   });
 
-  test('a twelve-item class fills all four columns', () => {
+  test('a twelve-item class puts each page\'s first column on the left and its second on the right', () => {
     const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map(named);
-    const columns = signatureColumns(items);
-    expect(columns.map((column) => column.length)).toEqual([3, 3, 3, 3]);
-    expect(columns[3].map((item) => item.name)).toEqual(['J', 'K', 'L']);
+    expect(sideNames(signatureSides(items))).toEqual([
+      ['A', 'B', 'C', 'G', 'H', 'I'],
+      ['D', 'E', 'F', 'J', 'K', 'L']
+    ]);
+  });
+
+  test('a side lists the left page\'s column before the right page\'s even when the input is unsorted', () => {
+    const items = [
+      { name: 'D', column: 2 }, { name: 'J', column: 4 }, { name: 'G', column: 3 },
+      { name: 'A', column: 1 }, { name: 'E', column: 2 }, { name: 'B', column: 1 }
+    ];
+    expect(sideNames(signatureSides(items))).toEqual([
+      ['A', 'B', 'G'],
+      ['D', 'E', 'J']
+    ]);
   });
 
   // Of the 444 live gear items, the 300 answering {category, description,
   // name} or {category, description, meters, name, notes} carry no `column`,
   // and only the 144 ENCLAVE: Aspirant V1 items do. A strict `item.column ===
-  // n` filter would return four empty arrays for every unsaved class in the
+  // n` filter would return two empty sides for every unsaved class in the
   // catalog; falling back to the item's position in the list is what keeps an
   // unsaved class's Signatures on the page at all.
   test('items with no column key group by their position in the list', () => {
     const items = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L']
       .map((name) => ({ category: 'default', description: '', meters: [], name, notes: [] }));
-    const columns = signatureColumns(items);
-    expect(columns.map((column) => column.map((item) => item.name))).toEqual([
-      ['A', 'B', 'C'],
-      ['D', 'E', 'F'],
-      ['G', 'H', 'I'],
-      ['J', 'K', 'L']
+    expect(sideNames(signatureSides(items))).toEqual([
+      ['A', 'B', 'C', 'G', 'H', 'I'],
+      ['D', 'E', 'F', 'J', 'K', 'L']
     ]);
   });
 
-  test('a non-array gear value yields four empty columns', () => {
-    expect(signatureColumns(undefined)).toEqual([[], [], [], []]);
-    expect(signatureColumns(null)).toEqual([[], [], [], []]);
+  test('a non-array gear value yields two empty sides', () => {
+    expect(signatureSides(undefined)).toEqual([[], []]);
+    expect(signatureSides(null)).toEqual([[], []]);
   });
 });

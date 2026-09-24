@@ -211,9 +211,11 @@ const normalizeGear = (value) => indexedRows(value)
         position: gearPosition(index)
     }));
 
-// The class page renders Signatures in the book's four columns. Grouping here
-// rather than in the template keeps it testable and keeps the template free of
-// a group-by helper that would exist for one caller.
+// The class page folds the book's two-page spread into two sides: each page's
+// first column on the left (book columns 1 and 3), its second on the right
+// (2 and 4), so both pages read down the screen in the book's order. Grouping
+// here rather than in the template keeps it testable and keeps the template
+// free of a group-by helper that would exist for one caller.
 //
 // A stored item only gains `column` on its next save -- of the 444 live gear
 // items, the 300 answering {category, description, name} or
@@ -221,14 +223,15 @@ const normalizeGear = (value) => indexedRows(value)
 // ENCLAVE: Aspirant V1 items carry it. Falling back to the position in the list
 // means a class that has not been re-saved still renders all of its Signatures
 // instead of none of them.
-const signatureColumns = (gear) => {
+const signatureSides = (gear) => {
     const items = Array.isArray(gear) ? gear : [];
-    return [1, 2, 3, 4].map((column) => items.filter(
+    const inColumn = (column) => items.filter(
         (item, index) => (item.column ?? gearColumn(index)) === column
-    ));
+    );
+    return [[1, 3], [2, 4]].map((columns) => columns.flatMap(inColumn));
 };
 
 module.exports = {
     normalizeGear, gearCategory, gearColumn, gearPosition, indexedRows, normalizeNote,
-    signatureColumns, DEFAULT_ROSTER_COLUMN
+    signatureSides, DEFAULT_ROSTER_COLUMN
 };

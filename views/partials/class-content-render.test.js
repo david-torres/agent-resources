@@ -14,7 +14,7 @@ const renderPartial = (name, context) => {
   handlebars.registerHelper('markdown', renderMarkdown);
   for (const dependency of [
     'class-notes', 'class-sample-perks', 'class-enchantment', 'class-meters',
-    'class-signature-columns', 'class-expanded-tips'
+    'class-signature-sides', 'class-expanded-tips'
   ]) {
     handlebars.registerPartial(dependency, partial(dependency));
   }
@@ -64,7 +64,7 @@ describe('power ratings in class content partials', () => {
   });
 });
 
-describe('signature columns', () => {
+describe('signature sides', () => {
   const item = (i) => ({
     name: `Item ${i + 1}`,
     description: '',
@@ -76,14 +76,30 @@ describe('signature columns', () => {
     default_enchantment: null
   });
 
-  test('twelve items render as four columns', () => {
-    const { signatureColumns } = require('../../util/class-gear');
-    const gear = Array.from({ length: 12 }, (_, i) => item(i));
-    const html = renderPartial('class-signature-columns', {
-      columns: signatureColumns(gear)
-    });
-    expect(html.match(/class="column signature-column"/g)).toHaveLength(4);
+  const renderSides = (gear) => {
+    const { signatureSides } = require('../../util/class-gear');
+    return renderPartial('class-signature-sides', { sides: signatureSides(gear) });
+  };
+
+  test('twelve items render as two sides', () => {
+    const html = renderSides(Array.from({ length: 12 }, (_, i) => item(i)));
+    expect(html.match(/class="column is-half signature-side"/g)).toHaveLength(2);
     for (let i = 1; i <= 12; i += 1) expect(html).toContain(`Item ${i}`);
+  });
+
+  test('book columns 1 and 3 render on the left side, 2 and 4 on the right', () => {
+    const gear = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map((name, i) => ({
+      ...item(i), name
+    }));
+    const [leftSide, rightSide] = renderSides(gear).split('signature-side"').slice(1);
+    for (const name of ['A', 'G']) {
+      expect(leftSide).toContain(`>${name}<`);
+      expect(rightSide).not.toContain(`>${name}<`);
+    }
+    for (const name of ['D', 'J']) {
+      expect(rightSide).toContain(`>${name}<`);
+      expect(leftSide).not.toContain(`>${name}<`);
+    }
   });
 });
 

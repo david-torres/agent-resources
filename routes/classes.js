@@ -32,7 +32,7 @@ const { processClassImport } = require('../util/class-import');
 const { exportClass, getSupportedFormats, EXPORT_FORMATS } = require('../util/class-export');
 const { applyImageCrop } = require('../util/crop');
 const { normalizeAbilities } = require('../util/class-abilities');
-const { normalizeGear, signatureColumns } = require('../util/class-gear');
+const { normalizeGear, signatureSides } = require('../util/class-gear');
 const { normalizeExpandedTips } = require('../util/class-expanded-tips');
 const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
@@ -540,7 +540,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         title: `${classData.name} - View Class`,
         class: classData,
         showClassArt: classData.status === 'release' && bookUnlocked,
-        signatureColumns: signatureColumns(classData.gear),
+        signatureSides: signatureSides(classData.gear),
         hasExpandedTips: expandedTips.player.length > 0 || expandedTips.conduit.length > 0,
         unlocked,
         unlockExpiresAt,

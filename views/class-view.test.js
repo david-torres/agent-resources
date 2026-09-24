@@ -2,7 +2,7 @@ const { test, expect, beforeAll, beforeEach } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
 const { setupAlpine, render, tick } = require('../test/helpers/alpine-dom');
-const { signatureColumns } = require('../util/class-gear');
+const { signatureSides } = require('../util/class-gear');
 
 beforeAll(async () => {
   await setupAlpine();
@@ -99,7 +99,7 @@ test('paired_action renders through the power-ratings helper', () => {
 // Renders both formats for real, the way `paired_action renders through the
 // power-ratings helper` above pins its own branch: a presence assertion for
 // the format under test and an absence assertion for the other format's markup.
-test('class-view renders the four signature-column layout for content_format aspirant, not the Advent Base/Elective split', () => {
+test('class-view renders the two-sided signature layout for content_format aspirant, not the Advent Base/Elective split', () => {
   const gear = Array.from({ length: 12 }, (_, i) => ({
     name: `Item ${i + 1}`,
     description: '',
@@ -112,14 +112,14 @@ test('class-view renders the four signature-column layout for content_format asp
   }));
   const html = renderClassView({
     class: { id: 'c1', name: 'Test Class', content_format: 'aspirant', abilities: [], gear },
-    signatureColumns: signatureColumns(gear)
+    signatureSides: signatureSides(gear)
   });
-  expect(html.match(/class="column signature-column"/g)).toHaveLength(4);
+  expect(html.match(/class="column is-half signature-side"/g)).toHaveLength(2);
   expect(html).not.toContain('Base Gear');
   expect(html).not.toContain('Elective Gear');
 });
 
-test('class-view renders the Advent Base/Elective gear split for content_format advent, not signature columns', () => {
+test('class-view renders the Advent Base/Elective gear split for content_format advent, not signature pages', () => {
   const gear = [
     { name: 'Base One', description: '', category: 'default', meters: [], notes: [] },
     { name: 'Base Two', description: '', category: 'default', meters: [], notes: [] },
@@ -133,7 +133,7 @@ test('class-view renders the Advent Base/Elective gear split for content_format 
   });
   expect(html).toContain('Base Gear');
   expect(html).toContain('Elective Gear');
-  expect(html).not.toContain('signature-column');
+  expect(html).not.toContain('signature-side');
 });
 
 // Mirrors the real duplicate-modal markup closely enough to exercise the
@@ -266,7 +266,7 @@ function renderClassView(context) {
   hb.registerPartial('class-notes', fs.readFileSync(path.join(__dirname, 'partials', 'class-notes.handlebars'), 'utf8'));
   hb.registerPartial('class-enchantment', fs.readFileSync(path.join(__dirname, 'partials', 'class-enchantment.handlebars'), 'utf8'));
   hb.registerPartial('class-sample-perks', fs.readFileSync(path.join(__dirname, 'partials', 'class-sample-perks.handlebars'), 'utf8'));
-  hb.registerPartial('class-signature-columns', fs.readFileSync(path.join(__dirname, 'partials', 'class-signature-columns.handlebars'), 'utf8'));
+  hb.registerPartial('class-signature-sides', fs.readFileSync(path.join(__dirname, 'partials', 'class-signature-sides.handlebars'), 'utf8'));
   hb.registerPartial('class-expanded-tips', fs.readFileSync(path.join(__dirname, 'partials', 'class-expanded-tips.handlebars'), 'utf8'));
   return hb.compile(SRC)(context);
 }

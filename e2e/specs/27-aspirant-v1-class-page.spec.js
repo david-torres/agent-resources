@@ -4,8 +4,8 @@
 // same templates still render the older shape.
 //
 // views/class-view.handlebars:244 branches on `class.content_format`: an
-// 'aspirant' row goes through views/partials/class-signature-columns.handlebars
-// (the book's four Signature columns), anything else through the Base/Elective
+// 'aspirant' row goes through views/partials/class-signature-sides.handlebars
+// (the book's Signature spread folded into two sides), anything else through the Base/Elective
 // split that predates it. Both branches are live in the local catalogue, so
 // one spec has to drive both -- the V1 fork below and the pre-release parent it
 // forked from are two rows of the same name, and only the fork is 'aspirant'.
@@ -57,26 +57,26 @@ const openClass = async (page, id) => {
   ).toHaveCount(1);
 };
 
-// Keeps failures readable: "expected 3, got [Cowboy Hat, Bandolier]" names the
-// column and the items it did find, where a bare toHaveCount(3) would not.
+// Keeps failures readable: "expected 6, got [Cowboy Hat, Bandolier]" names the
+// page and the items it did find, where a bare toHaveCount(3) would not.
 const cardTitles = (scope) => scope.locator('.card h4.title').allTextContents();
 
 test.describe('the V1 fork', () => {
-  test('renders twelve Signatures in the book\'s four columns, each with a Default Enchantment', async ({ page }) => {
+  test('renders twelve Signatures on two sides folded from the book\'s spread, each with a Default Enchantment', async ({ page }) => {
     await openClass(page, V1_GUNSLINGER);
 
     const gear = section(page, 'Signature Gear');
-    const columns = gear.locator('.column.signature-column');
-    // signatureColumns always returns four arrays, so this count can only ever
-    // be 0 or 4 -- it is a smoke check that the aspirant column wrapper
-    // rendered at all. The per-column length assertions below are what
-    // actually pin the book's four-column layout.
+    const sides = gear.locator('.column.signature-side');
+    // signatureSides always returns two arrays, so this count can only ever
+    // be 0 or 2 -- it is a smoke check that the aspirant side wrapper
+    // rendered at all. The per-side assertions below are what actually pin
+    // the fold: book columns 1 and 3 on the left, 2 and 4 on the right.
     await expect(
-      columns,
-      'signature-column wrapper must be present (smoke check; see per-column checks below for the four-column layout)'
-    ).toHaveCount(4);
+      sides,
+      'signature-side wrapper must be present (smoke check; see per-side checks below for the two-sided layout)'
+    ).toHaveCount(2);
 
-    // The 3/3/3/3 split checked here can't tell a stored `column` value from
+    // The 6/6 split checked here can't tell a stored `column` value from
     // list order, because the route falls back to list position when a
     // column isn't set, and, measured now, 0 of the 144 stored Signature
     // items in the local catalogue disagree with their array order. What
@@ -84,20 +84,20 @@ test.describe('the V1 fork', () => {
     // (util/aspirant-verify.js), which re-derived all 144 items' column and
     // position from the PDF's raw coordinates.
     const seen = [];
-    for (let column = 1; column <= 4; column++) {
-      const titles = await cardTitles(columns.nth(column - 1));
-      expect(titles, `Gunslinger V1 Signature column ${column}`).toHaveLength(3);
+    for (let side = 1; side <= 2; side++) {
+      const titles = await cardTitles(sides.nth(side - 1));
+      expect(titles, `Gunslinger V1 Signature side ${side}`).toHaveLength(6);
       seen.push(...titles);
     }
-    expect(seen, 'Gunslinger V1 Signatures, in column order').toHaveLength(12);
+    expect(seen, 'Gunslinger V1 Signatures, left side then right').toHaveLength(12);
     expect(new Set(seen).size, `twelve distinct Signatures, got ${seen.join(', ')}`).toBe(12);
     // Book fidelity (the other 10 names, and every other class) is the PDF
     // verifier's job; these two anchor that this page is Gunslinger's own
     // row and not some other class's.
-    expect(seen[0], 'Gunslinger V1 first Signature').toBe('Cowboy Hat');
-    expect(seen[11], 'Gunslinger V1 twelfth Signature').toBe('Hip Flask');
+    expect(seen[0], 'Gunslinger V1 first Signature, top of the left side').toBe('Cowboy Hat');
+    expect(seen[11], 'Gunslinger V1 twelfth Signature, bottom of the right side').toBe('Hip Flask');
 
-    const cards = gear.locator('.column.signature-column .card');
+    const cards = gear.locator('.column.signature-side .card');
     for (let i = 0; i < 12; i++) {
       const card = cards.nth(i);
       const item = seen[i];
@@ -262,7 +262,7 @@ test.describe('the V1 fork', () => {
     const overflow = await page.evaluate(() => {
       const root = document.documentElement;
       const limit = root.clientWidth;
-      const offenders = [...document.querySelectorAll('.signature-column *')]
+      const offenders = [...document.querySelectorAll('.signature-side *')]
         .filter((el) => el.getBoundingClientRect().right > limit + 1)
         .slice(0, 5)
         .map((el) => `${el.tagName.toLowerCase()}.${el.className} @${Math.round(el.getBoundingClientRect().right)}px`);
@@ -271,7 +271,7 @@ test.describe('the V1 fork', () => {
 
     expect(
       overflow.offenders,
-      'nothing inside the four Signature columns may reach past the viewport'
+      'nothing inside the two Signature sides may reach past the viewport'
     ).toEqual([]);
     expect(
       overflow.scrollWidth,
@@ -282,7 +282,7 @@ test.describe('the V1 fork', () => {
 
 // The load forked twelve new rows and touched none of the old ones. This is the
 // rendered half of that claim: the parent still reaches the pre-'aspirant'
-// branch of the template, which has no four-column layout and no advanced
+// branch of the template, which has no two-sided Signature layout and no advanced
 // block at all.
 test.describe('the pre-release parent it forked from', () => {
   test('still renders six Signatures as Base and Elective, and three abilities with no advanced block', async ({ page }) => {
@@ -290,8 +290,8 @@ test.describe('the pre-release parent it forked from', () => {
 
     const gear = section(page, 'Signature Gear');
     await expect(
-      gear.locator('.column.signature-column'),
-      'a non-aspirant class must not pick up the four-column Signature layout'
+      gear.locator('.column.signature-side'),
+      'a non-aspirant class must not pick up the two-sided Signature layout'
     ).toHaveCount(0);
 
     const halves = gear.locator('.columns > .column.is-half');
