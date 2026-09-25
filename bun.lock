@@ -13,6 +13,7 @@
         "express-handlebars": "^8.0.1",
         "handlebars-helper-range": "^1.1.1",
         "handlebars-helpers": "^0.10.0",
+        "jose": "^6.2.12",
         "llm-api": "^1.6.0",
         "marked": "^18.0.1",
         "moment-timezone": "^0.5.46",
