@@ -369,7 +369,9 @@ Server-side agent routes should use `SUPABASE_SECRET_KEY` so token-authenticated
 The same agent read API is exposed as an MCP server at `/api/mcp` (production: `https://agent-resources.vip/api/mcp`).
 
 - Transport: Streamable HTTP, stateless, JSON responses. Only `POST` is supported; `GET` and `DELETE` answer `405`.
-- Authentication: the same personal agent tokens as `/api/agent` (`ar_pat_…`, created from the profile page or `POST /profile/agent-tokens`), sent as `Authorization: Bearer ar_pat_…` or `X-Agent-Token`. `initialize` and `tools/list` work without a token; tool calls without a valid token return an `unauthenticated` tool error.
+- Authentication: every request needs credentials; without them the server answers `401` with `WWW-Authenticate: Bearer resource_metadata="https://agent-resources.vip/.well-known/oauth-protected-resource/api/mcp"`. Two kinds are accepted:
+  - **OAuth (ChatGPT, Claude and other MCP clients):** Supabase Auth's OAuth 2.1 server is the authorization server. Clients discover it from the protected-resource metadata, register dynamically, and send the user to `/oauth/consent` to approve. Access tokens are Supabase JWTs and must carry a `client_id` claim — ordinary website session tokens are refused.
+  - **Agent tokens:** the same `ar_pat_…` personal tokens as `/api/agent`, sent as `Authorization: Bearer ar_pat_…` or `X-Agent-Token`.
 - Clients must send `Accept: application/json, text/event-stream`.
 
 Tools (all read-only):
@@ -380,7 +382,15 @@ Tools (all read-only):
 - `searchCharacters(q?)` — characters visible to the user, optionally matched by name.
 - `getCharacter(id)` — one character by UUID.
 
-Tool failures come back with `isError: true` and a text content of `{"error":{"code":"…","message":"…"}}`, where `code` is one of `unauthenticated`, `invalid_argument` (e.g. a non-UUID `id`), `not_found`, or `internal`.
+Tool failures come back with `isError: true` and a text content of `{"error":{"code":"…","message":"…"}}`, where `code` is one of `invalid_argument` (e.g. a non-UUID `id`), `not_found`, or `internal`.
+
+### Enabling OAuth on a Supabase project
+
+Locally this is on in `supabase/config.toml` (`[auth.oauth_server]`). On the hosted project, in the dashboard under Authentication → OAuth Server: enable the OAuth server, allow dynamic OAuth apps, set the authorization path to `/oauth/consent`, and check the Site URL is `https://agent-resources.vip`. Then confirm `https://<project-ref>.supabase.co/.well-known/oauth-authorization-server/auth/v1` lists a `registration_endpoint`.
+
+To connect ChatGPT, add a connector in developer mode with the URL `https://agent-resources.vip/api/mcp` and OAuth authentication; ChatGPT registers itself and walks the user through the consent page.
+
+An `ar_pat_` token is the quickest way to try the endpoint from a terminal:
 
 ```sh
 curl -s https://agent-resources.vip/api/mcp \
