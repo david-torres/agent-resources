@@ -1,4 +1,4 @@
-const { test, expect, mock, afterAll } = require('bun:test');
+const { test, expect, mock, afterAll, describe, beforeEach } = require('bun:test');
 
 const realBase = require('../models/_base');
 const realAuth = require('../models/auth');
@@ -7,6 +7,7 @@ const realSystemMessage = require('./system-message');
 const realLfg = require('../models/lfg');
 const realAgentToken = require('../models/agent-token');
 const realNavLoader = require('./nav-loader');
+const realOauthToken = require('./oauth-token');
 
 const fakeAnon = { __name: 'anon', auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
 const fakeAdmin = { __name: 'admin' };
@@ -22,8 +23,10 @@ mock.module('../models/_base', () => ({
 mock.module('../models/auth', () => ({
   getUserFromToken: async (token) => token === 'valid-jwt' ? { id: 'u1' } : false,
 }));
+let profileLookup = async () => ({ data: null, error: { code: 'PGRST116' } });
 mock.module('../models/profile', () => ({
-  getProfile: async () => ({ id: 'p1', user_id: 'u1' })
+  getProfile: async () => ({ id: 'p1', user_id: 'u1' }),
+  getProfileByUserIdAdmin: async (userId) => profileLookup(userId)
 }));
 mock.module('./system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
@@ -39,8 +42,16 @@ mock.module('../models/agent-token', () => ({
 }));
 mock.module('./nav-loader', () => ({ populateNavItems: async () => {} }));
 
+let oauthResult = async () => ({ ok: false });
+mock.module('./oauth-token', () => ({
+  verifyOAuthAccessToken: async (token) => {
+    if (oauthResult instanceof Error) throw oauthResult;
+    return oauthResult(token);
+  }
+}));
+
 delete require.cache[require.resolve('./auth')];
-const { isAuthenticated, authOptional, isAgentAuthenticated, resolveAgentAuth } = require('./auth');
+const { isAuthenticated, authOptional, isAgentAuthenticated, resolveAgentAuth, resolveMcpAuth } = require('./auth');
 
 afterAll(() => {
   mock.module('../models/_base', () => realBase);
@@ -50,6 +61,7 @@ afterAll(() => {
   mock.module('../models/lfg', () => realLfg);
   mock.module('../models/agent-token', () => realAgentToken);
   mock.module('./nav-loader', () => realNavLoader);
+  mock.module('./oauth-token', () => realOauthToken);
   delete require.cache[require.resolve('./auth')];
 });
 
@@ -279,4 +291,74 @@ test('an ordinary htmx request with an expired token still gets the HX-Redirect 
   expect(res.calls.render.length).toBe(0);
   expect(res.calls.set['HX-Redirect']).toBe('/auth');
   expect(res.calls.end).toBe(1);
+});
+
+// ---------------------------------------------------------------------------
+// resolveMcpAuth: agent tokens (ar_pat_/aat_-prefixed, per AGENT_TOKEN_PREFIX)
+// route through resolveAgentAuth unchanged; any other bearer token is checked
+// against the Supabase OAuth verifier.
+// ---------------------------------------------------------------------------
+const reqWith = makeReq;
+const VALID_AGENT_TOKEN = 'aat_bearer';
+const OAUTH_PROFILE = { id: 'p9', user_id: 'u9', name: 'Oauth User', role: 'player', timezone: 'UTC', email_notifications: true };
+
+describe('resolveMcpAuth', () => {
+  beforeEach(() => {
+    oauthResult = async () => ({ ok: true, claims: { sub: 'u9', client_id: 'chatgpt-client' } });
+    profileLookup = async () => ({ data: OAUTH_PROFILE, error: null });
+  });
+
+  test('no credentials is missing', async () => {
+    expect(await resolveMcpAuth(reqWith({}))).toEqual({ ok: false, reason: 'missing', error: 'Missing access token' });
+  });
+
+  test('a non-Bearer Authorization header is missing', async () => {
+    expect(await resolveMcpAuth(reqWith({ authorization: 'Basic dXNlcjpwYXNz' }))).toMatchObject({ ok: false, reason: 'missing' });
+  });
+
+  test('an OAuth token resolves to the whitelisted profile and client', async () => {
+    const result = await resolveMcpAuth(reqWith({ authorization: 'Bearer eyJ.oauth.token' }));
+    expect(result.ok).toBe(true);
+    expect(result.auth.user).toEqual({ id: 'u9' });
+    expect(result.auth.profile).toEqual({ id: 'p9', user_id: 'u9', name: 'Oauth User', role: 'player', timezone: 'UTC' });
+    expect(result.auth.agentToken).toEqual({ type: 'oauth', client_id: 'chatgpt-client' });
+    expect(result.auth.supabase).toBeDefined();
+  });
+
+  test('a rejected OAuth token is invalid', async () => {
+    oauthResult = async () => ({ ok: false });
+    expect(await resolveMcpAuth(reqWith({ authorization: 'Bearer eyJ.bad.token' }))).toEqual({ ok: false, reason: 'invalid', error: 'Invalid access token' });
+  });
+
+  test('an OAuth token for a user without a profile is invalid', async () => {
+    profileLookup = async () => ({ data: null, error: { code: 'PGRST116' } });
+    expect(await resolveMcpAuth(reqWith({ authorization: 'Bearer eyJ.oauth.token' }))).toMatchObject({ ok: false, reason: 'invalid' });
+  });
+
+  test('a profile lookup failure is an error, not an invalid token', async () => {
+    profileLookup = async () => ({ data: null, error: { code: '08006', message: 'connection failure' } });
+    await expect(resolveMcpAuth(reqWith({ authorization: 'Bearer eyJ.oauth.token' }))).rejects.toMatchObject({ code: '08006' });
+  });
+
+  test('a verifier outage propagates', async () => {
+    oauthResult = new TypeError('fetch failed');
+    await expect(resolveMcpAuth(reqWith({ authorization: 'Bearer eyJ.oauth.token' }))).rejects.toThrow('fetch failed');
+  });
+
+  test('an agent-prefixed bearer token goes through the agent-token path', async () => {
+    const result = await resolveMcpAuth(reqWith({ authorization: `Bearer ${VALID_AGENT_TOKEN}` }));
+    expect(result.ok).toBe(true);
+    expect(result.auth.agentToken).toHaveProperty('hint');
+  });
+
+  test('an X-Agent-Token header goes through the agent-token path', async () => {
+    const result = await resolveMcpAuth(reqWith({ 'x-agent-token': VALID_AGENT_TOKEN }));
+    expect(result.ok).toBe(true);
+  });
+
+  test('a bad agent-prefixed token is invalid, not missing', async () => {
+    await withVerifyAgentToken(async () => ({ data: null, error: null }), async () => {
+      expect(await resolveMcpAuth(reqWith({ authorization: 'Bearer aat_wrong' }))).toEqual({ ok: false, reason: 'invalid', error: 'Invalid agent token' });
+    });
+  });
 });

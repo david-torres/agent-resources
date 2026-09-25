@@ -65,6 +65,8 @@ const getProfileByIdAdmin = async (id) => profileRepository.fetchProfileByIdAdmi
 
 const getProfileByNameAdmin = async (name) => profileRepository.fetchProfileByNameAdmin(name);
 
+const getProfileByUserIdAdmin = async (userId) => profileRepository.fetchOwnProfile(userId);
+
 // Self-provisioning on first sign-in: inserts the profile row and grants the
 // starter (trial) unlocks. `actor` gates the service's self-authz check;
 // `user` is the just-verified auth user (only .id is used for the insert).
@@ -199,6 +201,7 @@ module.exports = {
   getProfileByName,
   getProfileByIdAdmin,
   getProfileByNameAdmin,
+  getProfileByUserIdAdmin,
   createProfile,
   grantStarterUnlocks,
   updateUser,

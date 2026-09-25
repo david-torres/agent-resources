@@ -1,7 +1,8 @@
 const { supabase, createUserClient } = require('../models/_base');
 const { getUserFromToken } = require('../models/auth');
-const { getProfile } = require('../models/profile');
+const { getProfile, getProfileByUserIdAdmin } = require('../models/profile');
 const { getSystemMessage } = require('./system-message');
+const { verifyOAuthAccessToken } = require('./oauth-token');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
 const { populateNavItems } = require('./nav-loader');
@@ -171,6 +172,42 @@ const resolveAgentAuth = async (req) => {
   };
 };
 
+const MCP_PROFILE_FIELDS = ['id', 'user_id', 'name', 'role', 'timezone'];
+const PROFILE_NOT_FOUND = 'PGRST116';
+
+const pickProfile = (profile) => Object.fromEntries(MCP_PROFILE_FIELDS.map((field) => [field, profile[field]]));
+
+// MCP callers authenticate with either an agent token (routed to the
+// existing agent-token path) or a Supabase OAuth access token (verified
+// against the project's JWKS and mapped to the caller's profile).
+const resolveMcpAuth = async (req) => {
+  const bearer = getBearerToken(req);
+  if (req.headers['x-agent-token'] || bearer?.startsWith(AGENT_TOKEN_PREFIX)) {
+    const result = await resolveAgentAuth(req);
+    return result.ok ? result : { ok: false, reason: 'invalid', error: result.error };
+  }
+  if (!bearer) return { ok: false, reason: 'missing', error: 'Missing access token' };
+
+  const invalid = { ok: false, reason: 'invalid', error: 'Invalid access token' };
+  const verified = await verifyOAuthAccessToken(bearer);
+  if (!verified.ok) return invalid;
+
+  const { sub, client_id: clientId } = verified.claims;
+  const { data: profile, error } = await getProfileByUserIdAdmin(sub);
+  if (error && error.code !== PROFILE_NOT_FOUND) throw error;
+  if (!profile) return invalid;
+
+  return {
+    ok: true,
+    auth: {
+      user: { id: sub },
+      profile: pickProfile(profile),
+      agentToken: { type: 'oauth', client_id: clientId },
+      supabase
+    }
+  };
+};
+
 const isAgentAuthenticated = async (req, res, next) => {
   const result = await resolveAgentAuth(req);
   if (!result.ok) {
@@ -185,4 +222,4 @@ const isAgentAuthenticated = async (req, res, next) => {
   next();
 };
 
-module.exports = { isAuthenticated, authOptional, requireAdmin, isAgentAuthenticated, resolveAgentAuth };
+module.exports = { isAuthenticated, authOptional, requireAdmin, isAgentAuthenticated, resolveAgentAuth, resolveMcpAuth };
