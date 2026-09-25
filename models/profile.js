@@ -65,6 +65,8 @@ const getProfileByIdAdmin = async (id) => profileRepository.fetchProfileByIdAdmi
 
 const getProfileByNameAdmin = async (name) => profileRepository.fetchProfileByNameAdmin(name);
 
+// Bypasses RLS only to load the profile belonging to a verified token's
+// subject (e.g. an OAuth access token's `sub`) — not gated by requireAdmin.
 const getProfileByUserIdAdmin = async (userId) => profileRepository.fetchOwnProfile(userId);
 
 // Self-provisioning on first sign-in: inserts the profile row and grants the
