@@ -10,6 +10,7 @@ const integrationFiles = new Set([
   'models/nav-rls.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
+  'routes/mcp-oauth.integration.test.js',
   'util/character-content-integrity.integration.test.js',
   'util/class-description-dropped.integration.test.js',
   'util/class-form-round-trip.integration.test.js',
