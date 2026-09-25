@@ -115,20 +115,22 @@ Add `jose` (to both `bun.lock` and `package-lock.json`).
 
 ## 3. Consent page: `/oauth/consent?authorization_id=…`
 
-- Server route renders a view without server-side auth, like
-  `/auth/check`. The view's `<body>`/form opt out of `hx-boost` so the final
-  cross-origin navigation is a real page load.
-- Client script (in `public/js`):
+- Server route is gated by the existing `isAuthenticated`, so a signed-out
+  load goes through `/auth/check?r=<this URL>` and the site's normal
+  sign-in-and-return flow, exactly like any other protected page. The page
+  uses plain buttons (no forms), and the final cross-origin navigation is
+  `window.location.assign`, so `hx-boost` never intercepts it.
+- Client logic (Alpine component `oauthConsent` in
+  `public/js/alpine-components.js`, calling `App.oauth.*`):
   1. Missing `authorization_id` → error message.
-  2. No session → `location = /auth?r=<encoded /oauth/consent?authorization_id=…>`.
-  3. `getAuthorizationDetails(id)`:
+  2. `getAuthorizationDetails(id)`:
      - Response with `redirect_url` (already consented) → `location = redirect_url`.
      - Otherwise render client name, requested scopes (plain-language labels
        for `openid`, `email`, `profile`, `offline_access`), and the signed-in
        account's email, with **Approve** and **Deny** buttons.
      - Error → message ("This authorization request has expired or is
        invalid").
-  4. Approve/Deny → `approveAuthorization` / `denyAuthorization` →
+  3. Approve/Deny → `approveAuthorization` / `denyAuthorization` →
      `location = redirect_url`. Buttons are disabled while in flight.
 - Visual style matches `views/bot-link.handlebars`.
 
