@@ -2,7 +2,7 @@
 // the handshake and tool catalogue (open to anyone), the tool results (exactly
 // the REST read bodies), and the error envelope, including that no token,
 // SQL text or stack ever leaks into a response.
-const { test, expect, mock, beforeAll, beforeEach, afterAll } = require('bun:test');
+const { test, expect, mock, beforeAll, beforeEach, afterAll, afterEach } = require('bun:test');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.invalid';
 process.env.SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY || 'test-publishable-key';
@@ -12,14 +12,20 @@ const realAgentToken = require('../models/agent-token');
 const realClass = require('../models/class');
 const realCharacter = require('../models/character');
 const realNavLoader = require('../util/nav-loader');
+const realOauthToken = require('../util/oauth-token');
+const realProfile = require('../models/profile');
 
 const VALID_TOKEN = 'ar_pat_valid_secret_value';
 const INVALID_TOKEN = 'ar_pat_wrong_secret_value';
+const OAUTH_TOKEN = 'eyJ.oauth.valid';
+const THROWING_TOKEN = 'eyJ.oauth.infra-failure';
+const OAUTH_PROFILE = { id: 'p2', user_id: 'u2', name: 'Chat User', role: 'player', timezone: 'UTC' };
 const CLASS_ID = '11111111-1111-4111-8111-111111111111';
 const CHARACTER_ID = '22222222-2222-4222-8222-222222222222';
 const PROFILE = { id: 'p1', user_id: 'u1', name: 'Agent Owner', role: 'admin', timezone: 'Europe/London', extra: 'hidden' };
 const ACTOR = { userId: 'u1', profileId: 'p1', role: 'admin' };
 const SQL_ERROR_TEXT = 'relation "classes" does not exist';
+const originalSiteUrl = process.env.SITE_URL;
 
 let calls;
 let responses;
@@ -56,6 +62,21 @@ mock.module('../util/nav-loader', () => ({
   populateNavItems: async () => {},
   loadNavItems: (req, res, next) => next()
 }));
+mock.module('../util/oauth-token', () => ({
+  ...realOauthToken,
+  verifyOAuthAccessToken: async (token) => {
+    if (token === THROWING_TOKEN) throw new Error('JWKS unreachable');
+    return token === OAUTH_TOKEN
+      ? { ok: true, claims: { sub: 'u2', client_id: 'chatgpt-client' } }
+      : { ok: false };
+  }
+}));
+mock.module('../models/profile', () => ({
+  ...realProfile,
+  getProfileByUserIdAdmin: async (userId) => (userId === 'u2'
+    ? { data: OAUTH_PROFILE, error: null }
+    : { data: null, error: { code: 'PGRST116' } })
+}));
 
 const forget = (path) => {
   try {
@@ -64,7 +85,14 @@ const forget = (path) => {
     // Not every module exists yet; nothing cached to forget.
   }
 };
-const forgetAll = () => ['../services/agent/service', '../routes/agent', '../routes/mcp', '../app'].forEach(forget);
+const forgetAll = () => [
+  '../services/agent/service',
+  '../routes/agent',
+  '../routes/mcp',
+  '../util/auth',
+  '../routes/oauth-metadata',
+  '../app'
+].forEach(forget);
 
 let server;
 let baseUrl;
@@ -82,6 +110,8 @@ afterAll(async () => {
   mock.module('../models/class', () => realClass);
   mock.module('../models/character', () => realCharacter);
   mock.module('../util/nav-loader', () => realNavLoader);
+  mock.module('../util/oauth-token', () => realOauthToken);
+  mock.module('../models/profile', () => realProfile);
   forgetAll();
 });
 
@@ -90,18 +120,27 @@ beforeEach(() => {
   responses = {};
 });
 
+afterEach(() => {
+  if (originalSiteUrl === undefined) delete process.env.SITE_URL;
+  else process.env.SITE_URL = originalSiteUrl;
+});
+
 let nextId = 1;
-const rpc = async (method, params = {}, { token } = {}) => {
-  const headers = {
+
+const rawPost = async (body, headers = {}) => fetch(`${baseUrl}/api/mcp`, {
+  method: 'POST',
+  headers: {
     'Content-Type': 'application/json',
-    Accept: 'application/json, text/event-stream'
-  };
-  if (token) headers.Authorization = `Bearer ${token}`;
-  const res = await fetch(`${baseUrl}/api/mcp`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ jsonrpc: '2.0', id: nextId++, method, params })
-  });
+    Accept: 'application/json, text/event-stream',
+    ...headers
+  },
+  body: JSON.stringify(body)
+});
+
+const rpc = async (method, params = {}, { token } = {}) => {
+  const headers = {};
+  if (token) headers.authorization = `Bearer ${token}`;
+  const res = await rawPost({ jsonrpc: '2.0', id: nextId++, method, params }, headers);
   const text = await res.text();
   let body;
   try {
@@ -110,6 +149,12 @@ const rpc = async (method, params = {}, { token } = {}) => {
     body = undefined;
   }
   return { status: res.status, text, body };
+};
+
+const INIT_PARAMS = {
+  protocolVersion: '2025-06-18',
+  capabilities: {},
+  clientInfo: { name: 'test-client', version: '1.0.0' }
 };
 
 const callTool = (name, args = {}, options = { token: VALID_TOKEN }) =>
@@ -132,20 +177,16 @@ const toolError = (response) => {
   return JSON.parse(result.content[0].text).error;
 };
 
-test('initialize succeeds without a token and advertises tools', async () => {
-  const response = await rpc('initialize', {
-    protocolVersion: '2025-06-18',
-    capabilities: {},
-    clientInfo: { name: 'test-client', version: '1.0.0' }
-  });
+test('initialize succeeds and advertises tools', async () => {
+  const response = await rpc('initialize', INIT_PARAMS, { token: VALID_TOKEN });
   expect(response.status).toBe(200);
   expect(response.body.result.serverInfo.name).toBe('agent-resources');
   expect(response.body.result.capabilities.tools).toBeDefined();
-  expect(calls).toEqual([]);
+  expect(calls).toEqual([['verifyAgentToken', VALID_TOKEN]]);
 });
 
-test('tools/list works without a token and lists exactly the five read tools', async () => {
-  const response = await rpc('tools/list');
+test('tools/list lists exactly the five read tools', async () => {
+  const response = await rpc('tools/list', {}, { token: VALID_TOKEN });
   expect(response.status).toBe(200);
   const tools = response.body.result.tools;
   expect(tools.map(tool => tool.name).sort()).toEqual(
@@ -160,14 +201,14 @@ test('tools/list works without a token and lists exactly the five read tools', a
 });
 
 test('getClass and getCharacter input schemas require an id', async () => {
-  const { body } = await rpc('tools/list');
+  const { body } = await rpc('tools/list', {}, { token: VALID_TOKEN });
   const byName = Object.fromEntries(body.result.tools.map(tool => [tool.name, tool]));
   expect(byName.getClass.inputSchema.required).toEqual(['id']);
   expect(byName.getCharacter.inputSchema.required).toEqual(['id']);
 });
 
 test('listClasses input schema has optional string filters and a boolean is_player_created', async () => {
-  const { body } = await rpc('tools/list');
+  const { body } = await rpc('tools/list', {}, { token: VALID_TOKEN });
   const schema = body.result.tools.find(tool => tool.name === 'listClasses').inputSchema;
   expect(schema.properties.rules_edition.type).toBe('string');
   expect(schema.properties.rules_version.type).toBe('string');
@@ -181,17 +222,52 @@ test('GET /api/mcp answers 405', async () => {
   expect(res.status).toBe(405);
 });
 
-test('a tool call without a token is unauthenticated', async () => {
-  const response = await callTool('getMe', {}, {});
-  expect(toolError(response)).toEqual({ code: 'unauthenticated', message: 'Missing agent token' });
-  expect(calls).toEqual([]);
+const METADATA_URL = 'https://agent-resources.vip/.well-known/oauth-protected-resource/api/mcp';
+
+test('a request without credentials is challenged with the resource metadata', async () => {
+  process.env.SITE_URL = 'https://agent-resources.vip';
+  const res = await rawPost({ jsonrpc: '2.0', id: 1, method: 'initialize', params: INIT_PARAMS });
+  expect(res.status).toBe(401);
+  expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${METADATA_URL}"`);
+  expect((await res.json()).error.message).toBe('Missing access token');
 });
 
-test('a tool call with a bad token is unauthenticated and never echoes the token', async () => {
-  const response = await callTool('getMe', {}, { token: INVALID_TOKEN });
-  expect(toolError(response)).toEqual({ code: 'unauthenticated', message: 'Invalid agent token' });
-  expect(calls).toEqual([['verifyAgentToken', INVALID_TOKEN]]);
-  expect(response.text).not.toContain(INVALID_TOKEN);
+test.each([
+  ['a website session JWT', 'Bearer eyJ.website.session'],
+  ['a bad agent token', `Bearer ${INVALID_TOKEN}`],
+  ['a garbage bearer', 'Bearer not-a-jwt']
+])('%s is challenged as invalid_token and never echoed', async (_label, authorization) => {
+  process.env.SITE_URL = 'https://agent-resources.vip';
+  const res = await rawPost({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }, { authorization });
+  const text = await res.text();
+  expect(res.status).toBe(401);
+  expect(res.headers.get('www-authenticate')).toBe(`Bearer resource_metadata="${METADATA_URL}", error="invalid_token"`);
+  expect(text).not.toContain(authorization.slice('Bearer '.length));
+});
+
+test('an OAuth-linked caller can use the tools as their own profile', async () => {
+  const { body } = await rpc('tools/call', { name: 'getMe', arguments: {} }, { token: OAUTH_TOKEN });
+  expect(body.result.isError).toBeFalsy();
+  expect(body.result.structuredContent).toEqual({
+    user: { id: 'u2' },
+    profile: { id: 'p2', user_id: 'u2', name: 'Chat User', role: 'player', timezone: 'UTC' },
+    token: { type: 'oauth', client_id: 'chatgpt-client' }
+  });
+});
+
+test('an OAuth-linked caller reads classes as their own actor', async () => {
+  calls = [];
+  await rpc('tools/call', { name: 'listClasses', arguments: {} }, { token: OAUTH_TOKEN });
+  expect(calls.find(([name]) => name === 'listClassesForAgent').at(-1)).toEqual({ userId: 'u2', profileId: 'p2', role: 'player' });
+});
+
+test('a credential-check infrastructure failure answers a generic 500, never a 401', async () => {
+  const res = await rawPost(
+    { jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} },
+    { authorization: `Bearer ${THROWING_TOKEN}` }
+  );
+  expect(res.status).toBe(500);
+  expect(res.headers.get('www-authenticate')).toBeNull();
 });
 
 test('getMe returns the user, whitelisted profile and token summary, and nothing secret', async () => {

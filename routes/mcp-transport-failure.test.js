@@ -11,12 +11,20 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/server/streamableHttp.js');
 const realHandleRequest = StreamableHTTPServerTransport.prototype.handleRequest;
 const realNavLoader = require('../util/nav-loader');
+const realAgentToken = require('../models/agent-token');
 
 const TRANSPORT_ERROR_TEXT = 'transport exploded: secret internals';
+const VALID_TOKEN = 'ar_pat_valid_secret_value';
 
 mock.module('../util/nav-loader', () => ({
   populateNavItems: async () => {},
   loadNavItems: (req, res, next) => next()
+}));
+mock.module('../models/agent-token', () => ({
+  ...realAgentToken,
+  verifyAgentToken: async (token) => (token === VALID_TOKEN
+    ? { data: { userId: 'u1', profile: { id: 'p1', user_id: 'u1', name: 'Agent Owner', role: 'admin', timezone: 'UTC' }, tokenId: 't1', tokenName: 'Bot', tokenHint: 'alue' }, error: null }
+    : { data: null, error: new Error('bad token') })
 }));
 
 const forget = (path) => {
@@ -46,6 +54,7 @@ afterAll(async () => {
   await stopHttpServer(server);
   StreamableHTTPServerTransport.prototype.handleRequest = realHandleRequest;
   mock.module('../util/nav-loader', () => realNavLoader);
+  mock.module('../models/agent-token', () => realAgentToken);
   forgetAll();
 });
 
@@ -54,7 +63,8 @@ test('a transport failure answers a prompt generic 500 without leaking the error
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'application/json, text/event-stream'
+      Accept: 'application/json, text/event-stream',
+      Authorization: `Bearer ${VALID_TOKEN}`
     },
     body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/list', params: {} }),
     signal: AbortSignal.timeout(2000)
