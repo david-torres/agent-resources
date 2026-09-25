@@ -590,6 +590,66 @@ document.addEventListener('alpine:init', () => {
     }
   }));
 
+  // The OAuth consent page (views/oauth-consent.handlebars). Loads the
+  // pending authorization's details, then approves or denies it and follows
+  // the redirect Supabase hands back. Everything that talks to Supabase's
+  // oauth endpoints lives behind App.oauth (public/js/app.js), which owns
+  // the supabase-js client; this component only drives the UI states.
+  const OAUTH_SCOPE_LABELS = {
+    openid: 'Confirm who you are',
+    email: 'See your email address',
+    profile: 'See your name and basic profile',
+    offline_access: 'Stay connected when you are not using it'
+  };
+  const EXPIRED_AUTHORIZATION = 'This authorization request has expired or is invalid. Start the connection again from the app.';
+
+  Alpine.data('oauthConsent', (authorizationId) => ({
+    state: 'loading',
+    error: '',
+    clientName: '',
+    email: '',
+    scopes: [],
+    busy: false,
+
+    async load() {
+      if (!authorizationId) return this.fail('This link is missing its authorization request. Start the connection again from the app.');
+      try {
+        const { data, error } = await App.oauth.getAuthorizationDetails(authorizationId);
+        if (error || !data) return this.fail(EXPIRED_AUTHORIZATION);
+        if (data.redirect_url) return this.leave(data.redirect_url);
+        this.clientName = data.client?.name || 'An application';
+        this.email = data.user?.email || '';
+        this.scopes = String(data.scope || '').split(/\s+/).filter(Boolean).map((scope) => OAUTH_SCOPE_LABELS[scope] || scope);
+        this.state = 'ready';
+      } catch (err) {
+        this.fail(err.message);
+      }
+    },
+
+    async decide(action) {
+      this.busy = true;
+      try {
+        const call = action === 'approve' ? App.oauth.approveAuthorization : App.oauth.denyAuthorization;
+        const { data, error } = await call(authorizationId);
+        if (error || !data?.redirect_url) return this.fail(EXPIRED_AUTHORIZATION);
+        this.leave(data.redirect_url);
+      } catch (err) {
+        this.fail(err.message);
+      }
+    },
+
+    leave(url) {
+      this.state = 'redirecting';
+      window.location.assign(url);
+    },
+
+    fail(message) {
+      this.busy = false;
+      this.state = 'error';
+      this.error = message;
+    }
+  }));
+
   Alpine.data('modal', modalBase);
 
   // A modal that also blanks a result target when it actually closes --

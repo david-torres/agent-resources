@@ -24,6 +24,7 @@ const mcpRoutes = require('./routes/mcp');
 const sitemapRoutes = require('./routes/sitemap');
 const { router: oauthMetadataRoutes } = require('./routes/oauth-metadata');
 const botLinkRoutes = require('./routes/bot-link');
+const oauthRoutes = require('./routes/oauth');
 const feedbackRoutes = require('./routes/feedback');
 const { loadNavItems } = require('./util/nav-loader');
 const { openGraphDefaults } = require('./util/open-graph');
@@ -85,6 +86,7 @@ const createApp = () => {
   app.use('/pages', pagesRoutes);
   app.use('/nav', navRoutes);
   app.use('/link/bot', botLinkRoutes);
+  app.use('/oauth', oauthRoutes);
   app.use('/feedback', feedbackRoutes);
   app.use('/api/agent', agentRoutes);
   app.use('/api/mcp', mcpRoutes);

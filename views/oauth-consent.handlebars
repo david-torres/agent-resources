@@ -1,0 +1,38 @@
+{{!-- views/oauth-consent.handlebars --}}
+<section class="section">
+  <div class="container" style="max-width: 480px;" x-data="oauthConsent({{json authorizationId}})" x-init="load()">
+    <h1 class="title is-4">Connect an app to your account</h1>
+
+    <template x-if="state === 'loading'">
+      <div class="loader is-loading"></div>
+    </template>
+
+    <template x-if="state === 'error'">
+      <div class="notification is-danger" x-text="error"></div>
+    </template>
+
+    <template x-if="state === 'ready'">
+      <div>
+        <p class="content">
+          <strong x-text="clientName"></strong> wants to use your AgentResources
+          account<template x-if="email"><span> (<span x-text="email"></span>)</span></template>.
+        </p>
+        <p class="content">It will be able to:</p>
+        <ul class="content">
+          <template x-for="scope in scopes" :key="scope">
+            <li x-text="scope"></li>
+          </template>
+          <li>Read your classes and characters through AgentResources</li>
+        </ul>
+        <div class="buttons">
+          <button class="button is-primary" type="button" :disabled="busy" @click="decide('approve')">Approve</button>
+          <button class="button" type="button" :disabled="busy" @click="decide('deny')">Deny</button>
+        </div>
+      </div>
+    </template>
+
+    <template x-if="state === 'redirecting'">
+      <p>Returning you to the app…</p>
+    </template>
+  </div>
+</section>

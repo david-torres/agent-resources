@@ -40,6 +40,7 @@ const httpFiles = new Set([
   'routes/missions-log-game.test.js',
   'routes/missions.test.js',
   'routes/nav-manage-navbar.test.js',
+  'routes/oauth-consent.test.js',
   'routes/oauth-metadata.test.js',
   'routes/open-graph.test.js',
   'routes/pages.test.js',

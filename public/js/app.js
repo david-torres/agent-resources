@@ -1217,6 +1217,14 @@ const App = (function (document, supabase, htmx) {
     return !!url && url[0] === '/' && url[1] !== '/' && url[1] !== '\\';
   }
 
+  // The consent page runs on whatever supabase-js the CDN served; an older
+  // build has no auth.oauth, and failing loudly beats a page that never loads.
+  function _oauthApi() {
+    const api = supabaseClient && supabaseClient.auth && supabaseClient.auth.oauth;
+    if (!api) throw new Error('This page could not load the sign-in library. Please reload and try again.');
+    return api;
+  }
+
   function redirectTo(url) {
     const token = _getAuthToken();
     const refresh = _getRefreshToken();
@@ -1650,6 +1658,11 @@ const App = (function (document, supabase, htmx) {
     getBrowserInfo: _getBrowserInfo,
     getConsoleLog: _getConsoleLog,
     captureScreenshot: _captureScreenshot,
-    submitFeedback: _submitFeedback
+    submitFeedback: _submitFeedback,
+    oauth: {
+      getAuthorizationDetails: (id) => _oauthApi().getAuthorizationDetails(id),
+      approveAuthorization: (id) => _oauthApi().approveAuthorization(id, { skipBrowserRedirect: true }),
+      denyAuthorization: (id) => _oauthApi().denyAuthorization(id, { skipBrowserRedirect: true })
+    }
   };
 })(document, supabase, htmx);
