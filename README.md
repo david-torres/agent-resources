@@ -364,6 +364,47 @@ Long-lived personal access tokens can be created per user for agent integrations
 
 Server-side agent routes should use `SUPABASE_SECRET_KEY` so token-authenticated requests can evaluate ownership and unlock state without a Supabase browser session.
 
+## AgentResources MCP endpoint
+
+The same agent read API is exposed as an MCP server at `/api/mcp` (production: `https://agent-resources.vip/api/mcp`).
+
+- Transport: Streamable HTTP, stateless, JSON responses. Only `POST` is supported; `GET` and `DELETE` answer `405`.
+- Authentication: the same personal agent tokens as `/api/agent` (`ar_pat_…`, created from the profile page or `POST /profile/agent-tokens`), sent as `Authorization: Bearer ar_pat_…` or `X-Agent-Token`. `initialize` and `tools/list` work without a token; tool calls without a valid token return an `unauthenticated` tool error.
+- Clients must send `Accept: application/json, text/event-stream`.
+
+Tools (all read-only):
+
+- `getMe` — the authenticated user, profile, and token.
+- `listClasses(rules_edition?, rules_version?, status?, is_player_created?)` — class summaries visible to the user.
+- `getClass(id)` — one class by UUID. Locked classes return teaser-only data, exactly as `GET /api/agent/classes/:id` does.
+- `searchCharacters(q?)` — characters visible to the user, optionally matched by name.
+- `getCharacter(id)` — one character by UUID.
+
+Tool failures come back with `isError: true` and a text content of `{"error":{"code":"…","message":"…"}}`, where `code` is one of `unauthenticated`, `invalid_argument` (e.g. a non-UUID `id`), `not_found`, or `internal`.
+
+```sh
+curl -s https://agent-resources.vip/api/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'Authorization: Bearer ar_pat_your_token_here' \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"getMe","arguments":{}}}'
+```
+
+```js
+const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
+const { StreamableHTTPClientTransport } = require('@modelcontextprotocol/sdk/client/streamableHttp.js');
+
+const transport = new StreamableHTTPClientTransport(new URL('https://agent-resources.vip/api/mcp'), {
+  requestInit: { headers: { Authorization: 'Bearer ar_pat_your_token_here' } }
+});
+const client = new Client({ name: 'my-agent', version: '1.0.0' });
+
+await client.connect(transport);
+const { tools } = await client.listTools();
+const result = await client.callTool({ name: 'listClasses', arguments: { is_player_created: false } });
+await client.close();
+```
+
 ## Dependencies
 
 This project is built using:

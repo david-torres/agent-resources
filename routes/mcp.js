@@ -5,6 +5,7 @@ const { StreamableHTTPServerTransport } = require('@modelcontextprotocol/sdk/ser
 const { version } = require('../package.json');
 const { resolveAgentAuth } = require('../util/auth');
 const { isValidUuid } = require('../util/validate');
+const { asyncHandler } = require('../util/async-handler');
 const agentReads = require('../services/agent/service');
 
 const router = express.Router();
@@ -103,7 +104,7 @@ const buildServer = (req) => {
   return server;
 };
 
-router.post('/', async (req, res) => {
+router.post('/', asyncHandler(async (req, res) => {
   const server = buildServer(req);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
   res.on('close', () => {
@@ -112,7 +113,7 @@ router.post('/', async (req, res) => {
   });
   await server.connect(transport);
   await transport.handleRequest(req, res, req.body);
-});
+}));
 
 const methodNotAllowed = (req, res) => res.status(405).json({
   jsonrpc: '2.0',
