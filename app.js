@@ -22,6 +22,7 @@ const navRoutes = require('./routes/nav');
 const agentRoutes = require('./routes/agent');
 const mcpRoutes = require('./routes/mcp');
 const sitemapRoutes = require('./routes/sitemap');
+const { router: oauthMetadataRoutes } = require('./routes/oauth-metadata');
 const botLinkRoutes = require('./routes/bot-link');
 const feedbackRoutes = require('./routes/feedback');
 const { loadNavItems } = require('./util/nav-loader');
@@ -64,9 +65,10 @@ const createApp = () => {
     next();
   });
 
-  // Before loadNavItems: the sitemap renders no layout, so it has no use for
-  // nav items and no reason to pay for the query.
+  // Before loadNavItems: these routes render no layout, so they have no use
+  // for nav items and no reason to pay for the query.
   app.use('/', sitemapRoutes);
+  app.use('/', oauthMetadataRoutes);
 
   app.use(openGraphDefaults);
   app.use(loadNavItems);
