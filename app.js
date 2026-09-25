@@ -20,6 +20,7 @@ const badgesRoutes = require('./routes/badges');
 const pagesRoutes = require('./routes/pages');
 const navRoutes = require('./routes/nav');
 const agentRoutes = require('./routes/agent');
+const mcpRoutes = require('./routes/mcp');
 const sitemapRoutes = require('./routes/sitemap');
 const botLinkRoutes = require('./routes/bot-link');
 const feedbackRoutes = require('./routes/feedback');
@@ -84,6 +85,7 @@ const createApp = () => {
   app.use('/link/bot', botLinkRoutes);
   app.use('/feedback', feedbackRoutes);
   app.use('/api/agent', agentRoutes);
+  app.use('/api/mcp', mcpRoutes);
 
   app.use((err, req, res, next) => {
     console.error('Unhandled error:', err);

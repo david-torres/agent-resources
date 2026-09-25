@@ -76,6 +76,8 @@ test('listClasses picks the known filters and returns the model result', async (
 test.each([
   ['true', true],
   ['false', false],
+  [true, true],
+  [false, false],
   ['yes', undefined],
   [undefined, undefined]
 ])('listClasses parses is_player_created %p as %p', async (raw, expected) => {

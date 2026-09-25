@@ -33,6 +33,8 @@ const httpFiles = new Set([
   'routes/feedback.test.js',
   'routes/lfg-conduit-join.test.js',
   'routes/lfg-log-game.test.js',
+  'routes/mcp.test.js',
+  'routes/mcp-class-access.test.js',
   'routes/library-book-type.test.js',
   'routes/missions-log-game.test.js',
   'routes/missions.test.js',

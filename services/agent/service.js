@@ -2,6 +2,7 @@ const { listClassesForAgent, getClassForAgent } = require('../../models/class');
 const { searchCharactersForAgent, getCharacterForAgent } = require('../../models/character');
 
 const parseBooleanFilter = (value) => {
+  if (typeof value === 'boolean') return value;
   if (value === 'true') return true;
   if (value === 'false') return false;
   return undefined;
