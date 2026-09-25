@@ -386,7 +386,7 @@ Tool failures come back with `isError: true` and a text content of `{"error":{"c
 
 ### Enabling OAuth on a Supabase project
 
-Locally this is on in `supabase/config.toml` (`[auth.oauth_server]`). On the hosted project, in the dashboard under Authentication → OAuth Server: enable the OAuth server, allow dynamic OAuth apps, set the authorization path to `/oauth/consent`, and check the Site URL is `https://agent-resources.vip`. Then confirm `https://<project-ref>.supabase.co/.well-known/oauth-authorization-server/auth/v1` lists a `registration_endpoint`.
+Locally this is on in `supabase/config.toml` (`[auth.oauth_server]`). On the hosted project, in the dashboard under Authentication → OAuth Server: enable the OAuth server, allow dynamic OAuth apps, set the authorization path to `/oauth/consent`, and check the Site URL is `https://agent-resources.vip`. Then confirm `https://<project-ref>.supabase.co/.well-known/oauth-authorization-server/auth/v1` lists a `registration_endpoint`. The project must also sign tokens with asymmetric JWT signing keys (the legacy HS256 shared secret never appears in the JWKS), and `SUPABASE_URL` must be the same origin as the token issuer rather than a separate custom auth domain -- otherwise every OAuth token this endpoint receives is rejected.
 
 To connect ChatGPT, add a connector in developer mode with the URL `https://agent-resources.vip/api/mcp` and OAuth authentication; ChatGPT registers itself and walks the user through the consent page.
 

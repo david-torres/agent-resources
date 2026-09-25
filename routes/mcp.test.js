@@ -1,7 +1,8 @@
 // Pins the contract of the stateless Streamable HTTP MCP endpoint at /api/mcp:
-// the handshake and tool catalogue (open to anyone), the tool results (exactly
-// the REST read bodies), and the error envelope, including that no token,
-// SQL text or stack ever leaks into a response.
+// every request needs a valid agent token or OAuth token (401 otherwise), the
+// handshake and tool catalogue, the tool results (exactly the REST read
+// bodies), and the error envelope, including that no token, SQL text or stack
+// ever leaks into a response.
 const { test, expect, mock, beforeAll, beforeEach, afterAll, afterEach } = require('bun:test');
 
 process.env.SUPABASE_URL = process.env.SUPABASE_URL || 'https://test.invalid';
@@ -256,7 +257,6 @@ test('an OAuth-linked caller can use the tools as their own profile', async () =
 });
 
 test('an OAuth-linked caller reads classes as their own actor', async () => {
-  calls = [];
   await rpc('tools/call', { name: 'listClasses', arguments: {} }, { token: OAUTH_TOKEN });
   expect(calls.find(([name]) => name === 'listClassesForAgent').at(-1)).toEqual({ userId: 'u2', profileId: 'p2', role: 'player' });
 });
@@ -268,6 +268,8 @@ test('a credential-check infrastructure failure answers a generic 500, never a 4
   );
   expect(res.status).toBe(500);
   expect(res.headers.get('www-authenticate')).toBeNull();
+  const text = await res.text();
+  expect(text).not.toContain('JWKS unreachable');
 });
 
 test('getMe returns the user, whitelisted profile and token summary, and nothing secret', async () => {

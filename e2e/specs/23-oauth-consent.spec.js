@@ -34,6 +34,7 @@ test.beforeAll(async () => {
 });
 
 test.afterAll(async () => {
+  if (!clientId) return;
   const db = new Client({ connectionString: DB_URL });
   await db.connect();
   try {
@@ -57,6 +58,23 @@ const startAuthorization = async () => {
   return { state, path: `${consent.pathname}${consent.search}` };
 };
 
+// Runs before the approve test below: once a connector has been approved for
+// this client+user, Supabase skips the consent screen on later authorizations
+// (see "an already-approved connector" below), so there would be no Deny
+// button left to click if this ran after approval.
+test('a signed-in player denies a connector and is sent back with access_denied', async ({ page }) => {
+  await page.route(`${REDIRECT_URI}**`, (route) => route.fulfill({ status: 200, body: 'callback' }));
+  const { state, path } = await startAuthorization();
+
+  await page.goto(path);
+  await page.getByRole('button', { name: 'Deny' }).click();
+
+  await page.waitForURL(`${REDIRECT_URI}**`);
+  const callback = new URL(page.url());
+  expect(callback.searchParams.get('error')).toBe('access_denied');
+  expect(callback.searchParams.get('state')).toBe(state);
+});
+
 test('a signed-in player approves a connector and is sent back with a code', async ({ page }) => {
   await page.route(`${REDIRECT_URI}**`, (route) => route.fulfill({ status: 200, body: 'callback' }));
   const { state, path } = await startAuthorization();
@@ -64,6 +82,7 @@ test('a signed-in player approves a connector and is sent back with a code', asy
   await page.goto(path);
   await expect(page.getByText('E2E Connector')).toBeVisible();
   await expect(page.getByText(PLAYER_EMAIL)).toBeVisible();
+  await expect(page.getByText('chatgpt.example.test')).toBeVisible();
   await page.getByRole('button', { name: 'Approve' }).click();
 
   await page.waitForURL(`${REDIRECT_URI}**`);

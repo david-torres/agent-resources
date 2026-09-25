@@ -602,6 +602,18 @@ document.addEventListener('alpine:init', () => {
     offline_access: 'Stay connected when you are not using it'
   };
   const EXPIRED_AUTHORIZATION = 'This authorization request has expired or is invalid. Start the connection again from the app.';
+  const UNEXPECTED_ERROR = 'An unexpected error occurred. Please try again.';
+
+  // The host a redirect_uri points at, for display only. Returns '' when
+  // there is nothing to show rather than throwing, since the value comes
+  // from an OAuth client's own (attacker-controllable) registration.
+  const _redirectHost = (uri) => {
+    try {
+      return new URL(uri).host;
+    } catch {
+      return '';
+    }
+  };
 
   Alpine.data('oauthConsent', (authorizationId) => ({
     state: 'loading',
@@ -609,6 +621,7 @@ document.addEventListener('alpine:init', () => {
     clientName: '',
     email: '',
     scopes: [],
+    redirectHost: '',
     busy: false,
 
     async load() {
@@ -620,9 +633,10 @@ document.addEventListener('alpine:init', () => {
         this.clientName = data.client?.name || 'An application';
         this.email = data.user?.email || '';
         this.scopes = String(data.scope || '').split(/\s+/).filter(Boolean).map((scope) => OAUTH_SCOPE_LABELS[scope] || scope);
+        this.redirectHost = _redirectHost(data.redirect_uri);
         this.state = 'ready';
       } catch (err) {
-        this.fail(err.message);
+        this.reportUnexpected(err);
       }
     },
 
@@ -634,13 +648,33 @@ document.addEventListener('alpine:init', () => {
         if (error || !data?.redirect_url) return this.fail(EXPIRED_AUTHORIZATION);
         this.leave(data.redirect_url);
       } catch (err) {
-        this.fail(err.message);
+        this.reportUnexpected(err);
       }
     },
 
+    // Clients register their own redirect_uri through open dynamic client
+    // registration, so it is attacker-controlled. Only ever navigate to an
+    // http(s) target -- never javascript:, data:, or anything else a
+    // malicious client could hand back for us to execute or render as this
+    // signed-in user.
     leave(url) {
+      let target;
+      try {
+        target = new URL(url, window.location.href);
+      } catch {
+        return this.fail(EXPIRED_AUTHORIZATION);
+      }
+      if (target.protocol !== 'http:' && target.protocol !== 'https:') return this.fail(EXPIRED_AUTHORIZATION);
       this.state = 'redirecting';
       window.location.assign(url);
+    },
+
+    // err.userFacing marks messages that are already safe to show verbatim
+    // (see App's _oauthApi in app.js); anything else might be a raw
+    // network/library error, so show a generic message and log the real one.
+    reportUnexpected(err) {
+      console.error(err);
+      this.fail(err && err.userFacing ? err.message : UNEXPECTED_ERROR);
     },
 
     fail(message) {

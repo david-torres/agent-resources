@@ -1221,7 +1221,13 @@ const App = (function (document, supabase, htmx) {
   // build has no auth.oauth, and failing loudly beats a page that never loads.
   function _oauthApi() {
     const api = supabaseClient && supabaseClient.auth && supabaseClient.auth.oauth;
-    if (!api) throw new Error('This page could not load the sign-in library. Please reload and try again.');
+    if (!api) {
+      // userFacing marks this message as safe to show verbatim -- unlike a
+      // raw network/library error, it names no internals.
+      const err = new Error('This page could not load the sign-in library. Please reload and try again.');
+      err.userFacing = true;
+      throw err;
+    }
     return api;
   }
 

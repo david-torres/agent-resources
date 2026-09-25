@@ -17,6 +17,9 @@
           <strong x-text="clientName"></strong> wants to use your AgentResources
           account<template x-if="email"><span> (<span x-text="email"></span>)</span></template>.
         </p>
+        <template x-if="redirectHost">
+          <p class="content">You'll be sent back to <strong x-text="redirectHost"></strong>.</p>
+        </template>
         <p class="content">It will be able to:</p>
         <ul class="content">
           <template x-for="scope in scopes" :key="scope">
