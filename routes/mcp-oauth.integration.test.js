@@ -60,19 +60,33 @@ beforeAll(async () => {
   ({ server, baseUrl } = await startHttpServer(createApp()));
 });
 
+// Runs one cleanup statement in isolation so a failure in an earlier one
+// (e.g. a stale FK left by a previous partial run) can't skip the rest --
+// every row this run created must still be attempted.
+const cleanupStep = async (label, fn) => {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`afterAll cleanup step failed (${label}):`, err.message);
+  }
+};
+
 afterAll(async () => {
   if (server) await stopHttpServer(server);
   const db = new Client({ connectionString: DB_URL });
   await db.connect();
   try {
-    if (clientId) await db.query('delete from auth.oauth_clients where id = $1', [clientId]);
     if (userId) {
       // getProfile's starter grant wrote a rules_pdf_unlocks row referencing
       // the profile; it must go before the profile can be deleted.
-      await db.query('delete from public.rules_pdf_unlocks where user_id = $1', [userId]);
-      await db.query('delete from public.profiles where user_id = $1', [userId]);
-      await db.query('delete from auth.users where id = $1', [userId]);
+      await cleanupStep('rules_pdf_unlocks', () => db.query('delete from public.rules_pdf_unlocks where user_id = $1', [userId]));
+      await cleanupStep('profiles', () => db.query('delete from public.profiles where user_id = $1', [userId]));
+      await cleanupStep('auth.users', () => db.query('delete from auth.users where id = $1', [userId]));
     }
+    // auth.oauth_authorizations and auth.oauth_consents both FK client_id
+    // ON DELETE CASCADE, so this alone clears any authorization/consent rows
+    // the flow created for this client.
+    if (clientId) await cleanupStep('oauth_clients', () => db.query('delete from auth.oauth_clients where id = $1', [clientId]));
   } finally {
     await db.end();
   }
