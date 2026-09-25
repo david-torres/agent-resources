@@ -3,11 +3,7 @@ const router = express.Router();
 const { registerUuidParams } = require('../util/validate');
 registerUuidParams(router, ['id', 'requestId']);
 const { isAgentAuthenticated } = require('../util/auth');
-const { listClassesForAgent, getClassForAgent } = require('../models/class');
-const {
-  searchCharactersForAgent,
-  getCharacterForAgent
-} = require('../models/character');
+const agentReads = require('../services/agent/service');
 const {
   normalizeLinkCode,
   isValidDiscordUserId,
@@ -45,23 +41,6 @@ const sendLfgError = (res, err) => {
   if (code) payload.code = code;
   return res.status(status).json(payload);
 };
-
-const parseBooleanFilter = (value) => {
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return undefined;
-};
-
-// Used for class/character agent reads. Unlike lfg's buildAgentActor
-// (models/lfg.js), this deliberately preserves the profile's REAL role
-// (e.g. 'admin') rather than stripping it: it preserves the pre-refactor
-// resolveClassAgentAccess visibility contract, where an admin's agent token
-// gets the same admin-wide read visibility an admin's session would.
-const getActorContext = (res) => ({
-  userId: res.locals.user?.id || null,
-  profileId: res.locals.profile?.id || null,
-  role: res.locals.profile?.role || null
-});
 
 router.post('/bot-link/start', express.json(), async (req, res) => {
   const discordUserId = req.body?.discord_user_id;
@@ -118,47 +97,30 @@ router.post('/bot-link/claim', express.json(), async (req, res) => {
 router.use(isAgentAuthenticated);
 
 router.get('/me', async (req, res) => {
-  return res.json({
-    user: { id: res.locals.user.id },
-    profile: {
-      id: res.locals.profile.id,
-      user_id: res.locals.profile.user_id,
-      name: res.locals.profile.name,
-      role: res.locals.profile.role,
-      timezone: res.locals.profile.timezone || 'UTC'
-    },
-    token: res.locals.agentToken
-  });
+  return res.json(agentReads.buildMe(res.locals));
 });
 
 router.get('/classes', async (req, res) => {
-  const filters = {
-    rules_edition: req.query.rules_edition,
-    rules_version: req.query.rules_version,
-    status: req.query.status,
-    is_player_created: parseBooleanFilter(req.query.is_player_created)
-  };
-  const { data, error } = await listClassesForAgent(filters, getActorContext(res));
+  const { data, error } = await agentReads.listClasses(req.query, agentReads.actorFromAuth(res.locals));
   if (error) return res.status(500).json({ error: error.message });
   return res.json({ classes: data });
 });
 
 router.get('/classes/:id', async (req, res) => {
-  const { data, error } = await getClassForAgent(req.params.id, getActorContext(res));
+  const { data, error } = await agentReads.getClass(req.params.id, agentReads.actorFromAuth(res.locals));
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Class not found' });
   return res.json({ class: data });
 });
 
 router.get('/characters', async (req, res) => {
-  const q = typeof req.query.q === 'string' ? req.query.q : '';
-  const { data, error } = await searchCharactersForAgent(q, getActorContext(res));
+  const { data, error } = await agentReads.searchCharacters(req.query.q, agentReads.actorFromAuth(res.locals));
   if (error) return res.status(500).json({ error: error.message });
   return res.json({ characters: data });
 });
 
 router.get('/characters/:id', async (req, res) => {
-  const { data, error } = await getCharacterForAgent(req.params.id, getActorContext(res));
+  const { data, error } = await agentReads.getCharacter(req.params.id, agentReads.actorFromAuth(res.locals));
   if (error) return res.status(500).json({ error: error.message });
   if (!data) return res.status(404).json({ error: 'Character not found' });
   return res.json({ character: data });

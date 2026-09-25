@@ -147,29 +147,42 @@ const requireAdmin = async (req, res, next) => {
   next();
 };
 
-const isAgentAuthenticated = async (req, res, next) => {
+const resolveAgentAuth = async (req) => {
   const headerToken = getBearerToken(req);
   const agentToken = req.headers['x-agent-token'] || (headerToken && headerToken.startsWith(AGENT_TOKEN_PREFIX) ? headerToken : null);
 
   if (!agentToken) {
-    return res.status(401).json({ error: 'Missing agent token' });
+    return { ok: false, status: 401, error: 'Missing agent token' };
   }
 
   const { data, error } = await verifyAgentToken(agentToken);
   if (error || !data?.profile) {
-    return res.status(401).json({ error: 'Invalid agent token' });
+    return { ok: false, status: 401, error: 'Invalid agent token' };
   }
 
-  res.locals.user = { id: data.userId };
-  res.locals.supabase = supabase;
-  res.locals.profile = data.profile;
-  res.locals.agentToken = {
-    id: data.tokenId,
-    name: data.tokenName,
-    hint: data.tokenHint
+  return {
+    ok: true,
+    auth: {
+      user: { id: data.userId },
+      profile: data.profile,
+      agentToken: { id: data.tokenId, name: data.tokenName, hint: data.tokenHint },
+      supabase
+    }
   };
+};
+
+const isAgentAuthenticated = async (req, res, next) => {
+  const result = await resolveAgentAuth(req);
+  if (!result.ok) {
+    return res.status(result.status).json({ error: result.error });
+  }
+
+  res.locals.user = result.auth.user;
+  res.locals.supabase = result.auth.supabase;
+  res.locals.profile = result.auth.profile;
+  res.locals.agentToken = result.auth.agentToken;
 
   next();
 };
- 
-module.exports = { isAuthenticated, authOptional, requireAdmin, isAgentAuthenticated };
+
+module.exports = { isAuthenticated, authOptional, requireAdmin, isAgentAuthenticated, resolveAgentAuth };

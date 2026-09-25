@@ -175,7 +175,7 @@ const toAgentError = (err) => {
 // role is intentionally always null here (never the profile's real role):
 // the lfg agent surface authorizes purely on ownership/host checks, with no
 // admin bypass. This is a deliberate divergence from the class/character
-// agent-read actor (routes/agent.js getActorContext), which preserves the
+// agent-read actor (services/agent/service.js actorFromAuth), which preserves the
 // real role to honor that domain's per-role read-visibility contract.
 const buildAgentActor = (profileId) => ({ profileId, role: null });
 
