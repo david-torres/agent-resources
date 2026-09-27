@@ -148,3 +148,65 @@ test('the Aspirant rules-edition filter option is selected when filtering by Asp
   }));
   expect(aspirantFilterOption(html)).toContain('selected');
 });
+
+const editionGroup = (id, name, edition) => {
+  const g = group(id, name);
+  g.primary.rules_edition = edition;
+  return g;
+};
+
+const decodeEntities = (html) => html.replace(/&amp;/g, '&').replace(/&#x3D;/g, '=');
+
+const ownedToggle = (html) => {
+  const m = html.match(/<div[^>]*id="ownedEditionToggle"[\s\S]*?<\/div>/);
+  return m ? decodeEntities(m[0]) : null;
+};
+
+const toggleLink = (toggleHtml, label) => {
+  const m = toggleHtml.match(new RegExp(`<a[^>]*>\\s*${label}\\s*</a>`));
+  return m ? m[0] : null;
+};
+
+const bothEditionsContext = (ownedEdition) => baseContext({
+  ownedReleaseGroups: [editionGroup('asp-1', 'Aeronaut', 'aspirant')],
+  ownedEdition,
+  ownedEditions: ['advent', 'aspirant'],
+  ownedToggleLinks: {
+    advent: '/classes?status=release&yours=advent',
+    aspirant: '/classes?status=release&yours=aspirant'
+  }
+});
+
+test('owning both editions renders an Advent | Aspirant toggle under Your Released Classes', () => {
+  const html = renderClasses(bothEditionsContext('aspirant'));
+  const toggle = ownedToggle(html);
+  expect(toggle).not.toBeNull();
+  expect(toggle).toContain('role="group"');
+  expect(html.indexOf('id="ownedEditionToggle"')).toBeGreaterThan(html.indexOf('Your Released Classes'));
+  expect(toggleLink(toggle, 'Advent')).toContain('href="/classes?status=release&yours=advent"');
+  expect(toggleLink(toggle, 'Aspirant')).toContain('href="/classes?status=release&yours=aspirant"');
+});
+
+test('the owned edition toggle marks only the shown edition as active', () => {
+  const aspirantToggle = ownedToggle(renderClasses(bothEditionsContext('aspirant')));
+  expect(toggleLink(aspirantToggle, 'Aspirant')).toContain('is-selected');
+  expect(toggleLink(aspirantToggle, 'Aspirant')).toContain('aria-current="true"');
+  expect(toggleLink(aspirantToggle, 'Advent')).not.toContain('is-selected');
+  expect(toggleLink(aspirantToggle, 'Advent')).not.toContain('aria-current');
+
+  const adventToggle = ownedToggle(renderClasses(bothEditionsContext('advent')));
+  expect(toggleLink(adventToggle, 'Advent')).toContain('is-selected');
+  expect(toggleLink(adventToggle, 'Advent')).toContain('aria-current="true"');
+  expect(toggleLink(adventToggle, 'Aspirant')).not.toContain('is-selected');
+});
+
+test('owning a single edition renders no owned edition toggle', () => {
+  const html = renderClasses(baseContext({
+    ownedReleaseGroups: [editionGroup('gun', 'Gunslinger', 'advent')],
+    ownedEdition: 'advent',
+    ownedEditions: ['advent'],
+    ownedToggleLinks: { advent: '/classes?yours=advent', aspirant: '/classes?yours=aspirant' }
+  }));
+  expect(html).toContain('Your Released Classes');
+  expect(html).not.toContain('ownedEditionToggle');
+});

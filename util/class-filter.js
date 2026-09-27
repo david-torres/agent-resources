@@ -66,4 +66,42 @@ const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
   return { ownedReleases, otherReleases, prerelease, pcc };
 };
 
-module.exports = { filterClassListsByIds, isUnreleasedPcc, partitionProfileClasses, partitionClassGroups, partitionClassCatalog };
+const OWNED_EDITIONS = ['advent', 'aspirant'];
+
+// Narrow the owned-release groups to one rules edition. An unknown or unowned
+// requested edition falls back to the first edition the viewer owns.
+const splitOwnedByEdition = (groups, requested) => {
+  const list = Array.isArray(groups) ? groups : [];
+  const byEdition = Object.fromEntries(OWNED_EDITIONS.map(e => [e, []]));
+  for (const group of list) {
+    const edition = group?.primary?.rules_edition || 'advent';
+    if (byEdition[edition]) byEdition[edition].push(group);
+  }
+  const editions = OWNED_EDITIONS.filter(e => byEdition[e].length > 0);
+  const edition = editions.includes(requested) ? requested : (editions[0] || null);
+  return { edition, groups: edition ? byEdition[edition] : [], editions };
+};
+
+const CATALOG_FILTER_KEYS = ['rules_edition', 'rules_version', 'status', 'is_player_created'];
+
+const ownedToggleLinks = (query = {}) => {
+  const linkFor = (edition) => {
+    const params = new URLSearchParams();
+    for (const key of CATALOG_FILTER_KEYS) {
+      if (query[key]) params.set(key, query[key]);
+    }
+    params.set('yours', edition);
+    return `/classes?${params.toString()}`;
+  };
+  return { advent: linkFor('advent'), aspirant: linkFor('aspirant') };
+};
+
+module.exports = {
+  filterClassListsByIds,
+  isUnreleasedPcc,
+  partitionProfileClasses,
+  partitionClassGroups,
+  partitionClassCatalog,
+  splitOwnedByEdition,
+  ownedToggleLinks
+};

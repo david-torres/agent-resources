@@ -1,5 +1,12 @@
 const { test, expect, describe } = require('bun:test');
-const { filterClassListsByIds, partitionProfileClasses, partitionClassGroups, partitionClassCatalog } = require('./class-filter');
+const {
+  filterClassListsByIds,
+  partitionProfileClasses,
+  partitionClassGroups,
+  partitionClassCatalog,
+  splitOwnedByEdition,
+  ownedToggleLinks
+} = require('./class-filter');
 
 const mk = (id, name, edition = 'advent') => ({ id, name, rules_edition: edition });
 
@@ -195,5 +202,70 @@ describe('partitionClassGroups', () => {
   test('handles non-array input', () => {
     expect(partitionClassGroups(null)).toEqual({ released: [], pcc: [] });
     expect(partitionClassGroups(undefined)).toEqual({ released: [], pcc: [] });
+  });
+});
+
+describe('splitOwnedByEdition', () => {
+  const eg = (id, edition) => ({ primary: { id, rules_edition: edition }, previous: [] });
+  const mixed = [eg('gun', 'advent'), eg('asp-1', 'aspirant'), eg('lib', 'advent'), eg('asp-2', 'aspirant')];
+
+  test('shows the requested edition and keeps only its groups, order preserved', () => {
+    const out = splitOwnedByEdition(mixed, 'aspirant');
+    expect(out.edition).toBe('aspirant');
+    expect(out.groups.map(g => g.primary.id)).toEqual(['asp-1', 'asp-2']);
+    expect(out.editions).toEqual(['advent', 'aspirant']);
+  });
+
+  test('defaults to the first owned edition when none is requested', () => {
+    const out = splitOwnedByEdition(mixed, undefined);
+    expect(out.edition).toBe('advent');
+    expect(out.groups.map(g => g.primary.id)).toEqual(['gun', 'lib']);
+  });
+
+  test('an unknown or unowned requested edition falls back to the first owned edition', () => {
+    const onlyAspirant = [eg('asp-1', 'aspirant')];
+    const out = splitOwnedByEdition(onlyAspirant, 'advent');
+    expect(out.edition).toBe('aspirant');
+    expect(out.editions).toEqual(['aspirant']);
+    expect(out.groups.map(g => g.primary.id)).toEqual(['asp-1']);
+    expect(splitOwnedByEdition(mixed, 'bogus').edition).toBe('advent');
+  });
+
+  test('a group with no rules_edition counts as advent', () => {
+    const out = splitOwnedByEdition([eg('old', undefined), eg('asp-1', 'aspirant')], 'advent');
+    expect(out.groups.map(g => g.primary.id)).toEqual(['old']);
+    expect(out.editions).toEqual(['advent', 'aspirant']);
+  });
+
+  test('no owned groups yields no edition', () => {
+    expect(splitOwnedByEdition([], 'aspirant')).toEqual({ edition: null, groups: [], editions: [] });
+  });
+});
+
+describe('ownedToggleLinks', () => {
+  test('links to each edition with no other filters', () => {
+    expect(ownedToggleLinks({})).toEqual({
+      advent: '/classes?yours=advent',
+      aspirant: '/classes?yours=aspirant'
+    });
+  });
+
+  test('preserves the current catalog filters and replaces yours', () => {
+    const links = ownedToggleLinks({
+      rules_edition: 'aspirant',
+      rules_version: 'v1',
+      status: 'release',
+      is_player_created: 'false',
+      yours: 'advent'
+    });
+    expect(links).toEqual({
+      advent: '/classes?rules_edition=aspirant&rules_version=v1&status=release&is_player_created=false&yours=advent',
+      aspirant: '/classes?rules_edition=aspirant&rules_version=v1&status=release&is_player_created=false&yours=aspirant'
+    });
+  });
+
+  test('omits empty-valued filters', () => {
+    const links = ownedToggleLinks({ rules_edition: '', rules_version: undefined, status: 'beta' });
+    expect(links.aspirant).toBe('/classes?status=beta&yours=aspirant');
   });
 });

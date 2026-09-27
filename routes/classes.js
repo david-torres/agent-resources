@@ -38,7 +38,7 @@ const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
-const { partitionClassCatalog } = require('../util/class-filter');
+const { partitionClassCatalog, splitOwnedByEdition, ownedToggleLinks } = require('../util/class-filter');
 const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
@@ -152,11 +152,15 @@ router.get('/', authOptional, async (req, res) => {
         prerelease: prereleaseGroups,
         pcc: pccGroups
     } = partitionClassCatalog(classGroups, access.bookIds);
+    const owned = splitOwnedByEdition(ownedReleaseGroups, req.query.yours);
 
     res.render('classes', {
         profile,
         title: 'Classes',
-        ownedReleaseGroups,
+        ownedReleaseGroups: owned.groups,
+        ownedEdition: owned.edition,
+        ownedEditions: owned.editions,
+        ownedToggleLinks: ownedToggleLinks(req.query),
         otherReleaseGroups,
         prereleaseGroups,
         pccGroups,

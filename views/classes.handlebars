@@ -93,6 +93,12 @@
 <!-- Class List -->
 {{#if ownedReleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="owned-released-classes" title="Your Released Classes"}}
+{{#if (gt ownedEditions.length 1)}}
+<div class="buttons has-addons mb-3" id="ownedEditionToggle" role="group" aria-label="Rules">
+  <a href="{{ownedToggleLinks.advent}}" class="button is-small{{#if (eq ownedEdition 'advent')}} is-primary is-selected{{/if}}"{{#if (eq ownedEdition 'advent')}} aria-current="true"{{/if}}>Advent</a>
+  <a href="{{ownedToggleLinks.aspirant}}" class="button is-small{{#if (eq ownedEdition 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq ownedEdition 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
+</div>
+{{/if}}
 <div class="columns is-multiline" id="classList">
   {{#each ownedReleaseGroups}}
   {{> class-group-card this showImage=true}}
