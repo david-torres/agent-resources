@@ -36,6 +36,8 @@ const makeCharacter = () => ({
   class_id: 'class-a',
   creator_id: 'profile-owner',
   is_public: true,
+  level: 3,
+  completed_missions: 0,
   ...Object.fromEntries(statList.map(stat => [stat, 2])),
   traits: ['brave'],
   abilities: [{ id: 'ab-1', name: 'Fireball', description: 'SECRET ABILITY TEXT', class_id: 'class-a' }],
@@ -47,6 +49,23 @@ const makeCharacter = () => ({
   perks: '',
   additional_gear: '',
 });
+
+const equipSignature = () => {
+  state.character.creator_mode = 'aspiring';
+  state.character.gear = [
+    {
+      name: 'Cowboy Hat', class_id: 'class-a', description: 'SECRET SIGNATURE TEXT',
+      enchantment: { source: 'default' },
+      default_enchantment: { name: 'Hats Off to You', description: 'SECRET DEFAULT TEXT' },
+      mods: [{ name: 'Scope', description: 'Player-written Mod' }],
+    },
+    {
+      name: 'Coat', class_id: 'class-a', description: 'SECOND SIGNATURE TEXT',
+      enchantment: { source: 'custom', name: 'Hex', description: 'Player-written Enchantment' },
+      mods: [],
+    },
+  ];
+};
 
 const makeClient = () => ({
   from() {
@@ -73,10 +92,14 @@ mock.module('../models/character', () => ({
   getCharacter: async () => state.character
     ? { data: state.character, error: null }
     : { data: null, error: { code: 'PGRST116', message: 'not found' } },
+  getCharacterRecentMissions: async () => ({ data: [], error: null }),
 }));
 mock.module('../models/class', () => ({
   getClass: async () => ({ data: { id: 'class-a', rules_version: state.rulesVersion }, error: null }),
-  getUnlockedClassIdsForUser: async () => ({ data: state.unlockedIds, error: null }),
+  getUnlockedClassIdsForUser: async () => {
+    if (state.unlocksThrow) throw new Error('unlock lookup failed');
+    return { data: state.unlockedIds, error: null };
+  },
 }));
 mock.module('../models/lfg', () => ({
   getPendingJoinRequestCount: async () => ({ count: 0 }),
@@ -90,6 +113,7 @@ mock.module('../models/auth', () => ({
 }));
 mock.module('../models/profile', () => ({
   getProfile: async () => state.profile,
+  getProfileById: async () => ({ data: null, error: null }),
 }));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../util/nav-loader', () => ({
@@ -139,6 +163,7 @@ beforeAll(async () => {
   }));
   app.set('view engine', 'handlebars');
   app.set('views', path.join(__dirname, '..', 'views'));
+  app.use(require('../util/open-graph').openGraphDefaults);
 
   app.use((req, res, next) => {
     res.locals.supabaseUrl = process.env.SUPABASE_URL;
@@ -169,6 +194,7 @@ beforeEach(() => {
   state.character = makeCharacter();
   state.profile = null;
   state.unlockedIds = new Set();
+  state.unlocksThrow = false;
   state.lfgPost = null;
   state.rulesVersion = 'v1';
 });
@@ -249,7 +275,56 @@ test('an aspiring character shows its Enchantment and Mods', async () => {
   const html = await res.text();
   expect(html).toContain('Hats Off to You');
   expect(html).toContain('Scope');
+  expect(html).not.toContain('Portray a Turning Point.');
 });
+
+for (const suffix of ['', '/details']) {
+  test(`a signed-out viewer sees no Default text in the ${suffix || 'full page'}`, async () => {
+    equipSignature();
+    const res = await get(`/characters/${CHAR_ID}${suffix}`);
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('Hats Off to You');
+    expect(html).not.toContain('SECRET DEFAULT TEXT');
+    expect(html).not.toContain('SECRET SIGNATURE TEXT');
+    expect(html).toContain('Player-written Enchantment');
+    expect(html).toContain('Player-written Mod');
+  });
+
+  test(`locked access and unlock failure hide Default text in the ${suffix || 'full page'}`, async () => {
+    for (const unlocksThrow of [false, true]) {
+      equipSignature();
+      state.profile = { id: 'viewer-1', user_id: 'user-1' };
+      state.unlocksThrow = unlocksThrow;
+      const res = await get(`/characters/${CHAR_ID}${suffix}`, true);
+      expect(res.status).toBe(200);
+      const html = await res.text();
+      expect(html).not.toContain('SECRET DEFAULT TEXT');
+      expect(html).toContain('Player-written Enchantment');
+      expect(html).toContain('Player-written Mod');
+    }
+  });
+
+  test(`an unlocked viewer and approved LFG host see Default text in the ${suffix || 'full page'}`, async () => {
+    equipSignature();
+    state.profile = { id: 'viewer-1', user_id: 'user-1' };
+    state.unlockedIds = new Set(['class-a']);
+    let res = await get(`/characters/${CHAR_ID}${suffix}`, true);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('SECRET DEFAULT TEXT');
+
+    equipSignature();
+    state.unlockedIds = new Set();
+    state.profile = { id: 'host-1', user_id: 'user-1' };
+    state.lfgPost = {
+      host_id: 'host-1',
+      join_requests: [{ status: 'approved', character: { id: CHAR_ID } }],
+    };
+    res = await get(`/characters/${CHAR_ID}${suffix}?lfg=post-1`, true);
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain('SECRET DEFAULT TEXT');
+  });
+}
 
 test('an advent character keeps the plain gear tag, never an Enchantment', async () => {
   state.character.gear = [{

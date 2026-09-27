@@ -282,7 +282,7 @@
       var purchase = findPurchase(name, classId);
       if (!purchase) return false;
       var next = normalizeEnchantment(enchantment, findEntry(name, purchase.class_id));
-      var after = { owned: true, class_id: purchase.class_id, enchantment: next, mods: purchase.mods };
+      var after = Object.assign({}, purchase, { enchantment: next });
       if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase),
                          SignatureEntry.slotsOf(after) - SignatureEntry.slotsOf(purchase))) return false;
       purchase.enchantment = next;
@@ -302,7 +302,7 @@
           description: ((m && m.description) || '').trim()
         };
       }).filter(function (m) { return m.name.length > 0; });
-      var after = { owned: true, class_id: purchase.class_id, enchantment: purchase.enchantment, mods: next };
+      var after = Object.assign({}, purchase, { mods: next });
       if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase), 0)) return false;
       purchase.mods = next;
       purchase.touched = true;

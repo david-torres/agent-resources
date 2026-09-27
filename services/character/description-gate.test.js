@@ -22,7 +22,7 @@ mock.module('../../models/lfg', () => ({
 mock.module('../../models/class', () => ({
   getUnlockedClassIdsForUser: async () => {
     if (state.unlocksThrow) throw new Error('unlocks boom');
-    return { data: state.unlockedIds, error: null };
+    return { data: state.unlockedIds, error: state.unlockError || null };
   },
 }));
 
@@ -33,6 +33,7 @@ beforeEach(() => {
   state.lfgThrows = false;
   state.unlockedIds = new Set();
   state.unlocksThrow = false;
+  state.unlockError = null;
 });
 
 const makeCharacter = () => ({
@@ -49,6 +50,83 @@ const makeCharacter = () => ({
 const descriptions = (character) => ({
   abilities: character.abilities.map(a => a.description),
   gear: character.gear.map(g => g.description),
+});
+
+const makeEquippedCharacter = () => ({
+  id: 'char-1',
+  gear: [
+    {
+      name: 'Hat', class_id: 'class-a', description: 'signature secret',
+      enchantment: { source: 'default' },
+      default_enchantment: { name: 'Hats Off', description: 'enchantment secret' },
+      mods: [{ name: 'Scope', description: 'player mod' }],
+    },
+    {
+      name: 'Coat', class_id: 'class-a', description: 'second secret',
+      enchantment: { source: 'custom', name: 'Hex', description: 'player enchantment' },
+      mods: [{ name: 'Lining', description: 'player lining' }],
+    },
+  ],
+});
+
+const expectEquipment = (character, defaultDescription) => {
+  expect(character.gear[0].default_enchantment).toEqual({
+    name: 'Hats Off', description: defaultDescription,
+  });
+  expect(character.gear[0].mods[0].description).toBe('player mod');
+  expect(character.gear[1].enchantment.description).toBe('player enchantment');
+  expect(character.gear[1].mods[0].description).toBe('player lining');
+};
+
+test('signed-out and locked viewers lose class-authored Default text, but retain player equipment', async () => {
+  for (const profile of [null, { id: 'p1', user_id: 'u1' }]) {
+    const character = makeEquippedCharacter();
+    await applyDescriptionGate({ character, profile, client: {} });
+    expect(character.gear.map(g => g.description)).toEqual(['', '']);
+    expectEquipment(character, '');
+  }
+});
+
+test('an unlocked viewer keeps Default Enchantment text', async () => {
+  state.unlockedIds = new Set(['class-a']);
+  const character = makeEquippedCharacter();
+  await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expectEquipment(character, 'enchantment secret');
+});
+
+test('an approved LFG host keeps Default Enchantment text without an unlock', async () => {
+  state.lfgPost = {
+    host_id: 'host-1',
+    join_requests: [{ status: 'approved', character: { id: 'char-1' } }],
+  };
+  const character = makeEquippedCharacter();
+  await applyDescriptionGate({
+    character, profile: { id: 'host-1', user_id: 'u1' },
+    lfgPostId: 'post-1', client: {},
+  });
+  expectEquipment(character, 'enchantment secret');
+});
+
+test('a failed unlock lookup or missing class id cannot reveal Default text', async () => {
+  state.unlocksThrow = true;
+  const character = makeEquippedCharacter();
+  await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expectEquipment(character, '');
+
+  state.unlocksThrow = false;
+  state.unlockedIds = new Set(['class-a']);
+  const classless = makeEquippedCharacter();
+  classless.gear[0].class_id = null;
+  await applyDescriptionGate({ character: classless, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expectEquipment(classless, '');
+});
+
+test('an unlock lookup error fails closed even if it returns ids', async () => {
+  state.unlockedIds = new Set(['class-a']);
+  state.unlockError = { message: 'lookup failed' };
+  const character = makeEquippedCharacter();
+  await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expectEquipment(character, '');
 });
 
 test('signed out, every description is blanked — class-gated or not', async () => {

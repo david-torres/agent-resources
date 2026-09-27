@@ -15,7 +15,7 @@ const { test, expect, describe } = require('bun:test');
 const {
   mountPurchases, fixtureCharacter, OWN_CLASS_ID, OWN_CLASS_NAME
 } = require('./helpers/gear-purchase-fixture');
-const { economyFigures } = require('../util/merx-economy');
+const { economyFigures, equipmentSpend } = require('../util/merx-economy');
 
 const FIGURES = economyFigures();
 
@@ -298,6 +298,67 @@ describe('only the hidden field submits', () => {
 });
 
 describe('an aspiring character prices against its Signature pool', () => {
+  const pool = ['Cowboy Hat', 'Sharps Rifle', 'Bandolier']
+    .map((name) => ({ class_id: OWN_CLASS_ID, name }));
+  const startingGear = [...pool, { class_id: OWN_CLASS_ID, name: 'Lasso' }];
+  const atBoundary = (earnedMerx = 0) => mountPurchases(fixtureCharacter({
+    economy: 'aspiring', aspiringSignatures: pool, gear: startingGear, earnedMerx
+  }));
+  const expectServerSpend = (form) => {
+    expect(form.getSpent()).toBe(equipmentSpend(form.getState().purchases, {
+      economy: 'aspiring', aspiringSignatures: pool
+    }));
+  };
+
+  test('the last Merx buys a first Mod on a pooled Signature', () => {
+    const form = atBoundary(); // three pooled Signatures cost 6; Lasso costs 3
+    expect(form.getSpent()).toBe(9);
+    expect(form.setMods('Cowboy Hat', [{ name: 'Scope' }], OWN_CLASS_ID)).toBe(true);
+    expect(form.getSpent()).toBe(form.getBudget());
+    expectServerSpend(form);
+  });
+
+  test('a cross-class first Mod needs two Merx and remains blocked with one', () => {
+    const form = atBoundary();
+    expect(form.setMods('Lasso', [{ name: 'Scope' }], OWN_CLASS_ID)).toBe(false);
+    expect(form.getState().purchases[3].mods).toEqual([]);
+    expect(form.getSpent()).toBe(9);
+    expectServerSpend(form);
+
+    const funded = atBoundary(1);
+    expect(funded.setMods('Lasso', [{ name: 'Scope' }], OWN_CLASS_ID)).toBe(true);
+    expect(funded.getSpent()).toBe(funded.getBudget());
+    expectServerSpend(funded);
+  });
+
+  test('a pooled Default Enchantment uses the own-class price at the boundary', () => {
+    const form = atBoundary(1); // two Merx remain
+    expect(form.setEnchantment('Cowboy Hat', { source: 'default' }, OWN_CLASS_ID)).toBe(true);
+    expect(form.getSpent()).toBe(form.getBudget());
+    expectServerSpend(form);
+  });
+
+  test('a pooled Custom Enchantment uses the own-class price at the boundary', () => {
+    const form = atBoundary(2); // three Merx remain
+    expect(form.setEnchantment('Cowboy Hat', {
+      source: 'custom', name: 'Hex', description: 'Shades the wearer.'
+    }, OWN_CLASS_ID)).toBe(true);
+    expect(form.getSpent()).toBe(form.getBudget());
+    expectServerSpend(form);
+  });
+
+  test('a cross-class Enchantment retains its higher price', () => {
+    const short = atBoundary(1); // two Merx remain; cross-class Default costs three
+    expect(short.setEnchantment('Lasso', { source: 'default' }, OWN_CLASS_ID)).toBe(false);
+    expect(short.getState().purchases[3].enchantment).toBeNull();
+    expectServerSpend(short);
+
+    const funded = atBoundary(2);
+    expect(funded.setEnchantment('Lasso', { source: 'default' }, OWN_CLASS_ID)).toBe(true);
+    expect(funded.getSpent()).toBe(funded.getBudget());
+    expectServerSpend(funded);
+  });
+
   // pg. 90's three are own-class...
   test('an aspiring character pays own-class for a Signature in its pool', () => {
     const form = mountPurchases(fixtureCharacter({

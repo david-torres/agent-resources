@@ -1,10 +1,17 @@
-// Render-time gating for class ability/gear descriptions. Extracted from the
+// Render-time gating for class ability/gear descriptions and the class-authored
+// Default Enchantment on purchased gear. Extracted from the
 // inline block that lived at routes/characters.js:863-939 so /characters/:id,
 // the /characters/:id/details fragment, and (through it) /party and /lfg all
 // enforce the same rule: names are always visible, descriptions require the
 // item's class family to be unlocked for the viewer.
 const { getLfgPost } = require('../../models/lfg');
 const { getUnlockedClassIdsForUser } = require('../../models/class');
+
+const blankDefaultEnchantment = (gear) => {
+  if (gear.default_enchantment) {
+    gear.default_enchantment = { ...gear.default_enchantment, description: '' };
+  }
+};
 
 const blankAll = (character) => {
   try {
@@ -15,15 +22,17 @@ const blankAll = (character) => {
     }
     if (Array.isArray(character.gear)) {
       for (const gear of character.gear) {
-        if (gear) gear.description = '';
+        if (gear) {
+          gear.description = '';
+          blankDefaultEnchantment(gear);
+        }
       }
     }
   } catch (_) { /* ignore */ }
 };
 
-// Mutates character.abilities[].description and character.gear[].description
-// in place and returns the character. Fails closed: any unexpected error
-// blanks every description rather than throwing.
+// Mutates class-authored descriptions on the character and returns it. Fails
+// closed: any unexpected error blanks them rather than throwing.
 const applyDescriptionGate = async ({ character, profile, userId = null, lfgPostId = null, client }) => {
   try {
     let hostingViaLfg = false;
@@ -47,8 +56,8 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
         // Admin-backed lookup on purpose: the shared anon client no longer
         // carries the user's JWT, so RLS on class_unlocks would return zero
         // rows and wipe every description.
-        const { data: ids } = await getUnlockedClassIdsForUser(userId || (profile && profile.user_id) || null);
-        if (ids instanceof Set) unlockedClassIds = ids;
+        const { data: ids, error } = await getUnlockedClassIdsForUser(userId || (profile && profile.user_id) || null);
+        if (!error && ids instanceof Set) unlockedClassIds = ids;
       } catch (_) {
         unlockedClassIds = new Set();
       }
@@ -65,11 +74,17 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
       }
       if (Array.isArray(character.gear)) {
         for (const gear of character.gear) {
-          if (gear && (
+          if (!gear) continue;
+          if (
             (gear.class_id && !unlockedClassIds.has(gear.class_id)) ||
             (!gear.class_id && !profile)
-          )) {
+          ) {
             gear.description = '';
+          }
+          // A Default Enchantment comes from the class book, even if the
+          // purchase row has no class_id. Without one, access cannot be proven.
+          if (!gear.class_id || !unlockedClassIds.has(gear.class_id)) {
+            blankDefaultEnchantment(gear);
           }
         }
       }

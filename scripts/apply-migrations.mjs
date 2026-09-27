@@ -2,6 +2,7 @@ import { readdir, readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import pg from "pg";
+import { migrationConnectionConfig } from "./migration-connection.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -28,39 +29,8 @@ if (!host || !password) {
   process.exit(1);
 }
 
-// Local Supabase stacks (loopback, LAN IPs, custom DNS — anything that isn't a
-// *.supabase.co hosted project) don't have the Supabase pooler, so we connect
-// directly to the local Postgres port instead. The standard local Supabase
-// Postgres port is 54322; the Kong/API gateway in SUPABASE_URL sits on 54321
-// and is irrelevant for SQL.
-const stripUrl = (u) =>
-  u.trim().replace(/^https?:\/\//, "").replace(/\/$/, "").split(":")[0];
-const hostname = stripUrl(host);
-const isLocal = !/(^|\.)(supabase\.co|pooler\.supabase\.com)$/.test(hostname);
-
-let clientConfig;
-if (isLocal) {
-  clientConfig = {
-    host: hostname,
-    port: 54322,
-    user: "postgres",
-    password,
-    database: "postgres",
-    connectionTimeoutMillis: 10000,
-  };
-} else {
-  const projectRef = hostname.replace(/^db\./, "");
-  const region = env.SUPABASE_DB_REGION || "aws-0-us-east-1";
-  clientConfig = {
-    host: `${region}.pooler.supabase.com`,
-    port: 6543,
-    user: `postgres.${projectRef}`,
-    password,
-    database: "postgres",
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 10000,
-  };
-}
+const clientConfig = migrationConnectionConfig(host, password, env.SUPABASE_DB_REGION || undefined);
+const isLocal = !clientConfig.ssl;
 
 const client = new pg.Client(clientConfig);
 
