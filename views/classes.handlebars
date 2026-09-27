@@ -91,6 +91,20 @@
 </div>
 
 <!-- Class List -->
+{{#*inline "class-difficulty-buckets"}}
+<div id="{{listId}}" class="block">
+  {{#each buckets}}
+  {{#unless (and (eq ../buckets.length 1) (eq level 'unrated'))}}
+  <h3 class="title is-6 mb-3">{{label}}</h3>
+  {{/unless}}
+  <div class="columns is-multiline">
+    {{#each groups}}
+    {{> class-group-card this showImage=../../showImage}}
+    {{/each}}
+  </div>
+  {{/each}}
+</div>
+{{/inline}}
 {{#if ownedReleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="owned-released-classes" title="Your Released Classes"}}
 {{#if (gt ownedEditions.length 1)}}
@@ -99,36 +113,20 @@
   <a href="{{ownedToggleLinks.aspirant}}" class="button is-small{{#if (eq ownedEdition 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq ownedEdition 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
 </div>
 {{/if}}
-<div class="columns is-multiline" id="classList">
-  {{#each ownedReleaseGroups}}
-  {{> class-group-card this showImage=true}}
-  {{/each}}
-</div>
+{{> class-difficulty-buckets buckets=ownedReleaseGroups listId="classList" showImage=true}}
 {{/if}}
 
 {{#if otherReleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="released-classes" title="Other Released Classes"}}
-<div class="columns is-multiline" id="otherClassList">
-  {{#each otherReleaseGroups}}
-  {{> class-group-card this}}
-  {{/each}}
-</div>
+{{> class-difficulty-buckets buckets=otherReleaseGroups listId="otherClassList"}}
 {{/if}}
 
 {{#if prereleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="prerelease-classes" title="Pre-release Classes"}}
-<div class="columns is-multiline" id="prereleaseClassList">
-  {{#each prereleaseGroups}}
-  {{> class-group-card this}}
-  {{/each}}
-</div>
+{{> class-difficulty-buckets buckets=prereleaseGroups listId="prereleaseClassList"}}
 {{/if}}
 
 {{#if pccGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="player-created-classes" title="Player-Created Classes (PCCs)"}}
-<div class="columns is-multiline" id="pccClassList">
-  {{#each pccGroups}}
-  {{> class-group-card this}}
-  {{/each}}
-</div>
+{{> class-difficulty-buckets buckets=pccGroups listId="pccClassList"}}
 {{/if}}

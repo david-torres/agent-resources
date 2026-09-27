@@ -5,7 +5,8 @@ const {
   partitionClassGroups,
   partitionClassCatalog,
   splitOwnedByEdition,
-  ownedToggleLinks
+  ownedToggleLinks,
+  groupByDifficulty
 } = require('./class-filter');
 
 const mk = (id, name, edition = 'advent') => ({ id, name, rules_edition: edition });
@@ -267,5 +268,57 @@ describe('ownedToggleLinks', () => {
   test('omits empty-valued filters', () => {
     const links = ownedToggleLinks({ rules_edition: '', rules_version: undefined, status: 'beta' });
     expect(links.aspirant).toBe('/classes?status=beta&yours=aspirant');
+  });
+});
+
+describe('groupByDifficulty', () => {
+  const dg = (name, level) => ({ primary: { id: name.toLowerCase(), name, challenge_level: level }, previous: [] });
+  const names = (groups) => groups.map(g => g.primary.name);
+  const summary = (buckets) => buckets.map(b => ({ level: b.level, label: b.label, names: names(b.groups) }));
+
+  test('buckets Low, then Mid, then High, then Unrated, each labelled', () => {
+    const out = groupByDifficulty([dg('Aa', null), dg('Bb', 'High'), dg('Cc', 'Mid'), dg('Dd', 'Low')]);
+    expect(summary(out)).toEqual([
+      { level: 'Low', label: 'Low Challenge', names: ['Dd'] },
+      { level: 'Mid', label: 'Mid Challenge', names: ['Cc'] },
+      { level: 'High', label: 'High Challenge', names: ['Bb'] },
+      { level: 'unrated', label: 'Unrated', names: ['Aa'] }
+    ]);
+  });
+
+  test('leaves out empty buckets', () => {
+    const out = groupByDifficulty([dg('Bb', 'High'), dg('Dd', 'Low')]);
+    expect(out.map(b => b.level)).toEqual(['Low', 'High']);
+  });
+
+  test('sorts groups within a bucket by name, ignoring case', () => {
+    const out = groupByDifficulty([dg('Warden', 'Mid'), dg('alchemist', 'Mid'), dg('Bard', 'Mid')]);
+    expect(summary(out)).toEqual([
+      { level: 'Mid', label: 'Mid Challenge', names: ['alchemist', 'Bard', 'Warden'] }
+    ]);
+  });
+
+  test('null, missing and unknown levels all go to Unrated, name-sorted', () => {
+    const out = groupByDifficulty([
+      dg('Zealot', undefined),
+      dg('Mystic', 'Extreme'),
+      dg('Hunter', 'High'),
+      dg('Acolyte', null)
+    ]);
+    expect(summary(out)).toEqual([
+      { level: 'High', label: 'High Challenge', names: ['Hunter'] },
+      { level: 'unrated', label: 'Unrated', names: ['Acolyte', 'Mystic', 'Zealot'] }
+    ]);
+  });
+
+  test('leaves the input array untouched', () => {
+    const input = [dg('Bb', 'High'), dg('Aa', 'Low')];
+    groupByDifficulty(input);
+    expect(names(input)).toEqual(['Bb', 'Aa']);
+  });
+
+  test('handles non-array input', () => {
+    expect(groupByDifficulty(null)).toEqual([]);
+    expect(groupByDifficulty(undefined)).toEqual([]);
   });
 });

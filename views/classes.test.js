@@ -2,6 +2,7 @@ const { test, expect } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
+const { JSDOM } = require('jsdom');
 const customHelpers = require('../util/handlebars');
 
 const handlebarsHelpers = require('handlebars-helpers')();
@@ -36,6 +37,9 @@ const group = (id, name, { image = false, status = 'release', previous = [] } = 
   previous
 });
 
+const bucket = (level, label, groups) => ({ level, label, groups });
+const unrated = (groups) => [bucket('unrated', 'Unrated', groups)];
+
 const baseContext = (overrides = {}) => ({
   filters: { rules_edition: '', rules_version: '', status: '' },
   isAdmin: false,
@@ -48,7 +52,7 @@ const baseContext = (overrides = {}) => ({
 
 test('owned release section renders its heading and thumbnail art', () => {
   const html = renderClasses(baseContext({
-    ownedReleaseGroups: [group('rel-1', 'Gunslinger', { image: true })]
+    ownedReleaseGroups: unrated([group('rel-1', 'Gunslinger', { image: true })])
   }));
   expect(html).toContain('Your Released Classes');
   expect(html).toContain('image-crop-render');
@@ -57,7 +61,7 @@ test('owned release section renders its heading and thumbnail art', () => {
 
 test('PCC cards render no image markup even when the class has art', () => {
   const html = renderClasses(baseContext({
-    pccGroups: [group('pcc-1', 'Homebrew', { image: true, status: 'beta' })]
+    pccGroups: unrated([group('pcc-1', 'Homebrew', { image: true, status: 'beta' })])
   }));
   expect(html).toContain('Player-Created Classes (PCCs)');
   expect(html).toContain('/classes/pcc-1/Homebrew');
@@ -67,8 +71,8 @@ test('PCC cards render no image markup even when the class has art', () => {
 
 test('released section appears before the PCC section', () => {
   const html = renderClasses(baseContext({
-    otherReleaseGroups: [group('rel-1', 'Gunslinger')],
-    pccGroups: [group('pcc-1', 'Homebrew', { status: 'beta' })]
+    otherReleaseGroups: unrated([group('rel-1', 'Gunslinger')]),
+    pccGroups: unrated([group('pcc-1', 'Homebrew', { status: 'beta' })])
   }));
   const releasedAt = html.indexOf('Released Classes');
   const pccAt = html.indexOf('Player-Created Classes (PCCs)');
@@ -78,12 +82,12 @@ test('released section appears before the PCC section', () => {
 
 test('an empty partition hides its whole section', () => {
   const onlyReleased = renderClasses(baseContext({
-    otherReleaseGroups: [group('rel-1', 'Gunslinger')]
+    otherReleaseGroups: unrated([group('rel-1', 'Gunslinger')])
   }));
   expect(onlyReleased).not.toContain('Player-Created Classes (PCCs)');
 
   const onlyPcc = renderClasses(baseContext({
-    pccGroups: [group('pcc-1', 'Homebrew', { status: 'beta' })]
+    pccGroups: unrated([group('pcc-1', 'Homebrew', { status: 'beta' })])
   }));
   expect(onlyPcc).not.toContain('Released Classes');
 
@@ -94,9 +98,9 @@ test('an empty partition hides its whole section', () => {
 
 test('previous-version links still render inside a card', () => {
   const html = renderClasses(baseContext({
-    otherReleaseGroups: [group('rel-2', 'Librarian', {
+    otherReleaseGroups: unrated([group('rel-2', 'Librarian', {
       previous: [{ id: 'rel-old', name: 'Librarian', rules_version: 'v1' }]
-    })]
+    })])
   }));
   expect(html).toContain('Previous:');
   expect(html).toContain('/classes/rel-old/Librarian');
@@ -105,15 +109,15 @@ test('previous-version links still render inside a card', () => {
 test('admin-only Private tag renders only for admins on non-public classes', () => {
   const privateGroup = group('priv-1', 'Secret');
   privateGroup.primary.is_public = false;
-  const asAdmin = renderClasses(baseContext({ isAdmin: true, otherReleaseGroups: [privateGroup] }));
+  const asAdmin = renderClasses(baseContext({ isAdmin: true, otherReleaseGroups: unrated([privateGroup]) }));
   expect(asAdmin).toContain('Private');
-  const asUser = renderClasses(baseContext({ isAdmin: false, otherReleaseGroups: [privateGroup] }));
+  const asUser = renderClasses(baseContext({ isAdmin: false, otherReleaseGroups: unrated([privateGroup]) }));
   expect(asUser).not.toContain('Private');
 });
 
 test('card renders the teaser blurb', () => {
   const html = renderClasses(baseContext({
-    otherReleaseGroups: [group('rel-1', 'Gunslinger')]
+    otherReleaseGroups: unrated([group('rel-1', 'Gunslinger')])
   }));
   expect(html).toContain('Gunslinger teaser');
 });
@@ -121,14 +125,14 @@ test('card renders the teaser blurb', () => {
 test('card omits the blurb paragraph when teaser is blank', () => {
   const blankTeaser = group('rel-1', 'Gunslinger');
   blankTeaser.primary.teaser = null;
-  const html = renderClasses(baseContext({ otherReleaseGroups: [blankTeaser] }));
+  const html = renderClasses(baseContext({ otherReleaseGroups: unrated([blankTeaser]) }));
   expect(html).not.toContain('teaser');
 });
 
 test('unowned releases and prerelease classes never render art', () => {
   const html = renderClasses(baseContext({
-    otherReleaseGroups: [group('rel-1', 'Gunslinger', { image: true })],
-    prereleaseGroups: [group('pre-1', 'Bogatyr', { image: true, status: 'beta' })]
+    otherReleaseGroups: unrated([group('rel-1', 'Gunslinger', { image: true })]),
+    prereleaseGroups: unrated([group('pre-1', 'Bogatyr', { image: true, status: 'beta' })])
   }));
   expect(html).toContain('Other Released Classes');
   expect(html).toContain('Pre-release Classes');
@@ -168,7 +172,7 @@ const toggleLink = (toggleHtml, label) => {
 };
 
 const bothEditionsContext = (ownedEdition) => baseContext({
-  ownedReleaseGroups: [editionGroup('asp-1', 'Aeronaut', 'aspirant')],
+  ownedReleaseGroups: unrated([editionGroup('asp-1', 'Aeronaut', 'aspirant')]),
   ownedEdition,
   ownedEditions: ['advent', 'aspirant'],
   ownedToggleLinks: {
@@ -202,11 +206,65 @@ test('the owned edition toggle marks only the shown edition as active', () => {
 
 test('owning a single edition renders no owned edition toggle', () => {
   const html = renderClasses(baseContext({
-    ownedReleaseGroups: [editionGroup('gun', 'Gunslinger', 'advent')],
+    ownedReleaseGroups: unrated([editionGroup('gun', 'Gunslinger', 'advent')]),
     ownedEdition: 'advent',
     ownedEditions: ['advent'],
     ownedToggleLinks: { advent: '/classes?yours=advent', aspirant: '/classes?yours=aspirant' }
   }));
   expect(html).toContain('Your Released Classes');
   expect(html).not.toContain('ownedEditionToggle');
+});
+
+const parse = (html) => new JSDOM(html).window.document;
+
+const sectionSequence = (doc, sectionHeadingId) => {
+  const nodes = [...doc.querySelectorAll('h2, h3, .card h5 a')];
+  const start = nodes.findIndex((n) => n.id === sectionHeadingId);
+  const rest = nodes.slice(start + 1);
+  const end = rest.findIndex((n) => n.tagName === 'H2');
+  return (end === -1 ? rest : rest.slice(0, end))
+    .map((n) => (n.tagName === 'H3' ? `## ${n.textContent.trim()}` : n.textContent.trim()));
+};
+
+test('a section with several challenge buckets renders an h3 per bucket followed by its cards', () => {
+  const doc = parse(renderClasses(baseContext({
+    otherReleaseGroups: [
+      bucket('Low', 'Low Challenge', [group('low-1', 'Aeronaut'), group('low-2', 'Bard')]),
+      bucket('High', 'High Challenge', [group('high-1', 'Gunslinger')]),
+      bucket('unrated', 'Unrated', [group('un-1', 'Librarian')])
+    ]
+  })));
+  expect(sectionSequence(doc, 'released-classes')).toEqual([
+    '## Low Challenge', 'Aeronaut', 'Bard',
+    '## High Challenge', 'Gunslinger',
+    '## Unrated', 'Librarian'
+  ]);
+});
+
+test('a section whose only bucket is unrated renders its cards with no challenge subheading', () => {
+  const doc = parse(renderClasses(baseContext({
+    pccGroups: unrated([group('pcc-1', 'Homebrew', { status: 'beta' }), group('pcc-2', 'Tinker', { status: 'beta' })])
+  })));
+  expect(sectionSequence(doc, 'player-created-classes')).toEqual(['Homebrew', 'Tinker']);
+  expect(doc.querySelectorAll('h3')).toHaveLength(0);
+});
+
+test('each bucketed section keeps its grid wrapper id around its cards', () => {
+  const doc = parse(renderClasses(baseContext({
+    ownedReleaseGroups: [
+      bucket('Low', 'Low Challenge', [group('own-1', 'Aeronaut')]),
+      bucket('Mid', 'Mid Challenge', [group('own-2', 'Bard')])
+    ],
+    otherReleaseGroups: [bucket('High', 'High Challenge', [group('rel-1', 'Gunslinger')])],
+    prereleaseGroups: [bucket('Mid', 'Mid Challenge', [group('pre-1', 'Bogatyr', { status: 'beta' })])],
+    pccGroups: [
+      bucket('Low', 'Low Challenge', [group('pcc-1', 'Homebrew', { status: 'beta' })]),
+      bucket('unrated', 'Unrated', [group('pcc-2', 'Tinker', { status: 'beta' })])
+    ]
+  })));
+  const cardNames = (id) => [...doc.querySelectorAll(`#${id} .card h5 a`)].map((a) => a.textContent.trim());
+  expect(cardNames('classList')).toEqual(['Aeronaut', 'Bard']);
+  expect(cardNames('otherClassList')).toEqual(['Gunslinger']);
+  expect(cardNames('prereleaseClassList')).toEqual(['Bogatyr']);
+  expect(cardNames('pccClassList')).toEqual(['Homebrew', 'Tinker']);
 });

@@ -96,6 +96,32 @@ const ownedToggleLinks = (query = {}) => {
   return { advent: linkFor('advent'), aspirant: linkFor('aspirant') };
 };
 
+const CHALLENGE_LEVELS = ['Low', 'Mid', 'High'];
+
+const DIFFICULTY_BUCKETS = [
+  ...CHALLENGE_LEVELS.map(level => ({ level, label: `${level} Challenge` })),
+  { level: 'unrated', label: 'Unrated' }
+];
+
+const byName = (a, b) =>
+  (a?.primary?.name || '').localeCompare(b?.primary?.name || '', undefined, { sensitivity: 'base' });
+
+const bucketLevel = (group) => {
+  const level = group?.primary?.challenge_level;
+  return CHALLENGE_LEVELS.includes(level) ? level : 'unrated';
+};
+
+const groupByDifficulty = (groups) => {
+  if (!Array.isArray(groups)) return [];
+  return DIFFICULTY_BUCKETS
+    .map(({ level, label }) => ({
+      level,
+      label,
+      groups: groups.filter(g => bucketLevel(g) === level).sort(byName)
+    }))
+    .filter(b => b.groups.length > 0);
+};
+
 module.exports = {
   filterClassListsByIds,
   isUnreleasedPcc,
@@ -103,5 +129,6 @@ module.exports = {
   partitionClassGroups,
   partitionClassCatalog,
   splitOwnedByEdition,
-  ownedToggleLinks
+  ownedToggleLinks,
+  groupByDifficulty
 };

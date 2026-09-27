@@ -38,7 +38,7 @@ const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
-const { partitionClassCatalog, splitOwnedByEdition, ownedToggleLinks } = require('../util/class-filter');
+const { partitionClassCatalog, splitOwnedByEdition, ownedToggleLinks, groupByDifficulty } = require('../util/class-filter');
 const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
@@ -157,13 +157,13 @@ router.get('/', authOptional, async (req, res) => {
     res.render('classes', {
         profile,
         title: 'Classes',
-        ownedReleaseGroups: owned.groups,
+        ownedReleaseGroups: groupByDifficulty(owned.groups),
         ownedEdition: owned.edition,
         ownedEditions: owned.editions,
         ownedToggleLinks: ownedToggleLinks(req.query),
-        otherReleaseGroups,
-        prereleaseGroups,
-        pccGroups,
+        otherReleaseGroups: groupByDifficulty(otherReleaseGroups),
+        prereleaseGroups: groupByDifficulty(prereleaseGroups),
+        pccGroups: groupByDifficulty(pccGroups),
         filters: filters,
         isAdmin,
         activeNav: 'classes',
