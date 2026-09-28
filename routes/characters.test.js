@@ -460,13 +460,85 @@ test('an Advanced option carries its type, so it is not stored as core', async (
   });
 
   const body = await res.text();
-  expect(body).toContain('value="Gunslinger::Trick Shot::advanced"');
-  expect(body).toContain('value="Gunslinger::Quickdraw::core"');
+  expect(body).toContain('value="class-adv::Trick Shot::advanced"');
+  expect(body).toContain('value="class-adv::Quickdraw::core"');
   // Visible label text, not just the value attribute: a player choosing an
   // option must be able to see it costs Perks before selecting it.
   expect(body).toContain('Trick Shot (Gunslinger — Advanced)');
   expect(body).toContain('Quickdraw (Gunslinger)');
   expect(body).not.toContain('Quickdraw (Gunslinger — Advanced)');
+});
+
+// Two versions of one class share a name and item names, so a name prefix
+// cannot tell the server which class a pick came from; the option value must
+// carry the class id (services/character/service.js's classItemResolver
+// trusts an id prefix only when that class carries the item).
+const PATHFINDER_V1 = {
+  id: 'class-pf-v1',
+  name: 'Pathfinder',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'aspirant',
+  rules_version: 'v1',
+  content_format: 'aspirant',
+  gear: [{ name: 'Compass', description: '' }],
+  abilities: [{ name: 'Trailsense', description: '' }],
+  advanced_abilities: [],
+};
+const PATHFINDER_V2 = { ...PATHFINDER_V1, id: 'class-pf-v2', base_class_id: 'class-pf-v1', rules_version: 'v2' };
+
+test('the classic gear picker prefixes each option with its class id, not the shared class name', async () => {
+  pageState.extraAspirantClasses = [PATHFINDER_V1, PATHFINDER_V2];
+
+  const res = await fetch(`${baseUrl}/characters/class-gear`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('value="class-pf-v1::Compass"');
+  expect(body).toContain('value="class-pf-v2::Compass"');
+  expect(body).not.toContain('value="Pathfinder::Compass"');
+  expect(body).toContain('Compass (Pathfinder — ');
+});
+
+test('the classic ability picker prefixes each option with its class id, not the shared class name', async () => {
+  pageState.extraAspirantClasses = [PATHFINDER_V1, PATHFINDER_V2];
+
+  const res = await fetch(`${baseUrl}/characters/class-abilities`, {
+    headers: { Accept: 'text/html' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('value="class-pf-v1::Trailsense::core"');
+  expect(body).toContain('value="class-pf-v2::Trailsense::core"');
+  expect(body).not.toContain('value="Pathfinder::Trailsense::core"');
+  expect(body).toContain('Trailsense (Pathfinder)');
+});
+
+// Both versions render an option for the same item name, so a stored pick
+// must select only the option of the class it was taken from.
+test('the classic edit pickers select only the option of the stored item\'s class', async () => {
+  pageState.character = {
+    ...makePageCharacter(0),
+    creator_id: 'profile-1',
+    gear: [{ name: 'Compass', class_id: PATHFINDER_V2.id }],
+    abilities: [{ name: 'Trailsense', class_id: PATHFINDER_V2.id, type: 'core' }],
+  };
+  pageState.unlockedClassIds = new Set([PATHFINDER_V1.id, PATHFINDER_V2.id]);
+  pageState.extraAspirantClasses = [PATHFINDER_V1, PATHFINDER_V2];
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toMatch(/value="class-pf-v2::Compass"\s+selected/);
+  expect(body).not.toMatch(/value="class-pf-v1::Compass"\s+selected/);
+  expect(body).toMatch(/value="class-pf-v2::Trailsense::core"\s+selected/);
+  expect(body).not.toMatch(/value="class-pf-v1::Trailsense::core"\s+selected/);
 });
 
 // GET /characters/:id/edit — the ability island (Task 4 fix round 2).

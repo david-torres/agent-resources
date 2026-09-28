@@ -825,6 +825,54 @@ test('gear no class defines still fails the save when the character has no class
   expect(saved).toBeNull();
 });
 
+// Every version of a class restates the same item names, so the edit form
+// submits the class id as the prefix ("<classId>::Item[::type]") and the save
+// must keep exactly that id -- even when the character's own class, its
+// family, and the global map would all pick a different version.
+const SHARED_ACROSS_VERSIONS_MAPS = () => ({
+  gearNameToClassId: new Map([['Peacemaker', 'gunslinger-v2']]),
+  gearNameToDescription: new Map(),
+  abilityNameToClassId: new Map([['Quick Draw', 'gunslinger-v2']]),
+  abilityNameToDescription: new Map(),
+  itemsByClassId: new Map([
+    ['gunslinger-v1', {
+      gear: new Map([['Peacemaker', 'The v1 revolver.']]),
+      abilities: new Map([['Quick Draw', 'The v1 draw.']])
+    }],
+    ['gunslinger-v2', {
+      gear: new Map([['Peacemaker', 'The v2 revolver.']]),
+      abilities: new Map([['Quick Draw', 'The v2 draw.']])
+    }]
+  ]),
+  classesByName: new Map([['gunslinger', ['gunslinger-v1', 'gunslinger-v2']]]),
+  classRows: CLASS_ROWS
+});
+
+const saveSharedItemsAsGunslingerV2 = async (submission) => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'gunslinger-v2', abilities: [] }),
+    getClassContentLookupMaps: async () => SHARED_ACROSS_VERSIONS_MAPS(),
+    saveCharacterAtomic: async (args) => {
+      saved = args;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const result = await service.updateCharacter('character-1', { name: 'Hero', ...submission }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  return saved;
+};
+
+test('gear submitted with a class id prefix is saved against exactly that class', async () => {
+  const { gear } = await saveSharedItemsAsGunslingerV2({ gear: ['gunslinger-v1::Peacemaker'] });
+  expect(gear).toEqual([{ name: 'Peacemaker', class_id: 'gunslinger-v1', description: 'The v1 revolver.' }]);
+});
+
+test('an ability submitted with a class id prefix is saved against exactly that class', async () => {
+  const { abilities } = await saveSharedItemsAsGunslingerV2({ abilities: ['gunslinger-v1::Quick Draw::core'] });
+  expect(abilities).toEqual([{ name: 'Quick Draw', type: 'core', class_id: 'gunslinger-v1', description: 'The v1 draw.' }]);
+});
+
 // --- Enchantment and Mods forwarding (atomic path, p_gear) -------------
 //
 // saveCharacterAtomic builds the payload for save_character_atomic, which is
@@ -1169,6 +1217,38 @@ test('string-format gear is resolved to its real class before the economy gate p
   }, { id: 'profile-1' });
   expect(result.data).toBeNull();
   expect(result.error).toMatch(/Merx/);
+});
+
+// Four own-class Signatures cost 8 of the 12-Merx grant; priced as the
+// cross-class copies the global map points at, they would cost all 12.
+test('string gear with no class id is priced against the character\'s own class before the global map', async () => {
+  const signatureNames = ['S0', 'S1', 'S2', 'S3'];
+  const saved = {};
+  const service = new CharacterService(makeAdapter([], {
+    getClassContentLookupMaps: async () => ({
+      gearNameToClassId: new Map(signatureNames.map(name => [name, 'other-class'])),
+      gearNameToDescription: new Map(),
+      abilityNameToClassId: new Map(),
+      abilityNameToDescription: new Map(),
+      itemsByClassId: new Map([
+        [ASPIRANT_CLASS_ID, { gear: new Map(signatureNames.map(name => [name, null])), abilities: new Map() }],
+        ['other-class', { gear: new Map(signatureNames.map(name => [name, null])), abilities: new Map() }]
+      ]),
+      classesByName: new Map([['gunslinger', [ASPIRANT_CLASS_ID]]]),
+      classRows: GUNSLINGER_FAMILY_AND_FORK
+    }),
+    saveCharacterAtomic: async (args) => {
+      Object.assign(saved, args.character);
+      return ok({ id: 'character-1', ...args.character });
+    }
+  }));
+  const result = await service.createCharacter({
+    name: 'Legacy Form', class_id: ASPIRANT_CLASS_ID, creator_mode: 'aspirant',
+    gear: signatureNames.map(name => `Gunslinger::${name}`),
+    commissary_reward: 0, trait0: 'brave', trait1: 'calm', trait2: 'alert'
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(saved.commissary_reward).toBe(4);
 });
 
 // Task 5: an Aspiring character's three chosen Signatures are its own-class

@@ -527,7 +527,7 @@ const renderCharacterForm = (overrides = {}) => {
     statList,
     personalityMap,
     statCaps: Object.fromEntries(statList.map((s) => [s, 5])),
-    classGearList: { Gunslinger: ['Cowboy Hat', 'Sharps Rifle'] },
+    classGearList: { 'c-v1': { name: 'Gunslinger', items: ['Cowboy Hat', 'Sharps Rifle'] } },
     adventDefaultSignatures: 3,
     classAbilityList: {},
     effectiveVersion: overrides.effectiveVersion ?? 'v1',

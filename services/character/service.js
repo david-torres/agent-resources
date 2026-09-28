@@ -142,18 +142,23 @@ const submittedAbilityType = (value) => (value === 'advanced' || value === 'core
 // validateEconomyLimits (signatureSlotsUsed) price an Enchantment as part of
 // this same item, and dropping it here would silently zero that cost for any
 // caller that resolves gear through this function.
-const resolveSubmittedGear = (gear, gearNameToClassId) => {
+const resolveSubmittedGear = (gear, { maps, ownClassId }) => {
+  const resolve = classItemResolver({ maps, ownClassId });
+  const classIdOf = (item) =>
+    resolve('gear', item, maps.gearNameToClassId, maps.gearNameToDescription).class_id ?? null;
   const submitted = Array.isArray(gear) ? gear : (gear ? [gear] : []);
   return submitted.map(item => {
     if (!item) return null;
     if (typeof item === 'string') {
       const trimmed = item.trim();
       if (!trimmed) return null;
-      const name = trimmed.includes('::') ? trimmed.split('::')[1].trim() : trimmed;
-      return name ? { name, class_id: gearNameToClassId.get(name) || null } : null;
+      const [prefix, name] = trimmed.includes('::')
+        ? trimmed.split('::').map(part => part.trim())
+        : ['', trimmed];
+      return name ? { name, class_id: classIdOf({ name, class_name: prefix }) } : null;
     }
     if (typeof item === 'object' && item.name) {
-      return { ...item, name: item.name, class_id: item.class_id || gearNameToClassId.get(item.name) || null };
+      return { ...item, name: item.name, class_id: classIdOf(item) };
     }
     return null;
   }).filter(Boolean);
@@ -176,9 +181,10 @@ const familyResolver = (classRows, classId) => {
 
 // Resolves a submitted gear item or ability to the class it belongs to, and to
 // that class's text for it. An item that names its own class_id is taken at
-// its word; otherwise the character's own class and the rest of its version
-// family are tried first, then the submitted class NAME, and the global
-// name map is the last resort.
+// its word; otherwise a class_name that is the id of a class carrying the item
+// wins, then the character's own class and the rest of its version family,
+// then class_name read as a class NAME, and the global name map is the last
+// resort.
 const classItemResolver = ({ maps, ownClassId }) => {
   const itemsByClassId = maps.itemsByClassId ?? new Map();
   const classesByName = maps.classesByName ?? new Map();
@@ -192,6 +198,17 @@ const classItemResolver = ({ maps, ownClassId }) => {
         description: item.description ?? nameToDescription.get(item.name) ?? null
       };
     }
+    // Every version of a class restates the same item names, so the form
+    // prefixes an item with its class id, which arrives as class_name; that id
+    // is honoured only when the class really carries the item.
+    const prefix = item.class_name?.trim();
+    const prefixedClassItems = itemsByClassId.get(prefix)?.[kind];
+    if (prefixedClassItems?.has(item.name)) {
+      return {
+        class_id: prefix,
+        description: item.description ?? prefixedClassItems.get(item.name) ?? null
+      };
+    }
     for (const classId of [ownClassId, ...familyClassIds].filter(Boolean)) {
       const classItems = itemsByClassId.get(classId)?.[kind];
       // The description has to come from the class that resolved the id, or a
@@ -203,7 +220,7 @@ const classItemResolver = ({ maps, ownClassId }) => {
         };
       }
     }
-    const namedCandidates = (classesByName.get(item.class_name?.trim().toLowerCase()) ?? [])
+    const namedCandidates = (classesByName.get(prefix?.toLowerCase()) ?? [])
       .filter(classId => itemsByClassId.get(classId)?.[kind]?.has(item.name));
     const namedClassId = namedCandidates.find(classId => familyClassIds.has(classId)) ?? namedCandidates[0];
     if (namedClassId) {
@@ -220,8 +237,8 @@ const classItemResolver = ({ maps, ownClassId }) => {
 };
 
 // The ability equivalent of resolveSubmittedGear, and for the same reason: the
-// classic/expert form submits an ability as a bare "ClassName::AbilityName"
-// string carrying neither class_id nor type (views/partials/character-class-
+// classic/expert form submits an ability as a "<classId>::AbilityName::type"
+// string rather than class_id and type fields (views/partials/character-class-
 // abilities.handlebars), while tagAbilities (util/character-derived.js) reads
 // exactly those two fields. Pricing the raw submission would charge every
 // cross-class unlock at the own-class rate, and would leave the ratchet
@@ -267,21 +284,21 @@ class CharacterService {
     const prepared = await this.adapter.resolveClassReference(input);
     // One catalogue lookup covers three needs that would otherwise each cost
     // their own round of sub-queries: content_format (economyFor), resolving
-    // bare "ClassName::Item" gear strings to a real class_id (below), and the
+    // prefixed "Class::Item" gear strings to a real class_id (below), and the
     // maps saveCharacterAtomic needs for its own class-item resolution --
     // handed straight through so it does not fetch the same four sub-queries
     // a second time on every creation.
     const maps = await this.adapter.getClassContentLookupMaps();
-    const { gearNameToClassId, classRows } = maps;
+    const { classRows } = maps;
     const classRow = (classRows || []).find(row => row.id === prepared.class_id);
     const contentFormat = classRow && classRow.content_format;
-    // The classic/expert create form submits gear as bare "ClassName::Item"
-    // strings with no class_id at all (views/partials/character-class-gear.
+    // The classic/expert create form submits gear as "<classId>::Item"
+    // strings with no class_id field (views/partials/character-class-gear.
     // handlebars), and isCrossClass (util/merx-economy.js) reads a missing
     // class_id as "not cross-class" -- so pricing the unresolved list, as
-    // both the economy check and the reward derivation below now avoid doing,
+    // both the economy check and the reward derivation below avoid doing,
     // would price every cross-class Signature as if it were own-class.
-    const resolvedGear = resolveSubmittedGear(prepared.gear, gearNameToClassId);
+    const resolvedGear = resolveSubmittedGear(prepared.gear, { maps, ownClassId: prepared.class_id ?? null });
     // The ability half of the same problem -- see resolveSubmittedAbilities.
     // The character does not exist yet, so there are no stored types to
     // inherit from.
@@ -538,7 +555,8 @@ class CharacterService {
     const economy = economyFor({ contentFormat, creatorMode: characterInput.creator_mode });
 
     if (characterInput.auto_calculate) {
-      const { gearNameToClassId, classRows } = await loadCatalogueMaps();
+      const maps = await loadCatalogueMaps();
+      const { classRows } = maps;
       const classRow = (classRows || []).find(row => row.id === characterInput.class_id);
       const [missions, offscreenMissions] = await Promise.all([
         this.adapter.getRealMissions(id),
@@ -556,7 +574,7 @@ class CharacterService {
         character: {
           class_id: characterInput.class_id,
           gear: withPreservedEquipment(
-            resolveSubmittedGear(childData.classGear, gearNameToClassId),
+            resolveSubmittedGear(childData.classGear, { maps, ownClassId: characterInput.class_id ?? null }),
             existing.data.gear
           ),
           common_items: characterInput.common_items,

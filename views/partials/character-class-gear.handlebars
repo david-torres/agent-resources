@@ -4,9 +4,9 @@
       <select name="gear[]" required data-searchable-select>
         <option value="">Select signature gear...</option>
         {{#each classGearList}}
-        <optgroup label="{{capitalize @key}}">
-          {{#each this}}
-          <option value="{{@../key}}::{{this}}" {{#if (eq this (lookup ../../characterGear 'name'))}}selected{{/if}}>{{capitalize this}} ({{capitalize @../key}} — {{#if (lt @index ../../adventDefaultSignatures)}}Base{{else}}Elective{{/if}})</option>
+        <optgroup label="{{capitalize name}}">
+          {{#each items}}
+          <option value="{{@../key}}::{{this}}" {{#if (and (eq this (lookup ../../characterGear 'name')) (eq @../key (lookup ../../characterGear 'class_id')))}}selected{{/if}}>{{capitalize this}} ({{capitalize ../name}} — {{#if (lt @index ../../adventDefaultSignatures)}}Base{{else}}Elective{{/if}})</option>
           {{/each}}
         </optgroup>
         {{/each}}

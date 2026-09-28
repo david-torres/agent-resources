@@ -113,9 +113,11 @@ const filterClassDataForUser = async (user) => {
   let filteredAspirant = aspirant;
   let filteredPCC = pcc;
 
-  // Build lookup maps for gear and abilities keyed by class name
+  // Build lookup maps for gear and abilities keyed by class id: versions of
+  // one class share a name, so only the id tells the server which one a pick
+  // came from.
   const allClasses = [...advent, ...aspirant, ...pcc];
-  let filteredGear = Object.fromEntries(allClasses.map(c => [c.name, Array.isArray(c.gear) ? c.gear.map(g => g.name) : []]));
+  let filteredGear = Object.fromEntries(allClasses.map(c => [c.id, { name: c.name, items: Array.isArray(c.gear) ? c.gear.map(g => g.name) : [] }]));
   // A V1 class carries three Core Abilities and three Advanced ones, and an
   // Advanced Ability costs Perks to unlock (pg. 7). The type travels with the
   // name because the option posts as a single string: without it an Advanced
@@ -124,7 +126,7 @@ const filterClassDataForUser = async (user) => {
     ...(Array.isArray(c.abilities) ? c.abilities.map(a => ({ name: a.name, type: 'core' })) : []),
     ...(Array.isArray(c.advanced_abilities) ? c.advanced_abilities.map(a => ({ name: a.name, type: 'advanced' })) : [])
   ];
-  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.name, abilityOptions(c)]));
+  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.id, { name: c.name, items: abilityOptions(c) }]));
 
   // If user provided, reduce to unlocked set. Unlocks match by class id and
   // extend to same-edition version families (a v1 unlock covers its v2 fork)
@@ -139,7 +141,8 @@ const filterClassDataForUser = async (user) => {
       filteredAdvent = filtered.advent;
       filteredAspirant = filtered.aspirant;
       filteredPCC = filtered.pcc;
-      const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => filtered.allowedNames.has(k)));
+      const allowedClassIds = new Set([...filtered.advent, ...filtered.aspirant, ...filtered.pcc].map(c => c.id));
+      const filterMap = m => Object.fromEntries(Object.entries(m).filter(([k]) => allowedClassIds.has(k)));
       filteredGear = filterMap(filteredGear);
       filteredAbilities = filterMap(filteredAbilities);
     } else {
@@ -475,29 +478,28 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     // Inject existing character gear/abilities into dropdown options so
     // items from classes the user no longer has unlocked still appear
     const allFilteredClasses = [...filteredAdvent, ...filteredAspirant, ...filteredPCC];
+    const pickerGroupFor = async (options, classId) => {
+      let className = allFilteredClasses.find(c => c.id === classId)?.name;
+      if (!className) {
+        try { className = (await getClass(classId, res.locals.supabase))?.data?.name; } catch (_) {}
+      }
+      if (!className) return null;
+      options[classId] ??= { name: className, items: [] };
+      return options[classId];
+    };
     if (Array.isArray(character.gear)) {
       for (const g of character.gear) {
         if (!g?.name || !g?.class_id) continue;
-        let className = allFilteredClasses.find(c => c.id === g.class_id)?.name;
-        if (!className) {
-          try { className = (await getClass(g.class_id, res.locals.supabase))?.data?.name; } catch (_) {}
-        }
-        if (!className) continue;
-        if (!filteredGear[className]) filteredGear[className] = [];
-        if (!filteredGear[className].includes(g.name)) filteredGear[className].push(g.name);
+        const group = await pickerGroupFor(filteredGear, g.class_id);
+        if (group && !group.items.includes(g.name)) group.items.push(g.name);
       }
     }
     if (Array.isArray(character.abilities)) {
       for (const a of character.abilities) {
         if (!a?.name || !a?.class_id) continue;
-        let className = allFilteredClasses.find(c => c.id === a.class_id)?.name;
-        if (!className) {
-          try { className = (await getClass(a.class_id, res.locals.supabase))?.data?.name; } catch (_) {}
-        }
-        if (!className) continue;
-        if (!filteredAbilities[className]) filteredAbilities[className] = [];
-        if (!filteredAbilities[className].some(opt => opt.name === a.name)) {
-          filteredAbilities[className].push({ name: a.name, type: a.type === 'advanced' ? 'advanced' : 'core' });
+        const group = await pickerGroupFor(filteredAbilities, a.class_id);
+        if (group && !group.items.some(opt => opt.name === a.name)) {
+          group.items.push({ name: a.name, type: a.type === 'advanced' ? 'advanced' : 'core' });
         }
       }
     }

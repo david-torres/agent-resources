@@ -29,17 +29,11 @@ describe('filterClassListsByIds', () => {
     expect(out.aspirant).toEqual([]); // name-based filtering would have leaked lib-asp
   });
 
-  test('exposes surviving class names for gear/ability map filtering', () => {
-    const out = filterClassListsByIds(lists, new Set(['lib-v1', 'pcc-1']));
-    expect(out.allowedNames).toEqual(new Set(['Librarian', 'Homebrew']));
-  });
-
   test('empty allowed set filters everything', () => {
     const out = filterClassListsByIds(lists, new Set());
     expect(out.advent).toEqual([]);
     expect(out.aspirant).toEqual([]);
     expect(out.pcc).toEqual([]);
-    expect(out.allowedNames).toEqual(new Set());
   });
 });
 

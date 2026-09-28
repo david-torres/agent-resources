@@ -4,9 +4,9 @@
       <select name="abilities[]" required data-searchable-select>
         <option value="">Select ability...</option>
         {{#each classAbilityList}}
-        <optgroup label="{{capitalize @key}}">
-          {{#each this}}
-          <option value="{{@../key}}::{{this.name}}::{{this.type}}" {{#if (eq this.name (lookup ../../characterAbility 'name'))}}selected{{/if}}>{{capitalize this.name}} ({{capitalize @../key}}{{#if (eq this.type 'advanced')}} — Advanced{{/if}})</option>
+        <optgroup label="{{capitalize name}}">
+          {{#each items}}
+          <option value="{{@../key}}::{{this.name}}::{{this.type}}" {{#if (and (eq this.name (lookup ../../characterAbility 'name')) (eq @../key (lookup ../../characterAbility 'class_id')))}}selected{{/if}}>{{capitalize this.name}} ({{capitalize ../name}}{{#if (eq this.type 'advanced')}} — Advanced{{/if}})</option>
           {{/each}}
         </optgroup>
         {{/each}}

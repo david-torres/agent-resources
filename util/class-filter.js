@@ -7,9 +7,7 @@ const filterClassListsByIds = (lists, allowedIds) => {
   const advent = filterArr(lists.advent);
   const aspirant = filterArr(lists.aspirant);
   const pcc = filterArr(lists.pcc);
-  // Surviving names drive the gear/ability lookup-map filtering downstream.
-  const allowedNames = new Set([...advent, ...aspirant, ...pcc].map(c => c.name));
-  return { advent, aspirant, pcc, allowedNames };
+  return { advent, aspirant, pcc };
 };
 
 // The one released/PCC rule (spec: docs/superpowers/specs/
