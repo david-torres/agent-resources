@@ -82,7 +82,7 @@ computation is deleted.
 ### 2. Purchase config
 
 `util/starter-content.js` exports `EDITION_PURCHASE_URLS = { advent, aspirant }`
-(both `https://enclave-aspirant.backerkit.com/hosted_preorders`) and `EDITION_LABELS = { advent: 'Advent',
+(advent: `https://enclave-aspirant.backerkit.com/hosted_preorders/822768`, aspirant: `https://enclave-aspirant.backerkit.com/hosted_preorders/822771`) and `EDITION_LABELS = { advent: 'Advent',
 aspirant: 'Aspirant' }`. When a URL is falsy, CTAs render redeem-only.
 
 CTA partial `views/partials/access/unlock-cta.handlebars` (params: `edition`)
