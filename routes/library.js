@@ -185,11 +185,14 @@ router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
         isUsable: (!code.expires_at || new Date(code.expires_at) > now)
             && code.used_count < code.max_uses
     }));
+    const unlockableRules = groupRulesVersions((rulesResult.data || []).filter((rule) => !rule.free_access))
+        .map(({ primary, previous }) => [primary, ...previous].find((rule) => rule.is_active) || primary);
 
     return res.render('library-unlocks', {
         profile,
         title: 'Unlock Dashboard',
         rules: rulesResult.data || [],
+        unlockableRules,
         grants,
         codes,
         activeNav: 'library',
@@ -460,4 +463,3 @@ router.get('/:id/view', authOptional, async (req, res) => {
 });
 
 module.exports = router;
-

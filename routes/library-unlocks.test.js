@@ -3,6 +3,9 @@ const { freshRequire } = require('../test/helpers/fresh-require');
 const realEditionAccess = require('../util/edition-access');
 
 const PDF_A = '11111111-1111-4111-8111-111111111111';
+const PDF_FREE = '22222222-2222-4222-8222-222222222222';
+const PDF_A_OLD = '33333333-3333-4333-8333-333333333333';
+const PDF_OTHER = '44444444-4444-4444-8444-444444444444';
 
 // Mutable per-test state.
 let currentRole = 'admin';
@@ -10,7 +13,10 @@ let upsertCall = null;
 let mintCall = null;
 
 const RULES_ROWS = [
-  { id: PDF_A, title: 'Core Rules', edition: 'Advent v2', is_active: true }
+  { id: PDF_A, title: 'Core Rules', edition: 'v2', is_active: true, free_access: false },
+  { id: PDF_A_OLD, title: 'Core Rules', edition: 'v1', is_active: true, free_access: false },
+  { id: PDF_OTHER, title: 'Aspirant', edition: 'v1', is_active: false, free_access: false },
+  { id: PDF_FREE, title: 'Quickstart', edition: 'v1', is_active: true, free_access: true }
 ];
 const GRANT_ROWS = [
   {
@@ -142,11 +148,25 @@ test('GET /library/unlocks renders the dashboard with stamped display state', as
   const { view, ctx } = await res.json();
   expect(view).toBe('library-unlocks');
   expect(ctx.rules).toEqual(RULES_ROWS);
+  expect(ctx.unlockableRules).toEqual([RULES_ROWS[0], RULES_ROWS[2]]);
   expect(ctx.grants.length).toBe(1);
   expect(ctx.grants[0].isExpired).toBe(true);
   expect(ctx.codes.length).toBe(1);
   expect(ctx.codes[0].isUsable).toBe(false); // exhausted: used_count == max_uses
   expect(ctx.title).toBe('Unlock Dashboard');
+});
+
+test('dashboard selects the newest active version when a newer family member is inactive', async () => {
+  const newer = RULES_ROWS[0];
+  newer.is_active = false;
+  try {
+    const res = await fetch(`${baseUrl}/library/unlocks`, { headers: authHeaders });
+    expect(res.status).toBe(200);
+    const { ctx } = await res.json();
+    expect(ctx.unlockableRules[0].id).toBe(PDF_A_OLD);
+  } finally {
+    newer.is_active = true;
+  }
 });
 
 test('GET /library/unlocks rejects non-admins with 403', async () => {

@@ -17,14 +17,15 @@
       <h2 class="title is-4">Grant Access</h2>
       <form method="post" action="/library/unlocks">
         <p class="help mb-3">Granting a core rulebook also grants that ruleset's core classes, for as long as the grant lasts.</p>
+        <p class="help mb-3">A grant covers every version of the selected document.</p>
         <div class="field">
           <label class="label" for="grant-document">Document</label>
           <div class="control">
             <div class="select is-fullwidth">
               <select name="rules_pdf_id" id="grant-document" required>
                 <option value="" selected disabled>Select a document…</option>
-                {{#each rules}}
-                <option value="{{this.id}}">{{this.title}} — {{this.edition}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+                {{#each unlockableRules}}
+                <option value="{{this.id}}">{{this.title}}{{#unless this.is_active}} (inactive){{/unless}}</option>
                 {{/each}}
               </select>
             </div>
@@ -62,6 +63,7 @@
   <div class="column is-half">
     <div class="box">
       <h2 class="title is-4">Generate Unlock Codes</h2>
+      <p class="help mb-3">Each code unlocks every version of the selected document.</p>
       <form hx-post="/library/codes" hx-target="#codeResult" hx-swap="innerHTML transition:true" hx-disabled-elt="input, button, select, textarea" hx-sync="this:abort" hx-on::after-request="if(event.detail.successful) this.reset()">
         <div class="field">
           <label class="label" for="codes-document">Document</label>
@@ -69,8 +71,8 @@
             <div class="select is-fullwidth">
               <select name="rules_pdf_id" id="codes-document" required>
                 <option value="" selected disabled>Select a document…</option>
-                {{#each rules}}
-                <option value="{{this.id}}">{{this.title}} — {{this.edition}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+                {{#each unlockableRules}}
+                <option value="{{this.id}}">{{this.title}}{{#unless this.is_active}} (inactive){{/unless}}</option>
                 {{/each}}
               </select>
             </div>

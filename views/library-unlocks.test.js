@@ -21,10 +21,12 @@ function renderUnlocks(context) {
 
 const PDF_A = '11111111-1111-4111-8111-111111111111';
 const PDF_B = '22222222-2222-4222-8222-222222222222';
+const PDF_FREE = '33333333-3333-4333-8333-333333333333';
 
 const RULES = [
   { id: PDF_A, title: 'Core Rules', edition: 'Advent v2', is_active: true },
-  { id: PDF_B, title: 'Core Rules', edition: 'Advent v1', is_active: false }
+  { id: PDF_B, title: 'Core Rules', edition: 'Advent v1', is_active: false },
+  { id: PDF_FREE, title: 'Quickstart', edition: 'Advent v1', is_active: true, free_access: true }
 ];
 
 const GRANTS = [
@@ -75,7 +77,21 @@ const CODES = [
   }
 ];
 
-const CONTEXT = { rules: RULES, grants: GRANTS, codes: CODES, breadcrumbs: [] };
+const CONTEXT = { rules: RULES, unlockableRules: [RULES[0]], grants: GRANTS, codes: CODES, breadcrumbs: [] };
+
+test('grant and code selectors show one paid version per family; history filter retains all PDFs', () => {
+  const html = renderUnlocks(CONTEXT);
+  for (const id of ['grant-document', 'codes-document']) {
+    const select = html.match(new RegExp(`<select[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`))[1];
+    expect(select).toContain(`value="${PDF_A}"`);
+    expect(select).not.toContain(`value="${PDF_B}"`);
+    expect(select).not.toContain(`value="${PDF_FREE}"`);
+    expect(select).toContain('>Core Rules<');
+  }
+  const filter = html.match(/<select id="filter-document"[^>]*>([\s\S]*?)<\/select>/)[1];
+  expect(filter).toContain(`value="${PDF_FREE}"`);
+  expect(filter).toContain(`value="${PDF_B}"`);
+});
 
 test('grant form posts rules_pdf_id to /library/unlocks', () => {
   const html = renderUnlocks(CONTEXT);
@@ -94,7 +110,7 @@ test('codes form hx-posts to /library/codes with a codeResult target', () => {
   expect(html).toContain('name="amount"');
 });
 
-test('document selects label inactive PDFs', () => {
+test('document history filter labels inactive PDFs', () => {
   const html = renderUnlocks(CONTEXT);
   expect(html).toContain(`Core Rules — Advent v2`);
   expect(html).toContain(`Core Rules — Advent v1 (inactive)`);
