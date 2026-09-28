@@ -8,7 +8,8 @@ const REQUIRED_REPOSITORY_METHODS = [
   'getMissionProfileIds', 'getCharacterCreator', 'upsertMissionCharacter',
   'deleteMissionCharacter', 'mergeMissions', 'getMission', 'recalcBadges',
   'updateUnregisteredNames', 'upsertEditor', 'deleteEditor',
-  'fetchMissionPermissionRow', 'fetchEditorRow', 'fetchCreatorId'
+  'fetchMissionPermissionRow', 'fetchEditorRow', 'fetchCreatorId',
+  'getMissionCharacterIds', 'recalcCharacterProgress'
 ];
 
 const loadEditorRow = async (repo, missionId, actor) => {
@@ -69,33 +70,56 @@ class MissionService {
     const existing = await this.repo.getHost(id);
     const data = normalizeMissionInput(input);
     const result = await this.repo.updateMissionRow(id, data);
-    if (!result.error) await this.repo.recalcBadges([existing.data?.host_id, data.host_id]);
+    if (!result.error) {
+      await this.recalcMissionCharacters(id);
+      await this.repo.recalcBadges([existing.data?.host_id, data.host_id]);
+    }
     return result;
   }
 
   async deleteMission(actor, id) {
     const mission = await requireMissionCreator(this.repo, actor, id);
     const affected = await this.repo.getMissionProfileIds(id);
+    const characterIds = await this.repo.getMissionCharacterIds(id);
     // The SQL filter (.eq('creator_id', ...)) is preserved as defense in
     // depth; use the loaded creator_id (not actor.profileId) so admin/system
     // deletions of another user's mission still match a row.
     const result = await this.repo.deleteMissionRow(id, mission.creator_id);
-    if (!result.error) await this.repo.recalcBadges(affected);
+    if (!result.error) {
+      await this.recalcCharacters(characterIds);
+      await this.repo.recalcBadges(affected);
+    }
     return result;
   }
 
   async addCharacter(actor, { missionId, characterId }) {
     await requireEditable(this.repo, actor, missionId);
     const result = await this.repo.upsertMissionCharacter(missionId, characterId);
-    if (!result.error) await this.recalcCharacterCreator(characterId);
+    if (!result.error) {
+      await this.repo.recalcCharacterProgress(characterId);
+      await this.recalcCharacterCreator(characterId);
+    }
     return result;
   }
 
   async removeCharacter(actor, { missionId, characterId }) {
     await requireEditable(this.repo, actor, missionId);
     const result = await this.repo.deleteMissionCharacter(missionId, characterId);
-    if (!result.error) await this.recalcCharacterCreator(characterId);
+    if (!result.error) {
+      await this.repo.recalcCharacterProgress(characterId);
+      await this.recalcCharacterCreator(characterId);
+    }
     return result;
+  }
+
+  async recalcCharacters(characterIds) {
+    for (const id of new Set(characterIds)) {
+      await this.repo.recalcCharacterProgress(id);
+    }
+  }
+
+  async recalcMissionCharacters(missionId) {
+    await this.recalcCharacters(await this.repo.getMissionCharacterIds(missionId));
   }
 
   async recalcCharacterCreator(characterId) {
@@ -130,8 +154,13 @@ class MissionService {
       ...(await this.repo.getMissionProfileIds(primaryId)),
       ...(await this.repo.getMissionProfileIds(secondaryId))
     ];
+    const characterIds = [
+      ...(await this.repo.getMissionCharacterIds(primaryId)),
+      ...(await this.repo.getMissionCharacterIds(secondaryId))
+    ];
     const result = await this.repo.mergeMissions(primaryId, secondaryId, actor?.profileId ?? null);
     if (result.error) return { data: null, error: result.error };
+    await this.recalcCharacters(characterIds);
     await this.repo.recalcBadges(affected);
     return this.repo.getMission(primaryId);
   }

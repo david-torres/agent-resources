@@ -313,6 +313,10 @@ module.exports = {
     .eq('character_id', characterId),
   getRealMissions,
   listOffscreenMissions: id => listOffscreenMissionsForCharacter({ characterId: id, supabase: supabaseAdmin }),
+  updateCharacterProgress: (id, totals) => supabaseAdmin.from('characters')
+    .update(totals)
+    .eq('id', id)
+    .eq('auto_calculate', true),
 
   // Trait/gear/ability/perk read helpers (used by models/character.js#getCharacter
   // and #getCharacterForAgent, both of which stay in the model as RLS-capable

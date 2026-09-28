@@ -21,6 +21,8 @@ const makeRepo = ({ mission = { creator_id: 'creator-1', host_id: 'host-1' }, ed
     updateMissionRow: async (id, data) => { calls.push(['update', id, data]); return { data: [data], error: null }; },
     deleteMissionRow: async (id, creatorId) => { calls.push(['delete', id, creatorId]); return { data: null, error: null }; },
     getMissionProfileIds: async id => { calls.push(['affected', id]); return ['host', 'character-owner']; },
+    getMissionCharacterIds: async id => { calls.push(['characterIds', id]); return ['char-1']; },
+    recalcCharacterProgress: async id => { calls.push(['progress', id]); },
     getCharacterCreator: async () => { calls.push(['getCharacterCreator']); return { data: { creator_id: 'character-owner' }, error: null }; },
     upsertMissionCharacter: async (id, charId) => { calls.push(['add', id, charId]); return { data: [], error: null }; },
     deleteMissionCharacter: async (id, charId) => { calls.push(['remove', id, charId]); return { data: null, error: null }; },
@@ -82,6 +84,8 @@ test('the creator may update their mission; the write reaches the repository', a
     ['fetchPermission', MISSION_ID],
     ['fetchEditorRow', 'creator-1'],
     ['update', MISSION_ID, { host_id: 'new-host' }],
+    ['characterIds', MISSION_ID],
+    ['progress', 'char-1'],
     ['recalc', ['old-host', 'new-host']]
   ]);
 });
@@ -90,28 +94,28 @@ test('the host may update the mission', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.updateMission(HOST, MISSION_ID, { name: 'New name' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'update', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'update', 'characterIds', 'progress', 'recalc']);
 });
 
 test('an editor may update the mission', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.updateMission(EDITOR, MISSION_ID, { name: 'New name' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'update', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'update', 'characterIds', 'progress', 'recalc']);
 });
 
 test('an admin may update a mission they do not own', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.updateMission(ADMIN, MISSION_ID, { name: 'New name' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'update', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'update', 'characterIds', 'progress', 'recalc']);
 });
 
 test('the system actor may update any mission', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.updateMission(SYSTEM_ACTOR, MISSION_ID, { name: 'New name' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'update', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'update', 'characterIds', 'progress', 'recalc']);
 });
 
 test('a stranger updating a mission throws AuthorizationError, never reaching the write', async () => {
@@ -134,7 +138,9 @@ test('the creator may delete their mission; the SQL filter uses the loaded creat
   expect(repo.calls).toEqual([
     ['fetchPermission', MISSION_ID],
     ['affected', MISSION_ID],
+    ['characterIds', MISSION_ID],
     ['delete', MISSION_ID, 'creator-1'],
+    ['progress', 'char-1'],
     ['recalc', ['host', 'character-owner']]
   ]);
 });
@@ -146,7 +152,9 @@ test('an admin may delete a mission they do not own; the filter uses the actual 
   expect(repo.calls).toEqual([
     ['fetchPermission', MISSION_ID],
     ['affected', MISSION_ID],
+    ['characterIds', MISSION_ID],
     ['delete', MISSION_ID, 'creator-1'],
+    ['progress', 'char-1'],
     ['recalc', ['host', 'character-owner']]
   ]);
 });
@@ -169,14 +177,14 @@ test('the creator may add a character to their mission', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.addCharacter(CREATOR, { missionId: MISSION_ID, characterId: 'char-1' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'add', 'getCharacterCreator', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'add', 'progress', 'getCharacterCreator', 'recalc']);
 });
 
 test('the system actor may add a character (internal backfill path)', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.addCharacter(SYSTEM_ACTOR, { missionId: MISSION_ID, characterId: 'char-1' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'add', 'getCharacterCreator', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'add', 'progress', 'getCharacterCreator', 'recalc']);
 });
 
 test('a stranger may NOT add a character to a mission they cannot edit', async () => {
@@ -190,14 +198,14 @@ test('the creator may remove a character from their mission', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.removeCharacter(CREATOR, { missionId: MISSION_ID, characterId: 'char-1' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'remove', 'getCharacterCreator', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'fetchEditorRow', 'remove', 'progress', 'getCharacterCreator', 'recalc']);
 });
 
 test('the system actor may remove a character (internal path)', async () => {
   const repo = makeRepo();
   const service = new MissionService(repo);
   await service.removeCharacter(SYSTEM_ACTOR, { missionId: MISSION_ID, characterId: 'char-1' });
-  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'remove', 'getCharacterCreator', 'recalc']);
+  expect(repo.calls.map(c => c[0])).toEqual(['fetchPermission', 'remove', 'progress', 'getCharacterCreator', 'recalc']);
 });
 
 test('a stranger may NOT remove a character from a mission they cannot edit', async () => {
@@ -274,7 +282,10 @@ test('merging requires the actor to edit BOTH missions; success recalculates and
   expect(repo.calls.filter(c => c[0] !== 'fetchPermission' && c[0] !== 'fetchEditorRow')).toEqual([
     ['affected', 'primary'],
     ['affected', 'secondary'],
+    ['characterIds', 'primary'],
+    ['characterIds', 'secondary'],
     ['merge', 'primary', 'secondary', 'creator-1'],
+    ['progress', 'char-1'],
     ['recalc', ['host', 'character-owner', 'host', 'character-owner']]
   ]);
   expect(result).toEqual({ data: { id: 'primary' }, error: null });

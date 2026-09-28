@@ -16,6 +16,7 @@ const expectedMethods = [
   'updateMissionRow',
   'deleteMissionRow',
   'getCharacterCreator',
+  'getMissionCharacterIds',
   'upsertMissionCharacter',
   'deleteMissionCharacter',
   'mergeMissions',

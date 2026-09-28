@@ -21,6 +21,12 @@ module.exports = {
     .from('missions').delete().eq('id', id).eq('creator_id', creatorId),
   getCharacterCreator: id => supabaseAdmin
     .from('characters').select('creator_id').eq('id', id).maybeSingle(),
+  getMissionCharacterIds: async id => {
+    const { data, error } = await supabaseAdmin.from('mission_characters')
+      .select('character_id').eq('mission_id', id);
+    if (error) throw error;
+    return (data || []).map(row => row.character_id);
+  },
   upsertMissionCharacter: (missionId, characterId) => supabaseAdmin
     .from('mission_characters').upsert({ mission_id: missionId, character_id: characterId }).select(),
   deleteMissionCharacter: (missionId, characterId) => supabaseAdmin

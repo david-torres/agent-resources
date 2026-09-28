@@ -3,6 +3,7 @@ const { escapeLikePattern } = require('../util/validate');
 const { recalcMilestoneBadgesSafely, getMissionProfileIds } = require('./badge');
 const { MissionService } = require('../services/mission/service');
 const missionRepository = require('../services/mission/repository');
+const { recalculateCharacterProgress } = require('../services/character/progress');
 const { actorFromProfile } = require('../util/actor');
 
 const getMissions = async () => {
@@ -686,7 +687,12 @@ missionService = new MissionService({
   ...missionRepository,
   getMissionProfileIds,
   getMission,
-  recalcBadges: recalcMilestoneBadgesSafely
+  recalcBadges: recalcMilestoneBadgesSafely,
+  // Character repository imports this model for backfill writes, so resolve it
+  // only when a mission mutation actually needs to refresh character totals.
+  recalcCharacterProgress: id => recalculateCharacterProgress(
+    id, require('../services/character/repository')
+  )
 });
 
 module.exports = {
