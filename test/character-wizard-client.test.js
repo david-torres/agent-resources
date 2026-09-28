@@ -361,9 +361,8 @@ describe('the free-gear floor reads what syncBaseGear actually loaded, not a mod
   // economy resolves.
   test('real picks are never counted as free base gear', () => {
     const wizard = bootWizard(fixture({
-      mode: 'aspirant',
-      classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', gear: [] }],
-      economyByClassId: { 'c-v1': 'advent' }
+      mode: 'advent',
+      classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', gear: [] }]
     }));
     wizard.getState().classId = 'c-v1';
     wizard.getState().gear = [
@@ -372,37 +371,6 @@ describe('the free-gear floor reads what syncBaseGear actually loaded, not a mod
       { name: 'Item C', kind: 'class', cost: 3, origin_class_id: 'other' }
     ];
     expect(wizard.getFreeBaseCount()).toBe(0);
-  });
-
-  // Whole-plan review, Important 3: syncBaseGear returned on DATA.mode ===
-  // 'aspirant' before it ever consulted the economy. Six live pre-release
-  // classes carry content_format 'advent' and can be picked under aspirant
-  // mode, which economyFor (util/merx-economy.js) resolves to the ADVENT
-  // economy: a 2-Merx grant and three Default Signatures free. The player
-  // was handed one Signature instead of four, and the save reported spend 0
-  // either way -- a silent under-grant, not a rejection.
-  test('an aspirant wizard on an advent-content class still gets its 3 free Defaults', () => {
-    const wizard = bootWizard(fixture({
-      mode: 'aspirant',
-      classes: [{
-        id: 'c-v1',
-        name: 'Old Guard',
-        content_format: 'advent',
-        gear: [],
-        base_gear: [{ name: 'Default A' }, { name: 'Default B' }, { name: 'Default C' }]
-      }],
-      economyByClassId: { 'c-v1': 'advent' }
-    }));
-    wizard.getState().classId = 'c-v1';
-    wizard.syncBaseGear();
-
-    const gear = wizard.getState().gear;
-    expect(gear).toHaveLength(3);
-    expect(gear.every((g) => g.cost === 0)).toBe(true);
-    expect(wizard.getFreeBaseCount())
-      .toBe(require('../util/character-derived').ADVENT_DEFAULT_SIGNATURES);
-    expect(wizard.getMerxBudget()).toBe(economyFigures().grants.advent);
-    expect(wizard.getMerxSpent()).toBe(0);
   });
 
   // The free Defaults belong to the economy that granted them, so a class
@@ -483,12 +451,11 @@ describe('the free-gear floor reads what syncBaseGear actually loaded, not a mod
   });
 });
 
-test('an aspirant wizard on an advent-content class gets no Trait Cap bonus, like advent', () => {
+test('an aspirant wizard on an advent-content class gets the Aspirant Trait Cap bonus', () => {
   const wizard = bootWizard(fixture({
     mode: 'aspirant',
     preselectedClassId: 'c-v1',
     classes: [{ id: 'c-v1', name: 'Old Guard', content_format: 'advent', stat_spread: { might: 1 }, gear: [] }],
-    economyByClassId: { 'c-v1': 'advent' },
     statList: STAT_LIST,
     personalityMap: PERSONALITY_MAP,
     commonItems: []
@@ -503,10 +470,8 @@ test('an aspirant wizard on an advent-content class gets no Trait Cap bonus, lik
   document.getElementById('step1Next').click();
   setLevel(2);
 
-  // luck carries Trait 3 and would read as a Cap of 6 under the Aspirant
-  // rule; statCapMap (util/stat-caps.js) grants advent's flat Cap here
-  // because the resolved economy is 'advent', not because DATA.mode is.
-  expect(statBoxes('luck')).toHaveLength(5);
+  // luck carries Trait 3, so the Aspirant rule lifts its Cap to 6.
+  expect(statBoxes('luck')).toHaveLength(6);
 });
 
 test('no economy or stat figure is written down in the wizard client', () => {
@@ -1860,5 +1825,91 @@ describe('the wizard counts the roster it submits, not a fixed free allowance', 
     });
     expect(wizard.canAcquire(state, DONOR_ADVANCED_3)).toBe(false);
     expect(wizard.buildSubmitPayload().abilities).toHaveLength(6);
+  });
+});
+
+// An Advent-format class picked in the Aspirant wizard spends the aspirant
+// economy, but its roster is the Advent one: six Signatures carrying no
+// printed column, position or Default Enchantment, and no Advanced abilities.
+describe('an aspirant wizard on an Advent-format class', () => {
+  const FIGURES = economyFigures();
+  const ADVENT_SIGNATURES = ['Longbow', 'Hunting Knife', 'Cloak', 'Snare', 'Whistle', 'Trail Rations'];
+  const adventSignature = (name, subtype) => ({
+    name, description_html: `<p>${name} description.</p>`, subtype
+  });
+  const adventClassInAspirant = () => ({
+    id: 'c-ranger',
+    name: 'Ranger',
+    content_format: 'advent',
+    stat_spread: {},
+    gear: [],
+    class_gear: ADVENT_SIGNATURES.map((name, i) => adventSignature(name, i < 3 ? 'base' : 'elective')),
+    base_gear: ADVENT_SIGNATURES.slice(0, 3).map((name) => ({ name })),
+    abilities: [{ name: 'Ranger Core A' }, { name: 'Ranger Core B' }, { name: 'Ranger Core C' }],
+    abilities_html: ['Ranger Core A', 'Ranger Core B', 'Ranger Core C']
+      .map((name) => ({ name, description_html: `<p>${name} description.</p>` })),
+    advanced_abilities: [],
+    advanced_abilities_html: []
+  });
+  const boot = () => {
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant', classes: [adventClassInAspirant()], preselectedClassId: 'c-ranger'
+    }));
+    wizard.getState().classId = 'c-ranger';
+    return wizard;
+  };
+
+  test('step 4 grants the aspirant Merx budget and loads no free Defaults', () => {
+    const wizard = boot();
+    wizard.syncBaseGear();
+    wizard.renderGearStep();
+    expect(wizard.getMerxBudget()).toBe(FIGURES.grants.aspirant);
+    expect(wizard.getState().gear).toEqual([]);
+    expect(document.getElementById('merxBudget').textContent).toBe(String(FIGURES.grants.aspirant));
+  });
+
+  test('every one of the six Signatures is on the grid at the own-class price', () => {
+    const wizard = boot();
+    wizard.syncBaseGear();
+    wizard.renderGearStep();
+    const cells = [...document.querySelectorAll('[data-signature-name]')];
+    expect(cells.map((el) => el.getAttribute('data-signature-name'))).toEqual(ADVENT_SIGNATURES);
+    for (const cell of cells) {
+      expect(cell.textContent).toContain(`${FIGURES.prices.signature.own} Merx`);
+    }
+  });
+
+  test('opening and buying a Signature through the drawer spends the own-class price', () => {
+    const wizard = boot();
+    wizard.syncBaseGear();
+    wizard.renderGearStep();
+    document.querySelector('[data-signature-name="Snare"]').click();
+    const drawer = document.getElementById('signatureDrawer');
+    expect(drawer.hidden).toBe(false);
+    document.querySelector('[data-signature-buy]').click();
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+    expect(wizard.getState().gear.map((g) => g.name)).toEqual(['Snare']);
+  });
+
+  // An Advent Signature has no printed column or position, so the drawer
+  // must not stamp the literal string "undefined" into its layout attributes.
+  test('the drawer renders an unplaced Signature without undefined or NaN', () => {
+    const wizard = boot();
+    wizard.syncBaseGear();
+    wizard.renderGearStep();
+    for (const name of ADVENT_SIGNATURES) {
+      document.querySelector(`[data-signature-name="${name}"]`).click();
+      const drawer = document.getElementById('signatureDrawer').innerHTML;
+      expect(drawer).not.toContain('undefined');
+      expect(drawer).not.toContain('NaN');
+    }
+  });
+
+  test('the ability primer offers "+ Add Perk" against a one-Perk grant', () => {
+    const wizard = boot();
+    wizard.renderAbilityPrimer();
+    const primer = document.getElementById('abilityPrimerList');
+    expect(primer.querySelectorAll('.wizard-perk-btn')).toHaveLength(3);
+    expect(primer.textContent).toContain('Perks spent 0 / 1');
   });
 });

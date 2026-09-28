@@ -1370,6 +1370,40 @@ test('normalizeCharacterInput accepts an over-budget Ability list when enforceAb
   expect(result.error).toBeNull();
 });
 
+// --- an Advent-format class built in the Aspirant wizard -----------------
+//
+// creator_mode 'aspirant' puts the character on the aspirant economy whatever
+// the class's own content_format, so a v2 advent class (Fiendslayer,
+// Janissary) gets the aspirant 12-Merx and 1-Perk grants, not advent's.
+
+const ADVENT_CLASS_IN_ASPIRANT_WIZARD = { rulesVersion: 'v2', contentFormat: 'advent', isCreation: true };
+const adventClassAspirant = (overrides = {}) => ({
+  name: 'Vex', creator_mode: 'aspirant', class_id: 'fiendslayer', level: 1,
+  trait0: 'Brave', trait1: 'Calm', trait2: 'Alert',
+  ...overrides
+});
+
+test('an advent-format class built as an aspirant may spend its one granted Perk', () => {
+  const result = normalizeCharacterInput(adventClassAspirant({
+    abilities: [{ name: 'Hunt', class_id: 'fiendslayer', type: 'core' }],
+    ability_perks: [{ class_ability_id: 'hunt', text: 'Deal more damage' }]
+  }), ADVENT_CLASS_IN_ASPIRANT_WIZARD);
+  expect(result.error).toBeNull();
+});
+
+test('an advent-format class built as an aspirant may spend the 12-Merx grant on its own Signatures', () => {
+  const gear = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: 'fiendslayer' }));
+  const result = normalizeCharacterInput(adventClassAspirant({ gear }), ADVENT_CLASS_IN_ASPIRANT_WIZARD);
+  expect(result.error).toBeNull();
+});
+
+test('an advent-format class built as an aspirant is refused past the 12-Merx grant', () => {
+  const gear = Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: 'fiendslayer' }));
+  const result = normalizeCharacterInput(adventClassAspirant({ gear }), ADVENT_CLASS_IN_ASPIRANT_WIZARD);
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/spends 14 Merx of 12/);
+});
+
 // The update path (Task 6) submits no aspiring_abilities key at all -- the
 // stored pool only reaches this function through context.aspiringAbilities.
 // Reading the (absent) submitted value instead would fall back to an empty

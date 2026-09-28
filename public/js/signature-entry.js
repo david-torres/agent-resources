@@ -258,7 +258,10 @@
     var owned = !!p.owned;
 
     var parts = [];
-    parts.push('<div class="entry" data-column="' + entry.column + '" data-position="' + entry.position + '">');
+    var placement = '';
+    if (entry.column != null) placement += ' data-column="' + entry.column + '"';
+    if (entry.position != null) placement += ' data-position="' + entry.position + '"';
+    parts.push('<div class="entry"' + placement + '>');
     parts.push('<div class="entry-header">');
     parts.push('<span class="entry-name">' + escapeHtml(entry.name) + '</span>');
     if (!readOnly) parts.push(priceTag(figures.prices.signature[t]));
