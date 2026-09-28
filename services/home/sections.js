@@ -40,7 +40,7 @@ const settle = async (label, run) => {
   }
 };
 
-const loadHomeSections = async ({ profile, client }, deps = defaultDeps) => {
+const loadHomeSections = async ({ profile, client, editionAccess }, deps = defaultDeps) => {
   const signedIn = Boolean(profile);
 
   const [
@@ -62,7 +62,8 @@ const loadHomeSections = async ({ profile, client }, deps = defaultDeps) => {
     profile,
     client,
     hasCharacters: signedIn ? myCharacters.length > 0 : undefined,
-    hasMissions: signedIn ? myMissions.length > 0 : undefined
+    hasMissions: signedIn ? myMissions.length > 0 : undefined,
+    advent: editionAccess ? editionAccess.advent : undefined
   }, deps);
 
   return {

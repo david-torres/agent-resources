@@ -1,14 +1,13 @@
 const { STARTER_RULES_PDF_ID } = require('../../util/starter-content');
 const { countCharactersByCreator } = require('../../models/character');
 const { hasAnyGameActivity } = require('../../models/lfg');
-const { listRulesPdfUnlocksForUser, getRulesPdfs } = require('../../models/rules');
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+const { getRulesPdfs } = require('../../models/rules');
+const { getEditionAccess } = require('../access/service');
 
 const defaultDeps = {
   countCharactersByCreator,
   hasAnyGameActivity,
-  listRulesPdfUnlocksForUser,
+  getEditionAccess,
   getRulesPdfs
 };
 
@@ -38,7 +37,7 @@ const hidden = (extra = {}) => ({
   ...extra
 });
 
-const computeOnboarding = ({ profile, hasCharacters, hasMissions, inGame, starterUnlock, freePdf, now }) => {
+const computeOnboarding = ({ profile, hasCharacters, hasMissions, inGame, advent, freePdf }) => {
   const ob = profile.onboarding || {};
   const quickstartHref = freePdf ? viewHref(freePdf.id) : null;
 
@@ -52,10 +51,7 @@ const computeOnboarding = ({ profile, hasCharacters, hasMissions, inGame, starte
     return hidden({ persistDismiss: true, quickstartHref });
   }
 
-  const expiresMs = starterUnlock?.expires_at ? Date.parse(starterUnlock.expires_at) : NaN;
-  const adventDaysLeft = expiresMs > now.getTime()
-    ? Math.ceil((expiresMs - now.getTime()) / DAY_MS)
-    : null;
+  const adventDaysLeft = advent?.state === 'trial' ? advent.daysLeft : null;
 
   const nameDone = profile.name !== `Agent #${profile.user_id}`;
   const learnDone = !!ob.read_rules;
@@ -78,7 +74,7 @@ const computeOnboarding = ({ profile, hasCharacters, hasMissions, inGame, starte
   };
 };
 
-const loadOnboarding = async ({ profile, client, hasCharacters, hasMissions, now = new Date() }, deps = defaultDeps) => {
+const loadOnboarding = async ({ profile, client, hasCharacters, hasMissions, advent, now = new Date() }, deps = defaultDeps) => {
   const findFreePdf = async () => {
     const rules = await settle('free-pdf', [], () => deps.getRulesPdfs({}));
     return rules.find(r => r.free_access && r.is_active) || null;
@@ -91,12 +87,22 @@ const loadOnboarding = async ({ profile, client, hasCharacters, hasMissions, now
 
   if (profile.onboarding?.dismissed) return hidden();
 
-  const [resolvedHasCharacters, inGame, unlocks, freePdf] = await Promise.all([
+  const lookUpAdvent = async () => {
+    try {
+      const access = await deps.getEditionAccess(profile.user_id, now, { timeZone: profile.timezone || null });
+      return access?.advent || null;
+    } catch (err) {
+      console.error('onboarding read "edition-access" threw:', err);
+      return null;
+    }
+  };
+
+  const [resolvedHasCharacters, inGame, resolvedAdvent, freePdf] = await Promise.all([
     hasCharacters === undefined
       ? settle('character-count', 0, () => deps.countCharactersByCreator(profile.id, client)).then(n => n > 0)
       : hasCharacters,
     settle('game-activity', false, () => deps.hasAnyGameActivity(profile.id, client)),
-    settle('starter-unlock', [], () => deps.listRulesPdfUnlocksForUser(profile.user_id, client)),
+    advent === undefined ? lookUpAdvent() : advent,
     findFreePdf()
   ]);
 
@@ -105,9 +111,8 @@ const loadOnboarding = async ({ profile, client, hasCharacters, hasMissions, now
     hasCharacters: resolvedHasCharacters,
     hasMissions: hasMissions === undefined ? false : hasMissions,
     inGame,
-    starterUnlock: unlocks.find(u => u.rules_pdf_id === STARTER_RULES_PDF_ID) || null,
-    freePdf,
-    now
+    advent: resolvedAdvent,
+    freePdf
   });
 };
 

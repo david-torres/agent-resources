@@ -155,7 +155,7 @@ test('every section failing still resolves with four empty arrays', async () => 
 const onboardingDeps = {
   countCharactersByCreator: ok(0),
   hasAnyGameActivity: ok(false),
-  listRulesPdfUnlocksForUser: ok([]),
+  getEditionAccess: async () => null,
   getRulesPdfs: ok([{ id: 'qs-id', is_active: true, free_access: true }])
 };
 
@@ -188,4 +188,25 @@ test('loadHomeSections gives a signed-out visitor the quickstart link only', asy
   );
   expect(result.onboarding.show).toBe(false);
   expect(result.onboarding.quickstartHref).toBe('/library/qs-id/view');
+});
+
+test("loadHomeSections hands the request's Advent status to onboarding without a second lookup", async () => {
+  let lookups = 0;
+  const result = await loadHomeSections(
+    {
+      profile: { id: 'p1', user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } },
+      client,
+      editionAccess: {
+        advent: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false },
+        aspirant: { state: 'none' }
+      }
+    },
+    {
+      ...allGood(), ...onboardingDeps,
+      getRecentCharactersByCreator: ok([]), getRecentMissionsByCreator: ok([]),
+      getEditionAccess: async () => { lookups++; return null; }
+    }
+  );
+  expect(result.onboarding.adventDaysLeft).toBe(10);
+  expect(lookups).toBe(0);
 });

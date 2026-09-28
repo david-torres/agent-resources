@@ -1,14 +1,14 @@
-const { test, expect } = require('bun:test');
+const { test, expect, spyOn } = require('bun:test');
 const { computeOnboarding, loadOnboarding } = require('./onboarding');
 const { STARTER_RULES_PDF_ID } = require('../../util/starter-content');
 
 const NOW = new Date('2026-08-17T12:00:00Z');
+const TRIAL_24 = { state: 'trial', endsAt: '2026-09-10T12:00:00Z', daysLeft: 24, urgent: false, endsToday: false };
 const base = () => ({
   profile: { user_id: 'u1', name: 'Dave', onboarding: {} },
   hasCharacters: false, hasMissions: false, inGame: false,
-  starterUnlock: { expires_at: '2026-09-10T12:00:00Z' },
-  freePdf: { id: 'qs-id' },
-  now: NOW
+  advent: TRIAL_24,
+  freePdf: { id: 'qs-id' }
 });
 
 test('a fresh profile with no path is asked the path question', () => {
@@ -72,29 +72,39 @@ test('all four done on the veteran path flags allDone and persists the dismissal
   expect(m.persistDismiss).toBe(true); // caller stores dismissed so it never re-renders
 });
 
-test('advent days-left counts up from now and links the starter PDF', () => {
+test("advent days-left comes from the edition status and links the starter PDF", () => {
   const m = computeOnboarding({ ...base(), profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } } });
-  expect(m.adventDaysLeft).toBe(24);  // 2026-08-17T12:00Z -> 2026-09-10T12:00Z
+  expect(m.adventDaysLeft).toBe(24);
   expect(m.adventHref).toBe(`/library/${STARTER_RULES_PDF_ID}/view`);
   expect(m.quickstartHref).toBe('/library/qs-id/view');
 });
 
-test('an expired starter unlock drops the advent link but keeps the quickstart', () => {
+test('an expired Advent trial drops the advent link but keeps the quickstart', () => {
   const m = computeOnboarding({
     ...base(),
     profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } },
-    starterUnlock: { expires_at: '2026-08-01T00:00:00Z' }
+    advent: { state: 'expired', endedAt: '2026-08-01T00:00:00Z' }
   });
   expect(m.adventDaysLeft).toBeNull();
   expect(m.adventHref).toBeNull();
   expect(m.quickstartHref).toBe('/library/qs-id/view');
 });
 
-test('a missing starter unlock behaves like an expired one', () => {
+test('an owned Advent shows no trial countdown', () => {
   const m = computeOnboarding({
     ...base(),
     profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } },
-    starterUnlock: null
+    advent: { state: 'owned' }
+  });
+  expect(m.adventDaysLeft).toBeNull();
+  expect(m.adventHref).toBeNull();
+});
+
+test('no edition status behaves like no trial', () => {
+  const m = computeOnboarding({
+    ...base(),
+    profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } },
+    advent: null
   });
   expect(m.adventDaysLeft).toBeNull();
 });
@@ -104,9 +114,7 @@ test('a missing starter unlock behaves like an expired one', () => {
 const deps = (over = {}) => ({
   countCharactersByCreator: async () => ({ data: 0, error: null }),
   hasAnyGameActivity: async () => ({ data: false, error: null }),
-  listRulesPdfUnlocksForUser: async () => ({
-    data: [{ rules_pdf_id: STARTER_RULES_PDF_ID, expires_at: '2026-09-10T12:00:00Z' }], error: null
-  }),
+  getEditionAccess: async () => ({ advent: TRIAL_24, aspirant: { state: 'none' } }),
   getRulesPdfs: async () => ({
     data: [{ id: 'qs-id', is_active: true, free_access: true }, { id: 'core', is_active: true, free_access: false }],
     error: null
@@ -159,4 +167,37 @@ test('a failed read degrades that step, never the whole card', async () => {
   );
   expect(m.show).toBe(true);
   expect(m.gameDone).toBe(false);
+});
+
+// POST /profile/onboarding answers an htmx fragment, which the auth step
+// skips, so loadOnboarding has to find the status on its own.
+test('loadOnboarding looks the Advent status up itself when the caller has none', async () => {
+  const calls = [];
+  const m = await loadOnboarding(
+    { profile: { user_id: 'u1', name: 'Vex', timezone: 'America/New_York', onboarding: { path: 'new' } }, client: {}, now: NOW },
+    deps({ getEditionAccess: async (...args) => { calls.push(args); return { advent: TRIAL_24, aspirant: { state: 'none' } }; } })
+  );
+  expect(calls).toEqual([['u1', NOW, { timeZone: 'America/New_York' }]]);
+  expect(m.adventDaysLeft).toBe(24);
+});
+
+test("loadOnboarding uses a caller-supplied Advent status and skips the lookup", async () => {
+  let lookups = 0;
+  const m = await loadOnboarding(
+    { profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } }, client: {}, advent: { ...TRIAL_24, daysLeft: 3 }, now: NOW },
+    deps({ getEditionAccess: async () => { lookups++; return null; } })
+  );
+  expect(m.adventDaysLeft).toBe(3);
+  expect(lookups).toBe(0);
+});
+
+test('a throwing edition lookup degrades to no countdown, never the whole card', async () => {
+  const errSpy = spyOn(console, 'error').mockImplementation(() => {});
+  const m = await loadOnboarding(
+    { profile: { user_id: 'u1', name: 'Vex', onboarding: { path: 'new' } }, client: {}, now: NOW },
+    deps({ getEditionAccess: async () => { throw new Error('down'); } })
+  );
+  expect(m.show).toBe(true);
+  expect(m.adventDaysLeft).toBeNull();
+  errSpy.mockRestore();
 });
