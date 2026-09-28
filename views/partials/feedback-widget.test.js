@@ -12,7 +12,7 @@ const renderLayout = (context) => {
   const handlebars = Handlebars.create();
   // Every other partial the layout pulls in is irrelevant here; only the
   // presence or absence of the widget is under test.
-  for (const name of ['head', 'nav', 'alert/system-banner']) {
+  for (const name of ['head', 'nav', 'alert/system-banner', 'access/access-banner']) {
     handlebars.registerPartial(name, '');
   }
   handlebars.registerPartial('feedback-widget', '<div id="feedback-widget-rendered"></div>');
