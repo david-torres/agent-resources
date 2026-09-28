@@ -24,7 +24,8 @@ function renderClasses(context) {
   return hb.compile(src)(context);
 }
 
-const group = (id, name, { image = false, status = 'release', previous = [] } = {}) => ({
+const group = (id, name, { image = false, status = 'release', previous = [], trialBadge = false } = {}) => ({
+  trialBadge,
   primary: {
     id,
     name,
@@ -322,11 +323,19 @@ test('locked sections sit between the owned and the other released sections', ()
 test('owned Advent cards carry a TRIAL badge while the trial runs', () => {
   const html = renderClasses(baseContext({
     profile: { timezone: 'UTC' },
-    showTrialBadges: true,
+    editionAccess: { advent: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false } },
+    ownedReleaseGroups: unrated([group('own-1', 'Gunslinger', { trialBadge: true })])
+  }));
+  expect(html).toContain('TRIAL · ends Oct 8, 2026');
+});
+
+test('an owned Advent card not flagged for the trial carries no badge', () => {
+  const html = renderClasses(baseContext({
+    profile: { timezone: 'UTC' },
     editionAccess: { advent: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false } },
     ownedReleaseGroups: unrated([group('own-1', 'Gunslinger')])
   }));
-  expect(html).toContain('TRIAL · ends Oct 8, 2026');
+  expect(html).not.toContain('TRIAL ·');
 });
 
 test('no TRIAL badge without an Advent trial', () => {

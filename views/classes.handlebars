@@ -99,7 +99,7 @@
   {{/unless}}
   <div class="columns is-multiline">
     {{#each groups}}
-    {{> class-group-card this showImage=../../showImage showTrial=../../showTrial locked=../../locked}}
+    {{> class-group-card this showImage=../../showImage locked=../../locked}}
     {{/each}}
   </div>
   {{/each}}
@@ -113,7 +113,7 @@
   <a href="{{ownedToggleLinks.aspirant}}" class="button is-small{{#if (eq ownedEdition 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq ownedEdition 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
 </div>
 {{/if}}
-{{> class-difficulty-buckets buckets=ownedReleaseGroups listId="classList" showImage=true showTrial=showTrialBadges}}
+{{> class-difficulty-buckets buckets=ownedReleaseGroups listId="classList" showImage=true}}
 {{/if}}
 
 {{#each lockedSections}}

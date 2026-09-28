@@ -160,15 +160,19 @@ router.get('/', authOptional, async (req, res) => {
         lockedRosterIds(editionAccess, access.rosterIdsByEdition, access.ids)
     );
     const owned = splitOwnedByEdition(ownedReleaseGroups, req.query.yours);
+    const adventTrialRunning = owned.edition === 'advent' && Boolean(trialStatus(editionAccess, 'advent'));
+    const ownedGroups = owned.groups.map(group => ({
+        ...group,
+        trialBadge: adventTrialRunning && access.sourceById.get(group.primary.id)?.source === 'book'
+    }));
 
     res.render('classes', {
         profile,
         title: 'Classes',
-        ownedReleaseGroups: groupByDifficulty(owned.groups),
+        ownedReleaseGroups: groupByDifficulty(ownedGroups),
         ownedEdition: owned.edition,
         ownedEditions: owned.editions,
         ownedToggleLinks: ownedToggleLinks(req.query),
-        showTrialBadges: owned.edition === 'advent' && Boolean(trialStatus(editionAccess, 'advent')),
         lockedSections: Object.entries(lockedGroups)
             .filter(([, groups]) => groups.length > 0)
             .map(([edition, groups]) => ({

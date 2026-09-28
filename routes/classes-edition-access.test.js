@@ -92,16 +92,24 @@ test('a lapsed Advent trial teases each Gunslinger under its own edition', async
       { edition: 'aspirant', count: 1, trialEndedAt: null, ids: [ASP] }
     ]);
   expect(ctx.otherReleaseGroups).toEqual([]);
-  expect(ctx.showTrialBadges).toBe(false);
+  expect(ctx.ownedReleaseGroups).toEqual([]);
 });
 
 test('during an Advent trial the Advent class is owned with a badge and only the fork is locked', async () => {
   state.editionAccess = TRIAL;
-  state.access = { ids: new Set([ADV]), bookIds: new Set([ADV]), rosterIdsByEdition: ROSTERS, error: null };
+  state.access = { ids: new Set([ADV]), bookIds: new Set([ADV]), sourceById: new Map([[ADV, { source: 'book' }]]), rosterIdsByEdition: ROSTERS, error: null };
   const { ctx } = await get('/classes');
   expect(idsIn(ctx.ownedReleaseGroups)).toEqual([ADV]);
   expect(ctx.lockedSections.map(s => s.edition)).toEqual(['aspirant']);
-  expect(ctx.showTrialBadges).toBe(true);
+  expect(ctx.ownedReleaseGroups.flatMap(b => b.groups.map(g => g.trialBadge))).toEqual([true]);
+});
+
+test('a permanently unlocked Advent class is owned without a trial badge', async () => {
+  state.editionAccess = TRIAL;
+  state.access = { ids: new Set([ADV]), bookIds: new Set([ADV]), sourceById: new Map([[ADV, { source: 'direct' }]]), rosterIdsByEdition: ROSTERS, error: null };
+  const { ctx } = await get('/classes');
+  expect(idsIn(ctx.ownedReleaseGroups)).toEqual([ADV]);
+  expect(ctx.ownedReleaseGroups.flatMap(b => b.groups.map(g => g.trialBadge))).toEqual([false]);
 });
 
 test('a failed status lookup leaves the catalog as it was: no locked sections', async () => {
