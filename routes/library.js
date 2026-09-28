@@ -29,6 +29,29 @@ const { groupRulesVersions, buildLibrarySections } = require('../util/library-li
 const { withRuleAccess } = require('../util/library-access');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
+const { trialEndedAt } = require('../util/edition-access');
+
+// A core rulebook names the edition it belongs to, so the locked page can say
+// why access is missing (a lapsed trial) and offer that edition's unlock.
+const sendLockedRulesPdf = (req, res, rulesPdf) => {
+    const isFragment = req.get('HX-Request') && !req.get('HX-Boosted');
+    if (isFragment || !req.accepts('html')) {
+        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have access to this rules PDF' });
+    }
+    const edition = rulesPdf.book_type === 'core' ? (rulesPdf.rules_edition || null) : null;
+    return res.status(403).render('library-locked', {
+        profile: res.locals.profile,
+        title: `${rulesPdf.title} - Locked`,
+        rulesPdf,
+        edition,
+        trialEndedAt: edition ? trialEndedAt(res.locals.editionAccess, edition) : null,
+        activeNav: 'library',
+        breadcrumbs: [
+            { label: 'Library', href: '/library' },
+            { label: rulesPdf.title, href: `/library/${rulesPdf.id}/view` }
+        ]
+    });
+};
 
 const upload = multer({
     storage: multer.memoryStorage(),
@@ -399,7 +422,7 @@ router.get('/:id/view', authOptional, async (req, res) => {
     }
 
     if (!canView) {
-        return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have access to this rules PDF' });
+        return sendLockedRulesPdf(req, res, rulesPdf);
     }
 
     const { data: signedUrl, error: signedError } = await getSignedPdfUrl({

@@ -29,7 +29,10 @@
               <span class="icon"><i class="fas fa-unlock"></i></span>
               <span>Access granted</span>
             </span>
-            {{#if this.primary.expires_at}}
+            {{#if (and (eq this.primary.book_type 'core') (eq this.primary.rules_edition 'advent') (eq @root.editionAccess.advent.state 'trial') this.primary.expires_at)}}
+            <br>
+            {{> access/trial-badge status=@root.editionAccess.advent}}
+            {{else if this.primary.expires_at}}
             <br>
             <span class="is-size-7">Expires {{date_tz this.primary.expires_at}}</span>
             {{/if}}
@@ -53,6 +56,9 @@
               <span class="icon"><i class="fas fa-hourglass-end"></i></span>
               <span>Access expired {{date_tz this.primary.expires_at}}</span>
             </span>
+            {{#if (eq this.primary.book_type 'core')}}
+            {{> access/unlock-cta edition=this.primary.rules_edition}}
+            {{/if}}
           </div>
           {{else}}
           <div class="notification is-light">

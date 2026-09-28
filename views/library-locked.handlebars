@@ -1,0 +1,15 @@
+{{> breadcrumbs}}
+<div class="box" data-library-locked>
+  <h1 class="title is-4">
+    <span class="icon"><i class="fas fa-lock"></i></span>
+    <span>{{rulesPdf.title}} is locked</span>
+  </h1>
+  {{#if trialEndedAt}}
+  {{> access/trial-ended-alert edition=edition endedAt=trialEndedAt lead=null}}
+  <p class="block">The rulebook stays locked until you unlock {{edition_label edition}}.</p>
+  {{else}}
+  <p class="block">You need an unlock to read this rulebook.</p>
+  {{> access/unlock-cta edition=edition}}
+  {{/if}}
+  <a class="button is-text" href="/library">Back to the library</a>
+</div>
