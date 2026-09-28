@@ -20,6 +20,9 @@
     <span>{{class.status}}</span>
   </span>
   {{/if}}
+  {{#if adventTrial}}
+  {{> access/trial-badge status=adventTrial}}
+  {{/if}}
 </h1>
 {{#if profile}}
 {{#or (eq profile.role 'admin') (eq profile.id class.created_by)}}

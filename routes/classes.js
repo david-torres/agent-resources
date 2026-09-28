@@ -38,7 +38,8 @@ const { parseExamples } = require('../util/class-examples');
 const { applyConstrainedSelects, blankTextToNull } = require('../util/class-fields');
 const { redeemAnyCode } = require('../util/redeem-code');
 const { groupClassVersions } = require('../util/class-list-grouping');
-const { partitionClassCatalog, splitOwnedByEdition, ownedToggleLinks, groupByDifficulty } = require('../util/class-filter');
+const { partitionClassCatalog, lockedRosterIds, splitOwnedByEdition, ownedToggleLinks, groupByDifficulty } = require('../util/class-filter');
+const { trialStatus, trialEndedAt } = require('../util/edition-access');
 const { statList } = require('../util/enclave-consts');
 
 const upload = multer({
@@ -146,12 +147,18 @@ router.get('/', authOptional, async (req, res) => {
     const viewerUserId = res.locals.user?.id || profile?.user_id || null;
     const access = await getEffectiveClassUnlocks(viewerUserId);
     if (access.error) return sendError(req, res, access.error);
+    const { editionAccess } = res.locals;
     const {
         ownedReleases: ownedReleaseGroups,
         otherReleases: otherReleaseGroups,
         prerelease: prereleaseGroups,
-        pcc: pccGroups
-    } = partitionClassCatalog(classGroups, access.bookIds);
+        pcc: pccGroups,
+        locked: lockedGroups
+    } = partitionClassCatalog(
+        classGroups,
+        access.bookIds,
+        lockedRosterIds(editionAccess, access.rosterIdsByEdition, access.ids)
+    );
     const owned = splitOwnedByEdition(ownedReleaseGroups, req.query.yours);
 
     res.render('classes', {
@@ -161,6 +168,15 @@ router.get('/', authOptional, async (req, res) => {
         ownedEdition: owned.edition,
         ownedEditions: owned.editions,
         ownedToggleLinks: ownedToggleLinks(req.query),
+        showTrialBadges: owned.edition === 'advent' && Boolean(trialStatus(editionAccess, 'advent')),
+        lockedSections: Object.entries(lockedGroups)
+            .filter(([, groups]) => groups.length > 0)
+            .map(([edition, groups]) => ({
+                edition,
+                count: groups.length,
+                trialEndedAt: trialEndedAt(editionAccess, edition),
+                buckets: groupByDifficulty(groups)
+            })),
         otherReleaseGroups: groupByDifficulty(otherReleaseGroups),
         prereleaseGroups: groupByDifficulty(prereleaseGroups),
         pccGroups: groupByDifficulty(pccGroups),
@@ -495,6 +511,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
                 title: `${classData.name} - View Class`,
                 class: classData,
                 showClassArt: classData.status === 'release' && bookUnlocked,
+                adventTrialEndedAt: !classData.is_player_created && classData.rules_edition === 'advent'
+                    ? trialEndedAt(res.locals.editionAccess, 'advent')
+                    : null,
                 activeNav: 'classes',
                 breadcrumbs: [
                     { label: 'Classes', href: '/classes' },
@@ -548,6 +567,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         hasExpandedTips: expandedTips.player.length > 0 || expandedTips.conduit.length > 0,
         unlocked,
         unlockExpiresAt,
+        adventTrial: access?.accessSource === 'book' && classData.rules_edition === 'advent'
+            ? trialStatus(res.locals.editionAccess, 'advent')
+            : null,
         ownerProfile,
         classPdfAccessible,
         classPdfError,

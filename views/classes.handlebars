@@ -99,7 +99,7 @@
   {{/unless}}
   <div class="columns is-multiline">
     {{#each groups}}
-    {{> class-group-card this showImage=../../showImage}}
+    {{> class-group-card this showImage=../../showImage showTrial=../../showTrial locked=../../locked}}
     {{/each}}
   </div>
   {{/each}}
@@ -113,8 +113,23 @@
   <a href="{{ownedToggleLinks.aspirant}}" class="button is-small{{#if (eq ownedEdition 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq ownedEdition 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
 </div>
 {{/if}}
-{{> class-difficulty-buckets buckets=ownedReleaseGroups listId="classList" showImage=true}}
+{{> class-difficulty-buckets buckets=ownedReleaseGroups listId="classList" showImage=true showTrial=showTrialBadges}}
 {{/if}}
+
+{{#each lockedSections}}
+<section class="block locked-edition" data-locked-edition="{{edition}}">
+  <h2 class="title is-4" id="locked-{{edition}}-classes">
+    <span class="icon has-text-grey"><i class="fas fa-lock"></i></span>
+    <span>Locked — {{edition_label edition}}</span>
+    <span class="tag is-light ml-2">{{count}} {{#if (eq count 1)}}class{{else}}classes{{/if}}</span>
+  </h2>
+  {{#if trialEndedAt}}
+  <p class="has-text-danger mb-2">{{> access/trial-ended-text edition=edition endedAt=trialEndedAt lead=null}}</p>
+  {{/if}}
+  {{> access/unlock-cta edition=edition}}
+  {{> class-difficulty-buckets buckets=buckets listId=(concat "locked-" edition "-list") locked=true}}
+</section>
+{{/each}}
 
 {{#if otherReleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="released-classes" title="Other Released Classes"}}

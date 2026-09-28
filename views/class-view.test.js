@@ -249,6 +249,7 @@ const Handlebars = require('handlebars');
 const customHelpers = require('../util/handlebars');
 const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
 const handlebarsHelpers = require('handlebars-helpers')();
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 // class-view.handlebars calls `markdown`, which app.js registers separately
 // from the util/handlebars bundle (app.js:62) -- without it Handlebars
@@ -268,6 +269,7 @@ function renderClassView(context) {
   hb.registerPartial('class-sample-perks', fs.readFileSync(path.join(__dirname, 'partials', 'class-sample-perks.handlebars'), 'utf8'));
   hb.registerPartial('class-signature-sides', fs.readFileSync(path.join(__dirname, 'partials', 'class-signature-sides.handlebars'), 'utf8'));
   hb.registerPartial('class-expanded-tips', fs.readFileSync(path.join(__dirname, 'partials', 'class-expanded-tips.handlebars'), 'utf8'));
+  registerAccessPartials(hb);
   return hb.compile(SRC)(context);
 }
 
@@ -753,4 +755,18 @@ test('advanced abilities print in their own section', () => {
 test('a class with no advanced abilities prints no Advanced Abilities heading', () => {
   const html = renderClassView({ class: { advanced_abilities: [] } });
   expect(html).not.toContain('Advanced Abilities');
+});
+
+test('a book-granted Advent class shows the TRIAL badge in its header', () => {
+  const html = renderClassView(pdfContext({
+    profile: { name: 'Alice', timezone: 'UTC' },
+    adventTrial: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false }
+  }));
+  const badgeAt = html.indexOf('TRIAL · ends Oct 8, 2026');
+  expect(badgeAt).toBeGreaterThan(-1);
+  expect(badgeAt).toBeLessThan(html.indexOf('</h1>'));
+});
+
+test('no trial, no TRIAL badge', () => {
+  expect(renderClassView(pdfContext({}))).not.toContain('TRIAL ·');
 });

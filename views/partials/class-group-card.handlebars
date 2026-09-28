@@ -1,6 +1,6 @@
 <div class="column is-3">
-  <div class="card">
-    {{#if (and showImage primary.image_url)}}
+  <div class="card"{{#if locked}} data-locked-card style="opacity: 0.7"{{/if}}>
+    {{#if (and showImage primary.image_url (not locked))}}
     <div class="card-image">
       <a href="/classes/{{primary.id}}/{{primary.name}}">
         <div
@@ -18,7 +18,10 @@
     </div>
     {{/if}}
     <div class="card-content">
-      <h5 class="title is-5"><a href="/classes/{{primary.id}}/{{primary.name}}">{{primary.name}}</a>
+      <h5 class="title is-5">{{#if locked}}<span class="icon has-text-grey mr-1" title="Locked"><i class="fas fa-lock"></i></span>{{/if}}<a href="/classes/{{primary.id}}/{{primary.name}}">{{primary.name}}</a>
+        {{#if (and showTrial (eq primary.rules_edition 'advent'))}}
+        {{> access/trial-badge status=@root.editionAccess.advent}}
+        {{/if}}
         {{#if primary.free_play_access}}
         <span class="tag is-info is-light ml-2">Pre-release</span>
         {{/if}}

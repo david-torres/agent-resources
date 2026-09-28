@@ -1,5 +1,8 @@
 {{> breadcrumbs}}
 <h1 class="title is-2">{{class.name}}</h1>
+{{#if adventTrialEndedAt}}
+{{> access/trial-ended-alert edition="advent" endedAt=adventTrialEndedAt lead=null}}
+{{/if}}
 
 <div class="columns">
   <div class="column is-one-third">

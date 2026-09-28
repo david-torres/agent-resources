@@ -4,6 +4,7 @@ const path = require('path');
 const Handlebars = require('handlebars');
 const { JSDOM } = require('jsdom');
 const customHelpers = require('../util/handlebars');
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 const handlebarsHelpers = require('handlebars-helpers')();
 
@@ -18,6 +19,7 @@ function renderClasses(context) {
   hb.registerPartial('breadcrumbs', partialSource('breadcrumbs'));
   hb.registerPartial('section-heading', partialSource('section-heading'));
   hb.registerPartial('class-group-card', partialSource('class-group-card'));
+  registerAccessPartials(hb);
   const src = fs.readFileSync(path.join(__dirname, 'classes.handlebars'), 'utf8');
   return hb.compile(src)(context);
 }
@@ -47,6 +49,7 @@ const baseContext = (overrides = {}) => ({
   otherReleaseGroups: [],
   prereleaseGroups: [],
   pccGroups: [],
+  lockedSections: [],
   ...overrides
 });
 
@@ -267,4 +270,66 @@ test('each bucketed section keeps its grid wrapper id around its cards', () => {
   expect(cardNames('otherClassList')).toEqual(['Gunslinger']);
   expect(cardNames('prereleaseClassList')).toEqual(['Bogatyr']);
   expect(cardNames('pccClassList')).toEqual(['Homebrew', 'Tinker']);
+});
+
+const aspirantSection = (over = {}) => ({
+  edition: 'aspirant', count: 1, trialEndedAt: null,
+  buckets: unrated([{ ...group('asp-1', 'Berserker'), primary: { ...group('asp-1', 'Berserker').primary, rules_edition: 'aspirant' } }]),
+  ...over
+});
+
+test('a locked edition section names the edition, counts its classes and offers its CTA', () => {
+  const html = renderClasses(baseContext({ profile: { timezone: 'UTC' }, lockedSections: [aspirantSection()] }));
+  expect(html).toContain('Locked — Aspirant');
+  expect(html).toContain('1 class');
+  expect(html).toContain('https://enclave-aspirant.backerkit.com/hosted_preorders/822771');
+  expect(html).toContain('Redeem a code');
+  expect(html).toContain('Berserker teaser');
+  expect(html).toContain('href="/classes/asp-1/Berserker"');
+});
+
+test("a lapsed trial's Advent section carries the ended notice", () => {
+  const html = renderClasses(baseContext({
+    profile: { timezone: 'UTC' },
+    lockedSections: [aspirantSection({ edition: 'advent', trialEndedAt: '2026-09-20T12:00:00Z' })]
+  }));
+  expect(html).toContain('Locked — Advent');
+  expect(html).toContain('Your Advent free trial ended Sep 20, 2026.');
+});
+
+test('locked cards are dimmed, carry a lock and render no art', () => {
+  const html = renderClasses(baseContext({
+    lockedSections: [aspirantSection({ buckets: unrated([group('asp-2', 'Vessel', { image: true })]) })]
+  }));
+  expect(html).toContain('data-locked-card');
+  expect(html).toContain('fa-lock');
+  expect(html).not.toContain('image-crop-render');
+});
+
+test('locked sections sit between the owned and the other released sections', () => {
+  const html = renderClasses(baseContext({
+    ownedReleaseGroups: unrated([group('own-1', 'Gunslinger')]),
+    otherReleaseGroups: unrated([group('oth-1', 'Homebrew')]),
+    lockedSections: [aspirantSection()]
+  }));
+  const ownedAt = html.indexOf('Your Released Classes');
+  const lockedAt = html.indexOf('Locked — Aspirant');
+  const otherAt = html.indexOf('Other Released Classes');
+  expect(ownedAt).toBeLessThan(lockedAt);
+  expect(lockedAt).toBeLessThan(otherAt);
+});
+
+test('owned Advent cards carry a TRIAL badge while the trial runs', () => {
+  const html = renderClasses(baseContext({
+    profile: { timezone: 'UTC' },
+    showTrialBadges: true,
+    editionAccess: { advent: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false } },
+    ownedReleaseGroups: unrated([group('own-1', 'Gunslinger')])
+  }));
+  expect(html).toContain('TRIAL · ends Oct 8, 2026');
+});
+
+test('no TRIAL badge without an Advent trial', () => {
+  const html = renderClasses(baseContext({ ownedReleaseGroups: unrated([group('own-1', 'Gunslinger')]) }));
+  expect(html).not.toContain('TRIAL ·');
 });
