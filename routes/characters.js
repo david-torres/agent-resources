@@ -40,7 +40,7 @@ const { buildAbilityPurchaseData, applyAbilityPurchases } = require('../util/abi
 const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
-const { filterClassListsByIds, isUnreleasedPcc } = require('../util/class-filter');
+const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
 const { latestClassVersions } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
@@ -95,9 +95,24 @@ const sendCharacterSaveError = (req, res, error) => {
   return sendError(req, res, error);
 };
 
+// A locked class reaches the picker as its name and teaser only: nothing a
+// player could build a character from.
+const toLockedOption = (c) => ({
+  id: c.id,
+  name: c.name,
+  rules_edition: c.rules_edition || 'advent',
+  content_format: c.content_format || 'advent',
+  teaser_html: renderMarkdown(c.teaser || ''),
+  locked: true
+});
+
+const lockedClassGroupsFor = (lockedClasses, keep = () => true) => OWNED_EDITIONS
+  .map(edition => ({ edition, classes: lockedClasses[edition].filter(keep) }))
+  .filter(group => group.classes.length > 0);
+
 // Helper to filter class lists/lookup maps by user's unlocked classes
-const filterClassDataForUser = async (user) => {
-  
+const filterClassDataForUser = async (user, editionAccess = null) => {
+
   // Load classes from DB by category
   const [adventRes, aspirantRes, pccRes] = await Promise.all([
     getClasses({ is_public: true, is_player_created: false, rules_edition: 'advent' }),
@@ -132,8 +147,15 @@ const filterClassDataForUser = async (user) => {
   // If user provided, reduce to unlocked set. Unlocks match by class id and
   // extend to same-edition version families (a v1 unlock covers its v2 fork)
   // but never across editions — see util/class-family.js.
+  let lockedClasses = Object.fromEntries(OWNED_EDITIONS.map(edition => [edition, []]));
   if (user) {
-    const { data: allowedIds } = await getUnlockedClassIdsForUser(user.id);
+    const { data: allowedIds, rosterIdsByEdition } = await getUnlockedClassIdsForUser(user.id);
+    const lockedIds = lockedRosterIds(editionAccess, rosterIdsByEdition, allowedIds || new Set());
+    const releasedOfficials = [...advent, ...aspirant].filter(c => !c.prerelease_section);
+    lockedClasses = Object.fromEntries(OWNED_EDITIONS.map(edition => [
+      edition,
+      latestClassVersions(releasedOfficials.filter(c => lockedIds[edition]?.has(c.id))).map(toLockedOption)
+    ]));
     if (allowedIds && allowedIds.size > 0) {
       const filtered = filterClassListsByIds(
         { advent: filteredAdvent, aspirant: filteredAspirant, pcc: filteredPCC },
@@ -169,7 +191,7 @@ const filterClassDataForUser = async (user) => {
   const { advent: filteredPCCAdventV1, aspirant: filteredPCCAspirantV1 } = splitByEdition(filteredPCCv1);
   const { advent: filteredPCCAdventV2, aspirant: filteredPCCAspirantV2 } = splitByEdition(filteredPCCv2);
 
-  return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities };
+  return { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities, lockedClasses };
 };
 
 router.get('/', isAuthenticated, async (req, res) => {
@@ -202,7 +224,7 @@ router.get('/new', isAuthenticated, (req, res) => {
 
 router.get('/new/expert', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
-  const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
+  const { filteredAdventV1, filteredAdventV2, filteredAspirantV1, filteredAspirantV2, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities, lockedClasses } = await filterClassDataForUser(user, res.locals.editionAccess);
   res.render('character-form', {
     profile,
     isNew: true,
@@ -228,6 +250,8 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
     classGearList: filteredGear,
     adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES,
     classAbilityList: filteredAbilities,
+    lockedClassGroups: lockedClassGroupsFor(lockedClasses),
+    adventTrialEndedAt: trialEndedAt(res.locals.editionAccess, 'advent'),
     activeNav: 'characters',
     breadcrumbs: [
       { label: 'Characters', href: '/characters' },
@@ -254,7 +278,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   // and display fields for the slider card. Teaser and tips are stored as
   // markdown and rendered to safe HTML here so the client can drop them into
   // the wizard panel verbatim (no client-side markdown lib).
-  const { filteredAdvent, filteredAspirant, filteredPCC } = await filterClassDataForUser(user);
+  const { filteredAdvent, filteredAspirant, filteredPCC, lockedClasses } = await filterClassDataForUser(user, res.locals.editionAccess);
   const wizardClasses = latestClassVersions(
     [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
     { keep: [preselectedClassId] }
@@ -349,6 +373,8 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     mode,
     preselectedClassId,
     wizardClasses,
+    lockedClassGroups: mode === 'aspiring' ? [] : lockedClassGroupsFor(lockedClasses, (c) => c.content_format === mode),
+    adventTrialEndedAt: mode === 'advent' ? trialEndedAt(res.locals.editionAccess, 'advent') : null,
     statList,
     personalityMap,
     commonItemsHtml,

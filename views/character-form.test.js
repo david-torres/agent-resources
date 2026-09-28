@@ -129,6 +129,7 @@ const Handlebars = require('handlebars');
 const hbsHelpers = require('handlebars-helpers')();
 const rangeHelper = require('handlebars-helper-range');
 const customHelpers = require('../util/handlebars');
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 const { statList } = require('../util/enclave-consts');
 
 const FORM_SRC = fs.readFileSync(path.join(__dirname, 'character-form.handlebars'), 'utf8');
@@ -153,6 +154,7 @@ test('every stat POSTs its own name from a hidden input', async () => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   hb.registerHelper('range', rangeHelper);
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
@@ -199,6 +201,7 @@ test('the personality select marks the character\'s existing trait as selected',
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   hb.registerHelper('range', rangeHelper);
 
   const personalitySection = FORM_SRC.slice(
@@ -218,6 +221,7 @@ test('the Created date input carries a max attribute sourced from the render con
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
 
   const inputMatch = FORM_SRC.match(/<input[^>]*id="char-created-at"[^>]*>/);
   expect(inputMatch).toBeTruthy();
@@ -244,6 +248,7 @@ const renderPersonality = (context) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   hb.registerHelper('range', rangeHelper);
   const start = FORM_SRC.indexOf('<label class="label">Personality</label>');
   const section = FORM_SRC.slice(start, FORM_SRC.indexOf('<hr />', start));
@@ -360,6 +365,7 @@ const renderStats = (context) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   hb.registerHelper('range', rangeHelper);
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
@@ -502,6 +508,7 @@ const renderCharacterForm = (overrides = {}) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   hb.registerHelper('range', rangeHelper);
   // app.js registers `markdown` separately from the util/handlebars bundle;
   // this form reaches it only through its partials.
@@ -659,4 +666,20 @@ test('a v1 character edits its perks as before and sees no Deprecated fields sec
   expect(html).not.toContain('Deprecated fields');
   expect(html).toMatch(/<textarea[^>]*name="perks"/);
   expect(html).toMatch(/<textarea[^>]*name="additional_gear"/);
+});
+
+test('locked classes are listed inside the class select, after the playable ones', () => {
+  const html = source();
+  const selectAt = html.indexOf('id="char-class-id"');
+  const lockedAt = html.indexOf('{{> access/locked-class-options groups=lockedClassGroups}}');
+  expect(lockedAt).toBeGreaterThan(selectAt);
+  expect(lockedAt).toBeGreaterThan(html.indexOf('{{#each playerCreatedAspirantV2Classes}}'));
+  expect(lockedAt).toBeLessThan(html.indexOf('</select>', selectAt));
+});
+
+test('a lapsed trial alerts above the class select', () => {
+  const html = source();
+  const alertAt = html.indexOf('{{> access/trial-ended-alert lead="Advent classes are locked because" edition="advent" endedAt=adventTrialEndedAt}}');
+  expect(alertAt).toBeGreaterThan(-1);
+  expect(alertAt).toBeLessThan(html.indexOf('id="char-class-id"'));
 });

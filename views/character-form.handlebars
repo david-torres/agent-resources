@@ -1,5 +1,8 @@
 {{> breadcrumbs}}
 <h2 class="title is-3">{{#if isNew}}Create New Character{{else}}Edit Character{{/if}}</h2>
+{{#if adventTrialEndedAt}}
+{{> access/trial-ended-alert lead="Advent classes are locked because" edition="advent" endedAt=adventTrialEndedAt}}
+{{/if}}
 {{#if characterClass}}
 <p class="subtitle is-6 has-text-grey">
   <span class="tag is-light">{{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
@@ -84,6 +87,7 @@
           <option value="{{this.id}}" data-version="v2" {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
+          {{> access/locked-class-options groups=lockedClassGroups}}
         </select>
       </div>
     </div>

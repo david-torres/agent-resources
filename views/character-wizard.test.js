@@ -5,6 +5,7 @@ const Handlebars = require('handlebars');
 const hbsHelpers = require('handlebars-helpers')();
 const customHelpers = require('../util/handlebars');
 const { economyFigures } = require('../util/merx-economy');
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 const SOURCE_PATH = path.join(__dirname, 'character-wizard.handlebars');
 const SRC = fs.readFileSync(SOURCE_PATH, 'utf8');
@@ -22,15 +23,17 @@ test('the wizard view source writes down no Merx price', () => {
 // `wizard-data` JSON island (public/js/character-wizard.js); the template
 // itself only branches on `mode` and interpolates `economy`/`state`, so a
 // minimal context is enough to render the real markup.
-const renderWizardView = ({ mode, wizardData }) => {
+const renderWizardView = ({ mode, wizardData, ...extra }) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
+  registerAccessPartials(hb);
   return hb.compile(SRC)({
     mode,
     economy: economyFigures(),
     state: {},
-    wizardData
+    wizardData,
+    ...extra
   });
 };
 
@@ -75,4 +78,28 @@ test.each(['advent', 'aspirant'])('the %s wizard offers a toggle to either mode,
 test('the aspiring wizard has no mode toggle', () => {
   const html = renderWizardView({ mode: 'aspiring', wizardData: fixture({ mode: 'aspiring' }) });
   expect(html).not.toContain('wizardModeToggle');
+});
+
+const LOCKED = [{ edition: 'aspirant', classes: [{ id: 'bers', name: 'Berserker', teaser_html: '<p>Rage.</p>', locked: true }] }];
+
+test('locked classes sit beside the kiosk as disabled Unlock to play entries', () => {
+  const html = renderWizardView({ mode: 'advent', wizardData: fixture({ mode: 'advent' }), lockedClassGroups: LOCKED });
+  const lockedAt = html.indexOf('Berserker — Unlock to play');
+  expect(lockedAt).toBeGreaterThan(html.indexOf('id="classKiosk"'));
+  expect(lockedAt).toBeLessThan(html.indexOf('id="selectedClassPanel"'));
+});
+
+test('a lapsed trial alerts above the class pickers', () => {
+  const html = renderWizardView({
+    mode: 'advent', wizardData: fixture({ mode: 'advent' }),
+    profile: { timezone: 'UTC' }, adventTrialEndedAt: '2026-09-20T12:00:00Z'
+  });
+  const alertAt = html.indexOf('Advent classes are locked because your Advent free trial ended Sep 20, 2026.');
+  expect(alertAt).toBeGreaterThan(-1);
+  expect(alertAt).toBeLessThan(html.indexOf('id="classKiosk"'));
+});
+
+test('the aspiring builder shows no locked list', () => {
+  const html = renderWizardView({ mode: 'aspiring', wizardData: fixture({ mode: 'aspiring' }), lockedClassGroups: LOCKED });
+  expect(html).not.toContain('Unlock to play');
 });

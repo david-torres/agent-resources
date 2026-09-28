@@ -1,0 +1,17 @@
+{{#each groups}}
+<div class="box mt-4 wizard-locked-classes" data-locked-edition="{{edition}}">
+  <h4 class="title is-6 mb-2">
+    <span class="icon has-text-grey"><i class="fas fa-lock"></i></span>
+    <span>Locked — {{edition_label edition}}</span>
+  </h4>
+  <ul class="mb-3">
+    {{#each classes}}
+    <li class="mb-3">
+      <button type="button" class="button is-small" disabled aria-disabled="true">{{name}} — Unlock to play</button>
+      <div class="content is-size-7 has-text-grey mt-1">{{{teaser_html}}}</div>
+    </li>
+    {{/each}}
+  </ul>
+  {{> access/unlock-cta edition=edition}}
+</div>
+{{/each}}

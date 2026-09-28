@@ -126,3 +126,58 @@ test('a running trial carries no expiry alert', async () => {
   const { ctx } = await get(`/characters/${CHARACTER_ID}/Vex`);
   expect(ctx.adventTrialEndedAt).toBeNull();
 });
+
+const wizardIds = (ctx) => ctx.wizardData.classes.map(c => c.id);
+
+test('a lapsed Advent trial keeps the Advent class in the wizard as a locked teaser only', async () => {
+  const { view, ctx } = await get('/characters/wizard?mode=advent');
+  expect(view).toBe('character-wizard');
+  expect(ctx.lockedClassGroups).toEqual([{
+    edition: 'advent',
+    classes: [{
+      id: ADVENT_GUN.id, name: 'Gunslinger', rules_edition: 'advent', content_format: 'advent',
+      teaser_html: expect.stringContaining('Quick on the draw.'), locked: true
+    }]
+  }]);
+  expect(JSON.stringify(ctx.lockedClassGroups)).not.toContain('SECRET');
+  expect(wizardIds(ctx)).not.toContain(ADVENT_GUN.id);
+  expect(ctx.adventTrialEndedAt).toBe('2026-09-20T12:00:00Z');
+});
+
+test('the Aspirant wizard teases the Aspirant fork under Aspirant and shows no Advent-trial alert', async () => {
+  const { ctx } = await get('/characters/wizard?mode=aspirant');
+  expect(ctx.lockedClassGroups.map(g => ({ edition: g.edition, ids: g.classes.map(c => c.id) })))
+    .toEqual([{ edition: 'aspirant', ids: [ASPIRANT_GUN.id] }]);
+  expect(ctx.adventTrialEndedAt).toBeNull();
+});
+
+test('an Advent trial user plays the Advent class and sees only Aspirant locked', async () => {
+  state.editionAccess = TRIAL;
+  state.allowedIds = new Set([ADVENT_GUN.id]);
+  const advent = (await get('/characters/wizard?mode=advent')).ctx;
+  expect(advent.lockedClassGroups).toEqual([]);
+  expect(wizardIds(advent)).toContain(ADVENT_GUN.id);
+  expect(advent.adventTrialEndedAt).toBeNull();
+  const aspirant = (await get('/characters/wizard?mode=aspirant')).ctx;
+  expect(aspirant.lockedClassGroups.map(g => g.edition)).toEqual(['aspirant']);
+});
+
+test('the aspiring builder gets no locked list and no Advent-trial alert', async () => {
+  const { ctx } = await get('/characters/wizard?mode=aspiring');
+  expect(ctx.lockedClassGroups).toEqual([]);
+  expect(ctx.adventTrialEndedAt).toBeNull();
+});
+
+test('the expert form lists both locked editions and the lapsed-trial alert', async () => {
+  const { view, ctx } = await get('/characters/new/expert');
+  expect(view).toBe('character-form');
+  expect(ctx.lockedClassGroups.map(g => g.edition)).toEqual(['advent', 'aspirant']);
+  expect(ctx.adventTrialEndedAt).toBe('2026-09-20T12:00:00Z');
+});
+
+test('no edition status, no locked options', async () => {
+  state.editionAccess = null;
+  const { ctx } = await get('/characters/new/expert');
+  expect(ctx.lockedClassGroups).toEqual([]);
+  expect(ctx.adventTrialEndedAt).toBeNull();
+});

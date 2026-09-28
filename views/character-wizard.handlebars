@@ -53,6 +53,9 @@
 
 <!-- ====== Step panels ====== -->
 <section class="wizard-step" data-step-panel="1" hidden>
+  {{#if adventTrialEndedAt}}
+  {{> access/trial-ended-alert lead="Advent classes are locked because" edition="advent" endedAt=adventTrialEndedAt}}
+  {{/if}}
   {{#if (eq mode 'aspiring')}}
   <h3 class="title is-4">1. Build Your Class</h3>
   <p class="has-text-grey is-size-7 mb-3">
@@ -125,6 +128,8 @@
       Click a card to select it. Scroll or use the arrow keys to browse, scroll past either end to roll a random class from this tab. Search looks across every tab.
     </p>
   </div>
+
+  {{> access/locked-class-list groups=lockedClassGroups}}
 
   <div class="box mt-4" id="selectedClassPanel">
     <p class="has-text-grey">Loading selected class…</p>

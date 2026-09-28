@@ -150,6 +150,7 @@ module.exports = {
   partitionClassGroups,
   partitionClassCatalog,
   lockedRosterIds,
+  OWNED_EDITIONS,
   splitOwnedByEdition,
   ownedToggleLinks,
   groupByDifficulty
