@@ -112,5 +112,32 @@ module.exports = {
       console.error(e);
       return { data: null, error: e };
     }
+  },
+
+  // Every core-book grant the user holds, lapsed ones included: the edition
+  // status resolver needs a lapsed trial to read as "expired", not "none".
+  // Same embed alias and !inner join as fetchActiveBooksForUser, for the
+  // same reasons.
+  fetchCoreBookGrantsForUser: async ({ userId }) => {
+    try {
+      const { data, error } = await supabaseAdmin
+        .from('rules_pdf_unlocks')
+        .select('expires_at, rules_pdf:rules_pdfs!inner(rules_edition)')
+        .eq('user_id', userId)
+        .eq('rules_pdf.book_type', 'core');
+      if (error || !Array.isArray(data)) {
+        if (error) console.error(error);
+        return { data: null, error: error || { message: 'rules_pdf_unlocks read returned no rows' } };
+      }
+      return {
+        data: data
+          .filter(row => row.rules_pdf && row.rules_pdf.rules_edition)
+          .map(row => ({ rules_edition: row.rules_pdf.rules_edition, expires_at: row.expires_at ?? null })),
+        error: null
+      };
+    } catch (e) {
+      console.error(e);
+      return { data: null, error: e };
+    }
   }
 };

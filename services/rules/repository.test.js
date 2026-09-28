@@ -161,3 +161,34 @@ test('surfaces the error when the query fails, with no data to mistake for no bo
   expect(data).toBeNull();
   expect(error).not.toBeNull();
 });
+
+// The status resolver has to tell "expired" from "none", so unlike
+// fetchActiveBooksForUser this read must not filter lapsed grants out.
+test('fetchCoreBookGrantsForUser returns every core grant, lapsed ones included', async () => {
+  calls.length = 0;
+  const { data, error } = await rulesRepository.fetchCoreBookGrantsForUser({ userId: 'u1' });
+
+  expect(error).toBeNull();
+  expect(data).toEqual([{ rules_edition: 'advent', expires_at: '2026-09-16T00:00:00Z' }]);
+  expect(calls.some(c => typeof c.or === 'string')).toBe(false);
+  const select = calls.find(c => typeof c.select === 'string');
+  expect(select.select).toContain('rules_pdfs!inner');
+  expect(calls.some(c => Array.isArray(c.eq) && c.eq[0] === 'rules_pdf.book_type' && c.eq[1] === 'core')).toBe(true);
+  expect(calls.some(c => Array.isArray(c.eq) && c.eq[0] === 'user_id' && c.eq[1] === 'u1')).toBe(true);
+});
+
+test('fetchCoreBookGrantsForUser surfaces a failed read as an error with no data', async () => {
+  mock.module('../../models/_base', () => ({
+    supabase: makeClient({ data: null, error: { message: 'boom' } }, []),
+    supabaseAdmin: makeClient({ data: null, error: { message: 'boom' } }, []),
+    anonKey: 'test-anon-key',
+    createUserClient: () => makeClient({ data: null, error: null }, [])
+  }));
+  delete require.cache[require.resolve('./repository')];
+  const failing = require('./repository');
+
+  const { data, error } = await failing.fetchCoreBookGrantsForUser({ userId: 'u1' });
+
+  expect(data).toBeNull();
+  expect(error).not.toBeNull();
+});
