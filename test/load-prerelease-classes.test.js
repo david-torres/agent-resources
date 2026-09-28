@@ -641,7 +641,7 @@ test.skipIf(!forkRecords)('the projection publishes the fork and not the parent 
 // The owner authorised exactly these classes to be made visible. Widening the set
 // publishes a class nobody approved, so the list is pinned rather than trusted.
 test('the load publishes the classes the owner authorised and no others', () => {
-  expect(book.publishedByLoad).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan']);
+  expect(book.publishedByLoad).toEqual(['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan', 'Fiendslayer', 'Janissary']);
 });
 
 const createdPlan = (name, gear) => ({ row: null, matches: [], payload: { name, gear } });

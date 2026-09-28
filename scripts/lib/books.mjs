@@ -19,7 +19,7 @@ export const BOOKS = {
     // spelling until a load lands. Resolution accepts both, so a second run
     // finds the row it renamed rather than creating another.
     aliases: { Witchfinder: 'Witchhunter' },
-    publishedByLoad: ['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan'],
+    publishedByLoad: ['Ardent', 'Offdriver', 'Squire', 'Drachentöter', 'Charlatan', 'Fiendslayer', 'Janissary'],
     contentFormat: 'advent',
     rulesEdition: null,
     // A pre-release class is released Advent-format content, recorded at the
