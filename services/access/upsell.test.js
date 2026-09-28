@@ -9,9 +9,17 @@ test('each edition has its own upsell blurb', () => {
   expect(EDITION_UPSELL_BLURBS).toEqual({ advent: ADVENT_BLURB, aspirant: ASPIRANT_BLURB });
 });
 
-test('a lapsed Advent and an unowned Aspirant each get a blurb panel', () => {
+test('while Advent is locked, only Advent is pitched', () => {
   expect(getEditionUpsell({ advent: { state: 'expired', endedAt: 'x' }, aspirant: { state: 'none' } })).toEqual([
-    { edition: 'advent', label: 'Advent', blurb: ADVENT_BLURB },
+    { edition: 'advent', label: 'Advent', blurb: ADVENT_BLURB }
+  ]);
+  expect(getEditionUpsell({ advent: { state: 'none' }, aspirant: { state: 'none' } })).toEqual([
+    { edition: 'advent', label: 'Advent', blurb: ADVENT_BLURB }
+  ]);
+});
+
+test('an Advent trial unlocks the Aspirant pitch', () => {
+  expect(getEditionUpsell({ advent: { state: 'trial' }, aspirant: { state: 'none' } })).toEqual([
     { edition: 'aspirant', label: 'Aspirant', blurb: ASPIRANT_BLURB }
   ]);
 });
