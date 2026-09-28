@@ -2,17 +2,23 @@
   <hr />
 
   <div class="block">
-    <label class="label">Quirks</label>
-    <p class="help mb-2">Use these to describe non-human or otherwise atypical aspects of your character.</p>
-    <div class="columns is-multiline" id="quirks-list">
-      {{#if character.quirks}}
-        {{#each character.quirks}}
-          {{> character-quirk quirk=this}}
-        {{/each}}
-      {{/if}}
+    <label class="label">Defining Quirk</label>
+    <p class="help mb-2">Optional, and most characters have none: an unusual trait essential to your character's identity. Limited to one, and it must be more downside than upside.</p>
+    <div class="field">
+      <div class="control">
+        <input class="input" type="text" name="quirk_name" value="{{character.quirks.[0].name}}" placeholder="Quirk name (e.g. Monochromia)">
+      </div>
     </div>
-    <button type="button" class="button is-primary"
-            hx-get="/characters/quirk" hx-target="#quirks-list" hx-swap="beforeend">Add Quirk</button>
+    <div class="field">
+      <div class="control">
+        <input class="input" type="text" name="quirk_downside" value="{{character.quirks.[0].downside}}" placeholder="Downside (required with a name)">
+      </div>
+    </div>
+    <div class="field">
+      <div class="control">
+        <input class="input" type="text" name="quirk_upside" value="{{character.quirks.[0].upside}}" placeholder="Upside (optional)">
+      </div>
+    </div>
   </div>
 
   <hr />

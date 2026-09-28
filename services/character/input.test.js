@@ -38,7 +38,7 @@ test('normalizes a v1 payload without mutating the submitted request', () => {
     trait0: 'Brave', trait1: '', trait2: 'Calm',
     gear: ['Ranger::Knife'], abilities: ['Ranger::Dodge'],
     common_items: [' rope ', '', 3], is_public: 'on', hide_from_search: 'off',
-    quirks: [{ name: 'v2 only' }], ability_perks: [{ class_ability_id: 'a', text: 'ignored' }]
+    quirks: [{ name: 'v2 only', downside: 'Rusts in rain' }], ability_perks: [{ class_ability_id: 'a', text: 'ignored' }]
   };
 
   const result = normalizeCharacterInput(input, { rulesVersion: 'v1', creatorId: 'owner' });
@@ -56,7 +56,7 @@ test('normalizes a v1 payload without mutating the submitted request', () => {
 
 test('normalizes v2 fields and strips legacy free-text fields', () => {
   const result = normalizeCharacterInput({
-    quirks: [' Synthetic ', { name: 'Veteran', description: '  Seen it all ' }, { name: ' ' }],
+    quirks: [{ name: ' Synthetic ', downside: ' Rusts in rain ', upside: ' Never sleeps ' }],
     accessories: [{ name: ' Monocle ' }], perks: 'legacy', additional_gear: 'legacy gear',
     ability_perks: [{ class_ability_id: 'ability-1', text: '  Deal more damage  ', position: '2' }],
     creator_mode: 'aspiring', image_url: 'https://example.test/image.png',
@@ -64,12 +64,56 @@ test('normalizes v2 fields and strips legacy free-text fields', () => {
   }, { rulesVersion: 'v2' });
 
   expect(result.error).toBeNull();
-  expect(result.data.quirks).toEqual([{ name: 'Synthetic' }, { name: 'Veteran', description: 'Seen it all' }]);
+  expect(result.data.quirks).toEqual([{ name: 'Synthetic', downside: 'Rusts in rain', upside: 'Never sleeps' }]);
   expect(result.data.accessories).toEqual([{ name: 'Monocle' }]);
   expect(result.data).not.toHaveProperty('perks');
   expect(result.data).not.toHaveProperty('additional_gear');
   expect(result.data.image_url).toBe('https://example.test/image.png');
   expect(result.childData.abilityPerks[0].text).toBe('Deal more damage');
+});
+
+test('a v2 Defining Quirk with a blank upside stores no upside', () => {
+  const result = normalizeCharacterInput({
+    quirks: [{ name: 'Synthetic', downside: 'Rusts in rain', upside: '  ' }]
+  }, { rulesVersion: 'v2' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.quirks).toEqual([{ name: 'Synthetic', downside: 'Rusts in rain' }]);
+});
+
+test('an entirely blank v2 Defining Quirk is dropped', () => {
+  const result = normalizeCharacterInput({
+    quirks: [{ name: ' ', downside: ' ' }]
+  }, { rulesVersion: 'v2' });
+
+  expect(result.error).toBeNull();
+  expect(result.data.quirks).toEqual([]);
+});
+
+test('a v2 character may have at most one Defining Quirk', () => {
+  const result = normalizeCharacterInput({
+    quirks: [
+      { name: 'Synthetic', downside: 'Rusts in rain' },
+      { name: 'Haunted', downside: 'Hears voices' }
+    ]
+  }, { rulesVersion: 'v2' });
+
+  expect(result.data).toBeNull();
+  expect(result.error).toMatch(/one Defining Quirk/i);
+});
+
+test('a named v2 Defining Quirk needs a downside', () => {
+  const blank = normalizeCharacterInput({
+    quirks: [{ name: 'Synthetic', downside: '  ', upside: 'Never sleeps' }]
+  }, { rulesVersion: 'v2' });
+  expect(blank.data).toBeNull();
+  expect(blank.error).toMatch(/downside/i);
+
+  const missing = normalizeCharacterInput({
+    quirks: [{ name: 'Synthetic' }]
+  }, { rulesVersion: 'v2' });
+  expect(missing.data).toBeNull();
+  expect(missing.error).toMatch(/downside/i);
 });
 
 // A v2 character keeps the v1-only text it carried before its class became v2.
@@ -200,18 +244,35 @@ test('collectCharacterFormArrays assembles perks/quirks/accessories and strips r
     ability_perk_text: ['first', ''],          // blank text row is dropped
     ability_perk_position: ['0', '1'],
     ability_perk_compounds_with: ['', 'new:x'],
-    quirk_name: ['Brave', '  '],               // blank name dropped
-    quirk_description: ['bold', ''],
+    quirk_name: 'Synthetic',
+    quirk_downside: 'Rusts in rain',
+    quirk_upside: 'Never sleeps',
     accessory_name: ['Ring'],
     accessory_description: ['']
   });
   expect(out.name).toBe('Hero');
   expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'first', position: 0, compounds_with: null }]);
-  expect(out.quirks).toEqual([{ name: 'Brave', description: 'bold' }]);
+  expect(out.quirks).toEqual([{ name: 'Synthetic', downside: 'Rusts in rain', upside: 'Never sleeps' }]);
   expect(out.accessories).toEqual([{ name: 'Ring' }]);
   expect(out.ability_perk_class_ability_id).toBeUndefined();
   expect(out.quirk_name).toBeUndefined();
+  expect(out.quirk_downside).toBeUndefined();
+  expect(out.quirk_upside).toBeUndefined();
   expect(out.accessory_description).toBeUndefined();
+});
+
+test('collectCharacterFormArrays reads array-shaped quirk fields and omits a blank upside', () => {
+  const out = collectCharacterFormArrays({
+    quirk_name: ['Synthetic'],
+    quirk_downside: ['Rusts in rain'],
+    quirk_upside: ['  '],
+    accessory_name: ['Ring', 'Cloak'],
+    accessory_description: ['', 'Warm']
+  });
+  expect(out.quirks).toEqual([{ name: 'Synthetic', downside: 'Rusts in rain' }]);
+  expect(out.accessories).toEqual([{ name: 'Ring' }, { name: 'Cloak', description: 'Warm' }]);
+  expect(out.quirk_downside).toBeUndefined();
+  expect(out.quirk_upside).toBeUndefined();
 });
 
 test('collectCharacterFormArrays tolerates single (non-array) form values', () => {

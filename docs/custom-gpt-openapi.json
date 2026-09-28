@@ -322,14 +322,16 @@
               "conduit_credits": { "type": "integer", "description": "v2 only" },
               "quirks": {
                 "type": "array",
-                "description": "v2 only",
+                "description": "v2 only. At most one Defining Quirk, which must be more downside than upside.",
+                "maxItems": 1,
                 "items": {
                   "type": "object",
                   "properties": {
                     "name": { "type": "string" },
-                    "description": { "type": "string" }
+                    "downside": { "type": "string" },
+                    "upside": { "type": "string" }
                   },
-                  "required": ["name"]
+                  "required": ["name", "downside"]
                 }
               },
               "accessories": {

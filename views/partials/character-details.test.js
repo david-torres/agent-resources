@@ -73,27 +73,39 @@ test('empty sections are omitted, not rendered blank', () => {
 test('v1 shows the markdown perks and never the v2 sections', () => {
   const html = render(makeCharacter({
     perks: 'V1 PERK TEXT',
-    quirks: [{ name: 'Jumpy', description: 'twitchy' }],
+    quirks: [{ name: 'Jumpy', downside: 'twitchy' }],
   }), 'v1');
   expect(html).toContain('V1 PERK TEXT');
-  expect(html).not.toContain('Quirks');
+  expect(html).not.toContain('Defining Quirk');
   expect(html).not.toContain('Jumpy');
 });
 
-test('v2 shows quirks, accessories and per-ability perks and never the v1 perks', () => {
+test('v2 shows the Defining Quirk, accessories and per-ability perks and never the v1 perks', () => {
   const html = render(makeCharacter({
     perks: 'V1 PERK TEXT',
     additional_gear: 'OLD GEAR TEXT',
-    quirks: [{ name: 'Jumpy', description: 'twitchy' }],
+    quirks: [{ name: 'Monochromia', downside: 'Sees only red', upside: 'Spots blood instantly' }],
     accessories: [{ name: 'Charm' }],
     ability_perks: [{ class_ability_id: 'ab-1', text: 'Perk one', position: 0, compounds_with: null }],
   }), 'v2');
-  expect(html).toContain('Jumpy');
-  expect(html).toContain('twitchy');
+  expect(html).toContain('Defining Quirk');
+  expect(html).toContain('Monochromia');
+  expect(html).toContain('Sees only red');
+  expect(html).toContain('Spots blood instantly');
   expect(html).toContain('Charm');
   expect(html).toContain('Perk one');
   expect(html).not.toContain('V1 PERK TEXT');
   expect(html).not.toContain('OLD GEAR TEXT');
+});
+
+test('a v2 Defining Quirk without an upside renders no upside label', () => {
+  const html = render(makeCharacter({
+    quirks: [{ name: 'Monochromia', downside: 'Sees only red' }],
+  }), 'v2');
+  expect(html).toContain('Defining Quirk');
+  expect(html).toContain('Monochromia');
+  expect(html).toContain('Sees only red');
+  expect(html).not.toContain('Upside');
 });
 
 test('v1 deprecated additional gear renders with its warning tag', () => {

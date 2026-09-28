@@ -255,6 +255,19 @@ test('a v2 character sheet shows none of its stored v1-only text', () => {
   expect(v1).toContain('Old gear prose');
 });
 
+test('a v2 character sheet shows its Defining Quirk with the downside', () => {
+  const character = {
+    gear: [], common_items: [], accessories: [], ability_perks: [], abilities: [],
+    quirks: [{ name: 'Monochromia', downside: 'Sees only red', upside: 'Spots blood instantly' }]
+  };
+
+  const html = renderFromPerksToAppearance({ character, effectiveVersion: 'v2' });
+  expect(html).toContain('Defining Quirk');
+  expect(html).toContain('Monochromia');
+  expect(html).toContain('Sees only red');
+  expect(html).toContain('Spots blood instantly');
+});
+
 const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 const renderSheetHeader = (locals) => {

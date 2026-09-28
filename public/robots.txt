@@ -51,7 +51,6 @@ Disallow: /party/panel
 Disallow: /characters/class-gear
 Disallow: /characters/class-abilities
 Disallow: /characters/common-item
-Disallow: /characters/quirk
 Disallow: /characters/accessory
 Disallow: /characters/ability-perk
 Disallow: /characters/version-fields

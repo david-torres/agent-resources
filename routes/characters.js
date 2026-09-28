@@ -854,10 +854,6 @@ router.get('/common-item', authOptional, async (req, res) => {
   res.render('partials/character-common-item', { layout: false });
 });
 
-router.get('/quirk', authOptional, (req, res) => {
-  res.render('partials/character-quirk', { layout: false, quirk: {} });
-});
-
 router.get('/accessory', authOptional, (req, res) => {
   res.render('partials/character-accessory', { layout: false, accessory: {} });
 });

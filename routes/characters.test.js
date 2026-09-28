@@ -694,3 +694,53 @@ test('the edit form shows a v2 character its stored v1-only text as Deprecated f
   expect(body).not.toMatch(/<textarea[^>]*name="perks"/);
   expect(body).not.toMatch(/<textarea[^>]*name="additional_gear"/);
 });
+
+// A v2 character carries at most one Defining Quirk, posted as the scalar
+// fields quirk_name / quirk_downside / quirk_upside.
+const countMatches = (html, re) => (html.match(re) || []).length;
+
+test('GET /characters/version-fields renders a single blank Defining Quirk block', async () => {
+  const res = await fetch(
+    `${baseUrl}/characters/version-fields?class_id=${V2_RULES_CLASS.id}`,
+    { headers: { Accept: 'text/html' } }
+  );
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(countMatches(body, /Defining Quirk<\/label>/g)).toBe(1);
+  expect(countMatches(body, /name="quirk_name"/g)).toBe(1);
+  expect(countMatches(body, /name="quirk_downside"/g)).toBe(1);
+  expect(countMatches(body, /name="quirk_upside"/g)).toBe(1);
+  expect(body).not.toContain('name="quirk_name[]"');
+  expect(body).not.toContain('Add Quirk');
+  expect(body).not.toContain('hx-get="/characters/quirk"');
+});
+
+test('the edit form prefills the Defining Quirk from the stored quirk', async () => {
+  pageState.character = {
+    ...makePageCharacter(0),
+    class: V2_RULES_CLASS.name,
+    class_id: V2_RULES_CLASS.id,
+    creator_id: 'profile-1',
+    quirks: [{ name: 'Monochromia', downside: 'Sees only red', upside: 'Spots blood instantly' }],
+  };
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(countMatches(body, /Defining Quirk<\/label>/g)).toBe(1);
+  expect(body).toMatch(/name="quirk_name"[^>]*value="Monochromia"/);
+  expect(body).toMatch(/name="quirk_downside"[^>]*value="Sees only red"/);
+  expect(body).toMatch(/name="quirk_upside"[^>]*value="Spots blood instantly"/);
+  expect(body).not.toContain('Add Quirk');
+});
+
+test('GET /characters/quirk no longer serves a quirk row', async () => {
+  const res = await fetch(`${baseUrl}/characters/quirk`, { headers: { Accept: 'text/html' } });
+
+  expect(res.status).not.toBe(200);
+  expect(await res.text()).not.toContain('quirk_name');
+});

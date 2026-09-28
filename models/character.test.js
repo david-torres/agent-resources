@@ -209,7 +209,7 @@ test('createCharacter drops v2-only fields when linked class is v1', async () =>
     vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
     sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
     completed_missions: 0, commissary_reward: 0,
-    quirks: [{ name: 'Synthetic', description: 'Built, not born' }],
+    quirks: [{ name: 'Synthetic', downside: 'Built, not born' }],
     accessories: [{ name: 'Monocle' }]
   };
   const { data, error } = await createCharacter(payload, { id: 'profile-1' });
@@ -239,7 +239,7 @@ delete require.cache[require.resolve('../services/character/repository')];
     vitality: 1, might: 1, resilience: 1, spirit: 1, arcane: 1, will: 1,
     sensory: 1, reflex: 1, vigor: 1, skill: 1, intelligence: 1, luck: 1,
     completed_missions: 0, commissary_reward: 0,
-    quirks: [{ name: 'Synthetic', description: 'Built, not born' }],
+    quirks: [{ name: 'Synthetic', downside: 'Built, not born' }],
     accessories: [{ name: 'Monocle' }]
   };
   const { data, error } = await createCharacter(payload, { id: 'profile-1' });
@@ -521,7 +521,7 @@ test('serializeCharacterForAgent includes v2 fields on v2 characters', () => {
     id: 'c2', creator_id: 'p1', name: 'V2', class: 'Thane-v2', level: 1,
     is_public: true, is_deceased: false,
     rules_version: 'v2',
-    quirks: [{ name: 'Synthetic' }],
+    quirks: [{ name: 'Synthetic', downside: 'Built, not born' }],
     accessories: [{ name: 'Monocle' }],
     ability_perks: [{ class_ability_id: 'a1', text: 'Bigger sword', position: 0 }]
   };

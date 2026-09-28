@@ -63,6 +63,26 @@ const normalizeNamedJsonbList = (input) => {
   }).filter(Boolean);
 };
 
+const trimmedString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const shapeDefiningQuirk = (name, downside, upside) => (upside ? { name, downside, upside } : { name, downside });
+
+const normalizeDefiningQuirks = (input) => {
+  if (!Array.isArray(input)) return [];
+  return input.map(item => {
+    if (!item || typeof item !== 'object') return null;
+    const name = trimmedString(item.name);
+    if (!name) return null;
+    return shapeDefiningQuirk(name, trimmedString(item.downside), trimmedString(item.upside));
+  }).filter(Boolean);
+};
+
+const validateDefiningQuirks = (quirks) => {
+  if (quirks.length > 1) return 'A character may have only one Defining Quirk.';
+  if (quirks.some(quirk => !quirk.downside)) return 'A Defining Quirk must have a downside.';
+  return null;
+};
+
 // Shapes and judges a submitted Enchantment in one pass, returning both what
 // to store and, on a rejection, the player-readable message for it -- never
 // throwing, so a caller decides for itself whether the message needs to
@@ -622,7 +642,9 @@ const normalizeCharacterInput = (input, context = {}) => {
   if (rulesVersion === 'v2') {
     const validation = validateAbilityPerks(normalizeAbilityPerks(childData.abilityPerks));
     if (!validation.ok) return { data: null, childData: null, error: validation.errors.join(' ') };
-    data.quirks = normalizeNamedJsonbList(data.quirks);
+    data.quirks = normalizeDefiningQuirks(data.quirks);
+    const quirkError = validateDefiningQuirks(data.quirks);
+    if (quirkError) return { data: null, childData: null, error: quirkError };
     data.accessories = normalizeNamedJsonbList(data.accessories);
   }
 
@@ -852,6 +874,7 @@ const normalizeWizardPayload = (rawBody) => {
 };
 
 const asArray = (v) => (Array.isArray(v) ? v : (v == null || v === '' ? [] : [v]));
+const formText = (v) => (v || '').toString().trim();
 
 const collectAbilityPerksFromForm = (body) => {
   const ids = asArray(body.ability_perk_class_ability_id);
@@ -879,24 +902,37 @@ const collectNamedFromForm = (body, nameKey, descKey) => {
   const descs = asArray(body[descKey]);
   const out = [];
   for (let i = 0; i < names.length; i++) {
-    const name = (names[i] || '').toString().trim();
+    const name = formText(names[i]);
     if (!name) continue;
-    const desc = (descs[i] || '').toString().trim();
+    const desc = formText(descs[i]);
     out.push(desc ? { name, description: desc } : { name });
+  }
+  return out;
+};
+
+const collectQuirksFromForm = (body) => {
+  const names = asArray(body.quirk_name);
+  const downsides = asArray(body.quirk_downside);
+  const upsides = asArray(body.quirk_upside);
+  const out = [];
+  for (let i = 0; i < names.length; i++) {
+    const name = formText(names[i]);
+    if (!name) continue;
+    out.push(shapeDefiningQuirk(name, formText(downsides[i]), formText(upsides[i])));
   }
   return out;
 };
 
 const FORM_ARRAY_KEYS = [
   'ability_perk_class_ability_id', 'ability_perk_text', 'ability_perk_position',
-  'ability_perk_compounds_with', 'quirk_name', 'quirk_description',
+  'ability_perk_compounds_with', 'quirk_name', 'quirk_downside', 'quirk_upside',
   'accessory_name', 'accessory_description'
 ];
 
 const collectCharacterFormArrays = (body) => {
   const out = { ...body };
   out.ability_perks = collectAbilityPerksFromForm(body);
-  out.quirks = collectNamedFromForm(body, 'quirk_name', 'quirk_description');
+  out.quirks = collectQuirksFromForm(body);
   out.accessories = collectNamedFromForm(body, 'accessory_name', 'accessory_description');
   for (const key of FORM_ARRAY_KEYS) delete out[key];
   return out;
@@ -905,7 +941,6 @@ const collectCharacterFormArrays = (body) => {
 module.exports = {
   cloneInput,
   normalizeCharacterInput,
-  normalizeNamedJsonbList,
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,
   normalizeGearEquipment,

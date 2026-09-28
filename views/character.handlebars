@@ -312,12 +312,12 @@
     {{#if (eq effectiveVersion 'v2')}}
       {{#if character.quirks.length}}
       <div class="box">
-        <h3 class="title is-4">Quirks</h3>
-        <ul>
-          {{#each character.quirks}}
-          <li><strong>{{this.name}}</strong>{{#if this.description}} — {{this.description}}{{/if}}</li>
-          {{/each}}
-        </ul>
+        <h3 class="title is-4">Defining Quirk</h3>
+        {{#with character.quirks.[0]}}
+        <p><strong>{{name}}</strong></p>
+        <p>Downside: {{downside}}</p>
+        {{#if upside}}<p>Upside: {{upside}}</p>{{/if}}
+        {{/with}}
       </div>
       {{/if}}
 
