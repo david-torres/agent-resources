@@ -1,7 +1,7 @@
 # Advent Trial Visibility — Design
 
 Date: 2026-09-28
-Status: Approved (conversation), pending spec review
+Status: Approved
 
 ## Goal
 
@@ -82,7 +82,7 @@ computation is deleted.
 ### 2. Purchase config
 
 `util/starter-content.js` exports `EDITION_PURCHASE_URLS = { advent, aspirant }`
-(values supplied by the user) and `EDITION_LABELS = { advent: 'Advent',
+(both `https://enclave-aspirant.backerkit.com/hosted_preorders`) and `EDITION_LABELS = { advent: 'Advent',
 aspirant: 'Aspirant' }`. When a URL is falsy, CTAs render redeem-only.
 
 CTA partial `views/partials/access/unlock-cta.handlebars` (params: `edition`)
@@ -177,7 +177,3 @@ Teaser data comes from the existing `classes.teaser` column; no new content.
 - Email or push reminders before expiry.
 - Changing the trial length or grant mechanics.
 - Sheet per-field teaser placeholders (declined; the sheet gets one alert).
-
-## Open input
-
-- Purchase URLs for Advent and Aspirant.
