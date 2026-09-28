@@ -4,6 +4,7 @@ const {
   partitionProfileClasses,
   partitionClassGroups,
   partitionClassCatalog,
+  lockedRosterIds,
   splitOwnedByEdition,
   ownedToggleLinks,
   groupByDifficulty
@@ -98,7 +99,8 @@ describe('partitionClassCatalog', () => {
       ownedReleases: [owned],
       otherReleases: [other],
       prerelease: [teaser],
-      pcc: [pcc]
+      pcc: [pcc],
+      locked: { advent: [], aspirant: [] }
     });
   });
 
@@ -148,7 +150,73 @@ describe('partitionClassCatalog', () => {
       group('beta-pcc', { status: 'beta', is_player_created: true })];
     const bookIds = new Set(advent.map((g) => g.primary.id));
     const out = partitionClassCatalog([...teasers, ...aspirant, ...pccs, ...advent], bookIds);
-    expect(out).toEqual({ ownedReleases: advent, otherReleases: aspirant, prerelease: teasers, pcc: pccs });
+    expect(out).toEqual({
+      ownedReleases: advent, otherReleases: aspirant, prerelease: teasers, pcc: pccs,
+      locked: { advent: [], aspirant: [] }
+    });
+  });
+
+  const ADVENT_ROSTER = new Set(['gun-adv']);
+  const ASPIRANT_ROSTER = new Set(['gun-asp']);
+
+  test("a released core class the viewer cannot play moves to its edition's locked section", () => {
+    const advGun = group('gun-adv');
+    const aspGun = group('gun-asp');
+    const releasedPcc = group('pcc-rel', { is_player_created: true });
+    const out = partitionClassCatalog([advGun, aspGun, releasedPcc], new Set(), { advent: ADVENT_ROSTER, aspirant: ASPIRANT_ROSTER });
+    expect(out.locked).toEqual({ advent: [advGun], aspirant: [aspGun] });
+    expect(out.otherReleases).toEqual([releasedPcc]);
+  });
+
+  test('during an Advent trial the Advent class stays owned and only its Aspirant fork is locked', () => {
+    const advGun = group('gun-adv');
+    const aspGun = group('gun-asp');
+    const lockedIds = lockedRosterIds(
+      { advent: { state: 'trial' }, aspirant: { state: 'none' } },
+      { advent: ADVENT_ROSTER, aspirant: ASPIRANT_ROSTER },
+      new Set(['gun-adv'])
+    );
+    const out = partitionClassCatalog([advGun, aspGun], new Set(['gun-adv']), lockedIds);
+    expect(out.ownedReleases).toEqual([advGun]);
+    expect(out.locked).toEqual({ advent: [], aspirant: [aspGun] });
+  });
+
+  test('a pre-release class stays pre-release even when its edition is locked', () => {
+    const teaser = group('gun-asp', { prerelease_section: 'aspirant' });
+    const out = partitionClassCatalog([teaser], new Set(), { aspirant: ASPIRANT_ROSTER });
+    expect(out.prerelease).toEqual([teaser]);
+    expect(out.locked.aspirant).toEqual([]);
+  });
+});
+
+describe('lockedRosterIds', () => {
+  const rosters = { advent: new Set(['gun-adv', 'gun-adv-v2']), aspirant: new Set(['gun-asp', 'berserker']) };
+  const status = (advent, aspirant) => ({ advent: { state: advent }, aspirant: { state: aspirant } });
+
+  test('an Advent trial is access: only Aspirant is teased', () => {
+    expect(lockedRosterIds(status('trial', 'none'), rosters)).toEqual({ aspirant: new Set(['gun-asp', 'berserker']) });
+  });
+
+  test('a lapsed Advent trial teases the Advent roster', () => {
+    expect(lockedRosterIds(status('expired', 'owned'), rosters)).toEqual({ advent: new Set(['gun-adv', 'gun-adv-v2']) });
+  });
+
+  test('an owned edition is never teased', () => {
+    expect(lockedRosterIds(status('owned', 'owned'), rosters)).toEqual({});
+  });
+
+  test('a class the viewer can already play by another route is not teased', () => {
+    expect(lockedRosterIds(status('expired', 'owned'), rosters, new Set(['gun-adv-v2'])).advent)
+      .toEqual(new Set(['gun-adv']));
+  });
+
+  test('no edition status teases nothing', () => {
+    expect(lockedRosterIds(null, rosters)).toEqual({});
+    expect(lockedRosterIds(undefined, rosters)).toEqual({});
+  });
+
+  test('an edition without a roster is skipped', () => {
+    expect(lockedRosterIds(status('none', 'none'), { advent: new Set(['a']) })).toEqual({ advent: new Set(['a']) });
   });
 });
 

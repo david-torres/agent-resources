@@ -2,6 +2,7 @@ const { supabase } = require('./_base');
 const crypto = require('crypto');
 const { expandIdsToFamilies, computeVersionFamily } = require('../util/class-family');
 const { coreClassIdsForEditions } = require('../util/book-classes');
+const { CORE_CLASS_UNLOCKS } = require('../util/starter-content');
 const { applyClassFilters } = require('../util/class-filters');
 const { trimStrings } = require('../util/trim-input');
 const { pickClassProseForAgent } = require('../util/class-prose');
@@ -142,9 +143,13 @@ const getEffectiveClassUnlocks = async (userId) => {
     }
     // rawUnion is a superset of directIds, so an empty union means no direct
     // ids either — `empty` is the whole answer.
-    if (rawUnion.size === 0) return { ...empty, error: readError };
-
     const expand = (idSet) => (classRows ? expandIdsToFamilies(classRows, idSet) : new Set(idSet));
+    // Every edition's roster, owned or not: the catalog and pickers tease the
+    // ones the viewer lacks.
+    const rosterIdsByEdition = Object.fromEntries(
+        Object.keys(CORE_CLASS_UNLOCKS).map(edition => [edition, expand(coreClassIdsForEditions([edition]))])
+    );
+    if (rawUnion.size === 0) return { ...empty, rosterIdsByEdition, error: readError };
 
     // A fork inherits the source of whatever unlocked its seed id: expand
     // each book's roster and the direct ids separately, rather than the
@@ -199,6 +204,7 @@ const getEffectiveClassUnlocks = async (userId) => {
         sourceById,
         expiryById,
         directIds,
+        rosterIdsByEdition,
         error: readError
     };
 };
@@ -329,8 +335,8 @@ const getUnlockedClasses = async (userId) => {
 };
 
 const getUnlockedClassIdsForUser = async (userId) => {
-    const { ids, error } = await getEffectiveClassUnlocks(userId);
-    return { data: ids, error: error || null };
+    const { ids, rosterIdsByEdition, error } = await getEffectiveClassUnlocks(userId);
+    return { data: ids, rosterIdsByEdition, error: error || null };
 };
 
 const resolveClassAgentAccess = ({

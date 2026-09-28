@@ -2,6 +2,8 @@
 // matching by class id (NOT name — edition forks share names, and a v1
 // unlock must not leak into another edition's fork).
 
+const { isLockedStatus } = require('../services/access/edition-status');
+
 const filterClassListsByIds = (lists, allowedIds) => {
   const filterArr = arr => (Array.isArray(arr) ? arr.filter(c => allowedIds.has(c.id)) : []);
   const advent = filterArr(lists.advent);
@@ -42,29 +44,50 @@ const partitionClassGroups = (groups) => {
   return { released, pcc };
 };
 
-// The /classes catalog's four sections, decided per version group by its
-// primary and checked in this order. Pre-release comes first because it must
-// win over book ownership: the Aspirant book's roster grants the six
-// pre-release aspirant-section classes (util/starter-content.js). Artwork is
-// release content and appears only for released classes covered by a book the
-// viewer owns; the other sections stay art-free (views/classes.handlebars).
-const partitionClassCatalog = (groups, bookClassIds = new Set()) => {
+const OWNED_EDITIONS = ['advent', 'aspirant'];
+
+// The /classes catalog's sections, decided per version group by its primary
+// and checked in this order. Pre-release comes first because it must win over
+// book ownership: the Aspirant book's roster grants the six pre-release
+// aspirant-section classes (util/starter-content.js). A released core class
+// the viewer cannot play goes to its edition's locked section (lockedIds,
+// from lockedRosterIds) instead of "Other Released". Artwork is release
+// content and appears only for released classes covered by a book the viewer
+// owns; the other sections stay art-free (views/classes.handlebars).
+const partitionClassCatalog = (groups, bookClassIds = new Set(), lockedIds = {}) => {
   const list = Array.isArray(groups) ? groups : [];
   const ownedReleases = [];
   const otherReleases = [];
   const prerelease = [];
   const pcc = [];
+  const locked = Object.fromEntries(OWNED_EDITIONS.map(edition => [edition, []]));
   for (const group of list) {
     const cls = group && group.primary;
     if (cls?.prerelease_section) prerelease.push(group);
     else if (isUnreleasedPcc(cls)) pcc.push(group);
     else if (bookClassIds.has(cls?.id)) ownedReleases.push(group);
-    else otherReleases.push(group);
+    else {
+      const edition = OWNED_EDITIONS.find(e => lockedIds[e]?.has(cls?.id));
+      (edition ? locked[edition] : otherReleases).push(group);
+    }
   }
-  return { ownedReleases, otherReleases, prerelease, pcc };
+  return { ownedReleases, otherReleases, prerelease, pcc, locked };
 };
 
-const OWNED_EDITIONS = ['advent', 'aspirant'];
+// Roster ids of every edition the viewer neither owns nor is trialling, minus
+// anything they can already play by another route (a direct unlock, a free
+// pre-release row). A trial counts as access, so Advent is teased only once
+// it has lapsed or was never granted.
+const lockedRosterIds = (editionAccess, rosterIdsByEdition = {}, playableIds = new Set()) => {
+  const locked = {};
+  if (!editionAccess) return locked;
+  for (const [edition, status] of Object.entries(editionAccess)) {
+    const roster = rosterIdsByEdition?.[edition];
+    if (!isLockedStatus(status) || !roster) continue;
+    locked[edition] = new Set([...roster].filter(id => !playableIds.has(id)));
+  }
+  return locked;
+};
 
 // Narrow the owned-release groups to one rules edition. An unknown or unowned
 // requested edition falls back to the first edition the viewer owns.
@@ -126,6 +149,7 @@ module.exports = {
   partitionProfileClasses,
   partitionClassGroups,
   partitionClassCatalog,
+  lockedRosterIds,
   splitOwnedByEdition,
   ownedToggleLinks,
   groupByDifficulty

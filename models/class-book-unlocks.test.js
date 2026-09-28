@@ -319,3 +319,28 @@ describe('book-derived class unlocks', () => {
     expect(data).toEqual(new Set());
   });
 });
+
+test("rosterIdsByEdition names each edition's roster, family-expanded, for a user with no grants", async () => {
+  reset();
+  const access = await getEffectiveClassUnlocks('u1');
+
+  expect(access.rosterIdsByEdition.advent.has(ADVENT_LIBRARIAN)).toBe(true);
+  expect(access.rosterIdsByEdition.advent.has(LIBRARIAN_V2)).toBe(true);
+  expect(access.rosterIdsByEdition.advent.has(ASPIRANT_VESSEL)).toBe(false);
+  expect(access.rosterIdsByEdition.advent.has(PRIVATE_CLASS)).toBe(false);
+  expect(access.rosterIdsByEdition.aspirant.has(ASPIRANT_VESSEL)).toBe(true);
+});
+
+test('a signed-out viewer still gets the rosters', async () => {
+  reset();
+  const access = await getEffectiveClassUnlocks(null);
+  expect(access.rosterIdsByEdition.aspirant.has(ASPIRANT_VESSEL)).toBe(true);
+});
+
+test('getUnlockedClassIdsForUser carries the rosters alongside the playable ids', async () => {
+  reset();
+  state.books = [{ rules_edition: 'advent', title: 'Enclave: Advent', expires_at: null }];
+  const { data, rosterIdsByEdition } = await getUnlockedClassIdsForUser('u1');
+  expect(data.has(ADVENT_LIBRARIAN)).toBe(true);
+  expect(rosterIdsByEdition.aspirant.has(ASPIRANT_VESSEL)).toBe(true);
+});
