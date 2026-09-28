@@ -1325,12 +1325,12 @@ describe('step 4 prose follows the class economy the readouts follow', () => {
       .toBe(String(economyFigures().grants.aspirant));
   });
 
-  test('an aspirant wizard on an advent-content class is told about its free base gear', () => {
+  test('an aspirant wizard on an advent-content class is told the aspirant budget, with no free column', () => {
     const wizard = bootOnClass('aspirant', 'advent');
-    expect(introText()).toContain('free');
+    expect(introText()).not.toContain('free');
     expect(introText()).toContain(String(wizard.getMerxBudget()));
     expect(document.getElementById('merxBudget').textContent)
-      .toBe(String(economyFigures().grants.advent));
+      .toBe(String(economyFigures().grants.aspirant));
   });
 
   // pg. 85: 2 Merx for your own class's Signature, 3 for a cross-class one.

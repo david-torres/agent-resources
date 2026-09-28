@@ -945,8 +945,7 @@ window.CharacterWizard = (function () {
   // advent is flatly STAT_FIGURES.baseStatCap: the +1 per Trait is an
   // Aspirant rule. Branches on economyForState(), not DATA.mode, so it makes
   // the same branch statCapMap (util/stat-caps.js) makes off the resolved
-  // economy -- an advent-content class picked under aspirant mode resolves
-  // to the advent economy (economyFor) and gets the flat Cap there too.
+  // economy (economyFor).
   const getStatCap = (stat) => {
     if (economyForState() === 'advent') return STAT_FIGURES.baseStatCap;
     for (let idx = 0; idx < 3; idx++) {

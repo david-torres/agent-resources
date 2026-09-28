@@ -184,14 +184,14 @@ const countWordsExcludingRatings = (text) => {
     return stripped.split(/\s+/).filter((token) => WORD_WITH_ALPHANUMERIC.test(token)).length;
 };
 
-// Which economy a character is under. An aspiring character is class-less,
-// so there is no content_format to read and creator_mode is the only signal.
-// Everything else reads content_format, which is the shape of the class's
-// content. rules_edition is deliberately NOT consulted: the six pre-release
-// Aspirant classes are rules_edition 'aspirant' with content_format 'advent'
-// and are priced as Advent content, because that is the shape they carry.
+// Which economy a character is under. creator_mode decides first: an
+// aspiring character is class-less, and a character made in the Aspirant
+// wizard is on the Aspirant economy whatever its class's content_format.
+// Otherwise content_format, the shape of the class's content, decides.
+// rules_edition is not consulted.
 const economyFor = ({ contentFormat, creatorMode } = {}) => {
     if (creatorMode === 'aspiring') return 'aspiring';
+    if (creatorMode === 'aspirant') return 'aspirant';
     return contentFormat === 'aspirant' ? 'aspirant' : 'advent';
 };
 

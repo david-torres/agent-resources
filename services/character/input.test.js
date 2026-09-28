@@ -654,6 +654,7 @@ test('a non-aspiring creation never carries the pool', () => {
 test('an aspirant payload carrying a pseudo_class keeps its own class', () => {
   const result = normalizeCharacterInput({
     name: 'Kell', creator_mode: 'aspirant', class: 'Gunslinger', class_id: 'class-a',
+    trait0: 'Brave', trait1: 'Calm', trait2: 'Alert',
     pseudo_class: { name: 'Ashwalker', tagline: 'Walks the ash', description: 'A long tale.' }
   }, { rulesVersion: 'v1' });
 

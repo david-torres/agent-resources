@@ -186,12 +186,13 @@ test('equipmentSpend adds a Signature, its Enchantment and both its Mods', () =>
   expect(equipmentSpend(gear, { economy: 'aspirant', characterClassId: 'mine' })).toBe(8);
 });
 
-// The axis is content_format, not rules_edition: the six pre-release Aspirant
-// classes are rules_edition 'aspirant' with content_format 'advent'.
-test('economyFor reads content_format, and creator_mode only for aspiring', () => {
+// The six pre-release Aspirant classes are rules_edition 'aspirant' with
+// content_format 'advent'; built in the Aspirant wizard they are still Aspirant.
+test('economyFor is aspirant for the Aspirant wizard, otherwise reads content_format', () => {
   expect(economyFor({ contentFormat: 'aspirant', creatorMode: 'aspirant' })).toBe('aspirant');
   expect(economyFor({ contentFormat: 'aspirant', creatorMode: null })).toBe('aspirant');
-  expect(economyFor({ contentFormat: 'advent', creatorMode: 'aspirant' })).toBe('advent');
+  expect(economyFor({ contentFormat: 'advent', creatorMode: 'aspirant' })).toBe('aspirant');
+  expect(economyFor({ contentFormat: 'advent', creatorMode: null })).toBe('advent');
   expect(economyFor({ contentFormat: 'advent', creatorMode: 'advent' })).toBe('advent');
   expect(economyFor({})).toBe('advent');
 });
