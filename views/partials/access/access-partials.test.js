@@ -102,3 +102,22 @@ test('the trial-ended sentence renders with and without a lead', () => {
   expect(render('{{> access/trial-ended-text edition="aspirant" endedAt=endedAt lead="Heads up:"}}', context).trim())
     .toBe('Heads up: your Aspirant free trial ended Sep 20, 2026.');
 });
+
+test('the edition upsell shows each locked edition as its label, blurb, and CTA, without a class list', () => {
+  const upsell = [
+    { edition: 'advent', label: 'Advent', blurb: 'Unlock the Advent rulebook and its six core classes.' },
+    { edition: 'aspirant', label: 'Aspirant', blurb: 'Unlock the full Aspirant versions of the six base classes, plus six new Aspirant classes.' }
+  ];
+  const html = render('{{> access/edition-upsell upsell=upsell}}', { upsell });
+  const panels = html.split('data-upsell-edition=').slice(1);
+  expect(panels).toHaveLength(2);
+  expect(panels[0]).toMatch(/<span>Advent<\/span>/);
+  expect(panels[0]).toContain('<p>Unlock the Advent rulebook and its six core classes.</p>');
+  expect(panels[0]).toContain(`href="${ADVENT_URL}"`);
+  expect(panels[1]).toMatch(/<span>Aspirant<\/span>/);
+  expect(panels[1]).toContain('<p>Unlock the full Aspirant versions of the six base classes, plus six new Aspirant classes.</p>');
+  expect(panels[1]).toContain(`href="${ASPIRANT_URL}"`);
+  expect(html).toContain('fa-lock');
+  expect(html).not.toContain('<ul');
+  expect(html).not.toMatch(/href="\/classes\/(?!redeem\/)/);
+});

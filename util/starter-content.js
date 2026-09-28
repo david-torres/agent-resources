@@ -69,6 +69,11 @@ const CORE_CLASS_UNLOCKS = {
 
 const EDITION_LABELS = { advent: 'Advent', aspirant: 'Aspirant' };
 
+const EDITION_UPSELL_BLURBS = {
+  advent: 'Unlock the Advent rulebook and its six core classes.',
+  aspirant: 'Unlock the full Aspirant versions of the six base classes, plus six new Aspirant classes.'
+};
+
 // A falsy URL makes every CTA for that edition redeem-only.
 const EDITION_PURCHASE_URLS = {
   advent: 'https://enclave-aspirant.backerkit.com/hosted_preorders/822768',
@@ -80,5 +85,6 @@ module.exports = {
   CORE_CLASS_UNLOCKS,
   ASPIRANT_V1_CLASS_IDS,
   EDITION_LABELS,
+  EDITION_UPSELL_BLURBS,
   EDITION_PURCHASE_URLS
 };

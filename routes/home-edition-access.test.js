@@ -3,7 +3,7 @@ const { freshRequire } = require('../test/helpers/fresh-require');
 const realEditionAccess = require('../util/edition-access');
 
 const EXPIRED = { advent: { state: 'expired', endedAt: '2026-09-20T12:00:00Z' }, aspirant: { state: 'none' } };
-const UPSELL = [{ edition: 'advent', label: 'Advent', count: 1, classes: [{ id: 'g', name: 'Gunslinger', teaser: 'Quick.' }] }];
+const UPSELL = [{ edition: 'advent', label: 'Advent', blurb: 'Advent blurb.' }];
 
 const state = {};
 beforeEach(() => {
@@ -26,7 +26,7 @@ const overrides = new Map([
   }],
   [require.resolve('../models/pages'), { getAllNews: async () => ({ data: [], error: null }) }],
   [require.resolve('../services/access/upsell'), {
-    getEditionUpsell: async (editionAccess, userId) => { state.upsellArgs.push([editionAccess, userId]); return UPSELL; }
+    getEditionUpsell: (...args) => { state.upsellArgs.push(args); return UPSELL; }
   }],
   [require.resolve('../util/edition-access'), {
     ...realEditionAccess,
@@ -62,7 +62,7 @@ test('a signed-in home hands its edition status to onboarding and renders the up
   const { view, ctx } = await res.json();
   expect(view).toBe('home');
   expect(state.sectionsArgs.editionAccess).toEqual(EXPIRED);
-  expect(state.upsellArgs).toEqual([[EXPIRED, 'u1']]);
+  expect(state.upsellArgs).toEqual([[EXPIRED]]);
   expect(ctx.editionUpsell).toEqual(UPSELL);
 });
 

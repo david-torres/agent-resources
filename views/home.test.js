@@ -187,16 +187,15 @@ test('the FullCalendar container is gone from the homepage', () => {
   expect(html).not.toContain('id="calendar"');
 });
 
-const UPSELL = [{ edition: 'aspirant', label: 'Aspirant', count: 1, classes: [{ id: 'b', name: 'Berserker', teaser: 'Rage.' }] }];
+const UPSELL = [{ edition: 'aspirant', label: 'Aspirant', blurb: 'Unlock the full Aspirant versions.' }];
 
 test('the edition upsell renders for a signed-in player even with onboarding dismissed', () => {
   const html = render({ ...empty, profile: { name: 'Vex' }, hasCharacters: true, onboarding: { show: false }, editionUpsell: UPSELL });
-  expect(html).toContain('Aspirant: 1 class');
-  expect(html).toContain('Berserker');
-  expect(html).toContain('Rage.');
+  expect(html).toContain('data-upsell-edition="aspirant"');
+  expect(html).toContain('Unlock the full Aspirant versions.');
   expect(html).toContain('https://enclave-aspirant.backerkit.com/hosted_preorders/822771');
 });
 
 test('a signed-out visitor never sees the upsell', () => {
-  expect(render({ ...empty, profile: null, editionUpsell: UPSELL })).not.toContain('Aspirant: 1 class');
+  expect(render({ ...empty, profile: null, editionUpsell: UPSELL })).not.toContain('data-upsell-edition');
 });

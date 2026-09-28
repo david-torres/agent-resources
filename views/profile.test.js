@@ -110,10 +110,8 @@ test('the profile shows an upsell panel per locked edition', () => {
   const html = renderProfile({
     ...baseContext,
     unlockedClasses: [CLASS_PERMANENT],
-    editionUpsell: [{ edition: 'aspirant', label: 'Aspirant', count: 2, classes: [
-      { id: 'b', name: 'Berserker', teaser: 'Rage.' }, { id: 'v', name: 'Vessel', teaser: null }
-    ] }]
+    editionUpsell: [{ edition: 'aspirant', label: 'Aspirant', blurb: 'Unlock the full Aspirant versions.' }]
   });
-  expect(html).toContain('Aspirant: 2 classes');
-  expect(html).toContain('href="/classes/b/Berserker"');
+  expect(html).toContain('data-upsell-edition="aspirant"');
+  expect(html).toContain('Unlock the full Aspirant versions.');
 });

@@ -3,7 +3,7 @@ const { freshRequire } = require('../test/helpers/fresh-require');
 const realEditionAccess = require('../util/edition-access');
 
 const TRIAL = { advent: { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false }, aspirant: { state: 'none' } };
-const UPSELL = [{ edition: 'aspirant', label: 'Aspirant', count: 1, classes: [{ id: 'b', name: 'Berserker', teaser: 'Rage.' }] }];
+const UPSELL = [{ edition: 'aspirant', label: 'Aspirant', blurb: 'Aspirant blurb.' }];
 const upsellArgs = [];
 
 const overrides = new Map([
@@ -31,7 +31,7 @@ const overrides = new Map([
   }],
   [require.resolve('../models/badge'), { getProfileBadges: async () => ({ data: null, error: null }) }],
   [require.resolve('../services/access/upsell'), {
-    getEditionUpsell: async (editionAccess, userId) => { upsellArgs.push([editionAccess, userId]); return UPSELL; }
+    getEditionUpsell: (...args) => { upsellArgs.push(args); return UPSELL; }
   }],
   [require.resolve('../util/edition-access'), {
     ...realEditionAccess,
@@ -68,5 +68,5 @@ test('the profile carries the Advent trial for its badges and the upsell for loc
   expect(view).toBe('profile');
   expect(ctx.adventTrial).toEqual(TRIAL.advent);
   expect(ctx.editionUpsell).toEqual(UPSELL);
-  expect(upsellArgs).toEqual([[TRIAL, 'u1']]);
+  expect(upsellArgs).toEqual([[TRIAL]]);
 });

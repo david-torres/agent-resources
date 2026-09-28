@@ -17,10 +17,8 @@ router.get('/', authOptional, asyncHandler(async (req, res) => {
   // second, unbounded getOwnCharacters query (which pulls every column,
   // including background/appearance/private_notes/perks, of every character
   // the player owns) solely to compute this flag.
-  const [sections, editionUpsell] = await Promise.all([
-    loadHomeSections({ profile, client: res.locals.supabase, editionAccess: res.locals.editionAccess }),
-    profile ? getEditionUpsell(res.locals.editionAccess, res.locals.user.id) : []
-  ]);
+  const sections = await loadHomeSections({ profile, client: res.locals.supabase, editionAccess: res.locals.editionAccess });
+  const editionUpsell = profile ? getEditionUpsell(res.locals.editionAccess) : [];
 
   if (sections.onboarding?.persistDismiss && res.locals.user) {
     // Fire-and-forget: the gate/completion write must never delay the page.
