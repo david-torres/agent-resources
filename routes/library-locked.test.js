@@ -1,5 +1,5 @@
 // GET /library/:id/view without access stays a 403, but names a lapsed trial
-// and offers the edition's unlock. Scaffold from routes/library-view-onboarding.test.js.
+// and offers the edition's unlock.
 const { test, expect, beforeAll, afterAll, beforeEach } = require('bun:test');
 const { freshRequire } = require('../test/helpers/fresh-require');
 const realEditionAccess = require('../util/edition-access');
