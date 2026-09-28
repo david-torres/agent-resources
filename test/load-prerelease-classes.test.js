@@ -143,13 +143,13 @@ test.skipIf(!records)('a name no row of this format carries is created', () => {
   expect(planLoad([charlatan], elsewhere, book)[0].disposition).toBe('create');
 });
 
-test.skipIf(!records)('the load resolves 16 updates and 4 creates against the pre-load catalogue', () => {
-  expect(split(namesBeforeLoad)).toEqual({ update: 16, create: 4, ambiguous: 0 });
+test.skipIf(!records)('the load resolves 16 updates and 6 creates against the pre-load catalogue', () => {
+  expect(split(namesBeforeLoad)).toEqual({ update: 16, create: 6, ambiguous: 0 });
 });
 
 test.skipIf(!records)('re-running after a load creates nothing', () => {
   const afterLoad = records.map((record) => displayName(record.name));
-  expect(split(afterLoad)).toEqual({ update: 20, create: 0, ambiguous: 0 });
+  expect(split(afterLoad)).toEqual({ update: 22, create: 0, ambiguous: 0 });
 });
 
 test.skipIf(!forkRecords)('each V1 class forks off the roster id already in the catalogue, not its own', () => {
@@ -364,7 +364,7 @@ test.skipIf(!records)('every record maps to one of the three enum values', () =>
     const value = sectionEnum(record.prerelease_section);
     counts[value] = (counts[value] || 0) + 1;
   }
-  expect(counts).toEqual({ pcc: 11, exclusive: 3, aspirant: 6 });
+  expect(counts).toEqual({ pcc: 13, exclusive: 3, aspirant: 6 });
 });
 
 test('trimming takes the ends only and leaves rich-text runs alone', () => {
@@ -512,7 +512,7 @@ test.skipIf(!records)('ability pronunciation survives into the payload', () => {
   const pronunciations = records
       .flatMap((record) => buildPayload(record, book).abilities)
       .filter((ability) => ability.pronunciation);
-  expect(pronunciations).toHaveLength(2);
+  expect(pronunciations).toHaveLength(3);
 });
 
 test('every remap entry names a class row, one of the two kinds and two distinct names', () => {
