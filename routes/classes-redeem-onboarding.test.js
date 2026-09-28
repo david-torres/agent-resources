@@ -23,6 +23,7 @@
 // freshRequire is reachable from bun's require()/mock.module registry.
 const { test, expect, beforeAll, afterAll } = require('bun:test');
 const { freshRequire } = require('../test/helpers/fresh-require');
+const realEditionAccess = require('../util/edition-access');
 
 // Mutable per-test state, reset at the top of each test.
 let patchCalls = [];
@@ -92,6 +93,7 @@ const overrides = new Map([
     deletePdfObject: async () => ({ error: null }),
     CLASS_PDF_BUCKET: 'class-pdfs',
   }],
+  [require.resolve('../util/edition-access'), { ...realEditionAccess, populateEditionAccess: async () => {} }],
   [require.resolve('../util/system-message'), { getSystemMessage: () => null }],
   [require.resolve('../models/lfg'), { getPendingJoinRequestCount: async () => ({ count: 0 }) }],
   [require.resolve('../util/nav-loader'), {

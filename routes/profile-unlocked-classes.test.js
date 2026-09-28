@@ -17,6 +17,7 @@
 // substituting the overrides below by absolute path.
 const { test, expect, beforeAll, afterAll } = require('bun:test');
 const { freshRequire } = require('../test/helpers/fresh-require');
+const realEditionAccess = require('../util/edition-access');
 
 const UNLOCKED_CLASSES = [
   {
@@ -71,6 +72,7 @@ const overrides = new Map([
   [require.resolve('../models/badge'), {
     getProfileBadges: async () => ({ data: null, error: null }),
   }],
+  [require.resolve('../util/edition-access'), { ...realEditionAccess, populateEditionAccess: async () => {} }],
   [require.resolve('../util/system-message'), { getSystemMessage: () => null }],
   [require.resolve('../models/lfg'), { getPendingJoinRequestCount: async () => ({ count: 0 }) }],
   [require.resolve('../util/nav-loader'), {

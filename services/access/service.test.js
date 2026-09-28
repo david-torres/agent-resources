@@ -1,4 +1,4 @@
-const { test, expect } = require('bun:test');
+const { test, expect, spyOn } = require('bun:test');
 const { getEditionAccess } = require('./service');
 
 const NOW = new Date('2026-09-28T12:00:00Z');
@@ -27,15 +27,21 @@ test('passes the viewer timezone through to endsToday', async () => {
 });
 
 test('a repository error is null, never a confident "none"', async () => {
+  const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
   const access = await getEditionAccess('u1', NOW, {}, {
     fetchCoreBookGrantsForUser: async () => ({ data: null, error: { message: 'boom' } })
   });
   expect(access).toBeNull();
+  expect(errorSpy).toHaveBeenCalledTimes(1);
+  errorSpy.mockRestore();
 });
 
 test('a throwing repository is null', async () => {
+  const errorSpy = spyOn(console, 'error').mockImplementation(() => {});
   const access = await getEditionAccess('u1', NOW, {}, {
     fetchCoreBookGrantsForUser: async () => { throw new Error('down'); }
   });
   expect(access).toBeNull();
+  expect(errorSpy).toHaveBeenCalledTimes(1);
+  errorSpy.mockRestore();
 });
