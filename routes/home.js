@@ -19,7 +19,7 @@ router.get('/', authOptional, asyncHandler(async (req, res) => {
   // the player owns) solely to compute this flag.
   const [sections, editionUpsell] = await Promise.all([
     loadHomeSections({ profile, client: res.locals.supabase, editionAccess: res.locals.editionAccess }),
-    profile ? getEditionUpsell(res.locals.editionAccess) : []
+    profile ? getEditionUpsell(res.locals.editionAccess, res.locals.user.id) : []
   ]);
 
   if (sections.onboarding?.persistDismiss && res.locals.user) {

@@ -31,7 +31,7 @@ const overrides = new Map([
   }],
   [require.resolve('../models/badge'), { getProfileBadges: async () => ({ data: null, error: null }) }],
   [require.resolve('../services/access/upsell'), {
-    getEditionUpsell: async (editionAccess) => { upsellArgs.push(editionAccess); return UPSELL; }
+    getEditionUpsell: async (editionAccess, userId) => { upsellArgs.push([editionAccess, userId]); return UPSELL; }
   }],
   [require.resolve('../util/edition-access'), {
     ...realEditionAccess,
@@ -68,5 +68,5 @@ test('the profile carries the Advent trial for its badges and the upsell for loc
   expect(view).toBe('profile');
   expect(ctx.adventTrial).toEqual(TRIAL.advent);
   expect(ctx.editionUpsell).toEqual(UPSELL);
-  expect(upsellArgs).toEqual([TRIAL]);
+  expect(upsellArgs).toEqual([[TRIAL, 'u1']]);
 });

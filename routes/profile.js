@@ -41,7 +41,7 @@ router.get('/', isAuthenticated, async (req, res) => {
     if (data) badges = data;
   } catch (_) {}
 
-  const editionUpsell = await getEditionUpsell(res.locals.editionAccess);
+  const editionUpsell = await getEditionUpsell(res.locals.editionAccess, user.id);
 
   res.render('profile', {
     user,

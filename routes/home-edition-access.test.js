@@ -26,7 +26,7 @@ const overrides = new Map([
   }],
   [require.resolve('../models/pages'), { getAllNews: async () => ({ data: [], error: null }) }],
   [require.resolve('../services/access/upsell'), {
-    getEditionUpsell: async (editionAccess) => { state.upsellArgs.push(editionAccess); return UPSELL; }
+    getEditionUpsell: async (editionAccess, userId) => { state.upsellArgs.push([editionAccess, userId]); return UPSELL; }
   }],
   [require.resolve('../util/edition-access'), {
     ...realEditionAccess,
@@ -62,7 +62,7 @@ test('a signed-in home hands its edition status to onboarding and renders the up
   const { view, ctx } = await res.json();
   expect(view).toBe('home');
   expect(state.sectionsArgs.editionAccess).toEqual(EXPIRED);
-  expect(state.upsellArgs).toEqual([EXPIRED]);
+  expect(state.upsellArgs).toEqual([[EXPIRED, 'u1']]);
   expect(ctx.editionUpsell).toEqual(UPSELL);
 });
 
