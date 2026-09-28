@@ -3,6 +3,7 @@
 // unlock must not leak into another edition's fork).
 
 const { isLockedStatus } = require('../services/access/edition-status');
+const { CORE_CLASS_UNLOCKS } = require('./starter-content');
 
 const filterClassListsByIds = (lists, allowedIds) => {
   const filterArr = arr => (Array.isArray(arr) ? arr.filter(c => allowedIds.has(c.id)) : []);
@@ -44,7 +45,7 @@ const partitionClassGroups = (groups) => {
   return { released, pcc };
 };
 
-const OWNED_EDITIONS = ['advent', 'aspirant'];
+const OWNED_EDITIONS = Object.keys(CORE_CLASS_UNLOCKS);
 
 // The /classes catalog's sections, decided per version group by its primary
 // and checked in this order. Pre-release comes first because it must win over
