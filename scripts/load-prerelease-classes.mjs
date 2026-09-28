@@ -37,6 +37,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
 import { ASPIRANT_V1_CLASS_IDS, CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
+import { buildClassTeaser } from '../services/class/teaser.js';
 import { bookFor } from './lib/books.mjs';
 import {
   ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
@@ -49,7 +50,7 @@ const SECTIONS = { PCCs: 'pcc', EXCLUSIVES: 'exclusive', 'ASPIRANT CLASSES': 'as
 const CONTENT_FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'quote', 'quote_source',
     'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples', 'tips_heading',
     'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear',
-    'advanced_abilities', 'expanded_tips'];
+    'advanced_abilities', 'expanded_tips', 'teaser'];
 
 // `prerelease_section` is the pre-release document's own sectioning: the V1
 // artifact carries no such key, and DERIVED.prerelease_section would throw on a
@@ -108,7 +109,8 @@ const DERIVED = {
   // because the allowlist test compares the payload's key set against the
   // book's field list exactly.
   advanced_abilities: (record) => record.advanced_abilities ?? [],
-  expanded_tips: (record) => record.expanded_tips ?? { player: [], conduit: [] }
+  expanded_tips: (record) => record.expanded_tips ?? { player: [], conduit: [] },
+  teaser: (record) => record.teaser || buildClassTeaser(record.overview, record.designer)
 };
 
 // util/whitespace-integrity.integration.test.js fails the build on any stored

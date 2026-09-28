@@ -61,10 +61,9 @@ const ADVENT_NAMES = ['Gunslinger', 'Illusionist', 'Librarian', 'Thane', 'Thunde
 const parentRow = (name, over = {}) => row(name, { id: PARENT_IDS[name], ...over });
 
 // Columns the owner controls: no payload may flip a row's visibility, its
-// status, whether it is player-created, its marketing copy, or the
-// `rules_version` an owner set -- the insert that creates a row is the only
-// thing that writes those.
-const FORBIDDEN = ['is_public', 'status', 'is_player_created', 'teaser', 'image_url', 'image_crop',
+// status, whether it is player-created, or the `rules_version` an owner set --
+// the insert that creates a row is the only thing that writes those.
+const FORBIDDEN = ['is_public', 'status', 'is_player_created', 'image_url', 'image_crop',
   'rules_version'];
 
 // A fork mints these four itself. An update or a create must leave every one of
@@ -439,6 +438,60 @@ test.skipIf((!records || !forkRecords))('every payload carries expanded_tips, wh
       .toEqual({ player: [], conduit: [] });
   expect(buildPayload(berserkerRecord, forkBook).expanded_tips)
       .toEqual(berserkerRecord.expanded_tips);
+});
+
+// ClassService derives a blank teaser from the overview; the loader bypasses
+// the service, so it derives the same one and writes it like any content field.
+const DERIVED_TEASER = 'You are a furious warrior. Design by Jane Doe';
+const teaserFields = {
+  tips: [], designer: 'Jane Doe',
+  overview: 'Class stats: 3 / 2 / 1\nYou are a **furious** warrior. Second sentence.\nSecond line.'
+};
+const pccRecord = (over = {}) =>
+    ({ name: 'ZOOLOGIST', prerelease_section: 'PCCs', ...teaserFields, ...over });
+const forkRecord = (over = {}) => ({ name: 'BERSERKER', ...teaserFields, ...over });
+const existingBerserkerFork = (over = {}) => row('Berserker', { id: 'fork-berserker',
+  content_format: 'aspirant', rules_edition: 'aspirant', base_class_id: PARENT_IDS.Berserker, ...over });
+const changedFields = (plan) => diffFields(plan.payload, plan.row).map((change) => change.field);
+
+test('a created class carries the first-sentence teaser derived from its overview', () => {
+  const [plan] = planLoad([pccRecord()], [], book);
+  expect(plan.disposition).toBe('create');
+  expect(plan.payload.teaser).toBe(DERIVED_TEASER);
+});
+
+test('a new fork carries the first-sentence teaser derived from its overview', () => {
+  const [plan] = planLoad([forkRecord()], [parentRow('Berserker')], forkBook);
+  expect(plan.disposition).toBe('fork');
+  expect(plan.payload.teaser).toBe(DERIVED_TEASER);
+});
+
+test('a teaser the book supplies wins over the derived one', () => {
+  const [plan] = planLoad([pccRecord({ teaser: 'The book\'s own teaser.' })], [], book);
+  expect(plan.payload.teaser).toBe('The book\'s own teaser.');
+});
+
+test('an existing row with a missing or different teaser is overwritten with the derived one', () => {
+  for (const teaser of [null, 'Some older copy.']) {
+    const [update] = planLoad([pccRecord()], [row('Zoologist', { teaser })], book);
+    expect(update.payload.teaser).toBe(DERIVED_TEASER);
+    expect(changedFields(update)).toContain('teaser');
+
+    const [rerun] = planLoad([forkRecord()],
+        [parentRow('Berserker'), existingBerserkerFork({ teaser })], forkBook);
+    expect(rerun.disposition).toBe('update');
+    expect(rerun.payload.teaser).toBe(DERIVED_TEASER);
+    expect(changedFields(rerun)).toContain('teaser');
+  }
+});
+
+test('a second run after the teaser was written reports no teaser change', () => {
+  const [update] = planLoad([pccRecord()], [row('Zoologist', { teaser: DERIVED_TEASER })], book);
+  expect(changedFields(update)).not.toContain('teaser');
+
+  const [rerun] = planLoad([forkRecord()],
+      [parentRow('Berserker'), existingBerserkerFork({ teaser: DERIVED_TEASER })], forkBook);
+  expect(changedFields(rerun)).not.toContain('teaser');
 });
 
 test.skipIf(!records)('tips are written as a markdown bullet list', () => {

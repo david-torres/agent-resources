@@ -55,3 +55,21 @@ test('buildClassTeaser skips a leading "Class Stats:" line even when it is bold-
   const overview = '**Class Stats:** ++ LUCK / + VITALITY\r\n\r\nYou are an eclectic globetrotter who has seen more places than you can remember.';
   expect(buildClassTeaser(overview, null)).toBe('You are an eclectic globetrotter who has seen more places than you can remember.');
 });
+
+test('buildClassTeaser keeps only the first sentence of the first content line', () => {
+  const overview = 'You are a jaunty gunman whose cool-headed gravitas is backed up by deadly firepower. You pose an immediate threat.';
+  expect(buildClassTeaser(overview, null))
+    .toBe('You are a jaunty gunman whose cool-headed gravitas is backed up by deadly firepower.');
+});
+
+test('buildClassTeaser credits the designer after the first sentence, with markdown stripped', () => {
+  const overview = 'Class Stats: ++ LUCK\n\nYou are a **furious** warrior! You hit hard.';
+  expect(buildClassTeaser(overview, 'Jane Doe')).toBe('You are a furious warrior! Design by Jane Doe');
+});
+
+test('buildClassTeaser returns the whole stripped line, untruncated, when it has no sentence terminator', () => {
+  const line = 'You are a wanderer who has walked every road between the northern fells and the southern marshes '
+    + 'and has never once stopped long enough to learn the name of the town you slept in';
+  expect(line.length).toBeGreaterThan(160);
+  expect(buildClassTeaser(`**${line}**`, null)).toBe(line);
+});

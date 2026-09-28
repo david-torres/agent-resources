@@ -5,10 +5,10 @@ const buildClassTeaser = (overview, designer) => {
 
   let line = null;
   for (const rawLine of overview.split('\n')) {
-    const stripped = buildExcerpt(rawLine);
+    const stripped = buildExcerpt(rawLine, Infinity);
     if (!stripped) continue;
     if (/^class stats:/i.test(stripped)) continue;
-    line = stripped;
+    line = stripped.match(/^.*?[.!?](?=\s|$)/)?.[0] ?? stripped;
     break;
   }
 
