@@ -322,5 +322,6 @@ const fixture = (overrides = {}) => {
 };
 
 module.exports = {
-  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState
+  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState,
+  ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS
 };

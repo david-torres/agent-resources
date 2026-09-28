@@ -144,10 +144,10 @@ test('a lapsed Advent trial keeps the Advent class in the wizard as a locked tea
   expect(ctx.adventTrialEndedAt).toBe('2026-09-20T12:00:00Z');
 });
 
-test('the Aspirant wizard teases the Aspirant fork under Aspirant and shows no Advent-trial alert', async () => {
+test('the Aspirant wizard teases locked classes of both formats and shows no Advent-trial alert', async () => {
   const { ctx } = await get('/characters/wizard?mode=aspirant');
   expect(ctx.lockedClassGroups.map(g => ({ edition: g.edition, ids: g.classes.map(c => c.id) })))
-    .toEqual([{ edition: 'aspirant', ids: [ASPIRANT_GUN.id] }]);
+    .toEqual([{ edition: 'advent', ids: [ADVENT_GUN.id] }, { edition: 'aspirant', ids: [ASPIRANT_GUN.id] }]);
   expect(ctx.adventTrialEndedAt).toBeNull();
 });
 

@@ -324,12 +324,12 @@ test('the wizard grants a class its Core abilities, never its Advanced ones', ()
 // kiosk it belongs in. RANGER_ASPIRANT_FORMAT sits in the advent-edition pool
 // but is Aspirant-shaped content; STALKER_ASPIRANT is the opposite (Aspirant
 // edition, Advent-shaped content, per the six real pre-release classes).
-test('?mode=aspirant keeps only classes whose content_format is aspirant', async () => {
+test('?mode=aspirant keeps classes of every content_format, since an Advent class can be built under Aspirant rules', async () => {
   const ids = (await fetchWizardClasses('?mode=aspirant')).map(c => c.id);
   expect(ids).toContain('ranger-aspirant-format');
-  expect(ids).not.toContain('stalker-aspirant');
-  expect(ids).not.toContain('stalker-v2');
-  expect(ids).not.toContain('warden-v1');
+  expect(ids).toContain('stalker-aspirant');
+  expect(ids).toContain('stalker-v2');
+  expect(ids).toContain('warden-v1');
 });
 
 test('the default mode (advent) excludes aspirant-format classes', async () => {

@@ -20,7 +20,8 @@
 // reuse them.
 const { test, expect, describe } = require('bun:test');
 const {
-  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState
+  bootWizard, fixture, twelveItems, sixItems, aspiringStateWithBuild, aspirantStateAtLevel, adventState,
+  ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS
 } = require('./helpers/wizard-fixture');
 const { economyFigures } = require('../util/merx-economy');
 const { statCapFigures } = require('../util/stat-caps');
@@ -1668,6 +1669,22 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     expect(html).toContain('3 Perks');
     expect(html).toContain('Other Advanced');
     expect(html).toContain('4 Perks');
+  });
+
+  test('the shop offers no Cross-Class abilities from an Advent-format class', () => {
+    const adventClass = {
+      id: 'fixture-advent-other', name: 'Fixture Advent Class', content_format: 'advent',
+      stat_spread: {}, gear: [], class_gear: [], base_gear: [],
+      abilities: [{ name: 'Advent Core' }],
+      advanced_abilities: [{ name: 'Advent Advanced' }]
+    };
+    const wizard = aspirantStateAtLevel(1, {
+      classes: [ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS, adventClass]
+    });
+    const html = wizard.renderAbilityShop(wizard.getState());
+    expect(html).toContain('Other Core');
+    expect(html).not.toContain('Advent Core');
+    expect(html).not.toContain('Advent Advanced');
   });
 
   test('a Cross-Class pick prices at the cross tier, not the own tier', () => {

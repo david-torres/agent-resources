@@ -269,21 +269,23 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   }
   const preselectedClassId = (req.query.class || '').toString() || null;
 
-  // The class pool, filtered to the mode's content_format ('aspiring' shows
-  // every format), then collapsed so version families show one card each
-  // (same rule as the /classes list). A preselected class is exempt from
-  // both: a link from an older version's page, or one whose format does not
-  // match the mode, must still find its card.
+  // The class pool, filtered to advent-format classes in advent mode (the
+  // other modes can build a class of either format), then collapsed so
+  // version families show one card each (same rule as the /classes list). A
+  // preselected class is exempt from both: a link from an older version's
+  // page, or one whose format does not match the mode, must still find its
+  // card.
   // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
   // and display fields for the slider card. Teaser and tips are stored as
   // markdown and rendered to safe HTML here so the client can drop them into
   // the wizard panel verbatim (no client-side markdown lib).
   const { filteredAdvent, filteredAspirant, filteredPCC, lockedClasses } = await filterClassDataForUser(user, res.locals.editionAccess);
+  const fitsWizardMode = (c) => mode !== 'advent' || (c.content_format || 'advent') === 'advent';
   const wizardClasses = latestClassVersions(
     [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
     { keep: [preselectedClassId] }
   )
-    .filter((c) => mode === 'aspiring' || (c.content_format || 'advent') === mode || c.id === preselectedClassId)
+    .filter((c) => fitsWizardMode(c) || c.id === preselectedClassId)
     .map((c) => ({
       id: c.id,
       name: c.name,
@@ -373,7 +375,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     mode,
     preselectedClassId,
     wizardClasses,
-    lockedClassGroups: mode === 'aspiring' ? [] : lockedClassGroupsFor(lockedClasses, (c) => c.content_format === mode),
+    lockedClassGroups: mode === 'aspiring' ? [] : lockedClassGroupsFor(lockedClasses, fitsWizardMode),
     adventTrialEndedAt: mode === 'advent' ? trialEndedAt(res.locals.editionAccess, 'advent') : null,
     statList,
     personalityMap,
