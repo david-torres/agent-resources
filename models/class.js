@@ -141,14 +141,13 @@ const getEffectiveClassUnlocks = async (userId) => {
     for (const book of books || []) {
         for (const id of coreClassIdsForEditions([book.rules_edition])) rawUnion.add(id);
     }
-    // rawUnion is a superset of directIds, so an empty union means no direct
-    // ids either — `empty` is the whole answer.
     const expand = (idSet) => (classRows ? expandIdsToFamilies(classRows, idSet) : new Set(idSet));
     // Every edition's roster, owned or not: the catalog and pickers tease the
     // ones the viewer lacks.
     const rosterIdsByEdition = Object.fromEntries(
         Object.keys(CORE_CLASS_UNLOCKS).map(edition => [edition, expand(coreClassIdsForEditions([edition]))])
     );
+    // rawUnion contains directIds, so an empty union means no unlocks of any kind.
     if (rawUnion.size === 0) return { ...empty, rosterIdsByEdition, error: readError };
 
     // A fork inherits the source of whatever unlocked its seed id: expand
