@@ -8,6 +8,7 @@ const realLfg = require('../models/lfg');
 const realAgentToken = require('../models/agent-token');
 const realNavLoader = require('./nav-loader');
 const realOauthToken = require('./oauth-token');
+const realEditionAccess = require('./edition-access');
 
 const fakeAnon = { __name: 'anon', auth: { getUser: async () => ({ data: { user: null }, error: null }) } };
 const fakeAdmin = { __name: 'admin' };
@@ -50,6 +51,14 @@ mock.module('./oauth-token', () => ({
   }
 }));
 
+const editionAccessCalls = [];
+mock.module('./edition-access', () => ({
+  populateEditionAccess: async (req, res) => {
+    editionAccessCalls.push(res.locals.profile);
+    res.locals.editionAccess = { advent: { state: 'none' }, aspirant: { state: 'none' } };
+  }
+}));
+
 delete require.cache[require.resolve('./auth')];
 const { isAuthenticated, authOptional, isAgentAuthenticated, resolveAgentAuth, resolveMcpAuth } = require('./auth');
 
@@ -62,6 +71,7 @@ afterAll(() => {
   mock.module('../models/agent-token', () => realAgentToken);
   mock.module('./nav-loader', () => realNavLoader);
   mock.module('./oauth-token', () => realOauthToken);
+  mock.module('./edition-access', () => realEditionAccess);
   delete require.cache[require.resolve('./auth')];
 });
 
@@ -361,4 +371,28 @@ describe('resolveMcpAuth', () => {
       expect(await resolveMcpAuth(reqWith({ authorization: 'Bearer aat_wrong' }))).toEqual({ ok: false, reason: 'invalid', error: 'Invalid agent token' });
     });
   });
+});
+
+test('isAuthenticated attaches edition access once the profile is known', async () => {
+  editionAccessCalls.length = 0;
+  const res = makeRes();
+  await isAuthenticated(makeReq({ authorization: 'Bearer valid-jwt' }), res, () => {});
+  expect(editionAccessCalls).toEqual([{ id: 'p1', user_id: 'u1' }]);
+  expect(res.locals.editionAccess.advent.state).toBe('none');
+});
+
+test('authOptional with a token attaches edition access', async () => {
+  editionAccessCalls.length = 0;
+  const res = makeRes();
+  await authOptional(makeReq({ authorization: 'Bearer valid-jwt' }), res, () => {});
+  expect(editionAccessCalls).toHaveLength(1);
+  expect(res.locals.editionAccess).toBeDefined();
+});
+
+test('authOptional without a token looks nothing up', async () => {
+  editionAccessCalls.length = 0;
+  const res = makeRes();
+  await authOptional(makeReq({}), res, () => {});
+  expect(editionAccessCalls).toHaveLength(0);
+  expect(res.locals.editionAccess).toBeUndefined();
 });

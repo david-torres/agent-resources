@@ -6,6 +6,7 @@ const { verifyOAuthAccessToken } = require('./oauth-token');
 const { getPendingJoinRequestCount } = require('../models/lfg');
 const { verifyAgentToken, AGENT_TOKEN_PREFIX } = require('../models/agent-token');
 const { populateNavItems } = require('./nav-loader');
+const { populateEditionAccess } = require('./edition-access');
 
 function isSameOriginPath(value) {
   if (typeof value !== 'string' || value.length === 0) return false;
@@ -85,6 +86,7 @@ async function isAuthenticated(req, res, next) {
     }
 
     await populateNavItems(req, res);
+    await populateEditionAccess(req, res);
 
     const redirectTo = req.headers['redirect-to'];
     if (isSameOriginPath(redirectTo)) {
@@ -124,6 +126,7 @@ async function authOptional(req, res, next) {
     res.locals.systemMessage = null;
   }
   await populateNavItems(req, res);
+  await populateEditionAccess(req, res);
   const redirectTo = req.headers['redirect-to'];
   if (isSameOriginPath(redirectTo)) {
     const referer = safeRefererPath(req.headers['referer']);
