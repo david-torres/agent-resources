@@ -1,4 +1,4 @@
 <div class="notification is-danger" role="alert" aria-live="assertive" data-trial-ended>
-  <p>{{#if lead}}{{lead}} your{{else}}Your{{/if}} {{edition_label edition}} free trial ended {{date_tz endedAt "MMM D, YYYY" @root.profile.timezone}}.</p>
+  <p>{{> access/trial-ended-text edition=edition endedAt=endedAt lead=lead}}</p>
   {{> access/unlock-cta edition=edition}}
 </div>

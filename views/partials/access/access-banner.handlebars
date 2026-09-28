@@ -6,7 +6,7 @@
 </div>
 {{else if (eq editionAccess.advent.state 'expired')}}
 <div id="access-banner" class="notification is-danger mb-4" role="alert" data-access-banner="expired">
-  <p class="title is-4 mb-2">Your Advent free trial ended {{date_tz editionAccess.advent.endedAt "MMM D, YYYY" @root.profile.timezone}}.</p>
+  <p class="title is-4 mb-2">{{> access/trial-ended-text edition="advent" endedAt=editionAccess.advent.endedAt lead=null}}</p>
   <p>Advent classes, character abilities and the rulebook are locked.</p>
   {{> access/unlock-cta edition="advent"}}
 </div>

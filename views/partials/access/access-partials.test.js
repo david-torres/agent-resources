@@ -94,3 +94,11 @@ test('a trial-ended alert without a lead reads as a sentence of its own', () => 
   const html = render('{{> access/trial-ended-alert edition="advent" endedAt=endedAt}}', { endedAt: '2026-09-20T12:00:00Z' });
   expect(html).toContain('Your Advent free trial ended Sep 20, 2026.');
 });
+
+test('the trial-ended sentence renders with and without a lead', () => {
+  const context = { endedAt: '2026-09-20T12:00:00Z' };
+  expect(render('{{> access/trial-ended-text edition="advent" endedAt=endedAt lead=null}}', context).trim())
+    .toBe('Your Advent free trial ended Sep 20, 2026.');
+  expect(render('{{> access/trial-ended-text edition="aspirant" endedAt=endedAt lead="Heads up:"}}', context).trim())
+    .toBe('Heads up: your Aspirant free trial ended Sep 20, 2026.');
+});
