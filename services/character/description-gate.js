@@ -7,33 +7,45 @@
 const { getLfgPost } = require('../../models/lfg');
 const { getUnlockedClassIdsForUser } = require('../../models/class');
 
+// Each blank reports whether it removed text, so the caller can tell the
+// viewer that something was hidden.
+const blankField = (item, key) => {
+  if (!item[key]) return false;
+  item[key] = '';
+  return true;
+};
+
 const blankDefaultEnchantment = (gear) => {
-  if (gear.default_enchantment) {
-    gear.default_enchantment = { ...gear.default_enchantment, description: '' };
-  }
+  if (!gear.default_enchantment?.description) return false;
+  gear.default_enchantment = { ...gear.default_enchantment, description: '' };
+  return true;
 };
 
 const blankAll = (character) => {
+  let gated = false;
   try {
     if (Array.isArray(character.abilities)) {
       for (const ability of character.abilities) {
-        if (ability) ability.description = '';
+        if (ability) gated = blankField(ability, 'description') || gated;
       }
     }
     if (Array.isArray(character.gear)) {
       for (const gear of character.gear) {
         if (gear) {
-          gear.description = '';
-          blankDefaultEnchantment(gear);
+          gated = blankField(gear, 'description') || gated;
+          gated = blankDefaultEnchantment(gear) || gated;
         }
       }
     }
   } catch (_) { /* ignore */ }
+  return gated;
 };
 
-// Mutates class-authored descriptions on the character and returns it. Fails
-// closed: any unexpected error blanks them rather than throwing.
+// Mutates class-authored descriptions on the character and reports whether
+// any were hidden. Fails closed: any unexpected error blanks them rather than
+// throwing.
 const applyDescriptionGate = async ({ character, profile, userId = null, lfgPostId = null, client }) => {
+  let gated = false;
   try {
     let hostingViaLfg = false;
 
@@ -68,7 +80,7 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
             (ability.class_id && !unlockedClassIds.has(ability.class_id)) ||
             (!ability.class_id && !profile)
           )) {
-            ability.description = '';
+            gated = blankField(ability, 'description') || gated;
           }
         }
       }
@@ -79,20 +91,20 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
             (gear.class_id && !unlockedClassIds.has(gear.class_id)) ||
             (!gear.class_id && !profile)
           ) {
-            gear.description = '';
+            gated = blankField(gear, 'description') || gated;
           }
           // A Default Enchantment comes from the class book, even if the
           // purchase row has no class_id. Without one, access cannot be proven.
           if (!gear.class_id || !unlockedClassIds.has(gear.class_id)) {
-            blankDefaultEnchantment(gear);
+            gated = blankDefaultEnchantment(gear) || gated;
           }
         }
       }
     }
   } catch (_) {
-    blankAll(character);
+    gated = blankAll(character) || gated;
   }
-  return character;
+  return { character, gated };
 };
 
 module.exports = { applyDescriptionGate };

@@ -46,6 +46,7 @@ const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissio
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { renderMarkdown } = require('../util/markdown');
+const { trialEndedAt } = require('../util/edition-access');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
@@ -1131,7 +1132,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         // owner link is optional
       }
 
-      await applyDescriptionGate({
+      const { gated: descriptionsGated } = await applyDescriptionGate({
         character,
         profile,
         userId: (profile && profile.user_id) || (res.locals.user && res.locals.user.id) || null,
@@ -1241,6 +1242,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         merxBreakdown,
         perkBreakdown,
         buildBreaches,
+        adventTrialEndedAt: descriptionsGated && characterClass?.rules_edition === 'advent'
+          ? trialEndedAt(res.locals.editionAccess, 'advent')
+          : null,
         // Each Stat's real Cap, for the live stat editor and the level-up modal
         // this page mounts. Both write through routes that already judge a Stat
         // against the same Cap (statCapError, services/character/service.js), so

@@ -238,11 +238,61 @@ test('a failing unlock lookup fails closed on class-gated items', async () => {
 test('returns the same character object it mutated', async () => {
   const character = makeCharacter();
   const result = await applyDescriptionGate({ character, profile: null, client: {} });
-  expect(result).toBe(character);
+  expect(result.character).toBe(character);
 });
 
-test('a character with no abilities or gear arrays passes through untouched', async () => {
+test('a character with no abilities or gear arrays passes through untouched and ungated', async () => {
   const character = { id: 'char-1' };
   const result = await applyDescriptionGate({ character, profile: null, client: {} });
-  expect(result).toBe(character);
+  expect(result).toEqual({ character, gated: false });
+});
+
+test('a locked viewer losing a description is reported as gated', async () => {
+  const result = await applyDescriptionGate({ character: makeCharacter(), profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expect(result.gated).toBe(true);
+});
+
+test('an unlocked viewer is not gated', async () => {
+  state.unlockedIds = new Set(['class-a']);
+  const result = await applyDescriptionGate({ character: makeCharacter(), profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expect(result.gated).toBe(false);
+});
+
+test('blanking descriptions that were already empty is not gating', async () => {
+  const character = {
+    id: 'char-1',
+    abilities: [{ name: 'Fireball', description: '', class_id: 'class-a' }],
+    gear: [{ name: 'Staff', description: '', class_id: 'class-a' }]
+  };
+  const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expect(result.gated).toBe(false);
+});
+
+test('a hidden Default Enchantment alone counts as gated', async () => {
+  const character = {
+    id: 'char-1',
+    gear: [{ name: 'Hat', description: '', class_id: 'class-a', default_enchantment: { name: 'Hats Off', description: 'secret' } }]
+  };
+  const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expect(result.gated).toBe(true);
+});
+
+test('the fail-closed path reports what it gated', async () => {
+  state.unlocksThrow = true;
+  const result = await applyDescriptionGate({ character: makeCharacter(), profile: { id: 'p1', user_id: 'u1' }, userId: 'u1', client: {} });
+  expect(result.gated).toBe(true);
+});
+
+test('an unexpected error while gating blanks everything and reports it gated', async () => {
+  let armed = true;
+  const character = makeCharacter();
+  Object.defineProperty(character.abilities[0], 'class_id', {
+    get() {
+      if (armed) { armed = false; throw new Error('boom'); }
+      return 'class-a';
+    }
+  });
+  const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, userId: 'u1', client: {} });
+  expect(descriptions(result.character)).toEqual({ abilities: ['', ''], gear: [''] });
+  expect(result.gated).toBe(true);
 });

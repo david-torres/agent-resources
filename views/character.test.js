@@ -254,3 +254,26 @@ test('a v2 character sheet shows none of its stored v1-only text', () => {
   expect(v1).toContain('Old perk prose');
   expect(v1).toContain('Old gear prose');
 });
+
+const { registerAccessPartials } = require('../test/helpers/access-partials');
+
+const renderSheetHeader = (locals) => {
+  const header = CHARACTER_SRC.slice(0, CHARACTER_SRC.indexOf('<h1'));
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  hb.registerPartial('breadcrumbs', '');
+  registerAccessPartials(hb);
+  return hb.compile(header)(locals);
+};
+
+test('the sheet opens with the lapsed-trial alert when descriptions were hidden', () => {
+  const html = renderSheetHeader({ adventTrialEndedAt: '2026-09-20T12:00:00Z', profile: { timezone: 'UTC' } });
+  expect(html).toContain('Ability and gear descriptions are hidden because your Advent free trial ended Sep 20, 2026.');
+  expect(html).toContain('data-trial-ended');
+});
+
+test('the sheet has no lapsed-trial alert without an end date', () => {
+  const html = renderSheetHeader({ adventTrialEndedAt: null, profile: { timezone: 'UTC' } });
+  expect(html).not.toContain('data-trial-ended');
+});

@@ -54,7 +54,7 @@ mock.module('../models/profile', () => ({
 }));
 mock.module('../models/badge', () => ({ ...realBadge, getProfileBadges: async () => ({ data: [] }) }));
 mock.module('../models/offscreen-mission', () => ({ ...realOffscreen, listOffscreenMissions: async () => ({ data: [] }) }));
-mock.module('../services/character/description-gate', () => ({ applyDescriptionGate: async () => {} }));
+mock.module('../services/character/description-gate', () => ({ applyDescriptionGate: async ({ character }) => ({ character, gated: false }) }));
 mock.module('../util/nav-loader', () => ({ populateNavItems: async () => {}, loadNavItems: (req, res, next) => next() }));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 
