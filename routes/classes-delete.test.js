@@ -23,6 +23,7 @@ const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
 const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
+const realEditionAccess = require('../util/edition-access');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 
@@ -74,6 +75,7 @@ mock.module('../models/class', () => ({
   deleteClass: async () => ({ error: null }),
 }));
 
+mock.module('../util/edition-access', () => ({ ...realEditionAccess, populateEditionAccess: async () => {} }));
 mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../models/lfg', () => ({ getPendingJoinRequestCount: async () => ({ count: 0 }) }));
 mock.module('../util/nav-loader', () => ({
@@ -101,6 +103,7 @@ afterAll(async () => {
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
   mock.module('../models/class', () => realClass);
+  mock.module('../util/edition-access', () => realEditionAccess);
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);

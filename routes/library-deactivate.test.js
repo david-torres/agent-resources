@@ -8,6 +8,7 @@
 // is_active as false, or a rules PDF can never be deactivated from the UI.
 const { test, expect, beforeAll, afterAll } = require('bun:test');
 const { freshRequire } = require('../test/helpers/fresh-require');
+const realEditionAccess = require('../util/edition-access');
 
 const PDF_A = '11111111-1111-4111-8111-111111111111';
 
@@ -54,6 +55,7 @@ const overrides = new Map([
     getSignedPdfUrl: async () => ({ data: null, error: null }),
     RULES_PDF_BUCKET: 'rules-pdfs',
   }],
+  [require.resolve('../util/edition-access'), { ...realEditionAccess, populateEditionAccess: async () => {} }],
   [require.resolve('../util/system-message'), { getSystemMessage: () => null }],
   [require.resolve('../models/lfg'), { getPendingJoinRequestCount: async () => ({ count: 0 }) }],
   [require.resolve('../util/nav-loader'), {
