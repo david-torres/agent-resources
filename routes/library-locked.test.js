@@ -101,3 +101,9 @@ test('a non-boosted htmx request keeps the inline 403', async () => {
   expect(res.status).toBe(403);
   expect((await res.json()).view).toBe('error-inline');
 });
+
+test('a history restore renders the locked page, as the layout it replaces', async () => {
+  const res = await open(ADVENT_ID, { Authorization: 'Bearer valid-jwt', 'HX-Request': 'true', 'HX-Target': 'alerts', 'HX-History-Restore-Request': 'true' });
+  expect(res.status).toBe(403);
+  expect((await res.json()).view).toBe('library-locked');
+});

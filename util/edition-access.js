@@ -21,4 +21,4 @@ const trialStatus = (editionAccess, edition) =>
 const trialEndedAt = (editionAccess, edition) =>
   (editionAccess?.[edition]?.state === 'expired' ? editionAccess[edition].endedAt : null);
 
-module.exports = { populateEditionAccess, trialStatus, trialEndedAt };
+module.exports = { populateEditionAccess, rendersLayout, trialStatus, trialEndedAt };
