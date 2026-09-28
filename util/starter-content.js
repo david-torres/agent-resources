@@ -67,4 +67,18 @@ const CORE_CLASS_UNLOCKS = {
   },
 };
 
-module.exports = { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS, ASPIRANT_V1_CLASS_IDS };
+const EDITION_LABELS = { advent: 'Advent', aspirant: 'Aspirant' };
+
+// A falsy URL makes every CTA for that edition redeem-only.
+const EDITION_PURCHASE_URLS = {
+  advent: 'https://enclave-aspirant.backerkit.com/hosted_preorders/822768',
+  aspirant: 'https://enclave-aspirant.backerkit.com/hosted_preorders/822771',
+};
+
+module.exports = {
+  STARTER_RULES_PDF_ID,
+  CORE_CLASS_UNLOCKS,
+  ASPIRANT_V1_CLASS_IDS,
+  EDITION_LABELS,
+  EDITION_PURCHASE_URLS
+};

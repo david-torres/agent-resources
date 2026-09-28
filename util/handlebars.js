@@ -8,6 +8,10 @@ const { v1LevelingSequence, v2LevelingSequence, personalityMap } = require('./en
 // post 'default', and land in the wrong column the moment it sits fourth.
 // Re-exported rather than reimplemented so the rule has one home.
 const { gearCategory } = require('./class-gear');
+const { EDITION_LABELS, EDITION_PURCHASE_URLS } = require('./starter-content');
+
+const edition_label = (edition) => EDITION_LABELS[edition] || '';
+const edition_purchase_url = (edition) => EDITION_PURCHASE_URLS[edition] || '';
 
 
 // N times helper, usage: {{#times 5}}<div>{{index}}</div>{{/times}}
@@ -301,5 +305,7 @@ module.exports = {
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
   nextPerkPosition: nextPerkPositionH,
-  json: jsonH
+  json: jsonH,
+  edition_label,
+  edition_purchase_url
 }
