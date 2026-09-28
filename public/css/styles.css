@@ -1773,3 +1773,35 @@ a.dropdown-item:hover {
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* Library reading order: introduction, core rules, expansion, reference. */
+.library-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 2rem;
+  padding: 2rem;
+  margin-bottom: 1.5rem;
+  border: 1px solid #dbdbdb;
+  border-radius: 6px;
+  scroll-margin-top: 5rem;
+}
+.library-section--advent {
+  border-left: 5px solid #363636;
+  background: #f5f5f5;
+}
+.library-eyebrow {
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+.library-description { line-height: 1.7; }
+.library-note { margin-top: 1rem; font-weight: 600; }
+.library-books { display: grid; gap: 1rem; align-content: start; min-width: 0; }
+.library-books .card { box-shadow: none; border: 1px solid #dbdbdb; }
+.library-books .title { overflow-wrap: anywhere; }
+.library-section--reference { margin-bottom: 1rem; }
+@media (max-width: 768px) {
+  .library-section { grid-template-columns: 1fr; padding: 1.25rem; gap: 1.25rem; }
+}

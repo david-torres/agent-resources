@@ -138,7 +138,7 @@ test('GET /library marks a free PDF viewable for a signed-out visitor', async ()
   const res = await fetch(`${baseUrl}/library`); // no auth header
   expect(res.status).toBe(200);
   const { ctx } = await res.json();
-  const allRules = ctx.ruleGroups.flatMap(g => [g.primary, ...(g.previous || [])].filter(Boolean));
+  const allRules = ctx.librarySections.flatMap(section => section.groups).flatMap(g => [g.primary, ...(g.previous || [])].filter(Boolean));
   const quickstart = allRules.find(r => r.id === PDF_FREE);
   expect(quickstart).toBeTruthy();
   expect(quickstart.canView).toBe(true);

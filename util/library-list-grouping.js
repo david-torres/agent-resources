@@ -28,4 +28,37 @@ const groupRulesVersions = (rules) => {
   });
 };
 
-module.exports = { groupRulesVersions };
+// Presentation categories do not grant access or change a book's ruleset.
+const libraryCategory = ({ title = '', book_type, rules_edition }) => {
+  if (/quick[\s-]*start/i.test(title)) return 'quickstart';
+  if (/glossary|keyword/i.test(title)) return 'reference';
+  if (book_type === 'core' && rules_edition === 'aspirant') return 'aspirant';
+  if (book_type === 'core' && rules_edition === 'advent') return 'advent';
+  // Older records may predate explicit book types.
+  if (/^(enclave\s*:\s*)?aspirant$/i.test(title.trim())) return 'aspirant';
+  if (/^(enclave\s*:\s*)?advent$/i.test(title.trim())) return 'advent';
+  return 'reference';
+};
+
+const buildLibrarySections = (groups) => [
+  {
+    id: 'quickstart', label: '01 / Start here · Free', title: 'Quickstart',
+    description: 'The bare Enclave essentials. Learn the basics with the free Quickstart.'
+  },
+  {
+    id: 'advent', label: '02 / The core ruleset', title: 'Advent',
+    description: 'Foundational Enclave knowledge: the full core rules you’ll use throughout the game.',
+    note: '30-day free trial. Purchase Advent for continued access after your trial ends.'
+  },
+  {
+    id: 'aspirant', label: '03 / The expansion', title: 'Aspirant',
+    description: 'Explore new classes and advanced mechanics.',
+    note: 'Builds on Advent.'
+  },
+  {
+    id: 'reference', label: 'Useful reading', title: 'Reference materials',
+    description: 'Free keyword glossary for Aspirant terms.'
+  }
+].map(section => ({ ...section, groups: groups.filter(group => libraryCategory(group.primary) === section.id) }));
+
+module.exports = { groupRulesVersions, buildLibrarySections };

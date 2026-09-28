@@ -13,12 +13,38 @@
   </div>
 </div>
 
-<div class="content">
-  <p>Access gated PDFs for active rules editions. Viewing requires an active unlock on your account.</p>
+<div class="library-intro content mb-5">
+  <p class="is-size-5">Learn the essentials. Build on the core. Expand your game.</p>
+  <p>Start with the free Quickstart, then turn to Advent for the full rules. Aspirant expands on that foundation with new material and changes to Advent.</p>
 </div>
 
-<div class="box mb-5">
-  <h2 class="title is-4">Character Sheets</h2>
+<nav class="buttons mb-5" aria-label="Library sections">
+  <a class="button is-light" href="#quickstart">1. Quickstart</a>
+  <a class="button is-light" href="#advent">2. Advent</a>
+  <a class="button is-light" href="#aspirant">3. Aspirant</a>
+  <a class="button is-light" href="#reference">Reference materials</a>
+</nav>
+
+{{#each librarySections}}
+<section id="{{id}}" class="library-section library-section--{{id}}" aria-labelledby="{{id}}-title">
+  <div class="library-section-heading">
+    <p class="library-eyebrow">{{label}}</p>
+    <h2 id="{{id}}-title" class="title is-3">{{title}}</h2>
+    <p class="library-description">{{description}}</p>
+    {{#if note}}<p class="library-note">{{note}}</p>{{/if}}
+  </div>
+  <div class="library-books">
+    {{#each groups}}
+      {{> library-book}}
+    {{else}}
+      <p class="is-size-7">No PDFs available in this section yet.</p>
+    {{/each}}
+  </div>
+</section>
+{{/each}}
+
+<div class="box library-sheets">
+  <h2 class="title is-5">Character Sheets</h2>
   <div class="buttons">
     <a class="button is-link" href="https://ndneltuukvijkvdfaqfu.supabase.co/storage/v1/object/public/misc/Character%20Sheet%20(Fillable).pdf" target="_blank" rel="noopener noreferrer">
       <span class="icon"><i class="fas fa-file-pdf"></i></span>
@@ -30,84 +56,4 @@
     </a>
   </div>
 </div>
-
-{{#if ruleGroups.length}}
-<div class="columns is-multiline">
-  {{#each ruleGroups}}
-  <div class="column is-full-tablet is-half-desktop">
-    <div class="card">
-      <div class="card-content">
-        <div class="content">
-          <p class="title is-4">{{this.primary.title}}</p>
-          <p class="subtitle is-6">Edition: {{this.primary.edition}}</p>
-          {{#if ../isAdmin}}
-          <p>
-            <span class="tag {{#if this.primary.is_active}}is-success{{else}}is-danger{{/if}} is-light">
-              {{#if this.primary.is_active}}Active{{else}}Inactive{{/if}}
-            </span>
-          </p>
-          {{/if}}
-          {{#if this.primary.free_access}}
-          <p>
-            <span class="tag is-success is-light">Free</span>
-          </p>
-          {{/if}}
-          {{#if this.primary.canView}}
-          {{#if this.primary.isAdminOverride}}
-          <div class="notification is-warning is-light">
-            <span class="icon-text">
-              <span class="icon"><i class="fas fa-user-shield"></i></span>
-              <span>Admin Override</span>
-            </span>
-          </div>
-          {{else}}
-          <div class="notification is-success is-light">
-            <span class="icon-text">
-              <span class="icon"><i class="fas fa-unlock"></i></span>
-              <span>Access granted</span>
-            </span>
-            {{#if this.primary.expires_at}}
-            <br>
-            <span class="is-size-7">Expires {{date_tz this.primary.expires_at}}</span>
-            {{/if}}
-          </div>
-          {{/if}}
-          <a class="button is-link is-fullwidth" href="/library/{{this.primary.id}}/view">
-            <span class="icon"><i class="fas fa-file-pdf"></i></span>
-            <span>Open PDF</span>
-          </a>
-          {{#if this.previous.length}}
-          <p class="is-size-7 mt-3 mb-0">
-            Previous:
-            {{#each this.previous}}
-            <a class="tag is-light ml-1" href="/library/{{this.id}}/view">{{this.edition}}</a>
-            {{/each}}
-          </p>
-          {{/if}}
-          {{else if this.primary.isUnlocked}}
-          <div class="notification is-warning is-light">
-            <span class="icon-text">
-              <span class="icon"><i class="fas fa-hourglass-end"></i></span>
-              <span>Access expired {{date_tz this.primary.expires_at}}</span>
-            </span>
-          </div>
-          {{else}}
-          <div class="notification is-light">
-            <span class="icon-text">
-              <span class="icon"><i class="fas fa-lock"></i></span>
-              <span>Unlock required</span>
-            </span>
-          </div>
-          {{/if}}
-        </div>
-      </div>
-    </div>
-  </div>
-  {{/each}}
-</div>
-{{else}}
-<div class="notification is-light">
-  No rules PDFs available yet. Check back soon.
-</div>
-{{/if}}
 

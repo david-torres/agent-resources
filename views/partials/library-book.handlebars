@@ -1,0 +1,67 @@
+    <div class="card">
+      <div class="card-content">
+        <div class="content">
+          <h3 class="title is-5">{{this.primary.title}}</h3>
+          <p class="subtitle is-6">Version: {{this.primary.edition}}</p>
+          {{#if @root.isAdmin}}
+          <p>
+            <span class="tag {{#if this.primary.is_active}}is-success{{else}}is-danger{{/if}} is-light">
+              {{#if this.primary.is_active}}Active{{else}}Inactive{{/if}}
+            </span>
+          </p>
+          {{/if}}
+          {{#if this.primary.free_access}}
+          <p>
+            <span class="tag is-success is-light">Free</span>
+          </p>
+          {{/if}}
+          {{#if this.primary.canView}}
+          {{#if this.primary.isAdminOverride}}
+          <div class="notification is-warning is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-user-shield"></i></span>
+              <span>Admin Override</span>
+            </span>
+          </div>
+          {{else}}
+          <div class="notification is-success is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-unlock"></i></span>
+              <span>Access granted</span>
+            </span>
+            {{#if this.primary.expires_at}}
+            <br>
+            <span class="is-size-7">Expires {{date_tz this.primary.expires_at}}</span>
+            {{/if}}
+          </div>
+          {{/if}}
+          <a class="button is-link is-fullwidth" href="/library/{{this.primary.id}}/view">
+            <span class="icon"><i class="fas fa-file-pdf"></i></span>
+            <span>Open PDF</span>
+          </a>
+          {{#if this.previous.length}}
+          <p class="is-size-7 mt-3 mb-0">
+            Previous:
+            {{#each this.previous}}
+            <a class="tag is-light ml-1" href="/library/{{this.id}}/view">{{this.edition}}</a>
+            {{/each}}
+          </p>
+          {{/if}}
+          {{else if this.primary.isUnlocked}}
+          <div class="notification is-warning is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-hourglass-end"></i></span>
+              <span>Access expired {{date_tz this.primary.expires_at}}</span>
+            </span>
+          </div>
+          {{else}}
+          <div class="notification is-light">
+            <span class="icon-text">
+              <span class="icon"><i class="fas fa-lock"></i></span>
+              <span>Unlock required</span>
+            </span>
+          </div>
+          {{/if}}
+        </div>
+      </div>
+    </div>

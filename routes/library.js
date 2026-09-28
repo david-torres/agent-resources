@@ -25,7 +25,7 @@ const { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS } = require('../util/starter-co
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
-const { groupRulesVersions } = require('../util/library-list-grouping');
+const { groupRulesVersions, buildLibrarySections } = require('../util/library-list-grouping');
 const { withRuleAccess } = require('../util/library-access');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
@@ -107,7 +107,7 @@ router.get('/', authOptional, async (req, res) => {
     return res.render('library', {
         profile,
         title: 'Library',
-        ruleGroups: groupRulesVersions(rulesWithAccess),
+        librarySections: buildLibrarySections(groupRulesVersions(rulesWithAccess)),
         isAdmin,
         activeNav: 'library',
         breadcrumbs: [
