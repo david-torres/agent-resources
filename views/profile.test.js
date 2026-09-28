@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const customHelpers = require('../util/handlebars');
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 const handlebarsHelpers = require('handlebars-helpers')();
 
@@ -19,6 +20,7 @@ function renderProfile(context) {
     path.join(__dirname, 'partials', 'private-badge.handlebars'), 'utf8'
   ));
   hb.registerPartial('badge-shelf', '');
+  registerAccessPartials(hb);
   const src = fs.readFileSync(path.join(__dirname, 'profile.handlebars'), 'utf8');
   return hb.compile(src)(context);
 }
@@ -84,4 +86,34 @@ test('a globally available class is labelled as a pre-release', () => {
 
   expect(html).toContain('Available Classes');
   expect(html).toContain('>Pre-release<');
+});
+
+const TRIAL = { state: 'trial', endsAt: '2026-10-08T12:00:00Z', daysLeft: 10, urgent: false, endsToday: false };
+
+test("an Advent class from the trial book carries the TRIAL badge", () => {
+  const html = renderProfile({
+    ...baseContext,
+    profile: { ...baseContext.profile, timezone: 'UTC' },
+    adventTrial: TRIAL,
+    unlockedClasses: [{ ...CLASS_TEMPORARY, unlock_source: 'book', unlock_book_title: 'Enclave: Advent' }]
+  });
+  expect(html).toContain('TRIAL · ends Oct 8, 2026');
+});
+
+test('a directly unlocked Advent class keeps its plain Expires tag during the trial', () => {
+  const html = renderProfile({ ...baseContext, adventTrial: TRIAL, unlockedClasses: [{ ...CLASS_TEMPORARY, unlock_source: 'direct' }] });
+  expect(html).not.toContain('TRIAL ·');
+  expect(html).toContain('Expires');
+});
+
+test('the profile shows an upsell panel per locked edition', () => {
+  const html = renderProfile({
+    ...baseContext,
+    unlockedClasses: [CLASS_PERMANENT],
+    editionUpsell: [{ edition: 'aspirant', label: 'Aspirant', count: 2, classes: [
+      { id: 'b', name: 'Berserker', teaser: 'Rage.' }, { id: 'v', name: 'Vessel', teaser: null }
+    ] }]
+  });
+  expect(html).toContain('Aspirant: 2 classes');
+  expect(html).toContain('href="/classes/b/Berserker"');
 });

@@ -1,0 +1,14 @@
+{{#each upsell}}
+<div class="box edition-upsell" data-upsell-edition="{{edition}}">
+  <h3 class="title is-5">
+    <span class="icon has-text-grey"><i class="fas fa-lock"></i></span>
+    <span>{{label}}: {{count}} {{#if (eq count 1)}}class{{else}}classes{{/if}}</span>
+  </h3>
+  <ul class="mb-3">
+    {{#each classes}}
+    <li class="mb-1"><a href="/classes/{{id}}/{{name}}"><strong>{{name}}</strong></a>{{#if teaser}} — {{teaser}}{{/if}}</li>
+    {{/each}}
+  </ul>
+  {{> access/unlock-cta edition=edition}}
+</div>
+{{/each}}

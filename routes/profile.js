@@ -14,6 +14,8 @@ const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
+const { getEditionUpsell } = require('../services/access/upsell');
+const { trialStatus } = require('../util/edition-access');
 
 router.get('/', isAuthenticated, async (req, res) => {
   const { user, profile } = res.locals;
@@ -39,12 +41,16 @@ router.get('/', isAuthenticated, async (req, res) => {
     if (data) badges = data;
   } catch (_) {}
 
+  const editionUpsell = await getEditionUpsell(res.locals.editionAccess);
+
   res.render('profile', {
     user,
     profile,
     unlockedClasses,
     conduitCredits,
     badges,
+    editionUpsell,
+    adventTrial: trialStatus(res.locals.editionAccess, 'advent'),
     activeNav: 'profile',
     breadcrumbs: [
       { label: 'Profile', href: '/profile' }

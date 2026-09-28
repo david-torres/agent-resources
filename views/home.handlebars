@@ -2,6 +2,7 @@
   {{#if profile}}
   <p class="title is-4">Welcome, Agent: {{profile.name}}</p>
   {{> home-onboarding}}
+  {{> access/edition-upsell upsell=editionUpsell}}
   {{else}}
   <p>Please <a href="/auth">sign in</a> or <a href="/auth">sign up</a>.</p>
   {{/if}}

@@ -3,6 +3,8 @@ const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const { time_ago } = require('../util/handlebars');
+const customHelpers = require('../util/handlebars');
+const { registerAccessPartials } = require('../test/helpers/access-partials');
 // The real app spreads handlebars-helpers into its helper set (app.js:41), and
 // home-upcoming-games.handlebars uses `eq` as a subexpression. Register the real
 // one rather than a stand-in, so a change in its semantics surfaces here.
@@ -27,6 +29,9 @@ const render = (context) => {
   hb.registerHelper('eq', packagedHelpers.eq);
   hb.registerHelper('time_ago', time_ago);
   hb.registerHelper('date_tz', dateTzStub);
+  hb.registerHelper('edition_label', customHelpers.edition_label);
+  hb.registerHelper('edition_purchase_url', customHelpers.edition_purchase_url);
+  registerAccessPartials(hb);
   for (const name of ['home-feed-item', 'home-recent-mine', 'home-upcoming-games', 'home-news', 'home-community', 'home-onboarding']) {
     hb.registerPartial(name, read('partials', `${name}.handlebars`));
   }
@@ -180,4 +185,18 @@ test('empty sections are omitted entirely rather than rendering empty headings',
 test('the FullCalendar container is gone from the homepage', () => {
   const html = render({ ...empty, profile: { name: 'Dave' }, hasCharacters: true });
   expect(html).not.toContain('id="calendar"');
+});
+
+const UPSELL = [{ edition: 'aspirant', label: 'Aspirant', count: 1, classes: [{ id: 'b', name: 'Berserker', teaser: 'Rage.' }] }];
+
+test('the edition upsell renders for a signed-in player even with onboarding dismissed', () => {
+  const html = render({ ...empty, profile: { name: 'Vex' }, hasCharacters: true, onboarding: { show: false }, editionUpsell: UPSELL });
+  expect(html).toContain('Aspirant: 1 class');
+  expect(html).toContain('Berserker');
+  expect(html).toContain('Rage.');
+  expect(html).toContain('https://enclave-aspirant.backerkit.com/hosted_preorders/822771');
+});
+
+test('a signed-out visitor never sees the upsell', () => {
+  expect(render({ ...empty, profile: null, editionUpsell: UPSELL })).not.toContain('Aspirant: 1 class');
 });

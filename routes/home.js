@@ -6,6 +6,7 @@ const { loadHomeSections } = require('../services/home/sections');
 const { getAllNews } = require('../models/pages');
 const { buildExcerpt } = require('../services/home/excerpt');
 const { patchOnboarding } = require('../models/profile');
+const { getEditionUpsell } = require('../services/access/upsell');
 
 router.get('/', authOptional, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
@@ -16,7 +17,10 @@ router.get('/', authOptional, asyncHandler(async (req, res) => {
   // second, unbounded getOwnCharacters query (which pulls every column,
   // including background/appearance/private_notes/perks, of every character
   // the player owns) solely to compute this flag.
-  const sections = await loadHomeSections({ profile, client: res.locals.supabase, editionAccess: res.locals.editionAccess });
+  const [sections, editionUpsell] = await Promise.all([
+    loadHomeSections({ profile, client: res.locals.supabase, editionAccess: res.locals.editionAccess }),
+    profile ? getEditionUpsell(res.locals.editionAccess) : []
+  ]);
 
   if (sections.onboarding?.persistDismiss && res.locals.user) {
     // Fire-and-forget: the gate/completion write must never delay the page.
@@ -26,6 +30,7 @@ router.get('/', authOptional, asyncHandler(async (req, res) => {
   res.render('home', {
     profile,
     authOptional: true,
+    editionUpsell,
     ...sections
   });
 }));

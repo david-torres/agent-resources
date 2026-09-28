@@ -73,7 +73,9 @@
             {{/if}}
           </td>
           <td>
-            {{#if this.unlock_expires_at}}
+            {{#if (and @root.adventTrial (eq this.unlock_source 'book') (eq this.rules_edition 'advent'))}}
+            {{> access/trial-badge status=@root.adventTrial}}
+            {{else if this.unlock_expires_at}}
             <span class="tag is-warning is-light">Expires {{date_tz this.unlock_expires_at}}</span>
             {{/if}}
           </td>
@@ -95,3 +97,5 @@
   </div>
   </div>
 {{/if}}
+
+{{> access/edition-upsell upsell=editionUpsell}}
