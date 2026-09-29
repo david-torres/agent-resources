@@ -277,9 +277,11 @@ income. If a loadout feature is built, the cap belongs there.
 (prints the target host first).
 
 - **Selects** characters with `creator_mode = 'aspirant'` whose class is
-  advent-format and has a fork, or that own a row whose class has a fork.
-  Aspirant creation lists hide forked Advent classes
-  (`withoutForkedAdventClasses`), so these are conversions; the dry-run lists
+  advent-format and has a fork. Aspirant creation lists hide forked Advent
+  classes (`withoutForkedAdventClasses`), so these are conversions. An
+  Aspirant character on an Aspirant class that bought Advent items (the
+  wizard shop sells them) is not selected: those items were a choice. The
+  dry-run lists
   every one (name, owner, class → fork, rows that move, rows that stay) for
   review before `--apply`.
 - **Applies** the same class and item swap as conversion (the shared pure
