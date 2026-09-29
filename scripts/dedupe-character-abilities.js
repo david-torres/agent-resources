@@ -83,10 +83,15 @@ const dedupeCharacterAbilities = async ({ client, apply = false, characterIds = 
       for (const group of character.names) await mergeRows(client, group);
       await client.query('commit');
       report.applied.push(character.id);
+      log('  cleaned');
     } catch (error) {
-      await client.query('rollback');
       report.failed.push({ id: character.id, error: error.message });
       log(`  failed: ${error.message}`);
+      try {
+        await client.query('rollback');
+      } catch (rollbackError) {
+        log(`  rollback failed: ${rollbackError.message}`);
+      }
     }
   }
   log(`Characters holding an Ability name more than once: ${characters.length}.`
@@ -107,7 +112,7 @@ const main = async () => {
   const config = migrationConnectionConfig(
     process.env.SUPABASE_URL, process.env.SUPABASE_DB_PASS, process.env.SUPABASE_DB_REGION || undefined
   );
-  console.log(`Target: ${config.host}:${config.port} (${apply ? 'apply' : 'read-only'})`);
+  console.log(`Target: ${config.user}@${config.host}:${config.port} (${apply ? 'apply' : 'read-only'})`);
   const client = new Client(config);
   await client.connect();
   try {

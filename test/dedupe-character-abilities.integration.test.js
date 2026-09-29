@@ -78,7 +78,12 @@ test('the dry run lists every row of each duplicate name as KEEP or DELETE, and 
 });
 
 test('--apply keeps the lowest id, moves every Perk after the kept row\'s own, and a second run finds nothing', async () => {
-  expect(await run(true)).toMatchObject({ applied: [RAVEN], failed: [] });
+  const lines = [];
+  expect(await run(true, line => lines.push(line))).toMatchObject({ applied: [RAVEN], failed: [] });
+  expect(lines.slice(-2)).toEqual([
+    '  cleaned',
+    'Characters holding an Ability name more than once: 1. 1 cleaned, 0 failed.'
+  ]);
 
   const { rows: abilities } = await db.query(
     'select id from class_abilities where character_id = $1 order by id', [RAVEN]
