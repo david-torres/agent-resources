@@ -120,7 +120,29 @@
 
   {{#if aspirantConversion}}
   <div class="notification is-link is-light" id="aspirant-conversion">
-    <p>{{character.name}} can switch to the Aspirant rules. It keeps its class and its whole build: every Signature, Ability and Ability Perk stays as it is.</p>
+    {{#if aspirantConversion.upgrade.target}}
+    <p>{{character.name}} can switch to the Aspirant rules and move to <strong>the Aspirant version of {{aspirantConversion.upgrade.target.name}}</strong>.</p>
+    {{else}}
+    <p>{{character.name}} can switch to the Aspirant rules. It keeps its class and its whole build.</p>
+    {{/if}}
+    {{#if aspirantConversion.upgrade.moved.length}}
+    <p class="mt-2">Moves to its Aspirant version:</p>
+    <ul>
+      {{#each aspirantConversion.upgrade.moved}}
+      <li>{{this.kind}}: {{this.name}} ({{this.className}})</li>
+      {{/each}}
+    </ul>
+    {{/if}}
+    {{#if aspirantConversion.upgrade.target}}
+    {{#if aspirantConversion.upgrade.kept.length}}
+    <p class="mt-2">Stays as it is:</p>
+    <ul>
+      {{#each aspirantConversion.upgrade.kept}}
+      <li>{{this.kind}}: {{this.name}}{{#if this.className}} ({{this.className}}){{/if}}</li>
+      {{/each}}
+    </ul>
+    {{/if}}
+    {{/if}}
     <p class="mt-2">Under the Aspirant rules:</p>
     {{#if aspirantConversion.perkBreakdown}}
     <p><strong>Perks earned:</strong> {{aspirantConversion.perkBreakdown.earned}}</p>

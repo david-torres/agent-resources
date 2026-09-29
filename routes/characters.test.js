@@ -908,7 +908,9 @@ test('GET /characters/quirk no longer serves a quirk row', async () => {
 
 // --- Convert to Aspirant ------------------------------------------------------
 
-const conversionPlan = (blockers = []) => ({
+const NO_UPGRADE = { target: null, gear: null, abilities: null, abilityPerks: null, moved: [], kept: [] };
+const conversionPlan = (blockers = [], upgrade = NO_UPGRADE) => ({
+  upgrade,
   blockers,
   breaches: [{ severity: 'hard', rule: 'perk-deficit', detail: '6 Perks spent of 4 earned.' }],
   perkBreakdown: { earned: 4, spend: 6, remaining: 0, deficit: 2 },
@@ -929,13 +931,43 @@ test('the edit form offers conversion: same class and build, Aspirant totals, a 
   const body = await editPage();
   expect(pageState.lastPlanArgs).toEqual({ actor: expect.objectContaining({ profileId: 'profile-1' }), id: CHAR_ID });
   expect(body).toContain('id="aspirant-conversion"');
-  expect(body).toContain('Ash can switch to the Aspirant rules. It keeps its class and its whole build');
-  expect(body).not.toContain('Abilities after conversion');
+  expect(body).toContain('Ash can switch to the Aspirant rules. It keeps its class and its whole build.</p>');
+  expect(body).not.toContain('Moves to its Aspirant version:');
+  expect(body).not.toContain('Stays as it is:');
   expect(body).toContain('<strong>Perks spent:</strong> 6');
   expect(body).toContain('<strong>Deficit:</strong> 8');
   expect(body).toContain('<strong>Illegal Build:</strong> 6 Perks spent of 4 earned.');
   expect(body).toContain(`hx-post="/characters/${CHAR_ID}/convert-aspirant"`);
   expect(body).toContain('hx-confirm="Convert Ash to Aspirant? This cannot be undone."');
+});
+
+test('the edit form names the Aspirant version and lists what moves and what stays', async () => {
+  pageState.conversionPlan = conversionPlan([], {
+    ...NO_UPGRADE,
+    target: { id: 'class-gs-fork', name: 'Gunslinger' },
+    moved: [{ kind: 'Signature', name: 'Revolver', className: 'Gunslinger' }],
+    kept: [{ kind: 'Ability', name: 'Old Trick', className: null }, { kind: 'Signature', name: 'Duster', className: 'Gunslinger' }]
+  });
+  const body = await editPage();
+  expect(body).toContain('Ash can switch to the Aspirant rules and move to <strong>the Aspirant version of Gunslinger</strong>.');
+  expect(body).toContain('Moves to its Aspirant version:');
+  expect(body).toContain('<li>Signature: Revolver (Gunslinger)</li>');
+  expect(body).toContain('Stays as it is:');
+  expect(body).toContain('<li>Ability: Old Trick</li>');
+  expect(body).toContain('<li>Signature: Duster (Gunslinger)</li>');
+  expect(body).not.toContain('It keeps its class');
+});
+
+test('without an Aspirant version the form lists a cross-class item that moves, and nothing that stays', async () => {
+  pageState.conversionPlan = conversionPlan([], {
+    ...NO_UPGRADE,
+    moved: [{ kind: 'Ability', name: 'Familiar Face', className: 'Wanderer' }],
+    kept: [{ kind: 'Signature', name: 'Bedroll', className: 'Drifter' }]
+  });
+  const body = await editPage();
+  expect(body).toContain('It keeps its class and its whole build.');
+  expect(body).toContain('<li>Ability: Familiar Face (Wanderer)</li>');
+  expect(body).not.toContain('Stays as it is:');
 });
 
 test('the conversion footer about Illegal Build lines appears only when there is a hard breach', async () => {
