@@ -5,30 +5,42 @@ Branch: `feat/convert-to-aspirant`
 
 ## Intent
 
-A player can move their own Advent character onto Aspirant V1 without
+A player can move their own Advent character onto the Aspirant rules without
 rebuilding it. The trigger case is Caroline Denton
 (`465f52ce-ee0d-4b0f-99bc-4baa4f9c8b7d`): an Advent v2 Gunslinger carrying a
 fourth, cross-class Ability (Wanderer's Familiar Face), flagged
 "Illegal Build: 4 Abilities, and the cap is 3." Under Aspirant the same build
 is within the 6-Ability cap and Cross-Classing is a rule, not a breach.
 
+The model:
+
+- **Class format and character mode are independent.** A class is
+  Advent-format or Aspirant-format (`content_format`); a character is on the
+  Advent or the Aspirant rules (`creator_mode`).
+- An Advent character may use only Advent classes. An Aspirant character may
+  use Aspirant or Advent classes, and their Signatures and Abilities, freely.
+- **Conversion changes the character's mode and nothing else.** Its class and
+  every Signature, Ability and Ability Perk stay exactly as they are.
+- **Aspirant V1 builds on Advent v2.** A character on the Aspirant rules has
+  everything an Advent v2 character has -- Defining Quirk, Accessories,
+  Ability Perks, the v2 level curve, Conduit Credit offscreen missions -- plus
+  Enchantments and Mods, whatever its class's `rules_version`.
+- **The Signature Cap limits what a character brings on a mission, not what
+  it owns.** Nothing in the app records a mission loadout, so nothing enforces
+  it.
+
 Decisions taken with the user:
 
 - **Owner self-service**, one-way, no admin step.
-- **Keep the whole build.** Ability cap, Perk deficit and Merx overspend that
-  the conversion produces are grandfathered by the existing ratchet.
-- **Block on absolute rules.** Anything Aspirant enforces on every save
-  (Traits, Stat Cap, Signature Cap), plus content with no Aspirant
-  counterpart, is listed as a checklist and prevents conversion until fixed.
-- **Switch to the Aspirant fork** of the class; not a mode flag alone.
-- **Aspirant V1 builds on Advent v2.** An Aspirant character has everything
-  an Advent v2 character has — Defining Quirk, Accessories, Ability Perks, the
-  v2 level curve, Conduit Credit offscreen missions — plus Enchantments and
-  Mods.
+- **Keep the whole build.** An Ability-cap breach, Perk deficit or Merx
+  overspend the Aspirant rules would find is grandfathered by the existing
+  ratchet.
+- **Block only on the rules Aspirant enforces on every save:** Traits and the
+  Stat Cap.
 
-The work is two parts, in order. Part 1 is a standalone bug fix and ships
-first; Part 2 depends on it (without it a converted character's Quirk and
-Accessories would disappear on its next save).
+The work is two parts. Part 1 puts Aspirant-format classes on the v2
+character rules; Part 2 is the conversion, and it relies on every Aspirant
+character getting the v2 rules by mode.
 
 ---
 
@@ -52,6 +64,14 @@ client level-up modal (`public/js/character-common.js:27`) already assumes v2.
 characters are built under**. Aspirant V1 is built on Advent v2, so every
 aspirant-format class is `'v2'`. The ingestion spec's paragraph is corrected
 to say so.
+
+That answers the question for an Advent character. A character on the
+Aspirant rules -- `creator_mode` `'aspirant'`, and Aspiring characters, which
+are Aspirant-book characters -- is built under v2 whatever its class's
+`rules_version`, decided in one place (`util/character-rules.js`
+`characterRulesVersion`) and read by every site that picks a character's
+rules: create, update, level-up, progress recalculation, the edit form, the
+sheet, the details fragment, and the agent API.
 
 ### Changes
 
@@ -124,151 +144,142 @@ per-mission reward; grants keyed by economy).
 
 ### Eligibility
 
-Offered on the edit page when all hold:
+Offered on the edit page when both hold:
 
 - the actor may mutate the character (`requireOwnedCharacter`);
-- the character is on the **advent** economy (`economyFor` →
-  `'advent'`: `creator_mode` null/`'advent'` and class `content_format`
-  `'advent'`);
-- its class's version family has an **Aspirant fork**: exactly one class with
-  `content_format = 'aspirant'` whose `base_class_id` is a member of the
-  character's class family (`computeVersionFamily`). Zero → not offered;
-  more than one → not offered and logged (ambiguous catalogue data).
+- the character is on the **advent** economy (`economyFor` → `'advent'`:
+  `creator_mode` null or `'advent'` on an advent-format class, or no class).
 
-This covers both the six Advent base classes (fork of the v1 row, reached
-from a v2 character through the family) and the six pre-release Aspirant
-classes (fork of the pre-release row).
+Every such character is eligible, whatever its class: an Aspirant character
+may use Advent classes.
 
 ### What conversion does
 
-One atomic save through `save_character_atomic`:
+One atomic save through `save_character_atomic` with
+`p_character = { creator_mode: 'aspirant' }`:
 
-- `class_id` → the fork; `class` → the fork's name;
-  `creator_mode` → `'aspirant'`.
-- Each **Signature** (`class_gear`) and **Ability** (`class_abilities`) row
-  is remapped to the fork of *its own* class, matched by trimmed name
-  against the fork's catalogue (`gear`, `abilities`, `advanced_abilities`).
-  Own-class items go to the character's new class; cross-class items go to
-  their class's fork (Familiar Face → Aspirant Wanderer). Ability `type` is
-  taken from the fork's catalogue list the name was found in.
-- **Ability Perks** follow their Ability: submitted by `ability_name` so the
-  RPC re-attaches them to the re-inserted ability rows (changing `class_id`
-  makes the RPC delete and re-insert rows, and `character_perks` cascades
-  from the old row). Compound links are preserved the same way the v2
-  perk remap in `CharacterService.saveCharacterAtomic` (:721-736) preserves
-  them.
-- Enchantments and Mods already on rows (none expected on Advent characters)
-  ride along unchanged.
-- Everything else is untouched: name, level, missions, stats, Traits,
-  `stat_cap_purchases`, Quirk, Accessories, common items, story fields.
+- `class`, `class_id`, and every Signature (`class_gear`), Ability
+  (`class_abilities`) and Ability Perk (`character_perks`) row are left exactly
+  as they are, ids and compound links included: `p_gear`, `p_abilities` and
+  `p_perks` are null, which the RPC reads as "leave these rows alone".
+- Traits are resubmitted from the stored rows, because the RPC reads an absent
+  Trait list as "no Traits" (`COALESCE(p_traits, '[]')`). They pair by
+  `(name, occurrence)`, so the rows are kept.
+- Every other column keeps its stored value: the UPDATE merges `p_character`
+  over the stored row (`jsonb_populate_record(saved, p_character)`).
 
-The class family check makes conversion one-way: an aspirant-economy
-character is never eligible, and the fork is in a different family from its
-Advent parent, so Upgrade never offers the way back.
+One-way: a converted character is on the aspirant economy and is never
+eligible again. The stored `level` is not recalculated by the conversion; an
+auto-calculated character moves onto the v2 curve at its next auto-calculated
+save, level-up or mission write.
+
+### After conversion
+
+- **Aspirant economy.** Cross-Classing is judged against the character's own
+  class version family (`computeVersionFamily`, via `familyResolver`), so its
+  own class's Abilities and Signatures are own-class and another class's are
+  cross-class, exactly as for any Aspirant character.
+- **v2 character rules** by mode (Part 1): Defining Quirk, Accessories and
+  Ability Perks are kept on every save, the edit form shows the v2 fields, the
+  level follows the v2 curve, and the sheet offers Spend Conduit Credit.
 
 ### Blocking checklist
 
-Computed from the character *as it would be after conversion*, under the
-aspirant economy. Each item names what to change.
+Computed from the character's own build under the aspirant economy. Each item
+is fixable on the Advent edit form today.
 
 | Rule | Source | Example message |
 | --- | --- | --- |
-| Item with no Aspirant counterpart | remap above | "Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert." |
-| Item's class has no Aspirant fork | remap above | "Hand Cannon comes from Homebrew Class, which has no Aspirant version." |
-| Traits | `validateTraits` (`services/character/input.js:213`) | "Two Traits may not share a Stat (Might)." |
-| Stat Cap | `capBreaches` (`util/stat-caps.js`) with Traits and `stat_cap_purchases` | "Reflex is over its Cap." |
-| Signature Cap (12; an Enchantment counts as a slot) | the same check `validateEconomyLimits` runs | "15 Signatures, and the cap is 12." |
+| Traits | `validateTraits` (`services/character/input.js`) under `'aspirant'` | "Two Traits may not share a Stat (might)." |
+| Stat Cap | `validateStatLimits` with `enforceCreationAllotment: false` (the per-Stat Cap with Traits and `stat_cap_purchases`) | `capBreachMessage` for the Stat |
 
-All are reused from the existing validators; the conversion module never
-restates a figure. Each is fixable on the Advent edit form today: remove
-gear/abilities, re-pick a Trait (its Stat follows the Trait select), lower a
-Stat.
+The creation allotment and +++ ceiling are creation rules and are not judged.
 
 ### Grandfathered, not blocking
 
-Ability cap, Perk deficit (both from `buildBreaches`) and Merx overspend are
+The Ability cap and Perk deficit (`buildBreaches`) and Merx overspend are
 shown in the preview and allowed. After conversion they behave like any
-existing breach: `updateCharacter` and `levelUp` refuse only a save that
-makes a hard breach worse (the ratchet at `service.js:603-644`, `:1033-1066`),
-and the sheet shows the Illegal Build banner. Merx overspend shows as the
-existing Deficit line and is not enforced on update.
+existing breach: `updateCharacter` and `levelUp` refuse only a save that makes
+a hard breach worse (the ratchet, `worsenedBreaches`), and the sheet shows the
+Illegal Build line. Merx overspend shows as the Deficit line and is not
+enforced on an edit.
+
+### The Signature Cap
+
+The Signature Cap (pg. 85: 12 for an Aspirant character; pg. 92: 8 for an
+Aspiring one; pg. 8: an Enchantment takes a slot) limits what a character
+brings on a mission. Nothing in the app records a mission loadout -- mission
+sign-up and LFG selection choose a character, never its gear -- so the cap is
+enforced nowhere: not at creation, not on an edit, not at conversion, and no
+purchase surface counts Signature slots. What limits owning Signatures is Merx:
+the creation grant at creation, and on the edit form the grant plus mission
+income. If a loadout feature is built, the cap belongs there.
 
 ### Units
 
 1. **`util/aspirant-conversion.js`** (pure, no I/O)
-   `planConversion({ character, classes, gear, abilities, abilityPerks, traits })`
-   → `{ target, gear, abilities, abilityPerks, blockers, breaches, perkBreakdown, merxBreakdown }`
-   - `classes`: the catalogue rows needed for family and fork lookup and the
-     forks' content lists.
-   - `target`: the fork, or `null` with a blocker.
-   - `gear` / `abilities`: the remapped rows ready for the RPC payload.
-   - `blockers`: `[{ rule, detail }]`; empty means convertible.
-   - `breaches`: `buildBreaches` of the converted build under `'aspirant'`.
-   - Totals come from the existing `perkBreakdown` and Merx breakdown
-     derivations, so the preview shows what the sheet will show afterwards.
-   Also exports `findAspirantFork(classes, classId)`.
-2. **`CharacterService.convertToAspirant(actor, id)`**
-   (`services/character/service.js`, beside `upgradeClass`): ownership gate
-   (throws `AuthorizationError`), loads the character, children and catalogue
-   through the adapter, calls `planConversion`, returns
-   `{ status: 400, message }` listing blockers if any, otherwise saves via
-   `adapter.saveCharacterAtomic` with the new `class_id`, `class`,
-   `creator_mode`, remapped gear/abilities and perks by ability name. Never
-   trusts a client-sent plan. Also `planAspirantConversion(actor, id)` for the
-   preview, sharing the loading code.
+   `planConversion({ character, classFamilyOf, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions })`
+   → `{ blockers, breaches, perkBreakdown, merxBreakdown }`
+   - `classFamilyOf`: the character's own version-family resolver, handed in
+     by the service.
+   - `blockers`: `[{ rule, detail }]` with `rule` `'traits'` or `'stat-cap'`;
+     empty means convertible.
+   - `breaches`, `perkBreakdown`, `merxBreakdown`: the existing derivations
+     under `'aspirant'`, so the preview shows what the sheet will show
+     afterwards.
+2. **`CharacterService.convertToAspirant(actor, id)`** and
+   **`planAspirantConversion(actor, id)`** (`services/character/service.js`):
+   ownership gate (throws `AuthorizationError`), loads the character, its
+   class family (`getClassFamilyRows`, skipped for a class-less character) and
+   its missions through the adapter, calls `planConversion`, returns
+   `{ status: 400, message }` listing blockers if any, otherwise saves the mode
+   as above. Never trusts a client-sent plan.
 3. **Wrappers** in `models/character.js` (`convertCharacterToAspirant`,
-   `planCharacterAspirantConversion`), following `upgradeCharacterClass`.
-4. **Route** `POST /characters/:id/convert-aspirant` in
-   `routes/characters.js`, shaped like `POST /:id/upgrade` (:1375):
+   `planCharacterAspirantConversion`).
+4. **Route** `POST /characters/:id/convert-aspirant` (`routes/characters.js`):
    `sendRouteError` on a business error, else `HX-Location` to the character
    sheet.
 5. **Edit-page panel** in `views/character-form.handlebars`, next to the
-   Upgrade block (:100-116), rendered only when eligible. Shows the target
-   class; after-conversion Abilities, Perks earned/spent and Merx
-   earned/spent; any grandfathered breaches (as the sheet would word them);
-   the blocker checklist. The Convert button is disabled while blockers
-   exist, and otherwise `hx-post`s with `hx-confirm`
-   ("Convert <name> to Aspirant? This cannot be undone."). The edit route
-   (:590-615) computes the plan with the character data it already loads.
+   Upgrade block, rendered only when eligible. It says the character keeps its
+   class and whole build and switches to the Aspirant rules, and shows the
+   Perks earned/spent, Merx earned/spent (and any Deficit), the hard breaches
+   worded as the sheet words them, and the blocker checklist. The Convert
+   button is disabled while blockers exist, and otherwise `hx-post`s with
+   `hx-confirm` ("Convert <name> to Aspirant? This cannot be undone.").
 
 ### Error handling
 
 - Not owner → `AuthorizationError` (existing handling).
-- Not eligible (already aspirant/aspiring, no fork, ambiguous fork) → 400
-  with the reason.
+- Not eligible (already aspirant or aspiring, or an Advent-mode character on
+  an aspirant-format class) → 400 "<name> is not on the Advent rules, so there
+  is nothing to convert."
 - Blockers → 400 whose message lists every blocker, so a stale page still
   explains why.
-- RPC failure → propagated as today's saves do; the RPC is transactional, so
-  a failed conversion changes nothing.
+- A version-family or mission read failure → returned as `{ data: null, error }`.
+- RPC failure → propagated as today's saves do; the RPC is transactional, so a
+  failed conversion changes nothing.
 
 ### Testing
 
-TDD per unit.
-
-- `planConversion` unit tests: own-class remap; cross-class remap to the
-  other class's fork; Advanced abilities get `type: 'advanced'`; unmatched
-  name blocker; class without fork blocker; Traits, Stat Cap and Signature
-  Cap blockers; grandfathered Ability cap/Perk deficit appear in `breaches`
-  not `blockers`; a fixture shaped like Caroline Denton (Gunslinger v2,
-  Trickshot/Standoff/Shootout + Wanderer's Familiar Face, 3 Ability Perks with
-  compounds) converts with no Ability-cap breach.
-- `findAspirantFork`: v1 and v2 members both find the fork; pre-release
-  class finds its fork; none and two → `null`.
-- Service tests (adapter stubs): ownership; ineligible economy; blocker
-  refusal; payload shape sent to `saveCharacterAtomic`.
-- Integration (local stack): convert a character with Ability Perks and
-  compounds; afterwards `creator_mode = 'aspirant'`, `class_id` is the fork,
-  every perk is still attached to its ability, Quirk and Accessories survive,
-  and a follow-up ordinary edit saves.
-- E2E is not added; the panel is a server-rendered block with one htmx
-  button, covered by the route and integration tests.
+- `planConversion` unit tests: the plan names no rows; own/cross-class against
+  the character's own family; grandfathered Ability cap and Perk deficit in
+  `breaches`, not `blockers`; Signatures past the mission cap neither block nor
+  breach; Traits and Stat Cap blockers; a class-less character.
+- Service tests (adapter stubs): ownership; the mode-only save payload; a
+  class with no Aspirant fork converts; ineligible economies; blocker refusal;
+  a family read failure.
+- Integration (local stack): conversion leaves `class_id` and every
+  gear/ability/perk/trait row unchanged (ids and compound links included),
+  sets `creator_mode = 'aspirant'`, keeps Quirk and Accessories; a second
+  conversion is refused and writes nothing; a follow-up edit on an Advent v1
+  class saves Quirk, Accessories and Ability Perks; a 13-Signature character
+  converts and then saves a 14th.
 
 ## Rollout
 
-1. Merge Part 1; user runs `supabase db push --linked` for the migration,
+1. Merge Part 1; the user runs `supabase db push --linked` for the migration,
    then the reconcile script dry-run, review, `--apply`.
 2. Merge Part 2 (no migration).
-3. Caroline Denton's owner can then convert her. Expected blockers to check
-   in the preview first: her Signature count against the cap of 12, and
-   whether each non-Gunslinger item (Grapple Gun, Earpiece, Hand Cannon,
-   Knecht, Eye in the Sky, Catsuit) exists on its class's fork.
+3. Caroline Denton's owner can then convert her. The only possible blockers
+   are her Traits and her Stats against their Caps; the preview lists them
+   first.
