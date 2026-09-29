@@ -147,6 +147,7 @@ mock.module('../models/character', () => ({
   // offers one by setting pageState.conversionPlan.
   planCharacterAspirantConversion: async (actor, id) => {
     pageState.lastPlanArgs = { actor, id };
+    if (pageState.planThrows) throw new Error('plan exploded');
     return { data: pageState.conversionPlan || null, error: null };
   },
   convertCharacterToAspirant: async (actor, id) => {
@@ -354,6 +355,7 @@ beforeEach(() => {
   pageState.conversionResult = null;
   pageState.lastConvert = null;
   pageState.lastPlanArgs = null;
+  pageState.planThrows = false;
 });
 
 test('GET /characters/ability-perk-group renders scaffold with ability name and dom key', async () => {
@@ -889,3 +891,13 @@ test('POST /characters/:id/convert-aspirant renders a refusal with its reason', 
   expect(res.headers.get('HX-Location')).toBeNull();
   expect(await res.text()).toContain('Grapple Gun (Wanderer) has no Aspirant version.');
 });
+
+test('the edit page answers with an error, not a hang, when the conversion preview throws', async () => {
+  pageState.planThrows = true;
+  pageState.character = { ...makePageCharacter(3), creator_id: 'profile-1' };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+    signal: AbortSignal.timeout(3000),
+  });
+  expect(res.status).toBe(500);
+}, 5000);

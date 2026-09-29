@@ -462,7 +462,7 @@ router.post('/wizard', isAuthenticated, async (req, res) => {
   return res.header('HX-Location', `/characters/${character.id}/${encodeURIComponent(character.name)}`).send();
 });
 
-router.get('/:id/edit', isAuthenticated, async (req, res) => {
+router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
@@ -675,7 +675,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       ]
     });
   }
-});
+}));
 
 router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
