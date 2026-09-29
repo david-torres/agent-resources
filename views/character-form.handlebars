@@ -118,9 +118,8 @@
 
   {{#if aspirantConversion}}
   <div class="notification is-link is-light" id="aspirant-conversion">
-    <p>This character can move to the Aspirant rules as <strong>{{aspirantConversion.target.name}}</strong>, keeping its whole build.</p>
-    <p class="mt-2"><strong>Abilities after conversion:</strong>
-      {{#each aspirantConversion.abilities}}{{this.name}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    <p>{{character.name}} can switch to the Aspirant rules. It keeps its class and its whole build: every Signature, Ability and Ability Perk stays as it is.</p>
+    <p class="mt-2">Under the Aspirant rules:</p>
     {{#if aspirantConversion.perkBreakdown}}
     <p><strong>Perks earned:</strong> {{aspirantConversion.perkBreakdown.earned}}</p>
     <p><strong>Perks spent:</strong> {{aspirantConversion.perkBreakdown.spend}}</p>

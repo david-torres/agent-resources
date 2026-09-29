@@ -833,13 +833,6 @@ test('GET /characters/quirk no longer serves a quirk row', async () => {
 // --- Convert to Aspirant ------------------------------------------------------
 
 const conversionPlan = (blockers = []) => ({
-  target: { id: 'class-fork', name: 'Gunslinger' },
-  gear: [],
-  abilities: [
-    { name: 'Trickshot', class_id: 'class-fork', type: 'core' },
-    { name: 'Familiar Face', class_id: 'class-wanderer-fork', type: 'core' }
-  ],
-  abilityPerks: [],
   blockers,
   breaches: [{ severity: 'hard', rule: 'perk-deficit', detail: '6 Perks spent of 4 earned.' }],
   perkBreakdown: { earned: 4, spend: 6, remaining: 0, deficit: 2 },
@@ -855,12 +848,13 @@ const editPage = async () => {
   return res.text();
 };
 
-test('the edit form offers conversion with the after-conversion build and a live Convert button', async () => {
+test('the edit form offers conversion: same class and build, Aspirant totals, a live Convert button', async () => {
   pageState.conversionPlan = conversionPlan();
   const body = await editPage();
   expect(pageState.lastPlanArgs).toEqual({ actor: expect.objectContaining({ profileId: 'profile-1' }), id: CHAR_ID });
   expect(body).toContain('id="aspirant-conversion"');
-  expect(body).toContain('Familiar Face');
+  expect(body).toContain('Ash can switch to the Aspirant rules. It keeps its class and its whole build');
+  expect(body).not.toContain('Abilities after conversion');
   expect(body).toContain('<strong>Perks spent:</strong> 6');
   expect(body).toContain('<strong>Deficit:</strong> 8');
   expect(body).toContain('<strong>Illegal Build:</strong> 6 Perks spent of 4 earned.');
@@ -870,10 +864,10 @@ test('the edit form offers conversion with the after-conversion build and a live
 
 test('the edit form lists blockers and disables the Convert button', async () => {
   pageState.conversionPlan = conversionPlan([
-    { rule: 'no-counterpart', detail: 'Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.' }
+    { rule: 'traits', detail: 'Two Traits may not share a Stat (might).' }
   ]);
   const body = await editPage();
-  expect(body).toContain('<li>Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.</li>');
+  expect(body).toContain('<li>Two Traits may not share a Stat (might).</li>');
   expect(body).toMatch(/<button type="button" class="button is-link" disabled>Convert to Aspirant<\/button>/);
   expect(body).not.toContain('/convert-aspirant"');
 });
@@ -897,7 +891,7 @@ test('POST /characters/:id/convert-aspirant sends the player to the converted sh
 test('POST /characters/:id/convert-aspirant renders a refusal with its reason', async () => {
   pageState.conversionResult = {
     data: null,
-    error: { status: 400, message: 'Ash cannot convert to Aspirant yet. Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.' }
+    error: { status: 400, message: 'Ash cannot convert to Aspirant yet. Two Traits may not share a Stat (might).' }
   };
   const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/convert-aspirant`, {
     method: 'POST',
@@ -905,7 +899,7 @@ test('POST /characters/:id/convert-aspirant renders a refusal with its reason', 
   });
   expect(res.status).toBe(400);
   expect(res.headers.get('HX-Location')).toBeNull();
-  expect(await res.text()).toContain('Grapple Gun (Wanderer) has no Aspirant version.');
+  expect(await res.text()).toContain('Two Traits may not share a Stat (might).');
 });
 
 test('the edit page answers with an error, not a hang, when the conversion preview throws', async () => {
