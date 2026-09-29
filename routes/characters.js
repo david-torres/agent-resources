@@ -41,7 +41,7 @@ const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
-const { latestClassVersions } = require('../util/class-list-grouping');
+const { latestClassVersions, withoutForkedAdventClasses } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -270,19 +270,21 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   const preselectedClassId = (req.query.class || '').toString() || null;
 
   // The class pool, filtered to advent-format classes in advent mode (the
-  // other modes can build a class of either format), then collapsed so
-  // version families show one card each (same rule as the /classes list). A
-  // preselected class is exempt from both: a link from an older version's
-  // page, or one whose format does not match the mode, must still find its
-  // card.
+  // other modes can build a class of either format, and an aspirant-format
+  // fork replaces the Advent class it forks), then collapsed so version
+  // families show one card each (same rule as the /classes list). A
+  // preselected class is exempt from all three: a link from an older
+  // version's page, or one whose format does not match the mode, must still
+  // find its card.
   // Each row carries stat_spread (for step 2), gear/abilities (for steps 3-4),
   // and display fields for the slider card. Teaser and tips are stored as
   // markdown and rendered to safe HTML here so the client can drop them into
   // the wizard panel verbatim (no client-side markdown lib).
   const { filteredAdvent, filteredAspirant, filteredPCC, lockedClasses } = await filterClassDataForUser(user, res.locals.editionAccess);
   const fitsWizardMode = (c) => mode !== 'advent' || (c.content_format || 'advent') === 'advent';
+  const roster = [...filteredAdvent, ...filteredAspirant, ...filteredPCC];
   const wizardClasses = latestClassVersions(
-    [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
+    mode === 'advent' ? roster : withoutForkedAdventClasses(roster, { keep: [preselectedClassId] }),
     { keep: [preselectedClassId] }
   )
     .filter((c) => fitsWizardMode(c) || c.id === preselectedClassId)

@@ -1,12 +1,13 @@
 const { test, expect, describe } = require('bun:test');
-const { groupClassVersions, latestClassVersions } = require('./class-list-grouping');
+const { groupClassVersions, latestClassVersions, withoutForkedAdventClasses } = require('./class-list-grouping');
 
 // Minimal class row shape used by the grouping logic.
-const cls = (id, { base = null, edition = 'advent', version = 'v1', created_at = '2026-01-01T00:00:00Z', name = id } = {}) => ({
+const cls = (id, { base = null, edition = 'advent', format = 'advent', version = 'v1', created_at = '2026-01-01T00:00:00Z', name = id } = {}) => ({
   id,
   name,
   base_class_id: base,
   rules_edition: edition,
+  content_format: format,
   rules_version: version,
   created_at
 });
@@ -99,5 +100,25 @@ describe('latestClassVersions', () => {
 
   test('an empty list stays empty', () => {
     expect(latestClassVersions([])).toEqual([]);
+  });
+});
+
+describe('withoutForkedAdventClasses', () => {
+  const root = cls('a', { version: 'v1' });
+  const v2 = cls('a2', { base: 'a', version: 'v2' });
+  const fork = cls('a-fork', { base: 'a', format: 'aspirant' });
+
+  test('drops every version of an advent family an aspirant-format class forks', () => {
+    expect(withoutForkedAdventClasses([root, v2, fork]).map(c => c.id)).toEqual(['a-fork']);
+  });
+
+  test('keeps an advent class nobody forked', () => {
+    const other = cls('b');
+    expect(withoutForkedAdventClasses([root, fork, other]).map(c => c.id)).toEqual(['a-fork', 'b']);
+  });
+
+  test('ids in keep survive even when forked', () => {
+    expect(withoutForkedAdventClasses([root, v2, fork], { keep: ['a2'] }).map(c => c.id))
+      .toEqual(['a2', 'a-fork']);
   });
 });

@@ -4,7 +4,7 @@
 // intermediate naturally splits. Family membership reuses the same-edition
 // base_class_id adjacency from class-family.js.
 
-const { computeVersionFamily } = require('./class-family');
+const { computeVersionFamily, expandIdsToFamilies } = require('./class-family');
 
 // Pick the family leaf: the member with no same-edition child present in the
 // group. Ties (branches) and "no clear leaf" resolve to the newest created_at.
@@ -74,4 +74,19 @@ const latestClassVersions = (classes, { keep = [] } = {}) => {
   return rows.filter(c => shown.has(c.id));
 };
 
-module.exports = { groupClassVersions, latestClassVersions };
+// Drop each advent-format class whose version family an aspirant-format class
+// in the list forks from, so the fork is the one card for that class. Run it
+// before latestClassVersions: the family walk needs the forked root present
+// to reach its later versions. Ids in `keep` always survive.
+const withoutForkedAdventClasses = (classes, { keep = [] } = {}) => {
+  const rows = Array.isArray(classes) ? classes.filter(c => c && c.id) : [];
+  const kept = new Set(keep.filter(Boolean));
+  const formatOf = (c) => c.content_format || 'advent';
+  const forkedIds = rows
+    .filter(c => formatOf(c) === 'aspirant' && c.base_class_id)
+    .map(c => c.base_class_id);
+  const forked = expandIdsToFamilies(rows, forkedIds);
+  return rows.filter(c => kept.has(c.id) || formatOf(c) !== 'advent' || !forked.has(c.id));
+};
+
+module.exports = { groupClassVersions, latestClassVersions, withoutForkedAdventClasses };

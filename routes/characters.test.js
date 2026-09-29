@@ -249,14 +249,19 @@ mock.module('../models/class', () => ({
   getClass: async (id) => ({ data: CLASS_BY_ID[id] || { id: 'class-a', rules_version: 'v1' }, error: null }),
   getUnlockedClassIdsForUser: async () => ({ data: pageState.unlockedClassIds || new Set(), error: null }),
   // filterClassDataForUser fans out to advent, aspirant and player-created
-  // pools; only the aspirant pool carries ABILITY_CLASS and whatever a test
-  // adds via pageState.extraAspirantClasses.
-  getClasses: async (filters) => ({
-    data: filters && filters.rules_edition === 'aspirant' && !filters.is_player_created
-      ? [ABILITY_CLASS, ...(pageState.extraAspirantClasses || [])]
-      : [],
-    error: null,
-  }),
+  // pools; the aspirant pool carries ABILITY_CLASS and whatever a test adds
+  // via pageState.extraAspirantClasses, the advent pool only what a test adds
+  // via pageState.extraAdventClasses.
+  getClasses: async (filters) => {
+    const official = filters && !filters.is_player_created;
+    if (official && filters.rules_edition === 'aspirant') {
+      return { data: [ABILITY_CLASS, ...(pageState.extraAspirantClasses || [])], error: null };
+    }
+    if (official && filters.rules_edition === 'advent') {
+      return { data: pageState.extraAdventClasses || [], error: null };
+    }
+    return { data: [], error: null };
+  },
 }));
 
 const express = require('express');
@@ -332,6 +337,7 @@ beforeEach(() => {
   pageState.character = null;
   pageState.unlockedClassIds = null;
   pageState.extraAspirantClasses = null;
+  pageState.extraAdventClasses = null;
   pageState.classFamilyRows = null;
   pageState.lastUpdateBody = null;
 });
@@ -539,6 +545,53 @@ test('the classic edit pickers select only the option of the stored item\'s clas
   expect(body).not.toMatch(/value="class-pf-v1::Compass"\s+selected/);
   expect(body).toMatch(/value="class-pf-v2::Trailsense::core"\s+selected/);
   expect(body).not.toMatch(/value="class-pf-v1::Trailsense::core"\s+selected/);
+});
+
+// An Advent class and its aspirant-format fork share a name, but
+// util/class-family.js keeps a format fork in its own version family, so
+// latestClassVersions alone leaves both cards in the aspiring wizard. The
+// fork represents the class there; an Advent class nobody forked stays.
+const BERSERKER_ADVENT = {
+  id: 'class-berserker-advent',
+  name: 'Berserker',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'advent',
+  rules_version: 'v1',
+  content_format: 'advent',
+  gear: [],
+  abilities: [],
+  advanced_abilities: [],
+  created_at: '2023-01-01T00:00:00Z',
+};
+const BERSERKER_ASPIRANT = {
+  ...BERSERKER_ADVENT,
+  id: 'class-berserker-aspirant',
+  base_class_id: BERSERKER_ADVENT.id,
+  content_format: 'aspirant',
+  created_at: '2024-01-01T00:00:00Z',
+};
+const WARDEN_ADVENT = {
+  ...BERSERKER_ADVENT,
+  id: 'class-warden-advent',
+  name: 'Warden',
+};
+
+test('the aspiring wizard lists an aspirant-format fork in place of the Advent class it forks', async () => {
+  pageState.extraAdventClasses = [BERSERKER_ADVENT, BERSERKER_ASPIRANT, WARDEN_ADVENT];
+  pageState.unlockedClassIds = new Set([BERSERKER_ADVENT.id, BERSERKER_ASPIRANT.id, WARDEN_ADVENT.id]);
+
+  const res = await fetch(`${baseUrl}/characters/wizard?mode=aspiring`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const island = JSON.parse(body.match(/id="wizard-data">([\s\S]*?)<\/script>/)[1]);
+  const ids = island.classes.map((c) => c.id);
+  expect(ids).toContain(BERSERKER_ASPIRANT.id);
+  expect(ids).not.toContain(BERSERKER_ADVENT.id);
+  expect(ids).toContain(WARDEN_ADVENT.id);
 });
 
 // GET /characters/:id/edit — the ability island (Task 4 fix round 2).
