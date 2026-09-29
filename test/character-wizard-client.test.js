@@ -1593,20 +1593,27 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     expect(html).toContain('4 Perks');
   });
 
-  test('the shop offers no Cross-Class abilities from an Advent-format class', () => {
+  test('the shop sells an Advent-format class\'s Abilities at the Cross-Class prices', () => {
     const adventClass = {
       id: 'fixture-advent-other', name: 'Fixture Advent Class', content_format: 'advent',
       stat_spread: {}, gear: [], class_gear: [], base_gear: [],
       abilities: [{ name: 'Advent Core' }],
       advanced_abilities: [{ name: 'Advent Advanced' }]
     };
-    const wizard = aspirantStateAtLevel(1, {
+    const wizard = aspirantStateAtLevel(20, {
       classes: [ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS, adventClass]
     });
-    const html = wizard.renderAbilityShop(wizard.getState());
-    expect(html).toContain('Other Core');
-    expect(html).not.toContain('Advent Core');
-    expect(html).not.toContain('Advent Advanced');
+    const state = wizard.getState();
+    const html = wizard.renderAbilityShop(state);
+    expect(html).toContain('Advent Core');
+    expect(html).toContain('Advent Advanced');
+    const core = { classId: 'fixture-advent-other', abilityName: 'Advent Core', type: 'core', crossClass: true };
+    expect(wizard.canAcquire(state, core)).toBe(true);
+    wizard.acquireAbility(state, core);
+    expect(wizard.perksSpent(state)).toBe(3);
+    const advanced = { classId: 'fixture-advent-other', abilityName: 'Advent Advanced', type: 'advanced', crossClass: true };
+    wizard.acquireAbility(state, advanced);
+    expect(wizard.perksSpent(state)).toBe(7);
   });
 
   test('a Cross-Class pick prices at the cross tier, not the own tier', () => {

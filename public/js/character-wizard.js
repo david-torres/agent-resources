@@ -1978,14 +1978,14 @@ window.CharacterWizard = (function () {
   // Reuses DATA.classes as its roster exactly as the Signature shop's
   // getShopPool does (character-wizard.js, "Build a flat spend-pool"): the
   // route already reduces DATA.classes to what the player has unlocked
-  // (routes/characters.js#filterClassDataForUser). The aspirant roster also
-  // carries Advent-format classes (buildable under Aspirant rules), whose
-  // abilities are not for sale, so only aspirant-format classes stock it.
+  // (routes/characters.js#filterClassDataForUser). An Aspirant character may
+  // use Aspirant or Advent classes without restriction, so every class in the
+  // roster stocks the shop, priced by whether it is the character's own.
   const abilityShopEntries = (s) => {
     const ownClassId = s && s.classId;
     const entries = [];
     (Array.isArray(DATA.classes) ? DATA.classes : []).forEach((cls) => {
-      if (!cls || !cls.id || cls.content_format !== 'aspirant') return;
+      if (!cls || !cls.id) return;
       const isOwn = cls.id === ownClassId;
       // Own-Class Core Abilities are the free allowance every class starts
       // with (pg. 7), never a shop row. Another Class's Core is always a
@@ -3514,8 +3514,8 @@ window.CharacterWizard = (function () {
 
     // pg. 3: 12 Merx "may be spent however they like or save for later", so
     // Next is never gated on the budget being fully spent, in any economy.
-    // Over-budget and over-cap purchases are refused where a purchase is
-    // made (affordsChange), not here.
+    // Over-budget purchases are refused where a purchase is made
+    // (affordsChange), not here.
     if (step4Next) step4Next.disabled = false;
   };
 

@@ -112,7 +112,9 @@
       </button>
       {{/each}}
     </div>
+    {{#unless (eq effectiveVersion "v2")}}
     <p class="is-size-7 has-text-grey mt-2">One-way. Your existing Ability Perks text will be preserved as a read-only legacy block.</p>
+    {{/unless}}
   </div>
   {{/if}}
 
@@ -154,7 +156,7 @@
               hx-swap="none">Convert to Aspirant</button>
     </div>
     {{/if}}
-    <p class="is-size-7 has-text-grey mt-2">One-way. Illegal Build lines above carry over to the sheet and do not stop the conversion.</p>
+    <p class="is-size-7 has-text-grey mt-2">One-way.{{#if aspirantConversionHasHardBreach}} Illegal Build lines above carry over to the sheet and do not stop the conversion.{{/if}}</p>
   </div>
   {{/if}}
 

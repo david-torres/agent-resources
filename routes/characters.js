@@ -601,6 +601,8 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
     }
 
     const { data: aspirantConversion } = await planCharacterAspirantConversion(actorFromLocals(res.locals), id);
+    const aspirantConversionHasHardBreach = Boolean(aspirantConversion)
+      && aspirantConversion.breaches.some((breach) => breach.severity === 'hard');
 
     res.render('character-form', {
       profile,
@@ -619,6 +621,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       characterClass,
       upgradeTargets,
       aspirantConversion,
+      aspirantConversionHasHardBreach,
       derived,
       // Each Stat's real Cap, so the stat blocks can express a Trait's +1 and a
       // purchased +1. This is the only surface a character is edited on after
@@ -1183,9 +1186,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       });
 
       const effectiveVersion = characterRulesVersion({
-    classRulesVersion: characterClass && characterClass.rules_version,
-    creatorMode: character.creator_mode
-  });
+        classRulesVersion: characterClass && characterClass.rules_version,
+        creatorMode: character.creator_mode
+      });
 
       // A Signature's Enchantments and Mods, and the Earned/Spent/Remaining
       // breakdown below, are a V1-population feature: content_format

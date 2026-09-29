@@ -8,10 +8,10 @@ const { computeVersionFamily } = require('../util/class-family');
 const characterRepository = require('../services/character/repository');
 const { characterRulesVersion } = require('../util/character-rules');
 
-// Resolve the rules version a character should be rendered/validated against.
-// Inherits from the linked class; falls back to 'v1' when no class is linked
-// (preserves legacy behavior for old characters that predate class_id).
-const effectiveRulesVersion = async (classId, client = supabase) => {
+// The rules version of the linked class; 'v1' when no class is linked (old
+// characters predate class_id). characterRulesVersion combines this with the
+// character's mode.
+const classRulesVersion = async (classId, client = supabase) => {
   if (!classId) return 'v1';
   try {
     const { data: cls } = await getClass(classId, client);
@@ -457,7 +457,7 @@ const getCharacterForAgent = async (id, actor = {}) => {
   if (!data) return { data: null, error: null };
 
   const rulesVersion = characterRulesVersion({
-    classRulesVersion: await effectiveRulesVersion(data.class_id),
+    classRulesVersion: await classRulesVersion(data.class_id),
     creatorMode: data.creator_mode
   });
   if (rulesVersion === 'v2') {
@@ -481,7 +481,7 @@ const getCharacterForAgent = async (id, actor = {}) => {
 // validation, authorization, sequencing, and reconciliation decisions.
 const characterService = new CharacterService({
   ...characterRepository,
-  getRulesVersion: classId => effectiveRulesVersion(classId),
+  getRulesVersion: classId => classRulesVersion(classId),
   resolveClassReference: resolveCharacterClassReference,
   getClassContentLookupMaps: buildClassContentLookupMaps,
   findUpgradeTargets: (classId, client) => findUpgradeTargetsFor(classId, client)
@@ -547,5 +547,5 @@ module.exports = {
   searchCharactersForAgent,
   getCharacterForAgent,
   countCharactersByCreator,
-  effectiveRulesVersion
+  classRulesVersion
 };

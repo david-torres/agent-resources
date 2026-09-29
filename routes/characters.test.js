@@ -167,7 +167,7 @@ mock.module('../models/character', () => ({
   // below that authenticates does). Unused by upgradeTargets assertions here,
   // so an empty list is enough to keep the handler from throwing on a
   // destructured function it never got.
-  findUpgradeTargetsFor: async () => [],
+  findUpgradeTargetsFor: async () => pageState.upgradeTargets || [],
   // PUT /:id never reaches a real save layer here -- captures the body
   // applyAbilityPurchases and applyGearPurchases produced, the way pageState
   // feeds every other mock, so the abilities_json test below can assert on
@@ -368,6 +368,7 @@ beforeEach(() => {
   pageState.classFamilyRows = null;
   pageState.lastUpdateBody = null;
   pageState.conversionPlan = null;
+  pageState.upgradeTargets = null;
   pageState.conversionResult = null;
   pageState.lastConvert = null;
   pageState.lastPlanArgs = null;
@@ -860,6 +861,40 @@ test('the edit form offers conversion: same class and build, Aspirant totals, a 
   expect(body).toContain('<strong>Illegal Build:</strong> 6 Perks spent of 4 earned.');
   expect(body).toContain(`hx-post="/characters/${CHAR_ID}/convert-aspirant"`);
   expect(body).toContain('hx-confirm="Convert Ash to Aspirant? This cannot be undone."');
+});
+
+test('the conversion footer about Illegal Build lines appears only when there is a hard breach', async () => {
+  pageState.conversionPlan = conversionPlan();
+  expect(await editPage()).toContain('Illegal Build lines above carry over to the sheet');
+
+  pageState.conversionPlan = { ...conversionPlan(), breaches: [] };
+  const clean = await editPage();
+  expect(clean).toContain('id="aspirant-conversion"');
+  expect(clean).not.toContain('Illegal Build lines above carry over');
+});
+
+const LEGACY_BLOCK_COPY = 'preserved as a read-only legacy block';
+
+const upgradePage = async (creatorMode) => {
+  pageState.upgradeTargets = [{ id: 'class-a-v2', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v2' }];
+  pageState.character = { ...makePageCharacter(3), creator_id: 'profile-1', creator_mode: creatorMode };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  return res.text();
+};
+
+test('the Upgrade block warns of the read-only legacy block for an Advent character on a v1 class', async () => {
+  const body = await upgradePage(null);
+  expect(body).toContain('Upgrade to Aspirant v2');
+  expect(body).toContain(LEGACY_BLOCK_COPY);
+});
+
+test('the Upgrade block omits the legacy-block warning for an Aspirant character already on the v2 rules', async () => {
+  const body = await upgradePage('aspirant');
+  expect(body).toContain('Upgrade to Aspirant v2');
+  expect(body).not.toContain(LEGACY_BLOCK_COPY);
 });
 
 test('the edit form lists blockers and disables the Convert button', async () => {
