@@ -1610,3 +1610,8 @@ test('distinct Ability names pass', () => {
   const result = normalizeCharacterInput({ name: 'Raven', abilities: ['c1::Veneer::core', 'c1::Phantasm::core'] });
   expect(result.error).toBeNull();
 });
+
+test('a duplicate on a nameless create still reads as a sentence', () => {
+  const result = normalizeCharacterInput({ abilities: ['Veneer', 'Veneer'] });
+  expect(result.error).toBe('This character already has Veneer.');
+});

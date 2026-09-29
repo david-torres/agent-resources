@@ -82,9 +82,9 @@ const sendRouteError = (req, res, error) => {
 // entitled to be told why, not just that something broke.
 //
 // This gives a string that shape explicitly, so the real message reaches the
-// player. An Error/object-shaped failure (a genuine 500, a Postgres error
-// carrying its own `.code`) is left untouched and keeps classifying exactly
-// as it did before this existed.
+// player. A { status, title, message } business error passes through as
+// sendRouteError renders it; any other Error/object-shaped failure (a genuine
+// 500, a Postgres error carrying its own `.code`) keeps classifying as before.
 const sendCharacterSaveError = (req, res, error) => {
   if (typeof error === 'string') {
     // `message` is passed in the fallback, not left for classifyError to
@@ -96,7 +96,7 @@ const sendCharacterSaveError = (req, res, error) => {
     // (null-error) base values survive to the response.
     return sendError(req, res, null, { status: 400, title: 'Invalid submission', message: error });
   }
-  return sendError(req, res, error);
+  return sendRouteError(req, res, error);
 };
 
 // A locked class reaches the picker as its name and teaser only: nothing a

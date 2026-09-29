@@ -2460,3 +2460,16 @@ describe('one Ability name per character', () => {
     expect(result.error).toBe(error);
   });
 });
+
+test('convertToAspirant reads a raced duplicate-Ability violation as the friendly refusal', async () => {
+  const calls = [];
+  const violation = {
+    code: '23505',
+    message: 'duplicate key value violates unique constraint "class_abilities_character_name_key"',
+    details: 'Key (character_id, lower(btrim(name)))=(character-1, trickshot) already exists.'
+  };
+  const adapter = conversionAdapter(calls);
+  adapter.saveCharacterAtomic = async () => ({ data: null, error: violation });
+  const result = await new CharacterService(adapter).convertToAspirant(CREATOR, 'character-1');
+  expect(result).toEqual({ data: null, error: { status: 400, message: 'Caroline already has Trickshot.' } });
+});

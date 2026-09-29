@@ -580,7 +580,7 @@ const normalizeCharacterInput = (input, context = {}) => {
   if (!abilityValidation.ok) return { data: null, childData: null, error: abilityValidation.errors.join(' ') };
   const [heldTwice] = duplicateNames(normalizeClassItems(childData.classAbilities).map(item => item.name));
   if (heldTwice) {
-    return { data: null, childData: null, error: duplicateAbilityMessage(data.name || context.characterName, heldTwice) };
+    return { data: null, childData: null, error: duplicateAbilityMessage(data.name || context.characterName || 'This character', heldTwice) };
   }
 
   // Aspiring is class-less. The invented class name goes in `class` -- already

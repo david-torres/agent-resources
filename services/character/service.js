@@ -294,6 +294,12 @@ const collidingAbilityName = (error, abilities) => {
   const submitted = (abilities || []).find(ability => nameKey(ability.name) === key);
   return submitted ? submitted.name : key;
 };
+const readAbilityNameViolation = (saved, abilities, characterName) => {
+  const heldTwice = collidingAbilityName(saved.error, abilities);
+  return heldTwice
+    ? { data: null, error: { status: 400, message: duplicateAbilityMessage(characterName, heldTwice) } }
+    : saved;
+};
 
 /**
  * Application boundary for character writes. The adapter owns storage and
@@ -769,11 +775,7 @@ class CharacterService {
       abilities,
       perks
     });
-    const heldTwice = collidingAbilityName(saved.error, abilities);
-    if (heldTwice) {
-      return { data: null, error: { status: 400, message: duplicateAbilityMessage(characterName, heldTwice) } };
-    }
-    return saved;
+    return readAbilityNameViolation(saved, abilities, characterName);
   }
 
   async applyChildDiff(table, characterId, diff) {
@@ -956,7 +958,8 @@ class CharacterService {
     }
     // The class, its rows and the mode change in one transactional save.
     const save = upgradeSaveArgs({ character, upgrade: plan.upgrade });
-    return this.adapter.saveCharacterAtomic({ ...save, character: { ...save.character, creator_mode: 'aspirant' } });
+    const saved = await this.adapter.saveCharacterAtomic({ ...save, character: { ...save.character, creator_mode: 'aspirant' } });
+    return readAbilityNameViolation(saved, save.abilities, character.name);
   }
 
   async updateStats(actor, id, rawFields) {

@@ -162,7 +162,8 @@ mock.module('../models/character', () => ({
   // build is refused by validateAspiringBuild before createCharacter is
   // called. A distinct error here makes a guard that silently lets the
   // request through fail loudly instead of passing for the wrong reason.
-  createCharacter: async () => ({ data: null, error: 'createCharacter should not have been called' }),
+  createCharacter: async () => pageState.createResult
+    || ({ data: null, error: 'createCharacter should not have been called' }),
   // Reached by GET /:id/edit whenever characterClass resolves (every test
   // below that authenticates does). Unused by upgradeTargets assertions here,
   // so an empty list is enough to keep the handler from throwing on a
@@ -174,7 +175,7 @@ mock.module('../models/character', () => ({
   // what the route handed downstream without a real database.
   updateCharacter: async (id, body) => {
     pageState.lastUpdateBody = body;
-    return { data: { id, name: body.name || 'Ash' }, error: null };
+    return pageState.updateResult || { data: { id, name: body.name || 'Ash' }, error: null };
   },
 }));
 // A V1 aspirant class carrying three Core Abilities and three Advanced ones
@@ -424,6 +425,8 @@ beforeEach(() => {
   pageState.extraAdventClasses = null;
   pageState.classFamilyRows = null;
   pageState.lastUpdateBody = null;
+  pageState.updateResult = null;
+  pageState.createResult = null;
   pageState.conversionPlan = null;
   pageState.upgradeTargets = null;
   pageState.conversionResult = null;
@@ -1309,4 +1312,35 @@ test('the sheet shows an Aspirant character on a v1 class its v2 fields and curv
   const body = await res.text();
   expect(body).toContain('<h3 class="title is-4">Defining Quirk</h3>');
   expect(body).toContain('V2: Need');
+});
+
+test('a business error the update service returns reaches the player as its own status and message', async () => {
+  pageState.updateResult = { data: null, error: { status: 400, message: 'Raven already has Veneer.' } };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Authorization: 'Bearer test-token',
+    },
+    body: new URLSearchParams({ name: 'Raven' }).toString(),
+  });
+
+  expect(res.status).toBe(400);
+  expect(await res.text()).toContain('Raven already has Veneer.');
+});
+
+test('a business error the create service returns reaches the player as its own status and message', async () => {
+  pageState.createResult = { data: null, error: { status: 400, message: 'Raven already has Veneer.' } };
+  const res = await fetch(`${baseUrl}/characters`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      Authorization: 'Bearer test-token',
+    },
+    body: JSON.stringify({ name: 'Raven' }),
+  });
+
+  expect(res.status).toBe(400);
+  expect(await res.text()).toContain('Raven already has Veneer.');
 });
