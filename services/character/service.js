@@ -1,5 +1,6 @@
 const {
   cloneInput,
+  duplicateAbilityMessage,
   normalizeCharacterInput,
   normalizeGearItems,
   normalizeAbilityItems,
@@ -7,6 +8,7 @@ const {
   parseInteger,
   normalizeStatsPayload
 } = require('./input');
+const { nameKey } = require('../../util/item-name');
 const { deriveCharacterTotals, deriveBuildBreaches } = require('../../util/character-derived');
 const { economyFor, withPreservedEquipment } = require('../../util/merx-economy');
 const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/stat-caps');
@@ -281,6 +283,18 @@ const resolveSubmittedAbilities = (abilities, { maps, ownClassId, storedAbilitie
   }));
 };
 
+// The database's backstop for the check normalizeCharacterInput makes
+// first. Postgres names the colliding key in the violation's detail:
+// Key (character_id, lower(btrim(name)))=(<id>, <name>) already exists.
+const ABILITY_NAME_INDEX = 'class_abilities_character_name_key';
+const collidingAbilityName = (error, abilities) => {
+  if (!error || error.code !== '23505' || !String(error.message).includes(ABILITY_NAME_INDEX)) return null;
+  const key = /=\([^,]+, (.*)\) already exists/.exec(String(error.details))?.[1];
+  if (!key) return null;
+  const submitted = (abilities || []).find(ability => nameKey(ability.name) === key);
+  return submitted ? submitted.name : key;
+};
+
 /**
  * Application boundary for character writes. The adapter owns storage and
  * catalog queries; this service owns validation, authorization, sequencing,
@@ -380,7 +394,7 @@ class CharacterService {
 
     if (typeof this.adapter.saveCharacterAtomic === 'function') {
       return this.saveCharacterAtomic({
-        id: null, actor, characterInput, childData, rulesVersion, previousAbilities: [], maps
+        id: null, actor, characterInput, characterName: characterInput.name, childData, rulesVersion, previousAbilities: [], maps
       });
     }
     const created = await this.adapter.createCharacterRow(characterInput);
@@ -554,7 +568,8 @@ class CharacterService {
       // The submission never carries this key on update (Task 6) -- the
       // stored value is the only truth.
       aspiringAbilities: existing.data.aspiring_abilities,
-      classFamilyOf
+      classFamilyOf,
+      characterName: existing.data.name
     });
     if (normalized.error) return { data: null, error: normalized.error };
     const { data: characterInput, childData } = normalized;
@@ -655,7 +670,7 @@ class CharacterService {
     const previousAbilities = Array.isArray(existing.data.abilities) ? existing.data.abilities : [];
     if (typeof this.adapter.saveCharacterAtomic === 'function') {
       return this.saveCharacterAtomic({
-        id, actor, characterInput, childData, rulesVersion, previousAbilities,
+        id, actor, characterInput, characterName: characterInput.name ?? existing.data.name, childData, rulesVersion, previousAbilities,
         maps: catalogueMaps ?? undefined
       });
     }
@@ -688,7 +703,7 @@ class CharacterService {
     return { data: character, error: updated.error };
   }
 
-  async saveCharacterAtomic({ id, actor, characterInput, childData, rulesVersion, previousAbilities, maps: providedMaps }) {
+  async saveCharacterAtomic({ id, actor, characterInput, characterName, childData, rulesVersion, previousAbilities, maps: providedMaps }) {
     // A trait item arrives shaped {name, stat} from
     // services/character/input.js#normalizeCharacterInput.
     const traits = (Array.isArray(childData.traits) ? childData.traits : [])
@@ -745,7 +760,7 @@ class CharacterService {
           : abilities ? null : perk;
       }).filter(Boolean);
     }
-    return this.adapter.saveCharacterAtomic({
+    const saved = await this.adapter.saveCharacterAtomic({
       characterId: id,
       creatorId: actor.id,
       character: characterInput,
@@ -754,6 +769,11 @@ class CharacterService {
       abilities,
       perks
     });
+    const heldTwice = collidingAbilityName(saved.error, abilities);
+    if (heldTwice) {
+      return { data: null, error: { status: 400, message: duplicateAbilityMessage(characterName, heldTwice) } };
+    }
+    return saved;
   }
 
   async applyChildDiff(table, characterId, diff) {

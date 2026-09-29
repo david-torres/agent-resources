@@ -22,6 +22,11 @@ const {
   ASPIRING_ABILITY_PICKS, ASPIRING_CORE_PICKS, ASPIRING_ADVANCED_PICKS, buildBreaches
 } = require('../../util/perk-economy');
 const { tagAbilities } = require('../../util/character-derived');
+const { duplicateNames } = require('../../util/item-name');
+
+// Ability names compare trimmed and case-folded: the key
+// class_abilities_character_name_key enforces.
+const duplicateAbilityMessage = (characterName, abilityName) => `${characterName} already has ${abilityName}.`;
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 const V1_ONLY_FIELDS = ['perks', 'additional_gear'];
@@ -573,6 +578,10 @@ const normalizeCharacterInput = (input, context = {}) => {
   if (!gearValidation.ok) return { data: null, childData: null, error: gearValidation.errors.join(' ') };
   const abilityValidation = validateGearEquipment(childData.classAbilities);
   if (!abilityValidation.ok) return { data: null, childData: null, error: abilityValidation.errors.join(' ') };
+  const [heldTwice] = duplicateNames(normalizeClassItems(childData.classAbilities).map(item => item.name));
+  if (heldTwice) {
+    return { data: null, childData: null, error: duplicateAbilityMessage(data.name || context.characterName, heldTwice) };
+  }
 
   // Aspiring is class-less. The invented class name goes in `class` -- already
   // NOT NULL and already the display name every render path reads -- rather
@@ -904,6 +913,7 @@ const collectCharacterFormArrays = (body) => {
 
 module.exports = {
   cloneInput,
+  duplicateAbilityMessage,
   normalizeCharacterInput,
   normalizeGearItems: normalizeClassItems,
   normalizeAbilityItems: normalizeClassItems,

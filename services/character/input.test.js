@@ -1583,3 +1583,30 @@ test('the Advanced pick may repeat a class the Core picks used', () => {
   });
   expect(validateAspiringBuild(body)).toBeNull();
 });
+
+test('a save holding one Ability name twice is refused, whatever the class or spelling', () => {
+  const result = normalizeCharacterInput({
+    name: 'Raven',
+    abilities: [
+      { name: 'Veneer', class_id: 'illusionist' },
+      { name: 'Phantasm', class_id: 'illusionist' },
+      { name: ' VENEER', class_id: 'mesmer' }
+    ]
+  });
+  expect(result.error).toBe('Raven already has Veneer.');
+});
+
+test('classic picker strings are compared by name alone', () => {
+  const result = normalizeCharacterInput({ name: 'Raven', abilities: ['c1::Veneer::core', 'c2::veneer::advanced'] });
+  expect(result.error).toBe('Raven already has Veneer.');
+});
+
+test('an update with no name in the submission names the stored character', () => {
+  const result = normalizeCharacterInput({ abilities: ['Veneer', 'Veneer'] }, { characterName: 'Raven' });
+  expect(result.error).toBe('Raven already has Veneer.');
+});
+
+test('distinct Ability names pass', () => {
+  const result = normalizeCharacterInput({ name: 'Raven', abilities: ['c1::Veneer::core', 'c1::Phantasm::core'] });
+  expect(result.error).toBeNull();
+});

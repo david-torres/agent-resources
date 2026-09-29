@@ -1,4 +1,4 @@
-const { test, expect, spyOn } = require('bun:test');
+const { test, expect, spyOn, describe } = require('bun:test');
 const { CharacterService, resolveSubmittedGear } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
@@ -2418,4 +2418,45 @@ test('a fork character\'s bare item names resolve to the fork first, then its Ad
     { name: 'Revolver', class_id: 'gs-fork' },
     { name: 'Duster', class_id: 'gs-advent' }
   ]);
+});
+
+describe('one Ability name per character', () => {
+  const RAVEN = { id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', name: 'Raven', abilities: [] };
+  const UNIQUE_VIOLATION = {
+    code: '23505',
+    message: 'duplicate key value violates unique constraint "class_abilities_character_name_key"',
+    details: 'Key (character_id, lower(btrim(name)))=(character-1, veneer) already exists.'
+  };
+  const saveAbilities = async (abilities, saveResult = ok({ id: 'character-1' })) => {
+    let saved = null;
+    const service = new CharacterService(makeAdapter([], {
+      getCharacter: async () => ok(RAVEN),
+      saveCharacterAtomic: async (args) => {
+        saved = args;
+        return saveResult;
+      }
+    }));
+    const result = await service.updateCharacter('character-1', { abilities }, { id: 'profile-1' });
+    return { result, saved };
+  };
+
+  test('an edit that holds one name twice is refused before the save', async () => {
+    const { result, saved } = await saveAbilities([
+      { name: 'Veneer', class_id: 'class-1' },
+      { name: 'veneer', class_id: 'class-2' }
+    ]);
+    expect(result.error).toBe('Raven already has Veneer.');
+    expect(saved).toBeNull();
+  });
+
+  test('the database\'s unique violation reads as the same refusal', async () => {
+    const { result } = await saveAbilities([{ name: 'Veneer', class_id: 'class-1' }], { data: null, error: UNIQUE_VIOLATION });
+    expect(result).toEqual({ data: null, error: { status: 400, message: 'Raven already has Veneer.' } });
+  });
+
+  test('any other unique violation passes through untouched', async () => {
+    const error = { code: '23505', message: 'duplicate key value violates unique constraint "traits_pkey"', details: '' };
+    const { result } = await saveAbilities([{ name: 'Veneer', class_id: 'class-1' }], { data: null, error });
+    expect(result.error).toBe(error);
+  });
 });
