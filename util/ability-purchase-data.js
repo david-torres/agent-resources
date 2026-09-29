@@ -40,16 +40,11 @@ const rosterOf = (cls) => {
 };
 
 // The full catalogue an aspirant or aspiring character may buy from: the
-// character's own class first, then every other class the caller says is
-// unlocked. `allClasses` is expected to already be collapsed to one entry per
-// version family (util/class-list-grouping.js#latestClassVersions, the same
-// collapse the caller applies before util/gear-purchase-data.js sees a class
-// list) -- this module trusts that and only deduplicates by class + name, so
-// a class that arrived three times here would still print three times.
-//
-// Rows already seen keep their first appearance rather than being
-// overwritten, so the character's own class -- added first -- wins a name
-// collision against a cross-class print of the same ability name.
+// character's own class first, then every class in `allClasses`
+// (util/class-lineage.js#purchaseCatalogue, which gives an aspirant character
+// each Ability name once per lineage). This module deduplicates only by
+// class + name, so the own class, added first, wins against its own row in
+// the catalogue.
 const buildCatalogue = (characterClass, allClasses) => {
   const seen = new Set();
   const rows = [];

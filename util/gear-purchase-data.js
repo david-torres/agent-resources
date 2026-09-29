@@ -36,29 +36,20 @@ const toEntry = (item, classId, className) => ({
   default_enchantment: item.default_enchantment || null
 });
 
-// Another version of the character's own class, which the roster already
-// covers. The Advent origin of an Aspirant version is a different family that
-// is still own class, so its Signatures are stock priced at the own rate.
-const isOwnVersion = (cls, characterClass, characterClassId, classFamilyOf) => sameFamily(cls.id, characterClassId, classFamilyOf)
-  && cls.content_format === (characterClass && characterClass.content_format);
-
 // What the grid offers: every Signature the character's class prints (its
-// roster), then the catalogue of other classes' Signatures it may buy at the
-// cross-class tier, then an entry for anything the character already owns
-// that neither covers. Without the last part those owned rows would have no
-// controls.
+// roster), then the catalogue of other classes' Signatures it may buy, then an
+// entry for anything the character already owns that neither covers. Without
+// the last part those owned rows would have no controls.
 //
-// An aspirant character's catalogue is every served class outside its own
-// version family -- the same reach the wizard's shop gives it at creation.
-// allClasses holds only the newest version of each family, so a character on
-// an older version would otherwise see its own class again as cross-class
-// stock. An aspiring character is class-less, so it has no roster; its Class
-// is three named Signatures (pg. 90) and its catalogue is every served class.
+// allClasses is util/class-lineage.js#purchaseCatalogue: for an aspirant
+// character each Signature name once per lineage, its own class first. An
+// aspiring character is class-less, so it has no roster; its Class is three
+// named Signatures (pg. 90) and its catalogue is every served class.
 //
 // A stored class_gear row arrives merged with its class's printed entry
 // (services/character/repository.js#getCharacterGear), so it already carries
 // the description, meters and Default Enchantment the entry needs.
-const buildEntries = ({ characterClass, characterClassId, allClasses, gear, economy, aspiringSignatures, classFamilyOf }) => {
+const buildEntries = ({ characterClass, allClasses, gear, economy, aspiringSignatures }) => {
   const roster = Array.isArray(characterClass && characterClass.gear)
     ? characterClass.gear.map((item) => toEntry(item, characterClass.id, characterClass.name))
     : [];
@@ -66,7 +57,6 @@ const buildEntries = ({ characterClass, characterClassId, allClasses, gear, econ
   const catalogue = [];
   for (const cls of (Array.isArray(allClasses) ? allClasses : [])) {
     if (!cls || !cls.id || !Array.isArray(cls.gear)) continue;
-    if (economy === 'aspirant' && isOwnVersion(cls, characterClass, characterClassId, classFamilyOf)) continue;
     for (const item of cls.gear) {
       if (!item || !item.name) continue;
       const key = entryKey(cls.id, item.name);
@@ -138,12 +128,10 @@ const buildGearPurchaseData = ({ economy, characterClass, allClasses, character,
   const characterClassId = (character && character.class_id) || null;
   const entries = buildEntries({
     characterClass,
-    characterClassId,
     allClasses,
     gear,
     economy,
-    aspiringSignatures: character && character.aspiring_signatures,
-    classFamilyOf
+    aspiringSignatures: character && character.aspiring_signatures
   });
   const purchases = buildPurchases(gear);
   return {

@@ -291,7 +291,38 @@ const GS_FORK = {
   abilities: [{ name: 'Trickshot', description: '' }],
   created_at: '2024-01-01T00:00:00Z',
 };
+// An Advent class and its Aspirant version that print the same Signature and
+// Ability under different case.
+const LN_ADVENT = {
+  id: 'class-ln-advent',
+  name: 'Duelist',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'advent',
+  rules_version: 'v2',
+  content_format: 'advent',
+  gear: [{ name: 'Rapier', description: '' }, { name: 'Cloak', description: '' }],
+  abilities: [{ name: 'Riposte', description: '' }, { name: 'Feint', description: '' }],
+  advanced_abilities: [],
+  created_at: '2023-01-01T00:00:00Z',
+};
+const LN_FORK = {
+  ...LN_ADVENT,
+  id: 'class-ln-fork',
+  base_class_id: LN_ADVENT.id,
+  rules_edition: 'aspirant',
+  content_format: 'aspirant',
+  gear: [{ name: 'RAPIER', description: '' }],
+  abilities: [{ name: 'RIPOSTE', description: '' }],
+  created_at: '2024-01-01T00:00:00Z',
+};
+const LN_FAMILY_ROWS = [
+  { id: LN_ADVENT.id, base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: LN_FORK.id, base_class_id: LN_ADVENT.id, rules_edition: 'aspirant', content_format: 'aspirant' },
+];
 const CLASS_BY_ID = {
+  [LN_FORK.id]: LN_FORK,
+  [LN_ADVENT.id]: LN_ADVENT,
   [GS_FORK.id]: GS_FORK,
   [TRAILBLAZER_V1.id]: TRAILBLAZER_V1,
   [V2_RULES_CLASS.id]: V2_RULES_CLASS,
@@ -758,6 +789,91 @@ test('the edit page prices a fork character\'s Advent-origin items at the own ra
   expect(entriesNamed('Sling')[0].class_id).toBe(GS_ADVENT.id);
   expect(entriesNamed('Duster')).toHaveLength(1);
   expect(entriesNamed('Revolver')).toHaveLength(1);
+});
+
+test('the edit page offers an Aspirant character each lineage\'s item once, from its Aspirant version', async () => {
+  pageState.character = {
+    id: CHAR_ID,
+    name: 'Dara',
+    class: 'Duelist',
+    class_id: LN_FORK.id,
+    creator_id: 'profile-1',
+    creator_mode: 'aspirant',
+    is_public: true,
+    level: 3,
+    completed_missions: 0,
+    ...Object.fromEntries(statList.map(stat => [stat, 2])),
+    traits: [],
+    abilities: [],
+    gear: [],
+    ability_perks: [],
+    quirks: [],
+    accessories: [],
+    common_items: [],
+    perks: '',
+    additional_gear: '',
+  };
+  pageState.unlockedClassIds = new Set([LN_ADVENT.id, LN_FORK.id]);
+  pageState.extraAdventClasses = [LN_ADVENT];
+  pageState.extraAspirantClasses = [LN_FORK];
+  pageState.classFamilyRows = LN_FAMILY_ROWS;
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const island = (id) => JSON.parse(body.match(new RegExp(`id="${id}">([^<]*)</script>`))[1]);
+  const named = (entries, name) => entries.filter((e) => e.name.trim().toLowerCase() === name);
+  const gear = island('gear-purchase-data').entries;
+  expect(named(gear, 'rapier').map((e) => e.class_id)).toEqual([LN_FORK.id]);
+  expect(named(gear, 'cloak').map((e) => e.class_id)).toEqual([LN_ADVENT.id]);
+  const abilities = island('ability-purchase-data').entries;
+  expect(named(abilities, 'riposte').map((e) => e.class_id)).toEqual([LN_FORK.id]);
+  expect(named(abilities, 'feint').map((e) => [e.class_id, e.crossClass])).toEqual([[LN_ADVENT.id, false]]);
+});
+
+test('the edit page lists an owned Advent copy as owned although the Aspirant version is the catalogue entry', async () => {
+  pageState.character = {
+    id: CHAR_ID,
+    name: 'Dara',
+    class: 'Duelist',
+    class_id: LN_FORK.id,
+    creator_id: 'profile-1',
+    creator_mode: 'aspirant',
+    is_public: true,
+    level: 3,
+    completed_missions: 0,
+    ...Object.fromEntries(statList.map(stat => [stat, 2])),
+    traits: [],
+    abilities: [{ id: 'ab-r', name: 'Riposte', class_id: LN_ADVENT.id, type: 'core' }],
+    gear: [{ name: 'Rapier', class_id: LN_ADVENT.id, enchantment: null, mods: [] }],
+    ability_perks: [],
+    quirks: [],
+    accessories: [],
+    common_items: [],
+    perks: '',
+    additional_gear: '',
+  };
+  pageState.unlockedClassIds = new Set([LN_ADVENT.id, LN_FORK.id]);
+  pageState.extraAdventClasses = [LN_ADVENT];
+  pageState.extraAspirantClasses = [LN_FORK];
+  pageState.classFamilyRows = LN_FAMILY_ROWS;
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const island = (id) => JSON.parse(body.match(new RegExp(`id="${id}">([^<]*)</script>`))[1]);
+  const gear = island('gear-purchase-data');
+  expect(gear.purchases.map((p) => [p.name, p.class_id])).toEqual([['Rapier', LN_ADVENT.id]]);
+  expect(gear.entries.some((e) => e.name === 'Rapier' && e.class_id === LN_ADVENT.id)).toBe(true);
+  const abilities = island('ability-purchase-data');
+  expect(abilities.owned.map((a) => [a.name, a.class_id])).toEqual([['Riposte', LN_ADVENT.id]]);
+  expect(abilities.entries.some((e) => e.name === 'Riposte' && e.class_id === LN_ADVENT.id)).toBe(true);
 });
 
 // PUT /:id turns a submitted abilities_json into body.abilities via

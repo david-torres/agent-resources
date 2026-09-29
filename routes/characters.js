@@ -45,6 +45,7 @@ const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
 const { latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = require('../util/class-list-grouping');
+const { purchaseCatalogue } = require('../util/class-lineage');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -552,16 +553,15 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       contentFormat: characterClass && characterClass.content_format,
       creatorMode: character.creator_mode
     });
-    // Only a V1 character needs the catalogue: an aspirant character's
-    // Signatures and Abilities can Cross-Class against every other unlocked
-    // class (pg. 3), and an aspiring character has no class of its own at
-    // all. This costs no extra query: filterClassDataForUser already ran
-    // above for the Class <select>'s options, and latestClassVersions is the
-    // same pure collapse GET /wizard applies to build wizardClasses, so a
-    // player is never offered a class here they have not unlocked there.
-    const allClasses = economy === 'aspiring' || economy === 'aspirant'
-      ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
-      : [];
+    // An aspirant character's Signatures and Abilities can Cross-Class
+    // against every other unlocked class (pg. 3), and an aspiring character
+    // has no class of its own at all. The roster is the one
+    // filterClassDataForUser already fetched for the Class <select>.
+    const allClasses = purchaseCatalogue({
+      economy,
+      classes: [...filteredAdvent, ...filteredAspirant, ...filteredPCC],
+      characterClass
+    });
 
     // One own-class map for `derived` and both purchase islands, so they
     // never disagree about what is cross-class.

@@ -230,10 +230,10 @@ describe('the aspirant catalogue', () => {
     expect(data.entries.find((e) => e.name === 'Vial').class_name).toBe('Alchemist');
   });
 
-  // allClasses holds only the newest version of each family, so a character
-  // on an older version finds its own family's newer version there. That is
-  // its own class, not a source of cross-class purchases.
-  test('a newer version of the character\'s own class is not offered as catalogue', () => {
+  // util/class-lineage.js#purchaseCatalogue serves the newest version of the
+  // character's own family beside its stored one, pruned of the names the
+  // stored one prints. What only the newer version prints is own class.
+  test('a Signature only a newer version of the character\'s own class prints is offered at the own rate', () => {
     const newerVersion = { ...v1ClassRow(), id: 'c-v1-next', gear: [{ name: 'Stetson' }] };
     const classFamilyOf = (id) => (id === 'c-v1-next' ? 'c-v1' : id);
     const data = buildGearPurchaseData({
@@ -244,9 +244,8 @@ describe('the aspirant catalogue', () => {
       missionMerx: 0,
       classFamilyOf
     });
-    const names = data.entries.map((e) => e.name);
-    expect(names).not.toContain('Stetson');
-    expect(names).toContain('Vial');
+    expect(data.entries.filter((e) => e.name === 'Stetson').map((e) => e.class_id)).toEqual(['c-v1-next']);
+    expect(data.ownClassIds).toContain('c-v1-next');
   });
 
   test('a fork character is offered its Advent origin\'s Signatures once, as own class', () => {
