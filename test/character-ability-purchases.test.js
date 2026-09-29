@@ -131,6 +131,30 @@ describe('buying and dropping', () => {
   });
 });
 
+describe('an Ability name is held once', () => {
+  // Another class printing the name the character already holds, spelled
+  // differently.
+  const withEcho = () => fixtureIsland({
+    entries: [...baseEntries(), {
+      name: 'viewpoint ', class_id: 'c-third', class_name: 'Third Class',
+      type: 'core', crossClass: true, price: FIGURES.prices.ability.cross.core
+    }],
+    owned: [{ name: 'Viewpoint', class_id: OTHER_CLASS_ID, type: 'core' }]
+  });
+
+  test('an Ability whose name the character holds from another class cannot be bought', () => {
+    const form = mountAbilities(withEcho());
+    expect(form.buyAbility('viewpoint ', 'c-third')).toBe(false);
+    expect(form.serialize().abilities).toHaveLength(1);
+  });
+
+  test('its Buy button is disabled', () => {
+    mountAbilities(withEcho());
+    const button = document.querySelector('[data-ability-buy][data-ability-class="c-third"]');
+    expect(button.disabled).toBe(true);
+  });
+});
+
 describe('affordability consults both the balance and the cap', () => {
   test('an ability that would breach the cap cannot be bought', () => {
     const cap = FIGURES.abilityCap.aspirant;

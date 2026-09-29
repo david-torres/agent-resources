@@ -104,6 +104,14 @@
       return null;
     };
 
+    // services/character/input.js refuses a save that holds one Ability name
+    // twice, whatever the class; names compare trimmed and case-folded.
+    var nameKey = function (value) { return String(value == null ? '' : value).trim().toLowerCase(); };
+    var holdsName = function (name) {
+      var key = nameKey(name);
+      return purchases.some(function (p) { return nameKey(p.name) === key; });
+    };
+
     var priceOfEntry = function (entry) {
       return priceOf(FIGURES, entry.crossClass, entry.type);
     };
@@ -168,6 +176,8 @@
       return getSpent() + marginalCost(entry) <= getEarned();
     };
 
+    var canBuy = function (entry) { return !holdsName(entry.name) && affordsPurchase(entry); };
+
     var serialize = function () {
       return {
         abilities: purchases.map(function (p) {
@@ -179,8 +189,7 @@
     var buyAbility = function (name, classId) {
       var entry = findEntry(name, classId);
       if (!entry) return false;
-      if (findPurchase(entry.name, entry.class_id)) return false;
-      if (!affordsPurchase(entry)) return false;
+      if (!canBuy(entry)) return false;
       purchases.push({ name: entry.name, class_id: entry.class_id, type: entry.type });
       render();
       return true;
@@ -214,7 +223,7 @@
           + ' data-ability-drop data-ability-name="' + esc(entry.name) + '"'
           + ' data-ability-class="' + esc(entry.class_id || '') + '">Drop</button>'
         : '<button type="button" class="button is-small is-primary"'
-          + (affordsPurchase(entry) ? '' : ' disabled')
+          + (canBuy(entry) ? '' : ' disabled')
           + ' data-ability-buy data-ability-name="' + esc(entry.name) + '"'
           + ' data-ability-class="' + esc(entry.class_id || '') + '">Buy</button>';
       return '<div class="box mb-2" data-ability-entry'
