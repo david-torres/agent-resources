@@ -1076,6 +1076,30 @@ test('the auto-calc fields count an Aspirant character\'s missions on the v2 cur
   expect(await res.text()).toContain('V2: Need');
 });
 
+test('the auto-calc fields price a fork character\'s Advent-origin Signature at the own rate', async () => {
+  const { CREATION_GRANT, priceOfSignature } = require('../util/merx-economy');
+  pageState.character = {
+    ...makePageCharacter(0),
+    creator_id: 'profile-1',
+    class: 'Gunslinger',
+    class_id: GS_FORK.id,
+    creator_mode: 'aspirant',
+    completed_missions: 0,
+    gear: [{ name: 'Duster', class_id: GS_ADVENT.id, enchantment: null, mods: [] }],
+    common_items: [],
+  };
+  pageState.classFamilyRows = [
+    { id: GS_ADVENT.id, base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+    { id: GS_FORK.id, base_class_id: GS_ADVENT.id, rules_edition: 'aspirant', content_format: 'aspirant' },
+  ];
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/auto-calc-fields?on=1`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  const ownRate = CREATION_GRANT.aspirant - priceOfSignature({ crossClass: false });
+  expect(await res.text()).toMatch(new RegExp(`name="commissary_reward"[^>]*value="${ownRate}"`));
+});
+
 test('the sheet shows an Aspirant character on a v1 class its v2 fields and curve', async () => {
   pageState.character = aspirantOnAdventV1();
   const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/Ash`, { headers: { Accept: 'text/html' } });

@@ -2,6 +2,7 @@
 // Default is read-only. Pass --apply only after reviewing the reported count.
 const { supabaseAdmin } = require('../models/_base');
 const characterRepository = require('../services/character/repository');
+const { familyResolver } = require('../util/class-family');
 const { calculateCharacterProgress, recalculateCharacterProgress } = require('../services/character/progress');
 
 const PAGE_SIZE = 500;
@@ -38,7 +39,7 @@ const main = async () => {
     fetchAll('class_gear', 'id, character_id, class_id, name, enchantment, mods'),
     fetchAll('mission_characters', 'id, character_id, missions(outcome)'),
     fetchAll('offscreen_missions', 'id, character_id, merx_gained'),
-    fetchAll('classes', 'id, rules_version, content_format')
+    fetchAll('classes', 'id, rules_version, content_format, base_class_id, rules_edition')
   ]);
 
   const gearByCharacter = groupByCharacter(gear);
@@ -53,7 +54,8 @@ const main = async () => {
       character: { ...character, gear: gearByCharacter.get(character.id) || [] },
       realMissions: (linksByCharacter.get(character.id) || []).map(row => row.missions).filter(Boolean),
       offscreenMissions: offscreenByCharacter.get(character.id) || [],
-      classRules: { data: rules?.rules_version || 'v1', contentFormat: rules?.content_format || null }
+      classRules: { data: rules?.rules_version || 'v1', contentFormat: rules?.content_format || null },
+      classFamilyOf: familyResolver(classes, character.class_id)
     });
     if (Object.keys(totals).some(field => character[field] !== totals[field])) {
       stale.push({ id: character.id, current: {

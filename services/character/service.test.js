@@ -4,7 +4,8 @@ const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
 const { LEVEL_CEILING, BASE_STAT_CAP, capBreachMessage } = require('../../util/stat-caps');
-const { statList } = require('../../util/enclave-consts');
+const { statList, MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
+const { CREATION_GRANT, priceOfSignature } = require('../../util/merx-economy');
 
 // Gunslinger as the catalogue holds it: Advent v1, its same-family v2, and the
 // Aspirant V1 fork, which differs on both family axes.
@@ -335,6 +336,29 @@ test('CharacterService.levelUp succeeds for the creator, backfilling named missi
     { characterId: 'character-1', name: 'Op Alpha', profileId: 'profile-1' },
     { characterId: 'character-1', name: 'Op Bravo', profileId: 'profile-1' }
   ]);
+});
+
+const FORK_FAMILY_ROWS = [
+  { id: 'gs-advent', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: 'gs-fork', base_class_id: 'gs-advent', rules_edition: 'aspirant', content_format: 'aspirant' }
+];
+
+test('levelUp stores Merx with a fork character\'s Advent-origin Signature at the own rate', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      ...OWNED_CHARACTER, class_id: 'gs-fork', creator_mode: 'aspirant',
+      gear: [{ name: 'Duster', class_id: 'gs-advent', enchantment: null, mods: [] }]
+    }),
+    getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ok(FORK_FAMILY_ROWS),
+    getRealMissions: async () => ok([{ outcome: 'success' }])
+  }));
+  const result = await service.levelUp(CREATOR, 'character-1', {
+    level: 2, completed_missions: 1, mission_names: ['Op Delta'], use_conduit_credit: false, stats: {}
+  });
+  expect(result.error).toBeNull();
+  expect(result.data.commissary_reward)
+    .toBe(CREATION_GRANT.aspirant + MERX_PER_MISSION_SUCCESS - priceOfSignature({ crossClass: false }));
 });
 
 test('CharacterService.levelUp surfaces a backfill mission error without throwing (graceful, not a hang)', async () => {

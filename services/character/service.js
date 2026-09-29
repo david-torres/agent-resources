@@ -1057,12 +1057,16 @@ class CharacterService {
       creatorMode: character.creator_mode
     });
 
+    const classFamilyOf = character.class_id
+      ? familyResolver((await this.adapter.getClassFamilyRows()).data, character.class_id)
+      : null;
     const derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
       offscreenMissions: offscreenRes.data || [],
       rulesVersion,
-      economy
+      economy,
+      classFamilyOf
     });
 
     const stats = normalizeStatsPayload(body.stats || body);
@@ -1093,9 +1097,6 @@ class CharacterService {
     // -- that is what lets a character spend the Perk the new level earns. The
     // roster is untouched by a level-up, so both sides hold the same Abilities
     // and only the Perk balance can worsen.
-    const classFamilyOf = character.class_id
-      ? familyResolver((await this.adapter.getClassFamilyRows()).data, character.class_id)
-      : null;
     const storedPerks = Array.isArray(character.ability_perks) ? character.ability_perks : [];
     const ratchetArgs = {
       economy,

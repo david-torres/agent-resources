@@ -1,10 +1,11 @@
 const { deriveCharacterTotals } = require('../../util/character-derived');
+const { familyResolver } = require('../../util/class-family');
 const { economyFor } = require('../../util/merx-economy');
 const { characterRulesVersion } = require('../../util/character-rules');
 
 const progressFields = ['completed_missions', 'commissary_reward', 'level'];
 
-const calculateCharacterProgress = ({ character, realMissions, offscreenMissions, classRules }) => {
+const calculateCharacterProgress = ({ character, realMissions, offscreenMissions, classRules, classFamilyOf = null }) => {
   const derived = deriveCharacterTotals({
     character,
     realMissions,
@@ -13,7 +14,8 @@ const calculateCharacterProgress = ({ character, realMissions, offscreenMissions
     economy: economyFor({
       contentFormat: classRules.contentFormat,
       creatorMode: character.creator_mode
-    })
+    }),
+    classFamilyOf
   });
   return Object.fromEntries(progressFields.map(field => [field, derived[field]]));
 };
@@ -26,20 +28,21 @@ const inspectCharacterProgress = async (characterId, repository) => {
   if (characterError) throw characterError;
   if (!character || !character.auto_calculate) return null;
 
-  const [missions, offscreenMissions, classRules] = await Promise.all([
+  const [missions, offscreenMissions, classRules, familyRows] = await Promise.all([
     repository.getRealMissions(characterId),
     repository.listOffscreenMissions(characterId),
-    repository.getClassRulesVersion(character.class_id)
+    repository.getClassRulesVersion(character.class_id),
+    character.class_id ? repository.getClassFamilyRows() : { data: [], error: null }
   ]);
-  if (missions.error || offscreenMissions.error || classRules.error) {
-    throw missions.error || offscreenMissions.error || classRules.error;
-  }
+  const readError = missions.error || offscreenMissions.error || classRules.error || familyRows.error;
+  if (readError) throw readError;
 
   const totals = calculateCharacterProgress({
     character,
     realMissions: missions.data || [],
     offscreenMissions: offscreenMissions.data || [],
-    classRules
+    classRules,
+    classFamilyOf: familyResolver(familyRows.data, character.class_id)
   });
   const current = Object.fromEntries(progressFields.map(field => [field, character[field]]));
   const changed = progressFields.some(field => current[field] !== totals[field]);

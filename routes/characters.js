@@ -695,6 +695,9 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
     if (missionsRes.error || offscreenRes.error) {
       return sendError(req, res, null, { status: 503, message: 'Failed to load mission data' });
     }
+    const classFamilyOf = character.class_id
+      ? familyResolver((await characterRepository.getClassFamilyRows()).data, character.class_id)
+      : null;
     derived = deriveCharacterTotals({
       character,
       realMissions: missionsRes.data || [],
@@ -703,7 +706,8 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
       economy: economyFor({
         contentFormat: classRow && classRow.content_format,
         creatorMode: character.creator_mode
-      })
+      }),
+      classFamilyOf
     });
   }
 
