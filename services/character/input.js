@@ -348,7 +348,7 @@ const normalizeMods = (value) => shapeMods(value).value ?? [];
 // function does not resolve classes or pools -- and `level` is needed because
 // the Perk grant buildBreaches checks against scales with it.
 const validateEconomyLimits = ({
-  economy, gear, commonItems, characterClassId, aspiringSignatures,
+  economy, gear, commonItems, characterClassId, aspiringSignatures, classFamilyOf,
   abilities, abilityPerks, level,
   enforceMerxBudget = true, enforceAbilityLimits = true
 }) => {
@@ -374,7 +374,7 @@ const validateEconomyLimits = ({
     const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
     const budget = CREATION_GRANT[economy];
     const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
-    const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
+    const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures, classFamilyOf })
       + itemCount * COMMON_ITEM_PRICE;
     if (spend > budget) {
       errors.push(`This character spends ${spend} Merx of ${budget}.`);
@@ -678,6 +678,7 @@ const normalizeCharacterInput = (input, context = {}) => {
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
     aspiringSignatures: data.aspiring_signatures,
+    classFamilyOf: context.classFamilyOf,
     enforceMerxBudget: context.enforceMerxBudget ?? true,
     abilities: tagAbilities(context.economyAbilities ?? childData.classAbilities, {
       economy,

@@ -613,3 +613,35 @@ test('derivePerkBreakdown prices an aspirant advanced ability at 2', () => {
     abilityPerks: []
   })).toEqual({ earned: 3, spend: 2, remaining: 1, deficit: 0 });
 });
+
+describe('Signatures priced by class version family', () => {
+  const CLASS_ID = 'v2-class';
+  const SIBLING_ID = 'v1-class';
+  const classFamilyOf = (id) => (id === SIBLING_ID ? CLASS_ID : id);
+  const base = { realMissions: [], offscreenMissions: [], characterClassId: CLASS_ID, commonItems: [] };
+
+  test('advent: sibling-version Signatures count toward the three free', () => {
+    const gear = [
+      { name: 'A', class_id: CLASS_ID },
+      { name: 'B', class_id: SIBLING_ID },
+      { name: 'C', class_id: SIBLING_ID }
+    ];
+    expect(deriveMerxBreakdown({ ...base, economy: 'advent', gear, classFamilyOf }).spend).toBe(0);
+    expect(deriveMerxBreakdown({ ...base, economy: 'advent', gear }).spend).toBe(6);
+  });
+
+  test('aspirant: a sibling-version Signature prices own-class', () => {
+    const gear = [{ name: 'A', class_id: SIBLING_ID }];
+    expect(deriveMerxBreakdown({ ...base, economy: 'aspirant', gear, classFamilyOf }).spend).toBe(2);
+    expect(deriveMerxBreakdown({ ...base, economy: 'aspirant', gear }).spend).toBe(3);
+  });
+
+  test('deriveCharacterTotals threads classFamilyOf into the Merx breakdown', () => {
+    const character = { class_id: CLASS_ID, gear: [{ name: 'A', class_id: SIBLING_ID }], common_items: [] };
+    const totals = (fam) => deriveCharacterTotals({
+      character, realMissions: [], offscreenMissions: [], rulesVersion: 'v2', economy: 'aspirant', classFamilyOf: fam
+    });
+    expect(totals(classFamilyOf).commissary_reward).toBe(10);
+    expect(totals(undefined).commissary_reward).toBe(9);
+  });
+});

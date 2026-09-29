@@ -75,20 +75,28 @@ const inAspiringPool = (item, pool) => pool.some(
     (pick) => pick.class_id === item.class_id && pick.name === item.name
 );
 
-const isCrossClass = (item, { economy, characterClassId, aspiringSignatures } = {}) => {
+// `classFamilyOf` maps every id in the character's class version family onto
+// the character's class_id; absent, ids compare as they are.
+const sameFamily = (a, b, classFamilyOf) => {
+    const of = typeof classFamilyOf === 'function' ? classFamilyOf : (id) => id;
+    return !!a && !!b && of(a) === of(b);
+};
+
+const isCrossClass = (item, { economy, characterClassId, aspiringSignatures, classFamilyOf } = {}) => {
     if (economy === 'aspiring') {
         const pool = (Array.isArray(aspiringSignatures) ? aspiringSignatures : []).filter(Boolean);
         return pool.length > 0 && !inAspiringPool(item, pool);
     }
-    return !!characterClassId && !!item.class_id && item.class_id !== characterClassId;
+    return !!characterClassId && !!item.class_id
+        && !sameFamily(item.class_id, characterClassId, classFamilyOf);
 };
 
 const modsOf = (item) => (Array.isArray(item.mods) ? item.mods : []);
 
-const equipmentSpend = (gear, { economy, characterClassId, aspiringSignatures } = {}) => {
+const equipmentSpend = (gear, { economy, characterClassId, aspiringSignatures, classFamilyOf } = {}) => {
     const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
     return items.reduce((total, item) => {
-        const crossClass = isCrossClass(item, { economy, characterClassId, aspiringSignatures });
+        const crossClass = isCrossClass(item, { economy, characterClassId, aspiringSignatures, classFamilyOf });
         const enchantment = item.enchantment || null;
         const mods = modsOf(item);
         const modSpend = mods.reduce(
@@ -220,6 +228,8 @@ module.exports = {
     priceOfEnchantment,
     priceOfMod,
     equipmentSpend,
+    isCrossClass,
+    sameFamily,
     withPreservedEquipment,
     countWordsExcludingRatings,
     COMMON_ITEM_PRICE,

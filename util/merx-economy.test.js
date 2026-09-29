@@ -10,6 +10,7 @@ const {
   priceOfEnchantment,
   priceOfMod,
   equipmentSpend,
+  isCrossClass,
   withPreservedEquipment,
   countWordsExcludingRatings,
   COMMON_ITEM_PRICE,
@@ -334,5 +335,35 @@ describe('economyFigures', () => {
   test('hands back a fresh object, so a caller cannot mutate the module', () => {
     economyFigures().grants.advent = 99;
     expect(CREATION_GRANT.advent).toBe(2);
+  });
+});
+
+describe('Signature pricing by class version family', () => {
+  const CLASS_ID = 'v2-class';
+  const SIBLING_ID = 'v1-class';
+  const classFamilyOf = (id) => (id === SIBLING_ID ? CLASS_ID : id);
+  const sibling = { name: 'Old Blade', class_id: SIBLING_ID };
+  const stranger = { name: 'Elsewhere', class_id: 'other-class' };
+
+  test('a sibling-version Signature is own-class when a family resolver is supplied', () => {
+    expect(isCrossClass(sibling, { economy: 'aspirant', characterClassId: CLASS_ID, classFamilyOf })).toBe(false);
+  });
+
+  test('without a resolver a sibling-version class_id compares by class_id alone', () => {
+    expect(isCrossClass(sibling, { economy: 'aspirant', characterClassId: CLASS_ID })).toBe(true);
+  });
+
+  test('a class outside the family stays cross-class', () => {
+    expect(isCrossClass(stranger, { economy: 'aspirant', characterClassId: CLASS_ID, classFamilyOf })).toBe(true);
+  });
+
+  test('equipmentSpend prices a sibling-version Signature at the own-class rate', () => {
+    expect(equipmentSpend([sibling], { economy: 'aspirant', characterClassId: CLASS_ID, classFamilyOf })).toBe(2);
+    expect(equipmentSpend([sibling], { economy: 'aspirant', characterClassId: CLASS_ID })).toBe(3);
+  });
+
+  test('the resolver does not change aspiring pool membership', () => {
+    const pool = [{ class_id: 'other-class', name: 'Elsewhere' }];
+    expect(isCrossClass(sibling, { economy: 'aspiring', aspiringSignatures: pool, classFamilyOf })).toBe(true);
   });
 });

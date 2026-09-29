@@ -5,6 +5,7 @@ const {
 } = require('./enclave-consts');
 const {
   equipmentSpend,
+  sameFamily,
   priceOfSignature,
   COMMON_ITEM_PRICE,
   CREATION_GRANT
@@ -61,12 +62,12 @@ const coerceMerx = (raw) => {
 // If a future edition moves the Aspirant prices and Advent's must not follow,
 // that is the moment to give Advent its own entries -- not now, when a second
 // copy would only be a copy that can drift.
-const adventGearSpend = (gearList, characterClassId) => {
+const adventGearSpend = (gearList, characterClassId, classFamilyOf) => {
   let onClassCount = 0;
   let offClassCount = 0;
   for (const g of gearList) {
     if (!g) continue;
-    const onClass = !!characterClassId && !!g.class_id && g.class_id === characterClassId;
+    const onClass = !!characterClassId && sameFamily(g.class_id, characterClassId, classFamilyOf);
     if (onClass) onClassCount++;
     else offClassCount++;
   }
@@ -75,9 +76,9 @@ const adventGearSpend = (gearList, characterClassId) => {
     + offClassCount * priceOfSignature({ crossClass: true });
 };
 
-const gearSpendFor = (economy, gearList, characterClassId, aspiringSignatures) => (economy === 'advent'
-  ? adventGearSpend(gearList, characterClassId)
-  : equipmentSpend(gearList, { economy, characterClassId, aspiringSignatures }));
+const gearSpendFor = (economy, gearList, characterClassId, aspiringSignatures, classFamilyOf) => (economy === 'advent'
+  ? adventGearSpend(gearList, characterClassId, classFamilyOf)
+  : equipmentSpend(gearList, { economy, characterClassId, aspiringSignatures, classFamilyOf }));
 
 // Merx a character has earned since creation: mission successes plus whatever
 // each offscreen mission recorded. The creation grant is NOT part of it --
@@ -94,7 +95,7 @@ const deriveMissionMerx = ({ realMissions, offscreenMissions } = {}) => {
 
 const deriveMerxBreakdown = ({
   realMissions, offscreenMissions, gear, commonItems, characterClassId,
-  economy = 'advent', aspiringSignatures
+  economy = 'advent', aspiringSignatures, classFamilyOf
 }) => {
   const gearList = Array.isArray(gear) ? gear : [];
   const itemList = Array.isArray(commonItems) ? commonItems : [];
@@ -103,7 +104,7 @@ const deriveMerxBreakdown = ({
     + deriveMissionMerx({ realMissions, offscreenMissions });
 
   const itemSpend = itemList.length * COMMON_ITEM_PRICE;
-  const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId, aspiringSignatures);
+  const spend = itemSpend + gearSpendFor(economy, gearList, characterClassId, aspiringSignatures, classFamilyOf);
 
   return {
     earned,
@@ -114,11 +115,6 @@ const deriveMerxBreakdown = ({
 };
 
 const deriveMerx = (args) => deriveMerxBreakdown(args).reward;
-
-const sameFamily = (a, b, classFamilyOf) => {
-  const of = typeof classFamilyOf === 'function' ? classFamilyOf : (id) => id;
-  return !!a && !!b && of(a) === of(b);
-};
 
 // An aspiring character's pool is matched on class_id AND name, the same pair
 // util/merx-economy.js's inAspiringPool uses for Signatures.
@@ -185,7 +181,8 @@ const deriveCharacterTotals = ({
     commonItems: character && character.common_items,
     characterClassId: character && character.class_id,
     aspiringSignatures: character && character.aspiring_signatures,
-    economy
+    economy,
+    classFamilyOf
   });
   const level = deriveLevel(completed_missions, rulesVersion);
   return {

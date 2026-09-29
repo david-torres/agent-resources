@@ -162,6 +162,20 @@ describe('the component agrees with the server it cannot require', () => {
     expect(SE.isCrossClass(gear[1], opts)).toBe(true);
   });
 
+  test('client and server agree that a sibling-version Signature is own-class', () => {
+    const classFamilyOf = (id) => (id === 'old-version' ? CLASS_ID : id);
+    const gear = [
+      { name: 'S', class_id: 'old-version', owned: true, enchantment: { source: 'default' }, mods: [{ name: 'm' }] },
+      { name: 'T', class_id: 'other-class', owned: true, enchantment: null, mods: [] }
+    ];
+    const server = { economy: 'aspirant', characterClassId: CLASS_ID, classFamilyOf };
+    const client = { economy: 'aspirant', characterClassId: CLASS_ID, ownClassIds: ['old-version', CLASS_ID] };
+    expect(SE.totalOf(gear, { figures: FIGURES, ...client })).toBe(equipmentSpend(gear, server));
+    expect(SE.isCrossClass(gear[0], client)).toBe(false);
+    expect(SE.isCrossClass(gear[1], client)).toBe(true);
+    expect(SE.isCrossClass(gear[0], { economy: 'aspirant', characterClassId: CLASS_ID })).toBe(true);
+  });
+
   test('client and server agree that an empty aspiring pool is all own-class', () => {
     const gear = [{ name: 'Z', class_id: 'class-z', owned: true, enchantment: null, mods: [] }];
     const opts = { economy: 'aspiring', characterClassId: null, aspiringSignatures: [] };

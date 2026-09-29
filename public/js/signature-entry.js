@@ -49,6 +49,10 @@
   // rule as util/merx-economy.js isCrossClass, pinned to it by
   // test/signature-entry.test.js. An empty or absent pool prices everything
   // own-class, matching a row written before the pool was stored.
+  //
+  // Outside the aspiring economy a Signature is own-class when its class_id is
+  // the character's or is listed in opts.ownClassIds -- the ids of the
+  // character's class version family, which the server resolves.
   var inAspiringPool = function (purchase, pool) {
     for (var i = 0; i < pool.length; i++) {
       if (pool[i].class_id === purchase.class_id && pool[i].name === purchase.name) return true;
@@ -61,8 +65,9 @@
       var pool = (Array.isArray(opts.aspiringSignatures) ? opts.aspiringSignatures : []).filter(function (p) { return !!p; });
       return pool.length > 0 && !inAspiringPool(purchase, pool);
     }
-    return !!opts.characterClassId && !!purchase.class_id
-      && purchase.class_id !== opts.characterClassId;
+    if (!opts.characterClassId || !purchase.class_id) return false;
+    var ownClassIds = Array.isArray(opts.ownClassIds) ? opts.ownClassIds : [];
+    return purchase.class_id !== opts.characterClassId && ownClassIds.indexOf(purchase.class_id) === -1;
   };
 
   // Ruling 5: a rename is a delete plus an insert, so replacing or removing

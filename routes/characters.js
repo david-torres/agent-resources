@@ -582,7 +582,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
         const family = computeVersionFamily(classFamilyRows || [], character.class_id);
         classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
       } catch (_) {
-        // classFamilyOf stays null; abilities compare by class_id alone.
+        // classFamilyOf stays null; abilities and Signatures compare by class_id alone.
       }
     }
 
@@ -643,6 +643,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
         characterClass,
         allClasses,
         character,
+        classFamilyOf,
         missionMerx: deriveMissionMerx({
           realMissions: missionsRes.data || [],
           offscreenMissions: offscreenRes.data || []
@@ -1200,6 +1201,25 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       });
       const showGearPurchases = economy !== 'advent';
 
+      // Maps every id in the character's own version family onto
+      // character.class_id (util/class-family.js#computeVersionFamily is the
+      // single definition of "version family" -- see its own comment on why a
+      // query that drops a column must not be reimplemented here). An ability
+      // or Signature carried over from an earlier version of the character's
+      // OWN class then prices as own-class instead of cross-class, the same pattern
+      // services/character/service.js#updateCharacter already uses, reusing
+      // its same getClassFamilyRows call rather than a route-local query.
+      let classFamilyOf = null;
+      if (character.class_id) {
+        try {
+          const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
+          const family = computeVersionFamily(classFamilyRows || [], character.class_id);
+          classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
+        } catch (_) {
+          // classFamilyOf stays null; abilities and Signatures compare by class_id alone.
+        }
+      }
+
       // recentMissions above is capped at 5 for the Recent Missions box;
       // the breakdown needs every mission, so it reads the full list --
       // non-fatally, since the breakdown is supplementary to the page.
@@ -1214,29 +1234,11 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
             commonItems: character.common_items,
             characterClassId: character.class_id,
             aspiringSignatures: character.aspiring_signatures,
-            economy
+            economy,
+            classFamilyOf
           });
         } catch (_) {
           // Render without the breakdown; the bare page still works.
-        }
-      }
-
-      // Maps every id in the character's own version family onto
-      // character.class_id (util/class-family.js#computeVersionFamily is the
-      // single definition of "version family" -- see its own comment on why a
-      // query that drops a column must not be reimplemented here). An ability
-      // carried over from an earlier version of the character's OWN class then
-      // tags as own-class instead of cross-class, the same pattern
-      // services/character/service.js#updateCharacter already uses, reusing
-      // its same getClassFamilyRows call rather than a route-local query.
-      let classFamilyOf = null;
-      if (character.class_id) {
-        try {
-          const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
-          const family = computeVersionFamily(classFamilyRows || [], character.class_id);
-          classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
-        } catch (_) {
-          // classFamilyOf stays null; abilities compare by class_id alone.
         }
       }
 

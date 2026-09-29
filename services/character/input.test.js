@@ -1145,6 +1145,13 @@ test('six own-class Signatures fit the 12-Merx grant', () => {
   expect(validateEconomyLimits({ ...ASPIRANT, gear: own(6), commonItems: [] })).toEqual({ ok: true });
 });
 
+test('sibling-version Signatures do not trip the creation budget when a family resolver is passed', () => {
+  const classFamilyOf = (id) => (id === 'v1-old' ? 'v1' : id);
+  const gear = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: 'v1-old' }));
+  expect(validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [], classFamilyOf })).toEqual({ ok: true });
+  expect(validateEconomyLimits({ ...ASPIRANT, gear, commonItems: [] }).ok).toBe(false);
+});
+
 test('a seventh own-class Signature is over budget', () => {
   const result = validateEconomyLimits({ ...ASPIRANT, gear: own(7), commonItems: [] });
   expect(result.ok).toBe(false);

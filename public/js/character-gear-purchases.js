@@ -48,6 +48,7 @@
     var FIGURES = data.figures;
     var ECONOMY = data.economy;
     var CHARACTER_CLASS_ID = data.characterClassId || null;
+    var OWN_CLASS_IDS = Array.isArray(data.ownClassIds) ? data.ownClassIds : [];
     var ASPIRING_SIGNATURES = Array.isArray(data.aspiringSignatures) ? data.aspiringSignatures : [];
     var EARNED_MERX = Math.max(0, Number(data.earnedMerx) || 0);
     var entries = Array.isArray(data.entries) ? data.entries : [];
@@ -100,6 +101,7 @@
       return SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
         economy: ECONOMY,
         characterClassId: CHARACTER_CLASS_ID,
+        ownClassIds: OWN_CLASS_IDS,
         aspiringSignatures: ASPIRING_SIGNATURES
       });
     };
@@ -143,7 +145,7 @@
     var getSpent = function () {
       return SignatureEntry.totalOf(purchases, {
         figures: FIGURES, economy: ECONOMY, characterClassId: CHARACTER_CLASS_ID,
-        aspiringSignatures: ASPIRING_SIGNATURES
+        ownClassIds: OWN_CLASS_IDS, aspiringSignatures: ASPIRING_SIGNATURES
       }) + commonItemCount() * FIGURES.prices.commonItem;
     };
 

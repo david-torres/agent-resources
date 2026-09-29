@@ -56,7 +56,8 @@ const planConversion = ({
       gear,
       commonItems: character.common_items,
       characterClassId,
-      economy: ASPIRANT
+      economy: ASPIRANT,
+      classFamilyOf
     })
   };
 };

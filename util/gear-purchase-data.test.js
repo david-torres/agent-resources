@@ -270,3 +270,31 @@ describe('the submitted gear field', () => {
     expect(applyGearPurchases({ gear_json: '{"name":"Cowboy Hat"}' })).toBe(false);
   });
 });
+
+describe('ownClassIds', () => {
+  const CLASS_ID = 'c-v2';
+  const SIBLING_ID = 'c-v1';
+  const classFamilyOf = (id) => (id === SIBLING_ID ? CLASS_ID : id);
+  const character = {
+    class_id: CLASS_ID,
+    gear: [
+      { name: 'Old Blade', class_id: SIBLING_ID },
+      { name: 'Elsewhere', class_id: 'c-other' }
+    ]
+  };
+  const characterClass = { id: CLASS_ID, name: 'Gunslinger', content_format: 'aspirant', gear: [{ name: 'Hat' }] };
+
+  test('lists the served class ids that belong to the character\'s version family', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspirant', characterClass, allClasses: [characterClass], character, missionMerx: 0, classFamilyOf
+    });
+    expect(data.ownClassIds.sort()).toEqual([SIBLING_ID, CLASS_ID]);
+  });
+
+  test('is just the character\'s own class without a resolver', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspirant', characterClass, allClasses: [characterClass], character, missionMerx: 0
+    });
+    expect(data.ownClassIds).toEqual([CLASS_ID]);
+  });
+});

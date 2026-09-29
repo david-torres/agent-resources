@@ -7,7 +7,7 @@
 // It is built from data the edit GET already holds: the character, its class,
 // and the missions it already fetched for deriveCharacterTotals. Nothing here
 // queries.
-const { economyFigures } = require('./merx-economy');
+const { economyFigures, sameFamily } = require('./merx-economy');
 const { renderMarkdown } = require('./markdown');
 
 // A Signature is identified by the class that prints it plus its name -- two
@@ -111,16 +111,31 @@ const buildPurchases = (gear) => gear
     mods: Array.isArray(row.mods) ? row.mods : []
   }));
 
+const ownClassIdsOf = (rows, characterClassId, classFamilyOf) => {
+  if (!characterClassId) return [];
+  const ids = new Set([characterClassId]);
+  for (const row of rows) {
+    if (row.class_id && sameFamily(row.class_id, characterClassId, classFamilyOf)) ids.add(row.class_id);
+  }
+  return [...ids];
+};
+
 // Null for the advent economy: those characters keep the gear[] selects they
 // have always had, and a null island is what views/character-form.handlebars
 // gates the whole surface on. Only the two V1 economies buy here.
-const buildGearPurchaseData = ({ economy, characterClass, allClasses, character, missionMerx }) => {
+const buildGearPurchaseData = ({ economy, characterClass, allClasses, character, missionMerx, classFamilyOf }) => {
   if (economy !== 'aspirant' && economy !== 'aspiring') return null;
   const gear = Array.isArray(character && character.gear) ? character.gear : [];
+  const characterClassId = (character && character.class_id) || null;
+  const entries = buildEntries(characterClass, allClasses, gear, economy, character && character.aspiring_signatures);
+  const purchases = buildPurchases(gear);
   return {
     economy,
     figures: economyFigures(),
-    characterClassId: (character && character.class_id) || null,
+    characterClassId,
+    // Every served class id in the character's version family, so the browser
+    // prices a sibling-version Signature own-class exactly as the server does.
+    ownClassIds: ownClassIdsOf([...entries, ...purchases], characterClassId, classFamilyOf),
     // The three Signatures this character's Class is made of (pg. 90). The
     // browser prices against the same pool the server will, or the surface
     // would offer a purchase the save then refuses.
@@ -129,8 +144,8 @@ const buildGearPurchaseData = ({ economy, characterClass, allClasses, character,
     // figures above, so the budget is never written down as a single total
     // that could disagree with either half.
     earnedMerx: Math.max(0, Number(missionMerx) || 0),
-    entries: buildEntries(characterClass, allClasses, gear, economy, character && character.aspiring_signatures),
-    purchases: buildPurchases(gear)
+    entries,
+    purchases
   };
 };
 
