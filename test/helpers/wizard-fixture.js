@@ -201,7 +201,6 @@ const buildHtml = () => `
     <p id="gearStepIntro"></p>
     <span id="merxSpent">0</span> / <span id="merxBudget">0</span>
     <p id="merxRemainderNote" hidden></p>
-    <span id="slotsReadout" hidden><span id="slotsUsed">0</span> / <span id="slotsCap">0</span></span>
     <div id="signaturePanel" hidden>
       <div id="signatureGrid"></div>
       <div id="signatureDrawer" hidden></div>

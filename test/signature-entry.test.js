@@ -59,20 +59,6 @@ describe('priceOf', () => {
   });
 });
 
-describe('slotsOf (pg. 8)', () => {
-  const SE = boot();
-  test('a bare Signature is one slot', () => {
-    expect(SE.slotsOf({ owned: true, enchantment: null, mods: [] })).toBe(1);
-  });
-  test('an Enchantment costs a slot of its own', () => {
-    expect(SE.slotsOf({ owned: true, enchantment: { source: 'default' }, mods: [] })).toBe(2);
-  });
-  test('Mods cost no slots', () => {
-    expect(SE.slotsOf({ owned: true, enchantment: null, mods: [{ name: 'a' }, { name: 'b' }] }))
-      .toBe(1);
-  });
-});
-
 // The one test that stops the client and the server drifting apart. The
 // component prices a list; util/merx-economy.js prices the same list; they
 // must agree for every shape the UI can produce.

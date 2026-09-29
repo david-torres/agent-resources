@@ -44,7 +44,6 @@ const MOUNT_HTML = (islandJson) => `
       <script type="application/json" id="gear-purchase-data">${islandJson}</script>
       <p id="purchaseReadouts">
         <span data-merx-spent>0</span> <span data-merx-budget>0</span>
-        <span data-slots-used>0</span> <span data-slots-cap>0</span>
       </p>
       <div id="purchaseGrid"></div>
       <div id="purchaseDrawer" hidden></div>

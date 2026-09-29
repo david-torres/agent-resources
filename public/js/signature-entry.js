@@ -44,12 +44,6 @@
     return total;
   };
 
-  // pg. 8: an Enchantment occupies a Signature slot of its own; Mods occupy none.
-  var slotsOf = function (purchase) {
-    if (!purchase || !purchase.owned) return 0;
-    return 1 + (purchase.enchantment ? 1 : 0);
-  };
-
   // pg. 90: an aspiring character's three chosen Signatures are its Class, so
   // those three price own-class and everything else pays the surcharge. Same
   // rule as util/merx-economy.js isCrossClass, pinned to it by
@@ -281,7 +275,6 @@
   window.SignatureEntry = {
     render: render,
     priceOf: priceOf,
-    slotsOf: slotsOf,
     totalOf: totalOf,
     countWords: countWords,
     isCrossClass: isCrossClass,

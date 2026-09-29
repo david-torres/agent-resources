@@ -2,8 +2,8 @@
 //
 // Walks the wizard's Merx purchase journey for an Aspirant V1 class in a real
 // browser: buy a printed Signature, unlock its Default Enchantment, swap the
-// Default for a Custom, add two Mods, and watch the served spend/slot
-// readouts move by exactly the served prices -- then push the build over
+// Default for a Custom, add two Mods, and watch the served spend
+// readout moves by exactly the served prices -- then push the build over
 // budget and confirm the save is refused, and separately confirm that
 // removing a Signature carrying a paid Enchantment asks first and names it.
 //
@@ -131,31 +131,23 @@ test('buying a Default, swapping to a Custom and adding two Mods prices exactly 
   const drawer = page.locator('#signatureDrawer');
 
   await expect(page.locator('#merxSpent')).toHaveText('0');
-  await expect(page.locator('#slotsUsed')).toHaveText('0');
 
   const sigPrice = await readPrice(drawer.locator('.entry-header .entry-price'));
   await drawer.locator('[data-signature-buy]').click();
   await expect(page.locator('#merxSpent')).toHaveText(String(sigPrice));
-  await expect(page.locator('#slotsUsed')).toHaveText('1');
 
-  // pg. 8: a Default Enchantment takes a Signature slot of its own, so
-  // buying one raises slotsUsed as well as merxSpent -- the "cap arithmetic"
-  // the plan is about.
   const defaultPrice = await readPrice(
     drawer.locator('label.entry-option:has(input[value="default"]) .entry-price')
   );
   await drawer.locator('input[name="enchantment"][value="default"]').check();
   await expect(page.locator('#merxSpent')).toHaveText(String(sigPrice + defaultPrice));
-  await expect(page.locator('#slotsUsed')).toHaveText('2');
 
-  // Swapping the Default for a Custom changes only the Merx spent: both are
-  // one Enchantment, so the slot count does not move.
+  // Swapping the Default for a Custom changes only the Merx spent.
   const customPrice = await readPrice(
     drawer.locator('label.entry-option:has(input[value="custom"]) .entry-price')
   );
   await drawer.locator('input[name="enchantment"][value="custom"]').check();
   await expect(page.locator('#merxSpent')).toHaveText(String(sigPrice + customPrice));
-  await expect(page.locator('#slotsUsed')).toHaveText('2');
   await drawer.locator('[data-custom-name]').fill(`${prefix} Custom Rune`);
   await drawer.locator('[data-custom-description]').fill('A hand-written effect.');
 
@@ -253,5 +245,4 @@ test('removing a Signature that carries a paid Enchantment confirms first and na
   await expect(dialog).toBeHidden();
   await expect(page.locator('#signatureGrid')).not.toContainText('Owned');
   await expect(page.locator('#merxSpent')).toHaveText('0');
-  await expect(page.locator('#slotsUsed')).toHaveText('0');
 });

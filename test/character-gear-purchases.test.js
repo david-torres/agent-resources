@@ -435,6 +435,17 @@ describe('the component stays a pure function of its arguments', () => {
     const code = source.split('\n').filter((line) => !/^\s*\/\//.test(line)).join('\n');
     expect(code).not.toMatch(/grants\s*=\s*\{/);
     expect(code).toContain('FIGURES.grants');
-    expect(code).toContain('FIGURES.signatureCap');
+  });
+});
+
+// pg. 85: the Signature Cap limits what a character brings on a mission, not
+// what it owns. Six enchanted Signatures are twelve mission slots; a seventh
+// Signature is still a purchase the character may make.
+describe('owning Signatures is limited by Merx alone', () => {
+  test('a Signature past twelve mission slots is bought when Merx allows', () => {
+    const stored = ['Cowboy Hat', 'Sharps Rifle', 'Bandolier', 'Bowie Knife', 'Wild Rag', 'Duster'].map(enchanted);
+    const form = mountPurchases(fixtureCharacter({ gear: stored, earnedMerx: 100 }));
+    expect(form.buySignature('Rollups')).toBe(true);
+    expect(form.serialize().gear).toHaveLength(7);
   });
 });

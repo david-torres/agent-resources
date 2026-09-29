@@ -560,14 +560,6 @@ describe('step 4 offers the whole class and its purchases', () => {
     expect(bought.mods).toEqual([]);
   });
 
-  test('an enchanted Signature uses two of the twelve slots', () => {
-    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
-    wizard.getState().classId = 'c-v1';
-    wizard.buySignature('Cowboy Hat');
-    wizard.setEnchantment('Cowboy Hat', { source: 'default' });
-    expect(wizard.getSlotsUsed()).toBe(2);
-  });
-
   test('a purchase that would breach the budget is refused', () => {
     const wizard = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
     wizard.getState().classId = 'c-v1';
@@ -670,30 +662,21 @@ describe('step 4 offers the whole class and its purchases', () => {
       .toBe(String(FIGURES.prices.signature.own + FIGURES.prices.defaultEnchantment.own));
   });
 
-  // pg. 8: the cap is counted in slots, and an Enchantment takes one. It is
-  // judged apart from the Merx, exactly as validateEconomyLimits judges it.
-  //
-  // The printed aspirant cap sits far above anything its grant can buy -- the
-  // cheapest slot costs a Signature's own-class price either way -- so a
-  // creation cannot reach it with the real figures. Every figure the wizard
-  // uses comes from the server, so the gate is exercised by serving a cap a
-  // creation can reach.
-  test('an Enchantment that would breach the Signature Cap is refused, Merx in hand', () => {
-    const cap = 2;
+  // pg. 85: the Signature Cap limits what a character brings on a mission,
+  // not what it owns, so only Merx limits a purchase. The served grant is
+  // raised so the purchases run past the twelve slots a mission allows.
+  test('Signatures and Enchantments past the mission cap are bought while Merx allows', () => {
     const wizard = bootWizard(fixture({
       mode: 'aspirant',
       classes: [v1Class()],
-      economy: { ...FIGURES, signatureCap: { ...FIGURES.signatureCap, aspirant: cap } }
+      economy: { ...FIGURES, grants: { ...FIGURES.grants, aspirant: 100 } }
     }));
     wizard.getState().classId = 'c-v1';
     const names = twelveNames();
-    for (let i = 0; i < cap; i++) wizard.buySignature(names[i]);
-    expect(wizard.getSlotsUsed()).toBe(cap);
-    expect(wizard.getMerxBudget() - wizard.getMerxSpent())
-      .toBeGreaterThanOrEqual(FIGURES.prices.defaultEnchantment.own);
-
-    expect(wizard.setEnchantment(names[0], { source: 'default' })).toBe(false);
-    expect(wizard.getSlotsUsed()).toBe(cap);
+    for (const name of names) wizard.buySignature(name);
+    expect(wizard.getState().gear).toHaveLength(12);
+    expect(wizard.setEnchantment(names[0], { source: 'default' })).toBe(true);
+    expect(wizard.getState().gear[0].enchantment).toEqual({ source: 'default' });
   });
 
 
@@ -852,24 +835,9 @@ describe('step 4 offers the whole class and its purchases', () => {
   // these bare, so only the stylesheet itself can be asked.
   test('step 4\'s hidden toggles are backed by the stylesheet', () => {
     const css = require('fs').readFileSync('public/css/styles.css', 'utf8');
-    for (const id of ['slotsReadout', 'signatureDrawer', 'baseGearColumn']) {
+    for (const id of ['signatureDrawer', 'baseGearColumn']) {
       expect(css).toContain('#' + id + '[hidden]');
     }
-  });
-
-  // pg. 85: an economy with no cap has no readout to show.
-  test('the slot readout appears only where the economy caps Signatures', () => {
-    const aspirant = bootWizard(fixture({ mode: 'aspirant', classes: [v1Class()] }));
-    aspirant.getState().classId = 'c-v1';
-    aspirant.renderGearStep();
-    expect(document.getElementById('slotsReadout').hidden).toBe(false);
-    expect(document.getElementById('slotsCap').textContent)
-      .toBe(String(FIGURES.signatureCap.aspirant));
-
-    const advent = bootWizard(fixture({ mode: 'advent', classes: [adventClass()] }));
-    advent.getState().classId = 'c-advent';
-    advent.renderGearStep();
-    expect(document.getElementById('slotsReadout').hidden).toBe(true);
   });
 
   // serializePayload puts each Signature's Enchantment and Mods on its gear
@@ -987,18 +955,6 @@ describe('step 4 offers the whole class and its purchases', () => {
       expect(wizard.getMerxSpent()).toBeLessThanOrEqual(wizard.getMerxBudget());
     });
 
-    // Mission income lifts the budget well above what 8 Signatures cost, so
-    // the Signature Cap -- not the budget -- is what has to stop this purchase
-    // run; a low budget would let the test pass for the wrong reason.
-    test('a purchase that would breach the Signature Cap is refused (aspiring)', () => {
-      const wizard = bootWizard(fixture({ mode: 'aspiring', classes: [v1Class()] }));
-      const state = wizard.getState();
-      state.level = 12;
-      state.successfulMissions = 20;
-      seedAspiringPicks(wizard, twelveNames());
-      for (const name of twelveNames()) wizard.buySignature(name, 'c-v1');
-      expect(wizard.getSlotsUsed()).toBeLessThanOrEqual(FIGURES.signatureCap.aspiring);
-    });
   });
 
   // Ruling 5: a rename is a delete plus an insert, so a Signature that

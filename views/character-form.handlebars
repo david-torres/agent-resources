@@ -300,14 +300,13 @@
           Enchantment.
 
           Everything inside is drawn by public/js/character-gear-purchases.js
-          from the island -- the grid, the entry drawer, both readouts and the
-          hidden field that actually submits. No price, grant or cap is
+          from the island -- the grid, the entry drawer, the Merx readout and the
+          hidden field that actually submits. No price or grant is
           written into this template. --}}
     <div id="signaturePurchases">
       <script type="application/json" id="gear-purchase-data">{{{json gearPurchaseData}}}</script>
       <p class="help mb-3" id="purchaseReadouts">
         Merx <span data-merx-spent>0</span> / <span data-merx-budget>0</span>
-        &middot; Signature slots <span data-slots-used>0</span> / <span data-slots-cap>0</span>
       </p>
       <div id="purchaseGrid"></div>
       <div id="purchaseDrawer" hidden></div>

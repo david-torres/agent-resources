@@ -960,7 +960,6 @@ a.dropdown-item:hover {
 /* Same reason, for step 4's own toggles: each sits on a Bulma class that
    sets display in the author origin (.level-item is flex, .box and .column
    are block), which outranks the user agent's [hidden] { display: none }. */
-#slotsReadout[hidden],
 #signatureDrawer[hidden],
 #baseGearColumn[hidden] { display: none !important; }
 

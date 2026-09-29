@@ -6,7 +6,7 @@
 // be spendable afterwards, on the form every character is edited on.
 //
 // This file reads the page (its JSON island, its common-item rows); the
-// component it mounts reads nothing at all. Every price, grant and cap comes
+// component it mounts reads nothing at all. Every price and grant comes
 // from the served figures -- no economy number is written down here.
 //
 // ----------------------------------------------------------------------
@@ -74,8 +74,6 @@
     var gearField = root.querySelector('#purchaseGearJson');
     var merxSpentEl = root.querySelector('[data-merx-spent]');
     var merxBudgetEl = root.querySelector('[data-merx-budget]');
-    var slotsUsedEl = root.querySelector('[data-slots-used]');
-    var slotsCapEl = root.querySelector('[data-slots-cap]');
 
     var findEntry = function (name, classId) {
       for (var i = 0; i < entries.length; i++) {
@@ -149,21 +147,11 @@
       }) + commonItemCount() * FIGURES.prices.commonItem;
     };
 
-    var getSlotsUsed = function () {
-      return purchases.reduce(function (slots, p) {
-        return slots + SignatureEntry.slotsOf(p);
-      }, 0);
-    };
-
-    var signatureCap = function () { return FIGURES.signatureCap[ECONOMY]; };
-
-    // Both limits the save enforces on this economy (services/character/
-    // input.js validateEconomyLimits): a surface that let a player assemble
-    // either breach would hand them a character they cannot save.
-    var affordsChange = function (merxDelta, slotDelta) {
-      if (getSpent() + merxDelta > getBudget()) return false;
-      var cap = signatureCap();
-      return cap === null || getSlotsUsed() + slotDelta <= cap;
+    // A purchase the character cannot pay for is refused. Merx is the only
+    // limit on what a character owns: the Signature Cap limits what it brings
+    // on a mission.
+    var affordsChange = function (merxDelta) {
+      return getSpent() + merxDelta <= getBudget();
     };
 
     // A Default stores its source and nothing else: the text belongs to the
@@ -217,7 +205,7 @@
         // nothing to keep: it states both keys.
         touched: true
       };
-      if (!affordsChange(priceOfPurchase(purchase), SignatureEntry.slotsOf(purchase))) return false;
+      if (!affordsChange(priceOfPurchase(purchase))) return false;
       purchases.push(purchase);
       render();
       return true;
@@ -272,8 +260,7 @@
       render();
     };
 
-    // pg. 8: an Enchantment is bought onto a Signature the character owns, and
-    // takes a Signature slot as well as its price, so both gates apply.
+    // An Enchantment is bought onto a Signature the character owns, at its price.
     // The apply* pair below changes the purchase and nothing else; the
     // exported set* wrappers re-render around them. Typing into a Mod field
     // needs the change without the re-render that would take the caret out of
@@ -283,8 +270,7 @@
       if (!purchase) return false;
       var next = normalizeEnchantment(enchantment, findEntry(name, purchase.class_id));
       var after = Object.assign({}, purchase, { enchantment: next });
-      if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase),
-                         SignatureEntry.slotsOf(after) - SignatureEntry.slotsOf(purchase))) return false;
+      if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase))) return false;
       purchase.enchantment = next;
       purchase.touched = true;
       return true;
@@ -292,7 +278,7 @@
 
     // pg. 87: a Mod is a purchase, so an unnamed row is not one -- otherwise
     // an empty row between two named ones would charge the second at the
-    // dearer rate the table gives a Signature's second Mod. Mods take no slot.
+    // dearer rate the table gives a Signature's second Mod.
     var applyMods = function (name, mods, classId) {
       var purchase = findPurchase(name, classId);
       if (!purchase) return false;
@@ -303,7 +289,7 @@
         };
       }).filter(function (m) { return m.name.length > 0; });
       var after = Object.assign({}, purchase, { mods: next });
-      if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase), 0)) return false;
+      if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase))) return false;
       purchase.mods = next;
       purchase.touched = true;
       return true;
@@ -392,7 +378,7 @@
           + ' class="button is-small is-danger is-light" data-signature-sell>Remove</button></p>';
       }
       var price = priceOfEntry(entry);
-      var affordable = affordsChange(price, 1);
+      var affordable = affordsChange(price);
       return '<p class="control mt-3"><button type="button" class="button is-small is-primary"'
         + (affordable ? '' : ' disabled') + ' data-signature-buy'
         + '>Buy for ' + price + ' Merx</button></p>';
@@ -456,9 +442,6 @@
     var renderReadouts = function () {
       if (merxSpentEl) merxSpentEl.textContent = String(getSpent());
       if (merxBudgetEl) merxBudgetEl.textContent = String(getBudget());
-      if (slotsUsedEl) slotsUsedEl.textContent = String(getSlotsUsed());
-      var cap = signatureCap();
-      if (slotsCapEl) slotsCapEl.textContent = cap === null ? '—' : String(cap);
     };
 
     // The form is submitted by htmx, which serializes the form's own named
@@ -596,7 +579,6 @@
       getState: function () { return { entries: entries, purchases: purchases, open: open }; },
       getBudget: getBudget,
       getSpent: getSpent,
-      getSlotsUsed: getSlotsUsed,
       buySignature: buySignature,
       removeSignature: removeSignature,
       getPendingConfirmation: getPendingConfirmation,

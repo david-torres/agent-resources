@@ -235,9 +235,6 @@ window.CharacterWizard = (function () {
   const merxSpentEl = document.getElementById('merxSpent');
   const merxBudgetEl = document.getElementById('merxBudget');
   const merxRemainderNote = document.getElementById('merxRemainderNote');
-  const slotsReadout = document.getElementById('slotsReadout');
-  const slotsUsedEl = document.getElementById('slotsUsed');
-  const slotsCapEl = document.getElementById('slotsCap');
   const commonCountBadge = document.getElementById('commonCountBadge');
   const classCountBadge = document.getElementById('classCountBadge');
   const step4Next = document.getElementById('step4Next');
@@ -2929,10 +2926,6 @@ window.CharacterWizard = (function () {
     figures: ECONOMY, crossClass: crossClassFor(purchase.class_id, purchase.name)
   });
 
-  // pg. 85 and pg. 92: how many Signature slots this economy allows, or null
-  // where the rules the app models set no cap.
-  const signatureCap = () => ECONOMY.signatureCap[economyForState()];
-
   // Granted Defaults are not handed to the pricer: they were never bought,
   // and SignatureEntry.priceOf charges every owned purchase it is given.
   const pricedGear = () => gearList().slice(freeBaseCount());
@@ -2946,25 +2939,13 @@ window.CharacterWizard = (function () {
     aspiringSignatures: aspiringPool()
   }) + (Array.isArray(state.commonItems) ? state.commonItems.length : 0) * ECONOMY.prices.commonItem;
 
-  // pg. 8: an Enchantment occupies a Signature slot of its own. The whole
-  // list goes in, granted Defaults included -- slotsOf answers 0 for anything
-  // not owned, so nothing is filtered out first.
-  const getSlotsUsed = () => gearList().reduce(
-    (slots, g) => slots + SignatureEntry.slotsOf(g), 0
-  );
-
-  // Both limits the save enforces (services/character/input.js
-  // validateEconomyLimits): the Merx budget, and the Signature Cap an
-  // Enchantment also occupies. A wizard that lets a player assemble either
-  // breach hands them a character they cannot save.
-  const affordsChange = (merxDelta, slotDelta) => {
-    if (getMerxSpent() + merxDelta > getMerxBudget()) return false;
-    const cap = signatureCap();
-    return cap === null || getSlotsUsed() + slotDelta <= cap;
-  };
+  // A purchase the character cannot pay for is refused. Merx is the only
+  // limit on what a character owns: the Signature Cap limits what it brings
+  // on a mission.
+  const affordsChange = (merxDelta) => getMerxSpent() + merxDelta <= getMerxBudget();
 
   const addSignature = (purchase) => {
-    if (!affordsChange(priceOfPurchase(purchase), SignatureEntry.slotsOf(purchase))) return false;
+    if (!affordsChange(priceOfPurchase(purchase))) return false;
     if (!Array.isArray(state.gear)) state.gear = [];
     state.gear.push(purchase);
     return true;
@@ -3059,22 +3040,20 @@ window.CharacterWizard = (function () {
     };
   };
 
-  // pg. 8: an Enchantment is bought onto a Signature the character owns, and
-  // takes a slot as well as its price, so both gates apply to the change.
+  // An Enchantment is bought onto a Signature the character owns, at its price.
   const setEnchantment = (name, enchantment, classId) => {
     const purchase = findPurchase(name, classId);
     if (!purchase) return false;
     const next = normalizeEnchantment(enchantment, signatureIn(purchase.class_id, name));
     const after = Object.assign({}, purchase, { enchantment: next });
-    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase),
-                       SignatureEntry.slotsOf(after) - SignatureEntry.slotsOf(purchase))) return false;
+    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase))) return false;
     purchase.enchantment = next;
     return true;
   };
 
   // pg. 87: a Mod is a purchase, so an unnamed row is not one -- otherwise an
   // empty row between two named ones would charge the second at the dearer
-  // rate the table gives the Signature's second Mod. Mods take no slot.
+  // rate the table gives the Signature's second Mod.
   const setMods = (name, classId, mods) => {
     const purchase = findPurchase(name, classId);
     if (!purchase) return false;
@@ -3085,7 +3064,7 @@ window.CharacterWizard = (function () {
       }))
       .filter((m) => m.name.length > 0);
     const after = Object.assign({}, purchase, { mods: next });
-    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase), 0)) return false;
+    if (!affordsChange(priceOfPurchase(after) - priceOfPurchase(purchase))) return false;
     purchase.mods = next;
     return true;
   };
@@ -3241,7 +3220,7 @@ window.CharacterWizard = (function () {
         + '>Remove</button></p>';
     }
     const price = signaturePriceFor(cell.classId, cell.entry.name);
-    const affordable = affordsChange(price, 1);
+    const affordable = affordsChange(price);
     return '<p class="control mt-3"><button type="button" class="button is-small is-primary"'
       + (affordable ? '' : ' disabled') + ' data-signature-buy'
       + '>Buy for ' + price + ' Merx</button></p>';
@@ -3330,7 +3309,6 @@ window.CharacterWizard = (function () {
     if (!spendList) return;
     const c = selectedClass();
     const pool = getShopPool();
-    const remaining = getMerxBudget() - getMerxSpent();
 
     // ----- Step 4 gear filter controls -----
     // Two layered filters, both keyed off state.gearSearch /
@@ -3376,10 +3354,9 @@ window.CharacterWizard = (function () {
     const filtered = pool.filter((it) => it.kind === tab && matchesSearch(it) && matchesClass(it));
     const renderCard = (it) => {
         const picked = countPicks(it.key);
-        // A Signature takes a cap slot as well as Merx, so both gates decide
-        // whether this card can still be clicked -- the same pair
-        // pickShopItem enforces.
-        const canAfford = affordsChange(it.cost, it.kind === 'class' ? 1 : 0);
+        // The same Merx gate pickShopItem enforces decides whether this card
+        // can still be clicked.
+        const canAfford = affordsChange(it.cost);
         const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
         const removable = removablePicks(it.key);
         const removeCtl = removable
@@ -3389,9 +3366,7 @@ window.CharacterWizard = (function () {
           ? '<span class="tag is-success is-light">Picked ×' + picked + '</span>'
           : (canAfford
               ? '<span class="has-text-grey">Click to add</span>'
-              : (remaining >= it.cost
-                  ? '<span class="has-text-grey">No Signature slots left</span>'
-                  : '<span class="has-text-grey">Not enough Merx</span>')))
+              : '<span class="has-text-grey">Not enough Merx</span>'))
           + removeCtl;
         // On class-gear cards, badge the subtype (Base / Elective) so the
         // user knows which items are free on the left and which are paid.
@@ -3480,7 +3455,7 @@ window.CharacterWizard = (function () {
     if (classCountBadge) classCountBadge.textContent = classCount;
   };
 
-  // ----- Merx and Signature Cap readouts, and what they gate -----
+  // ----- Merx readouts, and what they gate -----
   // Step 4's opening sentence. Written here rather than in the view because
   // only the client knows which economy the SELECTED CLASS resolves to, and
   // every figure in it is the one the readouts below print -- the live budget
@@ -3525,14 +3500,6 @@ window.CharacterWizard = (function () {
       merxRemainderNote.textContent = remainder > 0
         ? remainder + ' Merx will be saved for later.'
         : '';
-    }
-
-    // The cap readout is meaningless where the economy sets no cap.
-    const cap = signatureCap();
-    if (slotsReadout) slotsReadout.hidden = cap === null;
-    if (cap !== null) {
-      if (slotsUsedEl) slotsUsedEl.textContent = String(getSlotsUsed());
-      if (slotsCapEl) slotsCapEl.textContent = String(cap);
     }
 
     // ----- Custom common item form gating -----
@@ -4349,7 +4316,6 @@ window.CharacterWizard = (function () {
     getState: () => state,
     getMerxBudget,
     getMerxSpent,
-    getSlotsUsed,
     getTotalPoints,
     getFreeBaseCount: freeBaseCount,
     validateBuilder,
