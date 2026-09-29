@@ -1,6 +1,11 @@
 const { test, expect, describe, spyOn } = require('bun:test');
 const { findAspirantFork, planConversion, CONVERSION_RULES } = require('./aspirant-conversion');
 const { statList } = require('./enclave-consts');
+const { capBreachMessage, BASE_STAT_CAP } = require('./stat-caps');
+const { SIGNATURE_CAP, CREATION_GRANT, priceOfSignature } = require('./merx-economy');
+const {
+  ABILITY_CAP_RULE, PERK_DEFICIT_RULE, CROSS_CLASS_EDITION_RULE, perkAllotment
+} = require('./perk-economy');
 
 // The catalogue shapes conversion meets: an Advent class at v1 and v2 (one
 // version family) with its Aspirant fork of the v1 row, a second such class
@@ -245,5 +250,108 @@ describe('planConversion: what has no Aspirant counterpart', () => {
     expect(plan.gear).toEqual([]);
     expect(plan.abilities).toEqual([]);
     expect(plan.abilityPerks).toEqual([]);
+  });
+});
+
+describe('planConversion: the converted build is judged under Aspirant', () => {
+  test('Caroline Denton converts with nothing blocking and no Ability-cap breach', () => {
+    const plan = planConversion(carolineDenton());
+    expect(plan.blockers).toEqual([]);
+    expect(plan.breaches.map(b => b.rule)).not.toContain(ABILITY_CAP_RULE);
+    expect(plan.breaches.map(b => b.rule)).not.toContain(CROSS_CLASS_EDITION_RULE);
+  });
+
+  // Level 4 earns 1 + 3 Perks; Familiar Face costs 3 cross-class and the
+  // three Ability Perks 1 each.
+  test('a Perk deficit is grandfathered: a breach, not a blocker', () => {
+    const plan = planConversion(carolineDenton());
+    expect(plan.perkBreakdown).toEqual({ earned: perkAllotment({ economy: 'aspirant', level: 4 }), spend: 6, remaining: 0, deficit: 2 });
+    expect(plan.breaches.map(b => b.rule)).toContain(PERK_DEFICIT_RULE);
+    expect(plan.blockers).toEqual([]);
+  });
+
+  test('an Ability count over the Aspirant cap is grandfathered: a breach, not a blocker', () => {
+    const plan = planConversion(carolineDenton({
+      abilities: [
+        ability('a1', 'Trickshot', 'gunslinger-v1'), ability('a2', 'Standoff', 'gunslinger-v1'),
+        ability('a3', 'Shootout', 'gunslinger-v1'), ability('a4', 'Last Word', 'gunslinger-v2'),
+        ability('a5', 'Dead Eye', 'gunslinger-v2'), ability('a6', 'High Noon', 'gunslinger-v2'),
+        ability('a7', 'Familiar Face', 'wanderer-v1')
+      ],
+      abilityPerks: []
+    }));
+    expect(plan.breaches.map(b => b.rule)).toContain(ABILITY_CAP_RULE);
+    expect(plan.blockers).toEqual([]);
+  });
+
+  test('two Traits on one Stat block conversion with the validator\'s own message', () => {
+    const plan = planConversion(carolineDenton({
+      traits: [{ name: 'Brave', stat: 'might' }, { name: 'Bold', stat: 'might' }, { name: 'Lucky', stat: 'luck' }]
+    }));
+    expect(plan.blockers).toEqual([
+      { rule: CONVERSION_RULES.traits, detail: 'Two Traits may not share a Stat (might).' }
+    ]);
+  });
+
+  test('a Stat over its Cap blocks conversion', () => {
+    const plan = planConversion(carolineDenton({ character: { reflex: BASE_STAT_CAP + 2 } }));
+    expect(plan.blockers).toEqual([{
+      rule: CONVERSION_RULES.statCap,
+      detail: capBreachMessage({ stat: 'reflex', value: BASE_STAT_CAP + 2, cap: BASE_STAT_CAP })
+    }]);
+  });
+
+  test('a Stat Cap purchase is honoured', () => {
+    const plan = planConversion(carolineDenton({
+      character: { reflex: BASE_STAT_CAP + 1, stat_cap_purchases: { reflex: 1 } }
+    }));
+    expect(plan.blockers).toEqual([]);
+  });
+
+  test('more Signatures than the Aspirant cap block conversion', () => {
+    const count = SIGNATURE_CAP.aspirant + 1;
+    const plan = planConversion(carolineDenton({
+      gear: Array.from({ length: count }, () => signature('Revolver', 'gunslinger-v1'))
+    }));
+    expect(plan.blockers).toEqual([{
+      rule: CONVERSION_RULES.signatureCap,
+      detail: `Signature Cap is ${SIGNATURE_CAP.aspirant}; this character carries ${count} (an Enchantment counts as a Signature).`
+    }]);
+  });
+
+  test('an Enchantment takes a Signature slot', () => {
+    const gear = Array.from({ length: SIGNATURE_CAP.aspirant }, () => signature('Revolver', 'gunslinger-v1'));
+    gear[0] = signature('Revolver', 'gunslinger-v1', { enchantment: { source: 'default' } });
+    const plan = planConversion(carolineDenton({ gear }));
+    expect(plan.blockers.map(b => b.rule)).toEqual([CONVERSION_RULES.signatureCap]);
+  });
+
+  test('the Signature Cap counts only the items that convert', () => {
+    const gear = [
+      ...Array.from({ length: SIGNATURE_CAP.aspirant }, () => signature('Revolver', 'gunslinger-v1')),
+      signature('Hand Cannon', 'homebrew')
+    ];
+    const plan = planConversion(carolineDenton({ gear }));
+    expect(plan.blockers.map(b => b.rule)).toEqual([CONVERSION_RULES.noFork]);
+  });
+
+  // Two own-class Revolvers and one cross-class Satchel, against the
+  // Aspirant creation grant with no missions.
+  test('the Merx breakdown prices the converted build under Aspirant', () => {
+    const plan = planConversion(carolineDenton());
+    const spend = 2 * priceOfSignature({ crossClass: false }) + priceOfSignature({ crossClass: true });
+    expect(plan.merxBreakdown).toEqual({
+      earned: CREATION_GRANT.aspirant,
+      spend,
+      reward: Math.max(0, CREATION_GRANT.aspirant - spend),
+      deficit: Math.max(0, spend - CREATION_GRANT.aspirant)
+    });
+  });
+
+  test('without a target there is nothing to judge', () => {
+    const plan = planConversion(carolineDenton({ character: { class_id: 'homebrew' } }));
+    expect(plan.breaches).toEqual([]);
+    expect(plan.perkBreakdown).toBeNull();
+    expect(plan.merxBreakdown).toBeNull();
   });
 });

@@ -2,6 +2,9 @@
 // the build becomes, what must change before it may, and what it will show
 // afterwards. Pure -- the caller loads everything and saves the result.
 const { computeVersionFamily } = require('./class-family');
+const { statList } = require('./enclave-consts');
+const { deriveBuildBreaches, derivePerkBreakdown, deriveMerxBreakdown } = require('./character-derived');
+const { validateTraits, validateStatLimits, validateEconomyLimits } = require('../services/character/input');
 
 const ASPIRANT = 'aspirant';
 
@@ -88,7 +91,9 @@ const remapRows = (rows, { lists, classesById, forkOf, blockers }) => (Array.isA
   })
   .filter(Boolean);
 
-const planConversion = ({ character, classes, gear, abilities, abilityPerks }) => {
+const planConversion = ({
+  character, classes, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions
+}) => {
   const rows = (Array.isArray(classes) ? classes : []).filter(Boolean);
   const classesById = new Map(rows.map(row => [row.id, row]));
   const target = findAspirantFork(rows, character.class_id);
@@ -102,7 +107,10 @@ const planConversion = ({ character, classes, gear, abilities, abilityPerks }) =
       blockers: [{
         rule: CONVERSION_RULES.noFork,
         detail: `${own ? own.name : character.class || 'This class'} has no Aspirant version.`
-      }]
+      }],
+      breaches: [],
+      perkBreakdown: null,
+      merxBreakdown: null
     };
   }
 
@@ -143,12 +151,55 @@ const planConversion = ({ character, classes, gear, abilities, abilityPerks }) =
       compounds_with: perk.compounds_with ?? null
     }));
 
+  // The rules Aspirant enforces on every save, judged by the validators that
+  // enforce them -- this module restates no figure. Stat Cap only: the
+  // creation allotment and +++ ceiling are creation rules (validateStatLimits).
+  const addBlockers = (rule, result) => {
+    if (!result.ok) for (const detail of result.errors) blockers.push({ rule, detail });
+  };
+  addBlockers(CONVERSION_RULES.traits, validateTraits(traits, { economy: ASPIRANT }));
+  addBlockers(CONVERSION_RULES.statCap, validateStatLimits({
+    economy: ASPIRANT,
+    stats: Object.fromEntries(statList.map(stat => [stat, character[stat]])),
+    traits,
+    capPurchases: character.stat_cap_purchases,
+    enforceCreationAllotment: false
+  }));
+  addBlockers(CONVERSION_RULES.signatureCap, validateEconomyLimits({
+    economy: ASPIRANT,
+    gear: convertedGear,
+    enforceMerxBudget: false,
+    enforceAbilityLimits: false
+  }));
+
+  // Ability cap and Perk deficit are grandfathered by the ratchet after
+  // conversion, so they are reported, not blocking.
+  const family = computeVersionFamily(rows, target.id);
+  const perkArgs = {
+    economy: ASPIRANT,
+    level: character.level,
+    abilities: convertedAbilities,
+    abilityPerks: convertedPerks,
+    characterClassId: target.id,
+    classFamilyOf: (classId) => (family.has(classId) ? target.id : classId)
+  };
+
   return {
     target,
     gear: convertedGear,
     abilities: convertedAbilities,
     abilityPerks: convertedPerks,
-    blockers
+    blockers,
+    breaches: deriveBuildBreaches(perkArgs),
+    perkBreakdown: derivePerkBreakdown(perkArgs),
+    merxBreakdown: deriveMerxBreakdown({
+      realMissions,
+      offscreenMissions,
+      gear: convertedGear,
+      commonItems: character.common_items,
+      characterClassId: target.id,
+      economy: ASPIRANT
+    })
   };
 };
 
