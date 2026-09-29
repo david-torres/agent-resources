@@ -367,13 +367,88 @@ income. If a loadout feature is built, the cap belongs there.
   keeps `class_id` and every row id; a second conversion is refused; the
   script's dry-run writes nothing and `--apply` then a second run finds none.
 
+## Part 3 — One entry per item, and no duplicate Ability names
+
+Decisions taken with the user (2026-09-29):
+
+- A player editing or creating an Aspirant character never wants the Advent
+  copy of an item whose class has an Aspirant version carrying the same name.
+- A character's Ability names never collide, enforced by the app and by the
+  database.
+- Existing duplicates are cleaned by deleting the extra copy.
+
+### One entry per item in Aspirant shops
+
+A **lineage** is an Advent version family plus the family of its Aspirant fork
+(`findAspirantFork`); a class with no fork is its own lineage. In every
+catalogue an Aspirant-economy character acquires from, each item name
+(trimmed, case-folded) appears once per lineage and kind (Signature, Ability),
+taken from the first source that carries it:
+
+1. the character's own class (its stored version);
+2. the newest version of the lineage's Aspirant family;
+3. the newest version of the lineage's Advent family.
+
+Items only an Advent version carries stay available. Rows the character owns
+are always listed as owned, whatever their class.
+
+One pure helper in `util/` builds this from the class rows, and every surface
+reads it:
+
+- the edit-page Signature island (`util/gear-purchase-data.js`) and Ability
+  island (`util/ability-purchase-data.js`);
+- the creation wizard's class data and shops (`routes/characters.js`
+  `wizardClasses`, `public/js/character-wizard.js`), including a preselected
+  forked Advent class;
+- the classic pickers (`/new/expert`, the `/class-gear` and `/class-abilities`
+  partials) when the economy is Aspirant.
+
+### Wizard pricing
+
+The wizard route serves each class's own-class id set (`ownClassIds`), and
+every client price check reads it: own vs cross-class for Signatures and
+Abilities, and which classes the cross-class shop leaves out. The client and
+the server then agree on every price.
+
+### Ability names never collide
+
+Names compare trimmed and case-folded.
+
+- **Server validation** (`services/character/input.js`): a save that leaves a
+  character holding two Abilities with the same name is refused:
+  `<character name> already has <Ability name>.` This covers create, edit,
+  level-up and import.
+- **Ability shops** (edit-page island, wizard): buying a name the character
+  already holds, from any class, is refused in the browser.
+- **Conversion**: an upgraded build holding a duplicate name is a blocker
+  (`rule: 'duplicate-ability'`), with detail
+  `<character name> has two Abilities named <Ability name>. Remove one to convert.`
+- **Fix-up script**: such a character is reported as failed and skipped.
+- **Database**: a migration adds a unique index on
+  `class_abilities (character_id, lower(btrim(name)))`. The RPC's delete runs
+  before its insert, so a moved row does not trip it.
+
+### Cleaning existing duplicates
+
+`scripts/dedupe-character-abilities.js`, read-only by default, `--apply` after
+review, in the style of the other scripts. For each character and name held
+more than once it keeps the oldest row (lowest `created_at`, then `id`),
+re-points the other rows' Perks at it (keeping `position` order after the
+kept row's Perks, and compound links within the moved set), and deletes the
+other rows, all in one transaction per character. The dry run lists each
+character, name, kept row and deleted rows. Idempotent. The local copy of
+production has one case (Raven (Rachel Roth), Veneer twice).
+
 ## Rollout
 
-1. Merge; no migration.
-2. The user runs `bun scripts/upgrade-converted-aspirant-classes.js` against
+1. Merge. Railway deploys the code; the unique index is not applied yet.
+2. The user runs `bun scripts/dedupe-character-abilities.js` against prod,
+   reviews it, then runs it with `--apply`. A second dry run must list nothing.
+3. The user runs `supabase db push --linked` to add the unique index.
+4. The user runs `bun scripts/upgrade-converted-aspirant-classes.js` against
    prod, reviews the list, then runs it with `--apply`.
-3. After the `--apply`, the user runs `bun scripts/reconcile-character-progress.js`
+5. After that `--apply`, the user runs `bun scripts/reconcile-character-progress.js`
    (dry run, review, then `--apply`) so the stored auto-calculated totals catch
    up with the moved rows.
-4. Both scripts read a character and then write it, so run them at a quiet time:
-   an edit saved in between is overwritten.
+6. These scripts read a character and then write it, so run them at a quiet
+   time: an edit saved in between is overwritten.
