@@ -129,9 +129,9 @@ const planConversion = ({ character, classes, gear, abilities, abilityPerks }) =
 
   // Moving an Ability to a fork deletes and re-inserts its row, which
   // cascades its Perks away; save_character_atomic re-attaches a Perk
-  // submitted by `ability_name` to the re-inserted row, and resolves its
-  // `position-<n>` compound link on that same Ability afterwards -- the same
-  // payload CharacterService#saveCharacterAtomic builds for a v2 edit.
+  // submitted by `ability_name` to the re-inserted row. `abilityPerks` arrive
+  // with `compounds_with` already in the `position-<n>` form that function
+  // resolves, and it is passed through unchanged.
   const abilityNameById = new Map(abilityMoves.map(({ row, name }) => [row.id, name]));
   const convertedPerks = (Array.isArray(abilityPerks) ? abilityPerks : [])
     .filter(perk => perk && abilityNameById.has(perk.class_ability_id))
