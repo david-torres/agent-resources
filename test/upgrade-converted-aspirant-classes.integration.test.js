@@ -8,6 +8,7 @@ const { Client } = require('pg');
 const { supabaseAdmin } = require('../models/_base');
 const { statList } = require('../util/enclave-consts');
 const { createAuthUserAndProfile } = require('./helpers/auth-user-fixture');
+const characterRepository = require('../services/character/repository');
 const { upgradeConvertedCharacters } = require('../scripts/upgrade-converted-aspirant-classes');
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -174,4 +175,26 @@ test('--apply moves the class and matching rows, and a second run finds nothing'
   expect(after.gear.filter(row => row.name === 'Revolver' && row.class_id === classes.legacy.id)).toHaveLength(1);
 
   expect((await run(false)).candidates).toEqual([]);
+});
+
+test('a character whose save throws is recorded as failed and the run continues', async () => {
+  const legacyCharacter = (name) => createAspirantCharacter({
+    cls: classes.legacy, name, gear: [{ name: 'Revolver', class_id: classes.legacy.id }], abilities: [], perks: []
+  });
+  const throwing = await legacyCharacter(`Throwing ${suffix}`);
+  const saving = await legacyCharacter(`Saving ${suffix}`);
+  const save = characterRepository.saveCharacterAtomic;
+  characterRepository.saveCharacterAtomic = (args) => {
+    if (args.characterId === throwing) throw new Error('connection reset');
+    return save(args);
+  };
+  const lines = [];
+  try {
+    const report = await upgradeConvertedCharacters({ apply: true, characterIds: [throwing, saving], log: line => lines.push(line) });
+    expect(report.failed).toEqual([{ id: throwing, error: 'connection reset' }]);
+    expect(report.applied).toEqual([saving]);
+  } finally {
+    characterRepository.saveCharacterAtomic = save;
+  }
+  expect(lines.at(-1)).toBe('2 converted characters on a forked Advent class. 1 upgraded, 1 failed.');
 });

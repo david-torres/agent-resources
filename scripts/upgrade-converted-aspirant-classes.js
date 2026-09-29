@@ -31,35 +31,40 @@ const upgradeConvertedCharacters = async ({ apply = false, characterIds = null, 
 
   const report = { candidates: [], applied: [], failed: [] };
   for (const summary of selected) {
-    const { data: character, error } = await characterRepository.getCharacter(summary.id);
-    if (error || !character) {
-      report.failed.push({ id: summary.id, error: error ? error.message : 'not found' });
-      log(`${summary.id}: could not be read (${error ? error.message : 'not found'})`);
-      continue;
-    }
-    const upgrade = upgradeBuild({
-      character, classes, gear: character.gear, abilities: character.abilities, abilityPerks: character.ability_perks
-    });
-    const candidate = {
-      id: character.id,
-      name: character.name,
-      owner: summary.profile ? summary.profile.name : null,
-      fromClass: classesById.get(character.class_id).name,
-      toClass: upgrade.target.name,
-      moved: upgrade.moved,
-      kept: upgrade.kept
-    };
-    report.candidates.push(candidate);
-    log(`${candidate.id} ${candidate.name} (owner ${candidate.owner}): ${candidate.fromClass} -> ${candidate.toClass}`
-      + ` [${upgrade.target.id}]; moves: ${describeItems(upgrade.moved)}; stays: ${describeItems(upgrade.kept)}`);
-    if (!apply) continue;
+    try {
+      const { data: character, error } = await characterRepository.getCharacter(summary.id);
+      if (error || !character) {
+        report.failed.push({ id: summary.id, error: error ? error.message : 'not found' });
+        log(`${summary.id}: could not be read (${error ? error.message : 'not found'})`);
+        continue;
+      }
+      const upgrade = upgradeBuild({
+        character, classes, gear: character.gear, abilities: character.abilities, abilityPerks: character.ability_perks
+      });
+      const candidate = {
+        id: character.id,
+        name: character.name,
+        owner: summary.profile ? summary.profile.name : null,
+        fromClass: classesById.get(character.class_id).name,
+        toClass: upgrade.target.name,
+        moved: upgrade.moved,
+        kept: upgrade.kept
+      };
+      report.candidates.push(candidate);
+      log(`${candidate.id} ${candidate.name} (owner ${candidate.owner}): ${candidate.fromClass} -> ${candidate.toClass}`
+        + ` [${upgrade.target.id}]; moves: ${describeItems(upgrade.moved)}; stays: ${describeItems(upgrade.kept)}`);
+      if (!apply) continue;
 
-    const { error: saveError } = await characterRepository.saveCharacterAtomic(upgradeSaveArgs({ character, upgrade }));
-    if (saveError) {
-      report.failed.push({ id: character.id, error: saveError.message });
-      log(`  failed: ${saveError.message}`);
-    } else {
-      report.applied.push(character.id);
+      const { error: saveError } = await characterRepository.saveCharacterAtomic(upgradeSaveArgs({ character, upgrade }));
+      if (saveError) {
+        report.failed.push({ id: character.id, error: saveError.message });
+        log(`  failed: ${saveError.message}`);
+      } else {
+        report.applied.push(character.id);
+      }
+    } catch (thrown) {
+      report.failed.push({ id: summary.id, error: thrown.message });
+      log(`${summary.id}: failed (${thrown.message})`);
     }
   }
 
