@@ -36,6 +36,12 @@ const toEntry = (item, classId, className) => ({
   default_enchantment: item.default_enchantment || null
 });
 
+// Another version of the character's own class, which the roster already
+// covers. The Advent origin of an Aspirant version is a different family that
+// is still own class, so its Signatures are stock priced at the own rate.
+const isOwnVersion = (cls, characterClass, characterClassId, classFamilyOf) => sameFamily(cls.id, characterClassId, classFamilyOf)
+  && cls.content_format === (characterClass && characterClass.content_format);
+
 // What the grid offers: every Signature the character's class prints (its
 // roster), then the catalogue of other classes' Signatures it may buy at the
 // cross-class tier, then an entry for anything the character already owns
@@ -60,7 +66,7 @@ const buildEntries = ({ characterClass, characterClassId, allClasses, gear, econ
   const catalogue = [];
   for (const cls of (Array.isArray(allClasses) ? allClasses : [])) {
     if (!cls || !cls.id || !Array.isArray(cls.gear)) continue;
-    if (economy === 'aspirant' && sameFamily(cls.id, characterClassId, classFamilyOf)) continue;
+    if (economy === 'aspirant' && isOwnVersion(cls, characterClass, characterClassId, classFamilyOf)) continue;
     for (const item of cls.gear) {
       if (!item || !item.name) continue;
       const key = entryKey(cls.id, item.name);

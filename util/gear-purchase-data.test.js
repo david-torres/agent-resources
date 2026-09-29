@@ -249,6 +249,23 @@ describe('the aspirant catalogue', () => {
     expect(names).toContain('Vial');
   });
 
+  test('a fork character is offered its Advent origin\'s Signatures once, as own class', () => {
+    const adventOrigin = { id: 'c-origin', name: 'Gunslinger', content_format: 'advent', gear: [{ name: 'Duster' }, { name: 'Sling' }] };
+    const classFamilyOf = (id) => (id === 'c-origin' ? 'c-v1' : id);
+    const data = buildGearPurchaseData({
+      economy: 'aspirant',
+      characterClass: v1ClassRow(),
+      allClasses: [adventOrigin, otherClassRow()],
+      character: { class_id: 'c-v1', gear: [{ name: 'Duster', class_id: 'c-origin' }] },
+      missionMerx: 0,
+      classFamilyOf
+    });
+    expect(data.entries.filter((e) => e.class_id === 'c-origin').map((e) => e.name)).toEqual(['Duster', 'Sling']);
+    expect(data.entries.filter((e) => e.class_id === 'c-v1')).toHaveLength(2);
+    expect(data.ownClassIds).toContain('c-origin');
+    expect(data.ownClassIds).not.toContain('c-other');
+  });
+
   test('other classes\' Signatures price cross-class: ownClassIds leaves them out', () => {
     const data = buildGearPurchaseData({
       economy: 'aspirant',

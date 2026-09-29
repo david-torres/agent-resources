@@ -13,7 +13,7 @@ const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/sta
 const { worsenedBreaches } = require('../../util/perk-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
-const { computeVersionFamily, familyResolver } = require('../../util/class-family');
+const { ownClassIds, familyResolver } = require('../../util/class-family');
 const { planConversion } = require('../../util/aspirant-conversion');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
@@ -202,14 +202,15 @@ const resolveSubmittedGear = (gear, { maps, ownClassId }) => {
 // Resolves a submitted gear item or ability to the class it belongs to, and to
 // that class's text for it. An item that names its own class_id is taken at
 // its word; otherwise a class_name that is the id of a class carrying the item
-// wins, then the character's own class and the rest of its version family,
+// wins, then the character's own class and the rest of its own class
+// (util/class-family.js#ownClassIds),
 // then class_name read as a class NAME, and the global name map is the last
 // resort.
 const classItemResolver = ({ maps, ownClassId }) => {
   const itemsByClassId = maps.itemsByClassId ?? new Map();
   const classesByName = maps.classesByName ?? new Map();
   const familyClassIds = ownClassId
-    ? computeVersionFamily(maps.classRows ?? [], ownClassId)
+    ? ownClassIds(maps.classRows ?? [], ownClassId)
     : new Set();
   return (kind, item, nameToClassId, nameToDescription) => {
     if (item.class_id) {

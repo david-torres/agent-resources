@@ -37,7 +37,7 @@ const {
   deriveCharacterTotals, deriveMerxBreakdown, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES,
   derivePerkBreakdown, deriveBuildBreaches
 } = require('../util/character-derived');
-const { computeVersionFamily } = require('../util/class-family');
+const { familyResolver } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { buildAbilityPurchaseData, applyAbilityPurchases } = require('../util/ability-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
@@ -563,27 +563,11 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
       : [];
 
-    // Maps every id in the character's own version family onto
-    // character.class_id (util/class-family.js#computeVersionFamily is the
-    // single definition of "version family"), the same resolution the
-    // character-show route below already does and
-    // services/character/service.js#updateCharacter uses on save. Without
-    // it, an ability carried over from an EARLIER version of the character's
-    // own class -- now a different class_id after allClasses was collapsed
-    // to the newest version above -- prices as cross-class in the ability
-    // island while `derived` counted it own-class, two disagreeing readings
-    // of the same pick shown on the same page. Fed to both below so they
-    // never can.
-    let classFamilyOf = null;
-    if (character.class_id) {
-      try {
-        const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
-        const family = computeVersionFamily(classFamilyRows || [], character.class_id);
-        classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
-      } catch (_) {
-        // classFamilyOf stays null; abilities and Signatures compare by class_id alone.
-      }
-    }
+    // One own-class map for `derived` and both purchase islands, so they
+    // never disagree about what is cross-class.
+    const classFamilyOf = character.class_id
+      ? familyResolver((await characterRepository.getClassFamilyRows()).data, character.class_id)
+      : null;
 
     const derived = deriveCharacterTotals({
       character,
@@ -1200,24 +1184,11 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       });
       const showGearPurchases = economy !== 'advent';
 
-      // Maps every id in the character's own version family onto
-      // character.class_id (util/class-family.js#computeVersionFamily is the
-      // single definition of "version family" -- see its own comment on why a
-      // query that drops a column must not be reimplemented here). An ability
-      // or Signature carried over from an earlier version of the character's
-      // OWN class then prices as own-class instead of cross-class, the same pattern
-      // services/character/service.js#updateCharacter already uses, reusing
-      // its same getClassFamilyRows call rather than a route-local query.
-      let classFamilyOf = null;
-      if (character.class_id) {
-        try {
-          const { data: classFamilyRows } = await characterRepository.getClassFamilyRows();
-          const family = computeVersionFamily(classFamilyRows || [], character.class_id);
-          classFamilyOf = (classId) => (family.has(classId) ? character.class_id : classId);
-        } catch (_) {
-          // classFamilyOf stays null; abilities and Signatures compare by class_id alone.
-        }
-      }
+      // One own-class map for `derived` and both purchase islands, so they
+      // never disagree about what is cross-class.
+      const classFamilyOf = character.class_id
+        ? familyResolver((await characterRepository.getClassFamilyRows()).data, character.class_id)
+        : null;
 
       // recentMissions above is capped at 5 for the Recent Missions box;
       // the breakdown needs every mission, so it reads the full list --

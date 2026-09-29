@@ -266,7 +266,33 @@ const ADVENT_V1_CLASS = {
   advanced_abilities: [],
   created_at: '2024-01-01T00:00:00Z',
 };
+// An Advent class and its Aspirant version. A character on the fork owns
+// items from the Advent class as its own class.
+const GS_ADVENT = {
+  id: 'class-gs-advent',
+  name: 'Gunslinger',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'advent',
+  rules_version: 'v2',
+  content_format: 'advent',
+  gear: [{ name: 'Duster', description: '' }, { name: 'Sling', description: '' }],
+  abilities: [{ name: 'Quickdraw', description: '' }],
+  advanced_abilities: [],
+  created_at: '2023-01-01T00:00:00Z',
+};
+const GS_FORK = {
+  ...GS_ADVENT,
+  id: 'class-gs-fork',
+  base_class_id: GS_ADVENT.id,
+  rules_edition: 'aspirant',
+  content_format: 'aspirant',
+  gear: [{ name: 'Revolver', description: '' }],
+  abilities: [{ name: 'Trickshot', description: '' }],
+  created_at: '2024-01-01T00:00:00Z',
+};
 const CLASS_BY_ID = {
+  [GS_FORK.id]: GS_FORK,
   [TRAILBLAZER_V1.id]: TRAILBLAZER_V1,
   [V2_RULES_CLASS.id]: V2_RULES_CLASS,
   [ADVENT_V1_CLASS.id]: ADVENT_V1_CLASS
@@ -683,6 +709,55 @@ test('the ability island prices a newer-version own-class ability at the own rat
   expect(entry).toBeTruthy();
   expect(entry.crossClass).toBe(false);
   expect(entry.price).toBe(1);
+});
+
+test('the edit page prices a fork character\'s Advent-origin items at the own rate', async () => {
+  pageState.character = {
+    id: CHAR_ID,
+    name: 'Cora',
+    class: 'Gunslinger',
+    class_id: GS_FORK.id,
+    creator_id: 'profile-1',
+    creator_mode: 'aspirant',
+    is_public: true,
+    level: 3,
+    completed_missions: 0,
+    ...Object.fromEntries(statList.map(stat => [stat, 2])),
+    traits: [],
+    abilities: [{ id: 'ab-q', name: 'Quickdraw', class_id: GS_ADVENT.id, type: 'core' }],
+    gear: [{ name: 'Duster', class_id: GS_ADVENT.id, enchantment: null, mods: [] }],
+    ability_perks: [],
+    quirks: [],
+    accessories: [],
+    common_items: [],
+    perks: '',
+    additional_gear: '',
+  };
+  pageState.unlockedClassIds = new Set([GS_ADVENT.id, GS_FORK.id]);
+  pageState.extraAdventClasses = [GS_ADVENT];
+  pageState.extraAspirantClasses = [GS_FORK];
+  pageState.classFamilyRows = [
+    { id: GS_ADVENT.id, base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+    { id: GS_FORK.id, base_class_id: GS_ADVENT.id, rules_edition: 'aspirant', content_format: 'aspirant' },
+  ];
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  const island = (id) => JSON.parse(body.match(new RegExp(`id="${id}">([^<]*)</script>`))[1]);
+  const quickdraw = island('ability-purchase-data').entries
+    .find((e) => e.name === 'Quickdraw' && e.class_id === GS_ADVENT.id);
+  expect(quickdraw.crossClass).toBe(false);
+  const gear = island('gear-purchase-data');
+  expect(gear.ownClassIds.sort()).toEqual([GS_ADVENT.id, GS_FORK.id].sort());
+  const entriesNamed = (name) => gear.entries.filter((e) => e.name === name);
+  expect(entriesNamed('Sling')).toHaveLength(1);
+  expect(entriesNamed('Sling')[0].class_id).toBe(GS_ADVENT.id);
+  expect(entriesNamed('Duster')).toHaveLength(1);
+  expect(entriesNamed('Revolver')).toHaveLength(1);
 });
 
 // PUT /:id turns a submitted abilities_json into body.abilities via

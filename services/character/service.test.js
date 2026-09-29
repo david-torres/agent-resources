@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { CharacterService } = require('./service');
+const { CharacterService, resolveSubmittedGear } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
@@ -2309,4 +2309,31 @@ test('a creation over its Merx is refused on Merx alone, with no Signature Cap',
   }), { id: 'profile-1' });
   expect(result.data).toBeNull();
   expect(result.error).toBe('This character spends 26 Merx of 12.');
+});
+
+// --- Own class across an Aspirant version ---------------------------------
+
+const forkResolutionMaps = () => ({
+  gearNameToClassId: new Map([['Duster', 'tailor-v1'], ['Revolver', 'tailor-v1']]),
+  gearNameToDescription: new Map(),
+  abilityNameToClassId: new Map(),
+  abilityNameToDescription: new Map(),
+  itemsByClassId: new Map([
+    ['gs-advent', { gear: new Map([['Duster', null], ['Revolver', null]]), abilities: new Map() }],
+    ['gs-fork', { gear: new Map([['Revolver', 'Aspirant six-shooter.']]), abilities: new Map() }],
+    ['tailor-v1', { gear: new Map([['Duster', null], ['Revolver', null]]), abilities: new Map() }]
+  ]),
+  classesByName: new Map(),
+  classRows: [
+    { id: 'gs-advent', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+    { id: 'gs-fork', base_class_id: 'gs-advent', rules_edition: 'aspirant', content_format: 'aspirant' },
+    { id: 'tailor-v1', base_class_id: null, rules_edition: 'advent', content_format: 'advent' }
+  ]
+});
+
+test('a fork character\'s bare item names resolve to the fork first, then its Advent origin, never another class', () => {
+  expect(resolveSubmittedGear(['Revolver', 'Duster'], { maps: forkResolutionMaps(), ownClassId: 'gs-fork' })).toEqual([
+    { name: 'Revolver', class_id: 'gs-fork' },
+    { name: 'Duster', class_id: 'gs-advent' }
+  ]);
 });
