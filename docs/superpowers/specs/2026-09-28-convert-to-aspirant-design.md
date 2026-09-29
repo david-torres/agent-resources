@@ -425,8 +425,10 @@ Names compare trimmed and case-folded.
   `<character name> has two Abilities named <Ability name>. Remove one to convert.`
 - **Fix-up script**: such a character is reported as failed and skipped.
 - **Database**: a migration adds a unique index on
-  `class_abilities (character_id, lower(btrim(name)))`. The RPC's delete runs
-  before its insert, so a moved row does not trip it.
+  `class_abilities (character_id, lower(btrim(name)))` and restates
+  `save_character_atomic` so its Ability delete is a statement of its own,
+  ahead of the insert: a data-modifying CTE the main statement does not read
+  runs after it, so a moved row would otherwise trip the index.
 
 ### Cleaning existing duplicates
 
@@ -444,7 +446,12 @@ production has one case (Raven (Rachel Roth), Veneer twice).
 1. Merge. Railway deploys the code; the unique index is not applied yet.
 2. The user runs `bun scripts/dedupe-character-abilities.js` against prod,
    reviews it, then runs it with `--apply`. A second dry run must list nothing.
-3. The user runs `supabase db push --linked` to add the unique index.
+   The script connects to Postgres directly, so `.env` needs `SUPABASE_DB_PASS`
+   (and `SUPABASE_DB_REGION` when the default pooler region does not apply)
+   alongside the prod `SUPABASE_URL`.
+3. The user runs `supabase db push --linked` to add the unique index. The same
+   migration also replaces `save_character_atomic` with the version whose
+   Ability delete runs before its insert.
 4. The user runs `bun scripts/upgrade-converted-aspirant-classes.js` against
    prod, reviews the list, then runs it with `--apply`.
 5. After that `--apply`, the user runs `bun scripts/reconcile-character-progress.js`
