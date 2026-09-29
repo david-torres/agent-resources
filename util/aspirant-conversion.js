@@ -6,13 +6,14 @@ const { deriveBuildBreaches, derivePerkBreakdown, deriveMerxBreakdown } = requir
 const { validateTraits, validateStatLimits } = require('../services/character/input');
 const { familyResolver } = require('./class-family');
 const { aspirantTargetOf } = require('./class-lineage');
-const { nameKey } = require('./item-name');
+const { nameKey, duplicateNames } = require('./item-name');
 
 const ASPIRANT = 'aspirant';
 
 const CONVERSION_RULES = {
   traits: 'traits',
-  statCap: 'stat-cap'
+  statCap: 'stat-cap',
+  duplicateAbility: 'duplicate-ability'
 };
 
 const GEAR_LISTS = [['gear', null]];
@@ -110,6 +111,14 @@ const upgradeSaveArgs = ({ character, upgrade }) => ({
   perks: upgrade.abilityPerks
 });
 
+// save_character_atomic cannot store a build holding one Ability name twice
+// (class_abilities_character_name_key).
+const duplicateAbilityBlockers = ({ character, abilities }) => duplicateNames(listOf(abilities).map(row => row.name))
+  .map(name => ({
+    rule: CONVERSION_RULES.duplicateAbility,
+    detail: `${character.name} has two Abilities named ${name}. Remove one to convert.`
+  }));
+
 // Judged under the aspirant economy on the upgraded build, with own class
 // taken from the class the character lands on.
 const planConversion = ({
@@ -134,6 +143,7 @@ const planConversion = ({
     capPurchases: character.stat_cap_purchases,
     enforceCreationAllotment: false
   }));
+  blockers.push(...duplicateAbilityBlockers({ character, abilities: upgrade.abilities ?? abilities }));
 
   // The Ability cap and Perk deficit are grandfathered by the ratchet after
   // conversion, so they are reported, not blocking.
@@ -163,4 +173,4 @@ const planConversion = ({
   };
 };
 
-module.exports = { upgradeBuild, upgradeSaveArgs, planConversion, CONVERSION_RULES };
+module.exports = { upgradeBuild, upgradeSaveArgs, planConversion, duplicateAbilityBlockers, CONVERSION_RULES };

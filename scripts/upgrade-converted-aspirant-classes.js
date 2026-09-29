@@ -4,7 +4,7 @@
 const characterRepository = require('../services/character/repository');
 const { fetchAll } = require('./lib/fetch-all');
 const { findAspirantFork } = require('../util/class-family');
-const { upgradeBuild, upgradeSaveArgs } = require('../util/aspirant-conversion');
+const { upgradeBuild, upgradeSaveArgs, duplicateAbilityBlockers } = require('../util/aspirant-conversion');
 
 const describeItems = (items) => items
   .map(item => `${item.kind} ${item.name}${item.className ? ` (${item.className})` : ''}`)
@@ -41,6 +41,13 @@ const upgradeConvertedCharacters = async ({ apply = false, characterIds = null, 
       const upgrade = upgradeBuild({
         character, classes, gear: character.gear, abilities: character.abilities, abilityPerks: character.ability_perks
       });
+      const duplicates = duplicateAbilityBlockers({ character, abilities: upgrade.abilities ?? character.abilities });
+      if (duplicates.length > 0) {
+        const message = duplicates.map(blocker => blocker.detail).join(' ');
+        report.failed.push({ id: character.id, error: message });
+        log(`${character.id} ${character.name}: skipped. ${message}`);
+        continue;
+      }
       const candidate = {
         id: character.id,
         name: character.name,

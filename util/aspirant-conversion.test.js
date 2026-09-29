@@ -137,8 +137,19 @@ describe('planConversion: judged as an Aspirant character on its own class', () 
 });
 
 describe('planConversion: what blocks conversion', () => {
-  test('only Traits and the Stat Cap can block', () => {
-    expect(Object.values(CONVERSION_RULES).sort()).toEqual(['stat-cap', 'traits']);
+  test('only Traits, the Stat Cap and a duplicate Ability name can block', () => {
+    expect(Object.values(CONVERSION_RULES).sort()).toEqual(['duplicate-ability', 'stat-cap', 'traits']);
+  });
+
+  test('an Ability name held twice blocks conversion', () => {
+    const plan = planConversion(carolineDenton({
+      abilities: [ability('ab-trick', 'Trickshot', 'gunslinger-v1'), ability('ab-echo', ' trickshot', 'wanderer-v1')],
+      abilityPerks: []
+    }));
+    expect(plan.blockers).toEqual([{
+      rule: CONVERSION_RULES.duplicateAbility,
+      detail: 'Caroline Denton has two Abilities named Trickshot. Remove one to convert.'
+    }]);
   });
 
   test('two Traits on one Stat block conversion with the validator\'s own message', () => {
@@ -415,6 +426,20 @@ describe('upgradeSaveArgs', () => {
 });
 
 describe('planConversion: judged on the upgraded build', () => {
+  test('a name held on the Advent row and on the Aspirant version still blocks after the move', () => {
+    const plan = planConversion(carolineDenton({
+      classes: UPGRADE_CLASSES,
+      character: { class_id: 'gs-v2' },
+      gear: [],
+      abilities: [abilityRow('a1', 'Trickshot', 'gs-v1'), abilityRow('a7', 'Trickshot', 'gs-asp')],
+      abilityPerks: []
+    }));
+    expect(plan.blockers).toEqual([{
+      rule: 'duplicate-ability',
+      detail: 'Caroline Denton has two Abilities named Trickshot. Remove one to convert.'
+    }]);
+  });
+
   const forked = () => carolineDenton({
     classes: UPGRADE_CLASSES,
     character: { class_id: 'gs-v2' },
