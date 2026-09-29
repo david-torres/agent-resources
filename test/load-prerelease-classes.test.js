@@ -704,7 +704,7 @@ test('reportPlan prints the FORK heading with the class name and parent id', () 
   };
   const lines = captureLog(() => reportPlan([plan], forkBook));
   expect(lines).toContain('\nFORK Berserker from parent-id-1');
-  expect(lines).toContain('  + rules_version: "v1"');
+  expect(lines).toContain('  + rules_version: "v2"');
 });
 
 test.skipIf(!records)('the dry run reports the fields only an insert writes', () => {
@@ -720,14 +720,14 @@ test.skipIf(!records)('the dry run reports the fields only an insert writes', ()
 
 // `rules_version` has no column default, `status` defaults to 'alpha' and
 // `is_player_created` to false, so the insert is where a book states all
-// three. Both books' classes are released content, each at its own rules
-// version, and only a pre-release PCC is player-created.
-test.skipIf(!forkRecords)('an Aspirant V1 fork is inserted released, at v1, and not player-created', () => {
+// three. Both books' classes are released content built under the v2
+// character rules, and only a pre-release PCC is player-created.
+test.skipIf(!forkRecords)('an Aspirant V1 fork is inserted released, at v2, and not player-created', () => {
   const [plan] = planLoad([berserkerRecord], [parentRow('Berserker', { rules_edition: 'aspirant' })],
       forkBook);
   const inserted = insertRow(plan, forkBook);
   expect(inserted.status).toBe('release');
-  expect(inserted.rules_version).toBe('v1');
+  expect(inserted.rules_version).toBe('v2');
   expect(inserted.is_player_created).toBe(false);
   expect(inserted.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
 });

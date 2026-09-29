@@ -42,9 +42,8 @@ export const BOOKS = {
     rulesEdition: 'aspirant',
     // Released content, gated by owning the book rather than by status.
     status: 'release',
-    // Advent's v1/v2 are character-rules versions; a class in the Aspirant
-    // format does not advance them.
-    rulesVersion: 'v1',
+    // Aspirant V1 characters are built under the Advent v2 character rules.
+    rulesVersion: 'v2',
     forks: true
   }
 };
