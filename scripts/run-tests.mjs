@@ -7,6 +7,7 @@ const root = new URL('..', import.meta.url).pathname;
 const integrationFiles = new Set([
   'models/character-aspirant-rules.integration.test.js',
   'models/character-atomic.integration.test.js',
+  'models/character-convert-aspirant.integration.test.js',
   'models/character-level-up.integration.test.js',
   'models/nav-rls.integration.test.js',
   'models/lfg-agent.test.js',

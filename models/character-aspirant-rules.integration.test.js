@@ -8,6 +8,7 @@ const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
 const { updateCharacter } = require('./character');
 const { statList } = require('../util/enclave-consts');
+const { createAuthUserAndProfile } = require('../test/helpers/auth-user-fixture');
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const email = `aspirant-rules-${suffix}@example.test`;
@@ -38,23 +39,9 @@ let aspirantClass;
 let characterId;
 let updateResult;
 
-async function createAuthUserAndProfile() {
-  const { rows } = await db.query(
-    `insert into auth.users (id, aud, role, email, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data)
-     values (gen_random_uuid(), 'authenticated', 'authenticated', $1, now(), now(), now(), '{}'::jsonb, '{}'::jsonb)
-     returning id`,
-    [email]
-  );
-  authUserId = rows[0].id;
-  ({ data: profile } = await supabaseAdmin.from('profiles')
-    .insert({ user_id: authUserId, name: `Aspirant Rules ${suffix}`, is_public: true, timezone: 'UTC' })
-    .select()
-    .single());
-}
-
 beforeAll(async () => {
   await db.connect();
-  await createAuthUserAndProfile();
+  ({ authUserId, profile } = await createAuthUserAndProfile(db, { email, profileName: `Aspirant Rules ${suffix}` }));
   ({ data: aspirantClass } = await supabaseAdmin.from('classes')
     .insert({
       name: `Aspirant Rules Class ${suffix}`, is_public: true,
