@@ -14,6 +14,8 @@ const {
   searchPublicCharacters,
   getRandomPublicCharacters,
   upgradeCharacterClass,
+  planCharacterAspirantConversion,
+  convertCharacterToAspirant,
   updateCharacterStats,
   levelUpCharacter,
   createCharacterOffscreenMission,
@@ -597,6 +599,8 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       upgradeTargets = await findUpgradeTargetsFor(characterClass.id, res.locals.supabase);
     }
 
+    const { data: aspirantConversion } = await planCharacterAspirantConversion(actorFromLocals(res.locals), id);
+
     res.render('character-form', {
       profile,
       isNew: false,
@@ -613,6 +617,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
       effectiveVersion,
       characterClass,
       upgradeTargets,
+      aspirantConversion,
       derived,
       // Each Stat's real Cap, so the stat blocks can express a Trait's +1 and a
       // purchased +1. This is the only surface a character is edited on after
@@ -1379,6 +1384,14 @@ router.post('/:id/upgrade', isAuthenticated, asyncHandler(async (req, res) => {
   const { data, error } = await upgradeCharacterClass(actor, id, target_class_id, res.locals.supabase);
   if (error) return sendError(req, res, error);
   return res.header('HX-Location', `/characters/${id}/edit`).send();
+}));
+
+router.post('/:id/convert-aspirant', isAuthenticated, asyncHandler(async (req, res) => {
+  const actor = actorFromLocals(res.locals);
+  const { id } = req.params;
+  const { data, error } = await convertCharacterToAspirant(actor, id);
+  if (error) return sendRouteError(req, res, error);
+  return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
 }));
 
 router.post('/:id/deceased', isAuthenticated, asyncHandler(async (req, res) => {

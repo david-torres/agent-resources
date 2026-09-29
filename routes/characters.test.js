@@ -143,6 +143,16 @@ mock.module('../util/nav-loader', () => ({
 // below that needs models/character and models/class; pageState drives
 // what getCharacter returns.
 mock.module('../models/character', () => ({
+  // GET /:id/edit asks for the conversion preview on every render; a test
+  // offers one by setting pageState.conversionPlan.
+  planCharacterAspirantConversion: async (actor, id) => {
+    pageState.lastPlanArgs = { actor, id };
+    return { data: pageState.conversionPlan || null, error: null };
+  },
+  convertCharacterToAspirant: async (actor, id) => {
+    pageState.lastConvert = { actor, id };
+    return pageState.conversionResult || { data: { id, name: 'Ash' }, error: null };
+  },
   getCharacter: async () => (pageState.character
     ? { data: pageState.character, error: null }
     : { data: null, error: { code: 'PGRST116', message: 'not found' } }),
@@ -340,6 +350,10 @@ beforeEach(() => {
   pageState.extraAdventClasses = null;
   pageState.classFamilyRows = null;
   pageState.lastUpdateBody = null;
+  pageState.conversionPlan = null;
+  pageState.conversionResult = null;
+  pageState.lastConvert = null;
+  pageState.lastPlanArgs = null;
 });
 
 test('GET /characters/ability-perk-group renders scaffold with ability name and dom key', async () => {
@@ -796,4 +810,82 @@ test('GET /characters/quirk no longer serves a quirk row', async () => {
 
   expect(res.status).not.toBe(200);
   expect(await res.text()).not.toContain('quirk_name');
+});
+
+// --- Convert to Aspirant ------------------------------------------------------
+
+const conversionPlan = (blockers = []) => ({
+  target: { id: 'class-fork', name: 'Gunslinger' },
+  gear: [],
+  abilities: [
+    { name: 'Trickshot', class_id: 'class-fork', type: 'core' },
+    { name: 'Familiar Face', class_id: 'class-wanderer-fork', type: 'core' }
+  ],
+  abilityPerks: [],
+  blockers,
+  breaches: [{ severity: 'hard', rule: 'perk-deficit', detail: '6 Perks spent of 4 earned.' }],
+  perkBreakdown: { earned: 4, spend: 6, remaining: 0, deficit: 2 },
+  merxBreakdown: { earned: 12, spend: 20, reward: 0, deficit: 8 }
+});
+
+const editPage = async () => {
+  pageState.character = { ...makePageCharacter(3), creator_id: 'profile-1' };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  return res.text();
+};
+
+test('the edit form offers conversion with the after-conversion build and a live Convert button', async () => {
+  pageState.conversionPlan = conversionPlan();
+  const body = await editPage();
+  expect(pageState.lastPlanArgs).toEqual({ actor: expect.objectContaining({ profileId: 'profile-1' }), id: CHAR_ID });
+  expect(body).toContain('id="aspirant-conversion"');
+  expect(body).toContain('Familiar Face');
+  expect(body).toContain('<strong>Perks spent:</strong> 6');
+  expect(body).toContain('<strong>Deficit:</strong> 8');
+  expect(body).toContain('<strong>Illegal Build:</strong> 6 Perks spent of 4 earned.');
+  expect(body).toContain(`hx-post="/characters/${CHAR_ID}/convert-aspirant"`);
+  expect(body).toContain('hx-confirm="Convert Ash to Aspirant? This cannot be undone."');
+});
+
+test('the edit form lists blockers and disables the Convert button', async () => {
+  pageState.conversionPlan = conversionPlan([
+    { rule: 'no-counterpart', detail: 'Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.' }
+  ]);
+  const body = await editPage();
+  expect(body).toContain('<li>Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.</li>');
+  expect(body).toMatch(/<button type="button" class="button is-link" disabled>Convert to Aspirant<\/button>/);
+  expect(body).not.toContain('/convert-aspirant"');
+});
+
+test('the edit form offers no conversion to an ineligible character', async () => {
+  const body = await editPage();
+  expect(body).not.toContain('aspirant-conversion');
+  expect(body).not.toContain('Convert to Aspirant');
+});
+
+test('POST /characters/:id/convert-aspirant sends the player to the converted sheet', async () => {
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/convert-aspirant`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token', 'HX-Request': 'true' },
+  });
+  expect(res.status).toBe(200);
+  expect(res.headers.get('HX-Location')).toBe(`/characters/${CHAR_ID}/Ash`);
+  expect(pageState.lastConvert).toEqual({ actor: expect.objectContaining({ profileId: 'profile-1' }), id: CHAR_ID });
+});
+
+test('POST /characters/:id/convert-aspirant renders a refusal with its reason', async () => {
+  pageState.conversionResult = {
+    data: null,
+    error: { status: 400, message: 'Ash cannot convert to Aspirant yet. Grapple Gun (Wanderer) has no Aspirant version. Remove it to convert.' }
+  };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/convert-aspirant`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-token', 'HX-Request': 'true' },
+  });
+  expect(res.status).toBe(400);
+  expect(res.headers.get('HX-Location')).toBeNull();
+  expect(await res.text()).toContain('Grapple Gun (Wanderer) has no Aspirant version.');
 });

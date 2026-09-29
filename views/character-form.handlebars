@@ -115,6 +115,49 @@
   </div>
   {{/if}}
 
+  {{#if aspirantConversion}}
+  <div class="notification is-link is-light" id="aspirant-conversion">
+    <p>This character can move to the Aspirant rules as <strong>{{aspirantConversion.target.name}}</strong>, keeping its whole build.</p>
+    <p class="mt-2"><strong>Abilities after conversion:</strong>
+      {{#each aspirantConversion.abilities}}{{this.name}}{{#unless @last}}, {{/unless}}{{/each}}</p>
+    {{#if aspirantConversion.perkBreakdown}}
+    <p><strong>Perks earned:</strong> {{aspirantConversion.perkBreakdown.earned}}</p>
+    <p><strong>Perks spent:</strong> {{aspirantConversion.perkBreakdown.spend}}</p>
+    {{/if}}
+    {{#if aspirantConversion.merxBreakdown}}
+    <p><strong>Merx earned:</strong> {{aspirantConversion.merxBreakdown.earned}}</p>
+    <p><strong>Merx spent:</strong> {{aspirantConversion.merxBreakdown.spend}}</p>
+    {{#if aspirantConversion.merxBreakdown.deficit}}
+    <p class="has-text-danger"><strong>Deficit:</strong> {{aspirantConversion.merxBreakdown.deficit}}</p>
+    {{/if}}
+    {{/if}}
+    {{#each aspirantConversion.breaches}}
+      {{#if (eq this.severity "hard")}}
+      <p class="has-text-danger"><strong>Illegal Build:</strong> {{this.detail}}</p>
+      {{/if}}
+    {{/each}}
+    {{#if aspirantConversion.blockers.length}}
+    <p class="mt-2">Change these on this form before converting:</p>
+    <ul>
+      {{#each aspirantConversion.blockers}}
+      <li>{{this.detail}}</li>
+      {{/each}}
+    </ul>
+    <div class="buttons mt-2">
+      <button type="button" class="button is-link" disabled>Convert to Aspirant</button>
+    </div>
+    {{else}}
+    <div class="buttons mt-2">
+      <button type="button" class="button is-link"
+              hx-post="/characters/{{character.id}}/convert-aspirant"
+              hx-confirm="Convert {{character.name}} to Aspirant? This cannot be undone."
+              hx-swap="none">Convert to Aspirant</button>
+    </div>
+    {{/if}}
+    <p class="is-size-7 has-text-grey mt-2">One-way. Illegal Build lines above carry over to the sheet and do not stop the conversion.</p>
+  </div>
+  {{/if}}
+
   {{#unless isNew}}
   <div class="field">
     <div class="control">
