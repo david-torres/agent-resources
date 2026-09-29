@@ -89,4 +89,10 @@ const withoutForkedAdventClasses = (classes, { keep = [] } = {}) => {
   return rows.filter(c => kept.has(c.id) || formatOf(c) !== 'advent' || !forked.has(c.id));
 };
 
-module.exports = { groupClassVersions, latestClassVersions, withoutForkedAdventClasses };
+const outdatedClassIds = (classes) => {
+  const rows = Array.isArray(classes) ? classes.filter(c => c && c.id) : [];
+  const current = new Set(latestClassVersions(withoutForkedAdventClasses(rows)).map(c => c.id));
+  return new Set(rows.filter(c => !current.has(c.id)).map(c => c.id));
+};
+
+module.exports = { groupClassVersions, latestClassVersions, withoutForkedAdventClasses, outdatedClassIds };

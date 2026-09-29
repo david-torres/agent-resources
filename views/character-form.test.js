@@ -541,7 +541,8 @@ const renderCharacterForm = (overrides = {}) => {
     maxCreatedAt: '2026-09-19',
     derived: {},
     gearPurchaseData: overrides.gearPurchaseData ?? null,
-    abilityPurchaseData: overrides.abilityPurchaseData ?? null
+    abilityPurchaseData: overrides.abilityPurchaseData ?? null,
+    ...overrides.context
   });
 };
 
@@ -682,4 +683,37 @@ test('a lapsed trial alerts above the class select', () => {
   const alertAt = html.indexOf('{{> access/trial-ended-alert lead="Advent classes are locked because" edition="advent" endedAt=adventTrialEndedAt}}');
   expect(alertAt).toBeGreaterThan(-1);
   expect(alertAt).toBeLessThan(html.indexOf('id="char-class-id"'));
+});
+
+// --- outdated classes in the class select ----------------------------------
+
+const optionFor = (html, id) => html.match(new RegExp(`<option value="${id}"[^>]*>`))[0];
+
+test('a class superseded in the user\'s roster is marked outdated in the class select', () => {
+  const html = renderCharacterForm({
+    context: {
+      adventV1Classes: [{ id: 'c-old', name: 'Gunslinger', outdated: true }],
+      aspirantPreviewV1Classes: [{ id: 'c-new', name: 'Gunslinger' }]
+    }
+  });
+
+  expect(optionFor(html, 'c-old')).toContain('data-outdated');
+  expect(optionFor(html, 'c-new')).not.toContain('data-outdated');
+});
+
+test('the class select offers a Show outdated classes toggle when a listed class is outdated', () => {
+  const html = renderCharacterForm({
+    context: { adventV1Classes: [{ id: 'c-old', name: 'Gunslinger', outdated: true }] }
+  });
+
+  expect(html).toMatch(/<input type="checkbox" id="char-show-outdated-classes"/);
+  expect(html).toContain('Show outdated classes');
+});
+
+test('the class select has no outdated toggle when no listed class is outdated', () => {
+  const html = renderCharacterForm({
+    context: { adventV1Classes: [{ id: 'c-a', name: 'Gunslinger' }] }
+  });
+
+  expect(html).not.toContain('char-show-outdated-classes');
 });

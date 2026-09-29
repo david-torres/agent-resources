@@ -1,5 +1,5 @@
 const { test, expect, describe } = require('bun:test');
-const { groupClassVersions, latestClassVersions, withoutForkedAdventClasses } = require('./class-list-grouping');
+const { groupClassVersions, latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = require('./class-list-grouping');
 
 // Minimal class row shape used by the grouping logic.
 const cls = (id, { base = null, edition = 'advent', format = 'advent', version = 'v1', created_at = '2026-01-01T00:00:00Z', name = id } = {}) => ({
@@ -120,5 +120,31 @@ describe('withoutForkedAdventClasses', () => {
   test('ids in keep survive even when forked', () => {
     expect(withoutForkedAdventClasses([root, v2, fork], { keep: ['a2'] }).map(c => c.id))
       .toEqual(['a2', 'a-fork']);
+  });
+});
+
+describe('outdatedClassIds', () => {
+  test('an advent class forked by an aspirant-format class in the list is outdated; the fork is not', () => {
+    const root = cls('a');
+    const fork = cls('a-fork', { base: 'a', format: 'aspirant' });
+    expect([...outdatedClassIds([root, fork])]).toEqual(['a']);
+  });
+
+  test('an older version superseded in its family is outdated; the newest is not', () => {
+    const v1 = cls('v1', { version: 'v1', created_at: '2026-01-01T00:00:00Z' });
+    const v2 = cls('v2', { base: 'v1', version: 'v2', created_at: '2026-02-01T00:00:00Z' });
+    expect([...outdatedClassIds([v1, v2])]).toEqual(['v1']);
+  });
+
+  test('an advent class whose aspirant fork is not in the list is not outdated', () => {
+    const root = cls('a');
+    const other = cls('b');
+    expect(outdatedClassIds([root, other]).size).toBe(0);
+  });
+
+  test('standalone classes yield an empty set', () => {
+    const result = outdatedClassIds([cls('a'), cls('b'), cls('c')]);
+    expect(result).toBeInstanceOf(Set);
+    expect(result.size).toBe(0);
   });
 });

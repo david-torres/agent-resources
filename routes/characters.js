@@ -41,7 +41,7 @@ const { economyFor, economyFigures } = require('../util/merx-economy');
 const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
-const { latestClassVersions, withoutForkedAdventClasses } = require('../util/class-list-grouping');
+const { latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = require('../util/class-list-grouping');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -176,6 +176,12 @@ const filterClassDataForUser = async (user, editionAccess = null) => {
       filteredAbilities = {};
     }
   }
+
+  const outdatedIds = outdatedClassIds([...filteredAdvent, ...filteredAspirant, ...filteredPCC]);
+  const markOutdated = (arr) => arr.map(c => (outdatedIds.has(c.id) ? { ...c, outdated: true } : c));
+  filteredAdvent = markOutdated(filteredAdvent);
+  filteredAspirant = markOutdated(filteredAspirant);
+  filteredPCC = markOutdated(filteredPCC);
 
   const splitByVersion = (arr) => ({
     v1: arr.filter(c => (c.rules_version || 'v1') === 'v1'),

@@ -181,3 +181,20 @@ test('no edition status, no locked options', async () => {
   expect(ctx.lockedClassGroups).toEqual([]);
   expect(ctx.adventTrialEndedAt).toBeNull();
 });
+
+const expertClass = (ctx, id) => [...ctx.adventV1Classes, ...ctx.aspirantPreviewV1Classes].find(c => c.id === id);
+
+test('the expert form marks an Advent class outdated when the user also has its Aspirant fork', async () => {
+  state.editionAccess = null;
+  state.allowedIds = new Set([ADVENT_GUN.id, ASPIRANT_GUN.id]);
+  const { ctx } = await get('/characters/new/expert');
+  expect(expertClass(ctx, ADVENT_GUN.id).outdated).toBe(true);
+  expect(expertClass(ctx, ASPIRANT_GUN.id).outdated).toBeFalsy();
+});
+
+test('the expert form does not mark an Advent class outdated when its fork is not unlocked', async () => {
+  state.editionAccess = null;
+  state.allowedIds = new Set([ADVENT_GUN.id]);
+  const { ctx } = await get('/characters/new/expert');
+  expect(expertClass(ctx, ADVENT_GUN.id).outdated).toBeFalsy();
+});

@@ -281,6 +281,9 @@ const jsonH = (value) => JSON.stringify(value ?? null)
   .replace(/\u2028/g, '\\u2028')
   .replace(/\u2029/g, '\\u2029');
 
+const anyOutdatedH = (...args) => args.slice(0, -1)
+  .some(list => Array.isArray(list) && list.some(c => c && c.outdated));
+
 module.exports = {
   times,
   customTrait: customTraitH,
@@ -307,5 +310,6 @@ module.exports = {
   nextPerkPosition: nextPerkPositionH,
   json: jsonH,
   edition_label,
-  edition_purchase_url
+  edition_purchase_url,
+  anyOutdated: anyOutdatedH
 }
