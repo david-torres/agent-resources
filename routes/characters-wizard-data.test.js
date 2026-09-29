@@ -65,7 +65,7 @@ mock.module('../models/class', () => ({
   ...realClass,
   getClasses: async (filters = {}) => {
     if (filters.is_player_created === true) return { data: [], error: null };
-    return { data: classPool, error: null };
+    return { data: classPool.filter((c) => (c.rules_edition || 'advent') === filters.rules_edition), error: null };
   },
   getUnlockedClassIdsForUser: async () => ({
     data: new Set(classPool.map((c) => c.id)),
@@ -266,4 +266,41 @@ test('advent still gets exactly three free Default Signatures', async () => {
     classes: [{ id: 'c-advent', content_format: 'advent', gear: sixItems() }]
   });
   expect(data.classes[0].base_gear).toHaveLength(3);
+});
+
+const LINEAGE_CLASSES = [
+  {
+    id: 'gs-advent', name: 'Gunslinger', content_format: 'advent', created_at: '2025-01-01T00:00:00Z',
+    gear: [{ name: 'Revolver' }, { name: 'Duster' }], abilities: [{ name: 'Trickshot' }, { name: 'Quickdraw' }]
+  },
+  {
+    id: 'gs-fork', name: 'Gunslinger', base_class_id: 'gs-advent', rules_edition: 'aspirant',
+    content_format: 'aspirant', created_at: '2026-01-01T00:00:00Z',
+    gear: [{ name: 'REVOLVER' }], abilities: [{ name: 'Trickshot' }]
+  }
+];
+
+test('an aspirant wizard sells each lineage\'s item once and serves each card its own-class ids', async () => {
+  const data = await renderWizardData({ mode: 'aspirant', classes: LINEAGE_CLASSES });
+  expect(data.classes.map((c) => c.id)).toEqual(['gs-fork']);
+  expect([...data.classes[0].own_class_ids].sort()).toEqual(['gs-advent', 'gs-fork']);
+  const shop = Object.fromEntries(data.shopClasses.map((c) => [c.id, c]));
+  expect(shop['gs-fork'].class_gear.map((g) => g.name)).toEqual(['REVOLVER']);
+  expect(shop['gs-advent'].class_gear.map((g) => g.name)).toEqual(['Duster']);
+  expect(shop['gs-advent'].abilities.map((a) => a.name)).toEqual(['Quickdraw']);
+  expect(shop['gs-advent'].lineage_id).toBe(data.classes[0].lineage_id);
+});
+
+test('a preselected forked Advent class keeps its card, and its own class stops at its Advent family', async () => {
+  const data = await renderWizardData({ mode: 'aspirant', classes: LINEAGE_CLASSES, preselect: 'gs-advent' });
+  const card = data.classes.find((c) => c.id === 'gs-advent');
+  expect(card.own_class_ids).toEqual(['gs-advent']);
+  expect(card.lineage_id).toBe(data.classes.find((c) => c.id === 'gs-fork').lineage_id);
+});
+
+test('outside aspirant mode the shop is the card list', async () => {
+  const data = await renderWizardData({
+    mode: 'advent', classes: [{ id: 'c-advent', content_format: 'advent', gear: [{ name: 'Bow' }] }]
+  });
+  expect(data.shopClasses.map((c) => c.id)).toEqual(data.classes.map((c) => c.id));
 });

@@ -37,7 +37,7 @@ const {
   deriveCharacterTotals, deriveMerxBreakdown, deriveMissionMerx, ADVENT_DEFAULT_SIGNATURES,
   derivePerkBreakdown, deriveBuildBreaches
 } = require('../util/character-derived');
-const { familyResolver } = require('../util/class-family');
+const { familyResolver, ownClassIds } = require('../util/class-family');
 const { buildGearPurchaseData, applyGearPurchases } = require('../util/gear-purchase-data');
 const { buildAbilityPurchaseData, applyAbilityPurchases } = require('../util/ability-purchase-data');
 const { economyFor, economyFigures } = require('../util/merx-economy');
@@ -45,7 +45,7 @@ const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
 const { latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = require('../util/class-list-grouping');
-const { lineageCatalogue, purchaseCatalogue } = require('../util/class-lineage');
+const { lineageCatalogue, lineageIdOf, purchaseCatalogue } = require('../util/class-lineage');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -293,6 +293,23 @@ router.get('/new/expert', isAuthenticated, async (req, res) => {
   });
 });
 
+// Every Signature a class carries, in printed order. A V1 class has twelve
+// across four columns; an Advent class has six. `column` and `position` come
+// from the class contract (util/class-gear.js) and are layout facts, not
+// economy ones -- nothing gates a purchase on a column (see the spec, "Two
+// things the book does not say").
+const wizardClassGear = (c) => (Array.isArray(c.gear)
+  ? c.gear.map((g, idx) => ({
+      name: g.name || '',
+      description_html: renderMarkdown(g.description || ''),
+      meters: Array.isArray(g.meters) ? g.meters : [],
+      column: g.column || null,
+      position: g.position || null,
+      default_enchantment: g.default_enchantment || null,
+      subtype: idx < ADVENT_DEFAULT_SIGNATURES ? 'base' : 'elective'
+    }))
+  : []);
+
 router.get('/wizard', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
   const mode = (req.query.mode || 'advent').toString();
@@ -369,24 +386,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             description_html: renderMarkdown(a.description || '')
           }))
         : [],
-      // Every Signature the class carries, in printed order. A V1 class has
-      // twelve across four columns; an Advent class has six. The player chooses
-      // which to buy, so the route no longer decides for them by taking the
-      // first six. `column` and `position` come from the class contract
-      // (util/class-gear.js) and are layout facts, not economy ones -- nothing
-      // gates a purchase on a column (see the spec, "Two things the book does
-      // not say").
-      class_gear: Array.isArray(c.gear)
-        ? c.gear.map((g, idx) => ({
-            name: g.name || '',
-            description_html: renderMarkdown(g.description || ''),
-            meters: Array.isArray(g.meters) ? g.meters : [],
-            column: g.column || null,
-            position: g.position || null,
-            default_enchantment: g.default_enchantment || null,
-            subtype: idx < ADVENT_DEFAULT_SIGNATURES ? 'base' : 'elective'
-          }))
-        : [],
+      class_gear: wizardClassGear(c),
       // Advent's free auto-loaded allotment for the left-hand list -- see
       // util/character-derived.js's ADVENT_DEFAULT_SIGNATURES. Aspirant and
       // aspiring modes never render this list; what an item costs and whether
@@ -396,8 +396,26 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
             name: g.name || '',
             description_html: renderMarkdown(g.description || '')
           }))
-        : []
+        : [],
+      // The client prices and prunes against these, never its own rule
+      // (util/class-family.js#ownClassIds, util/class-lineage.js#lineageIdOf).
+      own_class_ids: [...ownClassIds(roster, c.id)],
+      lineage_id: lineageIdOf(roster, c.id)
     }));
+
+  // What the shops sell. An aspirant character sees each item name once per
+  // lineage; public/js/character-wizard.js#shopClassesFor drops the selected
+  // card and the names it prints from the rest of its lineage.
+  const shopClasses = mode === 'aspirant'
+    ? lineageCatalogue(roster).map((c) => ({
+        id: c.id,
+        name: c.name,
+        lineage_id: c.lineage_id,
+        class_gear: wizardClassGear(c),
+        abilities: c.abilities,
+        advanced_abilities: c.advanced_abilities
+      }))
+    : wizardClasses;
 
   // Pre-render common-item descriptions for the step 4 spending list.
   const commonItemsHtml = (commonItemList || []).map((item) => ({
@@ -423,6 +441,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       mode,
       preselectedClassId,
       classes: wizardClasses,
+      shopClasses,
       statList,
       personalityMap,
       commonItems: commonItemsHtml,
