@@ -255,7 +255,28 @@ describe('upgradeBuild', () => {
       { class_ability_id: null, ability_name: 'Trickshot', text: 'Off the wall.', position: 0, compounds_with: null },
       { class_ability_id: null, ability_name: 'Standoff', text: 'Stare them down.', position: 1, compounds_with: null },
       { class_ability_id: null, ability_name: 'Standoff', text: 'Twice as long.', position: 2, compounds_with: 'position-1' },
-      { class_ability_id: 'a3', text: 'Steady hands.', position: 3, compounds_with: null }
+      { class_ability_id: 'a3', ability_name: 'Shootout', text: 'Steady hands.', position: 3, compounds_with: null }
+    ]);
+  });
+
+  // Positions are numbered per Ability, and save_character_atomic scopes a
+  // compound to its Ability only through ability_name.
+  test('every Perk names its Ability, so Abilities sharing positions keep their own compounds', () => {
+    const upgrade = upgradeBuild(upgradeInput({
+      gear: [],
+      abilities: [abilityRow('a3', 'Shootout', 'gs-v1'), abilityRow('a1', 'trickshot', 'gs-v1')],
+      abilityPerks: [
+        { id: 'p0', class_ability_id: 'a3', text: 'Steady hands.', position: 0, compounds_with: null },
+        { id: 'p1', class_ability_id: 'a3', text: 'Steadier.', position: 1, compounds_with: 'position-0' },
+        { id: 'p2', class_ability_id: 'a1', text: 'Off the wall.', position: 0, compounds_with: null },
+        { id: 'p3', class_ability_id: 'a1', text: 'Off the ceiling.', position: 1, compounds_with: null }
+      ]
+    }));
+    expect(upgrade.abilityPerks).toEqual([
+      { class_ability_id: 'a3', ability_name: 'Shootout', text: 'Steady hands.', position: 0, compounds_with: null },
+      { class_ability_id: 'a3', ability_name: 'Shootout', text: 'Steadier.', position: 1, compounds_with: 'position-0' },
+      { class_ability_id: null, ability_name: 'Trickshot', text: 'Off the wall.', position: 0, compounds_with: null },
+      { class_ability_id: null, ability_name: 'Trickshot', text: 'Off the ceiling.', position: 1, compounds_with: null }
     ]);
   });
 

@@ -80,24 +80,26 @@ const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks }) => 
 
   // save_character_atomic re-inserts an Ability whose class or name changes,
   // and one with no class_id (it cannot pair it with its stored row); either
-  // cascades the Perks away, so those Perks re-attach by ability_name.
-  const reinsertedNames = new Map();
+  // cascades the Perks away, so those Perks re-attach by ability_name alone.
+  // Every Perk names its Ability: positions are numbered per Ability, and the
+  // RPC scopes a compound's position to one Ability only through ability_name.
+  const abilityNames = new Map();
+  const reinsertedIds = new Set();
   const abilityRows = listOf(abilities).map((row) => {
     const move = upgradeRow(row, 'Ability', ABILITY_LISTS);
-    if (move) {
-      reinsertedNames.set(row.id, move.name);
-      return { name: move.name, class_id: move.classId, description: move.description, type: move.type };
-    }
-    if (row.class_id == null) reinsertedNames.set(row.id, row.name);
-    return { name: row.name, class_id: row.class_id ?? null, description: row.description ?? null, type: row.type ?? null };
+    abilityNames.set(row.id, move ? move.name : row.name);
+    if (move || row.class_id == null) reinsertedIds.add(row.id);
+    return move
+      ? { name: move.name, class_id: move.classId, description: move.description, type: move.type }
+      : { name: row.name, class_id: row.class_id ?? null, description: row.description ?? null, type: row.type ?? null };
   });
-  const perkRows = listOf(abilityPerks).map((perk) => {
-    const base = { text: perk.text, position: perk.position, compounds_with: perk.compounds_with ?? null };
-    const abilityName = reinsertedNames.get(perk.class_ability_id);
-    return abilityName
-      ? { class_ability_id: null, ability_name: abilityName, ...base }
-      : { class_ability_id: perk.class_ability_id, ...base };
-  });
+  const perkRows = listOf(abilityPerks).map(perk => ({
+    class_ability_id: reinsertedIds.has(perk.class_ability_id) ? null : perk.class_ability_id,
+    ability_name: abilityNames.get(perk.class_ability_id) ?? null,
+    text: perk.text,
+    position: perk.position,
+    compounds_with: perk.compounds_with ?? null
+  }));
 
   const target = targetOf(character.class_id ?? null);
   if (moved.length === 0) {

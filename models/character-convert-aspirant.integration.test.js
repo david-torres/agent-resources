@@ -155,6 +155,27 @@ beforeAll(async () => {
     perks: [{ ability_name: 'Wayfinding', text: 'Never lost.', position: 0 }]
   });
 
+  // Perk positions are numbered per Ability: Drifter's Wayfinding and the
+  // kept Shootout (whose second Perk compounds its first) both use 0 and 1,
+  // and so does the moving Trickshot.
+  characters.sharer = await createAdventCharacter({
+    cls: classes.gunslinger, name: `Sharer ${suffix}`, level: 4,
+    gear: [],
+    abilities: [
+      { name: 'Wayfinding', class_id: classes.drifter.id, type: 'core' },
+      { name: 'Shootout', class_id: classes.gunslinger.id, type: 'core' },
+      { name: 'Trickshot', class_id: classes.gunslinger.id, type: 'core' }
+    ],
+    perks: [
+      { ability_name: 'Wayfinding', text: 'Never lost.', position: 0 },
+      { ability_name: 'Wayfinding', text: 'Always found.', position: 1 },
+      { ability_name: 'Shootout', text: 'Steady hands.', position: 0 },
+      { ability_name: 'Shootout', text: 'Steadier still.', position: 1, compounds_with: 'position-0' },
+      { ability_name: 'Trickshot', text: 'Off the wall.', position: 0 },
+      { ability_name: 'Trickshot', text: 'Off the ceiling.', position: 1 }
+    ]
+  });
+
   // Thirteen Signatures: more than an Aspirant character may bring on a mission.
   characters.hoarder = await createAdventCharacter({
     cls: classes.gunslinger, name: `Hoarder ${suffix}`, level: 1,
@@ -234,6 +255,30 @@ test('conversion moves the class and every row with an Aspirant version, and kee
   const shootoutPerk = (rows) => rows.perks.find(perk => perk.position === 4).id;
   expect(shootoutPerk(after)).toBe(shootoutPerk(before));
   expect(after.traits).toEqual(before.traits);
+});
+
+test('Perks of Abilities sharing positions keep their own Ability and compound through conversion', async () => {
+  const id = characters.sharer;
+  expect((await convertCharacterToAspirant({ profileId: profile.id }, id)).error).toBeNull();
+
+  const { rows } = await db.query(
+    `select a.name as ability, p.position, p.text, ta.name as target_ability, t.text as target
+     from character_perks p
+     join class_abilities a on a.id = p.class_ability_id
+     left join character_perks t on t.id = p.compounds_with
+     left join class_abilities ta on ta.id = t.class_ability_id
+     where p.character_id = $1
+     order by a.name, p.position`,
+    [id]
+  );
+  expect(rows).toEqual([
+    { ability: 'Shootout', position: 0, text: 'Steady hands.', target_ability: null, target: null },
+    { ability: 'Shootout', position: 1, text: 'Steadier still.', target_ability: 'Shootout', target: 'Steady hands.' },
+    { ability: 'Trickshot', position: 0, text: 'Off the wall.', target_ability: null, target: null },
+    { ability: 'Trickshot', position: 1, text: 'Off the ceiling.', target_ability: null, target: null },
+    { ability: 'Wayfinding', position: 0, text: 'Never lost.', target_ability: null, target: null },
+    { ability: 'Wayfinding', position: 1, text: 'Always found.', target_ability: null, target: null }
+  ]);
 });
 
 test('a class with no Aspirant version keeps its class and every row id', async () => {

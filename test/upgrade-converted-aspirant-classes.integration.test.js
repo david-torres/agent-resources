@@ -68,7 +68,7 @@ beforeAll(async () => {
   }));
   classes.legacy = await insertClass({
     name: `Up Gunslinger ${suffix}`, rules_edition: 'advent', content_format: 'advent', rules_version: 'v2',
-    gear: [{ name: 'Revolver' }, { name: 'Duster' }], abilities: [{ name: 'Trickshot' }]
+    gear: [{ name: 'Revolver' }, { name: 'Duster' }], abilities: [{ name: 'Trickshot' }, { name: 'Shootout' }]
   });
   classes.fork = await insertClass({
     name: `Up Gunslinger ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
@@ -76,15 +76,25 @@ beforeAll(async () => {
   });
   classes.loner = await insertClass({
     name: `Up Loner ${suffix}`, rules_edition: 'advent', content_format: 'advent', rules_version: 'v2',
-    gear: [{ name: 'Bedroll' }], abilities: []
+    gear: [{ name: 'Bedroll' }], abilities: [{ name: 'Campfire' }]
   });
 
-  // Converted before conversion upgraded the class.
+  // Converted before conversion upgraded the class. Perk positions are
+  // numbered per Ability, so the kept Campfire and Shootout and the moving
+  // Trickshot all use 0 and 1.
   characters.converted = await createAspirantCharacter({
     cls: classes.legacy, name: `Converted ${suffix}`,
     gear: [{ name: 'Revolver', class_id: classes.legacy.id }, { name: 'Duster', class_id: classes.legacy.id }],
-    abilities: [{ name: 'Trickshot', class_id: classes.legacy.id, type: 'core' }],
+    abilities: [
+      { name: 'Campfire', class_id: classes.loner.id, type: 'core' },
+      { name: 'Shootout', class_id: classes.legacy.id, type: 'core' },
+      { name: 'Trickshot', class_id: classes.legacy.id, type: 'core' }
+    ],
     perks: [
+      { ability_name: 'Campfire', text: 'Warm hands.', position: 0 },
+      { ability_name: 'Campfire', text: 'Warm hearts.', position: 1 },
+      { ability_name: 'Shootout', text: 'Steady hands.', position: 0 },
+      { ability_name: 'Shootout', text: 'Steadier still.', position: 1, compounds_with: 'position-0' },
       { ability_name: 'Trickshot', text: 'Off the wall.', position: 0 },
       { ability_name: 'Trickshot', text: 'And again.', position: 1, compounds_with: 'position-0' }
     ]
@@ -119,7 +129,7 @@ test('the dry run lists only the converted character on a forked Advent class an
     name: `Converted ${suffix}`, owner: `Upgrade ${suffix}`, fromClass: classes.legacy.name, toClass: classes.fork.name
   });
   expect(report.candidates[0].moved.map(item => item.name).sort()).toEqual(['Revolver', 'Trickshot']);
-  expect(report.candidates[0].kept.map(item => item.name)).toEqual(['Duster']);
+  expect(report.candidates[0].kept.map(item => item.name).sort()).toEqual(['Campfire', 'Duster', 'Shootout']);
   expect(report.applied).toEqual([]);
   expect(await snapshot()).toEqual(before);
 });
@@ -141,18 +151,22 @@ test('--apply moves the class and matching rows, and a second run finds nothing'
     { name: 'Revolver', class_id: classes.fork.id }
   ]);
   const { rows: perks } = await db.query(
-    `select p.text, a.name, a.class_id from character_perks p join class_abilities a on a.id = p.class_ability_id
-     where p.character_id = $1`, [characters.converted]
+    `select a.name as ability, a.class_id, p.position, p.text, ta.name as target_ability, t.text as target
+     from character_perks p
+     join class_abilities a on a.id = p.class_ability_id
+     left join character_perks t on t.id = p.compounds_with
+     left join class_abilities ta on ta.id = t.class_ability_id
+     where p.character_id = $1
+     order by a.name, p.position`, [characters.converted]
   );
-  expect(perks.sort((a, b) => a.text.localeCompare(b.text))).toEqual([
-    { text: 'And again.', name: 'Trickshot', class_id: classes.fork.id },
-    { text: 'Off the wall.', name: 'Trickshot', class_id: classes.fork.id }
+  expect(perks).toEqual([
+    { ability: 'Campfire', class_id: classes.loner.id, position: 0, text: 'Warm hands.', target_ability: null, target: null },
+    { ability: 'Campfire', class_id: classes.loner.id, position: 1, text: 'Warm hearts.', target_ability: null, target: null },
+    { ability: 'Shootout', class_id: classes.legacy.id, position: 0, text: 'Steady hands.', target_ability: null, target: null },
+    { ability: 'Shootout', class_id: classes.legacy.id, position: 1, text: 'Steadier still.', target_ability: 'Shootout', target: 'Steady hands.' },
+    { ability: 'Trickshot', class_id: classes.fork.id, position: 0, text: 'Off the wall.', target_ability: null, target: null },
+    { ability: 'Trickshot', class_id: classes.fork.id, position: 1, text: 'And again.', target_ability: 'Trickshot', target: 'Off the wall.' }
   ]);
-  const { rows: links } = await db.query(
-    `select p.text, t.text as target from character_perks p join character_perks t on t.id = p.compounds_with
-     where p.character_id = $1`, [characters.converted]
-  );
-  expect(links).toEqual([{ text: 'And again.', target: 'Off the wall.' }]);
 
   const after = await snapshot();
   const untouched = (rows) => rows.filter(row => [characters.chosen, characters.loner].includes(row.id));
