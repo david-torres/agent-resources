@@ -68,4 +68,50 @@ const expandIdsToFamilies = (classes, ids) => {
   return expanded;
 };
 
-module.exports = { computeVersionFamily, expandIdsToFamilies };
+const ASPIRANT = 'aspirant';
+
+// The Aspirant version of a class: the aspirant-format class outside its
+// version family whose base_class_id is inside it, so every version of an
+// Advent class reaches the same one. The schema allows two, and conversion
+// does not guess between them.
+const findAspirantFork = (classes, classId) => {
+  const index = buildFamilyIndex(classes);
+  const origin = index.byId.get(classId);
+  if (!origin || origin.content_format === ASPIRANT) return null;
+  const family = familyFromIndex(index, classId);
+  const forks = [...index.byId.values()].filter(row => row.content_format === ASPIRANT
+    && !family.has(row.id) && family.has(row.base_class_id));
+  if (forks.length > 1) {
+    console.warn(`[findAspirantFork] class ${classId} has ${forks.length} Aspirant versions: `
+      + forks.map(row => row.id).join(', '));
+  }
+  return forks.length === 1 ? forks[0] : null;
+};
+
+// A character's own class for Cross-Classing. An Aspirant version also owns
+// the Advent family it was forked from; an Advent class never owns its fork.
+const ownClassIds = (classes, classId) => {
+  const index = buildFamilyIndex(classes);
+  const own = familyFromIndex(index, classId);
+  const node = index.byId.get(classId);
+  if (!node || node.content_format !== ASPIRANT) return own;
+  for (const memberId of [...own]) {
+    const base = index.byId.get(index.byId.get(memberId)?.base_class_id);
+    if (base && base.content_format !== ASPIRANT && !own.has(base.id)) {
+      for (const originId of familyFromIndex(index, base.id)) own.add(originId);
+    }
+  }
+  return own;
+};
+
+// The classFamilyOf that Merx and Perk pricing read: every own-class id maps
+// onto classId.
+const familyResolver = (classes, classId) => {
+  if (!classId) return null;
+  const own = ownClassIds(classes, classId);
+  return (candidateId) => (own.has(candidateId) ? classId : candidateId);
+};
+
+module.exports = {
+  computeVersionFamily, expandIdsToFamilies, findAspirantFork, ownClassIds, familyResolver
+};

@@ -13,7 +13,7 @@ const { capBreaches, capBreachMessage, LEVEL_CEILING } = require('../../util/sta
 const { worsenedBreaches } = require('../../util/perk-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
-const { computeVersionFamily } = require('../../util/class-family');
+const { computeVersionFamily, familyResolver } = require('../../util/class-family');
 const { planConversion } = require('../../util/aspirant-conversion');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
@@ -197,21 +197,6 @@ const resolveSubmittedGear = (gear, { maps, ownClassId }) => {
     }
     return null;
   }).filter(Boolean);
-};
-
-// Maps every id in `classId`'s own version family onto `classId`, which is
-// what tagAbilities (util/character-derived.js) consults to decide whether an
-// ability is cross-class. util/class-family.js#computeVersionFamily is the
-// single definition of "version family" -- see its own comment on why a query
-// that drops a column must not be reimplemented here. An ability row carried
-// over from an earlier version of the character's OWN class tags as own-class
-// through this; measured on live data, 22 of 327 characters hold exactly such
-// a row. Null for a character with no class_id: an aspiring character's branch
-// of tagAbilities never consults it.
-const familyResolver = (classRows, classId) => {
-  if (!classId) return null;
-  const family = computeVersionFamily(classRows || [], classId);
-  return (candidateId) => (family.has(candidateId) ? classId : candidateId);
 };
 
 // Resolves a submitted gear item or ability to the class it belongs to, and to
@@ -513,7 +498,7 @@ class CharacterService {
     }
     prepared = await this.adapter.resolveClassReference(prepared);
 
-    // See familyResolver. The query is skipped entirely for a class-less
+    // See util/class-family.js#familyResolver. The query is skipped entirely for a class-less
     // (aspiring) character, whose branch of tagAbilities would not use it.
     let classFamilyOf = null;
     if (storedClassId) {

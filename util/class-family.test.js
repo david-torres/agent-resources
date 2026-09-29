@@ -1,5 +1,9 @@
-const { test, expect, describe } = require('bun:test');
-const { computeVersionFamily, expandIdsToFamilies } = require('./class-family');
+const { test, expect, describe, spyOn } = require('bun:test');
+const {
+  computeVersionFamily, expandIdsToFamilies, findAspirantFork, ownClassIds, familyResolver
+} = require('./class-family');
+const { tagAbilities } = require('./character-derived');
+const { isCrossClass, equipmentSpend, priceOfSignature } = require('./merx-economy');
 
 // Minimal class row shape used by the family resolver.
 const cls = (id, base = null, edition = 'advent', format = 'advent') => ({
@@ -125,5 +129,96 @@ describe('format forks', () => {
       cls('v1', 'untagged', 'aspirant', 'aspirant')
     ];
     expect(computeVersionFamily(classes, 'v1')).toEqual(new Set(['v1']));
+  });
+});
+
+// Gunslinger: Advent v1 and v2 are one family; its Aspirant version forks from
+// v1 and has a v2 of its own. Wanderer has no Aspirant version.
+const GUNSLINGER = [
+  cls('gs-v1'),
+  cls('gs-v2', 'gs-v1'),
+  cls('gs-asp', 'gs-v1', 'aspirant', 'aspirant'),
+  cls('gs-asp-v2', 'gs-asp', 'aspirant', 'aspirant'),
+  cls('wd-v1')
+];
+
+describe('findAspirantFork', () => {
+  test('every version of an Advent class reaches the same Aspirant version', () => {
+    expect(findAspirantFork(GUNSLINGER, 'gs-v1').id).toBe('gs-asp');
+    expect(findAspirantFork(GUNSLINGER, 'gs-v2').id).toBe('gs-asp');
+  });
+
+  test('a class with no Aspirant version has none', () => {
+    expect(findAspirantFork(GUNSLINGER, 'wd-v1')).toBeNull();
+  });
+
+  test('an Aspirant class, an unknown class and no class have none', () => {
+    expect(findAspirantFork(GUNSLINGER, 'gs-asp')).toBeNull();
+    expect(findAspirantFork(GUNSLINGER, 'nope')).toBeNull();
+    expect(findAspirantFork(GUNSLINGER, null)).toBeNull();
+  });
+
+  // The schema does not enforce one fork per family, and conversion does not guess.
+  test('two Aspirant versions of one family count as none, with a warning naming both', () => {
+    const warn = spyOn(console, 'warn').mockImplementation(() => {});
+    const classes = [...GUNSLINGER, cls('gs-asp-b', 'gs-v2', 'aspirant', 'aspirant')];
+    expect(findAspirantFork(classes, 'gs-v1')).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][0]).toContain('gs-asp');
+    expect(warn.mock.calls[0][0]).toContain('gs-asp-b');
+    warn.mockRestore();
+  });
+});
+
+describe('ownClassIds', () => {
+  test('an Aspirant version\'s own class includes the Advent family it came from', () => {
+    const all = new Set(['gs-asp', 'gs-asp-v2', 'gs-v1', 'gs-v2']);
+    expect(ownClassIds(GUNSLINGER, 'gs-asp')).toEqual(all);
+    expect(ownClassIds(GUNSLINGER, 'gs-asp-v2')).toEqual(all);
+  });
+
+  test('an Advent class\'s own class never includes its Aspirant version', () => {
+    expect(ownClassIds(GUNSLINGER, 'gs-v2')).toEqual(new Set(['gs-v1', 'gs-v2']));
+  });
+
+  test('a class with no links, and an unknown class, are their own class alone', () => {
+    expect(ownClassIds(GUNSLINGER, 'wd-v1')).toEqual(new Set(['wd-v1']));
+    expect(ownClassIds(GUNSLINGER, 'nope')).toEqual(new Set(['nope']));
+  });
+
+  test('an Aspirant class forked from another Aspirant class takes in nothing across formats', () => {
+    const classes = [cls('asp-a', null, 'aspirant', 'aspirant'), cls('pre-b', 'asp-a', 'prerelease', 'aspirant')];
+    expect(ownClassIds(classes, 'pre-b')).toEqual(new Set(['pre-b']));
+  });
+});
+
+describe('familyResolver', () => {
+  test('is null without a class', () => {
+    expect(familyResolver(GUNSLINGER, null)).toBeNull();
+  });
+
+  test('maps every own-class id onto the character\'s class and leaves others alone', () => {
+    const of = familyResolver(GUNSLINGER, 'gs-asp');
+    expect(of('gs-v1')).toBe('gs-asp');
+    expect(of('gs-asp-v2')).toBe('gs-asp');
+    expect(of('wd-v1')).toBe('wd-v1');
+  });
+
+  test('on a fork character, Advent-origin Abilities and Signatures price own-class', () => {
+    const pricing = { economy: 'aspirant', characterClassId: 'gs-asp', classFamilyOf: familyResolver(GUNSLINGER, 'gs-asp') };
+    expect(tagAbilities([
+      { name: 'Trickshot', class_id: 'gs-v1', type: 'core' },
+      { name: 'Familiar Face', class_id: 'wd-v1', type: 'core' }
+    ], pricing).map(tag => tag.crossClass)).toEqual([false, true]);
+    expect(isCrossClass({ name: 'Revolver', class_id: 'gs-v2' }, pricing)).toBe(false);
+    expect(equipmentSpend([
+      { name: 'Revolver', class_id: 'gs-v1' },
+      { name: 'Satchel', class_id: 'wd-v1' }
+    ], pricing)).toBe(priceOfSignature({ crossClass: false }) + priceOfSignature({ crossClass: true }));
+  });
+
+  test('on an Advent character, its Aspirant version\'s items stay cross-class', () => {
+    const pricing = { economy: 'advent', characterClassId: 'gs-v2', classFamilyOf: familyResolver(GUNSLINGER, 'gs-v2') };
+    expect(isCrossClass({ name: 'Revolver', class_id: 'gs-asp' }, pricing)).toBe(true);
   });
 });
