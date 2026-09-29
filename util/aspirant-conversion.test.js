@@ -7,10 +7,14 @@ const {
   ABILITY_CAP_RULE, PERK_DEFICIT_RULE, CROSS_CLASS_EDITION_RULE, perkAllotment
 } = require('./perk-economy');
 
-// Gunslinger v1 and v2 are one version family; Wanderer is another class.
-// This is what familyResolver (util/class-family.js) hands the planner.
-const GUNSLINGER_FAMILY = new Set(['gunslinger-v1', 'gunslinger-v2']);
-const classFamilyOf = (classId) => (GUNSLINGER_FAMILY.has(classId) ? 'gunslinger-v2' : classId);
+// Gunslinger v1 and v2 are one version family; Wanderer v1 and v2 another.
+// Neither has an Aspirant version, so nothing moves.
+const CAROLINE_CLASSES = [
+  { id: 'gunslinger-v1', name: 'Gunslinger', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: 'gunslinger-v2', name: 'Gunslinger', base_class_id: 'gunslinger-v1', rules_edition: 'advent', content_format: 'advent' },
+  { id: 'wanderer-v1', name: 'Wanderer', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: 'wanderer-v2', name: 'Wanderer', base_class_id: 'wanderer-v1', rules_edition: 'advent', content_format: 'advent' }
+];
 
 const TRAITS = [
   { name: 'Brave', stat: 'might' }, { name: 'Clever', stat: 'intelligence' }, { name: 'Lucky', stat: 'luck' }
@@ -29,7 +33,7 @@ const carolineDenton = (overrides = {}) => ({
     ...Object.fromEntries(statList.map(stat => [stat, 1])),
     ...overrides.character
   },
-  classFamilyOf: 'classFamilyOf' in overrides ? overrides.classFamilyOf : classFamilyOf,
+  classes: 'classes' in overrides ? overrides.classes : CAROLINE_CLASSES,
   gear: overrides.gear || [
     signature('Revolver', 'gunslinger-v2'),
     signature('Revolver', 'gunslinger-v2'),
@@ -52,9 +56,10 @@ const carolineDenton = (overrides = {}) => ({
 });
 
 describe('planConversion: the build stays as it is', () => {
-  test('the plan names no rows to write: conversion changes only the mode', () => {
-    expect(Object.keys(planConversion(carolineDenton())).sort())
-      .toEqual(['blockers', 'breaches', 'merxBreakdown', 'perkBreakdown']);
+  test('with no Aspirant version anywhere, the plan moves nothing', () => {
+    const { upgrade } = planConversion(carolineDenton());
+    expect(upgrade.target).toBeNull();
+    expect([upgrade.gear, upgrade.abilities, upgrade.abilityPerks]).toEqual([null, null, null]);
   });
 
   test('Caroline Denton converts with nothing blocking and no Ability-cap breach', () => {
@@ -77,8 +82,8 @@ describe('planConversion: judged as an Aspirant character on its own class', () 
 
   // Without the family, the three Cores on the v1 row would each be a
   // cross-class unlock at 3: 9 + 3 + 3 Perks.
-  test('the family comes from classFamilyOf', () => {
-    expect(planConversion(carolineDenton({ classFamilyOf: null })).perkBreakdown.spend).toBe(15);
+  test('the family comes from the class catalogue', () => {
+    expect(planConversion(carolineDenton({ classes: [] })).perkBreakdown.spend).toBe(15);
   });
 
   test('a Perk deficit is grandfathered: a breach, not a blocker', () => {
@@ -125,7 +130,7 @@ describe('planConversion: judged as an Aspirant character on its own class', () 
   // No class means no family: every Ability is own-class. Four own Cores are
   // three free and one at 1, plus three Ability Perks, against 4 earned.
   test('a character with no class is judged with every Ability own-class', () => {
-    const plan = planConversion(carolineDenton({ character: { class: 'Drifter', class_id: null }, classFamilyOf: null }));
+    const plan = planConversion(carolineDenton({ character: { class: 'Drifter', class_id: null } }));
     expect(plan.blockers).toEqual([]);
     expect(plan.perkBreakdown.spend).toBe(4);
   });
@@ -385,5 +390,31 @@ describe('upgradeSaveArgs', () => {
     expect(upgradeSaveArgs({ character, upgrade })).toEqual({
       characterId: 'char-1', creatorId: 'profile-1', character: {}, traits: TRAITS, gear: null, abilities: null, perks: null
     });
+  });
+});
+
+describe('planConversion: judged on the upgraded build', () => {
+  const forked = () => carolineDenton({
+    classes: UPGRADE_CLASSES,
+    character: { class_id: 'gs-v2' },
+    gear: [gearRow('g1', 'Revolver', 'gs-v1'), gearRow('g3', 'Duster', 'gs-v1')],
+    abilities: [abilityRow('a1', 'Trickshot', 'gs-v1'), abilityRow('a3', 'Shootout', 'gs-v1')],
+    abilityPerks: []
+  });
+
+  test('the plan carries the upgrade', () => {
+    expect(planConversion(forked()).upgrade.target.id).toBe('gs-asp');
+  });
+
+  // Duster and Shootout have no Aspirant version and stay on Advent
+  // Gunslinger, which is still the character's own class on the fork.
+  test('leftover Advent own-class items price as own-class after the move', () => {
+    const plan = planConversion(forked());
+    expect(plan.merxBreakdown.spend).toBe(2 * priceOfSignature({ crossClass: false }));
+    expect(plan.perkBreakdown.spend).toBe(0);
+  });
+
+  test('items with no Aspirant version never block', () => {
+    expect(planConversion(forked()).blockers).toEqual([]);
   });
 });

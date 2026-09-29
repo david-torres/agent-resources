@@ -4,7 +4,7 @@
 const { statList } = require('./enclave-consts');
 const { deriveBuildBreaches, derivePerkBreakdown, deriveMerxBreakdown } = require('./character-derived');
 const { validateTraits, validateStatLimits } = require('../services/character/input');
-const { computeVersionFamily, findAspirantFork } = require('./class-family');
+const { computeVersionFamily, findAspirantFork, familyResolver } = require('./class-family');
 const { latestClassVersions } = require('./class-list-grouping');
 
 const ASPIRANT = 'aspirant';
@@ -119,12 +119,15 @@ const upgradeSaveArgs = ({ character, upgrade }) => ({
   perks: upgrade.abilityPerks
 });
 
-// `classFamilyOf` maps every class in the character's own version family onto
-// its class (familyResolver in util/class-family.js), so an Ability carried over
-// from another version of that class is own-class, as it is on the sheet.
+// Judged under the aspirant economy on the upgraded build, with own class
+// taken from the class the character lands on.
 const planConversion = ({
-  character, classFamilyOf, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions
+  character, classes, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions
 }) => {
+  const upgrade = upgradeBuild({ character, classes, gear, abilities, abilityPerks });
+  const characterClassId = upgrade.target ? upgrade.target.id : (character.class_id ?? null);
+  const classFamilyOf = familyResolver(classes, characterClassId);
+
   // The rules Aspirant enforces on every save, judged by the validators that
   // enforce them. Stat Cap only: the creation allotment and +++ ceiling are
   // creation rules (validateStatLimits).
@@ -143,24 +146,24 @@ const planConversion = ({
 
   // The Ability cap and Perk deficit are grandfathered by the ratchet after
   // conversion, so they are reported, not blocking.
-  const characterClassId = character.class_id ?? null;
   const perkArgs = {
     economy: ASPIRANT,
     level: character.level,
-    abilities,
+    abilities: upgrade.abilities ?? abilities,
     abilityPerks,
     characterClassId,
     classFamilyOf
   };
 
   return {
+    upgrade,
     blockers,
     breaches: deriveBuildBreaches(perkArgs),
     perkBreakdown: derivePerkBreakdown(perkArgs),
     merxBreakdown: deriveMerxBreakdown({
       realMissions,
       offscreenMissions,
-      gear,
+      gear: upgrade.gear ?? gear,
       commonItems: character.common_items,
       characterClassId,
       economy: ASPIRANT,

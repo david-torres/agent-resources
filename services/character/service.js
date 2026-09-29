@@ -14,7 +14,7 @@ const { worsenedBreaches } = require('../../util/perk-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { ownClassIds, familyResolver } = require('../../util/class-family');
-const { planConversion } = require('../../util/aspirant-conversion');
+const { planConversion, upgradeSaveArgs } = require('../../util/aspirant-conversion');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
@@ -43,6 +43,7 @@ const REQUIRED_ADAPTER_METHODS = [
   'updateOwnedFields',
   'getClassRulesVersion',
   'getClassFamilyRows',
+  'getConversionClasses',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
   'levelUpAtomic',
@@ -141,20 +142,16 @@ const loadAspirantConversion = async (adapter, actor, id) => {
   if (economy !== 'advent') {
     return { ineligible: `${character.name} is not on the Advent rules, so there is nothing to convert.` };
   }
-  let classFamilyOf = null;
-  if (character.class_id) {
-    const { data: classFamilyRows, error: familyError } = await adapter.getClassFamilyRows();
-    if (familyError) return { error: familyError };
-    classFamilyOf = familyResolver(classFamilyRows, character.class_id);
-  }
-  const [missions, offscreenMissions] = await Promise.all([
+  const [classes, missions, offscreenMissions] = await Promise.all([
+    adapter.getConversionClasses(),
     adapter.getRealMissions(id),
     adapter.listOffscreenMissions(id)
   ]);
-  if (missions.error || offscreenMissions.error) return { error: missions.error || offscreenMissions.error };
+  const readError = classes.error || missions.error || offscreenMissions.error;
+  if (readError) return { error: readError };
   const plan = planConversion({
     character,
-    classFamilyOf,
+    classes: classes.data,
     gear: character.gear,
     abilities: character.abilities,
     abilityPerks: character.ability_perks,
@@ -936,19 +933,9 @@ class CharacterService {
         }
       };
     }
-    // p_character names creator_mode alone, so every other column keeps its
-    // stored value, and a null gear, ability or Perk list leaves those rows as
-    // they are. Traits are the exception: save_character_atomic reads an
-    // absent Trait list as "no Traits", so the stored three are resubmitted.
-    return this.adapter.saveCharacterAtomic({
-      characterId: id,
-      creatorId: character.creator_id,
-      character: { creator_mode: 'aspirant' },
-      traits: (character.traits || []).map(({ name, stat }) => ({ name, stat })),
-      gear: null,
-      abilities: null,
-      perks: null
-    });
+    // The class, its rows and the mode change in one transactional save.
+    const save = upgradeSaveArgs({ character, upgrade: plan.upgrade });
+    return this.adapter.saveCharacterAtomic({ ...save, character: { ...save.character, creator_mode: 'aspirant' } });
   }
 
   async updateStats(actor, id, rawFields) {

@@ -207,6 +207,22 @@ const getClassFamilyRows = async () => {
   return { data: data || [], error: null };
 };
 
+// Every class with its catalogue lists: conversion walks version families
+// across the whole catalogue to find each row's Aspirant version, picks the
+// newest (created_at breaks ties) and matches names against its lists.
+// util/class-family.js needs base_class_id, rules_edition and content_format
+// together.
+const getConversionClasses = async () => {
+  const { data, error } = await supabaseAdmin
+    .from('classes')
+    .select('id, name, base_class_id, rules_edition, content_format, created_at, gear, abilities, advanced_abilities');
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  return { data: data || [], error: null };
+};
+
 const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
   let builder = supabaseAdmin
@@ -381,6 +397,7 @@ module.exports = {
   },
   getClassRulesVersion,
   getClassFamilyRows,
+  getConversionClasses,
 
   // Perk-build reads (level-up flow) — CharacterService#buildPerkRows uses
   // these to filter to allowed abilities and compute per-ability position
