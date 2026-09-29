@@ -3,7 +3,7 @@ const { CharacterService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
-const { LEVEL_CEILING, capBreachMessage } = require('../../util/stat-caps');
+const { LEVEL_CEILING, BASE_STAT_CAP, capBreachMessage } = require('../../util/stat-caps');
 const { statList } = require('../../util/enclave-consts');
 
 // Gunslinger as the catalogue holds it: Advent v1, its same-family v2, and the
@@ -98,7 +98,6 @@ const makeAdapter = (calls, overrides = {}) => ({
   },
   getClassRulesVersion: async () => ok('v1'),
   getClassFamilyRows: async () => ok([]),
-  getConversionClasses: async () => ok([]),
   fetchAllowedAbilityIds: async () => ok([]),
   fetchExistingPerks: async () => ok([]),
   levelUpAtomic: async ({ fields }) => ok({ id: 'character-1', name: 'Owned Hero', ...fields }),
@@ -2232,16 +2231,11 @@ test('a created Aspirant character on an Advent v1 class keeps its Defining Quir
 
 // --- convertToAspirant / planAspirantConversion -----------------------------
 
-const CONVERSION_CLASSES = [
-  { id: 'gunslinger-v1', name: 'Gunslinger', rules_edition: 'advent', content_format: 'advent', base_class_id: null, gear: [], abilities: [], advanced_abilities: [] },
-  { id: 'gunslinger-v2', name: 'Gunslinger', rules_edition: 'advent', content_format: 'advent', base_class_id: 'gunslinger-v1', gear: [], abilities: [], advanced_abilities: [] },
-  {
-    id: 'gunslinger-aspirant', name: 'Gunslinger', rules_edition: 'aspirant', content_format: 'aspirant', base_class_id: 'gunslinger-v1',
-    gear: [{ name: 'Revolver', description: 'A six-shooter.' }],
-    abilities: [{ name: 'Trickshot', description: 'Bank it.' }],
-    advanced_abilities: []
-  },
-  { id: 'wanderer-v1', name: 'Wanderer', rules_edition: 'advent', content_format: 'advent', base_class_id: null, gear: [{ name: 'Grapple Gun' }], abilities: [], advanced_abilities: [] }
+const CONVERSION_FAMILY = [
+  { id: 'gunslinger-v1', rules_edition: 'advent', content_format: 'advent', base_class_id: null },
+  { id: 'gunslinger-v2', rules_edition: 'advent', content_format: 'advent', base_class_id: 'gunslinger-v1' },
+  { id: 'gunslinger-aspirant', rules_edition: 'aspirant', content_format: 'aspirant', base_class_id: 'gunslinger-v1' },
+  { id: 'wanderer-v1', rules_edition: 'advent', content_format: 'advent', base_class_id: null }
 ];
 
 const CONVERSION_TRAITS = [
@@ -2261,17 +2255,31 @@ const adventGunslinger = (overrides = {}) => ({
 
 const conversionAdapter = (calls, character = adventGunslinger()) => makeAdapter(calls, {
   getCharacter: async () => ok(character),
-  getConversionClasses: async () => ok(CONVERSION_CLASSES),
+  getClassFamilyRows: async () => ok(CONVERSION_FAMILY),
   getClassRulesVersion: async (classId) => ({
     data: 'v1',
-    contentFormat: (CONVERSION_CLASSES.find(row => row.id === classId) || {}).content_format,
+    contentFormat: (CONVERSION_FAMILY.find(row => row.id === classId) || {}).content_format,
     error: null
   }),
   saveCharacterAtomic: async (args) => {
     calls.push(['saveCharacterAtomic', args]);
-    return ok({ id: 'character-1', name: character.name, class_id: args.character.class_id });
+    return ok({ id: 'character-1', name: character.name, class_id: character.class_id, creator_mode: args.character.creator_mode });
   }
 });
+
+// p_character names creator_mode alone, so the RPC keeps every other column;
+// a null gear, ability or Perk list leaves those rows as they are. Traits are
+// resubmitted because save_character_atomic reads an absent list as "no
+// Traits" and would delete them.
+const MODE_ONLY_SAVE = {
+  characterId: 'character-1',
+  creatorId: 'profile-1',
+  character: { creator_mode: 'aspirant' },
+  traits: CONVERSION_TRAITS,
+  gear: null,
+  abilities: null,
+  perks: null
+};
 
 test('convertToAspirant throws for a non-owner and saves nothing', async () => {
   const calls = [];
@@ -2280,51 +2288,58 @@ test('convertToAspirant throws for a non-owner and saves nothing', async () => {
   expect(calls).toEqual([]);
 });
 
-// p_character carries only the three columns conversion changes, so the RPC
-// keeps every other column (Quirk, Accessories, level, story fields). Traits
-// are resubmitted because save_character_atomic reads an absent list as
-// "no Traits" and would delete them.
-test('convertToAspirant saves the fork, the remapped rows and the Perks by Ability name', async () => {
+test('convertToAspirant changes only the mode', async () => {
   const calls = [];
-  const service = new CharacterService(conversionAdapter(calls));
-  const result = await service.convertToAspirant(CREATOR, 'character-1');
+  const result = await new CharacterService(conversionAdapter(calls)).convertToAspirant(CREATOR, 'character-1');
   expect(result.error).toBeNull();
-  expect(result.data.class_id).toBe('gunslinger-aspirant');
-  expect(calls).toEqual([['saveCharacterAtomic', {
-    characterId: 'character-1',
-    creatorId: 'profile-1',
-    character: { class_id: 'gunslinger-aspirant', class: 'Gunslinger', creator_mode: 'aspirant' },
-    traits: CONVERSION_TRAITS,
-    gear: [{ name: 'Revolver', class_id: 'gunslinger-aspirant', description: 'A six-shooter.', enchantment: null, mods: [] }],
-    abilities: [{ name: 'Trickshot', class_id: 'gunslinger-aspirant', description: 'Bank it.', type: 'core' }],
-    perks: [{ class_ability_id: null, ability_name: 'Trickshot', text: 'Off the wall.', position: 0, compounds_with: null }]
-  }]]);
+  expect(calls).toEqual([['saveCharacterAtomic', MODE_ONLY_SAVE]]);
 });
 
 test('an admin conversion keeps the owner as the row\'s creator', async () => {
   const calls = [];
-  const service = new CharacterService(conversionAdapter(calls));
-  const result = await service.convertToAspirant(ADMIN, 'character-1');
+  const result = await new CharacterService(conversionAdapter(calls)).convertToAspirant(ADMIN, 'character-1');
   expect(result.error).toBeNull();
   expect(calls[0][1].creatorId).toBe('profile-1');
+});
+
+test('a class with no Aspirant version converts all the same', async () => {
+  const calls = [];
+  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ class: 'Wanderer', class_id: 'wanderer-v1' })));
+  expect((await service.convertToAspirant(CREATOR, 'character-1')).error).toBeNull();
+  expect(calls).toEqual([['saveCharacterAtomic', MODE_ONLY_SAVE]]);
+});
+
+test('a character with no class converts without reading a version family', async () => {
+  const calls = [];
+  const service = new CharacterService({
+    ...conversionAdapter(calls, adventGunslinger({ class: 'Drifter', class_id: null })),
+    getClassFamilyRows: async () => { throw new Error('a class-less character has no family to read'); }
+  });
+  expect((await service.convertToAspirant(CREATOR, 'character-1')).error).toBeNull();
+  expect(calls).toEqual([['saveCharacterAtomic', MODE_ONLY_SAVE]]);
+});
+
+// pg. 85: the Signature Cap limits what a character brings on a mission.
+test('Signatures past what a mission allows do not block conversion', async () => {
+  const calls = [];
+  const gear = Array.from({ length: 15 }, (_, i) => ({ id: `g${i}`, name: 'Revolver', class_id: 'gunslinger-v1', enchantment: null, mods: [] }));
+  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ gear })));
+  expect((await service.convertToAspirant(CREATOR, 'character-1')).error).toBeNull();
+  expect(calls).toHaveLength(1);
 });
 
 test('convertToAspirant refuses a blocked build, listing every blocker, and saves nothing', async () => {
   const calls = [];
   const character = adventGunslinger({
-    gear: [
-      { id: 'g1', name: 'Revolver', class_id: 'gunslinger-v1', enchantment: null, mods: [] },
-      { id: 'g2', name: 'Grapple Gun', class_id: 'wanderer-v1', enchantment: null, mods: [] }
-    ],
+    reflex: BASE_STAT_CAP + 2,
     traits: [{ name: 'Brave', stat: 'might' }, { name: 'Bold', stat: 'might' }, { name: 'Lucky', stat: 'luck' }]
   });
-  const service = new CharacterService(conversionAdapter(calls, character));
-  const result = await service.convertToAspirant(CREATOR, 'character-1');
+  const result = await new CharacterService(conversionAdapter(calls, character)).convertToAspirant(CREATOR, 'character-1');
   expect(result.data).toBeNull();
   expect(result.error.status).toBe(400);
   expect(result.error.message).toContain('Caroline cannot convert to Aspirant yet.');
-  expect(result.error.message).toContain('Grapple Gun comes from Wanderer, which has no Aspirant version. Remove it to convert.');
   expect(result.error.message).toContain('Two Traits may not share a Stat (might).');
+  expect(result.error.message).toContain(capBreachMessage({ stat: 'reflex', value: BASE_STAT_CAP + 2, cap: BASE_STAT_CAP }));
   expect(calls).toEqual([]);
 });
 
@@ -2332,43 +2347,31 @@ test('convertToAspirant refuses a blocked build, listing every blocker, and save
 // converted in another tab; the POST must explain itself and change nothing.
 test('convertToAspirant refuses a character already converted', async () => {
   const calls = [];
-  const character = adventGunslinger({ class_id: 'gunslinger-aspirant', creator_mode: 'aspirant' });
-  const service = new CharacterService(conversionAdapter(calls, character));
-  const result = await service.convertToAspirant(CREATOR, 'character-1');
-  expect(result).toEqual({
+  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ creator_mode: 'aspirant' })));
+  expect(await service.convertToAspirant(CREATOR, 'character-1')).toEqual({
     data: null,
     error: { status: 400, message: 'Caroline is not on the Advent rules, so there is nothing to convert.' }
   });
   expect(calls).toEqual([]);
 });
 
-test('convertToAspirant refuses an aspirant creator_mode on an Advent class', async () => {
+test('convertToAspirant refuses an Advent-mode character on an Aspirant-format class', async () => {
   const calls = [];
-  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ creator_mode: 'aspirant' })));
-  const result = await service.convertToAspirant(CREATOR, 'character-1');
-  expect(result.error.status).toBe(400);
-  expect(calls).toEqual([]);
-});
-
-test('convertToAspirant refuses a class with no Aspirant fork', async () => {
-  const calls = [];
-  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ class: 'Wanderer', class_id: 'wanderer-v1' })));
-  const result = await service.convertToAspirant(CREATOR, 'character-1');
-  expect(result).toEqual({ data: null, error: { status: 400, message: 'Wanderer has no Aspirant version.' } });
+  const service = new CharacterService(conversionAdapter(calls, adventGunslinger({ class_id: 'gunslinger-aspirant' })));
+  expect((await service.convertToAspirant(CREATOR, 'character-1')).error.status).toBe(400);
   expect(calls).toEqual([]);
 });
 
 test('planAspirantConversion returns the plan for an eligible character', async () => {
-  const service = new CharacterService(conversionAdapter([]));
-  const { data, error } = await service.planAspirantConversion(CREATOR, 'character-1');
+  const { data, error } = await new CharacterService(conversionAdapter([])).planAspirantConversion(CREATOR, 'character-1');
   expect(error).toBeNull();
-  expect(data.target.id).toBe('gunslinger-aspirant');
+  expect(Object.keys(data).sort()).toEqual(['blockers', 'breaches', 'merxBreakdown', 'perkBreakdown']);
   expect(data.blockers).toEqual([]);
   expect(data.perkBreakdown).not.toBeNull();
 });
 
 test('planAspirantConversion returns no plan for an ineligible character', async () => {
-  const service = new CharacterService(conversionAdapter([], adventGunslinger({ class_id: 'wanderer-v1' })));
+  const service = new CharacterService(conversionAdapter([], adventGunslinger({ creator_mode: 'aspirant' })));
   expect(await service.planAspirantConversion(CREATOR, 'character-1')).toEqual({ data: null, error: null });
 });
 
@@ -2377,10 +2380,10 @@ test('planAspirantConversion throws for a non-owner', async () => {
   await expect(service.planAspirantConversion(STRANGER, 'character-1')).rejects.toBeInstanceOf(AuthorizationError);
 });
 
-test('a catalogue read failure is returned, not thrown', async () => {
-  const service = new CharacterService(makeAdapter([], {
-    getCharacter: async () => ok(adventGunslinger()),
-    getConversionClasses: async () => ({ data: null, error: { message: 'boom' } })
-  }));
+test('a version-family read failure is returned, not thrown', async () => {
+  const service = new CharacterService({
+    ...conversionAdapter([]),
+    getClassFamilyRows: async () => ({ data: [], error: { message: 'boom' } })
+  });
   expect(await service.convertToAspirant(CREATOR, 'character-1')).toEqual({ data: null, error: { message: 'boom' } });
 });

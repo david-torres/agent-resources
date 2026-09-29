@@ -1144,8 +1144,7 @@ describe('an enforced creation prices the grant alone, everywhere', () => {
     'levelUpAtomic', 'createBackfillMission', 'getAvailableHostedMissions',
     'createOffscreenMissionRow', 'findUpgradeTargets', 'getOffscreenMissionRow',
     'getSourceMissionForCredit', 'getConduitCredits', 'insertOffscreenMission',
-    'updateOffscreenMissionRow', 'deleteOffscreenMissionRow', 'getClassFamilyRows',
-    'getConversionClasses'
+    'updateOffscreenMissionRow', 'deleteOffscreenMissionRow', 'getClassFamilyRows'
   ];
   const serviceOnAspirantClass = () => {
     const saved = {};

@@ -43,7 +43,6 @@ const REQUIRED_ADAPTER_METHODS = [
   'updateOwnedFields',
   'getClassRulesVersion',
   'getClassFamilyRows',
-  'getConversionClasses',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
   'levelUpAtomic',
@@ -142,8 +141,12 @@ const loadAspirantConversion = async (adapter, actor, id) => {
   if (economy !== 'advent') {
     return { ineligible: `${character.name} is not on the Advent rules, so there is nothing to convert.` };
   }
-  const { data: classes, error: classesError } = await adapter.getConversionClasses();
-  if (classesError) return { error: classesError };
+  let classFamilyOf = null;
+  if (character.class_id) {
+    const { data: classFamilyRows, error: familyError } = await adapter.getClassFamilyRows();
+    if (familyError) return { error: familyError };
+    classFamilyOf = familyResolver(classFamilyRows, character.class_id);
+  }
   const [missions, offscreenMissions] = await Promise.all([
     adapter.getRealMissions(id),
     adapter.listOffscreenMissions(id)
@@ -151,7 +154,7 @@ const loadAspirantConversion = async (adapter, actor, id) => {
   if (missions.error || offscreenMissions.error) return { error: missions.error || offscreenMissions.error };
   const plan = planConversion({
     character,
-    classes: classes || [],
+    classFamilyOf,
     gear: character.gear,
     abilities: character.abilities,
     abilityPerks: character.ability_perks,
@@ -159,7 +162,6 @@ const loadAspirantConversion = async (adapter, actor, id) => {
     realMissions: missions.data || [],
     offscreenMissions: offscreenMissions.data || []
   });
-  if (!plan.target) return { ineligible: plan.blockers.map(blocker => blocker.detail).join(' ') };
   return { character, plan };
 };
 
@@ -947,10 +949,8 @@ class CharacterService {
     return { data: loaded.plan ?? null, error: null };
   }
 
-  // One-way: the converted character is on the aspirant economy, which is
-  // never eligible, and the fork is outside its Advent parent's family, so
-  // Upgrade never offers the way back. The plan is recomputed here, never
-  // taken from the client.
+  // One-way: a converted character is on the aspirant economy, which is never
+  // eligible. The plan is recomputed here, never taken from the client.
   async convertToAspirant(actor, id) {
     const loaded = await loadAspirantConversion(this.adapter, actor, id);
     if (loaded.error) return { data: null, error: loaded.error };
@@ -965,16 +965,18 @@ class CharacterService {
         }
       };
     }
-    // save_character_atomic reads an absent Trait list as "no Traits" and
-    // deletes them, so the stored three are resubmitted.
+    // p_character names creator_mode alone, so every other column keeps its
+    // stored value, and a null gear, ability or Perk list leaves those rows as
+    // they are. Traits are the exception: save_character_atomic reads an
+    // absent Trait list as "no Traits", so the stored three are resubmitted.
     return this.adapter.saveCharacterAtomic({
       characterId: id,
       creatorId: character.creator_id,
-      character: { class_id: plan.target.id, class: plan.target.name, creator_mode: 'aspirant' },
+      character: { creator_mode: 'aspirant' },
       traits: (character.traits || []).map(({ name, stat }) => ({ name, stat })),
-      gear: plan.gear,
-      abilities: plan.abilities,
-      perks: plan.abilityPerks
+      gear: null,
+      abilities: null,
+      perks: null
     });
   }
 

@@ -207,22 +207,6 @@ const getClassFamilyRows = async () => {
   return { data: data || [], error: null };
 };
 
-// Powers services/character/service.js's Aspirant conversion: family and
-// fork lookup need the same three family columns getClassFamilyRows selects
-// (util/class-family.js fails closed without them), and the remap needs each
-// fork's name and catalogue lists. Every class, not only public ones: a
-// character's cross-class item can come from any class it once unlocked.
-const getConversionClasses = async () => {
-  const { data, error } = await supabaseAdmin
-    .from('classes')
-    .select('id, name, base_class_id, rules_edition, content_format, gear, abilities, advanced_abilities');
-  if (error) {
-    console.error(error);
-    return { data: null, error };
-  }
-  return { data: data || [], error: null };
-};
-
 const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
   let builder = supabaseAdmin
@@ -397,7 +381,6 @@ module.exports = {
   },
   getClassRulesVersion,
   getClassFamilyRows,
-  getConversionClasses,
 
   // Perk-build reads (level-up flow) — CharacterService#buildPerkRows uses
   // these to filter to allowed abilities and compute per-ability position

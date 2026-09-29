@@ -110,7 +110,6 @@ mock.module('../services/character/repository', () => ({
   // updateCharacter's classFamilyOf lookup -- unreached by level-up, but the
   // constructor checks the whole adapter surface.
   getClassFamilyRows: async () => ({ data: [], error: null }),
-  getConversionClasses: async () => ({ data: [], error: null }),
   fetchAllowedAbilityIds: async () => ({ data: classAbilities.map(a => ({ id: a.id })), error: null }),
   fetchExistingPerks: async () => ({ data: characterPerks.map(p => ({ ...p })), error: null }),
   // In-memory stand-in for the level_up_character_atomic RPC: applies the
