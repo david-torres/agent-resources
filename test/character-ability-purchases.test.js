@@ -148,10 +148,24 @@ describe('an Ability name is held once', () => {
     expect(form.serialize().abilities).toHaveLength(1);
   });
 
-  test('its Buy button is disabled', () => {
+  const listed = () => [...document.querySelectorAll('[data-ability-entry]')]
+    .map((el) => [el.getAttribute('data-ability-class'), el.getAttribute('data-ability-name')]);
+
+  test('it is not listed beside the owned row, and neither is its empty class group', () => {
     mountAbilities(withEcho());
-    const button = document.querySelector('[data-ability-buy][data-ability-class="c-third"]');
-    expect(button.disabled).toBe(true);
+    expect(listed()).toContainEqual([OTHER_CLASS_ID, 'Viewpoint']);
+    expect(listed()).not.toContainEqual(['c-third', 'viewpoint ']);
+    const headings = [...document.querySelectorAll('[data-catalogue-group-heading]')].map((h) => h.textContent);
+    expect(headings).not.toContain('Third Class');
+  });
+
+  test('buying a name unlists its look-alikes, and dropping it lists them again', () => {
+    const form = mountAbilities({ ...withEcho(), owned: [] });
+    expect(listed()).toContainEqual(['c-third', 'viewpoint ']);
+    form.buyAbility('Viewpoint', OTHER_CLASS_ID);
+    expect(listed()).not.toContainEqual(['c-third', 'viewpoint ']);
+    form.dropAbility('Viewpoint', OTHER_CLASS_ID);
+    expect(listed()).toContainEqual(['c-third', 'viewpoint ']);
   });
 });
 

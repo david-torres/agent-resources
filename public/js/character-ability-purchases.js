@@ -240,12 +240,24 @@
       return groupEntries.map(renderEntry).join('');
     };
 
+    // An entry whose name the character holds from another row is not
+    // listed at all; only the held row is. CatalogueControls reads this
+    // array on every render, so it is refilled in place.
+    var listedEntries = [];
+    var refillListedEntries = function () {
+      var listed = entries.filter(function (entry) {
+        return findPurchase(entry.name, entry.class_id) || !holdsName(entry.name);
+      });
+      listedEntries.splice.apply(listedEntries, [0, listedEntries.length].concat(listed));
+    };
+
     var catalogueControl = null;
     var renderCatalogue = function () {
       if (!catalogue) return;
+      refillListedEntries();
       if (catalogueControl) { catalogueControl.render(); return; }
       catalogueControl = window.CatalogueControls.mount(catalogue, {
-        entries: entries,
+        entries: listedEntries,
         groupBy: function (entry) { return entry.class_name; },
         searchOf: function (entry) { return entry.name; },
         renderEntry: renderGroupBody
