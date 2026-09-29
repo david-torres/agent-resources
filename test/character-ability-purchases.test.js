@@ -59,15 +59,14 @@ const fixtureIsland = (overrides = {}) => ({
   entries: overrides.entries || baseEntries(),
   owned: overrides.owned || [],
   aspiringAbilities: overrides.aspiringAbilities || [],
-  level: overrides.level != null ? overrides.level : 10,
-  // util/ability-purchase-data.js serves this already computed
-  // (util/perk-economy.js#abilityPerkSpend); a test that wants it non-zero
-  // states the number directly, the same way it states any other served
-  // figure.
-  abilityPerkSpend: overrides.abilityPerkSpend || 0
+  level: overrides.level != null ? overrides.level : 10
 });
 
-const MOUNT_HTML = (islandJson) => `
+const PERK_ROW = '<div class="column is-full perk-row"></div>';
+
+// `perkRows` stands in for the v2 Ability-Perk editor on the same form
+// (views/partials/character-v2-fields.handlebars), one .perk-row per Perk.
+const MOUNT_HTML = (islandJson, perkRows = 0) => `
   <form>
     <div id="abilityPurchases">
       <script type="application/json" id="ability-purchase-data">${islandJson}</script>
@@ -78,6 +77,7 @@ const MOUNT_HTML = (islandJson) => `
       <div id="abilityCatalogue"></div>
       <input type="hidden" name="abilities_json" id="abilityJson">
     </div>
+    <div id="v2-fields-container"><div id="perk-groups">${PERK_ROW.repeat(perkRows)}</div></div>
   </form>
 `;
 
@@ -85,8 +85,8 @@ const MOUNT_HTML = (islandJson) => `
 // character-ability-purchases.js against it, and returns the mounted handle
 // -- the same recipe test/helpers/gear-purchase-fixture.js uses for
 // character-gear-purchases.js.
-const mountAbilities = (data) => {
-  const html = MOUNT_HTML(jsonHelper(data));
+const mountAbilities = (data, { perkRows = 0 } = {}) => {
+  const html = MOUNT_HTML(jsonHelper(data), perkRows);
   const dom = new JSDOM(`<!doctype html><html><body>${html}</body></html>`, {
     url: 'http://localhost/characters/abc/edit'
   });
@@ -169,11 +169,47 @@ describe('affordability consults both the balance and the cap', () => {
     // Level 3 earns three Perks -- enough for Last Word's own-Advanced price
     // of two by unlock spend alone, but not once two Perks are already spent
     // on Ability Perks.
-    const form = mountAbilities(fixtureIsland({ owned: [], level: 3, abilityPerkSpend: 2 }));
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 2 });
     expect(form.getEarned()).toBe(3);
-    expect(form.getSpent()).toBe(2);
+    expect(form.getSpent()).toBe(2 * FIGURES.abilityPerkCost);
     expect(form.buyAbility('Last Word', CLASS_ID)).toBe(false);
     expect(form.serialize().abilities).toHaveLength(0);
+  });
+
+  const spentReadout = () => document.querySelector('[data-perks-spent]').textContent;
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  // The Perk editor adds and removes rows after the page loads; the balance
+  // follows it rather than the Perks the character had when the page loaded.
+  test('an Ability Perk added on the same form is charged at once', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 1 });
+    const row = document.createElement('div');
+    row.className = 'column is-full perk-row';
+    document.getElementById('perk-groups').appendChild(row);
+    await settle();
+    expect(form.getSpent()).toBe(2 * FIGURES.abilityPerkCost);
+    expect(spentReadout()).toBe(String(2 * FIGURES.abilityPerkCost));
+  });
+
+  test('removing an Ability Perk on the same form refunds it', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 2 });
+    document.querySelector('#perk-groups .perk-row').remove();
+    await settle();
+    expect(form.getSpent()).toBe(FIGURES.abilityPerkCost);
+    expect(spentReadout()).toBe(String(FIGURES.abilityPerkCost));
+  });
+
+  // The class dropdown replaces #v2-fields-container wholesale (htmx
+  // outerHTML), taking #perk-groups with it.
+  test('the balance counts the Perks of a v2 container swapped in after mount', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 0 });
+    const fresh = document.createElement('div');
+    fresh.id = 'v2-fields-container';
+    fresh.innerHTML = `<div id="perk-groups">${PERK_ROW.repeat(2)}</div>`;
+    document.getElementById('v2-fields-container').replaceWith(fresh);
+    await settle();
+    expect(form.getSpent()).toBe(2 * FIGURES.abilityPerkCost);
+    expect(spentReadout()).toBe(String(2 * FIGURES.abilityPerkCost));
   });
 
   // util/ability-purchase-data.js serves the level already run through

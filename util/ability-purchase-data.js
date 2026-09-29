@@ -8,7 +8,7 @@
 //
 // It is built from data the edit GET already holds: the character, its
 // class, and every class the player has unlocked. Nothing here queries.
-const { perkFigures, priceOfAbility, abilityPerkSpend } = require('./perk-economy');
+const { perkFigures, priceOfAbility } = require('./perk-economy');
 const { tagAbilities } = require('./character-derived');
 const { normalizeLevel } = require('./stat-caps');
 
@@ -142,13 +142,13 @@ const buildOwned = (character) => ((character && character.abilities) || [])
 // by class_id alone -- the same default util/character-derived.js#sameFamily
 // falls back to when nothing is supplied.
 //
-// The level is served through normalizeLevel rather than raw, and the
-// character's existing Ability-Perk spend is served as its own figure,
-// because both are inputs to services/character/service.js's ratchet
-// (util/perk-economy.js#perkSpend = unlockSpend + abilityPerkSpend) that a
-// browser file must be told rather than re-derive -- a stored level past the
-// ceiling, or an un-served Ability-Perk spend, would let the surface show an
-// earned balance the server does not agree with.
+// The level is served through normalizeLevel rather than raw: it is an input
+// to services/character/service.js's ratchet that a browser file must be told
+// rather than re-derive, and a stored level past the ceiling would let the
+// surface show an earned balance the server does not agree with. The
+// Ability-Perk half of the spend is not served:
+// public/js/character-ability-purchases.js counts it from the Perk editor on
+// the same form, which changes after the page loads.
 const buildAbilityPurchaseData = ({ character, characterClass, allClasses, economy, classFamilyOf }) => {
   if (economy !== 'aspirant' && economy !== 'aspiring') return null;
   const { rows, seen } = buildCatalogue(characterClass, allClasses);
@@ -159,20 +159,7 @@ const buildAbilityPurchaseData = ({ character, characterClass, allClasses, econo
     entries: priceRows(rows, { economy, characterClass, character, classFamilyOf }),
     owned: buildOwned(character),
     aspiringAbilities: (character && character.aspiring_abilities) || [],
-    level: normalizeLevel(character && character.level),
-    // A page-load snapshot of the stored Ability-Perk spend. The v2
-    // per-ability Perk editor on the same form
-    // (views/partials/character-v2-fields.handlebars) can add and remove rows
-    // after this is served, and public/js/character-ability-purchases.js's
-    // balance keeps showing the figure served here, so the two surfaces
-    // disagree about the spend the moment a row is added live.
-    //
-    // That holds together only while no aspirant-or-aspiring class carries
-    // `rules_version = 'v2'`: services/character/input.js strips ability_perks
-    // off every non-v2 character, and this island is built only for those two
-    // economies, so no form can currently show both. The snapshot has to be
-    // reconciled with the live editor before that combination exists.
-    abilityPerkSpend: abilityPerkSpend(character && character.ability_perks)
+    level: normalizeLevel(character && character.level)
   };
 };
 

@@ -1,7 +1,6 @@
 const { test, expect, describe } = require('bun:test');
 const { buildAbilityPurchaseData, applyAbilityPurchases } = require('./ability-purchase-data');
 const { normalizeLevel, LEVEL_CEILING } = require('./stat-caps');
-const { abilityPerkSpend } = require('./perk-economy');
 
 const CLASS_A = { id: 'a', name: 'Gunslinger', abilities: [{ name: 'Standoff' }], advanced_abilities: [{ name: 'Last Word' }] };
 const CLASS_B = { id: 'b', name: 'Illusionist', abilities: [{ name: 'Viewpoint' }], advanced_abilities: [] };
@@ -103,17 +102,15 @@ test('a character stored above the level ceiling is served the ceiling, not the 
   expect(earnedFromServed).toBe(earnedAtCeiling);
 });
 
-// util/perk-economy.js#perkSpend charges unlockSpend PLUS abilityPerkSpend;
-// the island must serve the second term too, or the surface only ever shows
-// the first half of what the server ratchets a save against.
-test('the served abilityPerkSpend is the character\'s existing Ability-Perk spend, not recomputed by a caller', () => {
-  const perks = [{ id: 'p1' }, { id: 'p2' }];
+// The Ability-Perk half of the Perk spend is counted in the browser from the
+// Perk editor on the same form, which changes after the page loads; a served
+// figure would be a snapshot that disagrees with it.
+test('the island serves no Ability-Perk spend snapshot', () => {
   const data = buildAbilityPurchaseData({
-    character: { class_id: 'a', abilities: [], ability_perks: perks, level: 5 },
+    character: { class_id: 'a', abilities: [], ability_perks: [{ id: 'p1' }], level: 5 },
     characterClass: CLASS_A, allClasses: [CLASS_A], economy: 'aspirant'
   });
-  expect(data.abilityPerkSpend).toBe(abilityPerkSpend(perks));
-  expect(data.abilityPerkSpend).toBe(2);
+  expect(data).not.toHaveProperty('abilityPerkSpend');
 });
 
 // --- what comes back in -----------------------------------------------------

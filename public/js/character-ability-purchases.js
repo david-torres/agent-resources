@@ -52,12 +52,13 @@
     // of), so this file only guards against a non-numeric value -- it never
     // re-derives the ceiling itself.
     var LEVEL = Number(data.level) || 1;
-    // What the character has already spent on Ability Perks
-    // (util/perk-economy.js#abilityPerkSpend), served rather than
-    // recomputed: the server's budget is unlock spend PLUS this, and a
-    // surface that only tracked unlock spend would show a balance the
-    // server does not agree with.
-    var ABILITY_PERK_SPEND = Math.max(0, Number(data.abilityPerkSpend) || 0);
+    // The Ability Perks on the same form (views/partials/character-v2-fields.
+    // handlebars). Each row costs one abilityPerkCost at save, and the editor
+    // adds and removes rows after the page loads -- and the class dropdown
+    // replaces the whole editor -- so they are counted from the page each time.
+    var countPerkRows = function () {
+      return document.querySelectorAll('#perk-groups .perk-row').length;
+    };
     var entries = Array.isArray(data.entries) ? data.entries : [];
 
     // The character's current roster: what it already owns, plus whatever
@@ -112,8 +113,8 @@
     // other ability spends its full price. Every own-Core row prices
     // identically (see util/perk-economy.js#unlockSpend), so the running
     // total does not depend on which ones happen to be waived -- only how
-    // many are. ABILITY_PERK_SPEND is added on top, matching
-    // util/perk-economy.js#perkSpend's unlockSpend + abilityPerkSpend: the
+    // many are. The Ability Perks on the form are added on top, matching
+    // util/perk-economy.js#perkSpend's unlockSpend + Ability Perk spend: the
     // save the server ratchets against charges both.
     var getSpent = function () {
       var free = (FIGURES.freeCoreAbilities && FIGURES.freeCoreAbilities[ECONOMY]) || 0;
@@ -129,7 +130,7 @@
         }
         spend += entry ? priceOfEntry(entry) : 0;
       });
-      return spend + ABILITY_PERK_SPEND;
+      return spend + countPerkRows() * FIGURES.abilityPerkCost;
     };
 
     var getAbilitiesUsed = function () { return purchases.length; };
@@ -276,6 +277,18 @@
     }
 
     render();
+
+    // Typing in a Perk rewrites its word counter, so only a change in the
+    // number of rows re-renders. The form outlives the editor swap.
+    var perkScope = root.closest('form') || document.body;
+    if (window.MutationObserver) {
+      var renderedPerkRows = countPerkRows();
+      new window.MutationObserver(function () {
+        if (countPerkRows() === renderedPerkRows) return;
+        renderedPerkRows = countPerkRows();
+        render();
+      }).observe(perkScope, { childList: true, subtree: true });
+    }
 
     return {
       serialize: serialize,

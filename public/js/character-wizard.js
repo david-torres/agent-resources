@@ -1920,20 +1920,17 @@ window.CharacterWizard = (function () {
     return charged * PERKS.prices.ability.own.core;
   };
 
-  // Ability unlocks only. Step 3's "+ Add Perk" editor writes `state.perk` and
-  // `state.perkAbilityName`, which buildSubmitPayload ships as
-  // `payload.ability_perks`, and util/perk-economy.js#perkSpend charges a Perk
-  // for each of those rows through abilityPerkSpend -- a spend this figure
-  // omits, so a build carrying both an unlock and an Ability Perk shows a
-  // smaller spend here than the server will compute.
-  //
-  // That holds together only while no aspirant-or-aspiring class carries
-  // `rules_version = 'v2'`: services/character/input.js strips ability_perks
-  // off every non-v2 character, and these Ability surfaces exist only in those
-  // two economies, so no character can currently submit both. The two counts
-  // have to be reconciled before that combination exists.
+  // Step 3's Perk, once attached to one of the class's Abilities, ships as an
+  // Ability Perk row (buildSubmitPayload), and util/perk-economy.js#perkSpend
+  // charges ABILITY_PERK_COST for it -- so one condition decides both.
+  const attachesAbilityPerk = (s) => DATA.mode === 'aspirant'
+    && !!(s && s.perkAbilityName) && !!((s && s.perk) || '').trim();
+
+  // Both terms of util/perk-economy.js#perkSpend: Ability unlocks, and the
+  // attached Ability Perk.
   const perksSpent = (s) => ownCoreSpend(s)
-    + (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0);
+    + (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0)
+    + (attachesAbilityPerk(s) ? PERKS.abilityPerkCost : 0);
 
   // grant + perLevel * (level - 1), the same shape util/perk-economy.js's
   // perkAllotment uses server-side, so a character created above level 1
@@ -4091,9 +4088,8 @@ window.CharacterWizard = (function () {
       completed_missions: state.successfulMissions || 0,
       appearance: state.appearance || '',
       background: state.background || '',
-      // Aspirant mode: send the free-form perk. Stored in the characters.perks
-      // column (V1-only). Server-side input.js already drops `perks` for v2,
-      // so it's safe to send unconditionally.
+      // The free-form Perk for a v1 class. services/character/input.js keeps
+      // `perks` only on v1 characters, so it is safe to send unconditionally.
       perks: state.perk || '',
       is_public: state.isPublic !== false, // default true on the wizard
       hide_from_search: !!state.hideFromSearch,
@@ -4121,14 +4117,10 @@ window.CharacterWizard = (function () {
     DATA.statList.forEach((stat) => {
       payload[stat] = combined[stat] || 0;
     });
-    // Aspirant perk attachment: if the user assigned their single perk to
-    // one of the three base abilities, ship it as a structured v2 perk row
-    // (class_ability_id is the ability NAME — server-side
-    // remapPerkAbilityIdsByName rewrites it to the freshly-inserted row id).
-    // Server strips ability_perks on v1 characters (V2_ONLY_FIELDS), so this
-    // is safe to send unconditionally; the `perks` string above still
-    // carries the same text for v1.
-    if (DATA.mode === 'aspirant' && state.perkAbilityName && (state.perk || '').trim()) {
+    // The attached Perk as an Ability Perk row. class_ability_id is the
+    // ability NAME: remapPerkAbilityIdsByName rewrites it to the freshly
+    // inserted row id.
+    if (attachesAbilityPerk(state)) {
       payload.ability_perks = [{
         class_ability_id: state.perkAbilityName,
         text: state.perk.trim(),

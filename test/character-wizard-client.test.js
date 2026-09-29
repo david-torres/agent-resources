@@ -25,6 +25,7 @@ const {
 } = require('./helpers/wizard-fixture');
 const { economyFigures } = require('../util/merx-economy');
 const { statCapFigures } = require('../util/stat-caps');
+const { perkFigures } = require('../util/perk-economy');
 const { MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
 
 const STAT_LIST = [
@@ -1911,5 +1912,42 @@ describe('an aspirant wizard on an Advent-format class', () => {
     const primer = document.getElementById('abilityPrimerList');
     expect(primer.querySelectorAll('.wizard-perk-btn')).toHaveLength(3);
     expect(primer.textContent).toContain('Perks spent 0 / 1');
+  });
+});
+
+// util/perk-economy.js#perkSpend charges ABILITY_PERK_COST for every Ability
+// Perk row the payload carries. The aspirant wizard ships its step-3 Perk as
+// one such row once it is attached to an Ability, so the balance it shows has
+// to charge for it, or it sells an unlock the server then refuses as a
+// Perk deficit.
+describe('the attached Ability Perk is part of the Perk spend', () => {
+  test('an aspirant Perk attached to an Ability costs an Ability Perk', () => {
+    const wizard = aspirantStateAtLevel(1);
+    const state = wizard.getState();
+    const before = wizard.perksSpent(state);
+    state.perk = 'Never misses twice.';
+    state.perkAbilityName = 'Own Core A';
+    expect(wizard.perksSpent(state)).toBe(before + perkFigures().abilityPerkCost);
+  });
+
+  test('Perk text with no Ability chosen is not an Ability Perk and costs nothing', () => {
+    const wizard = aspirantStateAtLevel(1);
+    const state = wizard.getState();
+    const before = wizard.perksSpent(state);
+    state.perk = 'Never misses twice.';
+    state.perkAbilityName = null;
+    expect(wizard.perksSpent(state)).toBe(before);
+  });
+
+  test('the spend charges exactly the Ability Perk rows the payload submits', () => {
+    const wizard = aspirantStateAtLevel(1);
+    const state = wizard.getState();
+    const before = wizard.perksSpent(state);
+    state.perk = 'Never misses twice.';
+    state.perkAbilityName = 'Own Core A';
+    const payload = wizard.buildSubmitPayload();
+    expect(payload.ability_perks).toHaveLength(1);
+    expect(wizard.perksSpent(state) - before)
+      .toBe(payload.ability_perks.length * perkFigures().abilityPerkCost);
   });
 });
