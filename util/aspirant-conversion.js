@@ -4,8 +4,9 @@
 const { statList } = require('./enclave-consts');
 const { deriveBuildBreaches, derivePerkBreakdown, deriveMerxBreakdown } = require('./character-derived');
 const { validateTraits, validateStatLimits } = require('../services/character/input');
-const { computeVersionFamily, findAspirantFork, familyResolver } = require('./class-family');
-const { latestClassVersions } = require('./class-list-grouping');
+const { familyResolver } = require('./class-family');
+const { aspirantTargetOf } = require('./class-lineage');
+const { nameKey } = require('./item-name');
 
 const ASPIRANT = 'aspirant';
 
@@ -19,9 +20,6 @@ const ABILITY_LISTS = [['abilities', 'core'], ['advanced_abilities', 'advanced']
 
 const listOf = (value) => (Array.isArray(value) ? value.filter(Boolean) : []);
 
-// A character row and a class's catalogue are written by different paths.
-const nameKey = (value) => String(value ?? '').trim().toLowerCase();
-
 const findInCatalogue = (cls, lists, name) => {
   const key = nameKey(name);
   for (const [listKey, type] of lists) {
@@ -29,15 +27,6 @@ const findInCatalogue = (cls, lists, name) => {
     if (match) return { entry: match, type };
   }
   return null;
-};
-
-// The newest version in the family of a class's Aspirant fork: the one card
-// the class list shows for that family.
-const aspirantTargetOf = (catalogue, classId) => {
-  const fork = findAspirantFork(catalogue, classId);
-  if (!fork) return null;
-  const family = computeVersionFamily(catalogue, fork.id);
-  return latestClassVersions(catalogue.filter(row => family.has(row.id)))[0];
 };
 
 // Each row moves to the Aspirant target of its OWN class, so a cross-class
