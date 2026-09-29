@@ -191,12 +191,6 @@ function isYoutubeUrl(url) {
   return videoProviders.youtube.detectPattern.test(url);
 }
 
-const effectiveRulesVersionH = function (character, characterClass) {
-  if (characterClass && characterClass.rules_version === 'v2') return 'v2';
-  if (character && character.linked_class && character.linked_class.rules_version === 'v2') return 'v2';
-  return 'v1';
-};
-
 const wordCountH = function (text) {
   if (typeof text !== 'string') return 0;
   const trimmed = text.trim();
@@ -304,7 +298,6 @@ module.exports = {
   concat,
   filterBy,
   gearCategory,
-  effectiveRulesVersion: effectiveRulesVersionH,
   wordCount: wordCountH,
   perksForAbility: perksForAbilityH,
   nextPerkPosition: nextPerkPositionH,

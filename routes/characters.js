@@ -29,6 +29,7 @@ const { normalizeWizardPayload, collectCharacterFormArrays, validateAspiringBuil
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
+const { characterRulesVersion } = require('../util/character-rules');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
@@ -474,16 +475,16 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
     const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
 
     let characterClass = null;
-    let effectiveVersion = 'v1';
     if (character.class_id) {
       try {
         const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-        if (cls) {
-          characterClass = cls;
-          if (cls.rules_version === 'v2') effectiveVersion = 'v2';
-        }
+        if (cls) characterClass = cls;
       } catch (_) {}
     }
+    const effectiveVersion = characterRulesVersion({
+      classRulesVersion: characterClass && characterClass.rules_version,
+      creatorMode: character.creator_mode
+    });
 
     // Inject the character's own class into the Class <select> options so the
     // class it actually has still appears when the user no longer has it
@@ -687,16 +688,16 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
   let classRow = null;
-  let effectiveVersion = 'v1';
   if (character.class_id) {
     try {
       const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-      if (cls) {
-        classRow = cls;
-        if (cls.rules_version === 'v2') effectiveVersion = 'v2';
-      }
+      if (cls) classRow = cls;
     } catch (_) {}
   }
+  const effectiveVersion = characterRulesVersion({
+    classRulesVersion: classRow && classRow.rules_version,
+    creatorMode: character.creator_mode
+  });
 
   let derived = { completed_missions: 0, commissary_reward: 0, level: 1 };
   if (on) {
@@ -903,13 +904,14 @@ router.get('/ability-perk-group', authOptional, (req, res) => {
 
 router.get('/version-fields', authOptional, async (req, res) => {
   const classId = req.query.class_id;
-  let effectiveVersion = 'v1';
+  let classRulesVersion = null;
   if (classId) {
     try {
       const { data: cls } = await getClass(classId, res.locals.supabase);
-      if (cls && cls.rules_version === 'v2') effectiveVersion = 'v2';
+      classRulesVersion = cls && cls.rules_version;
     } catch (_) {}
   }
+  const effectiveVersion = characterRulesVersion({ classRulesVersion, creatorMode: req.query.creator_mode });
 
   if (effectiveVersion !== 'v2') {
     // Return an empty container so the swap target stays present for future
@@ -1094,7 +1096,10 @@ router.get('/:id/details', authOptional, async (req, res) => {
   } catch (_) {
     // ignore; render as v1 without class details
   }
-  const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
+  const effectiveVersion = characterRulesVersion({
+    classRulesVersion: characterClass && characterClass.rules_version,
+    creatorMode: character.creator_mode
+  });
   // A Signature's Enchantments and Mods are a V1-population feature: they
   // show for a class with content_format 'aspirant' or a creator_mode of
   // 'aspiring', never for an advent character, which keeps today's plain tags.
@@ -1177,7 +1182,10 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         client: res.locals.supabase
       });
 
-      const effectiveVersion = (characterClass && characterClass.rules_version === 'v2') ? 'v2' : 'v1';
+      const effectiveVersion = characterRulesVersion({
+    classRulesVersion: characterClass && characterClass.rules_version,
+    creatorMode: character.creator_mode
+  });
 
       // A Signature's Enchantments and Mods, and the Earned/Spent/Remaining
       // breakdown below, are a V1-population feature: content_format

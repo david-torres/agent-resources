@@ -117,7 +117,7 @@ const path = require('path');
 const {
   times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
   setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
-  substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
+  substring, concat, wordCount, perksForAbility, nextPerkPosition, json
 } = require('../util/handlebars');
 const { renderMarkdown } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
@@ -138,7 +138,7 @@ beforeAll(async () => {
     helpers: {
       ...hbsHelpers, times, range, date_tz, calendar_link, encodeURIComponentH,
       getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, dump,
-      videoEmbed, isSupportedVideoUrl, substring, concat, effectiveRulesVersion,
+      videoEmbed, isSupportedVideoUrl, substring, concat,
       wordCount, perksForAbility, nextPerkPosition, json, markdown: renderMarkdown,
     },
   }));

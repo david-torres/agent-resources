@@ -255,7 +255,7 @@ const getCharacterForAgentRow = async (id) => {
   const { data, error } = await supabaseAdmin
     .from('characters')
     .select(`
-      id, name, class, class_id, level, is_public, is_deceased, creator_id,
+      id, name, class, class_id, creator_mode, level, is_public, is_deceased, creator_id,
       ${statList.join(',')},
       profile:creator_id(name),
       personality:traits(name),

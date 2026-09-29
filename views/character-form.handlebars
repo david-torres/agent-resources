@@ -31,7 +31,8 @@
                 hx-trigger="change"
                 hx-target="#v2-fields-container"
                 hx-swap="outerHTML"
-                hx-include="this"{{/unless}}>
+                hx-include="this"
+                hx-vals='{"creator_mode": "{{character.creator_mode}}"}'{{/unless}}>
           {{#if adventV1Classes.length}}
           <option disabled>Advent v1 Classes</option>
           {{#each adventV1Classes}}

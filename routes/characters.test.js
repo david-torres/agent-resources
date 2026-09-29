@@ -251,9 +251,25 @@ const V2_RULES_CLASS = {
   advanced_abilities: [],
   created_at: '2024-01-01T00:00:00Z',
 };
+// An Advent class on the v1 rules, for characters whose mode, not their
+// class, decides their rules.
+const ADVENT_V1_CLASS = {
+  id: 'class-advent-v1',
+  name: 'Vanguard',
+  is_public: true,
+  is_player_created: false,
+  rules_edition: 'advent',
+  rules_version: 'v1',
+  content_format: 'advent',
+  gear: [],
+  abilities: [],
+  advanced_abilities: [],
+  created_at: '2024-01-01T00:00:00Z',
+};
 const CLASS_BY_ID = {
   [TRAILBLAZER_V1.id]: TRAILBLAZER_V1,
-  [V2_RULES_CLASS.id]: V2_RULES_CLASS
+  [V2_RULES_CLASS.id]: V2_RULES_CLASS,
+  [ADVENT_V1_CLASS.id]: ADVENT_V1_CLASS
 };
 
 mock.module('../models/class', () => ({
@@ -901,3 +917,66 @@ test('the edit page answers with an error, not a hang, when the conversion previ
   });
   expect(res.status).toBe(500);
 }, 5000);
+
+// An Aspirant character is on the v2 character rules whatever its class's
+// rules_version (util/character-rules.js).
+const aspirantOnAdventV1 = (extra = {}) => ({
+  ...makePageCharacter(0),
+  class: ADVENT_V1_CLASS.name,
+  class_id: ADVENT_V1_CLASS.id,
+  creator_mode: 'aspirant',
+  quirks: [{ name: 'Monochromia', downside: 'Sees only red', upside: 'Spots blood instantly' }],
+  ...extra,
+});
+
+test('the edit form gives an Aspirant character on a v1 class the v2 fields', async () => {
+  pageState.character = aspirantOnAdventV1({ creator_id: 'profile-1' });
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(countMatches(body, /Defining Quirk<\/label>/g)).toBe(1);
+  expect(body).toMatch(/name="quirk_name"[^>]*value="Monochromia"/);
+});
+
+test('the edit form\'s Class select tells /version-fields the character\'s mode', async () => {
+  pageState.character = aspirantOnAdventV1({ creator_id: 'profile-1' });
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  const body = await res.text();
+  expect(body).toContain('hx-vals=\'{"creator_mode": "aspirant"}\'');
+});
+
+test('GET /characters/version-fields serves the v2 block to an Aspirant character on a v1 class', async () => {
+  const aspirant = await fetch(
+    `${baseUrl}/characters/version-fields?class_id=${ADVENT_V1_CLASS.id}&creator_mode=aspirant`,
+    { headers: { Accept: 'text/html' } }
+  );
+  expect(countMatches(await aspirant.text(), /Defining Quirk<\/label>/g)).toBe(1);
+
+  const advent = await fetch(
+    `${baseUrl}/characters/version-fields?class_id=${ADVENT_V1_CLASS.id}`,
+    { headers: { Accept: 'text/html' } }
+  );
+  expect(await advent.text()).toBe('<div id="v2-fields-container"></div>');
+});
+
+test('the auto-calc fields count an Aspirant character\'s missions on the v2 curve', async () => {
+  pageState.character = aspirantOnAdventV1({ creator_id: 'profile-1' });
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/auto-calc-fields`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('V2: Need');
+});
+
+test('the sheet shows an Aspirant character on a v1 class its v2 fields and curve', async () => {
+  pageState.character = aspirantOnAdventV1();
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/Ash`, { headers: { Accept: 'text/html' } });
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toContain('<h3 class="title is-4">Defining Quirk</h3>');
+  expect(body).toContain('V2: Need');
+});

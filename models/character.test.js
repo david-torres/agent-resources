@@ -569,3 +569,30 @@ test('getRecentPublicCharacters excludes nothing for a signed-out caller', async
 
   expect(builder.calls.some(call => call[0] === 'neq')).toBe(false);
 });
+
+test('getCharacterForAgent reports an Aspirant character on a v1 class under the v2 rules', async () => {
+  mock.module('./_base', () => {
+    const client = makeClient({
+      characters: [{ ...characterRowBase, creator_mode: 'aspirant', personality: [], abilities: [], gear: [] }],
+      classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }],
+      character_perks: [
+        { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Bigger sword', position: 0, compounds_with: null }
+      ]
+    }, { singleTables: new Set(['characters', 'classes']) });
+    return { supabase: client, supabaseAdmin: client, anonKey: 'test-anon-key', createUserClient: () => client };
+  });
+  delete require.cache[require.resolve('./character')];
+  delete require.cache[require.resolve('../services/character/repository')];
+  const { getCharacterForAgent } = require('./character');
+  const { data, error } = await getCharacterForAgent('char-uuid-1', { profileId: 'profile-1', role: 'admin' });
+  expect(error).toBeFalsy();
+  expect(data.rules_version).toBe('v2');
+  expect(data.ability_perks.map(perk => perk.text)).toEqual(['Bigger sword']);
+
+  mock.module('./_base', () => ({
+    supabase: fakeAnon, supabaseAdmin: fakeAdmin,
+    anonKey: 'test-anon-key', createUserClient: () => fakeAnon
+  }));
+  delete require.cache[require.resolve('./character')];
+  delete require.cache[require.resolve('../services/character/repository')];
+});

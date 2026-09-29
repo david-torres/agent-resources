@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { inspectCharacterProgress, recalculateCharacterProgress } = require('./progress');
+const { inspectCharacterProgress, recalculateCharacterProgress, calculateCharacterProgress } = require('./progress');
 
 test('mission progress pays successes and accounts for gear already bought', async () => {
   const writes = [];
@@ -81,4 +81,15 @@ test('inspection reports stale totals and a matching character needs no write', 
   const current = await recalculateCharacterProgress('character-1', repository);
   expect(current.changed).toBe(false);
   expect(writes).toBe(0);
+});
+
+test('an Aspirant character on an Advent v1 class levels on the v2 curve', () => {
+  const levelFor = (creatorMode) => calculateCharacterProgress({
+    character: { class_id: 'advent-v1', creator_mode: creatorMode, gear: [], common_items: [] },
+    realMissions: [],
+    offscreenMissions: Array.from({ length: 4 }, () => ({ merx_gained: 0 })),
+    classRules: { data: 'v1', contentFormat: 'advent' }
+  }).level;
+  expect(levelFor('aspirant')).toBe(3);
+  expect(levelFor(null)).toBe(2);
 });

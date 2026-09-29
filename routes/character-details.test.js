@@ -134,7 +134,7 @@ const path = require('path');
 const {
   times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
   setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
-  substring, concat, effectiveRulesVersion, wordCount, perksForAbility, nextPerkPosition, json
+  substring, concat, wordCount, perksForAbility, nextPerkPosition, json
 } = require('../util/handlebars');
 const { renderMarkdown, renderPowerRatings } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
@@ -156,7 +156,7 @@ beforeAll(async () => {
     helpers: {
       ...hbsHelpers, times, range, date_tz, calendar_link, encodeURIComponentH,
       getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, dump,
-      videoEmbed, isSupportedVideoUrl, substring, concat, effectiveRulesVersion,
+      videoEmbed, isSupportedVideoUrl, substring, concat,
       wordCount, perksForAbility, nextPerkPosition, json, markdown: renderMarkdown,
       powerRatings: renderPowerRatings,
     },
@@ -339,4 +339,13 @@ test('an advent character keeps the plain gear tag, never an Enchantment', async
   expect(html).toContain('Cowboy Hat');
   expect(html).not.toContain('Hats Off to You');
   expect(html).not.toContain('Scope');
+});
+
+test('an Aspirant character on a v1 class shows its v2 fields', async () => {
+  state.character.creator_mode = 'aspirant';
+  state.character.quirks = [{ name: 'Night Owl', downside: 'Sleeps through mornings.' }];
+  const res = await get(`/characters/${CHAR_ID}/details`);
+  const html = await res.text();
+  expect(html).toContain('Defining Quirk');
+  expect(html).toContain('Night Owl');
 });

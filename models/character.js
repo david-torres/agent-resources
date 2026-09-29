@@ -6,6 +6,7 @@ const { cloneInput } = require('../services/character/input');
 const { CharacterService } = require('../services/character/service');
 const { computeVersionFamily } = require('../util/class-family');
 const characterRepository = require('../services/character/repository');
+const { characterRulesVersion } = require('../util/character-rules');
 
 // Resolve the rules version a character should be rendered/validated against.
 // Inherits from the linked class; falls back to 'v1' when no class is linked
@@ -455,7 +456,10 @@ const getCharacterForAgent = async (id, actor = {}) => {
   if (error) return { data: null, error };
   if (!data) return { data: null, error: null };
 
-  const rulesVersion = await effectiveRulesVersion(data.class_id);
+  const rulesVersion = characterRulesVersion({
+    classRulesVersion: await effectiveRulesVersion(data.class_id),
+    creatorMode: data.creator_mode
+  });
   if (rulesVersion === 'v2') {
     const { data: perks } = await characterRepository.getCharacterAbilityPerks(data.id);
     data.ability_perks = perks || [];

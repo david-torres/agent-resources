@@ -18,6 +18,7 @@ const { planConversion } = require('../../util/aspirant-conversion');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
+const { characterRulesVersion } = require('../../util/character-rules');
 
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 
@@ -312,7 +313,10 @@ class CharacterService {
   async createCharacter(input, actor) {
     // Preserve historical ordering: creation chooses the version before a
     // class-name lookup may populate class_id.
-    const rulesVersion = await this.adapter.getRulesVersion(input.class_id);
+    const rulesVersion = characterRulesVersion({
+      classRulesVersion: await this.adapter.getRulesVersion(input.class_id),
+      creatorMode: input.creator_mode
+    });
     const prepared = await this.adapter.resolveClassReference(input);
     // One catalogue lookup covers three needs that would otherwise each cost
     // their own round of sub-queries: content_format (economyFor), resolving
@@ -488,7 +492,7 @@ class CharacterService {
     // to validate.
     prepared.creator_mode = existing.data.creator_mode ?? null;
 
-    // Resolved from the stored class, never the submitted one: this gates both
+    // Resolved from the stored class and the stored creator_mode, never the submitted ones (util/character-rules.js): this gates both
     // the v2-only field strip below and the perk rebuild in saveCharacterAtomic.
     // content_format rides alongside rulesVersion from the same one-row query
     // (services/character/repository.js#getClassRulesVersion, the method
@@ -497,7 +501,10 @@ class CharacterService {
     // this is the one query updateCharacter already pays unconditionally, not
     // a new one, and it is not the auto_calculate-only catalogue lookup below.
     const rulesVersionResult = await this.adapter.getClassRulesVersion(storedClassId);
-    const rulesVersion = rulesVersionResult.data || 'v1';
+    const rulesVersion = characterRulesVersion({
+      classRulesVersion: rulesVersionResult.data,
+      creatorMode: prepared.creator_mode
+    });
     const contentFormat = rulesVersionResult.contentFormat;
     if (rulesVersion !== 'v2') {
       for (const field of V2_ONLY_FIELDS) delete prepared[field];
@@ -1068,7 +1075,10 @@ class CharacterService {
     const rulesVersionResult = character.class_id
       ? await this.adapter.getClassRulesVersion(character.class_id)
       : { data: 'v1', contentFormat: null };
-    const rulesVersion = rulesVersionResult.data || 'v1';
+    const rulesVersion = characterRulesVersion({
+      classRulesVersion: rulesVersionResult.data,
+      creatorMode: character.creator_mode
+    });
     const economy = economyFor({
       contentFormat: rulesVersionResult.contentFormat,
       creatorMode: character.creator_mode

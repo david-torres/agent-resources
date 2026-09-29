@@ -1,5 +1,6 @@
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { economyFor } = require('../../util/merx-economy');
+const { characterRulesVersion } = require('../../util/character-rules');
 
 const progressFields = ['completed_missions', 'commissary_reward', 'level'];
 
@@ -8,7 +9,7 @@ const calculateCharacterProgress = ({ character, realMissions, offscreenMissions
     character,
     realMissions,
     offscreenMissions,
-    rulesVersion: classRules.data || 'v1',
+    rulesVersion: characterRulesVersion({ classRulesVersion: classRules.data, creatorMode: character.creator_mode }),
     economy: economyFor({
       contentFormat: classRules.contentFormat,
       creatorMode: character.creator_mode

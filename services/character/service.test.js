@@ -2152,6 +2152,84 @@ test('an update that submits abilities still fetches the class catalogue exactly
   expect(calls.filter(c => c[0] === 'getClassContentLookupMaps')).toHaveLength(1);
 });
 
+// --- An Aspirant character is on the v2 character rules whatever its class --
+
+const NIGHT_OWL = { name: 'Night Owl', downside: 'Sleeps through mornings.', upside: 'Sees in the dark.' };
+
+const onAdventV1Class = (creatorMode) => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID, creator_mode: creatorMode,
+      level: 1, gear: [], ability_perks: [],
+      abilities: [{ id: 'ab-1', name: 'Quickdraw', class_id: ADVENT_CLASS_ID, type: 'core' }]
+    }),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    saveCharacterAtomic: async (args) => {
+      saved = args;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const save = () => service.updateCharacter('character-1', {
+    name: 'Hero', level: 1, trait0: 'brave', trait1: 'calm', trait2: 'alert',
+    perks: 'Old v1 prose',
+    quirks: [NIGHT_OWL],
+    accessories: [{ name: 'Pocket Watch' }],
+    ability_perks: [{ class_ability_id: 'ab-1', text: 'Steady hands.', position: 0 }]
+  }, { id: 'profile-1' });
+  return { save, saved: () => saved };
+};
+
+test('an Aspirant character on an Advent v1 class keeps its Quirk, Accessories and Ability Perks', async () => {
+  const { save, saved } = onAdventV1Class('aspirant');
+  expect((await save()).error).toBeNull();
+  expect(saved().character.quirks).toEqual([NIGHT_OWL]);
+  expect(saved().character.accessories).toEqual([{ name: 'Pocket Watch' }]);
+  expect(saved().perks).toEqual([expect.objectContaining({ ability_name: 'Quickdraw', text: 'Steady hands.' })]);
+});
+
+// The v1 free-text Perk is left out of the payload, which save_character_atomic
+// reads as "keep what is stored": the text survives, shown as a Deprecated field.
+test('an Aspirant character\'s save leaves its stored v1 free text alone', async () => {
+  const { save, saved } = onAdventV1Class('aspirant');
+  await save();
+  expect(saved().character).not.toHaveProperty('perks');
+});
+
+test('an Advent character on the same class still saves under v1', async () => {
+  const { save, saved } = onAdventV1Class(null);
+  expect((await save()).error).toBeNull();
+  expect(saved().character).not.toHaveProperty('quirks');
+  expect(saved().perks).toBeNull();
+});
+
+// Four missions: level 3 on the v2 curve (2 + 2), level 2 on the v1 curve (2 + 3).
+test('levelUp puts an Aspirant character on an Advent v1 class on the v2 curve', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ ...OWNED_CHARACTER, class_id: ADVENT_CLASS_ID, creator_mode: 'aspirant' }),
+    listOffscreenMissions: async () => ok(Array.from({ length: 4 }, () => ({ merx_gained: 0 }))),
+    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
+    levelUpAtomic: async (args) => {
+      calls.push(args);
+      return ok({ id: 'character-1', ...args.fields });
+    }
+  }));
+  const result = await service.levelUp(CREATOR, 'character-1', { level: 2 });
+  expect(result.error).toBeNull();
+  expect(calls[0].fields.level).toBe(3);
+});
+
+test('a created Aspirant character on an Advent v1 class keeps its Defining Quirk', async () => {
+  const { service, saved } = makeServiceOnClass();
+  const result = await service.createCharacter(
+    aspirantCreatePayload({ class_id: ADVENT_CLASS_ID, quirks: [NIGHT_OWL] }),
+    { id: 'profile-1' }
+  );
+  expect(result.error).toBeNull();
+  expect(saved.quirks).toEqual([NIGHT_OWL]);
+});
+
 // --- convertToAspirant / planAspirantConversion -----------------------------
 
 const CONVERSION_CLASSES = [
