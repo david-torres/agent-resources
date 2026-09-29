@@ -10,9 +10,12 @@
 const { Client } = require('pg');
 
 const DUPLICATE_ROWS = `
-  select a.id, a.character_id, a.name, c.name as character_name, lower(btrim(a.name)) as name_key
+  select a.id, a.character_id, a.name, a.type, a.class_id, c.name as character_name,
+    k.name as class_name, k.content_format, lower(btrim(a.name)) as name_key,
+    (select count(*)::int from character_perks p where p.class_ability_id = a.id) as perk_count
   from class_abilities a
   join characters c on c.id = a.character_id
+  join classes k on k.id = a.class_id
   where ($1::uuid[] is null or a.character_id = any($1::uuid[]))
     and (a.character_id, lower(btrim(a.name))) in (
       select character_id, lower(btrim(name)) from class_abilities
@@ -33,9 +36,10 @@ const planMerges = (rows) => {
   return [...characters.values()].map(({ id, name, groups }) => ({
     id,
     name,
-    names: [...groups.values()].map(([kept, ...extra]) => ({
-      name: kept.name, kept: kept.id, deleted: extra.map(row => row.id)
-    }))
+    names: [...groups.values()].map(rows => {
+      const [kept, ...extra] = rows;
+      return { name: kept.name, kept: kept.id, deleted: extra.map(row => row.id), rows };
+    })
   }));
 };
 
@@ -58,13 +62,20 @@ const mergeRows = async (client, { kept, deleted }) => {
   await client.query('delete from class_abilities where id = any($1::uuid[])', [deleted]);
 };
 
+const describeRow = (row, action) => {
+  const perks = `${row.perk_count} ${row.perk_count === 1 ? 'Perk' : 'Perks'}`;
+  return `  ${action.padEnd(6)} ${JSON.stringify(row.name)}, ${row.class_name} (${row.content_format}), `
+    + `${row.type}, ${perks}, ${row.id}`;
+};
+
 const dedupeCharacterAbilities = async ({ client, apply = false, characterIds = null, log = console.log }) => {
   const { rows } = await client.query(DUPLICATE_ROWS, [characterIds]);
   const characters = planMerges(rows);
   const report = { characters, applied: [], failed: [] };
   for (const character of characters) {
     for (const group of character.names) {
-      log(`${character.id} ${character.name}: ${group.name} keeps ${group.kept}, deletes ${group.deleted.join(', ')}`);
+      log(`${character.id} ${character.name}: ${group.rows.length} Abilities named ${JSON.stringify(group.name)}`);
+      group.rows.forEach((row, index) => log(describeRow(row, index === 0 ? 'KEEP' : 'DELETE')));
     }
     if (!apply) continue;
     try {

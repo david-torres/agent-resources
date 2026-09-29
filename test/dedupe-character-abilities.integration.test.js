@@ -1,4 +1,4 @@
-// Covers scripts/dedupe-character-abilities.js against Postgres. The three
+// Covers scripts/dedupe-character-abilities.js against Postgres. The four
 // tables are temporary copies that shadow the real ones for this connection
 // only, so the fixture can hold duplicates whether or not
 // class_abilities_character_name_key exists.
@@ -19,14 +19,16 @@ const MESMER = id(11);
 const [A1, A2, A3, A4, B1] = [id(101), id(102), id(103), id(104), id(201)];
 const [P1, P2, P3, P4, P5] = [id(301), id(302), id(303), id(304), id(305)];
 
-const run = (apply) => dedupeCharacterAbilities({ client: db, apply, log: () => {} });
+const run = (apply, log = () => {}) => dedupeCharacterAbilities({ client: db, apply, log });
 
 beforeAll(async () => {
   await db.connect();
   await db.query(`
     create temp table characters (id uuid primary key, name text not null);
+    create temp table classes (id uuid primary key, name text not null, content_format text not null);
     create temp table class_abilities (
-      id uuid primary key, character_id uuid not null, name text not null, class_id uuid not null
+      id uuid primary key, character_id uuid not null, name text not null, class_id uuid not null,
+      type text not null default 'core'
     );
     create temp table character_perks (
       id uuid primary key, character_id uuid not null, class_ability_id uuid not null,
@@ -35,9 +37,13 @@ beforeAll(async () => {
   `);
   await db.query('insert into characters values ($1, $2), ($3, $4)', [RAVEN, 'Raven', CLEAN, 'Clean']);
   await db.query(
+    `insert into classes values ($1, 'Illusionist', 'advent'), ($2, 'Mesmer', 'aspirant')`,
+    [ILLUSIONIST, MESMER]
+  );
+  await db.query(
     `insert into class_abilities values
-      ($1, $6, 'Veneer', $8), ($2, $6, 'veneer ', $9), ($3, $6, 'VENEER', $8),
-      ($4, $6, 'Phantasm', $8), ($5, $7, 'Veneer', $8)`,
+      ($1, $6, 'Veneer', $8, 'core'), ($2, $6, 'veneer ', $9, 'core'), ($3, $6, 'VENEER', $8, 'advanced'),
+      ($4, $6, 'Phantasm', $8, 'core'), ($5, $7, 'Veneer', $8, 'core')`,
     [A1, A2, A3, A4, B1, RAVEN, CLEAN, ILLUSIONIST, MESMER]
   );
   await db.query(
@@ -53,9 +59,17 @@ beforeAll(async () => {
 
 afterAll(() => db.end());
 
-test('the dry run names each character, the kept row and the rows to delete, and writes nothing', async () => {
-  const report = await run(false);
-  expect(report.characters).toEqual([
+test('the dry run lists every row of each duplicate name as KEEP or DELETE, and writes nothing', async () => {
+  const lines = [];
+  const report = await run(false, line => lines.push(line));
+  expect(lines).toEqual([
+    `${RAVEN} Raven: 3 Abilities named "Veneer"`,
+    `  KEEP   "Veneer", Illusionist (advent), core, 1 Perk, ${A1}`,
+    `  DELETE "veneer ", Mesmer (aspirant), core, 2 Perks, ${A2}`,
+    `  DELETE "VENEER", Illusionist (advent), advanced, 1 Perk, ${A3}`,
+    'Characters holding an Ability name more than once: 1. Read-only: nothing written.'
+  ]);
+  expect(report.characters).toMatchObject([
     { id: RAVEN, name: 'Raven', names: [{ name: 'Veneer', kept: A1, deleted: [A2, A3] }] }
   ]);
   expect(report.applied).toEqual([]);
