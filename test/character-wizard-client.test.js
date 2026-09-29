@@ -1956,6 +1956,12 @@ describe('the aspirant shops sell each name once per lineage', () => {
     ]);
   });
 
+  test('a bought Advent-origin Signature of the own lineage spends the own-class price', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    wizard.pickShopItem('class:gs-advent:Duster');
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+  });
+
   test('a preselected forked Advent class buys its Aspirant version\'s other items cross-class', () => {
     const wizard = boot('gs-advent', [GS_FORK, WANDERER, MESMER, GS_ADVENT]);
     const items = wizard.getShopPool().filter((p) => p.kind === 'class');
