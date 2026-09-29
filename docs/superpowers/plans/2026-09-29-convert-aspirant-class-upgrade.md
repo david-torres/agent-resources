@@ -20,7 +20,7 @@ Every "own class" site reads these: pricing, the class-item resolver, and the ed
 - **Branch:** `feat/convert-aspirant-class-upgrade`. Do not switch branches, push, or edit `.env`.
 - **`.env` currently points at PRODUCTION** (checked 2026-09-29), and bun loads `.env` automatically.
   - **Never run plain `bun test <file>`.**
-  - Never run the new script without the explicit local env shown in Task 7.
+  - Never run the new script without the explicit local env shown in Task 8.
   - Before any step that writes to a database, get credentials from `supabase status -o env`, never from `.env`.
 - **Unit tier:** `bun run test:unit` is always safe, because it scrubs the Supabase variables. For a single unit or HTTP file, run:
   ```bash
@@ -43,7 +43,7 @@ Every "own class" site reads these: pricing, the class-item resolver, and the ed
   - `test:unit`: 0 failures.
   - `test:http`: exactly `routes/open-graph.test.js`.
   - `test:integration`: exactly `util/character-content-integrity` (1), `util/class-form-round-trip` (2 of 3) and `util/image-crop-integrity` (2).
-  - Anything else that fails is yours to fix. Record the baseline once before Task 1 (see Task 8, Step 1).
+  - Anything else that fails is yours to fix. Record the baseline once before Task 1 (see Task 9, Step 1).
 - **No dead code.** When you replace something, delete what it replaced in the same task: no commented-out blocks, no fallbacks, no `_old` copies. Before committing, run `grep -rn "<removed symbol>" models routes services util scripts test views` to confirm nothing still references a removed symbol.
 - **Comments:** only where the code cannot carry the meaning. Describe the code as it is now. Never write history ("was", "no longer", "now", "used to").
 - **Discovery:** use `semble search "<query>" .` (or `uvx --from "semble[mcp]" semble search "<query>" .`) rather than grep. Use grep only for exhaustive literal checks.
@@ -61,22 +61,23 @@ Every "own class" site reads these: pricing, the class-item resolver, and the ed
 - **Copy (from the spec, verbatim):**
   - Not eligible: `<name> is not on the Advent rules, so there is nothing to convert.`
   - Blocked: `<name> cannot convert to Aspirant yet. <every blocker detail>`
-  - Panel with a fork: `<name> can switch to the Aspirant rules and move to <strong><fork name></strong>.`, followed by `Moves to its Aspirant version:` and `Stays as it is:`.
+  - Panel with a fork: `<name> can switch to the Aspirant rules and move to <strong>the Aspirant version of <class name></strong>.`, followed by `Moves to its Aspirant version:` and `Stays as it is:`.
   - Panel without a fork: `<name> can switch to the Aspirant rules. It keeps its class and its whole build.`
 
 ## Review Focus
 
 These are the five inputs the spec implies but never spells out, most likely first. Each one has a test in the task named.
 
-1. **Two identical Signatures where only one carries an Enchantment and Mods.** Both move to the fork, and each keeps its own Enchantment and Mods. Neither is merged into the other or stripped. Tested in Task 3 (`upgradeBuild` save rows) and Task 6 (integration: the stored rows).
-2. **A row whose name differs from the fork's catalogue only by case or surrounding whitespace.** The row moves and takes the fork's trimmed spelling. Tested in Task 3.
-3. **A legacy Ability row with `class_id` null that carries a Perk, when something else in the build moves.** The RPC cannot pair a null-class row with its stored self, so it re-inserts the row. The Perk must be re-keyed by `ability_name` so it survives instead of pointing at a deleted id. Tested in Task 3.
+1. **Two identical Signatures where only one carries an Enchantment and Mods.** Both move to the fork, and each keeps its own Enchantment and Mods. Neither is merged into the other or stripped. Tested in Task 4 (`upgradeBuild` save rows) and Task 7 (integration: the stored rows).
+2. **A row whose name differs from the fork's catalogue only by case or surrounding whitespace.** The row moves and takes the fork's trimmed spelling. Tested in Task 4.
+3. **A legacy Ability row with `class_id` null that carries a Perk, when something else in the build moves.** The RPC cannot pair a null-class row with its stored self, so it re-inserts the row. The Perk must be re-keyed by `ability_name` so it survives instead of pointing at a deleted id. Tested in Task 4.
 4. **A fork character submits a bare item name that both its fork and its Advent origin carry, and another class carries it too.** The name resolves to the fork first, then to the Advent origin, and never to the unrelated class. Tested in Task 2 (`resolveSubmittedGear`).
-5. **An Advent family with two Aspirant forks (bad catalogue data).** Treated as having no fork. A warning is logged, the character converts mode-only and nothing errors. Tested in Task 1 (`findAspirantFork`), Task 3 (`upgradeBuild`) and Task 4 (service save payload).
+5. **An Advent family with two Aspirant forks (bad catalogue data).** Treated as having no fork. A warning is logged, the character converts mode-only and nothing errors. Tested in Task 1 (`findAspirantFork`), Task 4 (`upgradeBuild`) and Task 5 (service save payload).
 
 ## Decisions the spec left open
 
-- **`getConversionClasses` reads every class** with `id, name, base_class_id, rules_edition, content_format, gear, abilities, advanced_abilities`. The fork search must walk the whole family graph anyway, and there are 63 classes today. This is one query, the same one the earlier implementation (`aea3614`) used. The spec's wording ("the character's class and every class its rows name, their families and forks") names what is *used*, not a narrower read.
+- **`getConversionClasses` reads every class** with `id, name, base_class_id, rules_edition, content_format, created_at, gear, abilities, advanced_abilities`. The fork search must walk the whole family graph anyway, and there are 63 classes today. This is one query, the same one the earlier implementation (`aea3614`) used. The spec's wording ("the character's class and every class its rows name, their families and forks") names what is *used*, not a narrower read.
+- **The target is the newest version in the fork's family** (user decision). This applies to the character's class and to every row, so a cross-class item moves to the newest version of its own class's fork family. `findAspirantFork` finds the fork. `aspirantTargetOf` (Task 4) then picks the newest version with `util/class-list-grouping.js#latestClassVersions`, the existing collapse that the class list and the wizard use to show one card per family: the family leaf, with ties broken by newest `created_at`. The Upgrade button's `findUpgradeTargetsFor` offers only direct children, so it is not the right helper. Items are matched against the target's catalogue.
 - **The lists are null whenever no row moves**, even if the class moves. That way row ids survive a class-only move. The spec's "when nothing moves" example is the special case where there is no fork at all.
 - **Perks for a re-inserted Ability** are sent as `{ class_ability_id: null, ability_name, text, position, compounds_with }`. A re-inserted Ability is either one that moved or a kept row with `class_id` null. Perks for every other Ability keep `{ class_ability_id, text, position, compounds_with }`. All Perks are sent whenever the lists are sent, because a non-null `p_perks` deletes any Perk it does not name.
 - **`moved` and `kept` entries** are `{ kind: 'Signature' | 'Ability', name, className }`:
@@ -489,15 +490,232 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 3: `upgradeBuild` and `upgradeSaveArgs` in `util/aspirant-conversion.js`
+### Task 3: Stored totals price own class through `familyResolver`
+
+Every `deriveCharacterTotals` call that writes or shows `commissary_reward` must be given `classFamilyOf`. Otherwise, once a character has moved to a fork, the stored auto-calculated Merx prices a leftover Advent own-class Signature as cross-class. These are all the call sites (check with `semble search "deriveCharacterTotals" .`):
+
+| Site | Resolver today | Action |
+| --- | --- | --- |
+| `services/character/service.js` `createCharacter` (~377) | passes `classFamilyOf` | none |
+| `services/character/service.js` `updateCharacter` (~599) | passes `classFamilyOf` | none |
+| `routes/characters.js` edit GET (~588) | passes `classFamilyOf` (Task 2) | none |
+| `routes/characters.js` sheet (`deriveMerxBreakdown`/`derivePerkBreakdown`) | passes `classFamilyOf` (Task 2) | none |
+| `routes/characters.js` `GET /:id/auto-calc-fields` (~714) | **none** | add |
+| `services/character/service.js` `levelUp` (~1074) | **none**: the resolver is built later, for the ratchet | hoist it and pass it |
+| `services/character/progress.js` `calculateCharacterProgress` (mission writes through `models/mission.js`, and `scripts/reconcile-character-progress.js`) | **none** | add a parameter, resolve it in `inspectCharacterProgress` and in the reconcile script |
+
+Every one of these prices Signatures through `gearSpendFor`, so none of them can skip the resolver.
+
+**Files:**
+- Modify: `services/character/progress.js`
+- Modify: `services/character/service.js` (`levelUp`)
+- Modify: `routes/characters.js` (`GET /:id/auto-calc-fields`)
+- Modify: `scripts/reconcile-character-progress.js` (the classes select and the `calculateCharacterProgress` call)
+- Test: `services/character/progress.test.js`, `services/character/service.test.js`, `routes/characters.test.js`
+
+**Interfaces:**
+- Consumes: `familyResolver` (Task 1). `GS_ADVENT`, `GS_FORK` and the `CLASS_BY_ID` entry in `routes/characters.test.js` (Task 2).
+- Produces: `calculateCharacterProgress({ character, realMissions, offscreenMissions, classRules, classFamilyOf = null })`. `inspectCharacterProgress` and `recalculateCharacterProgress` now also call `repository.getClassFamilyRows()` when the character has a class.
+
+- [ ] **Step 1: Write the failing progress tests**
+
+In `services/character/progress.test.js`, add these requires below the existing one:
+
+```js
+const { familyResolver } = require('../../util/class-family');
+const { CREATION_GRANT, priceOfSignature } = require('../../util/merx-economy');
+```
+
+In the first test (`'mission progress pays successes and accounts for gear already bought'`), its character has a class, so add `getClassFamilyRows: async () => ({ data: [], error: null }),` to its `repository`.
+
+Append:
+
+```js
+// A character on an Aspirant version, holding a Signature from the Advent
+// class that version came from: own class, so the own rate.
+const FORK_FAMILY = [
+  { id: 'gs-advent', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: 'gs-fork', base_class_id: 'gs-advent', rules_edition: 'aspirant', content_format: 'aspirant' }
+];
+const forkCharacter = () => ({
+  auto_calculate: true, class_id: 'gs-fork', creator_mode: 'aspirant',
+  gear: [{ name: 'Duster', class_id: 'gs-advent', enchantment: null, mods: [] }], common_items: [],
+  completed_missions: 0, commissary_reward: 0, level: 1
+});
+const OWN_RATE_REWARD = CREATION_GRANT.aspirant - priceOfSignature({ crossClass: false });
+
+test('stored Merx prices a fork character\'s Advent-origin Signature at the own rate', async () => {
+  const writes = [];
+  const repository = {
+    getCharacter: async () => ({ data: forkCharacter(), error: null }),
+    getRealMissions: async () => ({ data: [], error: null }),
+    listOffscreenMissions: async () => ({ data: [], error: null }),
+    getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ({ data: FORK_FAMILY, error: null }),
+    updateCharacterProgress: async (_id, totals) => { writes.push(totals); return { error: null }; }
+  };
+  await recalculateCharacterProgress('cora', repository);
+  expect(writes[0].commissary_reward).toBe(OWN_RATE_REWARD);
+});
+
+test('calculateCharacterProgress prices with the classFamilyOf it is handed', () => {
+  const reward = (classFamilyOf) => calculateCharacterProgress({
+    character: forkCharacter(),
+    realMissions: [],
+    offscreenMissions: [],
+    classRules: { data: 'v2', contentFormat: 'aspirant' },
+    classFamilyOf
+  }).commissary_reward;
+  expect(reward(familyResolver(FORK_FAMILY, 'gs-fork'))).toBe(OWN_RATE_REWARD);
+  expect(reward(null)).toBe(CREATION_GRANT.aspirant - priceOfSignature({ crossClass: true }));
+});
+```
+
+- [ ] **Step 2: Write the failing level-up test**
+
+In `services/character/service.test.js`:
+- Change the `enclave-consts` require to `const { statList, MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');`.
+- Add `const { CREATION_GRANT, priceOfSignature } = require('../../util/merx-economy');`.
+- Append this after the test `'CharacterService.levelUp succeeds for the creator, backfilling named missions'`:
+
+```js
+const FORK_FAMILY_ROWS = [
+  { id: 'gs-advent', base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+  { id: 'gs-fork', base_class_id: 'gs-advent', rules_edition: 'aspirant', content_format: 'aspirant' }
+];
+
+test('levelUp stores Merx with a fork character\'s Advent-origin Signature at the own rate', async () => {
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({
+      ...OWNED_CHARACTER, class_id: 'gs-fork', creator_mode: 'aspirant',
+      gear: [{ name: 'Duster', class_id: 'gs-advent', enchantment: null, mods: [] }]
+    }),
+    getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'aspirant', error: null }),
+    getClassFamilyRows: async () => ok(FORK_FAMILY_ROWS),
+    getRealMissions: async () => ok([{ outcome: 'success' }])
+  }));
+  const result = await service.levelUp(CREATOR, 'character-1', {
+    level: 2, completed_missions: 1, mission_names: ['Op Delta'], use_conduit_credit: false, stats: {}
+  });
+  expect(result.error).toBeNull();
+  expect(result.data.commissary_reward)
+    .toBe(CREATION_GRANT.aspirant + MERX_PER_MISSION_SUCCESS - priceOfSignature({ crossClass: false }));
+});
+```
+
+- [ ] **Step 3: Write the failing auto-calc route test**
+
+In `routes/characters.test.js`, append this after `'the auto-calc fields count an Aspirant character\'s missions on the v2 curve'`:
+
+```js
+test('the auto-calc fields price a fork character\'s Advent-origin Signature at the own rate', async () => {
+  const { CREATION_GRANT, priceOfSignature } = require('../util/merx-economy');
+  pageState.character = {
+    ...makePageCharacter(0),
+    creator_id: 'profile-1',
+    class: 'Gunslinger',
+    class_id: GS_FORK.id,
+    creator_mode: 'aspirant',
+    completed_missions: 0,
+    gear: [{ name: 'Duster', class_id: GS_ADVENT.id, enchantment: null, mods: [] }],
+    common_items: [],
+  };
+  pageState.classFamilyRows = [
+    { id: GS_ADVENT.id, base_class_id: null, rules_edition: 'advent', content_format: 'advent' },
+    { id: GS_FORK.id, base_class_id: GS_ADVENT.id, rules_edition: 'aspirant', content_format: 'aspirant' },
+  ];
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/auto-calc-fields?on=1`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+  expect(res.status).toBe(200);
+  const ownRate = CREATION_GRANT.aspirant - priceOfSignature({ crossClass: false });
+  expect(await res.text()).toMatch(new RegExp(`name="commissary_reward"[^>]*value="${ownRate}"`));
+});
+```
+
+- [ ] **Step 4: Run the tests and confirm they fail**
+
+Run: `env SUPABASE_URL=https://test.invalid SUPABASE_PUBLISHABLE_KEY=test-publishable-key SUPABASE_SECRET_KEY=test-secret-key OPENAI_API_KEY=test-openai-key bun test services/character/progress.test.js services/character/service.test.js routes/characters.test.js`
+Expected: 4 failures, one per new test. Each reports the reward one Merx lower than expected, which is the cross-class Signature price.
+
+- [ ] **Step 5: Implement**
+
+`services/character/progress.js`:
+- Add `const { familyResolver } = require('../../util/class-family');`.
+- `calculateCharacterProgress` takes `classFamilyOf = null` in its parameter object and passes `classFamilyOf` to `deriveCharacterTotals`.
+- In `inspectCharacterProgress`, replace the `Promise.all`, its error check and the `calculateCharacterProgress` call with:
+
+```js
+  const [missions, offscreenMissions, classRules, familyRows] = await Promise.all([
+    repository.getRealMissions(characterId),
+    repository.listOffscreenMissions(characterId),
+    repository.getClassRulesVersion(character.class_id),
+    character.class_id ? repository.getClassFamilyRows() : { data: [], error: null }
+  ]);
+  const readError = missions.error || offscreenMissions.error || classRules.error || familyRows.error;
+  if (readError) throw readError;
+
+  const totals = calculateCharacterProgress({
+    character,
+    realMissions: missions.data || [],
+    offscreenMissions: offscreenMissions.data || [],
+    classRules,
+    classFamilyOf: familyResolver(familyRows.data, character.class_id)
+  });
+```
+
+`services/character/service.js` `levelUp`:
+- Move the statement `const classFamilyOf = character.class_id ? familyResolver((await this.adapter.getClassFamilyRows()).data, character.class_id) : null;` from the ratchet block up to directly above `const derived = deriveCharacterTotals({`.
+- Add `classFamilyOf` to that `deriveCharacterTotals` call. The ratchet keeps using the same `const`.
+
+`routes/characters.js` `GET /:id/auto-calc-fields`: inside `if (on) {`, directly before `derived = deriveCharacterTotals({`, add the lines below, then add `classFamilyOf` to that call's argument object:
+
+```js
+    const classFamilyOf = character.class_id
+      ? familyResolver((await characterRepository.getClassFamilyRows()).data, character.class_id)
+      : null;
+```
+
+`scripts/reconcile-character-progress.js`:
+- Add `const { familyResolver } = require('../util/class-family');`.
+- Change the classes read to `fetchAll('classes', 'id, rules_version, content_format, base_class_id, rules_edition')`.
+- Add `classFamilyOf: familyResolver(classes, character.class_id)` to its `calculateCharacterProgress({ ... })` call.
+- `--apply` goes through `recalculateCharacterProgress`, which resolves the map itself.
+
+- [ ] **Step 6: Run the tests and confirm they pass**
+
+Run: `env SUPABASE_URL=https://test.invalid SUPABASE_PUBLISHABLE_KEY=test-publishable-key SUPABASE_SECRET_KEY=test-secret-key OPENAI_API_KEY=test-openai-key bun test services/character/progress.test.js services/character/service.test.js routes/characters.test.js routes/character-level-up.test.js`
+Expected: PASS, all four files.
+
+- [ ] **Step 7: Dry-run the reconcile script against the LOCAL stack only**
+
+The reconcile script has no test. This read-only run proves the new select and the resolver wiring.
+
+Run: `eval "$(supabase status -o env)" && SUPABASE_URL="$API_URL" SUPABASE_SECRET_KEY="$SECRET_KEY" SUPABASE_SERVICE_ROLE_KEY="$SECRET_KEY" SUPABASE_PUBLISHABLE_KEY="$PUBLISHABLE_KEY" bun scripts/reconcile-character-progress.js`
+
+Expected: the first line is `Target: 127.0.0.1:54321 (read-only)`, followed by an `... automatic characters checked; N need refresh.` line, with no error. If the host is anything else, stop. Never pass `--apply`.
+
+- [ ] **Step 8: Commit**
+
+```bash
+git add services/character/progress.js services/character/progress.test.js services/character/service.js services/character/service.test.js routes/characters.js routes/characters.test.js scripts/reconcile-character-progress.js
+git commit -m "fix: price stored auto-calculated Merx with the character's own class
+
+Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
+```
+
+---
+
+### Task 4: `upgradeBuild` and `upgradeSaveArgs` in `util/aspirant-conversion.js`
 
 **Files:**
 - Modify: `util/aspirant-conversion.js` (header comment, new functions, exports)
 - Test: `util/aspirant-conversion.test.js`
 
 **Interfaces:**
-- Consumes: `findAspirantFork` from Task 1.
+- Consumes: `findAspirantFork` and `computeVersionFamily` from `util/class-family.js`, and `latestClassVersions` from `util/class-list-grouping.js` (existing).
 - Produces:
+  - `aspirantTargetOf(classes, classId) => ClassRow|null`: the newest version in the family of `classId`'s Aspirant fork (internal to the module, not exported).
   - `upgradeBuild({ character, classes, gear, abilities, abilityPerks })` returns `{ target: ClassRow|null, gear: GearSave[]|null, abilities: AbilitySave[]|null, abilityPerks: PerkSave[]|null, moved: Item[], kept: Item[] }`, where:
     - `GearSave = { name, class_id, description, enchantment, mods }`
     - `AbilitySave = { name, class_id, description, type }`
@@ -676,6 +894,38 @@ describe('upgradeBuild', () => {
     expect(upgrade.kept).toEqual([{ kind: 'Ability', name: 'Old Trick', className: null }]);
   });
 
+  // Gunslinger's and Wanderer's Aspirant versions each have a newer version.
+  // The character and every row land on the newest of their own class's fork
+  // family, matched against that version's catalogue.
+  test('the character and each row move to the newest version of their Aspirant family', () => {
+    const upgrade = upgradeBuild(upgradeInput({
+      classes: [
+        ...UPGRADE_CLASSES,
+        klass('gs-asp-v2', 'Gunslinger', 'aspirant', 'gs-asp', {
+          gear: [entry('Revolver', 'Newer six-shooter.')], abilities: [entry('Standoff', 'Newer standoff.')]
+        }),
+        klass('wd-asp-v2', 'Wanderer', 'aspirant', 'wd-asp', { abilities: [entry('Familiar Face', 'Newer face.')] })
+      ],
+      gear: [gearRow('g2', 'Revolver', 'gs-v2')],
+      abilities: [
+        abilityRow('a1', 'Trickshot', 'gs-v1'),
+        abilityRow('a2', 'Standoff', 'gs-v1'),
+        abilityRow('a4', 'Familiar Face', 'wd-v1')
+      ],
+      abilityPerks: []
+    }));
+    expect(upgrade.target.id).toBe('gs-asp-v2');
+    expect(upgrade.gear).toEqual([
+      { name: 'Revolver', class_id: 'gs-asp-v2', description: 'Newer six-shooter.', enchantment: null, mods: [] }
+    ]);
+    // Trickshot is only in the older Aspirant version's catalogue, so it stays.
+    expect(upgrade.abilities).toEqual([
+      { name: 'Trickshot', class_id: 'gs-v1', description: null, type: 'core' },
+      { name: 'Standoff', class_id: 'gs-asp-v2', description: 'Newer standoff.', type: 'core' },
+      { name: 'Familiar Face', class_id: 'wd-asp-v2', description: 'Newer face.', type: 'core' }
+    ]);
+  });
+
   test('a family with two Aspirant versions counts as having none', () => {
     const warn = spyOn(console, 'warn').mockImplementation(() => {});
     const upgrade = upgradeBuild(upgradeInput({
@@ -730,7 +980,14 @@ In `util/aspirant-conversion.js`, replace the header comment (the first three li
 // shows afterwards. Pure -- the caller loads everything and saves the result.
 ```
 
-Add `const { findAspirantFork } = require('./class-family');` to the requires. Add the following above `planConversion`:
+Add these to the requires:
+
+```js
+const { computeVersionFamily, findAspirantFork } = require('./class-family');
+const { latestClassVersions } = require('./class-list-grouping');
+```
+
+Add the following above `planConversion`:
 
 ```js
 const GEAR_LISTS = [['gear', null]];
@@ -750,23 +1007,32 @@ const findInCatalogue = (cls, lists, name) => {
   return null;
 };
 
-// Each row moves to the Aspirant version of its OWN class, so a cross-class
+// The newest version in the family of a class's Aspirant fork: the one card
+// the class list shows for that family.
+const aspirantTargetOf = (catalogue, classId) => {
+  const fork = findAspirantFork(catalogue, classId);
+  if (!fork) return null;
+  const family = computeVersionFamily(catalogue, fork.id);
+  return latestClassVersions(catalogue.filter(row => family.has(row.id)))[0];
+};
+
+// Each row moves to the Aspirant target of its OWN class, so a cross-class
 // item follows its donor. A row with no Aspirant version, or already on one,
 // stays exactly as stored. The lists are null when no row moves, so the save
 // leaves every row and its id alone.
 const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks }) => {
   const catalogue = listOf(classes);
   const classesById = new Map(catalogue.map(row => [row.id, row]));
-  const forks = new Map();
-  const forkOf = (classId) => {
-    if (!forks.has(classId)) forks.set(classId, findAspirantFork(catalogue, classId));
-    return forks.get(classId);
+  const targets = new Map();
+  const targetOf = (classId) => {
+    if (!targets.has(classId)) targets.set(classId, aspirantTargetOf(catalogue, classId));
+    return targets.get(classId);
   };
   const moved = [];
   const kept = [];
   const upgradeRow = (row, kind, lists) => {
     const home = classesById.get(row.class_id) || null;
-    const fork = home ? forkOf(home.id) : null;
+    const fork = home ? targetOf(home.id) : null;
     const match = fork ? findInCatalogue(fork, lists, row.name) : null;
     if (!match) {
       kept.push({ kind, name: row.name, className: home ? home.name : null });
@@ -809,7 +1075,7 @@ const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks }) => 
       : { class_ability_id: perk.class_ability_id, ...base };
   });
 
-  const target = forkOf(character.class_id ?? null);
+  const target = targetOf(character.class_id ?? null);
   if (moved.length === 0) {
     return { target, gear: null, abilities: null, abilityPerks: null, moved, kept };
   }
@@ -852,7 +1118,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 4: Conversion plans and saves the upgraded build
+### Task 5: Conversion plans and saves the upgraded build
 
 **Files:**
 - Modify: `util/aspirant-conversion.js` (`planConversion`)
@@ -862,10 +1128,10 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Modify (adapter stubs): `routes/character-level-up.test.js:112`, `test/character-wizard-client.test.js:1103`
 
 **Interfaces:**
-- Consumes: `upgradeBuild` and `upgradeSaveArgs` (Task 3), `familyResolver` (Task 1).
+- Consumes: `upgradeBuild` and `upgradeSaveArgs` (Task 4), `familyResolver` (Task 1).
 - Produces:
   - `planConversion({ character, classes, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions })` returns `{ upgrade, blockers, breaches, perkBreakdown, merxBreakdown }`.
-  - Repository and adapter: `getConversionClasses() => Promise<{ data: ClassRow[]|null, error }>`, where each `ClassRow` has `id, name, base_class_id, rules_edition, content_format, gear, abilities, advanced_abilities`.
+  - Repository and adapter: `getConversionClasses() => Promise<{ data: ClassRow[]|null, error }>`, where each `ClassRow` has `id, name, base_class_id, rules_edition, content_format, created_at, gear, abilities, advanced_abilities`.
   - `planAspirantConversion(actor, id)` returns `{ data: plan|null, error }`, and `plan.upgrade` is the `upgradeBuild` result.
 
 - [ ] **Step 1: Move the `planConversion` tests onto `classes`, and add the new ones**
@@ -931,7 +1197,7 @@ describe('planConversion: judged on the upgraded build', () => {
 });
 ```
 
-`UPGRADE_CLASSES`, `gearRow` and `abilityRow` come from Task 3. Append this block after Task 3's `describe` blocks, so those constants are declared above it.
+`UPGRADE_CLASSES`, `gearRow` and `abilityRow` come from Task 4. Append this block after Task 4's `describe` blocks, so those constants are declared above it.
 
 - [ ] **Step 2: Rewrite the service conversion tests**
 
@@ -1053,7 +1319,7 @@ Expected: FAIL.
 
 - [ ] **Step 4: Implement `planConversion`**
 
-In `util/aspirant-conversion.js`, change the class-family require to `const { findAspirantFork, familyResolver } = require('./class-family');`. Then replace `planConversion` and the comment above it with:
+In `util/aspirant-conversion.js`, change the class-family require to `const { computeVersionFamily, findAspirantFork, familyResolver } = require('./class-family');`. Then replace `planConversion` and the comment above it with:
 
 ```js
 // Judged under the aspirant economy on the upgraded build, with own class
@@ -1116,13 +1382,14 @@ In `services/character/repository.js`, add this directly after `getClassFamilyRo
 
 ```js
 // Every class with its catalogue lists: conversion walks version families
-// across the whole catalogue to find each row's Aspirant version and matches
-// names against that version's lists. util/class-family.js needs
-// base_class_id, rules_edition and content_format together.
+// across the whole catalogue to find each row's Aspirant version, picks the
+// newest (created_at breaks ties) and matches names against its lists.
+// util/class-family.js needs base_class_id, rules_edition and content_format
+// together.
 const getConversionClasses = async () => {
   const { data, error } = await supabaseAdmin
     .from('classes')
-    .select('id, name, base_class_id, rules_edition, content_format, gear, abilities, advanced_abilities');
+    .select('id, name, base_class_id, rules_edition, content_format, created_at, gear, abilities, advanced_abilities');
   if (error) {
     console.error(error);
     return { data: null, error };
@@ -1196,14 +1463,14 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 5: Edit-page panel names the Aspirant version and what moves
+### Task 6: Edit-page panel names the Aspirant version and what moves
 
 **Files:**
 - Modify: `views/character-form.handlebars:121-124` (the panel's opening sentence)
 - Test: `routes/characters.test.js` (the Convert to Aspirant section, about lines 834-915)
 
 **Interfaces:**
-- Consumes: `aspirantConversion.upgrade` = `{ target, moved, kept }` (Task 4).
+- Consumes: `aspirantConversion.upgrade` = `{ target, moved, kept }` (Task 5).
 - Produces: markup only.
 
 - [ ] **Step 1: Write the failing tests**
@@ -1247,7 +1514,7 @@ test('the edit form names the Aspirant version and lists what moves and what sta
     kept: [{ kind: 'Ability', name: 'Old Trick', className: null }, { kind: 'Signature', name: 'Duster', className: 'Gunslinger' }]
   });
   const body = await editPage();
-  expect(body).toContain('Ash can switch to the Aspirant rules and move to <strong>Gunslinger</strong>.');
+  expect(body).toContain('Ash can switch to the Aspirant rules and move to <strong>the Aspirant version of Gunslinger</strong>.');
   expect(body).toContain('Moves to its Aspirant version:');
   expect(body).toContain('<li>Signature: Revolver (Gunslinger)</li>');
   expect(body).toContain('Stays as it is:');
@@ -1286,7 +1553,7 @@ with:
 
 ```hbs
     {{#if aspirantConversion.upgrade.target}}
-    <p>{{character.name}} can switch to the Aspirant rules and move to <strong>{{aspirantConversion.upgrade.target.name}}</strong>.</p>
+    <p>{{character.name}} can switch to the Aspirant rules and move to <strong>the Aspirant version of {{aspirantConversion.upgrade.target.name}}</strong>.</p>
     {{else}}
     <p>{{character.name}} can switch to the Aspirant rules. It keeps its class and its whole build.</p>
     {{/if}}
@@ -1326,7 +1593,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 6: Integration test — conversion moves class and rows through `save_character_atomic`
+### Task 7: Integration test — conversion moves class and rows through `save_character_atomic`
 
 **Files:**
 - Modify (rewrite): `models/character-convert-aspirant.integration.test.js`
@@ -1335,7 +1602,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 - Consumes: `convertCharacterToAspirant`, `planCharacterAspirantConversion` and `updateCharacter` from `models/character.js`, and the real repository (`getConversionClasses`, `saveCharacterAtomic`).
 - Produces: nothing.
 
-This task changes only a test, because Tasks 1-5 already produced the behaviour. "Red" here means proving the new assertions against the real RPC. If one fails, the code is wrong, not the test. Debug with superpowers:systematic-debugging.
+This task changes only a test, because Tasks 1-6 already produced the behaviour. "Red" here means proving the new assertions against the real RPC. If one fails, the code is wrong, not the test. Debug with superpowers:systematic-debugging.
 
 - [ ] **Step 1: Confirm the target is local**
 
@@ -1671,7 +1938,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 7: `scripts/upgrade-converted-aspirant-classes.js`
+### Task 8: `scripts/upgrade-converted-aspirant-classes.js`
 
 **Files:**
 - Create: `scripts/upgrade-converted-aspirant-classes.js`
@@ -1680,9 +1947,9 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes:
-  - `characterRepository.getConversionClasses`, `getCharacter` and `saveCharacterAtomic` (Task 4).
+  - `characterRepository.getConversionClasses`, `getCharacter` and `saveCharacterAtomic` (Task 5).
   - `findAspirantFork` (Task 1).
-  - `upgradeBuild` and `upgradeSaveArgs` (Task 3).
+  - `upgradeBuild` and `upgradeSaveArgs` (Task 4).
 - Produces: `upgradeConvertedCharacters({ apply = false, characterIds = null, log = console.log })` returns `Promise<{ candidates: { id, name, owner, fromClass, toClass, moved, kept }[], applied: string[], failed: { id, error }[] }>`.
 
 - [ ] **Step 1: Write the failing integration test**
@@ -1976,7 +2243,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 ---
 
-### Task 8: Whole-branch verification
+### Task 9: Whole-branch verification
 
 **Files:** none (verification only).
 
@@ -1984,7 +2251,7 @@ Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 
 Run: `git stash list` (it should be empty), then `bun run test:unit` and `bun run test:http`. Then run the integration tier using the command in Global Constraints. Write down every failing file and test name.
 
-- [ ] **Step 2: Run every tier after Task 7**
+- [ ] **Step 2: Run every tier after Task 8**
 
 Run: `bun run test:unit`
 Expected: 0 failures.
@@ -2012,27 +2279,28 @@ Expected: no output. The only definition is in `util/class-family.js`.
 ## Self-review
 
 - **Spec coverage (Part 2):**
-  - Eligibility: unchanged `loadAspirantConversion` gate (Task 4 tests).
+  - Eligibility: unchanged `loadAspirantConversion` gate (Task 5 tests).
   - `findAspirantFork` and `ownClassIds`: Task 1.
   - Own-class sites:
     - `familyResolver`: Task 1.
     - `classItemResolver`: Task 2.
     - Route mappers: Task 2.
     - `ownClassIdsOf` via the resolver: Task 2 route test.
-  - What conversion does (class, rows, Perks, mode, Traits, null lists): Tasks 3-4.
-  - Blocking checklist and grandfathered breaches: Task 4 `planConversion`.
-  - Signature Cap not enforced: Task 6 hoarder test.
-  - Script: Task 7.
-  - Panel copy: Task 5.
+    - Stored totals (`progress.js`, `levelUp`, auto-calc fields, reconcile script): Task 3.
+  - What conversion does (class, rows, Perks, mode, Traits, null lists): Tasks 4-5.
+  - Blocking checklist and grandfathered breaches: Task 5 `planConversion`.
+  - Signature Cap not enforced: Task 7 hoarder test.
+  - Script: Task 8.
+  - Panel copy: Task 6.
   - Error handling:
-    - Not owner: Task 4 existing test.
+    - Not owner: Task 5 existing test.
     - Not eligible and blockers: existing tests.
-    - Two forks: Tasks 1, 3 and 4.
-    - Class read failure: Task 4.
-    - Script continues after a failure: Task 7 code (`report.failed`, `continue`).
-  - Testing list: every item maps to Tasks 1-7.
+    - Two forks: Tasks 1, 4 and 5.
+    - Class read failure: Task 5.
+    - Script continues after a failure: Task 8 code (`report.failed`, `continue`).
+  - Testing list: every item maps to Tasks 1-8.
 - **Type consistency:**
-  - `upgradeBuild` returns `{ target, gear, abilities, abilityPerks, moved, kept }` in Tasks 3, 4, 5 and 7.
-  - `upgradeSaveArgs({ character, upgrade })` is used the same way in Tasks 4 and 7.
-  - `getConversionClasses()` returns `{ data, error }` in Tasks 4 and 7.
-  - `Item.kind` is `'Signature' | 'Ability'` in Tasks 3 and 5.
+  - `upgradeBuild` returns `{ target, gear, abilities, abilityPerks, moved, kept }` in Tasks 4, 5, 6 and 8.
+  - `upgradeSaveArgs({ character, upgrade })` is used the same way in Tasks 5 and 8.
+  - `getConversionClasses()` returns `{ data, error }` in Tasks 5 and 8.
+  - `Item.kind` is `'Signature' | 'Ability'` in Tasks 4 and 6.

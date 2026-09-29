@@ -174,6 +174,14 @@ aspirant-format class outside `classId`'s version family whose
 same fork. None → null. More than one → null with a warning naming them: the
 schema does not enforce one fork per family and conversion does not guess.
 
+The fork identifies the Aspirant family. What conversion moves onto is the
+**newest version in that family**: `util/class-list-grouping.js#latestClassVersions`,
+the family leaf (ties broken by newest `created_at`), the one card the class list
+shows for it. This holds for the character's class and for every row, so a
+cross-class item moves to the newest version of its own class's fork family.
+Wherever this spec says "the fork" as a target (the class, a row's `class_id`,
+the catalogue names are matched against), it means that newest version.
+
 ### Own class across the fork
 
 A fork starts a version family of its own (`sameFamilyEdge`), which keeps
@@ -314,7 +322,8 @@ income. If a loadout feature is built, the cap belongs there.
    `POST /characters/:id/convert-aspirant` unchanged.
 5. **Edit-page panel** (`views/character-form.handlebars`):
    - with a fork: "<name> can switch to the Aspirant rules and move to
-     **<fork>**." then "Moves to its Aspirant version:" and "Stays as it is:"
+     **the Aspirant version of <class name>**." (a fork shares its Advent
+     class's name) then "Moves to its Aspirant version:" and "Stays as it is:"
      item lists (each omitted when empty);
    - without: "<name> can switch to the Aspirant rules. It keeps its class
      and its whole build." (plus the moved list if any cross-class item has
