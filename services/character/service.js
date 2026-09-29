@@ -477,8 +477,9 @@ class CharacterService {
     // to validate.
     prepared.creator_mode = existing.data.creator_mode ?? null;
 
-    // Resolved from the stored class and the stored creator_mode, never the submitted ones (util/character-rules.js): this gates both
-    // the v2-only field strip below and the perk rebuild in saveCharacterAtomic.
+    // Resolved from the stored class and the stored creator_mode, never the
+    // submitted ones (util/character-rules.js): this gates both the v2-only
+    // field strip below and the perk rebuild in saveCharacterAtomic.
     // content_format rides alongside rulesVersion from the same one-row query
     // (services/character/repository.js#getClassRulesVersion, the method
     // levelUp already uses for the same reason) so the economy check just

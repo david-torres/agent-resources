@@ -372,3 +372,8 @@ income. If a loadout feature is built, the cap belongs there.
 1. Merge; no migration.
 2. The user runs `bun scripts/upgrade-converted-aspirant-classes.js` against
    prod, reviews the list, then runs it with `--apply`.
+3. After the `--apply`, the user runs `bun scripts/reconcile-character-progress.js`
+   (dry run, review, then `--apply`) so the stored auto-calculated totals catch
+   up with the moved rows.
+4. Both scripts read a character and then write it, so run them at a quiet time:
+   an edit saved in between is overwritten.
