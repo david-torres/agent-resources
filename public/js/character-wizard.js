@@ -1034,7 +1034,8 @@ window.CharacterWizard = (function () {
   // comes from any of the 12 stats not used for 1 or 2. If the class's
   // spread has fewer than 2 stats, the constraint can't be met — show a
   // message and lock the selects so the user can go back and pick a class
-  // that satisfies the rule.
+  // that satisfies the rule. Aspiring characters are class-less, so all
+  // three of their Traits may come from any stat.
   //
   // Aspirant and aspiring modes bypass the unified <select>s in favor of a
   // split control: a <select> for the stat, paired with a free-form text
@@ -1045,35 +1046,16 @@ window.CharacterWizard = (function () {
   // trait3 bonus if the typed value happens to match.
   const isSplitMode = () => DATA.mode === 'aspirant' || DATA.mode === 'aspiring';
 
-  // Aspiring is class-less, so trait slots 1 and 2 draw on the union of the
-  // stat spreads of the classes the builder borrowed its six slots from.
-  // Without this they get no options at all and fillStatSelect disables them.
-  const getAspiringSpreadStats = () => {
-    const build = state.classBuild || {};
-    const slots = []
-      .concat(build.classGear || [])
-      .concat(build.coreAbilities || [])
-      .concat(build.advancedAbility ? [build.advancedAbility] : []);
-    const stats = [];
-    slots.forEach((slot) => {
-      const cls = slot && slot.classId ? classesById[slot.classId] : null;
-      if (!cls || !cls.stat_spread) return;
-      Object.keys(cls.stat_spread).forEach((stat) => {
-        if (stats.indexOf(stat) === -1) stats.push(stat);
-      });
-    });
-    return stats;
-  };
-
   const statOptionsFor = (idx) => {
-    // Slots 1 & 2 (idx 0, 1) are limited to the class's stat spread.
-    // Slot 3 (idx 2) accepts any of the 12 stats.
+    // Slots 1 & 2 (idx 0, 1) are limited to the class's stat spread, except
+    // for aspiring characters, whose three Traits are all free (Aspirant
+    // pg. 90). Slot 3 (idx 2) always accepts any of the 12 stats.
     if (idx === 2) return DATA.statList.slice();
     const spreadStats = DATA.mode === 'aspiring'
-      ? getAspiringSpreadStats()
+      ? DATA.statList.slice()
       : getClassSpreadStats();
     // Also exclude the stat the user picked for the previous slot, so
-    // "two different class stats" stays enforceable.
+    // "two different stats" stays enforceable.
     const prevIdx = idx - 1;
     if (prevIdx < 0) return spreadStats;
     const prevStat = state.traitStats && state.traitStats[prevIdx];

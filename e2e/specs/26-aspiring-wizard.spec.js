@@ -27,6 +27,7 @@ const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass, unlockClassForProfile } = require('../fixtures/class');
 const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
+const { statList } = require('../../util/enclave-consts');
 
 test.use({ storageState: PLAYER_STATE });
 
@@ -34,16 +35,14 @@ const prefix = newPrefix('aspiring');
 
 // Three donor classes, because the builder requires the 3 gear picks to come
 // from 3 different classes and the 3 ability picks likewise (a class may
-// appear in both lists). Their stat spreads are deliberately disjoint: the
-// step-2 stat selects offer the UNION of the borrowed classes' spreads
-// (public/js/character-wizard.js#getAspiringSpreadStats), so six distinct
-// stats make that union assertable rather than coincidental.
+// appear in both lists). Their spreads cover only six of the twelve stats, so
+// the step-2 selects offering all twelve shows the donors' spreads do not
+// limit an aspiring character's Traits.
 const DONORS = [
   { key: 'alpha', statSpread: { vitality: 2, might: 1 } },
   { key: 'beta', statSpread: { reflex: 2, skill: 1 } },
   { key: 'gamma', statSpread: { luck: 2, sensory: 1 } }
 ];
-const UNION_STATS = ['vitality', 'might', 'reflex', 'skill', 'luck', 'sensory'];
 
 let db;
 let profile;
@@ -132,19 +131,20 @@ test('the wizard creates an aspiring character end to end', async ({ page }) => 
   await step1Next.click();
   await expect(page.locator('[data-step-panel="2"]')).toBeVisible();
 
-  // Step 2 -- traits 1 and 2 are the pseudo-class's own stat spread, which
-  // only exists as the union of the borrowed classes' spreads. An empty or
-  // disabled select here means the union never reached the selects.
-  const trait1Stats = page.locator('#trait1StatSelect option:not([value=""])');
+  // Step 2 -- all three aspiring Traits are free (pg. 90): slots 1 and 2 offer
+  // every stat, and slot 2 excludes only the stat already taken by slot 1.
+  const offeredStats = (select) => page
+    .locator(`${select} option:not([value=""])`)
+    .evaluateAll((els) => els.map((el) => el.value));
   await expect(page.locator('#trait1StatSelect')).toBeEnabled();
-  await expect(page.locator('#trait2StatSelect')).toBeEnabled();
-  expect((await trait1Stats.allTextContents()).length).toBeGreaterThan(0);
-  const offered = await trait1Stats.evaluateAll((els) => els.map((el) => el.value));
-  expect(offered.slice().sort()).toEqual(UNION_STATS.slice().sort());
+  expect((await offeredStats('#trait1StatSelect')).sort()).toEqual(statList.slice().sort());
 
   // The trait text input stays disabled until its stat is picked, so the stat
   // select goes first in every pair.
   await page.selectOption('#trait1StatSelect', 'vitality');
+  await expect(page.locator('#trait2StatSelect')).toBeEnabled();
+  expect((await offeredStats('#trait2StatSelect')).sort())
+    .toEqual(statList.filter((stat) => stat !== 'vitality').sort());
   await page.fill('#trait1Custom', 'optimistic');
   await page.selectOption('#trait2StatSelect', 'reflex');
   await page.fill('#trait2Custom', 'smooth');
