@@ -432,7 +432,7 @@ Names compare trimmed and case-folded.
 
 `scripts/dedupe-character-abilities.js`, read-only by default, `--apply` after
 review, in the style of the other scripts. For each character and name held
-more than once it keeps the oldest row (lowest `created_at`, then `id`),
+more than once it keeps the row with the lowest `id` (`class_abilities` has no `created_at`),
 re-points the other rows' Perks at it (keeping `position` order after the
 kept row's Perks, and compound links within the moved set), and deletes the
 other rows, all in one transaction per character. The dry run lists each
