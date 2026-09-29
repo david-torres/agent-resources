@@ -185,15 +185,26 @@ test('every Perk stays on its Ability; a same-Ability compound keeps its link, a
   ]);
 });
 
-test('a second conversion is refused and changes nothing', async () => {
+const storedState = async () => {
+  const query = async (sql) => (await db.query(sql, [characterId])).rows;
+  return {
+    character: await query('select class_id, class, creator_mode, level, quirks, accessories, updated_at from characters where id = $1'),
+    gear: await query('select id, class_id, name, description from class_gear where character_id = $1 order by id'),
+    abilities: await query('select id, class_id, name, type from class_abilities where character_id = $1 order by id'),
+    perks: await query('select id, class_ability_id, text, compounds_with from character_perks where character_id = $1 order by id'),
+    traits: await query('select id, name, stat from traits where character_id = $1 order by id')
+  };
+};
+
+test('a second conversion is refused and writes nothing', async () => {
+  const before = await storedState();
   const result = await convertCharacterToAspirant({ profileId: profile.id }, characterId);
   expect(result.data).toBeNull();
   expect(result.error).toEqual({
     status: 400,
     message: `Convert ${suffix} is not on the Advent rules, so there is nothing to convert.`
   });
-  const { rows } = await perkRows();
-  expect(rows).toHaveLength(4);
+  expect(await storedState()).toEqual(before);
 });
 
 test('an ordinary edit of the converted character saves and keeps its v2 fields', async () => {
