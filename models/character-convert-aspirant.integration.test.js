@@ -37,7 +37,7 @@ const insertClass = async (row) => {
 };
 
 const perkRows = () => db.query(
-  `select p.text, p.position, a.name as ability, a.class_id, target.text as compounds_with_text
+  `select p.text, p.position, a.name as ability, target.text as compounds_with_text
    from character_perks p
    join class_abilities a on a.id = p.class_ability_id
    left join character_perks target on target.id = p.compounds_with

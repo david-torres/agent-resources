@@ -56,8 +56,14 @@
     // handlebars). Each row costs one abilityPerkCost at save, and the editor
     // adds and removes rows after the page loads -- and the class dropdown
     // replaces the whole editor -- so they are counted from the page each time.
+    // The server drops a row with blank Perk text, so only filled rows count.
     var countPerkRows = function () {
-      return document.querySelectorAll('#perk-groups .perk-row').length;
+      var texts = document.querySelectorAll('#perk-groups .perk-row .perk-text');
+      var filled = 0;
+      for (var i = 0; i < texts.length; i++) {
+        if (texts[i].value.trim()) filled++;
+      }
+      return filled;
     };
     var entries = Array.isArray(data.entries) ? data.entries : [];
 
@@ -279,15 +285,18 @@
     render();
 
     // Typing in a Perk rewrites its word counter, so only a change in the
-    // number of rows re-renders. The form outlives the editor swap.
+    // number of filled rows re-renders. The form outlives the editor swap.
     var perkScope = root.closest('form') || document.body;
+    var renderedPerkRows = countPerkRows();
+    var renderIfPerkRowsChanged = function () {
+      if (countPerkRows() === renderedPerkRows) return;
+      renderedPerkRows = countPerkRows();
+      render();
+    };
+    perkScope.addEventListener('input', renderIfPerkRowsChanged);
     if (window.MutationObserver) {
-      var renderedPerkRows = countPerkRows();
-      new window.MutationObserver(function () {
-        if (countPerkRows() === renderedPerkRows) return;
-        renderedPerkRows = countPerkRows();
-        render();
-      }).observe(perkScope, { childList: true, subtree: true });
+      new window.MutationObserver(renderIfPerkRowsChanged)
+        .observe(perkScope, { childList: true, subtree: true });
     }
 
     return {

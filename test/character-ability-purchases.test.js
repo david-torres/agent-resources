@@ -62,7 +62,9 @@ const fixtureIsland = (overrides = {}) => ({
   level: overrides.level != null ? overrides.level : 10
 });
 
-const PERK_ROW = '<div class="column is-full perk-row"></div>';
+const perkRowHtml = (text) =>
+  `<div class="column is-full perk-row"><textarea class="textarea perk-text" name="ability_perk_text[]">${text}</textarea></div>`;
+const PERK_ROW = perkRowHtml('A filled Perk');
 
 // `perkRows` stands in for the v2 Ability-Perk editor on the same form
 // (views/partials/character-v2-fields.handlebars), one .perk-row per Perk.
@@ -183,12 +185,42 @@ describe('affordability consults both the balance and the cap', () => {
   // follows it rather than the Perks the character had when the page loaded.
   test('an Ability Perk added on the same form is charged at once', async () => {
     const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 1 });
-    const row = document.createElement('div');
-    row.className = 'column is-full perk-row';
-    document.getElementById('perk-groups').appendChild(row);
+    document.getElementById('perk-groups').insertAdjacentHTML('beforeend', PERK_ROW);
     await settle();
     expect(form.getSpent()).toBe(2 * FIGURES.abilityPerkCost);
     expect(spentReadout()).toBe(String(2 * FIGURES.abilityPerkCost));
+  });
+
+  // The server drops a Perk row with blank text (services/character/input.js),
+  // so only filled rows are charged.
+  test('a freshly added Ability Perk row with blank text is not charged', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 1 });
+    document.getElementById('perk-groups').insertAdjacentHTML('beforeend', perkRowHtml('   '));
+    await settle();
+    expect(form.getSpent()).toBe(FIGURES.abilityPerkCost);
+    expect(spentReadout()).toBe(String(FIGURES.abilityPerkCost));
+  });
+
+  test('typing text into a blank Ability Perk row charges it', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 0 });
+    document.getElementById('perk-groups').insertAdjacentHTML('beforeend', perkRowHtml(''));
+    await settle();
+    expect(form.getSpent()).toBe(0);
+    const textarea = document.querySelector('#perk-groups .perk-text');
+    textarea.value = 'Now it has text';
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(form.getSpent()).toBe(FIGURES.abilityPerkCost);
+    expect(spentReadout()).toBe(String(FIGURES.abilityPerkCost));
+  });
+
+  test('clearing the text of an Ability Perk row stops charging it', async () => {
+    const form = mountAbilities(fixtureIsland({ owned: [], level: 3 }), { perkRows: 1 });
+    expect(form.getSpent()).toBe(FIGURES.abilityPerkCost);
+    const textarea = document.querySelector('#perk-groups .perk-text');
+    textarea.value = '  ';
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(form.getSpent()).toBe(0);
+    expect(spentReadout()).toBe('0');
   });
 
   test('removing an Ability Perk on the same form refunds it', async () => {
