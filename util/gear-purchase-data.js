@@ -36,37 +36,40 @@ const toEntry = (item, classId, className) => ({
   default_enchantment: item.default_enchantment || null
 });
 
-// What the grid offers: every Signature the character's class prints, plus an
-// entry for anything the character already owns that the roster does not
-// cover -- a cross-class purchase, or any Signature at all for an aspiring
-// character, which is class-less and whose picks come from other classes'
-// rosters. Without the second half those rows would have no controls, and an
-// aspiring character would see an empty grid.
+// What the grid offers: every Signature the character's class prints (its
+// roster), then the catalogue of other classes' Signatures it may buy at the
+// cross-class tier, then an entry for anything the character already owns
+// that neither covers. Without the last part those owned rows would have no
+// controls.
+//
+// An aspirant character's catalogue is every served class outside its own
+// version family -- the same reach the wizard's shop gives it at creation.
+// allClasses holds only the newest version of each family, so a character on
+// an older version would otherwise see its own class again as cross-class
+// stock. An aspiring character is class-less, so it has no roster; its Class
+// is three named Signatures (pg. 90) and its catalogue is every served class.
 //
 // A stored class_gear row arrives merged with its class's printed entry
 // (services/character/repository.js#getCharacterGear), so it already carries
 // the description, meters and Default Enchantment the entry needs.
-const buildEntries = (characterClass, allClasses, gear, economy, aspiringSignatures) => {
+const buildEntries = ({ characterClass, characterClassId, allClasses, gear, economy, aspiringSignatures, classFamilyOf }) => {
   const roster = Array.isArray(characterClass && characterClass.gear)
     ? characterClass.gear.map((item) => toEntry(item, characterClass.id, characterClass.name))
     : [];
   const seen = new Set(roster.map((entry) => entryKey(entry.class_id, entry.name)));
   const catalogue = [];
-  // An aspiring character is class-less, so it has no roster of its own to
-  // list. Its Class is three named Signatures (pg. 90) and the rest of the
-  // catalogue is what it may acquire at the cross-class tier -- the same
-  // reach an aspirant character gets through the wizard's shop.
-  if (economy === 'aspiring') {
-    for (const cls of (Array.isArray(allClasses) ? allClasses : [])) {
-      if (!cls || !cls.id || !Array.isArray(cls.gear)) continue;
-      for (const item of cls.gear) {
-        if (!item || !item.name) continue;
-        const key = entryKey(cls.id, item.name);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        catalogue.push(toEntry(item, cls.id, cls.name));
-      }
+  for (const cls of (Array.isArray(allClasses) ? allClasses : [])) {
+    if (!cls || !cls.id || !Array.isArray(cls.gear)) continue;
+    if (economy === 'aspirant' && sameFamily(cls.id, characterClassId, classFamilyOf)) continue;
+    for (const item of cls.gear) {
+      if (!item || !item.name) continue;
+      const key = entryKey(cls.id, item.name);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      catalogue.push(toEntry(item, cls.id, cls.name));
     }
+  }
+  if (economy === 'aspiring') {
     // The pool has to outlive ownership (pg. 90 design intent): a character
     // that bought none of its three picks at creation must still be able to
     // buy its own invented Class later, even once a donor class's unlock has
@@ -127,7 +130,15 @@ const buildGearPurchaseData = ({ economy, characterClass, allClasses, character,
   if (economy !== 'aspirant' && economy !== 'aspiring') return null;
   const gear = Array.isArray(character && character.gear) ? character.gear : [];
   const characterClassId = (character && character.class_id) || null;
-  const entries = buildEntries(characterClass, allClasses, gear, economy, character && character.aspiring_signatures);
+  const entries = buildEntries({
+    characterClass,
+    characterClassId,
+    allClasses,
+    gear,
+    economy,
+    aspiringSignatures: character && character.aspiring_signatures,
+    classFamilyOf
+  });
   const purchases = buildPurchases(gear);
   return {
     economy,

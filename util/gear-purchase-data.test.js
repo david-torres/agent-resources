@@ -209,9 +209,12 @@ describe('the aspiring catalogue', () => {
     expect(data.entries.map((e) => e.name)).toContain('Lapsed Item');
   });
 
-  // An aspirant character's own class comes from characterClass; the rest of
-  // the catalogue must not be duplicated into its grid.
-  test('an aspirant island is unchanged by the catalogue argument', () => {
+});
+
+describe('the aspirant catalogue', () => {
+  // An aspirant character may buy any other unlocked class's Signature at the
+  // Cross-Class tier, the same reach the wizard's shop gives it at creation.
+  test('an aspirant island offers other classes\' Signatures alongside its roster', () => {
     const data = buildGearPurchaseData({
       economy: 'aspirant',
       characterClass: v1ClassRow(),
@@ -219,7 +222,53 @@ describe('the aspiring catalogue', () => {
       character: { class_id: 'c-v1', gear: [] },
       missionMerx: 0
     });
-    expect(data.entries.every((e) => e.class_id === 'c-v1')).toBe(true);
+    expect(data.entries.map((e) => [e.class_id, e.name])).toEqual([
+      ['c-v1', 'Cowboy Hat'],
+      ['c-v1', 'Lasso'],
+      ['c-other', 'Vial']
+    ]);
+    expect(data.entries.find((e) => e.name === 'Vial').class_name).toBe('Alchemist');
+  });
+
+  // allClasses holds only the newest version of each family, so a character
+  // on an older version finds its own family's newer version there. That is
+  // its own class, not a source of cross-class purchases.
+  test('a newer version of the character\'s own class is not offered as catalogue', () => {
+    const newerVersion = { ...v1ClassRow(), id: 'c-v1-next', gear: [{ name: 'Stetson' }] };
+    const classFamilyOf = (id) => (id === 'c-v1-next' ? 'c-v1' : id);
+    const data = buildGearPurchaseData({
+      economy: 'aspirant',
+      characterClass: v1ClassRow(),
+      allClasses: [newerVersion, otherClassRow()],
+      character: { class_id: 'c-v1', gear: [] },
+      missionMerx: 0,
+      classFamilyOf
+    });
+    const names = data.entries.map((e) => e.name);
+    expect(names).not.toContain('Stetson');
+    expect(names).toContain('Vial');
+  });
+
+  test('other classes\' Signatures price cross-class: ownClassIds leaves them out', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspirant',
+      characterClass: v1ClassRow(),
+      allClasses: [v1ClassRow(), otherClassRow()],
+      character: { class_id: 'c-v1', gear: [] },
+      missionMerx: 0
+    });
+    expect(data.ownClassIds).toEqual(['c-v1']);
+  });
+
+  test('an owned cross-class Signature is offered once', () => {
+    const data = buildGearPurchaseData({
+      economy: 'aspirant',
+      characterClass: v1ClassRow(),
+      allClasses: [v1ClassRow(), otherClassRow()],
+      character: { class_id: 'c-v1', gear: [{ name: 'Vial', class_id: 'c-other' }] },
+      missionMerx: 0
+    });
+    expect(data.entries.filter((e) => e.name === 'Vial')).toHaveLength(1);
   });
 });
 

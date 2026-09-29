@@ -552,14 +552,13 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       contentFormat: characterClass && characterClass.content_format,
       creatorMode: character.creator_mode
     });
-    // Only a V1 character needs the catalogue: an aspirant character's own
-    // Signatures already arrive via characterClass above, but its Abilities
-    // can Cross-Class against every other unlocked class (pg. 3), and an
-    // aspiring character has no class of its own at all. This costs no extra
-    // query: filterClassDataForUser already ran above for the Class
-    // <select>'s options, and latestClassVersions is the same pure collapse
-    // GET /wizard applies to build wizardClasses, so a player is never
-    // offered a class here they have not unlocked there.
+    // Only a V1 character needs the catalogue: an aspirant character's
+    // Signatures and Abilities can Cross-Class against every other unlocked
+    // class (pg. 3), and an aspiring character has no class of its own at
+    // all. This costs no extra query: filterClassDataForUser already ran
+    // above for the Class <select>'s options, and latestClassVersions is the
+    // same pure collapse GET /wizard applies to build wizardClasses, so a
+    // player is never offered a class here they have not unlocked there.
     const allClasses = economy === 'aspiring' || economy === 'aspirant'
       ? latestClassVersions([...filteredAdvent, ...filteredAspirant, ...filteredPCC])
       : [];
