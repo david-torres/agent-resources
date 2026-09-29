@@ -13,6 +13,7 @@ const integrationFiles = new Set([
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
   'routes/mcp-oauth.integration.test.js',
+  'test/upgrade-converted-aspirant-classes.integration.test.js',
   'util/aspirant-classes-v2.integration.test.js',
   'util/class-ability-type.integration.test.js',
   'util/character-content-integrity.integration.test.js',

@@ -1,21 +1,9 @@
 // One-time audit for totals that predate mission-triggered recalculation.
 // Default is read-only. Pass --apply only after reviewing the reported count.
-const { supabaseAdmin } = require('../models/_base');
 const characterRepository = require('../services/character/repository');
 const { familyResolver } = require('../util/class-family');
+const { fetchAll } = require('./lib/fetch-all');
 const { calculateCharacterProgress, recalculateCharacterProgress } = require('../services/character/progress');
-
-const PAGE_SIZE = 500;
-const fetchAll = async (table, columns, query = q => q) => {
-  const rows = [];
-  for (let from = 0; ; from += PAGE_SIZE) {
-    const { data, error } = await query(supabaseAdmin.from(table).select(columns))
-      .order('id', { ascending: true }).range(from, from + PAGE_SIZE - 1);
-    if (error) throw new Error(`Failed to read ${table}: ${error.message}`);
-    rows.push(...data);
-    if (data.length < PAGE_SIZE) return rows;
-  }
-};
 
 const groupByCharacter = rows => {
   const grouped = new Map();
