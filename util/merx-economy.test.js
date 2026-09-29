@@ -10,12 +10,10 @@ const {
   priceOfEnchantment,
   priceOfMod,
   equipmentSpend,
-  signatureSlotsUsed,
   withPreservedEquipment,
   countWordsExcludingRatings,
   COMMON_ITEM_PRICE,
   CREATION_GRANT,
-  SIGNATURE_CAP,
   MODS_PER_SIGNATURE,
   ENCHANTMENT_WORD_LIMIT,
   MOD_WORD_LIMIT,
@@ -59,11 +57,6 @@ test('advent grants the Elective, aspirant and aspiring their book figures', () 
   expect(CREATION_GRANT).toEqual({ advent: 2, aspirant: 12, aspiring: 10 });
 });
 
-test('caps are 12/8 Signatures (pp. 85, 92)', () => {
-  expect(SIGNATURE_CAP.aspirant).toBe(12);
-  expect(SIGNATURE_CAP.aspiring).toBe(8);
-});
-
 test('a Signature holds at most two Mods (pg. 87)', () => {
   expect(MODS_PER_SIGNATURE).toBe(2);
 });
@@ -76,26 +69,6 @@ test('a Mod beyond the two-Mod cap is priced at the dearest tier, never free', (
 test('word limits are 40 for a Custom Enchantment and 10 for a Mod (pp. 86, 87)', () => {
   expect(ENCHANTMENT_WORD_LIMIT).toBe(40);
   expect(MOD_WORD_LIMIT).toBe(10);
-});
-
-// pg. 8: "they count towards the Signature Cap of 12. This means that a
-// character with six Enchanted Signatures could not bring any other
-// Signatures onto a given mission." Mods "do not count towards the
-// Signature cap."
-test('an enchanted Signature uses two cap slots and an unenchanted one uses one', () => {
-  expect(signatureSlotsUsed([{ name: 'A' }])).toBe(1);
-  expect(signatureSlotsUsed([{ name: 'A', enchantment: { source: 'default' } }])).toBe(2);
-});
-
-test('six enchanted Signatures fill the cap of twelve exactly', () => {
-  const six = Array.from({ length: 6 }, (_, i) => ({
-    name: `S${i}`, enchantment: { source: 'default' }
-  }));
-  expect(signatureSlotsUsed(six)).toBe(SIGNATURE_CAP.aspirant);
-});
-
-test('Mods never consume a cap slot', () => {
-  expect(signatureSlotsUsed([{ name: 'A', mods: [{ name: 'm1' }, { name: 'm2' }] }])).toBe(1);
 });
 
 // pg. 86: "no more than 40 words long, minus Power Rating Superscripts".
@@ -202,16 +175,14 @@ test('an aspiring character has no class to read, so creator_mode decides', () =
   expect(economyFor({ contentFormat: undefined, creatorMode: 'aspiring' })).toBe('aspiring');
 });
 
-// --- withPreservedEquipment: limits judge what a save LEAVES --------------
+// --- withPreservedEquipment: the spend judges what a save LEAVES ----------
 //
-// pg. 8 charges an Enchantment a cap slot, and every Enchantment and Mod
-// costs Merx, so both the slot count and the spend have to be taken against
-// the equipment a save leaves on the character, not the equipment the
-// submission happens to mention. A submitted item that omits `enchantment`
-// and `mods` keeps whatever is stored (services/character/input.js
-// normalizeGearEquipment and the save_character_atomic RPC), so reading the
-// submission alone lets two saves walk a character past the cap and lets an
-// auto-calculated edit refund Merx that is still spent.
+// Every Enchantment and Mod costs Merx, so the spend is taken against the
+// equipment a save leaves on the character, not the equipment the submission
+// happens to mention. A submitted item that omits `enchantment` and `mods`
+// keeps whatever is stored (services/character/input.js normalizeGearEquipment
+// and the save_character_atomic RPC), so reading the submission alone would
+// let an auto-calculated edit refund Merx that is still spent.
 
 const stored = (name, classId, enchantment, mods = []) => ({ name, class_id: classId, enchantment, mods });
 
@@ -221,24 +192,22 @@ test('an item that omits enchantment inherits the stored one', () => {
     [stored('Blade', 'c1', { source: 'default' })]
   );
   expect(effective[0].enchantment).toEqual({ source: 'default' });
-  expect(signatureSlotsUsed(effective)).toBe(2);
 });
 
-test('an explicit null removes the stored Enchantment, so it costs no slot', () => {
+test('an explicit null removes the stored Enchantment', () => {
   const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1', enchantment: null }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
-  expect(signatureSlotsUsed(effective)).toBe(1);
+  expect(effective[0].enchantment).toBeNull();
 });
 
-test('an item with its own Enchantment replaces the stored one, costing one slot', () => {
+test('an item with its own Enchantment replaces the stored one', () => {
   const effective = withPreservedEquipment(
     [{ name: 'Blade', class_id: 'c1', enchantment: { source: 'custom', name: 'Hex' } }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
   expect(effective[0].enchantment).toEqual({ source: 'custom', name: 'Hex' });
-  expect(signatureSlotsUsed(effective)).toBe(2);
 });
 
 test('an unenchanted stored row leaves an omitting item unenchanted', () => {
@@ -246,7 +215,7 @@ test('an unenchanted stored row leaves an omitting item unenchanted', () => {
     [{ name: 'Blade', class_id: 'c1' }],
     [stored('Blade', 'c1', null)]
   );
-  expect(signatureSlotsUsed(effective)).toBe(1);
+  expect(effective[0].enchantment).toBeNull();
 });
 
 // A bare "ClassName::ItemName" submission carries a class NAME, not an id, so
@@ -257,7 +226,7 @@ test('a class_id on the submitted item discriminates between same-named rows', (
     [{ name: 'Blade', class_id: 'c2' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
-  expect(signatureSlotsUsed(effective)).toBe(1);
+  expect(effective[0].enchantment).toBeNull();
 });
 
 test('a name-only item pairs with a same-named row of any class', () => {
@@ -265,7 +234,7 @@ test('a name-only item pairs with a same-named row of any class', () => {
     [{ name: 'Blade' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
-  expect(signatureSlotsUsed(effective)).toBe(2);
+  expect(effective[0].enchantment).toEqual({ source: 'default' });
 });
 
 // N identical items consume N stored rows, so a second copy of a name with
@@ -275,7 +244,7 @@ test('each stored row is claimed once', () => {
     [{ name: 'Blade', class_id: 'c1' }, { name: 'Blade', class_id: 'c1' }],
     [stored('Blade', 'c1', { source: 'default' }), stored('Blade', 'c1', null)]
   );
-  expect(signatureSlotsUsed(effective)).toBe(3);
+  expect(effective.map(item => item.enchantment)).toEqual([{ source: 'default' }, null]);
 });
 
 // The create path has no stored rows at all: every existing caller must see
@@ -284,7 +253,6 @@ test('no stored rows leaves the submitted list alone', () => {
   const submitted = [{ name: 'Blade', class_id: 'c1' }, { name: 'Shield' }];
   expect(withPreservedEquipment(submitted, undefined)).toEqual(submitted);
   expect(withPreservedEquipment(submitted, [])).toEqual(submitted);
-  expect(signatureSlotsUsed(withPreservedEquipment(submitted, []))).toBe(2);
 });
 
 test('an unmatched submitted item inherits nothing', () => {
@@ -292,7 +260,7 @@ test('an unmatched submitted item inherits nothing', () => {
     [{ name: 'Shield', class_id: 'c1' }],
     [stored('Blade', 'c1', { source: 'default' })]
   );
-  expect(signatureSlotsUsed(effective)).toBe(1);
+  expect(effective[0].enchantment).toBeNull();
 });
 
 // The Merx half of the same contract: Mods are priced, and an untouched row
@@ -334,7 +302,6 @@ describe('economyFigures', () => {
     const figures = economyFigures();
     expect(figures).toEqual({
       grants: CREATION_GRANT,
-      signatureCap: SIGNATURE_CAP,
       modsPerSignature: MODS_PER_SIGNATURE,
       aspiringSignaturePicks: ASPIRING_SIGNATURE_PICKS,
       enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,

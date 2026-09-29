@@ -1088,7 +1088,7 @@ test('auto-calculate leaves an Advent character on the advent economy', async ()
 // normalizeGearEquipment keeps. So an untouched build was re-priced as bare
 // Signatures and the difference was written back as commissary_reward the
 // character could spend a second time. The derivation now prices what the
-// save LEAVES, the way the Signature Cap two calls earlier already did.
+// save LEAVES.
 test('auto-calculate keeps charging for Enchantments an untouched edit does not mention', async () => {
   const storedGear = Array.from({ length: 3 }, (_, i) => ({
     name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }, mods: []
@@ -1344,112 +1344,30 @@ test('an update never drops creator_mode from an aspiring character', async () =
   expect(saved.creator_mode).toBe('aspiring');
 });
 
-// Review round 1, Finding 2: updateCharacter threaded no contentFormat into
-// normalizeCharacterInput at all, so economyFor always fell back to 'advent'
-// for any class-bearing (non-aspiring) character on every edit, no matter its
-// class's content_format -- an aspirant-content character's edits went
-// unenforced even though its creation is. Content_format now rides alongside
-// rulesVersion on the one getClassRulesVersion query updateCharacter already
-// makes unconditionally (mirroring how levelUp resolves the same pair), so
-// this fires without adding a query to every update.
-//
-// Review round 2: enforcing the bare Merx grant on every edit was ruled out.
-// A character that has been played owns mission rows, and this call cannot
-// fetch them, so an edit checked against the grant alone would refuse a
-// purchase that character's real mission income could fund -- a false
-// rejection worse than not checking at all. So an edit enforces ONLY the
-// Signature Cap, which needs no mission data; the Merx budget is
-// deliberately left unenforced on update (context.enforceMerxBudget: false
-// in normalizeCharacterInput) until a caller exists that can supply the
-// character's real earned Merx. A creation needs none of that: it owns no
-// mission rows, so the grant alone is its budget. The two tests below are
-// the two halves of that split, and the third confirms the cap's gear
-// resolution costs an advent update nothing it did not already pay.
+// updateCharacter threads the stored class's content_format into
+// normalizeCharacterInput, on the one getClassRulesVersion query it already
+// makes, so an aspirant-content character's edit is judged under the aspirant
+// economy. An edit enforces no Merx budget: a played character owns mission
+// rows this call cannot fetch, so a check against the bare grant would refuse
+// a purchase its mission income could fund. Nor does anything enforce the
+// Signature Cap, which limits what a character brings on a mission, not what
+// it owns.
 const aspirantUpdateAdapter = (calls) => makeAdapter(calls, {
   getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
   getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
 });
 
-test('an aspirant-content character edited past the Signature Cap is rejected', async () => {
+test('an aspirant-content character may own more Signatures than a mission allows', async () => {
   const calls = [];
-  const service = new CharacterService(aspirantUpdateAdapter(calls));
-  // 13 own-class Signatures fill 13 of the 12 aspirant slots -- Merx is not
-  // the issue (26 spent against a 12-Merx grant would fail the budget too,
-  // but the budget is not what's being checked here).
-  const gear = Array.from({ length: 13 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
-  const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
-  }, { id: 'profile-1' });
-  expect(result.data).toBeNull();
-  expect(result.error).toMatch(/Signature Cap|12/);
-});
-
-// Whole-plan review, Important 1: the cap was taken against the submitted
-// list alone, but a submitted item that omits `enchantment` KEEPS the stored
-// one (the three-state model in normalizeGearEquipment and the
-// save_character_atomic RPC), so two saves could carry a character past the
-// cap -- six enchanted Signatures, then twelve bare ones. The stored rows come
-// from the getCharacter call updateCharacter already makes, so no query is
-// added.
-test('an update cannot breach the Signature Cap with preserved Enchantments', async () => {
-  const calls = [];
-  const storedGear = Array.from({ length: 6 }, (_, i) => ({
-    name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }
-  }));
   const service = new CharacterService(makeAdapter(calls, {
-    getCharacter: async () => ok({
-      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID,
-      abilities: [], gear: storedGear
-    }),
-    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null })
-  }));
-  // 12 Signatures, the first 6 of them naming stored enchanted rows and saying
-  // nothing about equipment: 12 slots submitted, 18 effective.
-  const gear = Array.from({ length: 12 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
-  const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear
-  }, { id: 'profile-1' });
-  expect(result.data).toBeNull();
-  expect(result.error).toMatch(/Signature Cap|18/);
-});
-
-test('re-saving the same enchanted Signatures is not a breach', async () => {
-  const calls = [];
-  const storedGear = Array.from({ length: 6 }, (_, i) => ({
-    name: `S${i}`, class_id: ASPIRANT_CLASS_ID, enchantment: { source: 'default' }
-  }));
-  const service = new CharacterService(makeAdapter(calls, {
-    getCharacter: async () => ok({
-      id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID,
-      abilities: [], gear: storedGear
-    }),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: ASPIRANT_CLASS_ID, abilities: [] }),
     getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'aspirant', error: null }),
     saveCharacterAtomic: async () => ok({ id: 'character-1' })
   }));
-  const gear = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
+  const gear = Array.from({ length: 13 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
   const result = await service.updateCharacter('character-1', {
     name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear,
     trait0: 'brave', trait1: 'calm', trait2: 'alert'
-  }, { id: 'profile-1' });
-  expect(result.error).toBeNull();
-});
-
-test('an advent update is unaffected by stored Enchantments', async () => {
-  const calls = [];
-  const storedGear = Array.from({ length: 20 }, (_, i) => ({
-    name: `S${i}`, class_id: ADVENT_CLASS_ID, enchantment: { source: 'default' }
-  }));
-  const service = new CharacterService(makeAdapter(calls, {
-    getCharacter: async () => ok({
-      id: 'character-1', creator_id: 'profile-1', class_id: ADVENT_CLASS_ID,
-      abilities: [], gear: storedGear
-    }),
-    getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
-    saveCharacterAtomic: async () => ok({ id: 'character-1' })
-  }));
-  const gear = Array.from({ length: 20 }, (_, i) => ({ name: `S${i}`, class_id: ADVENT_CLASS_ID }));
-  const result = await service.updateCharacter('character-1', {
-    name: 'Hero', class_id: ADVENT_CLASS_ID, gear
   }, { id: 'profile-1' });
   expect(result.error).toBeNull();
 });
@@ -1458,10 +1376,9 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
   const calls = [];
   const service = new CharacterService(aspirantUpdateAdapter(calls));
   // 7 own-class Signatures spend 14 Merx -- over the bare 12-Merx grant, which
-  // would fail if the budget were enforced here -- but only 7 of the 12
-  // Signature Cap slots, so the save must go through. A character can only
-  // ever reach 7 real Signatures on a save by having earned Merx from
-  // missions; refusing this save would refuse a purchase that Merx paid for.
+  // would fail if the budget were enforced here -- so the save must go through:
+  // a character only reaches 7 Signatures by having earned Merx from missions,
+  // and refusing this save would refuse a purchase that Merx paid for.
   const gear = Array.from({ length: 7 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }));
   const result = await service.updateCharacter('character-1', {
     name: 'Hero', class_id: ASPIRANT_CLASS_ID, gear,
@@ -1470,11 +1387,7 @@ test('an update does not refuse a purchase earned Merx could fund', async () => 
   expect(result.error).toBeNull();
 });
 
-// An update's cap check needs no gear resolution and no catalogue lookup: it
-// counts entries and Enchantment presence (signatureSlotsUsed) and pairs the
-// submission against the stored rows getCharacter already returned, using the
-// class_id each side carries rather than resolving a name to one -- see the
-// comment on updateCharacter in service.js. These payloads submit no
+// An update resolves no gear before it saves. These payloads submit no
 // abilities, so the only getClassContentLookupMaps call they make is
 // saveCharacterAtomic's own, and it happens exactly once regardless of gear
 // count or economy. Pinning the count at 1 (not 0) for BOTH an advent and an
@@ -1736,7 +1649,7 @@ test('an ability submitted without a type keeps the stored type of an existing r
 
 // --- Task 9: the ability cap and Perk balance wired into both save paths ---
 //
-// Mirrors the Signature Cap split just above: a new character must be legal
+// A new character must be legal
 // outright (enforceAbilityLimits: true), but an edit delegates to Task 10's
 // ratchet (enforceAbilityLimits: false) so an already-breaching character
 // stays editable.
@@ -1844,9 +1757,8 @@ test('a created aspiring character prices all three pool Abilities as own-class'
 
 // The update path delegates the ability cap and Perk balance to Task 10's
 // ratchet: an absolute check here would refuse every save by an already-
-// breaching character, exactly as the Signature Cap split above documents
-// for Merx. Reuses aspirantUpdateAdapter (defined for the Signature Cap
-// tests), whose stored character carries `abilities: []` -- a LEGAL build,
+// breaching character, exactly as the Merx budget is left unenforced on an
+// edit. Reuses aspirantUpdateAdapter, whose stored character carries `abilities: []` -- a LEGAL build,
 // so going to 7 is a fresh breach, not a grandfathered one, and the ratchet
 // (below) refuses it same as a creation would.
 test('an update introducing a fresh Ability-cap breach is refused', async () => {
@@ -2386,4 +2298,15 @@ test('a version-family read failure is returned, not thrown', async () => {
     getClassFamilyRows: async () => ({ data: [], error: { message: 'boom' } })
   });
   expect(await service.convertToAspirant(CREATOR, 'character-1')).toEqual({ data: null, error: { message: 'boom' } });
+});
+
+// pg. 85: the Signature Cap limits what a character brings on a mission. A
+// creation is held to its Merx grant alone.
+test('a creation over its Merx is refused on Merx alone, with no Signature Cap', async () => {
+  const service = new CharacterService(aspirantCreateAdapter([]));
+  const result = await service.createCharacter(aspirantCreatePayload({
+    gear: Array.from({ length: 13 }, (_, i) => ({ name: `S${i}`, class_id: ASPIRANT_CLASS_ID }))
+  }), { id: 'profile-1' });
+  expect(result.data).toBeNull();
+  expect(result.error).toBe('This character spends 26 Merx of 12.');
 });

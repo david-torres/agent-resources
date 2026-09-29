@@ -147,7 +147,7 @@ JSON output:`;
     characterData.gear = formatClassContent(characterData.gear, classDefinition.id);
     const { data: character, error } = await createCharacter(characterData, profile);
     // createCharacter reports its validation failures as a plain string (the
-    // Merx budget and Signature Cap among them), so reading `.message` off it
+    // Merx budget among them), so reading `.message` off it
     // leaves the catch below with nothing to tell the player. Same shape test
     // routes/characters.js uses on the create routes.
     if (error) throw new Error(typeof error === 'string' ? error : error.message);

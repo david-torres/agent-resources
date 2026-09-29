@@ -74,9 +74,7 @@ const PERKS_PER_ABILITY = 5;
 // cap cannot be increased, even via Flavor". pg. 92: aspiring "may never have
 // more than four total Abilities".
 //
-// Advent reads 3, not null. Its siblings use null for "the rules this app
-// models state no cap" (SIGNATURE_CAP.advent, util/merx-economy.js), and that
-// is not the case here: Advent has no unlock path whatsoever, so its three
+// Advent reads 3, not null: Advent has no unlock path whatsoever, so its three
 // Core Abilities are the entire roster a character can hold. Three is the true
 // figure, not an absent one.
 const ABILITY_CAP = { advent: 3, aspirant: 6, aspiring: 4 };

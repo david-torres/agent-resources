@@ -1130,7 +1130,7 @@ test.skipIf(!V1_ARTIFACT)('counting Power Rating superscripts as words would bre
   expect(breaches).toHaveLength(5);
 });
 
-// --- validateEconomyLimits: the Merx budget and Signature Cap -----------
+// --- validateEconomyLimits: the Merx budget -----------------------
 //
 // Reports like validateGearEquipment -- `{ ok: true }` or `{ ok: false,
 // errors }` -- never a throw. See the function's own comment in input.js for
@@ -1179,22 +1179,16 @@ test('common items are charged against the budget', () => {
   expect(result.errors.join(' ')).toMatch(/Merx/);
 });
 
-// pg. 8: six enchanted Signatures fill the cap of twelve, so a seventh
-// Signature cannot be carried at all -- independent of Merx.
-test('the Signature Cap counts an Enchantment as a slot', () => {
-  const gear = own(6).map((g) => ({ ...g, enchantment: { source: 'default' } }));
+// pg. 85: the Signature Cap limits what a character brings on a mission, not
+// what it owns, so nothing here counts Signature slots.
+test('owning more Signature slots than a mission allows is no error', () => {
+  const gear = own(7).map((g) => ({ ...g, enchantment: { source: 'default' } }));
   expect(validateEconomyLimits({
     ...ASPIRANT, gear, commonItems: [], enforceMerxBudget: false
   })).toEqual({ ok: true });
-  const result = validateEconomyLimits({
-    ...ASPIRANT, gear: [...gear, { name: 'One More', class_id: 'v1' }],
-    commonItems: [], enforceMerxBudget: false
-  });
-  expect(result.ok).toBe(false);
-  expect(result.errors.join(' ')).toMatch(/Signature Cap|12/);
 });
 
-test('aspiring is capped at eight slots and granted ten Merx', () => {
+test('aspiring is granted ten Merx and may own more Signatures than it brings on a mission', () => {
   const picks = [
     { name: 'A', class_id: 'class-a' },
     { name: 'B', class_id: 'class-b' },
@@ -1204,23 +1198,8 @@ test('aspiring is capped at eight slots and granted ten Merx', () => {
     economy: 'aspiring', characterClassId: null, gear: picks, commonItems: []
   })).toEqual({ ok: true });
   const nine = Array.from({ length: 9 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
-  const result = validateEconomyLimits({
-    economy: 'aspiring', characterClassId: null, gear: nine, commonItems: [],
-    enforceMerxBudget: false
-  });
-  expect(result.ok).toBe(false);
-  expect(result.errors.join(' ')).toMatch(/Signature Cap|8/);
-});
-
-// Review round 1, Finding 3: the aspiring cap's passing side (exactly at the
-// boundary, not comfortably under it) was never asserted, so a `>` that
-// regressed to `>=` would reject a legal 8-slot build and nothing would catch
-// it. The budget is switched off so only the cap, not the spend, could be
-// doing the rejecting.
-test('exactly eight Signatures fit the aspiring cap', () => {
-  const eight = Array.from({ length: 8 }, (_, i) => ({ name: `S${i}`, class_id: 'class-a' }));
   expect(validateEconomyLimits({
-    economy: 'aspiring', characterClassId: null, gear: eight, commonItems: [],
+    economy: 'aspiring', characterClassId: null, gear: nine, commonItems: [],
     enforceMerxBudget: false
   })).toEqual({ ok: true });
 });
@@ -1436,24 +1415,24 @@ test('normalizeCharacterInput prices an aspiring Ability against context.aspirin
 // A gate that refuses a save the rules permit is the exact failure mode
 // validateEconomyLimits's own comment calls worse than not checking at all.
 
-test('an Enchantment that normalizes to nothing costs no Signature Cap slot', () => {
+test('an Enchantment that normalizes to nothing is not charged Merx', () => {
   // `enchantment: {}` carries no source, so shapeEnchantment stores null --
-  // nothing is stored, so nothing may be counted. Seven such items are 7 of
-  // the 12 aspirant slots, not 14.
-  const gear = own(7).map((g) => ({ ...g, enchantment: {} }));
+  // nothing is stored, so nothing may be charged. Six such Signatures spend
+  // exactly the 12-Merx grant.
+  const gear = own(6).map((g) => ({ ...g, enchantment: {} }));
   const result = normalizeCharacterInput({
     name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear,
     trait0: 'brave', trait1: 'calm', trait2: 'alert'
-  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
   expect(result.error).toBeNull();
 });
 
-test('a real Enchantment still costs a Signature Cap slot', () => {
-  const gear = own(7).map((g) => ({ ...g, enchantment: { source: 'default' } }));
+test('a real Enchantment is still charged Merx', () => {
+  const gear = own(6).map((g) => ({ ...g, enchantment: { source: 'default' } }));
   const result = normalizeCharacterInput({
     name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
-  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
-  expect(result.error).toMatch(/Signature Cap|12/);
+  }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
+  expect(result.error).toMatch(/Merx/);
 });
 
 test('Mods that normalize away are not charged Merx', () => {
@@ -1475,77 +1454,6 @@ test('a real Mod is still charged Merx', () => {
     name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
   }, { rulesVersion: 'v1', contentFormat: 'aspirant' });
   expect(result.error).toMatch(/Merx/);
-});
-
-test('the gate counts a bare "Class::Item" submission as one slot each', () => {
-  const gear = Array.from({ length: 13 }, (_, i) => `Aspira::S${i}`);
-  const result = normalizeCharacterInput({
-    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
-  }, { rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false });
-  expect(result.error).toMatch(/Signature Cap|12/);
-});
-
-// --- the Signature Cap counts preserved equipment too --------------------
-//
-// Whole-plan review, Important 1: the cap was taken against the submitted
-// list, but an item that omits `enchantment` keeps its stored one, so the cap
-// was breachable across two saves. context.storedGear is the character's
-// current class_gear rows, which updateCharacter already has in hand.
-
-const enchanted = (n, classId = 'v1') => Array.from({ length: n }, (_, i) => ({
-  name: `S${i}`, class_id: classId, enchantment: { source: 'default' }
-}));
-
-test('six stored Enchantments plus twelve bare Signatures breaches the cap', () => {
-  // The two-save route: save 6 enchanted Signatures (12 slots, legal), then
-  // submit 12 items whose first 6 omit `enchantment` and so keep theirs. The
-  // effective character carries 12 Signatures + 6 Enchantments = 18 slots.
-  const submitted = Array.from({ length: 12 }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
-  const result = validateEconomyLimits({
-    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
-    enforceMerxBudget: false
-  });
-  expect(result.ok).toBe(false);
-  expect(result.errors.join(' ')).toMatch(/Signature Cap|18/);
-});
-
-test('a legitimate twelve-slot update is still accepted', () => {
-  // Re-saving the same six enchanted Signatures is exactly the cap, not over
-  // it: each submitted item claims its own stored row, so no Enchantment is
-  // counted twice.
-  const submitted = Array.from({ length: 6 }, (_, i) => ({ name: `S${i}`, class_id: 'v1' }));
-  expect(validateEconomyLimits({
-    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
-    enforceMerxBudget: false
-  })).toEqual({ ok: true });
-});
-
-test('removing a stored Enchantment frees its slot', () => {
-  const submitted = Array.from({ length: 12 }, (_, i) => ({
-    name: `S${i}`, class_id: 'v1', ...(i < 6 ? { enchantment: null } : {})
-  }));
-  expect(validateEconomyLimits({
-    ...ASPIRANT, gear: submitted, storedGear: enchanted(6), commonItems: [],
-    enforceMerxBudget: false
-  })).toEqual({ ok: true });
-});
-
-test('an advent update pays nothing for stored equipment', () => {
-  expect(validateEconomyLimits({
-    economy: 'advent', characterClassId: 'advent', gear: own(20),
-    storedGear: enchanted(20, 'advent'), commonItems: [], enforceMerxBudget: false
-  })).toEqual({ ok: true });
-});
-
-test('normalizeCharacterInput threads context.storedGear into the cap', () => {
-  const gear = Array.from({ length: 12 }, (_, i) => `Aspira::S${i}`);
-  const result = normalizeCharacterInput({
-    name: 'Vex', creator_mode: 'aspirant', class_id: 'v1', gear
-  }, {
-    rulesVersion: 'v1', contentFormat: 'aspirant', enforceMerxBudget: false,
-    storedGear: enchanted(6)
-  });
-  expect(result.error).toMatch(/Signature Cap|18/);
 });
 
 test('the aspiring ability shaper keeps only well-formed picks', () => {

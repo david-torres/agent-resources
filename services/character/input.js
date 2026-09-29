@@ -14,10 +14,7 @@ const {
   MODS_PER_SIGNATURE,
   economyFor,
   equipmentSpend,
-  signatureSlotsUsed,
-  withPreservedEquipment,
   CREATION_GRANT,
-  SIGNATURE_CAP,
   COMMON_ITEM_PRICE,
   ASPIRING_SIGNATURE_PICKS
 } = require('../../util/merx-economy');
@@ -325,48 +322,33 @@ const validateStatLimits = ({
 const normalizeEnchantment = (value) => shapeEnchantment(value).value ?? null;
 const normalizeMods = (value) => shapeMods(value).value ?? [];
 
-// Judges a character's Merx spend and/or Signature Cap against
-// util/merx-economy.js -- the single definition of every figure -- and
-// reports both the same way validateGearEquipment does: `{ ok: true }` or
-// `{ ok: false, errors }`, never a throw. A throw here would reach
-// `POST /characters/wizard` and `POST /characters` as an unhandled promise
-// rejection (neither route has an asyncHandler wrapper, so the request just
-// hangs) and `PUT /characters/:id` as a generic "unexpected error" (a bare
+// Judges a character's Ability cap, Perk balance and Merx spend against
+// util/perk-economy.js and util/merx-economy.js -- the single definitions of
+// every figure -- and reports them the same way validateGearEquipment does:
+// `{ ok: true }` or `{ ok: false, errors }`, never a throw. A throw here would
+// reach `POST /characters/wizard` and `POST /characters` as an unhandled
+// promise rejection (neither route has an asyncHandler wrapper, so the request
+// just hangs) and `PUT /characters/:id` as a generic "unexpected error" (a bare
 // Error has no `.code`, so util/http-error.js classifyError drops the message
 // in production).
 //
-// The Advent economy is deliberately unenforced: every character that exists
-// today predates any budget, and no measurement says it would pass one, so
-// enforcing it now would retroactively invalidate real data. Aspirant and
-// Aspiring are both empty populations, which is what makes hard rejection
-// safe for them.
+// No Signature count is judged: the Signature Cap (pg. 85) limits what a
+// character brings on a mission, not what it owns.
 //
-// `enforceMerxBudget` (default true) exists because the Signature Cap and the
-// Merx budget need different information: the cap is a fixed number that any
-// caller can check, but a character's real budget is CREATION_GRANT plus
-// whatever Merx its mission ROWS have earned, and updateCharacter has no
-// mission data in hand outside its auto_calculate branch. Enforcing the bare
-// grant on an edit would refuse a purchase a character's real (unfetched)
-// earnings could afford, and that false rejection is worse than not checking
-// at all, so an edit switches the budget off and keeps the cap.
+// `enforceMerxBudget` (default true) is off on an edit. A character's real
+// budget is CREATION_GRANT plus whatever Merx its mission ROWS have earned,
+// and updateCharacter has no mission data in hand outside its auto_calculate
+// branch, so the bare grant would refuse a purchase its real (unfetched)
+// earnings could afford. A creation owns no mission rows, so the grant alone
+// is its whole budget. The Advent economy has no budget at all: every
+// character that exists today predates one, and no measurement says it would
+// pass one.
 //
-// A creation needs no mission data: a character being created owns no
-// mission rows, so the grant alone is its whole budget.
-//
-// `storedGear` is the character's current class_gear rows, passed by
-// updateCharacter from the getCharacter call it already makes. The cap is
-// counted from the equipment the save will LEAVE, not only what it mentions:
-// an item that omits `enchantment` and `mods` keeps its stored ones, so the
-// submitted list alone is breachable across two saves (see
-// withPreservedEquipment). The spend below stays on the submitted list --
-// storedGear only ever arrives from updateCharacter, which passes
-// enforceMerxBudget: false, so no caller prices a list with stored rows
-// behind it. `abilities` arrive already tagged `{crossClass, type}` by the
-// caller -- this function does not resolve classes or pools -- and `level`
-// is needed because the Perk grant buildBreaches checks against scales with
-// it.
+// `abilities` arrive already tagged `{crossClass, type}` by the caller -- this
+// function does not resolve classes or pools -- and `level` is needed because
+// the Perk grant buildBreaches checks against scales with it.
 const validateEconomyLimits = ({
-  economy, gear, storedGear, commonItems, characterClassId, aspiringSignatures,
+  economy, gear, commonItems, characterClassId, aspiringSignatures,
   abilities, abilityPerks, level,
   enforceMerxBudget = true, enforceAbilityLimits = true
 }) => {
@@ -388,31 +370,14 @@ const validateEconomyLimits = ({
     }
   }
 
-  // The Merx half stays off for advent: 327 existing characters were built
-  // with no Merx budget and no measurement says they would pass one.
-  if (economy !== 'advent') {
+  if (economy !== 'advent' && enforceMerxBudget) {
     const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
-
-    // pg. 8: an Enchantment counts as a second slot toward the Signature Cap.
-    // This is checked independently of Merx -- a character who can afford a
-    // seventh enchanted Signature may still not carry it if the slots are full.
-    const cap = SIGNATURE_CAP[economy];
-    const slots = signatureSlotsUsed(withPreservedEquipment(items, storedGear));
-    if (cap !== null && slots > cap) {
-      errors.push(
-        `Signature Cap is ${cap}; this character carries ${slots} `
-        + '(an Enchantment counts as a Signature).'
-      );
-    }
-
-    if (enforceMerxBudget) {
-      const budget = CREATION_GRANT[economy];
-      const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
-      const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
-        + itemCount * COMMON_ITEM_PRICE;
-      if (spend > budget) {
-        errors.push(`This character spends ${spend} Merx of ${budget}.`);
-      }
+    const budget = CREATION_GRANT[economy];
+    const itemCount = Array.isArray(commonItems) ? commonItems.length : 0;
+    const spend = equipmentSpend(items, { economy, characterClassId, aspiringSignatures })
+      + itemCount * COMMON_ITEM_PRICE;
+    if (spend > budget) {
+      errors.push(`This character spends ${spend} Merx of ${budget}.`);
     }
   }
 
@@ -675,14 +640,13 @@ const normalizeCharacterInput = (input, context = {}) => {
   // Normalized before it is priced, through the same normalizeClassItems the
   // write paths run: a submission may carry equipment that shapes to nothing
   // storable (`enchantment: {}` has no source and stores null; a blank-named
-  // Mod is dropped), and charging Merx or a Signature Cap slot for equipment
+  // Mod is dropped), and charging Merx for equipment
   // the save will not store refuses builds the rules permit. Normalizing here
   // rather than re-deriving "what counts as stored equipment" keeps that
   // definition in one place.
   // context.enforceMerxBudget defaults to true (creation) and is passed false
   // by updateCharacter (an edit's real budget needs the character's mission
-  // ROWS, which this call has no way to fetch). The Signature Cap needs no
-  // such data and always runs for a non-advent economy either way.
+  // ROWS, which this call has no way to fetch).
   //
   // A creation's budget is the grant alone. The payload's completed_missions
   // is a count the character declares, not mission rows -- a creation writes
@@ -711,7 +675,6 @@ const normalizeCharacterInput = (input, context = {}) => {
   const economyValidation = validateEconomyLimits({
     economy,
     gear: normalizeClassItems(context.economyGear ?? childData.classGear),
-    storedGear: context.storedGear,
     commonItems: data.common_items,
     characterClassId: data.class_id ?? null,
     aspiringSignatures: data.aspiring_signatures,

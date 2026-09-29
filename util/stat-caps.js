@@ -31,9 +31,7 @@ const CAP_INCREASE_PLUS_COST = 2;
 // it. Whether a save is held to it is a decision for whatever validates the
 // save, not for this module; recording a false value here to signal
 // "unenforced" would be a lie in the one place that exists to be
-// authoritative. SIGNATURE_CAP.advent in util/merx-economy.js is null for a
-// different reason that looks similar: Advent has no such cap at all, so null
-// is the true figure there.
+// authoritative.
 const CREATION_PLUSES = { advent: 6, aspirant: 6, aspiring: 4 };
 
 const LEVEL_PLUSES_PER_LEVEL = 2;

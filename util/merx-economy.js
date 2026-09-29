@@ -1,5 +1,5 @@
 // The Merx economy ENCLAVE: Aspirant V1 prints on page 85, with the grants,
-// caps and word limits from pages 3, 8, 86, 87, 90 and 92.
+// the Mod limit and the word limits from pages 3, 86, 87 and 90.
 //
 // This is the only place these figures are written down, so that every
 // consumer -- an extractor, a verifier, a derivation, a browser view --
@@ -29,12 +29,6 @@ const COMMON_ITEM_PRICE = 1;
 // items instead priced only the first of those routes and reported a deficit
 // for the other two.
 const CREATION_GRANT = { advent: 2, aspirant: 12, aspiring: 10 };
-
-// pg. 85: "you can never bring more than 12 Signature Items on a mission".
-// pg. 92: aspiring "Signature Cap is set at 8, and they may never have more
-// than four total Abilities". Advent has no cap in the rules the app models,
-// so null means "not capped" rather than zero.
-const SIGNATURE_CAP = { advent: null, aspirant: 12, aspiring: 8 };
 
 // pg. 87: "A given Signature may hold up to two Mods".
 const MODS_PER_SIGNATURE = 2;
@@ -107,23 +101,13 @@ const equipmentSpend = (gear, { economy, characterClassId, aspiringSignatures } 
     }, 0);
 };
 
-// pg. 8: an Enchantment "counts towards the Signature Cap of 12", so an
-// enchanted Signature occupies two slots; Mods "do not count towards the
-// Signature cap" and occupy none.
-const signatureSlotsUsed = (gear) => {
-    const items = Array.isArray(gear) ? gear.filter(Boolean) : [];
-    return items.reduce((slots, item) => slots + 1 + (item.enchantment ? 1 : 0), 0);
-};
-
-// pg. 8 charges an Enchantment a cap slot, and every Enchantment and Mod
-// costs Merx, so both have to be judged against the equipment a save LEAVES
-// on a character, not only the equipment its payload mentions. A submitted
-// item that omits `enchantment` and `mods` keeps whatever is stored -- the
-// three-state model services/character/input.js normalizeGearEquipment and
-// the save_character_atomic RPC share, and the contract the edit form's
-// purchase surface serialises to for any row the player did not touch.
-// Counting or pricing the submission alone lets an untouched character walk
-// past the cap (six enchanted Signatures, then twelve bare ones) and lets an
+// Every Enchantment and Mod costs Merx, so a spend has to be judged against the
+// equipment a save LEAVES on a character, not only the equipment its payload
+// mentions. A submitted item that omits `enchantment` and `mods` keeps
+// whatever is stored -- the three-state model services/character/input.js
+// normalizeGearEquipment and the save_character_atomic RPC share, and the
+// contract the edit form's purchase surface serialises to for any row the
+// player did not touch. Pricing the submission alone would let an
 // auto-calculated edit hand back Merx that is still spent.
 //
 // Pairing mirrors the RPC's (class_id, name, occurrence) matching, with one
@@ -138,10 +122,8 @@ const signatureSlotsUsed = (gear) => {
 // one-sided: the RPC resolves every bare copy of a name to the ONE class_id
 // the catalogue maps it to and deletes the same-named rows of other classes,
 // so the equipment it preserves may not be the one claimed here. Claiming the
-// dearest row first means this can report MORE slots and MORE spend than the
-// save will produce, never fewer. The worst case is refusing a save that
-// already sits exactly on a limit in an ambiguous same-name-across-classes
-// build; the opposite bias would leave the two-save breach open.
+// dearest row first means this can report MORE spend than the save will
+// produce, never less.
 const withPreservedEquipment = (submitted, stored) => {
     const items = Array.isArray(submitted) ? submitted.filter(Boolean) : [];
     const rows = Array.isArray(stored) ? stored.filter(Boolean) : [];
@@ -203,7 +185,6 @@ const economyFor = ({ contentFormat, creatorMode } = {}) => {
 // the module's own constants back.
 const economyFigures = () => ({
     grants: { ...CREATION_GRANT },
-    signatureCap: { ...SIGNATURE_CAP },
     modsPerSignature: MODS_PER_SIGNATURE,
     aspiringSignaturePicks: ASPIRING_SIGNATURE_PICKS,
     enchantmentWordLimit: ENCHANTMENT_WORD_LIMIT,
@@ -239,12 +220,10 @@ module.exports = {
     priceOfEnchantment,
     priceOfMod,
     equipmentSpend,
-    signatureSlotsUsed,
     withPreservedEquipment,
     countWordsExcludingRatings,
     COMMON_ITEM_PRICE,
     CREATION_GRANT,
-    SIGNATURE_CAP,
     MODS_PER_SIGNATURE,
     ASPIRING_SIGNATURE_PICKS,
     ENCHANTMENT_WORD_LIMIT,

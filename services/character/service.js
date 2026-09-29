@@ -173,10 +173,10 @@ const submittedAbilityType = (value) => (value === 'advanced' || value === 'core
 
 // An object item keeps every field it submitted (spread first, name/class_id
 // pinned after) -- not just name/class_id -- so a resolved item still carries
-// its enchantment/mods. Both deriveCharacterTotals (equipmentSpend) and
-// validateEconomyLimits (signatureSlotsUsed) price an Enchantment as part of
-// this same item, and dropping it here would silently zero that cost for any
-// caller that resolves gear through this function.
+// its enchantment/mods. Both deriveCharacterTotals and validateEconomyLimits
+// (equipmentSpend) price an Enchantment as part of this same item, and
+// dropping it here would silently zero that cost for any caller that
+// resolves gear through this function.
 const resolveSubmittedGear = (gear, { maps, ownClassId }) => {
   const resolve = classItemResolver({ maps, ownClassId });
   const classIdOf = (item) =>
@@ -546,26 +546,12 @@ class CharacterService {
       })
       : [];
 
-    // The Signature Cap is enforced on every save, including an edit; the
-    // Merx budget is NOT -- see validateEconomyLimits's own comment for why
-    // (an edit's real budget needs mission-earned Merx this path does not
-    // fetch outside auto_calculate, and checking the bare grant would refuse
-    // a purchase the character can actually afford). The cap needs no
-    // catalogue lookup: it counts Signatures and Enchantments
-    // (signatureSlotsUsed), and it pairs a submission against the stored rows
-    // getCharacter already returned using the class_id each side carries, so
-    // it resolves no gear names. createCharacter does resolve gear, because
-    // the Merx budget IT enforces prices cross-class items differently
-    // (equipmentSpend reads class_id).
-    //
-    // storedGear is what makes the cap honest across two saves: an item that
-    // omits `enchantment` and `mods` keeps its stored ones, so counting only
-    // what the payload mentions would let 6 enchanted Signatures plus 12 bare
-    // ones through at a submitted 12 slots and a real 18.
-    // The Stat Cap is enforced on every edit too, the same way the Signature
-    // Cap is just above; capPurchases comes from the row this call already
-    // fetched (existing.data.stat_cap_purchases), not a second lookup. The
-    // creation allotment and +++ ceiling are NOT enforced here -- see
+    // The Merx budget is NOT enforced on an edit -- see validateEconomyLimits's
+    // own comment (an edit's real budget needs mission-earned Merx this path
+    // does not fetch outside auto_calculate). The Stat Cap is enforced on every
+    // edit; capPurchases comes from the row this call already fetched
+    // (existing.data.stat_cap_purchases), not a second lookup. The creation
+    // allotment and +++ ceiling are NOT enforced here -- see
     // validateStatLimits's own comment -- so this path fetches no class data
     // for the Stat Cap at all; a class's stat_spread plays no part in either
     // check validateStatLimits runs.
@@ -574,7 +560,6 @@ class CharacterService {
       normalizeAutoCalculate: true,
       contentFormat,
       enforceMerxBudget: false,
-      storedGear: existing.data.gear,
       capPurchases: existing.data.stat_cap_purchases,
       enforceCreationAllotment: false,
       isCreation: false,
