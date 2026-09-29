@@ -307,6 +307,7 @@ const fixture = (overrides = {}) => {
     mode,
     preselectedClassId: null,
     classes,
+    shopClasses: classes,
     statList: [],
     personalityMap: {},
     commonItems: [],

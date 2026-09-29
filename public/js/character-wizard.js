@@ -296,6 +296,39 @@ window.CharacterWizard = (function () {
     return state.classId ? classesById[state.classId] || null : null;
   };
 
+  // Names compare trimmed and case-folded (util/item-name.js#nameKey).
+  const nameKey = (value) => String(value == null ? '' : value).trim().toLowerCase();
+
+  // The route resolves each card's own class (util/class-family.js#ownClassIds).
+  const ownClassIdsOf = (classId) => {
+    const cls = classId ? classesById[classId] : null;
+    return (cls && cls.own_class_ids) || [];
+  };
+
+  const shopClassNames = {};
+  DATA.shopClasses.forEach((c) => { shopClassNames[c.id] = c.name; });
+
+  // What the shops sell beside the selected class: every other served class.
+  // DATA.shopClasses holds each name once per lineage already; the classes of
+  // the selected class's own lineage also drop the names it prints, which
+  // puts it first in util/class-lineage.js#lineageCatalogue's order.
+  const shopClassesFor = (s) => {
+    const own = s && s.classId ? classesById[s.classId] : null;
+    const ownGear = new Set(((own && own.class_gear) || []).map((g) => nameKey(g && g.name)));
+    const ownAbilities = new Set(((own && own.abilities) || []).concat((own && own.advanced_abilities) || [])
+      .map((a) => nameKey(a && a.name)));
+    const notOwn = (names) => (item) => !!(item && item.name) && !names.has(nameKey(item.name));
+    return DATA.shopClasses
+      .filter((cls) => cls && cls.id && !(own && cls.id === own.id))
+      .map((cls) => (own && own.lineage_id && cls.lineage_id === own.lineage_id
+        ? Object.assign({}, cls, {
+          class_gear: (cls.class_gear || []).filter(notOwn(ownGear)),
+          abilities: (cls.abilities || []).filter(notOwn(ownAbilities)),
+          advanced_abilities: (cls.advanced_abilities || []).filter(notOwn(ownAbilities))
+        })
+        : cls));
+  };
+
   // Escape helper for injecting into innerHTML (limited, but enough for teaser text).
   const esc = (s) => {
     return String(s == null ? '' : s)
@@ -1905,29 +1938,31 @@ window.CharacterWizard = (function () {
     return printed.filter((a) => a && a.name);
   };
 
-  // pg. 7: a character's own Core roster is its free allowance, and only the
-  // first PERKS.freeCoreAbilities of it. A class printing more than that
-  // charges the full own-Core price for every row past the allowance, exactly
-  // as util/perk-economy.js#unlockSpend does over the submitted array -- the
-  // ability shop never sells an own-class Core row, so the printed roster is
-  // the only place a waiver can be consumed.
-  const ownCoreSpend = (s) => {
-    const free = (PERKS.freeCoreAbilities && PERKS.freeCoreAbilities[economyOf(s)]) || 0;
-    const charged = Math.max(0, printedCoreRoster(s).length - free);
-    return charged * PERKS.prices.ability.own.core;
-  };
-
   // Step 3's Perk, once attached to one of the class's Abilities, ships as an
   // Ability Perk row (buildSubmitPayload), and util/perk-economy.js#perkSpend
   // charges ABILITY_PERK_COST for it -- so one condition decides both.
   const attachesAbilityPerk = (s) => DATA.mode === 'aspirant'
     && !!(s && s.perkAbilityName) && !!((s && s.perk) || '').trim();
 
-  // Both terms of util/perk-economy.js#perkSpend: Ability unlocks, and the
-  // attached Ability Perk.
-  const perksSpent = (s) => ownCoreSpend(s)
-    + (s.acquiredAbilities || []).reduce((total, pick) => total + priceOfPick(pick), 0)
-    + (attachesAbilityPerk(s) ? PERKS.abilityPerkCost : 0);
+  // util/perk-economy.js#unlockSpend over what buildSubmitPayload sends: the
+  // printed Core roster, then every acquired pick. The first
+  // PERKS.freeCoreAbilities own-class Core rows are free, wherever they come
+  // from.
+  const unlockSpend = (s) => {
+    const free = (PERKS.freeCoreAbilities && PERKS.freeCoreAbilities[economyOf(s)]) || 0;
+    const rows = printedCoreRoster(s).map(() => ({ type: 'core', crossClass: false }))
+      .concat(s.acquiredAbilities || []);
+    let waived = 0;
+    return rows.reduce((total, row) => {
+      if (!row.crossClass && row.type !== 'advanced' && waived < free) {
+        waived += 1;
+        return total;
+      }
+      return total + priceOfPick(row);
+    }, 0);
+  };
+
+  const perksSpent = (s) => unlockSpend(s) + (attachesAbilityPerk(s) ? PERKS.abilityPerkCost : 0);
 
   // grant + perLevel * (level - 1), the same shape util/perk-economy.js's
   // perkAllotment uses server-side, so a character created above level 1
@@ -1949,11 +1984,19 @@ window.CharacterWizard = (function () {
   // the acquired rows -- and refuses only what the server would refuse.
   const abilitiesUsed = (s) => printedCoreRoster(s).length + (s.acquiredAbilities || []).length;
 
+  // services/character/input.js refuses a save that holds one Ability name
+  // twice, whatever the class.
+  const holdsAbilityName = (s, name) => {
+    const key = nameKey(name);
+    return printedCoreRoster(s).some((a) => nameKey(a.name) === key)
+      || (s.acquiredAbilities || []).some((a) => nameKey(a.abilityName) === key);
+  };
+
   const canAcquire = (s, pick) => {
-    if ((s.acquiredAbilities || []).some((a) => samePick(a, pick))) return false;
+    if (holdsAbilityName(s, pick.abilityName)) return false;
     const cap = PERKS.abilityCap[economyOf(s)];
     if (cap != null && abilitiesUsed(s) + 1 > cap) return false;
-    return perksSpent(s) + priceOfPick(pick) <= perksGrant(s);
+    return perksSpent(Object.assign({}, s, { acquiredAbilities: (s.acquiredAbilities || []).concat([pick]) })) <= perksGrant(s);
   };
 
   const acquireAbility = (s, pick) => {
@@ -1975,31 +2018,23 @@ window.CharacterWizard = (function () {
   // -- economyOf(s) gates both siblings out to an empty roster and an empty
   // render below.
   //
-  // Reuses DATA.classes as its roster exactly as the Signature shop's
-  // getShopPool does (character-wizard.js, "Build a flat spend-pool"): the
-  // route already reduces DATA.classes to what the player has unlocked
-  // (routes/characters.js#filterClassDataForUser). An Aspirant character may
-  // use Aspirant or Advent classes without restriction, so every class in the
-  // roster stocks the shop, priced by whether it is the character's own.
+  // The selected class sells its own Advanced Abilities; every other class
+  // sells from shopClassesFor. A class inside the selected class's own-class
+  // set (its Advent origin, for an Aspirant version) prices as own class, so
+  // its Core rows are own Core and may fall inside the free allowance.
   const abilityShopEntries = (s) => {
-    const ownClassId = s && s.classId;
+    const own = s && s.classId ? classesById[s.classId] : null;
+    const ownIds = ownClassIdsOf(s && s.classId);
+    const isOwnClass = (id) => !!own && (id === own.id || ownIds.indexOf(id) !== -1);
     const entries = [];
-    (Array.isArray(DATA.classes) ? DATA.classes : []).forEach((cls) => {
-      if (!cls || !cls.id) return;
-      const isOwn = cls.id === ownClassId;
-      // Own-Class Core Abilities are the free allowance every class starts
-      // with (pg. 7), never a shop row. Another Class's Core is always a
-      // Cross-Class buy.
-      if (!isOwn) {
-        (Array.isArray(cls.abilities) ? cls.abilities : []).forEach((a) => {
-          if (!a || !a.name) return;
-          entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: 'core', crossClass: true });
-        });
-      }
-      (Array.isArray(cls.advanced_abilities) ? cls.advanced_abilities : []).forEach((a) => {
-        if (!a || !a.name) return;
-        entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: 'advanced', crossClass: !isOwn });
-      });
+    const push = (cls, a, type) => {
+      if (!a || !a.name) return;
+      entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: type, crossClass: !isOwnClass(cls.id) });
+    };
+    if (own) (own.advanced_abilities || []).forEach((a) => push(own, a, 'advanced'));
+    shopClassesFor(s).forEach((cls) => {
+      (cls.abilities || []).forEach((a) => push(cls, a, 'core'));
+      (cls.advanced_abilities || []).forEach((a) => push(cls, a, 'advanced'));
     });
     return entries;
   };
@@ -2042,9 +2077,7 @@ window.CharacterWizard = (function () {
         +         '<div>'
         +           '<h4 class="title is-5 mb-0">' + esc(entry.abilityName) + '</h4>'
         +           ' <span class="tag is-light ml-1">' + esc(entry.className) + '</span>'
-        +           (entry.crossClass
-              ? ' <span class="tag is-info is-light ml-1">cross-class</span>'
-              : ' <span class="tag is-info is-light ml-1">advanced</span>')
+        +           ' <span class="tag is-info is-light ml-1">' + (entry.crossClass ? 'cross-class' : entry.type) + '</span>'
         +         '</div>'
         +         '<div class="is-flex is-align-items-center">'
         +           '<span class="tag is-warning is-light mr-2">' + price + ' Perk' + (price === PERKS.prices.ability.own.core ? '' : 's') + '</span>'
@@ -2787,6 +2820,7 @@ window.CharacterWizard = (function () {
     SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
       economy: economyForState(),
       characterClassId: state.classId,
+      ownClassIds: ownClassIdsOf(state.classId),
       aspiringSignatures: aspiringPool()
     }) ? 'cross' : 'own'
   ];
@@ -2823,8 +2857,8 @@ window.CharacterWizard = (function () {
   // grid does not sell. Each entry is a "shop item" with
   // { key, name, description_html, cost, kind, subtype }.
   //   - common items: every economy, ECONOMY.prices.commonItem each.
-  //   - aspirant mode: every unlocked Class's gear except the one the grid
-  //     holds, priced by signaturePriceFor at the Cross-Class tier.
+  //   - aspirant mode: shopClassesFor's classes, priced by signaturePriceFor
+  //     (own class for the selected class's own-class set).
   //   - advent economy: the selected Class's own gear, own-class priced. The
   //     first freeBaseCount() picks are already free in state.gear
   //     (syncBaseGear stamps cost: 0 on what it auto-loads); a duplicate
@@ -2855,25 +2889,21 @@ window.CharacterWizard = (function () {
         subtype: g.subtype || 'elective'
       });
     };
-    // The grid sells whatever counts as the character's own Class; the shop
-    // sells everything else. For aspirant that is every class but the
-    // selected one; for aspiring, whose Class is three named items, it is
-    // every Signature outside the pool. Branching on the resolved economy
-    // rather than DATA.mode is what keeps this agreeing with
-    // usesSignatureGrid, so ?mode=advent on an aspirant-content class still
-    // produces a shop with class items in it.
+    // The grid sells the selected Class; the shop sells shopClassesFor's
+    // classes. For aspiring, whose Class is three named items, it is every
+    // Signature outside the pool. Branching on the resolved economy rather
+    // than DATA.mode is what keeps this agreeing with usesSignatureGrid, so
+    // ?mode=advent on an aspirant-content class still produces a shop with
+    // class items in it.
     if (usesSignatureGrid()) {
-      if (Array.isArray(DATA.classes)) {
-        DATA.classes.forEach((cls) => {
-          if (!cls || !cls.id || !Array.isArray(cls.class_gear)) return;
-          if (economyForState() !== 'aspiring' && cls.id === state.classId) return;
-          cls.class_gear.forEach((g) => {
-            if (!g || !g.name) return;
-            if (economyForState() === 'aspiring' && !crossClassFor(cls.id, g.name)) return;
-            pushClassItem(cls, g);
-          });
+      shopClassesFor(state).forEach((cls) => {
+        if (!Array.isArray(cls.class_gear)) return;
+        cls.class_gear.forEach((g) => {
+          if (!g || !g.name) return;
+          if (economyForState() === 'aspiring' && !crossClassFor(cls.id, g.name)) return;
+          pushClassItem(cls, g);
         });
-      }
+      });
     } else {
       const c = selectedClass();
       if (c && Array.isArray(c.class_gear)) {
@@ -2903,7 +2933,7 @@ window.CharacterWizard = (function () {
     kind: 'class',
     subtype: entry.subtype || 'elective',
     class_id: classId,
-    class_name: (classesById[classId] || {}).name || '',
+    class_name: (classesById[classId] || {}).name || shopClassNames[classId] || '',
     owned: true,
     enchantment: null,
     mods: []
@@ -2912,6 +2942,7 @@ window.CharacterWizard = (function () {
   const crossClassFor = (classId, name) => SignatureEntry.isCrossClass({ class_id: classId, name: name }, {
     economy: economyForState(),
     characterClassId: state.classId,
+    ownClassIds: ownClassIdsOf(state.classId),
     aspiringSignatures: aspiringPool()
   });
 
@@ -2936,6 +2967,7 @@ window.CharacterWizard = (function () {
     figures: ECONOMY,
     economy: economyForState(),
     characterClassId: state.classId,
+    ownClassIds: ownClassIdsOf(state.classId),
     aspiringSignatures: aspiringPool()
   }) + (Array.isArray(state.commonItems) ? state.commonItems.length : 0) * ECONOMY.prices.commonItem;
 
@@ -4335,6 +4367,7 @@ window.CharacterWizard = (function () {
     acquireAbility,
     dropAbility,
     renderAbilityPrimer,
-    renderAbilityShop
+    renderAbilityShop,
+    abilityShopEntries
   };
 })();

@@ -1914,3 +1914,82 @@ describe('the attached Ability Perk is part of the Perk spend', () => {
       .toBe(payload.ability_perks.length * perkFigures().abilityPerkCost);
   });
 });
+
+describe('the aspirant shops sell each name once per lineage', () => {
+  const card = (id, name, format, lineage, own, lists) => ({
+    id, name, content_format: format, lineage_id: lineage, own_class_ids: own,
+    stat_spread: {}, gear: [], base_gear: [],
+    class_gear: lists.gear.map((n) => ({ name: n, description_html: '' })),
+    abilities: lists.core.map((n) => ({ name: n })), abilities_html: [],
+    advanced_abilities: lists.advanced.map((n) => ({ name: n })), advanced_abilities_html: []
+  });
+  const GS_FORK = card('gs-fork', 'Gunslinger', 'aspirant', 'gs', ['gs-fork', 'gs-advent'],
+    { gear: ['Revolver', 'Bolo'], core: ['Trickshot', 'Deadeye'], advanced: ['Standoff'] });
+  const GS_ADVENT = card('gs-advent', 'Gunslinger', 'advent', 'gs', ['gs-advent'],
+    { gear: ['Revolver', 'Duster'], core: ['Trickshot', 'Quickdraw'], advanced: ['Standoff'] });
+  const WANDERER = card('wd', 'Wanderer', 'aspirant', 'wd', ['wd'],
+    { gear: ['Satchel'], core: ['Familiar Face'], advanced: [] });
+  const MESMER = card('ms', 'Mesmer', 'aspirant', 'ms', ['ms'],
+    { gear: [], core: [' trickshot', 'Glamour'], advanced: [] });
+  // DATA.shopClasses as the route serves it (util/class-lineage.js#lineageCatalogue
+  // with no own class): the Advent class keeps only what its Aspirant version
+  // does not print.
+  const SHOP = [
+    GS_FORK,
+    { ...GS_ADVENT, class_gear: [{ name: 'Duster', description_html: '' }], abilities: [{ name: 'Quickdraw' }], advanced_abilities: [] },
+    WANDERER,
+    MESMER
+  ];
+  const boot = (classId, cards) => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes: cards, shopClasses: SHOP, preselectedClassId: classId }));
+    wizard.getState().classId = classId;
+    wizard.getState().level = 10;
+    return wizard;
+  };
+
+  test('the Signature shop sells the Advent-only items once, at the own-class price', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    const items = wizard.getShopPool().filter((p) => p.kind === 'class');
+    expect(items.map((p) => [p.key, p.cost])).toEqual([
+      ['class:gs-advent:Duster', FIGURES.prices.signature.own],
+      ['class:wd:Satchel', FIGURES.prices.signature.cross]
+    ]);
+  });
+
+  test('a preselected forked Advent class buys its Aspirant version\'s other items cross-class', () => {
+    const wizard = boot('gs-advent', [GS_FORK, WANDERER, MESMER, GS_ADVENT]);
+    const items = wizard.getShopPool().filter((p) => p.kind === 'class');
+    expect(items.map((p) => [p.key, p.cost])).toEqual([
+      ['class:gs-fork:Bolo', FIGURES.prices.signature.cross],
+      ['class:wd:Satchel', FIGURES.prices.signature.cross]
+    ]);
+  });
+
+  test('the Ability shop sells the Advent-only Core as own class, and nothing of its lineage twice', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    const entries = wizard.abilityShopEntries(wizard.getState());
+    expect(entries.map((e) => [e.classId, e.abilityName, e.type, e.crossClass])).toEqual([
+      ['gs-fork', 'Standoff', 'advanced', false],
+      ['gs-advent', 'Quickdraw', 'core', false],
+      ['wd', 'Familiar Face', 'core', true],
+      ['ms', ' trickshot', 'core', true],
+      ['ms', 'Glamour', 'core', true]
+    ]);
+  });
+
+  test('an own-class Core bought inside the free allowance costs nothing, as on the server', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    const state = wizard.getState();
+    expect(wizard.acquireAbility(state, { classId: 'gs-advent', abilityName: 'Quickdraw', type: 'core', crossClass: false })).toBe(true);
+    expect(wizard.perksSpent(state)).toBe(0);
+  });
+
+  test('a name the character already holds cannot be bought from another class', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    const state = wizard.getState();
+    expect(wizard.canAcquire(state, { classId: 'ms', abilityName: ' trickshot', type: 'core', crossClass: true })).toBe(false);
+    expect(wizard.canAcquire(state, { classId: 'ms', abilityName: 'Glamour', type: 'core', crossClass: true })).toBe(true);
+    expect(wizard.acquireAbility(state, { classId: 'wd', abilityName: 'Familiar Face', type: 'core', crossClass: true })).toBe(true);
+    expect(wizard.canAcquire(state, { classId: 'ms', abilityName: 'FAMILIAR FACE', type: 'core', crossClass: true })).toBe(false);
+  });
+});
