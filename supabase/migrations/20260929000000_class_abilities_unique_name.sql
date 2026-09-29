@@ -1,5 +1,5 @@
--- One Ability name per character, compared trimmed and case-folded -- the key
--- services/character/input.js checks before every save.
+-- One Ability name per character, compared by the same trimmed, case-folded
+-- key services/character/input.js checks before every save.
 --
 -- save_character_atomic is restated so its class_abilities delete is a
 -- statement of its own, ahead of the insert. A data-modifying CTE that the

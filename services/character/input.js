@@ -24,7 +24,7 @@ const {
 const { tagAbilities } = require('../../util/character-derived');
 const { duplicateNames } = require('../../util/item-name');
 
-// Ability names compare trimmed and case-folded: the key
+// Ability names compare by the same trimmed, case-folded key
 // class_abilities_character_name_key enforces.
 const duplicateAbilityMessage = (characterName, abilityName) => `${characterName} already has ${abilityName}.`;
 

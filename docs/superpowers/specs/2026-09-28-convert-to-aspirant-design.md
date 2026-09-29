@@ -438,12 +438,15 @@ more than once it keeps the row with the lowest `id` (`class_abilities` has no `
 re-points the other rows' Perks at it (keeping `position` order after the
 kept row's Perks, and compound links within the moved set), and deletes the
 other rows, all in one transaction per character. The dry run lists each
-character, name, kept row and deleted rows. Idempotent. The local copy of
+character and name, then one line per row marked KEEP or DELETE with its
+spelling, class name and format, type, Perk count and id. Idempotent. The local copy of
 production has one case (Raven (Rachel Roth), Veneer twice).
 
 ## Rollout
 
 1. Merge. Railway deploys the code; the unique index is not applied yet.
+   Run step 2 promptly after the merge: a character holding a duplicate
+   cannot save its edit form until the dedupe has run.
 2. The user runs `bun scripts/dedupe-character-abilities.js` against prod,
    reviews it, then runs it with `--apply`. A second dry run must list nothing.
    The script connects to Postgres directly, so `.env` needs `SUPABASE_DB_PASS`
@@ -451,7 +454,9 @@ production has one case (Raven (Rachel Roth), Veneer twice).
    alongside the prod `SUPABASE_URL`.
 3. The user runs `supabase db push --linked` to add the unique index. The same
    migration also replaces `save_character_atomic` with the version whose
-   Ability delete runs before its insert.
+   Ability delete runs before its insert. If the push fails because a
+   duplicate reappeared since step 2, nothing is applied: re-run step 2, then
+   push again.
 4. The user runs `bun scripts/upgrade-converted-aspirant-classes.js` against
    prod, reviews the list, then runs it with `--apply`.
 5. After that `--apply`, the user runs `bun scripts/reconcile-character-progress.js`
