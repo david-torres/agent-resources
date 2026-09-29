@@ -345,6 +345,7 @@
       {{/if}}
     </div>
     <button class="button is-primary" hx-get="/characters/class-gear" hx-target="#class-gear-list"
+      hx-include="#char-class-id" hx-vals='{"creator_mode": "{{character.creator_mode}}"}'
       hx-swap="beforeend">Add
       Signature Gear</button>
     {{/if}}
@@ -401,6 +402,7 @@
       {{/if}}
     </div>
     <button class="button is-primary" hx-get="/characters/class-abilities" hx-target="#class-ability-list"
+      hx-include="#char-class-id" hx-vals='{"creator_mode": "{{character.creator_mode}}"}'
       hx-swap="beforeend">Add
       Class Abilities</button>
     {{/if}}

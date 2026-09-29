@@ -613,6 +613,60 @@ test('the classic ability picker prefixes each option with its class id, not the
   expect(body).toContain('Trailsense (Pathfinder)');
 });
 
+// The classic pickers list each lineage's item once when the form's class puts
+// the character on the Aspirant economy.
+test('the classic pickers of an Aspirant form list each lineage\'s item once', async () => {
+  pageState.extraAdventClasses = [LN_ADVENT];
+  pageState.extraAspirantClasses = [LN_FORK];
+
+  const gearRes = await fetch(`${baseUrl}/characters/class-gear?class_id=${LN_FORK.id}`, {
+    headers: { Accept: 'text/html' },
+  });
+  expect(gearRes.status).toBe(200);
+  const gear = await gearRes.text();
+  expect(gear).toContain(`value="${LN_FORK.id}::RAPIER"`);
+  expect(gear).not.toContain(`value="${LN_ADVENT.id}::Rapier"`);
+  expect(gear).toContain(`value="${LN_ADVENT.id}::Cloak"`);
+
+  const abilityRes = await fetch(`${baseUrl}/characters/class-abilities?class_id=${LN_FORK.id}`, {
+    headers: { Accept: 'text/html' },
+  });
+  const abilities = await abilityRes.text();
+  expect(abilities).toContain(`value="${LN_FORK.id}::RIPOSTE::core"`);
+  expect(abilities).not.toContain(`value="${LN_ADVENT.id}::Riposte::core"`);
+  expect(abilities).toContain(`value="${LN_ADVENT.id}::Feint::core"`);
+});
+
+test('the classic pickers of an Advent form list every class\'s items', async () => {
+  pageState.extraAdventClasses = [LN_ADVENT];
+  pageState.extraAspirantClasses = [LN_FORK];
+
+  const res = await fetch(`${baseUrl}/characters/class-gear?class_id=${LN_ADVENT.id}&creator_mode=advent`, {
+    headers: { Accept: 'text/html' },
+  });
+  const body = await res.text();
+  expect(body).toContain(`value="${LN_FORK.id}::RAPIER"`);
+  expect(body).toContain(`value="${LN_ADVENT.id}::Rapier"`);
+});
+
+test('the Add buttons send the form\'s class and the stored mode', async () => {
+  pageState.character = {
+    ...makePageCharacter(0),
+    creator_id: 'profile-1',
+    class_id: ADVENT_V1_CLASS.id,
+    creator_mode: 'advent',
+  };
+
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
+    headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
+  });
+
+  expect(res.status).toBe(200);
+  const body = await res.text();
+  expect(body).toMatch(/hx-get="\/characters\/class-gear"[^>]*hx-include="#char-class-id"[^>]*hx-vals='\{"creator_mode": "advent"\}'/);
+  expect(body).toMatch(/hx-get="\/characters\/class-abilities"[^>]*hx-include="#char-class-id"[^>]*hx-vals='\{"creator_mode": "advent"\}'/);
+});
+
 // Both versions render an option for the same item name, so a stored pick
 // must select only the option of the class it was taken from.
 test('the classic edit pickers select only the option of the stored item\'s class', async () => {

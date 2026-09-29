@@ -45,7 +45,7 @@ const { statCapMap, statCapFigures } = require('../util/stat-caps');
 const { perkFigures } = require('../util/perk-economy');
 const { filterClassListsByIds, isUnreleasedPcc, lockedRosterIds, OWNED_EDITIONS } = require('../util/class-filter');
 const { latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = require('../util/class-list-grouping');
-const { purchaseCatalogue } = require('../util/class-lineage');
+const { lineageCatalogue, purchaseCatalogue } = require('../util/class-lineage');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
@@ -114,6 +114,40 @@ const lockedClassGroupsFor = (lockedClasses, keep = () => true) => OWNED_EDITION
   .map(edition => ({ edition, classes: lockedClasses[edition].filter(keep) }))
   .filter(group => group.classes.length > 0);
 
+// The classic pickers' options, keyed by class id: versions of one class share
+// a name, so only the id tells the server which one a pick came from.
+const gearPickerMap = (classes) => Object.fromEntries(classes.map(c => [c.id, {
+  name: c.name,
+  items: Array.isArray(c.gear) ? c.gear.map(g => g.name) : []
+}]));
+
+// A V1 class carries three Core Abilities and three Advanced ones, and an
+// Advanced Ability costs Perks to unlock (pg. 7). The type travels with the
+// name because the option posts as a single string: without it an Advanced
+// pick is stored as core and priced as though it were free.
+const abilityPickerMap = (classes) => Object.fromEntries(classes.map(c => [c.id, {
+  name: c.name,
+  items: [
+    ...(Array.isArray(c.abilities) ? c.abilities.map(a => ({ name: a.name, type: 'core' })) : []),
+    ...(Array.isArray(c.advanced_abilities) ? c.advanced_abilities.map(a => ({ name: a.name, type: 'advanced' })) : [])
+  ]
+}]));
+
+// For a form whose class puts the character on the Aspirant economy, each
+// lineage's item once (util/class-lineage.js#lineageCatalogue).
+const classicPickerLists = async (user, query) => {
+  const { filteredAdvent, filteredAspirant, filteredPCC, filteredGear, filteredAbilities } = await filterClassDataForUser(user);
+  const classId = (query.class_id || '').toString() || null;
+  const roster = [...filteredAdvent, ...filteredAspirant, ...filteredPCC];
+  const selected = classId ? roster.find(c => c.id === classId) : null;
+  const economy = selected
+    ? economyFor({ contentFormat: selected.content_format, creatorMode: (query.creator_mode || '').toString() || null })
+    : null;
+  if (economy !== 'aspirant') return { gear: filteredGear, abilities: filteredAbilities };
+  const catalogue = lineageCatalogue(roster, { ownClassId: classId });
+  return { gear: gearPickerMap(catalogue), abilities: abilityPickerMap(catalogue) };
+};
+
 // Helper to filter class lists/lookup maps by user's unlocked classes
 const filterClassDataForUser = async (user, editionAccess = null) => {
 
@@ -133,20 +167,9 @@ const filterClassDataForUser = async (user, editionAccess = null) => {
   let filteredAspirant = aspirant;
   let filteredPCC = pcc;
 
-  // Build lookup maps for gear and abilities keyed by class id: versions of
-  // one class share a name, so only the id tells the server which one a pick
-  // came from.
   const allClasses = [...advent, ...aspirant, ...pcc];
-  let filteredGear = Object.fromEntries(allClasses.map(c => [c.id, { name: c.name, items: Array.isArray(c.gear) ? c.gear.map(g => g.name) : [] }]));
-  // A V1 class carries three Core Abilities and three Advanced ones, and an
-  // Advanced Ability costs Perks to unlock (pg. 7). The type travels with the
-  // name because the option posts as a single string: without it an Advanced
-  // pick is stored as core and priced as though it were free.
-  const abilityOptions = (c) => [
-    ...(Array.isArray(c.abilities) ? c.abilities.map(a => ({ name: a.name, type: 'core' })) : []),
-    ...(Array.isArray(c.advanced_abilities) ? c.advanced_abilities.map(a => ({ name: a.name, type: 'advanced' })) : [])
-  ];
-  let filteredAbilities = Object.fromEntries(allClasses.map(c => [c.id, { name: c.name, items: abilityOptions(c) }]));
+  let filteredGear = gearPickerMap(allClasses);
+  let filteredAbilities = abilityPickerMap(allClasses);
 
   // If user provided, reduce to unlocked set. Unlocks match by class id and
   // extend to same-edition version families (a v1 unlock covers its v2 fork)
@@ -844,17 +867,17 @@ router.post('/', isAuthenticated, async (req, res) => {
 });
 
 router.get('/class-gear', authOptional, async (req, res) => {
-  const { filteredGear } = await filterClassDataForUser(res.locals.user);
+  const { gear } = await classicPickerLists(res.locals.user, req.query);
   res.render('partials/character-class-gear', {
     layout: false,
-    classGearList: filteredGear,
+    classGearList: gear,
     adventDefaultSignatures: ADVENT_DEFAULT_SIGNATURES
   });
 });
 
 router.get('/class-abilities', authOptional, async (req, res) => {
-  const { filteredAbilities } = await filterClassDataForUser(res.locals.user);
-  res.render('partials/character-class-abilities', { layout: false, classAbilityList: filteredAbilities });
+  const { abilities } = await classicPickerLists(res.locals.user, req.query);
+  res.render('partials/character-class-abilities', { layout: false, classAbilityList: abilities });
 });
 
 router.get('/common-item', authOptional, async (req, res) => {
