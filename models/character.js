@@ -492,6 +492,8 @@ const updateCharacter = (id, input, actor) => characterService.updateCharacter(i
 const deleteCharacter = (actor, id) => characterService.deleteCharacter(actor, id);
 const markCharacterDeceased = (actor, id, confirmName) => characterService.markDeceased(actor, id, confirmName);
 const upgradeCharacterClass = (actor, id, targetClassId, client) => characterService.upgradeClass(actor, id, targetClassId, client);
+const planCharacterAspirantConversion = (actor, id) => characterService.planAspirantConversion(actor, id);
+const convertCharacterToAspirant = (actor, id) => characterService.convertToAspirant(actor, id);
 const updateCharacterStats = (actor, id, fields) => characterService.updateStats(actor, id, fields);
 const levelUpCharacter = (actor, id, body) => characterService.levelUp(actor, id, body);
 const createCharacterOffscreenMission = (actor, characterId, body) => characterService.createOffscreenMission(actor, characterId, body);
@@ -519,6 +521,8 @@ module.exports = {
   deleteCharacter,
   markCharacterDeceased,
   upgradeCharacterClass,
+  planCharacterAspirantConversion,
+  convertCharacterToAspirant,
   updateCharacterStats,
   levelUpCharacter,
   createCharacterOffscreenMission,

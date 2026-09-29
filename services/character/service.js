@@ -14,6 +14,7 @@ const { worsenedBreaches } = require('../../util/perk-economy');
 const { remapPerkAbilityIds, remapPerkAbilityIdsByName } = require('../../util/ability-perks');
 const { diffChildRows, resolveCompoundLinks } = require('../../util/reconcile');
 const { computeVersionFamily } = require('../../util/class-family');
+const { planConversion } = require('../../util/aspirant-conversion');
 const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
@@ -41,6 +42,7 @@ const REQUIRED_ADAPTER_METHODS = [
   'updateOwnedFields',
   'getClassRulesVersion',
   'getClassFamilyRows',
+  'getConversionClasses',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
   'levelUpAtomic',
@@ -128,6 +130,36 @@ const requireOwnedCharacterLean = async (adapter, actor, id) => {
     throw new AuthorizationError('Not authorized to modify this character', { reason: 'not_owner' });
   }
   return character;
+};
+
+// Everything a conversion is judged on, loaded once for both the preview and
+// the POST so the two can never disagree. `ineligible` is why the character is
+// not offered conversion at all; blockers stay on the plan.
+const loadAspirantConversion = async (adapter, actor, id) => {
+  const character = await requireOwnedCharacter(adapter, actor, id);
+  const economy = await resolveMutationEconomy(adapter, character);
+  if (economy !== 'advent') {
+    return { ineligible: `${character.name} is not on the Advent rules, so there is nothing to convert.` };
+  }
+  const { data: classes, error: classesError } = await adapter.getConversionClasses();
+  if (classesError) return { error: classesError };
+  const [missions, offscreenMissions] = await Promise.all([
+    adapter.getRealMissions(id),
+    adapter.listOffscreenMissions(id)
+  ]);
+  if (missions.error || offscreenMissions.error) return { error: missions.error || offscreenMissions.error };
+  const plan = planConversion({
+    character,
+    classes: classes || [],
+    gear: character.gear,
+    abilities: character.abilities,
+    abilityPerks: character.ability_perks,
+    traits: character.traits,
+    realMissions: missions.data || [],
+    offscreenMissions: offscreenMissions.data || []
+  });
+  if (!plan.target) return { ineligible: plan.blockers.map(blocker => blocker.detail).join(' ') };
+  return { character, plan };
 };
 
 // A submit that says nothing about type must not retag anything: the edit form
@@ -900,6 +932,43 @@ class CharacterService {
     if (error) return { data: null, error };
     if (!data || data.length === 0) return { data: null, error: 'Character upgrade returned no rows' };
     return { data: data[0], error: null };
+  }
+
+  async planAspirantConversion(actor, id) {
+    const loaded = await loadAspirantConversion(this.adapter, actor, id);
+    if (loaded.error) return { data: null, error: loaded.error };
+    return { data: loaded.plan ?? null, error: null };
+  }
+
+  // One-way: the converted character is on the aspirant economy, which is
+  // never eligible, and the fork is outside its Advent parent's family, so
+  // Upgrade never offers the way back. The plan is recomputed here, never
+  // taken from the client.
+  async convertToAspirant(actor, id) {
+    const loaded = await loadAspirantConversion(this.adapter, actor, id);
+    if (loaded.error) return { data: null, error: loaded.error };
+    if (loaded.ineligible) return { data: null, error: { status: 400, message: loaded.ineligible } };
+    const { character, plan } = loaded;
+    if (plan.blockers.length > 0) {
+      return {
+        data: null,
+        error: {
+          status: 400,
+          message: `${character.name} cannot convert to Aspirant yet. ${plan.blockers.map(blocker => blocker.detail).join(' ')}`
+        }
+      };
+    }
+    // save_character_atomic reads an absent Trait list as "no Traits" and
+    // deletes them, so the stored three are resubmitted.
+    return this.adapter.saveCharacterAtomic({
+      characterId: id,
+      creatorId: character.creator_id,
+      character: { class_id: plan.target.id, class: plan.target.name, creator_mode: 'aspirant' },
+      traits: (character.traits || []).map(({ name, stat }) => ({ name, stat })),
+      gear: plan.gear,
+      abilities: plan.abilities,
+      perks: plan.abilityPerks
+    });
   }
 
   async updateStats(actor, id, rawFields) {
