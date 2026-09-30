@@ -75,4 +75,13 @@ function sendError(req, res, error, opts = {}) {
   return res.status(d.status).json({ error: d.message });
 }
 
-module.exports = { classifyError, sendError, FRIENDLY_NOT_FOUND };
+// A service's business refusal arrives already shaped as { status, title,
+// message } and is rendered as given; anything else is classified.
+function sendRouteError(req, res, error) {
+  if (error && (error.status != null || error.title)) {
+    return sendError(req, res, null, error);
+  }
+  return sendError(req, res, error);
+}
+
+module.exports = { classifyError, sendError, sendRouteError, FRIENDLY_NOT_FOUND };

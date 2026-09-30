@@ -48,26 +48,13 @@ const { latestClassVersions, withoutForkedAdventClasses, outdatedClassIds } = re
 const { lineageCatalogue, lineageIdOf, purchaseCatalogue } = require('../util/class-lineage');
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
-const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { sendError, sendRouteError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { renderMarkdown } = require('../util/markdown');
 const { trialEndedAt } = require('../util/edition-access');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
 
-
-// Renders a service-returned { status, title, message }-shaped error (or a
-// plain Error/string) with the appropriate status — the equivalent of
-// passing a pre-classified shape through as sendError's `opts`. Kept at the
-// route layer (not an admin site) for the stats/level-up capabilities' business-
-// rule errors (insufficient credits, name mismatch, perk validation, ...);
-// the ownership/authorization gate itself throws and is handled by asyncHandler.
-const sendRouteError = (req, res, error) => {
-  if (error && (error.status != null || error.title)) {
-    return sendError(req, res, null, error);
-  }
-  return sendError(req, res, error);
-};
 
 // createCharacter/updateCharacter return a bare STRING for every validation
 // failure normalizeCharacterInput reports (over-budget, over-cap, invalid

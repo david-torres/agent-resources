@@ -25,7 +25,7 @@ const { getRulesPdf } = require('../models/rules');
 const { storeClassPdf, getSignedPdfUrl, deletePdfObject, CLASS_PDF_BUCKET } = require('../models/pdf');
 const { getProfileById, patchOnboarding } = require('../models/profile');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
-const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { sendError, sendRouteError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { processClassImport } = require('../util/class-import');
@@ -746,7 +746,7 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
 
     const { data: classData, error } = await createClass(actor, req.body);
     if (error) {
-        return sendError(req, res, error);
+        return sendRouteError(req, res, error);
     }
 
     if (req.file) {
@@ -822,7 +822,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
 
     const { data: classData, error } = await updateClass(actor, id, req.body);
     if (error) {
-        return sendError(req, res, error);
+        return sendRouteError(req, res, error);
     }
 
     if (req.file) {

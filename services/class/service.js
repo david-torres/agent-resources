@@ -20,7 +20,7 @@ const itemConflictError = async (repo, candidate, previous) => {
   const classRows = await repo.fetchClassItemOwnership();
   const [conflict] = findItemNameConflicts({ candidate, classRows, previous });
   if (!conflict) return null;
-  return new Error(`"${conflict.name}" is already defined by the class "${conflict.ownerClassName}"`);
+  return { status: 409, title: 'Name taken', message: `"${conflict.name}" is already defined by the class "${conflict.ownerClassName}"` };
 };
 
 const requireManageable = async (repo, actor, id) => {

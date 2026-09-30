@@ -272,3 +272,50 @@ test('creating a v2 fork that repeats its own family\'s gear name reaches the in
   expect(repo.calls.map(c => c[0])).toEqual(['fetchClassItemOwnership', 'insertClass']);
   expect(result.error).toBeNull();
 });
+
+const THUNDERBIRD_ROW = {
+  id: 'tb-1',
+  name: 'Thunderbird',
+  is_public: true,
+  base_class_id: null,
+  rules_edition: 'advent',
+  gear: [],
+  abilities: [{ name: 'Stormbrewing' }]
+};
+
+const STORMBREWING_TAKEN = '"Stormbrewing" is already defined by the class "Thunderbird"';
+
+test('updating a public class onto another family\'s ability name is refused as a 409 Name taken, never reaching the update', async () => {
+  const repo = makeRepo({ itemOwnership: [THUNDERBIRD_ROW] });
+  const service = new ClassService(repo);
+
+  const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [],
+    abilities: [{ name: 'Stormbrewing' }]
+  });
+
+  expect(repo.calls.map(c => c[0])).not.toContain('updateClass');
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 409, title: 'Name taken', message: STORMBREWING_TAKEN });
+});
+
+test('creating a public class with another family\'s ability name is refused as a 409 Name taken, never reaching the insert', async () => {
+  const repo = makeRepo({ itemOwnership: [THUNDERBIRD_ROW] });
+  const service = new ClassService(repo);
+
+  const result = await service.createClass(OWNER_ACTOR, {
+    name: 'Tempest Caller',
+    is_public: true,
+    base_class_id: null,
+    rules_edition: 'advent',
+    gear: [],
+    abilities: [{ name: 'Stormbrewing' }]
+  });
+
+  expect(repo.calls.map(c => c[0])).not.toContain('insertClass');
+  expect(result.data).toBeNull();
+  expect(result.error).toMatchObject({ status: 409, title: 'Name taken', message: STORMBREWING_TAKEN });
+});

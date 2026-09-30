@@ -27,6 +27,9 @@ const realNavLoader = require('../util/nav-loader');
 // Payloads the mocked data layer received. Reset before every test.
 let capturedCreate = null;
 let capturedUpdate = null;
+// When set, the mocked model returns this instead of a successful save.
+let createResult = null;
+let updateResult = null;
 
 const EXISTING_CLASS_ID = '11111111-2222-4333-8444-555555555555';
 
@@ -65,11 +68,11 @@ mock.module('../models/profile', () => ({
 mock.module('../models/class', () => ({
   createClass: async (actor, payload) => {
     capturedCreate = payload;
-    return { data: { id: 'new-class-id', name: payload.name }, error: null };
+    return createResult || { data: { id: 'new-class-id', name: payload.name }, error: null };
   },
   updateClass: async (actor, id, payload) => {
     capturedUpdate = payload;
-    return { data: { id, name: payload.name }, error: null };
+    return updateResult || { data: { id, name: payload.name }, error: null };
   },
   getClass: async (id) => ({ data: { id, name: 'Vanguard', created_by: 'p1' }, error: null }),
 }));
@@ -145,6 +148,8 @@ beforeAll(async () => {
 beforeEach(() => {
   capturedCreate = null;
   capturedUpdate = null;
+  createResult = null;
+  updateResult = null;
   profileRole = 'admin';
 });
 
@@ -1185,4 +1190,46 @@ test('create persists content_format and expanded_tips', async () => {
 test('an unknown content_format falls back to advent', async () => {
   const saved = await postClass({ name: 'Bad Format', content_format: 'aspirant-v1' });
   expect(saved.content_format).toBe('advent');
+});
+
+// ---------------------------------------------------------------------------
+// A save that would reuse another class family's item name is a business
+// refusal the admin must read, even where unexpected errors are masked.
+const STORMBREWING_TAKEN = '"Stormbrewing" is already defined by the class "Thunderbird"';
+const nameTakenResult = () => ({
+  data: null,
+  error: { status: 409, title: 'Name taken', message: STORMBREWING_TAKEN },
+});
+
+const withNodeEnv = async (value, run) => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = value;
+  try {
+    return await run();
+  } finally {
+    if (previous === undefined) delete process.env.NODE_ENV;
+    else process.env.NODE_ENV = previous;
+  }
+};
+
+test('PUT /classes/:id answers a taken item name with 409 and the real message outside development', async () => {
+  updateResult = nameTakenResult();
+  const res = await withNodeEnv('production', () => put(`/classes/${EXISTING_CLASS_ID}`, {
+    ...baseBody,
+    'abilities[0][name]': 'Stormbrewing',
+  }));
+
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toBe(STORMBREWING_TAKEN);
+});
+
+test('POST /classes answers a taken item name with 409 and the real message outside development', async () => {
+  createResult = nameTakenResult();
+  const res = await withNodeEnv('production', () => post('/classes', {
+    ...baseBody,
+    'abilities[0][name]': 'Stormbrewing',
+  }));
+
+  expect(res.status).toBe(409);
+  expect((await res.json()).error).toBe(STORMBREWING_TAKEN);
 });
