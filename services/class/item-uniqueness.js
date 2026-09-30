@@ -1,5 +1,3 @@
-const { computeVersionFamily } = require('../../util/class-family');
-
 // Gear and Abilities are separate name spaces: a Signature and an Ability may
 // share a name without ambiguity. Core and Advanced Abilities are ONE space,
 // spanning two columns -- the Perk economy resolves a submitted ability's type
@@ -11,30 +9,30 @@ const ITEM_FIELDS = NAME_SPACES.flat();
 
 const itemName = (item) => String(item?.name ?? '').trim();
 
-// A candidate being created has no row of its own yet, so its family is
-// reached through its base_class_id edge.
-const candidateFamily = (candidate, classRows) => {
-  const family = new Set();
-  const collect = (id) => {
-    for (const member of computeVersionFamily(classRows, id)) family.add(member);
-  };
-  if (candidate.id) collect(candidate.id);
-  const parent = classRows.find(row => row.id === candidate.base_class_id);
-  // Deliberately narrower than util/class-family.js's sameFamilyEdge, which also
-  // requires matching content_format: a format fork (e.g. a V1 class forked from
-  // a pre-release Aspirant class) restates its parent's Signature and Ability
-  // names verbatim by design, so it must inherit the parent's name space even
-  // though it starts a new unlock/version family.
-  if (parent && parent.rules_edition === candidate.rules_edition) collect(parent.id);
-  return family;
+// The whole base_class_id lineage, regardless of edition or format, shares one
+// name space: an Aspirant or format fork deliberately restates its original's
+// Signature and Ability names. A candidate being created has no row of its own
+// yet, so its lineage is reached through its base_class_id.
+const candidateLineage = (candidate, classRows) => {
+  const lineage = new Set();
+  const pending = [candidate.id, candidate.base_class_id].filter(Boolean);
+  while (pending.length) {
+    const id = pending.pop();
+    if (lineage.has(id)) continue;
+    lineage.add(id);
+    for (const row of classRows) {
+      if (row.base_class_id === id) pending.push(row.id);
+      if (row.id === id && row.base_class_id) pending.push(row.base_class_id);
+    }
+  }
+  return lineage;
 };
 
-// A version family reuses item names freely across its v1 -> v2 forks; only a
-// public class in a different family may not repeat them.
+// Only a public class outside the candidate's lineage may not repeat its names.
 const findItemNameConflicts = ({ candidate, classRows, previous }) => {
   if (!candidate?.is_public) return [];
   const rows = Array.isArray(classRows) ? classRows : [];
-  const family = candidateFamily(candidate, rows);
+  const lineage = candidateLineage(candidate, rows);
 
   const conflicts = [];
   for (const fields of NAME_SPACES) {
@@ -47,7 +45,7 @@ const findItemNameConflicts = ({ candidate, classRows, previous }) => {
     );
     const owners = new Map();
     for (const row of rows) {
-      if (!row.is_public || row.id === candidate.id || family.has(row.id)) continue;
+      if (!row.is_public || row.id === candidate.id || lineage.has(row.id)) continue;
       for (const field of fields) {
         for (const item of row[field] || []) {
           const name = itemName(item);

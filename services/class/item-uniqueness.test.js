@@ -195,3 +195,66 @@ test('grandfathers an advanced ability the class previously stored as a core abi
     candidate, classRows, previous: { abilities: [{ name: 'Gairethinx' }] }
   })).toEqual([]);
 });
+
+// Every class linked through base_class_id shares one name space, across both
+// edition and format forks: an Aspirant version restates its Advent original's
+// Signature and Ability names on purpose.
+const thunderbirdLineage = () => [
+  classRow('tb-v1', 'Thunderbird', {
+    content_format: 'advent', abilities: [{ name: 'Storm Brewing' }]
+  }),
+  classRow('tb-v2', 'Thunderbird v2', {
+    base_class_id: 'tb-v1', content_format: 'advent', abilities: [{ name: 'Storm Brewing' }]
+  }),
+  classRow('tb-asp', 'Thunderbird (Aspirant)', {
+    base_class_id: 'tb-v1', rules_edition: 'aspirant', content_format: 'aspirant',
+    abilities: [{ name: 'Stormbrewing' }]
+  })
+];
+
+test('allows an Advent version to adopt an ability name its Aspirant sibling owns through a shared base', () => {
+  const candidate = candidateClass({
+    id: 'tb-v2', base_class_id: 'tb-v1', content_format: 'advent', abilities: [{ name: 'Stormbrewing' }]
+  });
+  const previous = { abilities: [{ name: 'Storm Brewing' }] };
+
+  expect(findItemNameConflicts({ candidate, classRows: thunderbirdLineage(), previous })).toEqual([]);
+});
+
+test('allows an Advent class to adopt an ability name owned only by its Aspirant child', () => {
+  const candidate = candidateClass({
+    id: 'tb-v1', content_format: 'advent', abilities: [{ name: 'Stormbrewing' }]
+  });
+  const previous = { abilities: [{ name: 'Storm Brewing' }] };
+
+  expect(findItemNameConflicts({ candidate, classRows: thunderbirdLineage(), previous })).toEqual([]);
+});
+
+test('allows a gear name shared with a same-edition format fork of the candidate\'s parent', () => {
+  const classRows = [
+    classRow('gs-v1', 'Gunslinger', { content_format: 'advent' }),
+    classRow('gs-fork', 'Gunslinger (format fork)', {
+      base_class_id: 'gs-v1', content_format: 'aspirant', gear: [{ name: 'Revolver' }]
+    })
+  ];
+  const candidate = candidateClass({
+    base_class_id: 'gs-v1', content_format: 'advent', gear: [{ name: 'Revolver' }]
+  });
+
+  expect(findItemNameConflicts({ candidate, classRows })).toEqual([]);
+});
+
+test('still flags a name owned by an unrelated lineage when the candidate\'s own lineage shares it', () => {
+  const classRows = [
+    ...thunderbirdLineage(),
+    classRow('storm-caller', 'Storm Caller', { content_format: 'advent', abilities: [{ name: 'Stormbrewing' }] })
+  ];
+  const candidate = candidateClass({
+    id: 'tb-v2', base_class_id: 'tb-v1', content_format: 'advent', abilities: [{ name: 'Stormbrewing' }]
+  });
+  const previous = { abilities: [{ name: 'Storm Brewing' }] };
+
+  expect(findItemNameConflicts({ candidate, classRows, previous })).toEqual([
+    { field: 'abilities', name: 'Stormbrewing', ownerClassId: 'storm-caller', ownerClassName: 'Storm Caller' }
+  ]);
+});
