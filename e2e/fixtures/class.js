@@ -15,6 +15,8 @@ const { supabaseAdmin } = require('../../models/_base');
 const seedClass = async (prefix, {
   name = `${prefix}-class`,
   rulesVersion = 'v1',
+  rulesEdition = 'advent',
+  contentFormat = 'advent',
   isPublic = true,
   // Matches the column's own DB default (baseline_schema.sql:129) so
   // existing callers that don't pass `status` see no behavior change --
@@ -60,7 +62,7 @@ const seedClass = async (prefix, {
   const { data, error } = await supabaseAdmin
     .from('classes')
     .insert({
-      name, rules_version: rulesVersion, is_public: isPublic, status, gear, abilities,
+      name, rules_edition: rulesEdition, rules_version: rulesVersion, content_format: contentFormat, is_public: isPublic, status, gear, abilities,
       advanced_abilities: advancedAbilities,
       created_by: createdBy, stat_spread: statSpread
     })

@@ -1,3 +1,4 @@
+const { assertPublishedClassRules } = require("../../util/character-rules");
 const { normalizeClassInput } = require('./input');
 const { AuthorizationError } = require('../../util/errors');
 const { isSystem } = require('../../util/actor');
@@ -44,7 +45,8 @@ class ClassService {
   // system actor, which is allowed to set an explicit owner (e.g. seeding).
   async createClass(actor, input) {
     const created_by = isSystem(actor) ? (input?.created_by ?? null) : (actor?.profileId ?? null);
-    const data = normalizeClassInput({ ...input, created_by });
+    const data = normalizeClassInput({ rules_edition: "advent", rules_version: "v1", ...input, created_by });
+    try { assertPublishedClassRules(data); } catch (error) { return { data: null, error }; }
     if (carriesItems(data)) {
       const conflict = await itemConflictError(this.repo, { ...data, id: null });
       if (conflict) return { data: null, error: conflict };
@@ -56,6 +58,9 @@ class ClassService {
     const { existing, error } = await requireManageable(this.repo, actor, id);
     if (error) return { data: null, error };
     const data = normalizeClassInput(input);
+    if (Object.hasOwn(data, "rules_edition") || Object.hasOwn(data, "rules_version")) {
+      try { assertPublishedClassRules({ ...existing, ...data }); } catch (error) { return { data: null, error }; }
+    }
     if (carriesItems(data)) {
       const conflict = await itemConflictError(this.repo, { ...data, id }, existing);
       if (conflict) return { data: null, error: conflict };

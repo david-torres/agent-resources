@@ -1,22 +1,32 @@
 const { test, expect } = require('bun:test');
-const { characterRulesVersion } = require('./character-rules');
+const { resolveCharacterMechanics, characterRulesVersion, assertPublishedClassRules } = require('./character-rules');
 
-const CASES = [
-  ['an Advent character follows a v1 class', { classRulesVersion: 'v1', creatorMode: null }, 'v1'],
-  ['an Advent character follows a v2 class', { classRulesVersion: 'v2', creatorMode: 'advent' }, 'v2'],
-  ['an Aspirant character on a v1 class is on v2', { classRulesVersion: 'v1', creatorMode: 'aspirant' }, 'v2'],
-  ['an Aspirant character on a v2 class is on v2', { classRulesVersion: 'v2', creatorMode: 'aspirant' }, 'v2'],
-  ['an Aspiring character, which has no class, is on v2', { classRulesVersion: undefined, creatorMode: 'aspiring' }, 'v2'],
-  ['a character with no class and no mode is on v1', { classRulesVersion: null, creatorMode: null }, 'v1'],
-  ['an unrecognised class version is v1', { classRulesVersion: 'v3', creatorMode: '' }, 'v1']
-];
-
-for (const [name, args, expected] of CASES) {
-  test(name, () => {
-    expect(characterRulesVersion(args)).toBe(expected);
+for (const creatorMode of [null, '', 'advent', 'aspirant', 'aspiring']) {
+  for (const [edition, version, expected] of [
+    ['advent', 'v1', 'advent-v1'], ['advent', 'v2', 'advent-v2'],
+    ['aspirant', 'v1', 'advent-v2'], ['aspirant', 'v2', 'advent-v2']
+  ]) {
+    for (const content_format of ['advent', 'aspirant']) {
+      test(`${edition} ${version}, mode ${creatorMode}, format ${content_format}`, () => {
+        const classRules = { rules_edition: edition, rules_version: version, content_format };
+        const mechanics = ['aspirant', 'aspiring'].includes(creatorMode) ? 'advent-v2' : expected;
+        expect(resolveCharacterMechanics({ classRules, creatorMode })).toBe(mechanics);
+        expect(characterRulesVersion({ classRules, creatorMode })).toBe(mechanics === 'advent-v2' ? 'v2' : 'v1');
+      });
+    }
+  }
+  test(`classless, mode ${creatorMode}`, () => {
+    expect(resolveCharacterMechanics({ classRules: null, creatorMode })).toBe(['aspirant', 'aspiring'].includes(creatorMode) ? 'advent-v2' : 'advent-v1');
   });
 }
 
-test('no arguments is v1', () => {
-  expect(characterRulesVersion()).toBe('v1');
+test('invalid identity is rejected before mode overrides', () => {
+  for (const classRules of [undefined, {}, { rules_edition: 'unknown', rules_version: 'v1' }, { rules_edition: 'advent', rules_version: 'v3' }]) {
+    expect(() => resolveCharacterMechanics({ classRules, creatorMode: 'aspirant' })).toThrow();
+  }
+  expect(() => resolveCharacterMechanics({ classRules: null, creatorMode: 'unknown' })).toThrow();
+});
+test('published writes reject legacy Aspirant v2', () => {
+  expect(() => assertPublishedClassRules({ rules_edition: 'aspirant', rules_version: 'v2' })).toThrow();
+  expect(assertPublishedClassRules({ rules_edition: 'aspirant', rules_version: 'v1' }).rules_version).toBe('v1');
 });

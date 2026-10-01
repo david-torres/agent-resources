@@ -150,3 +150,39 @@ test('high stakes reach stored progress in every economy with ordinary level cre
     expect(high.level).toBe(ordinary.level);
   }
 });
+
+test('corrected legacy Aspirant v1 retains level 5 at 11 missions and Advent economy', () => {
+  const progress = calculateCharacterProgress({
+    character: { class_id: 'legacy', creator_mode: null, gear: [], common_items: [] },
+    realMissions: Array.from({ length: 11 }, () => ({ outcome: 'failure' })), offscreenMissions: [],
+    classRules: { data: 'v1', classRules: { rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' }, contentFormat: 'advent' }
+  });
+  expect(progress).toEqual({ completed_missions: 11, commissary_reward: CREATION_GRANT.advent, level: 5 });
+});
+test('rules lookup failure prevents automatic progress writes', async () => {
+  let writes = 0;
+  const repository = {
+    getCharacter: async () => ({ data: { auto_calculate: true, class_id: 'missing' } }),
+    getRealMissions: async () => ({ data: [] }), listOffscreenMissions: async () => ({ data: [] }),
+    getClassRulesVersion: async () => ({ data: null, classRules: null, error: new Error('rules unavailable') }),
+    getClassFamilyRows: async () => ({ data: [] }),
+    updateCharacterProgress: async () => { writes++; return {}; }
+  };
+  await expect(recalculateCharacterProgress('character', repository)).rejects.toThrow('rules unavailable');
+  expect(writes).toBe(0);
+});
+
+test('stale automatic calculation is re-read before writing after a concurrent edit', async () => {
+  let reads = 0;
+  const timestamps = [];
+  const repository = {
+    getCharacter: async () => ({ data: { auto_calculate: true, updated_at: `snapshot-${++reads}`, class_id: null, gear: [], common_items: [] } }),
+    getRealMissions: async () => ({ data: [] }), listOffscreenMissions: async () => ({ data: [] }),
+    getClassRulesVersion: async () => ({ classRules: null, contentFormat: null }),
+    updateCharacterProgress: async (_id, _totals, expectedUpdatedAt) => {
+      timestamps.push(expectedUpdatedAt); return { stale: timestamps.length === 1 };
+    }
+  };
+  await recalculateCharacterProgress('character', repository);
+  expect(timestamps).toEqual(['snapshot-1', 'snapshot-2']);
+});

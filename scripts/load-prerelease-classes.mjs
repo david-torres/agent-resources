@@ -38,6 +38,7 @@ import { readFileSync } from 'node:fs';
 import { createClient } from '@supabase/supabase-js';
 
 import { CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
+import { assertPublishedClassRules } from '../util/character-rules.js';
 import { buildClassTeaser } from '../services/class/teaser.js';
 import { SECTION_FROM_RECORD, bookFor } from './lib/books.mjs';
 import {
@@ -279,7 +280,11 @@ const insertOnly = (plan, book) => ({
   is_player_created: plan.payload.prerelease_section === 'pcc'
 });
 
-export const insertRow = (plan, book) => ({ ...plan.payload, ...insertOnly(plan, book) });
+export const insertRow = (plan, book) => {
+  const row = { ...plan.payload, ...insertOnly(plan, book) };
+  assertPublishedClassRules({ rules_edition: row.rules_edition || book.rulesEdition || 'advent', rules_version: row.rules_version });
+  return row;
+};
 
 export const publishPatch = (row, book) => {
   const patch = {};

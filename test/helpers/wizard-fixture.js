@@ -12,6 +12,8 @@ const { JSDOM } = require('jsdom');
 const { economyFor, economyFigures } = require('../../util/merx-economy');
 const { statCapFigures } = require('../../util/stat-caps');
 const { perkFigures } = require('../../util/perk-economy');
+const { resolveCharacterMechanics } = require('../../util/character-rules');
+const { MAX_LEVEL, LEVEL_THRESHOLDS } = require('../../util/character-leveling');
 const { MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
 
 // Boots a wizard in aspiring mode with its class-build slots (and, for
@@ -143,6 +145,7 @@ const buildHtml = () => `
   <div id="summaryAbilities"></div>
   <div id="summaryGear"></div>
   <input id="wizardLevel" value="1">
+  <input id="summaryMissions" value="0">
   <input id="summarySuccessful" value="0">
   <ul class="wizard-steps">
     <li data-step="1"></li><li data-step="2"></li><li data-step="3"></li>
@@ -304,7 +307,13 @@ const fixture = (overrides = {}) => {
   const economyWhenClassless = overrides.economyWhenClassless
     || economyFor({ contentFormat: null, creatorMode: mode });
 
+  const progression = classRules => {
+    const mechanics = resolveCharacterMechanics({ classRules: classRules && { rules_edition: 'advent', rules_version: 'v2', ...classRules }, creatorMode: mode });
+    return { mechanics, maxLevel: MAX_LEVEL, thresholds: LEVEL_THRESHOLDS[mechanics] };
+  };
   return {
+    progressionByClassId: Object.fromEntries(classes.map(c => [c.id, progression(c)])),
+    progressionWhenClassless: progression(null),
     mode,
     preselectedClassId: null,
     classes,

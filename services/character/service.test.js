@@ -3,7 +3,7 @@ const { CharacterService, resolveSubmittedGear } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { findUpgradeTargetsFor } = require('../../models/character');
 const { classesStub } = require('../../test/helpers/classes-family-stub');
-const { LEVEL_CEILING, BASE_STAT_CAP, capBreachMessage } = require('../../util/stat-caps');
+const { BASE_STAT_CAP, capBreachMessage } = require('../../util/stat-caps');
 const { statList, MERX_PER_MISSION_SUCCESS } = require('../../util/enclave-consts');
 const { CREATION_GRANT, priceOfSignature } = require('../../util/merx-economy');
 
@@ -311,34 +311,23 @@ test('CharacterService.levelUp throws for a non-creator actor', async () => {
   expect(calls).toEqual([]);
 });
 
-test('CharacterService.levelUp succeeds for the creator, backfilling named missions', async () => {
-  const calls = [];
-  const backfillCalls = [];
-  const service = new CharacterService(makeAdapter(calls, {
+test('CharacterService.levelUp sends named backfill missions in one atomic commit', async () => {
+  const atomic = [];
+  const service = new CharacterService(makeAdapter([], {
     getCharacter: async () => ok({ ...OWNED_CHARACTER }),
-    createBackfillMission: async (args) => {
-      backfillCalls.push(args);
-      return { error: null };
-    },
-    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }])
+    createBackfillMission: async () => { throw new Error('Independent mission writes are forbidden'); },
+    levelUpAtomic: async args => { atomic.push(args); return ok({ id: 'character-1', ...args.fields }); }
   }));
-
   const result = await service.levelUp(CREATOR, 'character-1', {
-    level: 2,
-    completed_missions: 2,
-    mission_names: ['Op Alpha', 'Op Bravo'],
-    use_conduit_credit: false,
-    stats: {}
+    level: 2, completed_missions: 999, mission_names: ['Op Alpha', 'Op Bravo'], stats: {}
   });
-
   expect(result.error).toBeNull();
   expect(result.data.completed_missions).toBe(2);
-  // 2 (advent grant) + 2 successful missions = 4
   expect(result.data.commissary_reward).toBe(4);
-  expect(backfillCalls).toEqual([
-    { characterId: 'character-1', name: 'Op Alpha', profileId: 'profile-1' },
-    { characterId: 'character-1', name: 'Op Bravo', profileId: 'profile-1' }
-  ]);
+  expect(atomic).toHaveLength(1);
+  expect(atomic[0].missionNames).toEqual(['Op Alpha', 'Op Bravo']);
+  expect(atomic[0].creditSourceIds).toEqual([]);
+  expect(atomic[0].requestId).toMatch(/^[0-9a-f-]{36}$/);
 });
 
 const FORK_FAMILY_ROWS = [
@@ -361,26 +350,23 @@ test('levelUp stores Merx with a fork character\'s Advent-origin Signature at th
   });
   expect(result.error).toBeNull();
   expect(result.data.commissary_reward)
-    .toBe(CREATION_GRANT.aspirant + MERX_PER_MISSION_SUCCESS - priceOfSignature({ crossClass: false }));
+    .toBe(CREATION_GRANT.aspirant + 2 * MERX_PER_MISSION_SUCCESS - priceOfSignature({ crossClass: false }));
 });
 
-test('CharacterService.levelUp surfaces a backfill mission error without throwing (graceful, not a hang)', async () => {
-  const calls = [];
-  const service = new CharacterService(makeAdapter(calls, {
+test('CharacterService.levelUp returns atomic failure without independently committing backfill', async () => {
+  const error = new AuthorizationError('Mission not found', { reason: 'not_found' });
+  let atomicCalls = 0;
+  const service = new CharacterService(makeAdapter([], {
     getCharacter: async () => ok({ ...OWNED_CHARACTER }),
-    createBackfillMission: async () => ({ error: new AuthorizationError('Mission not found', { reason: 'not_found' }) })
+    createBackfillMission: async () => { throw new Error('Independent writes are forbidden'); },
+    levelUpAtomic: async () => { atomicCalls++; return { data: null, error }; }
   }));
-
   const result = await service.levelUp(CREATOR, 'character-1', {
-    level: 2,
-    completed_missions: 1,
-    mission_names: ['Op Charlie'],
-    use_conduit_credit: false,
-    stats: {}
+    level: 2, mission_names: ['Op Charlie', 'Op Delta'], stats: {}
   });
-
   expect(result.data).toBeNull();
-  expect(result.error).toBeInstanceOf(AuthorizationError);
+  expect(result.error).toBe(error);
+  expect(atomicCalls).toBe(1);
 });
 
 // The two missions are what pays for the Perk: levelUp runs the same ratchet
@@ -422,7 +408,7 @@ test('levelUp allows a compounded perk five more words than the baseline limit',
   const compoundText = Array.from({ length: 28 }, (_, i) => `w${i}`).join(' ');
   const adapter = {
     ...minimalRequiredAdapter(),
-    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 1, completed_missions: 0, commissary_reward: 0, abilities: [] }),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 2, completed_missions: 0, commissary_reward: 0, abilities: [] }),
     // Four missions carry an advent character to level 3 and so to two earned
     // Perks, which is what the two Perks below cost; see the ratchet note on
     // the test above.
@@ -433,57 +419,33 @@ test('levelUp allows a compounded perk five more words than the baseline limit',
     getClassRulesVersion: async () => ok('v2'),
     fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
     fetchExistingPerks: async () => ok([]),
-    levelUpAtomic: async (args) => { calls.push(args); return ok({ id: 'character-1', name: 'Hero', level: 2, completed_missions: 0, commissary_reward: 0 }); },
+    levelUpAtomic: async (args) => { calls.push(args); return ok({ id: 'character-1', name: 'Hero', level: 3, completed_missions: 0, commissary_reward: 0 }); },
     updateOwnedFields: async () => { throw new Error('updateOwnedFields must not be called by levelUp'); },
   };
   const svc = new CharacterService(adapter);
   const { data, error } = await svc.levelUp(CREATOR, 'character-1', {
-    level: 2,
+    level: 3,
     ability_perks: [
       { class_ability_id: 'ab-1', text: 'New perk', ref: 'r1' },
       { class_ability_id: 'ab-1', text: compoundText, ref: 'r2', compounds_with: 'new:r1' }
     ]
   });
   expect(error).toBeNull();
-  expect(data.level).toBe(2);
+  expect(data.level).toBe(3);
   expect(calls).toHaveLength(1);
   expect(calls[0].perks[1]).toMatchObject({ class_ability_id: 'ab-1', text: compoundText, position: 1, compounds_with: 'position-0' });
 });
 
-// The level a level-up may reach is LEVEL_CEILING (util/stat-caps.js), read
-// from there rather than re-typed: a second literal 20 in levelUp would
-// silently desync from normalizeLevel, the clamp every Cap and allotment check
-// reads a level through. Observable through the Conduit Credit mission name,
-// the one place requestedLevel is rendered -- the stored `level` column comes
-// from deriveCharacterTotals, not from this clamp.
-//
-// The character sits at level 5 deliberately. requestedLevel is
-// `Math.max(currentLevel + 1, Math.min(LEVEL_CEILING, requested))`, so near the
-// ceiling the Math.max wins and the ceiling is never the binding term -- a test
-// run from level 19 passes whatever number the Math.min holds.
-test('levelUp clamps a runaway requested level to LEVEL_CEILING', async () => {
-  const offscreenWrites = [];
-  const adapter = {
-    ...minimalRequiredAdapter(),
-    getCharacter: async () => ok({
-      id: 'character-1', creator_id: 'profile-1', class_id: 'class-1',
-      level: 5, completed_missions: 0, commissary_reward: 0, abilities: []
-    }),
-    getAvailableHostedMissions: async () => ok([{ id: 'hosted-1', name: 'A Hosted Game', date: '2026-01-02' }]),
-    createOffscreenMissionRow: async (args) => { offscreenWrites.push(args); return ok({ id: 'off-1' }); },
-    getRealMissions: async () => ok([]),
-    listOffscreenMissions: async () => ok([]),
-    getClassRulesVersion: async () => ok('v2'),
-    levelUpAtomic: async () => ok({ id: 'character-1', name: 'Hero', level: 2, completed_missions: 1, commissary_reward: 0 })
-  };
-  const svc = new CharacterService(adapter);
-
-  const { error } = await svc.levelUp(CREATOR, 'character-1', {
-    level: 999, completed_missions: 1, use_conduit_credit: true
-  });
-
-  expect(error).toBeNull();
-  expect(offscreenWrites[0].payload.name).toBe(`Conduit Credit: Level ${LEVEL_CEILING}`);
+test('levelUp rejects a runaway requested level without spending credits', async () => {
+  const writes = [];
+  const svc = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ ...OWNED_CHARACTER, level: 5 }),
+    createOffscreenMissionRow: async args => { writes.push(args); return ok({}); },
+    levelUpAtomic: async args => { writes.push(args); return ok({}); }
+  }));
+  const { error } = await svc.levelUp(CREATOR, 'character-1', { level: 999, use_conduit_credit: true });
+  expect(error.status).toBe(409);
+  expect(writes).toEqual([]);
 });
 
 test('levelUp still refuses a non-owner with AuthorizationError', async () => {
@@ -605,7 +567,8 @@ const levelUpWithStats = (service, stats) => service.levelUp(CREATOR, 'character
 test('a level-up that would breach a Cap is refused', async () => {
   const calls = [];
   const service = new CharacterService(aspirantMutationAdapter(calls, {
-    getCharacter: async () => ok(aspirantStatsCharacter())
+    getCharacter: async () => ok(aspirantStatsCharacter()),
+    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }])
   }));
   const result = await levelUpWithStats(service, { arcane: 7 });
   expect(result.data).toBeNull();
@@ -616,7 +579,8 @@ test('a level-up that would breach a Cap is refused', async () => {
 test('a level-up that merely spends its new pluses is accepted', async () => {
   const calls = [];
   const service = new CharacterService(aspirantMutationAdapter(calls, {
-    getCharacter: async () => ok(aspirantStatsCharacter())
+    getCharacter: async () => ok(aspirantStatsCharacter()),
+    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }])
   }));
   const result = await levelUpWithStats(service, { arcane: 3 });
   expect(result.error).toBeNull();
@@ -1062,6 +1026,9 @@ const autoCalculateOnClass = async (classId, gear, storedGear) => {
     getCharacter: async () => ok({
       id: 'character-1', creator_id: 'profile-1', class_id: classId, abilities: [], gear: storedGear
     }),
+    getClassRulesVersion: async () => ({ data: 'v2',
+      classRules: GUNSLINGER_FAMILY_AND_FORK.find(row => row.id === classId),
+      contentFormat: GUNSLINGER_FAMILY_AND_FORK.find(row => row.id === classId).content_format, error: null }),
     getClassContentLookupMaps: async () => ({
       gearNameToClassId: new Map(),
       gearNameToDescription: new Map(),
@@ -1076,7 +1043,8 @@ const autoCalculateOnClass = async (classId, gear, storedGear) => {
       return ok({ id: 'character-1' });
     }
   }));
-  const result = await service.updateCharacter('character-1', { name: 'Hero', gear, auto_calculate: true }, { id: 'profile-1' });
+  const result = await service.updateCharacter('character-1', { name: 'Hero', gear, auto_calculate: true,
+    trait0: 'brave', trait1: 'calm', trait2: 'alert' }, { id: 'profile-1' });
   return { result, saved };
 };
 
@@ -2007,11 +1975,8 @@ test('a save that raises the level may spend the Perk that level earns', async (
 
 // --- The ratchet on the level-up path -------------------------------------
 //
-// buildPerkRows checks a Perk's word count and how many one Ability may carry,
-// and nothing else -- so without the ratchet POST /:id/level-up was a way to
-// attach Perks the character cannot pay for and have the deficit grandfathered
-// by the next ordinary save. This character gains no mission, so it stays at
-// level 1 and an advent character's Perk balance there is zero.
+// Two completed missions legitimately earn level 2 and one Perk. Attaching
+// two Perks must fail the economy ratchet before the atomic commit.
 test('levelUp refuses a Perk the character has not earned', async () => {
   const service = new CharacterService(makeAdapter([], {
     getCharacter: async () => ok({
@@ -2020,6 +1985,7 @@ test('levelUp refuses a Perk the character has not earned', async () => {
       abilities: [{ id: 'ab-1', class_id: ADVENT_CLASS_ID, name: 'Quickdraw', type: 'core' }],
       ability_perks: []
     }),
+    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }]),
     getClassRulesVersion: async () => ({ data: 'v2', contentFormat: 'advent', error: null }),
     getClassFamilyRows: async () => ok(GUNSLINGER_FAMILY_AND_FORK),
     fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
@@ -2027,11 +1993,11 @@ test('levelUp refuses a Perk the character has not earned', async () => {
   }));
   const result = await service.levelUp(CREATOR, 'character-1', {
     level: 2,
-    ability_perks: [{ class_ability_id: 'ab-1', text: 'New perk', ref: 'r1' }]
+    ability_perks: [{ class_ability_id: 'ab-1', text: 'New perk', ref: 'r1' }, { class_ability_id: 'ab-1', text: 'Second perk', ref: 'r2' }]
   });
   expect(result.data).toBeNull();
   expect(result.error).toMatchObject({ status: 400 });
-  expect(result.error.message).toMatch(/1 Perks spent of 0 earned/);
+  expect(result.error.message).toMatch(/2 Perks spent of 1 earned/);
 });
 
 // --- classFamilyOf on the create path -------------------------------------
@@ -2145,7 +2111,7 @@ test('an Advent character on the same class still saves under v1', async () => {
 test('levelUp puts an Aspirant character on an Advent v1 class on the v2 curve', async () => {
   const calls = [];
   const service = new CharacterService(makeAdapter([], {
-    getCharacter: async () => ok({ ...OWNED_CHARACTER, class_id: ADVENT_CLASS_ID, creator_mode: 'aspirant' }),
+    getCharacter: async () => ok({ ...OWNED_CHARACTER, level: 2, class_id: ADVENT_CLASS_ID, creator_mode: 'aspirant' }),
     listOffscreenMissions: async () => ok(Array.from({ length: 4 }, () => ({ merx_gained: 0 }))),
     getClassRulesVersion: async () => ({ data: 'v1', contentFormat: 'advent', error: null }),
     levelUpAtomic: async (args) => {
@@ -2153,7 +2119,7 @@ test('levelUp puts an Aspirant character on an Advent v1 class on the v2 curve',
       return ok({ id: 'character-1', ...args.fields });
     }
   }));
-  const result = await service.levelUp(CREATOR, 'character-1', { level: 2 });
+  const result = await service.levelUp(CREATOR, 'character-1', { level: 3 });
   expect(result.error).toBeNull();
   expect(calls[0].fields.level).toBe(3);
 });
@@ -2562,4 +2528,114 @@ test('an individually unlocked Aspirant-format class still requires its book', a
 test('active trial book access permits Aspirant features', async () => {
   const service = new CharacterService(makeAdapter([], { getEditionAccess: async () => ({ aspirant: { state: 'trial' } }) }));
   expect(await service.aspirantAccessError(CREATOR)).toBeNull();
+});
+
+describe('edition-aware atomic level-up preflight', () => {
+  const classRules = { rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' };
+  const history = count => Array.from({ length: count }, (_, i) => ({ id: `mission-${i}`, outcome: 'success' }));
+  const fixture = (overrides = {}) => {
+    const writes = [];
+    const service = new CharacterService(makeAdapter([], {
+      getCharacter: async () => ok({ ...OWNED_CHARACTER, level: 4, creator_mode: null, updated_at: '2026-10-01T00:00:00Z' }),
+      getClassRulesVersion: async () => ({ data: 'v1', classRules, contentFormat: 'advent', error: null }),
+      getRealMissions: async () => ok(history(11)),
+      createBackfillMission: async () => { throw new Error('Independent mission writes forbidden'); },
+      createOffscreenMissionRow: async () => { throw new Error('Independent credit writes forbidden'); },
+      levelUpAtomic: async args => { writes.push(args); return ok({ id: 'character-1', ...args.fields }); },
+      ...overrides
+    }));
+    return { service, writes };
+  };
+  test('legacy Aspirant v1 without mode reaches level 5 at 11 missions and retains Advent economy', async () => {
+    const { service, writes } = fixture();
+    const result = await service.levelUp(CREATOR, 'character-1', { level: 5 });
+    expect(result.error).toBeNull();
+    expect(result.data.level).toBe(5);
+    expect(result.data.commissary_reward).toBe(CREATION_GRANT.advent + 11);
+    expect(writes[0].snapshot.class_rules).toEqual(classRules);
+    expect(writes[0].snapshot.creator_mode).toBe(null);
+    expect(writes[0].snapshot.missions).toHaveLength(11);
+    expect(writes[0].snapshot.updated_at).toBe('2026-10-01T00:00:00Z');
+  });
+  for (const [name, overrides, body, status] of [
+    ['insufficient recorded history', { getRealMissions: async () => ok(history(4)) }, { level: 5, completed_missions: 999 }, 409],
+    ['history implies a jump', { getRealMissions: async () => ok(history(34)) }, { level: 5 }, 409],
+    ['level 10 ceiling', { getCharacter: async () => ok({ ...OWNED_CHARACTER, level: 10 }) }, { level: 11 }, 409],
+    ['invalid request ID', {}, { level: 5, request_id: 'bad-id' }, 400],
+    ['incompatible backfill sources', {}, { level: 5, mission_names: ['Named'], use_conduit_credit: true }, 400],
+    ['insufficient credits', { getRealMissions: async () => ok(history(7)) }, { level: 5, use_conduit_credit: true }, 400]
+  ]) {
+    test(`${name} causes no persistence`, async () => {
+      const { service, writes } = fixture(overrides);
+      const result = await service.levelUp(CREATOR, 'character-1', body);
+      expect(result.data).toBeNull();
+      expect(result.error.status).toBe(status);
+      expect(writes).toEqual([]);
+    });
+  }
+  test('rules lookup failure stops promotion before any persistence', async () => {
+    const error = new Error('Class unavailable');
+    const { service, writes } = fixture({ getClassRulesVersion: async () => ({ data: null, error }) });
+    expect((await service.levelUp(CREATOR, 'character-1', { level: 5 })).error).toBe(error);
+    expect(writes).toEqual([]);
+  });
+  test('credit IDs and derived progress enter the same atomic operation', async () => {
+    const { service, writes } = fixture({ getRealMissions: async () => ok(history(7)),
+      getAvailableHostedMissions: async () => ok([{ id: 'credit-1' }, { id: 'credit-2' }, { id: 'credit-3' }]) });
+    const result = await service.levelUp(CREATOR, 'character-1', { level: 5, use_conduit_credit: true });
+    expect(result.error).toBeNull();
+    expect(writes[0].creditSourceIds).toEqual(['credit-1', 'credit-2', 'credit-3']);
+    expect(writes[0].fields.completed_missions).toBe(10);
+    expect(writes[0].fields.commissary_reward).toBe(CREATION_GRANT.advent + 7);
+  });
+  test('retry returns committed result before deriving another promotion', async () => {
+    const committed = { id: 'character-1', level: 5, completed_missions: 11, commissary_reward: 13 };
+    const { service, writes } = fixture({
+      getCharacter: async () => ok({ ...OWNED_CHARACTER, level: 5 }),
+      getLevelUpResult: async () => ok(committed),
+      getRealMissions: async () => { throw new Error('Replay must not rederive'); }
+    });
+    const result = await service.levelUp(CREATOR, 'character-1', { level: 5, request_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee' });
+    expect(result.data).toEqual(committed);
+    expect(writes).toEqual([]);
+  });
+});
+
+test('class-name creation resolves the final Aspirant identity before gating v2 fields', async () => {
+  let lookedUp;
+  let saved;
+  const service = new CharacterService(makeAdapter([], {
+    resolveClassReference: async input => ({ ...input, class_id: 'resolved-aspirant' }),
+    getClassRulesVersion: async classId => {
+      lookedUp = classId;
+      return { data: 'v1', classRules: { rules_edition: 'aspirant', rules_version: 'v1' }, contentFormat: 'advent', error: null };
+    },
+    createCharacterRow: async input => { saved = input; return ok([{ id: 'new-character', ...input }]); }
+  }));
+  const result = await service.createCharacter({ name: 'Legacy', class: 'Soldier', quirks: [NIGHT_OWL], accessories: [{ name: 'Ring' }] }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(lookedUp).toBe('resolved-aspirant');
+  expect(saved.quirks).toEqual([NIGHT_OWL]);
+  expect(saved.accessories).toEqual([{ name: 'Ring' }]);
+});
+
+test('editing corrected Aspirant v1 retains v2 fields and manual progression with legacy Advent economy', async () => {
+  let saved;
+  const service = new CharacterService(makeAdapter([], {
+    getCharacter: async () => ok({ ...OWNED_CHARACTER, creator_mode: null, level: 5, completed_missions: 11, auto_calculate: false }),
+    getClassRulesVersion: async () => ({ data: 'v1', classRules: { rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' }, contentFormat: 'advent', error: null }),
+    getRealMissions: async () => { throw new Error('Ordinary manual edits must not reconcile history'); },
+    saveCharacterAtomic: async args => { saved = args; return ok({ id: 'character-1', ...args.character }); }
+  }));
+  const result = await service.updateCharacter('character-1', {
+    name: 'Legacy', level: 5, completed_missions: 11, commissary_reward: 7, auto_calculate: false,
+    quirks: [NIGHT_OWL], accessories: [{ name: 'Ring' }]
+  }, { id: 'profile-1' });
+  expect(result.error).toBeNull();
+  expect(saved.character.quirks).toEqual([NIGHT_OWL]);
+  expect(saved.character.accessories).toEqual([{ name: 'Ring' }]);
+  expect(saved.character.level).toBe(5);
+  expect(saved.character.completed_missions).toBe(11);
+  expect(saved.character.commissary_reward).toBe(7);
+  expect(saved.perks).toEqual([]);
 });

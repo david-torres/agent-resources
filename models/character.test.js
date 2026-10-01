@@ -84,7 +84,7 @@ const fakeAnon = makeClient({
   traits: [],
   class_gear: [],
   class_abilities: [],
-  classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }]
+  classes: [{ id: 'class-1', name: 'Soldier', rules_edition: 'advent', rules_version: 'v1' }]
 });
 
 // Admin client has the full picture: the character row (with embedded
@@ -101,7 +101,7 @@ const fakeAdmin = makeClient({
   traits: [{ character_id: 'char-uuid-1', name: 'Brave' }],
   class_gear: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Knife' }],
   class_abilities: [{ character_id: 'char-uuid-1', class_id: 'class-1', name: 'Dodge' }],
-  classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }]
+  classes: [{ id: 'class-1', name: 'Soldier', rules_edition: 'advent', rules_version: 'v1' }]
 });
 
 const fakeAdminV2 = makeClient({
@@ -119,7 +119,7 @@ const fakeAdminV2 = makeClient({
   class_gear: [],
   class_abilities: [],
   character_perks: [],
-  classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }]
+  classes: [{ id: 'class-v2', name: 'Thane-v2', rules_edition: 'advent', rules_version: 'v2' }]
 }, { singleTables: new Set(['characters', 'classes']) });
 
 mock.module('./_base', () => ({
@@ -392,7 +392,7 @@ test('getCharacter attaches ability_perks for v2 characters', async () => {
       traits: [],
       class_gear: [],
       class_abilities: [],
-      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }],
+      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_edition: 'advent', rules_version: 'v2' }],
       character_perks: [
         { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Bigger sword', position: 0, compounds_with: null },
         { id: 'p2', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Even bigger',  position: 1, compounds_with: 'p1' }
@@ -435,7 +435,7 @@ test('getCharacter rewrites compounds_with UUIDs into position-N sentinels', asy
       traits: [],
       class_gear: [],
       class_abilities: [],
-      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_version: 'v2' }],
+      classes: [{ id: 'class-v2', name: 'Thane-v2', rules_edition: 'advent', rules_version: 'v2' }],
       character_perks: [
         { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Base', position: 0, compounds_with: null },
         { id: 'p2', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Stacks',  position: 1, compounds_with: 'p1' },
@@ -574,7 +574,7 @@ test('getCharacterForAgent reports an Aspirant character on a v1 class under the
   mock.module('./_base', () => {
     const client = makeClient({
       characters: [{ ...characterRowBase, creator_mode: 'aspirant', personality: [], abilities: [], gear: [] }],
-      classes: [{ id: 'class-1', name: 'Soldier', rules_version: 'v1' }],
+      classes: [{ id: 'class-1', name: 'Soldier', rules_edition: 'advent', rules_version: 'v1' }],
       character_perks: [
         { id: 'p1', character_id: 'char-uuid-1', class_ability_id: 'a1', text: 'Bigger sword', position: 0, compounds_with: null }
       ]

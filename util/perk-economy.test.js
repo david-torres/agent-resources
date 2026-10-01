@@ -71,7 +71,7 @@ test('perkAllotment counts levels exactly as plusAllotment does', () => {
   // Same shape, different table: grant + perLevel * (level - 1). A Perk table
   // that counted levels differently from the Pluses table would be a bug
   // waiting for someone to notice.
-  for (const level of [1, 2, 7, 20]) {
+  for (const level of [1, 2, 7, 10]) {
     expect(plusAllotment({ economy: 'aspirant', level })).toBe(
       CREATION_PLUSES.aspirant + LEVEL_PLUSES_PER_LEVEL * (level - 1)
     );
@@ -84,7 +84,7 @@ test('perkAllotment counts levels exactly as plusAllotment does', () => {
 test('perkAllotment clamps a junk level rather than trusting it', () => {
   expect(perkAllotment({ economy: 'advent', level: 0 })).toBe(0);
   expect(perkAllotment({ economy: 'advent', level: -5 })).toBe(0);
-  expect(perkAllotment({ economy: 'advent', level: Infinity })).toBe(19);
+  expect(perkAllotment({ economy: 'advent', level: Infinity })).toBe(9);
   expect(perkAllotment({ economy: 'advent', level: 'seven' })).toBe(0);
 });
 

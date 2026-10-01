@@ -263,16 +263,19 @@ test('content_format defaults to advent', async () => {
   expect(result.content_format).toBe('advent');
 });
 
-// classes.rules_version names the character rules a class's characters are
-// built under, and Aspirant V1 builds on Advent v2 -- so an Aspirant-format
-// import is v2 whatever the writeup says, and cannot land on v1.
-test('an aspirant-format import is built under the v2 character rules', async () => {
-  const result = await importClass({ content_format: 'aspirant', gear: [{ name: 'One' }] });
-  expect(result.rules_version).toBe('v2');
+test('Aspirant edition imports default to published v1 regardless of format', async () => {
+  for (const content_format of ['aspirant', 'advent']) {
+    const result = await importClass({ rules_edition: 'aspirant', content_format, gear: [{ name: 'One' }] });
+    expect(result.rules_version).toBe('v1');
+  }
 });
 
-test('an aspirant-format import is v2 even when the writeup says v1', async () => {
-  const result = await importClass({ content_format: 'aspirant', rules_version: 'v1', gear: [{ name: 'One' }] });
+test('explicit unsupported Aspirant v2 imports fail before creation', async () => {
+  await expect(importClass({ rules_edition: 'aspirant', rules_version: 'v2', gear: [{ name: 'One' }] })).rejects.toThrow();
+});
+
+test('content format does not override an explicit Advent edition version', async () => {
+  const result = await importClass({ rules_edition: 'advent', content_format: 'aspirant', rules_version: 'v2', gear: [{ name: 'One' }] });
   expect(result.rules_version).toBe('v2');
 });
 

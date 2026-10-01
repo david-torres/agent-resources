@@ -1,3 +1,5 @@
+> Version semantics superseded by the [October 1 design](../specs/2026-10-01-edition-version-and-leveling-design.md): `rules_version` means version within the edition. Aspirant v1 uses Advent v2 mechanics.
+
 # Aspirant Mode Conversion Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.

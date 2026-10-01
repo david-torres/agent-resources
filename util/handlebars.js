@@ -1,6 +1,7 @@
+const { missionsRequiredForLevel } = require('./character-leveling');
 const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
-const { v1LevelingSequence, v2LevelingSequence, personalityMap } = require('./enclave-consts');
+const { personalityMap } = require('./enclave-consts');
 
 // The class form's gear category <select> has to pick the same `selected`
 // option normalizeGear would pick for the same item, or an uncategorised item
@@ -77,12 +78,12 @@ const calendar_link = function (platform, start, title, description) {
 
 const getTotalV1MissionsNeeded = (targetLevel) => {
   if (targetLevel <= 1) return 0;
-  return v1LevelingSequence.slice(0, targetLevel - 1).reduce((sum, num) => sum + num, 0);
+  return missionsRequiredForLevel(Number(targetLevel), 'advent-v1');
 };
 
 const getTotalV2MissionsNeeded = (targetLevel) => {
   if (targetLevel <= 1) return 0;
-  return v2LevelingSequence.slice(0, targetLevel - 1).reduce((sum, num) => sum + num, 0);
+  return missionsRequiredForLevel(Number(targetLevel), 'advent-v2');
 };
 
 function setVariable(varName, varValue, options){

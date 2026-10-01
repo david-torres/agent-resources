@@ -54,10 +54,8 @@ test('deriveLevel uses v2 sequence (cumulative 2,4,7,10,14,18,23,28,34)', () => 
   expect(deriveLevel(100, 'v2')).toBe(10);
 });
 
-test('deriveLevel defaults to v1 sequence when rulesVersion missing or unknown', () => {
-  expect(deriveLevel(5)).toBe(3);
-  expect(deriveLevel(5, null)).toBe(3);
-  expect(deriveLevel(5, 'v3')).toBe(3);
+test('deriveLevel rejects missing or unknown mechanics', () => {
+  for (const mechanics of [undefined, null, 'v3']) expect(() => deriveLevel(5, mechanics)).toThrow();
 });
 
 const { deriveMerx } = require('./character-derived');
@@ -242,13 +240,14 @@ test('deriveCharacterTotals returns all three derived fields together', () => {
   });
 });
 
-test('deriveCharacterTotals defaults to v1 when rulesVersion missing', () => {
+test('deriveCharacterTotals uses explicit v1 mechanics', () => {
   const character = { class_id: null, gear: [], common_items: [] };
   const realMissions = Array.from({ length: 5 }, () => ({ outcome: 'success' }));
   const result = deriveCharacterTotals({
     character,
     realMissions,
-    offscreenMissions: []
+    offscreenMissions: [],
+    mechanics: 'advent-v1'
   });
   // completed 5, level v1: cumulative [2,5,...] -> 5 >= 5 -> level 3
   // merx: earned = 2 (advent grant) + 5 = 7, no spend = 7

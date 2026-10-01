@@ -13,6 +13,7 @@ const realMission = require('../models/mission');
 const realProfile = require('../models/profile');
 const realBadge = require('../models/badge');
 const realOffscreen = require('../models/offscreen-mission');
+const realCharacterRepository = require('../services/character/repository');
 const realDescriptionGate = require('../services/character/description-gate');
 const realNavLoader = require('../util/nav-loader');
 const realSystemMessage = require('../util/system-message');
@@ -53,6 +54,9 @@ mock.module('../models/profile', () => ({
   getProfileByName: async () => ({ data: viewProfile, error: null })
 }));
 mock.module('../models/badge', () => ({ ...realBadge, getProfileBadges: async () => ({ data: [] }) }));
+mock.module('../services/character/repository', () => ({ ...realCharacterRepository,
+  getRealMissions: async () => ({ data: [], error: null })
+}));
 mock.module('../models/offscreen-mission', () => ({ ...realOffscreen, listOffscreenMissions: async () => ({ data: [] }) }));
 mock.module('../services/character/description-gate', () => ({ applyDescriptionGate: async ({ character }) => ({ character, gated: false }) }));
 mock.module('../util/nav-loader', () => ({ populateNavItems: async () => {}, loadNavItems: (req, res, next) => next() }));
@@ -77,6 +81,7 @@ afterAll(async () => {
   mock.module('../models/profile', () => realProfile);
   mock.module('../models/badge', () => realBadge);
   mock.module('../models/offscreen-mission', () => realOffscreen);
+  mock.module('../services/character/repository', () => realCharacterRepository);
   mock.module('../services/character/description-gate', () => realDescriptionGate);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../util/system-message', () => realSystemMessage);
@@ -105,7 +110,7 @@ beforeEach(() => {
     rules_edition: 'advent',
     rules_version: 'v2',
     teaser: 'A builder who solves problems with a wrench and nerve.',
-    status: 'published',
+    status: 'release',
     is_public: true,
     created_by: 'owner-1',
     image_url: 'https://cdn.test/tinker.png'
@@ -171,12 +176,12 @@ test('a character hidden from search shares no description and no image', async 
   expect(tags.image).toBeUndefined();
 });
 
-test('a class page describes the edition, version and teaser', async () => {
+test('a free-play class page describes the edition, version and teaser without book art', async () => {
   const { tags } = await ogTags(`/classes/${CLASS_ID}/Tinker`);
 
   expect(tags.title).toBe('Tinker');
   expect(tags.description).toBe('Advent v2 · A builder who solves problems with a wrench and nerve.');
-  expect(tags.image).toBe('https://cdn.test/tinker.png');
+  expect(tags.image).toBeUndefined();
   expect(tags.url).toBe(`https://agent-resources.vip/classes/${CLASS_ID}/Tinker`);
 });
 

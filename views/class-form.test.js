@@ -1099,3 +1099,19 @@ test('added advanced rows get unique ids and keep their labels pointed at them',
     }
   }
 });
+
+test('edition changes limit published Aspirant versions and retain Advent v2 choice', async () => {
+  await render(renderForm('admin', { isNew: false, class: { rules_edition: 'advent', rules_version: 'v2' } }));
+  require('../public/js/class-edition-version');
+  document.dispatchEvent(new window.CustomEvent('htmx:load'));
+  const edition = document.getElementById('class-rules-edition');
+  const version = document.getElementById('class-rules-version');
+  expect(version.value).toBe('v2');
+  edition.value = 'aspirant';
+  edition.dispatchEvent(new window.Event('change'));
+  expect(version.value).toBe('v1');
+  expect(version.querySelector('[value="v2"]').disabled).toBe(true);
+  edition.value = 'advent';
+  edition.dispatchEvent(new window.Event('change'));
+  expect(version.querySelector('[value="v2"]').disabled).toBe(false);
+});

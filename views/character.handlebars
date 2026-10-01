@@ -64,15 +64,10 @@
       <p><strong>Owner:</strong> {{ownerProfile.name}}</p>
       {{/if}}
       {{/if}}
-      {{#if (lt character.level 10)}}
+      {{#if levelUpProgress.nextLevel}}
       <p class="is-size-7">
-        {{#if (eq effectiveVersion 'v2')}}
-        V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
-        missions to reach level {{add character.level 1}}
-        {{else}}
-        V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
-        missions to reach level {{add character.level 1}}
-        {{/if}}
+        Need {{levelUpProgress.missing}} more completed missions to reach level {{levelUpProgress.nextLevel}}
+        ({{levelUpProgress.completedMissions}} recorded).
       </p>
       {{/if}}
       <p><strong>Completed Missions:</strong> {{character.completed_missions}}</p>
@@ -175,7 +170,7 @@
       <div class="control">
         <div class="buttons has-addons mb-0">
           <a href="/characters/{{character.id}}/edit" class="button is-warning">Edit Character</a>
-          <button type="button" class="button is-link is-light" id="levelUpBtn" data-completed-missions="{{character.completed_missions}}">
+          <button type="button" class="button is-link is-light" id="levelUpBtn" data-completed-missions="{{levelUpProgress.completedMissions}}" {{#unless levelUpProgress.nextLevel}}disabled{{/unless}}>
             <span class="icon"><i class="fas fa-arrow-up"></i></span>
             <span>Level Up</span>
           </button>

@@ -29,7 +29,8 @@ const { normalizeWizardPayload, collectCharacterFormArrays, validateAspiringBuil
 const { getMission } = require('../models/mission');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
-const { characterRulesVersion } = require('../util/character-rules');
+const { characterRulesVersion, resolveCharacterMechanics } = require('../util/character-rules');
+const { missionsRequiredForLevel, nextLevelProgress, MAX_LEVEL } = require('../util/character-leveling');
 const { getClasses, getClass, getUnlockedClassIdsForUser } = require('../models/class');
 const { getProfileById, getProfileConduitCredits } = require('../models/profile');
 const { statList, personalityMap, commonItemList, MERX_PER_MISSION_SUCCESS } = require('../util/enclave-consts');
@@ -55,6 +56,23 @@ const { trialEndedAt } = require('../util/edition-access');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
+
+
+// Progression is served with the page, so class changes use the same tables as saves.
+const progressionRules = (classRules, creatorMode) => {
+  const mechanics = resolveCharacterMechanics({ classRules, creatorMode });
+  return { mechanics, maxLevel: MAX_LEVEL, thresholds: Array.from({ length: MAX_LEVEL }, (_, i) => missionsRequiredForLevel(i + 1, mechanics)) };
+};
+const loadLinkedClassRules = async (classId, client) => {
+  if (!classId) return { data: null };
+  try {
+    const result = await getClass(classId, client);
+    if (result.error || !result.data) return { error: result.error || new Error('Linked class not found') };
+    resolveCharacterMechanics({ classRules: result.data });
+    return result;
+  } catch (error) { return { error }; }
+};
+const rulesUnavailable = (req, res, error) => sendError(req, res, error, { status: 503, message: 'Character rules unavailable' });
 
 
 const sendAspirantUnlock = (req, res, mode = 'aspirant') => {
@@ -316,7 +334,7 @@ const wizardClassGear = (c) => (Array.isArray(c.gear)
     }))
   : []);
 
-router.get('/wizard', isAuthenticated, async (req, res) => {
+router.get('/wizard', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile, user } = res.locals;
   const mode = (req.query.mode || 'advent').toString();
   const allowed = ['advent', 'aspiring', 'aspirant'];
@@ -437,6 +455,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
     mode,
     preselectedClassId,
     wizardClasses,
+    maxLevel: MAX_LEVEL,
     lockedClassGroups: mode === 'aspiring' ? [] : lockedClassGroupsFor(lockedClasses, fitsWizardMode),
     adventTrialEndedAt: mode === 'advent' ? trialEndedAt(res.locals.editionAccess, 'advent') : null,
     statList,
@@ -450,6 +469,8 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       mode,
       preselectedClassId,
       classes: wizardClasses,
+      progressionByClassId: Object.fromEntries(wizardClasses.map(c => [c.id, progressionRules(c, mode)])),
+      progressionWhenClassless: progressionRules(null, mode),
       shopClasses,
       statList,
       personalityMap,
@@ -480,7 +501,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
       { label: 'Wizard', href: '#' }
     ]
   });
-});
+}));
 
 router.post('/wizard', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -526,15 +547,11 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
   } else {
     const { filteredAdvent, filteredAdventV1, filteredAdventV2, filteredAspirant, filteredAspirantV1, filteredAspirantV2, filteredPCC, filteredPCCAdventV1, filteredPCCAdventV2, filteredPCCAspirantV1, filteredPCCAspirantV2, filteredGear, filteredAbilities } = await filterClassDataForUser(res.locals.user);
 
-    let characterClass = null;
-    if (character.class_id) {
-      try {
-        const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-        if (cls) characterClass = cls;
-      } catch (_) {}
-    }
+    const classResult = await loadLinkedClassRules(character.class_id, res.locals.supabase);
+    if (classResult.error) return rulesUnavailable(req, res, classResult.error);
+    const characterClass = classResult.data;
     const effectiveVersion = characterRulesVersion({
-      classRulesVersion: characterClass && characterClass.rules_version,
+      classRules: characterClass,
       creatorMode: character.creator_mode
     });
 
@@ -655,6 +672,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       // match the server-side check, which uses moment.utc().
       maxCreatedAt: moment.utc().format('YYYY-MM-DD'),
       effectiveVersion,
+      fieldsProgress: nextLevelProgress({ level: Number(character.auto_calculate ? derived.level : character.level) || 1, completedMissions: character.auto_calculate ? derived.completed_missions : character.completed_missions || 0, mechanics: resolveCharacterMechanics({ classRules: characterClass, creatorMode: character.creator_mode }) }),
       characterClass,
       upgradeTargets,
       showAspirantUpsell: !canUseAspirant,
@@ -720,7 +738,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
   }
 }));
 
-router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
+router.get('/:id/auto-calc-fields', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const on = req.query.on === '1' || req.query.on === 1 || req.query.on === true || req.query.on === 'true';
@@ -729,15 +747,11 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
   if (error || !character) return sendError(req, res, error, { message: 'Character not found' });
   if (character.creator_id !== profile.id) return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
 
-  let classRow = null;
-  if (character.class_id) {
-    try {
-      const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-      if (cls) classRow = cls;
-    } catch (_) {}
-  }
+  const classResult = await loadLinkedClassRules(character.class_id, res.locals.supabase);
+  if (classResult.error) return rulesUnavailable(req, res, classResult.error);
+  const classRow = classResult.data;
   const effectiveVersion = characterRulesVersion({
-    classRulesVersion: classRow && classRow.rules_version,
+    classRules: classRow,
     creatorMode: character.creator_mode
   });
 
@@ -771,9 +785,10 @@ router.get('/:id/auto-calc-fields', isAuthenticated, async (req, res) => {
     character,
     derived,
     autoCalculate: on,
+    fieldsProgress: nextLevelProgress({ level: Number(on ? derived.level : character.level) || 1, completedMissions: on ? derived.completed_missions : character.completed_missions || 0, mechanics: resolveCharacterMechanics({ classRules: classRow, creatorMode: character.creator_mode }) }),
     effectiveVersion
   });
-});
+}));
 
 router.get('/:id/offscreen-missions/new', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;
@@ -948,16 +963,11 @@ router.get('/ability-perk-group', authOptional, (req, res) => {
   });
 });
 
-router.get('/version-fields', authOptional, async (req, res) => {
+router.get('/version-fields', authOptional, asyncHandler(async (req, res) => {
   const classId = req.query.class_id;
-  let classRulesVersion = null;
-  if (classId) {
-    try {
-      const { data: cls } = await getClass(classId, res.locals.supabase);
-      classRulesVersion = cls && cls.rules_version;
-    } catch (_) {}
-  }
-  const effectiveVersion = characterRulesVersion({ classRulesVersion, creatorMode: req.query.creator_mode });
+  const classResult = await loadLinkedClassRules(classId, res.locals.supabase);
+  if (classResult.error) return rulesUnavailable(req, res, classResult.error);
+  const effectiveVersion = characterRulesVersion({ classRules: classResult.data, creatorMode: req.query.creator_mode });
 
   if (effectiveVersion !== 'v2') {
     // Return an empty container so the swap target stays present for future
@@ -972,7 +982,7 @@ router.get('/version-fields', authOptional, async (req, res) => {
     // render with an empty character so the v2 fields show as blank rows.
     character: { quirks: [], accessories: [], ability_perks: [], abilities: [] }
   });
-});
+}));
 
 router.get('/import', isAuthenticated, (req, res) => {
   const { profile } = res.locals;
@@ -1125,25 +1135,18 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
 // applicants ungated). Visibility is RLS's: a character the viewer cannot
 // see never comes back from getCharacter. Must stay mounted before
 // /:id/:name? or that greedy route swallows it as name="details".
-router.get('/:id/details', authOptional, async (req, res) => {
+router.get('/:id/details', authOptional, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { data: character, error } = await getCharacter(req.params.id, res.locals.supabase);
   if (error || !character) {
     return res.status(404).send('<p class="has-text-grey">Character not found.</p>');
   }
 
-  // fetch class record for the effective rules version (non-fatal on failure)
-  let characterClass = null;
-  try {
-    if (character.class_id) {
-      const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-      if (cls) characterClass = cls;
-    }
-  } catch (_) {
-    // ignore; render as v1 without class details
-  }
+  const classResult = await loadLinkedClassRules(character.class_id, res.locals.supabase);
+  if (classResult.error) return rulesUnavailable(req, res, classResult.error);
+  const characterClass = classResult.data;
   const effectiveVersion = characterRulesVersion({
-    classRulesVersion: characterClass && characterClass.rules_version,
+    classRules: characterClass,
     creatorMode: character.creator_mode
   });
   // A Signature's Enchantments and Mods are a V1-population feature: they
@@ -1169,9 +1172,9 @@ router.get('/:id/details', authOptional, async (req, res) => {
     showGearPurchases,
     statList
   });
-});
+}));
 
-router.get('/:id/:name?', authOptional, async (req, res) => {
+router.get('/:id/:name?', authOptional, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   const { id } = req.params;
   const { data: character, error } = await getCharacter(id, res.locals.supabase);
@@ -1183,10 +1186,12 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
     } else {
       const { data: recentMissions } = await getCharacterRecentMissions(id);
 
-      const { data: offscreenMissions } = await listOffscreenMissions({
+      const { data: offscreenMissions, error: offscreenError } = await listOffscreenMissions({
         characterId: id,
         supabase: res.locals.supabase
       });
+
+      if (offscreenError) return sendError(req, res, offscreenError, { status: 503, message: 'Mission history unavailable' });
 
       // Merge real missions and offscreen entries into a single chronological list.
       // Each entry carries a `_kind` discriminator so the view can choose its renderer.
@@ -1198,19 +1203,9 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       mergedRecent.sort((a, b) => new Date(dateOf(b)) - new Date(dateOf(a)));
       const recentMerged = mergedRecent.slice(0, 5);
 
-      // fetch class record (non-fatal on failure)
-      let characterClass = null;
-      try {
-        if (character.class_id) {
-          const { data: cls } = await getClass(character.class_id, res.locals.supabase);
-          if (cls) {
-            characterClass = cls;
-          }
-        }
-      } catch (_) {
-        // ignore; continue rendering without class details
-      }
-
+      const classResult = await loadLinkedClassRules(character.class_id, res.locals.supabase);
+      if (classResult.error) return rulesUnavailable(req, res, classResult.error);
+      const characterClass = classResult.data;
       // fetch creator profile
       let ownerProfile = null;
       try {
@@ -1229,7 +1224,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       });
 
       const effectiveVersion = characterRulesVersion({
-        classRulesVersion: characterClass && characterClass.rules_version,
+        classRules: characterClass,
         creatorMode: character.creator_mode
       });
 
@@ -1293,6 +1288,14 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         classFamilyOf
       });
 
+      const historyResult = await characterRepository.getRealMissions(id);
+      if (historyResult.error) return sendError(req, res, historyResult.error, { status: 503, message: 'Mission history unavailable' });
+      const historyCompleted = (historyResult.data || []).filter(m => m.outcome === 'success' || m.outcome === 'failure').length + (offscreenMissions || []).length;
+      const progression = progressionRules(characterClass, character.creator_mode);
+      const nextLevel = Number(character.level) < progression.maxLevel ? Number(character.level) + 1 : null;
+      const required = nextLevel ? progression.thresholds[nextLevel - 1] : null;
+      const levelUpProgress = { nextLevel, required, completedMissions: historyCompleted, missing: nextLevel ? Math.max(0, required - historyCompleted) : 0 };
+
       const ownerCredit = ownerProfile && ownerProfile.is_public !== false
         ? `by ${ownerProfile.name}`
         : null;
@@ -1313,6 +1316,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
         character,
         characterClass,
         effectiveVersion,
+        levelUpProgress,
         ownerProfile,
         recentMissions,
         recentMerged,
@@ -1344,7 +1348,7 @@ router.get('/:id/:name?', authOptional, async (req, res) => {
       });
     }
   }
-});
+}));
 
 router.patch('/:id/stats', isAuthenticated, asyncHandler(async (req, res) => {
   const actor = actorFromLocals(res.locals);

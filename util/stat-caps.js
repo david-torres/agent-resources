@@ -1,9 +1,8 @@
 // The single definition of every Stat Cap and plus-allotment figure ENCLAVE:
 // Aspirant V1 states, and all the arithmetic over them.
 //
-// Deliberately require-free, exactly like util/merx-economy.js: this module is
-// pure arithmetic over values its callers hand it, so it can be read in one
-// sitting and tested without a database, a class row or a request.
+// Pure arithmetic over supplied values, sharing the canonical progression
+// ceiling without a database, a class row or a request.
 //
 // Page numbers are PRINTED pages of ENCLAVE: Aspirant V1 (the PDF page is the
 // printed page plus five). Where a figure is stated on two pages, both are
@@ -57,18 +56,9 @@ const statCapFor = (stat, { traits, capPurchases } = {}) => {
     return BASE_STAT_CAP + fromTraits + purchased;
 };
 
-// The app's existing settable maximum for a character's level (previously a
-// literal 20 duplicated in normalizeWizardPayload, services/character/
-// input.js). Named and centralized here so normalizeLevel enforces the same
-// ceiling everywhere: without one, normalizeLevel(Infinity) was Infinity and
-// normalizeLevel(1e9) gave plusAllotment an allotment over two billion,
-// silently passing any stat total on the classic/expert save path. Two other
-// sites clamp a SUBMITTED level against this same ceiling, and both read it
-// from here: normalizeWizardPayload (services/character/input.js), which the
-// wizard alone calls, and levelUp's requestedLevel (services/character/
-// service.js). Distinct from MAX_LEVEL in util/character-derived.js, which
-// caps the level derived from completed missions -- a different concept.
-const LEVEL_CEILING = 20;
+// Settable and mission-derived levels share the same supported ceiling.
+const { MAX_LEVEL } = require('./character-leveling');
+const LEVEL_CEILING = MAX_LEVEL;
 
 // The one clamp for "what level is this character": a whole number in
 // [1, LEVEL_CEILING]. A missing, non-numeric, or sub-1 level all read as

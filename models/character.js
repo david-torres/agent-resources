@@ -6,43 +6,38 @@ const { cloneInput } = require('../services/character/input');
 const { CharacterService } = require('../services/character/service');
 const { computeVersionFamily } = require('../util/class-family');
 const characterRepository = require('../services/character/repository');
-const { characterRulesVersion } = require('../util/character-rules');
+const { characterRulesVersion, resolveCharacterMechanics, rulesError, validateClassRules } = require('../util/character-rules');
 
-// The rules version of the linked class; 'v1' when no class is linked (old
-// characters predate class_id). characterRulesVersion combines this with the
-// character's mode.
-const classRulesVersion = async (classId, client = supabase) => {
-  if (!classId) return 'v1';
-  try {
-    const { data: cls } = await getClass(classId, client);
-    return cls?.rules_version === 'v2' ? 'v2' : 'v1';
-  } catch (_) {
-    return 'v1';
-  }
+const classRulesFor = async (classId, client = supabase) => {
+  if (!classId) return null;
+  const { data: cls, error } = await getClass(classId, client);
+  if (error) throw error;
+  if (!cls) throw rulesError('Linked class rules are unavailable');
+  validateClassRules(cls);
+  return { rules_edition: cls.rules_edition, rules_version: cls.rules_version, content_format: cls.content_format };
 };
+// Deprecated adapter; production mechanics readers receive the complete identity.
+const classRulesVersion = async (classId, client = supabase) =>
+  characterRulesVersion({ classRules: await classRulesFor(classId, client) });
 
 // This remains the database-facing part of class preparation. The pure input
 // module receives the resulting rules version and never needs Supabase.
 const resolveCharacterClassReference = async (input) => {
   const data = cloneInput(input);
   if (!data.class_id && data.class) {
-    try {
-      let lookup = await getClasses({ name: data.class });
-      if (!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0) {
-        lookup = await getClasses({ name: data.class, is_public: true });
-      }
-      if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) data.class_id = lookup.data[0].id;
-    } catch (_) {
-      // Class lookup is intentionally non-fatal for the existing create/edit flow.
+    let lookup = await getClasses({ name: data.class });
+    if (lookup?.error) throw lookup.error;
+    if (!lookup || !Array.isArray(lookup.data) || lookup.data.length === 0) {
+      lookup = await getClasses({ name: data.class, is_public: true });
+      if (lookup?.error) throw lookup.error;
     }
+    if (lookup && Array.isArray(lookup.data) && lookup.data.length > 0) data.class_id = lookup.data[0].id;
   }
   if (data.class_id && !data.class) {
-    try {
-      const { data: cls } = await getClass(data.class_id);
-      if (cls && cls.name) data.class = cls.name;
-    } catch (_) {
-      // Keep the submitted reference when a catalog lookup is unavailable.
-    }
+    const { data: cls, error } = await getClass(data.class_id);
+    if (error) throw error;
+    if (!cls) throw rulesError('Linked class rules are unavailable');
+    if (cls.name) data.class = cls.name;
   }
   return data;
 };
@@ -418,7 +413,10 @@ const serializeCharacterForAgent = (row, actor = {}) => {
 
   const out = {
     ...serializeCharacterSummaryForAgent(row),
-    rules_version: row.rules_version === 'v2' ? 'v2' : 'v1',
+    // Deprecated effective-mechanics alias; class_rules carries published identity.
+    rules_version: row.mechanics === 'advent-v2' || row.rules_version === 'v2' ? 'v2' : 'v1',
+    mechanics: row.mechanics || (row.rules_version === 'v2' ? 'advent-v2' : 'advent-v1'),
+    class_rules: row.class_rules ? { rules_edition: row.class_rules.rules_edition, rules_version: row.class_rules.rules_version } : null,
     stats,
     traits: Array.isArray(row.personality) ? row.personality.map((t) => t.name) : [],
     abilities: Array.isArray(row.abilities)
@@ -460,17 +458,19 @@ const getCharacterForAgent = async (id, actor = {}) => {
   if (error) return { data: null, error };
   if (!data) return { data: null, error: null };
 
-  const rulesVersion = characterRulesVersion({
-    classRulesVersion: await classRulesVersion(data.class_id),
-    creatorMode: data.creator_mode
-  });
+  let classRules, mechanics;
+  try {
+    classRules = await classRulesFor(data.class_id);
+    mechanics = resolveCharacterMechanics({ classRules, creatorMode: data.creator_mode });
+  } catch (error) { return { data: null, error }; }
+  const rulesVersion = mechanics === 'advent-v2' ? 'v2' : 'v1';
   if (rulesVersion === 'v2') {
     const { data: perks } = await characterRepository.getCharacterAbilityPerks(data.id);
     data.ability_perks = perks || [];
   }
 
   const serialized = serializeCharacterForAgent(
-    { ...data, owner_name: data.profile?.name || null, rules_version: rulesVersion },
+    { ...data, owner_name: data.profile?.name || null, rules_version: rulesVersion, mechanics, class_rules: classRules },
     actor
   );
   return { data: serialized, error: null };

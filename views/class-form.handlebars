@@ -36,7 +36,7 @@
           <div class="select is-fullwidth">
             <select name="rules_version" id="class-rules-version">
               <option value="v1" {{#if (eq class.rules_version "v1")}}selected{{/if}}>v1</option>
-              <option value="v2" {{#if (eq class.rules_version "v2")}}selected{{/if}}>v2</option>
+              <option value="v2" {{#if (eq class.rules_version "v2")}}selected{{/if}} {{#if (eq class.rules_edition "aspirant")}}disabled{{/if}}>v2 (Advent)</option>
             </select>
           </div>
         </div>
@@ -844,3 +844,5 @@
     </div>
   </div>
   </form>
+
+<script src="/js/class-edition-version.js" defer></script>

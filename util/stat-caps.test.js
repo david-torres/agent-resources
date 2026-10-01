@@ -131,3 +131,11 @@ test('statCapFigures carries every stat figure a surface needs', () => {
     traitCount: TRAIT_COUNT
   });
 });
+
+test('settable and derived levels share the canonical ceiling of 10', () => {
+  const { MAX_LEVEL } = require('./character-leveling');
+  expect(LEVEL_CEILING).toBe(MAX_LEVEL);
+  expect(LEVEL_CEILING).toBe(10);
+  expect(normalizeLevel(11)).toBe(10);
+  expect(normalizeLevel(20)).toBe(10);
+});

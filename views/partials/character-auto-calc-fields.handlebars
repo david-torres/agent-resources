@@ -6,33 +6,12 @@
         <div class="control">
           <input class="input" type="number" name="level" id="char-level" placeholder="Level"
             value="{{#if autoCalculate}}{{derived.level}}{{else}}{{#if character.level}}{{character.level}}{{else}}1{{/if}}{{/if}}"
-            {{#if autoCalculate}}disabled{{/if}} required min="1" max="10">
-        </div>
-        {{#if autoCalculate}}
-          {{#if (lt derived.level 10)}}
+            {{#if fieldsProgress.targetLevel}}
           <p class="help">
-            {{#if (eq effectiveVersion 'v2')}}
-            V2: Need {{subtract (getTotalV2MissionsNeeded (add derived.level 1)) derived.completed_missions}} more
-            missions to reach level {{add derived.level 1}}
-            {{else}}
-            V1: Need {{subtract (getTotalV1MissionsNeeded (add derived.level 1)) derived.completed_missions}} more
-            missions to reach level {{add derived.level 1}}
-            {{/if}}
+            Need {{fieldsProgress.remainingMissions}} more completed missions to reach level {{fieldsProgress.targetLevel}}.
           </p>
-          {{/if}}
-        {{else}}
-          {{#if (lt character.level 10)}}
-          <p class="help">
-            {{#if (eq effectiveVersion 'v2')}}
-            V2: Need {{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}} more
-            missions to reach level {{add character.level 1}}
-            {{else}}
-            V1: Need {{subtract (getTotalV1MissionsNeeded (add character.level 1)) character.completed_missions}} more
-            missions to reach level {{add character.level 1}}
-            {{/if}}
-          </p>
-          {{/if}}
         {{/if}}
+
       </div>
     </div>
 

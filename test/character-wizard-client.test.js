@@ -1776,6 +1776,7 @@ describe('the wizard counts the roster it submits, not a fixed free allowance', 
     expect(wizard.acquireAbility(state, OWN_ADVANCED)).toBe(true);
     expect(wizard.acquireAbility(state, DONOR_CORE)).toBe(true);
     expect(wizard.canAcquire(state, DONOR_ADVANCED)).toBe(false);
+    state.level = 10; // Progression has a level-10 ceiling.
     expect(wizard.buildSubmitPayload().abilities).toHaveLength(6);
   });
 
@@ -1790,6 +1791,7 @@ describe('the wizard counts the roster it submits, not a fixed free allowance', 
       expect(wizard.acquireAbility(state, pick)).toBe(true);
     });
     expect(wizard.canAcquire(state, DONOR_ADVANCED_3)).toBe(false);
+    state.level = 10; // Progression has a level-10 ceiling.
     expect(wizard.buildSubmitPayload().abilities).toHaveLength(6);
   });
 });
@@ -2121,5 +2123,50 @@ describe('Your Signatures', () => {
     buyFromShop('c-other', 'Drifter Sharps Rifle');
     expect(document.getElementById('signaturePanel').hidden).toBe(false);
     expect(yourCells()).toEqual([{ name: 'Drifter Sharps Rifle', classId: 'c-other' }]);
+  });
+});
+
+
+describe('server-owned progression in the wizard', () => {
+  const classes = [
+    { ...ASPIRANT_OWN_CLASS, id: 'advent-one', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' },
+    { ...ASPIRANT_OTHER_CLASS, id: 'aspirant-one', rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' }
+  ];
+  test('class switches refresh displayed totals from the canonical server tables', () => {
+    const wizard = bootWizard(fixture({ mode: 'advent', classes, preselectedClassId: 'advent-one' }));
+    wizard.getState().level = 5;
+    document.querySelector('[data-id="advent-one"]').click();
+    expect(document.getElementById('summaryMissions').value).toBe('14');
+    document.querySelector('[data-id="aspirant-one"]').click();
+    expect(document.getElementById('summaryMissions').value).toBe('10');
+    expect(wizard.buildSubmitPayload().level).toBe(5);
+  });
+  test('both class curves display every served cumulative threshold', () => {
+    const { LEVEL_THRESHOLDS } = require('../util/character-leveling');
+    const wizard = bootWizard(fixture({ mode: 'advent', classes, preselectedClassId: 'advent-one' }));
+    for (let level = 1; level <= 10; level++) {
+      wizard.getState().level = level;
+      document.querySelector('[data-id="advent-one"]').click();
+      expect(document.getElementById('summaryMissions').value).toBe(String(LEVEL_THRESHOLDS['advent-v1'][level - 1]));
+      document.querySelector('[data-id="aspirant-one"]').click();
+      expect(document.getElementById('summaryMissions').value).toBe(String(LEVEL_THRESHOLDS['advent-v2'][level - 1]));
+    }
+  });
+  test('mode navigation consumes its new server data without retaining the old curve', () => {
+    const first = bootWizard(fixture({ mode: 'advent', classes, preselectedClassId: 'advent-one' }));
+    first.getState().level = 3;
+    document.querySelector('[data-id="advent-one"]').click();
+    expect(document.getElementById('summaryMissions').value).toBe('5');
+    const second = bootWizard(fixture({ mode: 'aspirant', classes, preselectedClassId: 'advent-one' }));
+    second.getState().level = 3;
+    document.querySelector('[data-id="advent-one"]').click();
+    expect(document.getElementById('summaryMissions').value).toBe('4');
+  });
+  test('submission refuses unresolved progression or a level-eleven threshold', () => {
+    const wizard = bootWizard(fixture({ progressionByClassId: {}, progressionWhenClassless: null }));
+    expect(() => wizard.buildSubmitPayload()).toThrow('progression rules unavailable');
+    const valid = bootWizard(fixture());
+    valid.getState().level = 11;
+    expect(() => valid.buildSubmitPayload()).toThrow('progression rules unavailable');
   });
 });

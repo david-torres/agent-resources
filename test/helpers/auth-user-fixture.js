@@ -17,4 +17,11 @@ async function createAuthUserAndProfile(db, { email, profileName }) {
   return { authUserId, profile };
 }
 
-module.exports = { createAuthUserAndProfile };
+async function grantAspirantBook(db, profile, title = `Aspirant fixture ${profile.id}`) {
+  const { rows: [book] } = await db.query(`insert into rules_pdfs(title,edition,storage_path,rules_edition,book_type,created_by)
+    values($1,'v1','fixture.pdf','aspirant','core',$2) returning id`, [title, profile.id]);
+  await db.query('insert into rules_pdf_unlocks(user_id,profile_id,rules_pdf_id) values($1,$2,$3)',
+    [profile.user_id, profile.id, book.id]);
+  return book.id;
+}
+module.exports = { createAuthUserAndProfile, grantAspirantBook };

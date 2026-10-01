@@ -97,7 +97,7 @@ test('completing a level-up persists the new level and the edited stat', async (
   // for level 1 -> 2 the modal pre-renders exactly
   // missionsForLevel(2) = 2 empty "missing mission" rows
   // (character-level-up.js:203-211 / character-common.js's
-  // v2LevelingSequence). Filling both clears the real gate; the stat edit
+  // server-provided progression). Filling both clears the real gate; the stat edit
   // below is asserted directly below, not just assumed to "ride along" --
   // level alone would pass even if stats were dropped entirely, since level
   // is derived server-side from mission rows
@@ -137,4 +137,29 @@ test('completing a level-up persists the new level and the edited stat', async (
     );
     return rows[0];
   }, { timeout: 15_000 }).toEqual({ level: before.level + 1, might: editedMight });
+});
+
+
+for (const [edition, required] of [['advent', 14], ['aspirant', 10]]) {
+  test(`${edition} v1 level-up shows its history requirement with manual counter discrepancies`, async ({ page }) => {
+    const profile = await profileForEmail(db, ADMIN_EMAIL);
+    const classRow = await seedClass(prefix, { rulesEdition: edition, rulesVersion: 'v1', contentFormat: 'advent' });
+    const manual = await seedCharacter(prefix, profile, classRow, { level: 4, completed_missions: 999, creator_mode: 'advent', auto_calculate: false });
+    await page.goto(`/characters/${manual.id}`);
+    await page.locator('#levelUpBtn').click();
+    const modal = page.locator('#levelUpModal');
+    await expect(modal).toHaveAttribute('data-required-missions', String(required));
+    await expect(modal).toHaveAttribute('data-completed-missions', '0');
+    await expect(modal.locator('.level-up-mission')).toHaveCount(required);
+    await expect(modal).toContainText('more completed missions');
+  });
+}
+
+test('level ten has no level-up action or level-eleven target', async ({ page }) => {
+  const profile = await profileForEmail(db, ADMIN_EMAIL);
+  const classRow = await seedClass(prefix);
+  const capped = await seedCharacter(prefix, profile, classRow, { level: 10, auto_calculate: false });
+  await page.goto(`/characters/${capped.id}`);
+  await expect(page.locator('#levelUpBtn')).toBeDisabled();
+  await expect(page.locator('#levelUpModal')).toHaveAttribute('data-next-level', '');
 });

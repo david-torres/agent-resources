@@ -23,6 +23,7 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
+const realAccess = require('../services/access/service');
 const realBase = require('../models/_base');
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
@@ -33,11 +34,11 @@ const realOffscreen = require('../models/offscreen-mission');
 const realMission = require('../models/mission');
 const realClass = require('../models/class');
 const realCharacterRepository = require('../services/character/repository');
-const { AuthorizationError } = require('../util/errors');
-const { SYSTEM_ACTOR } = require('../util/actor');
 
 const CHAR_ID = '11111111-1111-4111-8111-111111111111';
 const PROFILE_ID = 'p1';
+
+mock.module('../services/access/service', () => ({ ...realAccess, getEditionAccess: async () => ({ aspirant: { state: 'owned' } }) }));
 
 mock.module('../models/_base', () => ({
   supabase: { from: () => { throw new Error('unexpected supabase call in level-up test'); } },
@@ -54,21 +55,13 @@ mock.module('../models/profile', () => ({
   getProfile: async () => ({ id: PROFILE_ID, user_id: 'u1' }),
 }));
 
-// Mutable so a single test can force addCharacterToMission to THROW (as the
-// real MissionService.addCharacter now does on a denied/not-found mission via
-// requireEditable) without affecting the other tests in this file, which all
-// share this one mock.module registration.
-let addCharacterToMissionImpl = async () => ({ data: [{}], error: null });
 mock.module('../models/mission', () => ({
-  createMission: async () => ({ data: [{ id: 'mission-1' }], error: null }),
-  addCharacterToMission: async (...args) => addCharacterToMissionImpl(...args),
+  createMission: async () => { throw new Error('Independent mission writes forbidden'); },
+  addCharacterToMission: async () => { throw new Error('Independent mission links forbidden'); }
 }));
-// Re-require AFTER the mock.module registration above so this file's own
-// direct calls (inside the repository fake below) resolve to the fakes too.
-const { createMission: fakeCreateMission, addCharacterToMission: fakeAddCharacterToMission } = require('../models/mission');
 
 mock.module('../models/class', () => ({
-  getClass: async () => ({ data: { id: 'c1', rules_version: 'v1' }, error: null }),
+  getClass: async () => ({ data: { id: 'c1', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' }, error: null }),
   getClasses: async () => ({ data: [], error: null }),
   // Not exercised by the level-up flow, but models/character.js composes it
   // into the CharacterService adapter unconditionally at module load time.
@@ -87,6 +80,10 @@ let classAbilities;
 let characterPerks;
 let backfilledMissions;
 let perkIdSeq;
+let atomicError;
+let atomicCalls;
+let committedRequests;
+let rulesMetadata;
 
 mock.module('../services/character/repository', () => ({
   getEditionAccess: async () => ({ aspirant: { state: 'owned' } }),
@@ -107,7 +104,7 @@ mock.module('../services/character/repository', () => ({
   updateClass: async () => ({ data: [{ ...characterRow }], error: null }),
   getRealMissions: async () => ({ data: [...backfilledMissions], error: null }),
   listOffscreenMissions: async () => ({ data: [], error: null }),
-  getClassRulesVersion: async () => ({ data: 'v1', error: null }),
+  getClassRulesVersion: async () => ({ data: rulesMetadata.rules_version, classRules: rulesMetadata, contentFormat: rulesMetadata.content_format, error: null }),
   // updateCharacter's classFamilyOf lookup -- unreached by level-up, but the
   // constructor checks the whole adapter surface.
   getClassFamilyRows: async () => ({ data: [], error: null }),
@@ -115,12 +112,21 @@ mock.module('../services/character/repository', () => ({
   getAccessibleClassIds: async () => ({ data: new Set(), error: null }),
   fetchAllowedAbilityIds: async () => ({ data: classAbilities.map(a => ({ id: a.id })), error: null }),
   fetchExistingPerks: async () => ({ data: characterPerks.map(p => ({ ...p })), error: null }),
-  // In-memory stand-in for the level_up_character_atomic RPC: applies the
+  // In-memory stand-in for the atomic level-up RPC: applies the
   // owned-field update, inserts the new perk rows, then resolves each perk's
   // compound link exactly as the SQL does — a 'position-<n>' link targets a
   // same-ability perk by position; a bare UUID targets a same-ability existing
   // perk by id; anything else stays null.
-  levelUpAtomic: async ({ fields, perks }) => {
+  getLevelUpResult: async (_id, _creator, requestId, hash) => {
+    const saved = committedRequests.get(requestId);
+    return saved && saved.hash !== hash ? { data: null, error: { status: 409, message: 'Request ID reused with another payload' } }
+      : { data: saved?.data || null, error: null };
+  },
+  levelUpAtomic: async ({ fields, perks, missionNames, creditSourceIds, requestId, requestHash }) => {
+    atomicCalls++;
+    if (atomicError) return { data: null, error: atomicError };
+    if (creditSourceIds.length) throw new Error('Fixture does not provide credit sources');
+    backfilledMissions.push(...missionNames.map((name, i) => ({ id: `mission-${backfilledMissions.length + i}`, name, outcome: 'success' })));
     Object.assign(characterRow, fields);
     if (Array.isArray(perks)) {
       for (const row of perks) {
@@ -148,31 +154,10 @@ mock.module('../services/character/repository', () => ({
         if (target && target.id !== source.id) source.compounds_with = target.id;
       }
     }
+    committedRequests.set(requestId, { hash: requestHash, data: { ...characterRow } });
     return { data: { ...characterRow }, error: null };
   },
-  // Mirrors services/character/repository.js#createBackfillMission, using
-  // this file's (possibly test-overridden) mission mocks — preserves the
-  // throw-regression coverage below.
-  createBackfillMission: async ({ characterId, name, profileId }) => {
-    const { data: missionRows, error: missionError } = await fakeCreateMission(SYSTEM_ACTOR, {
-      name,
-      date: new Date().toISOString(),
-      outcome: 'success',
-      is_public: false,
-      creator_id: profileId
-    });
-    if (missionError) return { error: missionError };
-    const mission = Array.isArray(missionRows) ? missionRows[0] : missionRows;
-    if (!mission) return { error: { status: 400, message: 'Mission creation returned no rows' } };
-    try {
-      const { error: linkError } = await fakeAddCharacterToMission(SYSTEM_ACTOR, mission.id, characterId);
-      if (linkError) return { error: linkError };
-      backfilledMissions.push({ outcome: 'success' });
-      return { error: null };
-    } catch (error) {
-      return { error };
-    }
-  },
+  createBackfillMission: async () => { throw new Error('Backfill must use the atomic RPC'); },
   getAvailableHostedMissions: async () => ({ data: [], error: null }),
   createOffscreenMissionRow: async () => ({ data: {}, error: null }),
   // Unused by the level-up flow but required by CharacterService's adapter
@@ -226,6 +211,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopHttpServer(server);
+  mock.module('../services/access/service', () => realAccess);
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
@@ -241,8 +227,11 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
-  addCharacterToMissionImpl = async () => ({ data: [{}], error: null });
   perkIdSeq = 0;
+  atomicError = null;
+  atomicCalls = 0;
+  committedRequests = new Map();
+  rulesMetadata = { rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' };
   characterRow = {
     id: CHAR_ID,
     creator_id: PROFILE_ID,
@@ -281,44 +270,16 @@ test('level-up backfilling real missions updates stored commissary_reward', asyn
   expect(characterRow.completed_missions).toBe(2);
 });
 
-test('level-up backfill returns a graceful error (not a hang) when addCharacterToMission throws', async () => {
-  // As of the mission service seam, MissionService.addCharacter throws
-  // (AuthorizationError or a raw repo error) instead of returning
-  // { error }. The level-up route/service isn't shielded from that any other
-  // way than the repository's own try/catch, so this proves it resolves
-  // gracefully instead of hanging on an unhandled rejection.
-  addCharacterToMissionImpl = async () => {
-    throw new AuthorizationError('Mission not found', { reason: 'not_found' });
-  };
-
-  const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('request hung')), 2000));
-
-  const res = await Promise.race([
-    fetch(`${baseUrl}/characters/${CHAR_ID}/level-up`, {
-      method: 'POST',
-      headers: {
-        'authorization': 'Bearer valid-jwt',
-        'content-type': 'application/json',
-        'accept': 'application/json',
-      },
-      body: JSON.stringify({
-        level: 2,
-        completed_missions: 1,
-        mission_names: ['Op Charlie'],
-        use_conduit_credit: false,
-        stats: {},
-      }),
-    }),
-    timeout,
-  ]);
-
-  expect(res.status).toBe(403);
-  const body = await res.json();
-  expect(body.error).toBeTruthy();
-
-  // The character row must be untouched — the backfill failed before the
-  // route/service ever reached the update at the end of the handler.
-  expect(characterRow.completed_missions).toBe(0);
+test('atomic database failure returns HTTP error without mission or character side effects', async () => {
+  atomicError = { status: 503, message: 'Injected transaction failure' };
+  const before = structuredClone(characterRow);
+  const res = await postLevelUp({ level: 2, mission_names: ['Op Charlie', 'Op Delta'], stats: {} });
+  expect(res.status).toBe(503);
+  expect((await res.json()).error).toBeTruthy();
+  expect(characterRow).toEqual(before);
+  expect(backfilledMissions).toEqual([]);
+  expect(characterPerks).toEqual([]);
+  expect(atomicCalls).toBe(1);
 });
 
 test('level-up resolves compounds_with links for newly-added perks', async () => {
@@ -331,7 +292,8 @@ test('level-up resolves compounds_with links for newly-added perks', async () =>
   // -- what the existing perk plus the two added below cost. levelUp runs the
   // same ratchet updateCharacter does, so without them the save is refused as
   // a Perk deficit and this test never reaches the links it asserts on.
-  backfilledMissions = Array.from({ length: 9 }, () => ({ outcome: 'success' }));
+  characterRow.level = 3;
+  backfilledMissions = Array.from({ length: 9 }, (_, i) => ({ id: `mission-${i}`, outcome: 'success' }));
 
   const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/level-up`, {
     method: 'POST',
@@ -341,7 +303,7 @@ test('level-up resolves compounds_with links for newly-added perks', async () =>
       'accept': 'application/json',
     },
     body: JSON.stringify({
-      level: 2,
+      level: 4,
       use_conduit_credit: false,
       stats: {},
       ability_perks: [
@@ -369,4 +331,40 @@ test('level-up resolves compounds_with links for newly-added perks', async () =>
   expect(b.compounds_with).toBe(a.id);
   // The existing perk is left untouched.
   expect(base.compounds_with).toBeNull();
+});
+
+const postLevelUp = body => fetch(`${baseUrl}/characters/${CHAR_ID}/level-up`, {
+  method: 'POST', headers: { authorization: 'Bearer valid-jwt', 'content-type': 'application/json', accept: 'application/json' },
+  body: JSON.stringify(body)
+});
+test('HTTP retry returns the committed promotion without duplicating named missions', async () => {
+  const body = { level: 2, request_id: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', mission_names: ['Alpha', 'Bravo'], stats: {} };
+  const first = await postLevelUp(body);
+  expect(first.status).toBe(200);
+  const firstData = await first.json();
+  const retry = await postLevelUp(body);
+  expect(retry.status).toBe(200);
+  expect(await retry.json()).toEqual(firstData);
+  expect(backfilledMissions).toHaveLength(2);
+  expect(atomicCalls).toBe(1);
+  expect(characterRow.level).toBe(2);
+});
+test('insufficient history rejects HTTP promotion without named mission or perk side effects', async () => {
+  const before = structuredClone(characterRow);
+  const res = await postLevelUp({ level: 2, completed_missions: 999, mission_names: ['Only One'], stats: {} });
+  expect(res.status).toBe(409);
+  expect(characterRow).toEqual(before);
+  expect(backfilledMissions).toEqual([]);
+  expect(characterPerks).toEqual([]);
+  expect(atomicCalls).toBe(0);
+});
+test('corrected Aspirant v1 without mode promotes using Advent v2 mission curve', async () => {
+  rulesMetadata = { rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' };
+  characterRow.level = 4;
+  backfilledMissions = Array.from({ length: 11 }, (_, i) => ({ id: `mission-${i}`, outcome: 'failure' }));
+  const res = await postLevelUp({ level: 5, stats: {} });
+  expect(res.status).toBe(200);
+  expect(characterRow.level).toBe(5);
+  expect(characterRow.completed_missions).toBe(11);
+  expect(characterRow.commissary_reward).toBe(2);
 });

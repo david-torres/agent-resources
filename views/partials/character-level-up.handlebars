@@ -4,6 +4,9 @@
      with its overlay swallowing every click on the page.
      See public/js/alpine-components.js. --}}
 <div id="levelUpModal" class="modal" x-data="modal('levelUp')"
+     data-next-level="{{levelUpProgress.nextLevel}}"
+     data-required-missions="{{levelUpProgress.required}}"
+     data-completed-missions="{{levelUpProgress.completedMissions}}"
      :class="{ 'is-active': show }"
      @open-modal.window="open($event.detail)"
      @close-modal.window="close($event.detail)"
@@ -17,17 +20,19 @@
     <section class="modal-card-body">
       <p class="has-text-grey is-size-7 mb-3">
         Current level <strong>{{character.level}}</strong>.
-        Promoting to level <strong>{{add character.level 1}}</strong> requires
-        <strong>{{subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions}}</strong>
-        more successful missions ({{character.completed_missions}} / {{getTotalV2MissionsNeeded (add character.level 1)}}).
-        {{#if (gt (subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions) 0)}}
-        Add them below, then save.
+        {{#if levelUpProgress.nextLevel}}
+        Promoting to level <strong>{{levelUpProgress.nextLevel}}</strong> requires
+        <strong>{{levelUpProgress.missing}}</strong>
+        more completed missions ({{levelUpProgress.completedMissions}} / {{levelUpProgress.required}} recorded).
+        {{#if (gt levelUpProgress.missing 0)}}
+        Add named missions below or select credits, then save.
+        {{/if}}
         {{else}}
-        You can backfill missions here if needed.
+        Maximum level reached.
         {{/if}}
       </p>
 
-      {{#if (gt (subtract (getTotalV2MissionsNeeded (add character.level 1)) character.completed_missions) 0)}}
+      {{#if (gt levelUpProgress.missing 0)}}
       <h4 class="title is-5 mt-4">Missing missions</h4>
       <p class="has-text-grey is-size-7 mb-2">
         Each filled text box becomes a new mission row attached to this character.
@@ -107,7 +112,7 @@
     </section>
     <footer class="modal-card-foot is-justify-content-flex-end">
       <button type="button" class="button" @click="close()">Cancel</button>
-      <button type="button" class="button is-primary" id="levelUpSaveBtn">
+      <button type="button" class="button is-primary" id="levelUpSaveBtn" {{#unless levelUpProgress.nextLevel}}disabled{{/unless}}>
         <span class="icon"><i class="fas fa-arrow-up"></i></span>
         <span>Level Up</span>
       </button>

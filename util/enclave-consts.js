@@ -309,8 +309,10 @@ const classStatSpread = {
   Witchfinder: { will: 2, sensory: 1 }
 };
 
-const v1LevelingSequence = [2, 3, 4, 5, 6, 7, 8, 9, 10];
-const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6];
+const { LEVEL_THRESHOLDS } = require('./character-leveling');
+const increments = mechanics => LEVEL_THRESHOLDS[mechanics].slice(1).map((total, i) => total - LEVEL_THRESHOLDS[mechanics][i]);
+const v1LevelingSequence = increments('advent-v1');
+const v2LevelingSequence = increments('advent-v2');
 
 // Merx awarded per successful real mission. Current editions are a flat 1
 // across v1 and v2; future editions are expected to tier this by level or

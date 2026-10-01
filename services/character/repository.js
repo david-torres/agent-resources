@@ -174,18 +174,23 @@ const getRealMissions = async (characterId) => {
   return { data: (data || []).map(mc => mc.missions).filter(Boolean), error: null };
 };
 
-// `contentFormat` rides alongside `data` (the rules version) rather than
-// replacing it, so the one class row this already fetches also answers
-// economyFor's question -- levelUp is the only caller and needs both.
-const getClassRulesVersion = async (classId) => {
-  if (!classId) return { data: 'v1', contentFormat: null, error: null };
+// A linked class must load successfully; only an explicitly absent reference is classless.
+const getClassRules = async (classId, client = supabaseAdmin) => {
+  if (!classId) return { data: null, error: null };
   try {
-    const { data, error } = await supabaseAdmin.from('classes').select('rules_version, content_format').eq('id', classId).maybeSingle();
-    if (error || !data) return { data: 'v1', contentFormat: null, error: null };
-    return { data: data.rules_version === 'v2' ? 'v2' : 'v1', contentFormat: data.content_format || null, error: null };
-  } catch (_) {
-    return { data: 'v1', contentFormat: null, error: null };
-  }
+    const { data, error } = await client.from('classes')
+      .select('rules_edition, rules_version, content_format').eq('id', classId).maybeSingle();
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: require('../../util/character-rules').rulesError('Linked class rules are unavailable') };
+    require('../../util/character-rules').validateClassRules(data);
+    return { data, error: null };
+  } catch (error) { return { data: null, error }; }
+};
+// Compatibility adapter name and version field; all mechanics readers use classRules.
+const getClassRulesVersion = async (classId) => {
+  const { data, error } = await getClassRules(classId);
+  return { data: data?.rules_version || null, classRules: data,
+    contentFormat: data?.content_format || null, error };
 };
 
 // Powers services/character/service.js's classFamilyOf: every class row
@@ -275,7 +280,7 @@ const getCharacterForAgentRow = async (id) => {
   const { data, error } = await supabaseAdmin
     .from('characters')
     .select(`
-      id, name, class, class_id, creator_mode, level, is_public, is_deceased, creator_id,
+      id, name, class, class_id, creator_mode, quirks, accessories, level, is_public, is_deceased, creator_id,
       ${statList.join(',')},
       profile:creator_id(name),
       personality:traits(name),
@@ -332,14 +337,32 @@ module.exports = {
   // exported unconditionally and listed in REQUIRED_ADAPTER_METHODS. Callers
   // always run against a real supabase client (rpc present); the only no-rpc
   // context is fake-client unit tests that never invoke levelUp.
-  levelUpAtomic: async ({ characterId, creatorId, fields, perks }) => {
-    const { data, error } = await supabaseAdmin.rpc('level_up_character_atomic', {
+  getLevelUpResult: async (characterId, creatorId, requestId, hash) => {
+    const { data, error } = await supabaseAdmin.from('character_level_up_requests')
+      .select('request_hash, result').eq('character_id', characterId)
+      .eq('creator_id', creatorId).eq('request_id', requestId).maybeSingle();
+    if (error) return { data: null, error };
+    if (data && data.request_hash !== hash) {
+      return { data: null, error: { status: 409, message: 'This request ID has already been used for a different level-up.' } };
+    }
+    return { data: data?.result || null, error: null };
+  },
+  levelUpAtomic: async ({ characterId, creatorId, fields, perks, requestId, requestHash,
+    profileId, missionNames, creditSourceIds, snapshot }) => {
+    const { data, error } = await supabaseAdmin.rpc('level_up_character_with_missions_atomic', {
       p_character_id: characterId,
       p_creator_id: creatorId,
+      p_profile_id: profileId,
+      p_request_id: requestId,
+      p_request_hash: requestHash,
+      p_snapshot: snapshot,
+      p_mission_names: missionNames,
+      p_credit_source_ids: creditSourceIds,
       p_fields: fields,
       p_perks: perks
     });
-    return { data, error };
+    return { data, error: error?.code === 'P0001'
+      ? { ...error, status: 409 } : error };
   },
   getChildRows: (table, characterId) => supabaseAdmin
     .from(table)
@@ -359,10 +382,12 @@ module.exports = {
     .eq('character_id', characterId),
   getRealMissions,
   listOffscreenMissions: id => listOffscreenMissionsForCharacter({ characterId: id, supabase: supabaseAdmin }),
-  updateCharacterProgress: (id, totals) => supabaseAdmin.from('characters')
-    .update(totals)
-    .eq('id', id)
-    .eq('auto_calculate', true),
+  updateCharacterProgress: async (id, totals, expectedUpdatedAt) => {
+    let query = supabaseAdmin.from('characters').update(totals).eq('id', id).eq('auto_calculate', true);
+    if (expectedUpdatedAt != null) query = query.eq('updated_at', expectedUpdatedAt);
+    const { data, error } = await query.select('id');
+    return { data, error, stale: !error && Array.isArray(data) && data.length === 0 };
+  },
 
   // Trait/gear/ability/perk read helpers (used by models/character.js#getCharacter
   // and #getCharacterForAgent, both of which stay in the model as RLS-capable
@@ -425,6 +450,7 @@ module.exports = {
       .single();
     return { data, error };
   },
+  getClassRules,
   getClassRulesVersion,
   getClassFamilyRows,
   getConversionClasses,

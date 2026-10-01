@@ -1,6 +1,4 @@
 const {
-  v1LevelingSequence,
-  v2LevelingSequence,
   MERX_PER_MISSION_SUCCESS
 } = require('./enclave-consts');
 const {
@@ -29,23 +27,10 @@ const deriveCompletedMissions = (realMissions, offscreenMissions) => {
   return countedReal + offscreen.length;
 };
 
-const MAX_LEVEL = 10;
-
-const deriveLevel = (completedMissions, rulesVersion) => {
-  const seq = rulesVersion === 'v2' ? v2LevelingSequence : v1LevelingSequence;
-  const total = Math.max(0, Number(completedMissions) || 0);
-  let level = 1;
-  let cumulative = 0;
-  for (let i = 0; i < seq.length; i++) {
-    cumulative += seq[i];
-    if (total >= cumulative) {
-      level = i + 2;
-    } else {
-      break;
-    }
-  }
-  return Math.min(level, MAX_LEVEL);
-};
+const { levelForCompletedMissions } = require('./character-leveling');
+const deriveLevel = (completedMissions, mechanics) => levelForCompletedMissions(
+  completedMissions, mechanics === 'v1' ? 'advent-v1' : mechanics === 'v2' ? 'advent-v2' : mechanics
+);
 
 const coerceMerx = (raw) => {
   const n = Number(raw);
@@ -178,7 +163,7 @@ const deriveBuildBreaches = ({
 });
 
 const deriveCharacterTotals = ({
-  character, realMissions, offscreenMissions, rulesVersion, economy, classFamilyOf
+  character, realMissions, offscreenMissions, mechanics, rulesVersion, economy, classFamilyOf
 }) => {
   const completed_missions = deriveCompletedMissions(realMissions, offscreenMissions);
   const merxParts = deriveMerxBreakdown({
@@ -191,7 +176,7 @@ const deriveCharacterTotals = ({
     economy,
     classFamilyOf
   });
-  const level = deriveLevel(completed_missions, rulesVersion);
+  const level = deriveLevel(completed_missions, mechanics || rulesVersion);
   return {
     completed_missions,
     commissary_reward: merxParts.reward,

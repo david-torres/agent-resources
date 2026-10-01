@@ -18,7 +18,7 @@
 // window-assigned (not `const`) so it survives hx-boost re-execution — see
 // character-common.js for the full rationale.
 window.CharacterLevelUp = (function () {
-  const { missionsForLevel, ready, getAuthHeader } = CharacterCommon;
+  const { ready, getAuthHeader } = CharacterCommon;
   const showError = (msg) => CharacterCommon.showError('levelUpError', msg);
   const clearError = () => CharacterCommon.clearError('levelUpError');
 
@@ -185,10 +185,12 @@ window.CharacterLevelUp = (function () {
     return wrapper;
   };
 
+  const initialized = new WeakSet();
   const init = () => {
     const openBtn = document.getElementById('levelUpBtn');
     const modal = document.getElementById('levelUpModal');
-    if (!openBtn || !modal) return;
+    if (!openBtn || !modal || initialized.has(modal)) return;
+    initialized.add(modal);
 
     const statBox = document.getElementById('statsBox');
     if (!statBox) return;
@@ -196,12 +198,16 @@ window.CharacterLevelUp = (function () {
     const characterName = statBox.getAttribute('data-character-name') || '';
     let currentLevel = parseInt(statBox.getAttribute('data-character-level') || '1', 10);
     if (isNaN(currentLevel) || currentLevel < 1) currentLevel = 1;
-    let completedMissions = parseInt(openBtn.getAttribute('data-completed-missions') || '0', 10);
-    if (isNaN(completedMissions) || completedMissions < 0) completedMissions = 0;
-
-    const nextLevel = currentLevel + 1;
-    const required = missionsForLevel(nextLevel);
+    const nextLevel = Number(modal.getAttribute('data-next-level'));
+    const required = Number(modal.getAttribute('data-required-missions'));
+    const completedMissions = Number(modal.getAttribute('data-completed-missions'));
+    if (!nextLevel || nextLevel > 10 || !Number.isFinite(required) || !Number.isFinite(completedMissions)) {
+      openBtn.disabled = true;
+      return;
+    }
     const missing = Math.max(0, required - completedMissions);
+    let requestId = null;
+    let requestPayload = null;
 
     // Render initial mission rows only if the section is in the DOM (the
     // server only emits the container when there's at least one missing
@@ -293,6 +299,12 @@ window.CharacterLevelUp = (function () {
         ability_perks: flatPerks
       };
 
+      const serialized = JSON.stringify(payload);
+      if (serialized !== requestPayload) {
+        requestId = window.crypto.randomUUID();
+        requestPayload = serialized;
+      }
+      payload.request_id = requestId;
       fetch(putUrl, {
         method: 'POST',
         headers: Object.assign(getAuthHeader(), { 'Accept': 'application/json', 'Content-Type': 'application/json' }),

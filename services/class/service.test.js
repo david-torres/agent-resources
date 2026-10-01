@@ -3,7 +3,7 @@ const { normalizeClassInput } = require('./input');
 const { ClassService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 
-const CLASS_ROW = { id: 'class-1', created_by: 'owner-1' };
+const CLASS_ROW = { id: 'class-1', created_by: 'owner-1', rules_edition: 'advent', rules_version: 'v1' };
 
 const makeRepo = ({ classRow = CLASS_ROW, itemOwnership = [] } = {}) => {
   const calls = [];
@@ -29,7 +29,7 @@ const GUNSLINGER_ROW = {
   name: 'Gunslinger',
   is_public: true,
   base_class_id: null,
-  rules_edition: 'advent',
+  rules_edition: 'advent', rules_version: 'v1',
   gear: [{ name: 'Revolver' }],
   abilities: []
 };
@@ -39,7 +39,7 @@ const PCC_ROW = {
   name: 'Seamus McGlide — Gunslinger (PCC)',
   is_public: true,
   base_class_id: null,
-  rules_edition: 'advent',
+  rules_edition: 'advent', rules_version: 'v1',
   gear: [{ name: 'Revolver' }, { name: 'Spyglass' }],
   abilities: []
 };
@@ -63,14 +63,14 @@ test('createClass derives created_by from the actor, ignoring any input value', 
   const repo = makeRepo();
   const service = new ClassService(repo);
   await service.createClass(OWNER_ACTOR, { name: 'Tinker', created_by: 'forged-id' });
-  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'owner-1', teaser: null }]]);
+  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'owner-1', teaser: null, rules_edition: 'advent', rules_version: 'v1' }]]);
 });
 
 test('createClass respects an explicit created_by from the system actor', async () => {
   const repo = makeRepo();
   const service = new ClassService(repo);
   await service.createClass(SYSTEM_ACTOR, { name: 'Tinker', created_by: 'admin-profile' });
-  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'admin-profile', teaser: null }]]);
+  expect(repo.calls).toEqual([['insertClass', { name: 'Tinker', created_by: 'admin-profile', teaser: null, rules_edition: 'advent', rules_version: 'v1' }]]);
 });
 
 test('the class owner may update their class; the write reaches the repository', async () => {
@@ -166,7 +166,7 @@ test('creating a public class whose gear name belongs to another family returns 
     name: 'Seamus McGlide — Gunslinger (PCC)',
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }],
     abilities: []
   });
@@ -184,7 +184,7 @@ test('updating a public class onto another family\'s gear name returns an error,
   const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }],
     abilities: []
   });
@@ -205,7 +205,7 @@ test('updating a public class that keeps a gear name it already stores reaches t
   const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }],
     abilities: []
   });
@@ -224,7 +224,7 @@ test('updating a public class names the newly added gear name, not the one it al
   const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }, { name: 'Spyglass' }],
     abilities: []
   });
@@ -246,7 +246,7 @@ test('creating a public class grandfathers nothing, rejecting a colliding gear n
     name: 'Fresh Gunslinger',
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }],
     abilities: []
   });
@@ -264,7 +264,7 @@ test('creating a v2 fork that repeats its own family\'s gear name reaches the in
     name: 'Gunslinger v2',
     is_public: true,
     base_class_id: 'gs-v1',
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [{ name: 'Revolver' }],
     abilities: []
   });
@@ -278,7 +278,7 @@ const THUNDERBIRD_ROW = {
   name: 'Thunderbird',
   is_public: true,
   base_class_id: null,
-  rules_edition: 'advent',
+  rules_edition: 'advent', rules_version: 'v1',
   gear: [],
   abilities: [{ name: 'Stormbrewing' }]
 };
@@ -292,7 +292,7 @@ test('updating a public class onto another family\'s ability name is refused as 
   const result = await service.updateClass(OWNER_ACTOR, 'class-1', {
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [],
     abilities: [{ name: 'Stormbrewing' }]
   });
@@ -310,7 +310,7 @@ test('creating a public class with another family\'s ability name is refused as 
     name: 'Tempest Caller',
     is_public: true,
     base_class_id: null,
-    rules_edition: 'advent',
+    rules_edition: 'advent', rules_version: 'v1',
     gear: [],
     abilities: [{ name: 'Stormbrewing' }]
   });
@@ -319,3 +319,16 @@ test('creating a public class with another family\'s ability name is refused as 
   expect(result.data).toBeNull();
   expect(result.error).toMatchObject({ status: 409, title: 'Name taken', message: STORMBREWING_TAKEN });
 });
+
+ test('Aspirant v2 creation is rejected before repository writes', async () => {
+  const repo = makeRepo();
+  const result = await new ClassService(repo).createClass(OWNER_ACTOR, { rules_edition: 'aspirant', rules_version: 'v2' });
+  expect(result.error).toBeTruthy();
+  expect(repo.calls).toEqual([]);
+ });
+ test('edition changes validate the destination published version', async () => {
+  const repo = makeRepo({classRow: {...CLASS_ROW, rules_edition:'advent', rules_version:'v2'}});
+  const result = await new ClassService(repo).updateClass(OWNER_ACTOR, 'class-1', {rules_edition:'aspirant'});
+  expect(result.error).toBeTruthy();
+  expect(repo.calls.map(row => row[0])).toEqual(['fetchClassByIdAdmin']);
+ });

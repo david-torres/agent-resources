@@ -25,7 +25,7 @@ const main = async () => {
   const [characters, gear, links, offscreen, classes] = await Promise.all([
     fetchAll('characters', 'id, class_id, creator_mode, auto_calculate, common_items, aspiring_signatures, completed_missions, commissary_reward, level', q => q.eq('auto_calculate', true)),
     fetchAll('class_gear', 'id, character_id, class_id, name, enchantment, mods'),
-    fetchAll('mission_characters', 'id, character_id, missions(outcome)'),
+    fetchAll('mission_characters', 'id, character_id, missions(id, outcome, difficulty, danger)'),
     fetchAll('offscreen_missions', 'id, character_id, merx_gained'),
     fetchAll('classes', 'id, rules_version, content_format, base_class_id, rules_edition')
   ]);
@@ -37,12 +37,13 @@ const main = async () => {
   const stale = [];
 
   for (const character of characters) {
-    const rules = classesById.get(character.class_id);
+    const rules = character.class_id ? classesById.get(character.class_id) : null;
+    if (character.class_id && !rules) throw new Error(`Linked class unavailable: ${character.class_id}`);
     const totals = calculateCharacterProgress({
       character: { ...character, gear: gearByCharacter.get(character.id) || [] },
       realMissions: (linksByCharacter.get(character.id) || []).map(row => row.missions).filter(Boolean),
       offscreenMissions: offscreenByCharacter.get(character.id) || [],
-      classRules: { data: rules?.rules_version || 'v1', contentFormat: rules?.content_format || null },
+      classRules: { data: rules, classRules: rules, contentFormat: rules?.content_format || null },
       classFamilyOf: familyResolver(classes, character.class_id)
     });
     if (Object.keys(totals).some(field => character[field] !== totals[field])) {

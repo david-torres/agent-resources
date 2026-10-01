@@ -28,6 +28,7 @@ const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fix
 const { seedClass, unlockClassForProfile } = require('../fixtures/class');
 const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
 const { statList } = require('../../util/enclave-consts');
+const { grantAspirantBook } = require('../../test/helpers/auth-user-fixture');
 
 test.use({ storageState: PLAYER_STATE });
 
@@ -46,11 +47,13 @@ const DONORS = [
 
 let db;
 let profile;
+let bookId;
 const donors = {};
 
 test.beforeAll(async () => {
   db = await connect();
   profile = await profileForEmail(db, PLAYER_EMAIL);
+  bookId = await grantAspirantBook(db, profile, `${prefix} Aspirant book`);
   for (const { key, statSpread } of DONORS) {
     const row = await seedClass(prefix, {
       name: `${prefix}-${key}`,
@@ -77,6 +80,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   try {
     await cleanupByPrefix(db, prefix);
+    if (bookId) await db.query('delete from rules_pdfs where id=$1', [bookId]);
   } finally {
     await db.end();
   }

@@ -367,7 +367,7 @@ test('the Aspirant Exclusives book is an unlock-only forking book of three relea
   expect(descriptor.contentFormat).toBe('aspirant');
   expect(descriptor.rulesEdition).toBe('aspirant');
   expect(descriptor.status).toBe('release');
-  expect(descriptor.rulesVersion).toBe('v2');
+  expect(descriptor.rulesVersion).toBe('v1');
   expect(descriptor.forks).toBe(true);
 });
 
@@ -395,11 +395,11 @@ test('an Exclusive fork is aspirant on both axes, sectioned exclusive and not fr
   expect(Object.keys(plan.payload).sort()).toEqual([...fieldsFor(exclusivesBook()), ...FORK_ONLY].sort());
 });
 
-test('an Exclusive fork is inserted released, at v2, and not player-created', () => {
+test('an Exclusive fork is inserted released, at v1, and not player-created', () => {
   const [plan] = planLoad([exclusiveRecord('Squire')], [exclusiveParent('Squire')], exclusivesBook());
   const inserted = insertRow(plan, exclusivesBook());
   expect(inserted.status).toBe('release');
-  expect(inserted.rules_version).toBe('v2');
+  expect(inserted.rules_version).toBe('v1');
   expect(inserted.is_player_created).toBe(false);
   expect(inserted.id).toBe(EXCLUSIVE_FORK_IDS.Squire);
 });
@@ -829,7 +829,7 @@ test('reportPlan prints the FORK heading with the class name and parent id', () 
   };
   const lines = captureLog(() => reportPlan([plan], forkBook));
   expect(lines).toContain('\nFORK Berserker from parent-id-1');
-  expect(lines).toContain('  + rules_version: "v2"');
+  expect(lines).toContain('  + rules_version: "v1"');
 });
 
 test.skipIf(!records)('the dry run reports the fields only an insert writes', () => {
@@ -847,12 +847,12 @@ test.skipIf(!records)('the dry run reports the fields only an insert writes', ()
 // `is_player_created` to false, so the insert is where a book states all
 // three. Both books' classes are released content built under the v2
 // character rules, and only a pre-release PCC is player-created.
-test.skipIf(!forkRecords)('an Aspirant V1 fork is inserted released, at v2, and not player-created', () => {
+test.skipIf(!forkRecords)('an Aspirant V1 fork is inserted released, at v1, and not player-created', () => {
   const [plan] = planLoad([berserkerRecord], [parentRow('Berserker', { rules_edition: 'aspirant' })],
       forkBook);
   const inserted = insertRow(plan, forkBook);
   expect(inserted.status).toBe('release');
-  expect(inserted.rules_version).toBe('v2');
+  expect(inserted.rules_version).toBe('v1');
   expect(inserted.is_player_created).toBe(false);
   expect(inserted.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
 });
@@ -892,4 +892,10 @@ test('publishing a pre-release row brings its status to release', () => {
   expect(publishPatch({ id: 'x', is_public: false, status: 'alpha' }, book))
       .toEqual({ is_public: true, status: 'release' });
   expect(publishPatch({ id: 'x', is_public: true, status: 'release' }, book)).toBeNull();
+});
+
+test('loader refuses an unsupported explicit Aspirant publication version before insert', () => {
+  const book = { ...bookFor('aspirant-v1'), rulesVersion: 'v2' };
+  const [plan] = planLoad([berserkerRecord], [parentRow('Berserker')], book);
+  expect(() => insertRow(plan, book)).toThrow('Unsupported class rules');
 });

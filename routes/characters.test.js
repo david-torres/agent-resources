@@ -37,7 +37,7 @@ const makeClient = () => ({
       single() { return Promise.resolve({ data: null, error: null }); },
       maybeSingle() { return Promise.resolve({ data: null, error: null }); },
       then(onF, onR) {
-        const data = table === 'classes' ? (pageState.classFamilyRows || []) : [];
+        const data = table === 'classes' ? (pageState.classFamilyRows || []) : table === 'mission_characters' ? (pageState.history || []).map(missions => ({missions})) : [];
         return Promise.resolve({ data, error: null }).then(onF, onR);
       },
     };
@@ -334,7 +334,7 @@ const CLASS_BY_ID = {
 };
 
 mock.module('../models/class', () => ({
-  getClass: async (id) => ({ data: CLASS_BY_ID[id] || { id: 'class-a', rules_version: 'v1' }, error: null }),
+  getClass: async (id) => ({ data: CLASS_BY_ID[id] || { id: 'class-a', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' }, error: null }),
   getUnlockedClassIdsForUser: async () => ({ data: pageState.unlockedClassIds || new Set(), error: null }),
   // filterClassDataForUser fans out to advent, aspirant and player-created
   // pools; the aspirant pool carries ABILITY_CLASS and whatever a test adds
@@ -1283,7 +1283,7 @@ test('the auto-calc fields count an Aspirant character\'s missions on the v2 cur
     headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
   });
   expect(res.status).toBe(200);
-  expect(await res.text()).toContain('V2: Need');
+  expect(await res.text()).toContain('more completed missions');
 });
 
 test('the auto-calc fields price a fork character\'s Advent-origin Signature at the own rate', async () => {
@@ -1316,7 +1316,7 @@ test('the sheet shows an Aspirant character on a v1 class its v2 fields and curv
   expect(res.status).toBe(200);
   const body = await res.text();
   expect(body).toContain('<h3 class="title is-4">Defining Quirk</h3>');
-  expect(body).toContain('V2: Need');
+  expect(body).toContain('more completed missions');
 });
 
 test('a business error the update service returns reaches the player as its own status and message', async () => {
@@ -1386,4 +1386,40 @@ test('a book-locked conversion returns a purchase prompt in the htmx alerts area
   const html = await res.text();
   expect(html).toContain('Buy Aspirant');
   expect(html).not.toContain('<!DOCTYPE');
+});
+
+
+test('sheet promotion uses Advent v1 history thresholds instead of manual counters', async () => {
+  pageState.character = { ...makePageCharacter(0), creator_id: 'profile-1', level: 4, completed_missions: 999 };
+  pageState.history = Array.from({length: 11}, () => ({ outcome: 'success' }));
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, { headers: { Accept: 'text/html', Authorization: 'Bearer test-token' } });
+  expect(res.status).toBe(200);
+  const html = await res.text();
+  expect(html).toContain('data-required-missions="14"');
+  expect(html).toContain('data-completed-missions="11"');
+  expect(html).toContain('more completed missions');
+  pageState.history = [];
+});
+
+test('corrected Aspirant v1 sheet uses v2 curve with absent creator mode', async () => {
+  const saved = CLASS_BY_ID[GS_FORK.id].rules_version;
+  CLASS_BY_ID[GS_FORK.id].rules_version = 'v1';
+  pageState.character = { ...makePageCharacter(0), class_id: GS_FORK.id, creator_id: 'profile-1', creator_mode: null, level: 4 };
+  pageState.history = Array.from({length: 7}, () => ({ outcome: 'failure' }));
+  try {
+    const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, { headers: { Accept: 'text/html', Authorization: 'Bearer test-token' } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('data-required-missions="10"');
+    expect(html).toContain('data-completed-missions="7"');
+  } finally { CLASS_BY_ID[GS_FORK.id].rules_version = saved; pageState.history = []; }
+});
+
+test('level ten sheet disables promotion and has no level-eleven target', async () => {
+  pageState.character = { ...makePageCharacter(0), creator_id: 'profile-1', level: 10 };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}`, { headers: { Accept: 'text/html', Authorization: 'Bearer test-token' } });
+  const html = await res.text();
+  expect(html).toMatch(/id="levelUpBtn"[^>]*disabled/);
+  expect(html).toContain('data-next-level=""');
+  expect(html).toContain('Maximum level reached.');
 });

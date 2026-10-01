@@ -28,3 +28,22 @@ test('the character row wins over the class JSONB on a shared key', () => {
   const [merged] = mergeClassItems(rows, classes, 'gear');
   expect(merged.description).toBe('Custom description');
 });
+
+const { getClassRules } = require('./repository');
+const rulesClient = result => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => result }) }) }) });
+test('class rules returns complete published identity without replacing Aspirant version', async () => {
+  const rules = { rules_edition: 'aspirant', rules_version: 'v1', content_format: 'advent' };
+  expect(await getClassRules('class', rulesClient({ data: rules, error: null }))).toEqual({ data: rules, error: null });
+});
+test('classless rules is explicit null, missing class and database failures are errors', async () => {
+  expect(await getClassRules(null, {})).toEqual({ data: null, error: null });
+  expect((await getClassRules('missing', rulesClient({ data: null, error: null }))).error.code).toBe('CHARACTER_RULES_UNAVAILABLE');
+  const error = new Error('database unavailable');
+  expect((await getClassRules('linked', rulesClient({ data: null, error }))).error).toBe(error);
+  expect((await getClassRules('linked', { from: () => { throw error; } })).error).toBe(error);
+});
+test('unsupported rules metadata returns an error before selecting mechanics', async () => {
+  const result = await getClassRules('class', rulesClient({ data: { rules_edition: 'advent', rules_version: 'v9' } }));
+  expect(result.data).toBe(null);
+  expect(result.error.code).toBe('CHARACTER_RULES_UNAVAILABLE');
+});

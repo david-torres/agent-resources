@@ -197,7 +197,7 @@ test('normalizeWizardPayload coerces stats, clamps level/missions, defaults rewa
   expect(error).toBeNull();
   expect(data.name).toBe('Hero');
   expect(data.might).toBe(7);
-  expect(data.level).toBe(20);
+  expect(data.level).toBe(10);
   expect(data.completed_missions).toBe(0);
   expect(data.commissary_reward).toBe(0);
   expect(data.is_public).toBe(false);

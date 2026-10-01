@@ -296,7 +296,9 @@
           {
             "type": "object",
             "properties": {
-              "rules_version": { "type": "string", "enum": ["v1", "v2"] },
+              "rules_version": { "type": "string", "enum": ["v1", "v2"], "deprecated": true, "description": "Deprecated effective mechanics alias. Use mechanics for character behavior and class_rules for published edition/version." },
+              "mechanics": { "type": "string", "enum": ["advent-v1", "advent-v2"], "description": "Underlying character mechanics; Aspirant v1 uses advent-v2." },
+              "class_rules": { "type": "object", "nullable": true, "description": "Published class identity, or null for a classless character.", "properties": { "rules_edition": { "type": "string", "enum": ["advent", "aspirant"] }, "rules_version": { "type": "string", "enum": ["v1", "v2"] } } },
               "stats": { "type": "object", "additionalProperties": { "type": ["integer", "null"] } },
               "traits": { "type": "array", "items": { "type": "string" } },
               "abilities": {

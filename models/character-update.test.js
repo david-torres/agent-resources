@@ -171,7 +171,7 @@ beforeEach(() => {
   adminTables.traits = [];
   adminTables.class_gear = [];
   adminTables.class_abilities = [];
-  adminTables.classes = [{ id: 'class-soldier', name: 'Soldier' }];
+  adminTables.classes = [{ id: 'class-soldier', name: 'Soldier', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' }];
   adminTables.offscreen_missions = [];
   adminTables.mission_characters = [];
   adminTables.missions = [];
@@ -216,7 +216,7 @@ test('updateCharacter with auto_calculate=true overwrites the three derived fiel
     commissary_reward: 0,
     auto_calculate: false
   }];
-  adminTables.classes = [{ id: 'class-soldier', name: 'Soldier', rules_version: 'v1' }];
+  adminTables.classes = [{ id: 'class-soldier', name: 'Soldier', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent' }];
   adminTables.mission_characters = [
     { character_id: 'char-private-1', mission_id: 'mis-1', missions: { id: 'mis-1', outcome: 'success' } },
     { character_id: 'char-private-1', mission_id: 'mis-2', missions: { id: 'mis-2', outcome: 'success' } }

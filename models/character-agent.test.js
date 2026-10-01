@@ -43,3 +43,18 @@ test('serializeCharacterForAgent returns detail for admin regardless of visibili
   const out = serializeCharacterForAgent(priv, { profileId: 'profile-self', role: 'admin' });
   expect(out.id).toBe(priv.id);
 });
+
+test('agent metadata distinguishes Aspirant v1 identity from Advent v2 mechanics', () => {
+  const out = serializeCharacterForAgent({ ...baseCharacter, mechanics: 'advent-v2',
+    class_rules: { rules_edition: 'aspirant', rules_version: 'v1' }, quirks: ['Brave'], accessories: ['Ring'], ability_perks: [] });
+  expect(out.class_rules).toEqual({ rules_edition: 'aspirant', rules_version: 'v1' });
+  expect(out.mechanics).toBe('advent-v2');
+  expect(out.rules_version).toBe('v2');
+  expect(out.quirks).toEqual(['Brave']);
+  expect(out.accessories).toEqual(['Ring']);
+});
+test('classless Aspiring exposes mechanics with no class identity', () => {
+  const out = serializeCharacterForAgent({ ...baseCharacter, mechanics: 'advent-v2', class_rules: null });
+  expect(out.class_rules).toBe(null);
+  expect(out.mechanics).toBe('advent-v2');
+});

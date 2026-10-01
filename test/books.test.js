@@ -39,3 +39,9 @@ test('the pre-release book loads Advent content in place, and the Aspirant V1 bo
   expect(bookFor('aspirant-v1').contentFormat).toBe('aspirant');
   expect(bookFor('aspirant-v1').rulesEdition).toBe('aspirant');
 });
+
+test('Aspirant books store edition version v1 while Advent prerelease stays v2', () => {
+  expect(bookFor('aspirant-v1').rulesVersion).toBe('v1');
+  expect(bookFor('aspirant-exclusives').rulesVersion).toBe('v1');
+  expect(bookFor('prerelease').rulesVersion).toBe('v2');
+});

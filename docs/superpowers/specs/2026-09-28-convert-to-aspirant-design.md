@@ -1,3 +1,5 @@
+> Superseded version semantics: the [October 1 design](../specs/2026-10-01-edition-version-and-leveling-design.md) defines `rules_version` within the published edition. Aspirant v1 resolves to Advent v2 mechanics separately.
+
 # Convert to Aspirant — design
 
 Date: 2026-09-28

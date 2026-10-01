@@ -58,8 +58,8 @@ export const BOOKS = {
     rulesEdition: 'aspirant',
     // Released content, gated by owning the book rather than by status.
     status: 'release',
-    // Aspirant V1 characters are built under the Advent v2 character rules.
-    rulesVersion: 'v2',
+    // Version within the Aspirant edition; mechanics are resolved separately.
+    rulesVersion: 'v1',
     forks: true,
     section: null,
     // The grant lives in the class-unlock roster; free play on top of it would
@@ -77,7 +77,7 @@ export const BOOKS = {
     contentFormat: 'aspirant',
     rulesEdition: 'aspirant',
     status: 'release',
-    rulesVersion: 'v2',
+    rulesVersion: 'v1',
     forks: true,
     // The admin unlock dashboard grants only 'exclusive' classes, and these are
     // unlock-only.

@@ -8,7 +8,7 @@ const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
 const { convertCharacterToAspirant, planCharacterAspirantConversion, updateCharacter } = require('./character');
 const { statList } = require('../util/enclave-consts');
-const { createAuthUserAndProfile } = require('../test/helpers/auth-user-fixture');
+const { createAuthUserAndProfile, grantAspirantBook } = require('../test/helpers/auth-user-fixture');
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const email = `convert-aspirant-${suffix}@example.test`;
@@ -95,6 +95,7 @@ const gearCount = async (id) => (await db.query(
 beforeAll(async () => {
   await db.connect();
   ({ authUserId, profile } = await createAuthUserAndProfile(db, { email, profileName: `Convert ${suffix}` }));
+  await grantAspirantBook(db, profile);
 
   classes.gunslinger = await insertClass({
     name: `Conv Gunslinger ${suffix}`, rules_edition: 'advent', content_format: 'advent', rules_version: 'v1',
@@ -102,7 +103,7 @@ beforeAll(async () => {
     abilities: [{ name: 'Trickshot' }, { name: 'Standoff' }, { name: 'Shootout' }]
   });
   classes.gunslingerFork = await insertClass({
-    name: `Conv Gunslinger ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
+    name: `Conv Gunslinger ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v1',
     base_class_id: classes.gunslinger.id,
     gear: [{ name: 'Revolver', description: 'Aspirant six-shooter.' }],
     abilities: [{ name: 'Trickshot', description: 'Aspirant trick.' }],
@@ -113,7 +114,7 @@ beforeAll(async () => {
     gear: [{ name: 'Satchel' }], abilities: [{ name: 'Familiar Face' }]
   });
   classes.wandererFork = await insertClass({
-    name: `Conv Wanderer ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
+    name: `Conv Wanderer ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v1',
     base_class_id: classes.wanderer.id, abilities: [{ name: 'Familiar Face' }]
   });
   // Conversion moves only onto an Aspirant version the owner has unlocked.
@@ -196,6 +197,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (authUserId) await db.query('delete from class_unlocks where user_id = $1', [authUserId]);
   if (profile?.id) await db.query('delete from characters where creator_id = $1', [profile.id]);
+  if (profile?.id) await db.query('delete from rules_pdfs where created_by = $1', [profile.id]);
   if (profile?.id) await db.query('delete from profiles where id = $1', [profile.id]);
   for (const key of ['gunslingerFork', 'wandererFork', 'gunslinger', 'wanderer', 'drifter']) {
     if (classes[key]?.id) await db.query('delete from classes where id = $1', [classes[key].id]);

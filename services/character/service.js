@@ -21,6 +21,10 @@ const { validateAbilityPerks } = require('../../util/validate');
 const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
 const { characterRulesVersion } = require('../../util/character-rules');
+const { MAX_LEVEL, missionsRequiredForLevel } = require('../../util/character-leveling');
+const { deriveCompletedMissions } = require('../../util/character-derived');
+const { randomUUID } = require('node:crypto');
+const { requestHash, historySnapshot, buildSnapshot } = require('./level-up-snapshot');
 
 const { hasAspirantAccess, ASPIRANT_ACCESS_ERROR } = require('../access/service');
 
@@ -100,8 +104,9 @@ const resolveMutationEconomy = async (adapter, character) => {
   if (character.creator_mode === 'aspiring' || !character.class_id) {
     return economyFor({ creatorMode: character.creator_mode });
   }
-  const { contentFormat } = await adapter.getClassRulesVersion(character.class_id);
-  return economyFor({ contentFormat, creatorMode: character.creator_mode });
+  const rules = await adapter.getClassRulesVersion(character.class_id);
+  if (rules.error) throw rules.error;
+  return economyFor({ contentFormat: rules.contentFormat, creatorMode: character.creator_mode });
 };
 
 // Judges a mutation-path Stat write against the per-stat Cap only -- never
@@ -326,13 +331,15 @@ class CharacterService {
   }
 
   async createCharacter(input, actor) {
-    // Preserve historical ordering: creation chooses the version before a
-    // class-name lookup may populate class_id.
-    const rulesVersion = characterRulesVersion({
-      classRulesVersion: await this.adapter.getRulesVersion(input.class_id),
-      creatorMode: input.creator_mode
-    });
     const prepared = await this.adapter.resolveClassReference(input);
+    const classRulesResult = await this.adapter.getClassRulesVersion(prepared.class_id);
+    if (classRulesResult.error) return { data: null, error: classRulesResult.error };
+    const rulesVersion = characterRulesVersion({
+      ...(Object.hasOwn(classRulesResult, 'classRules')
+        ? { classRules: classRulesResult.classRules }
+        : { classRulesVersion: await this.adapter.getRulesVersion(prepared.class_id) }),
+      creatorMode: prepared.creator_mode
+    });
     // One catalogue lookup covers three needs that would otherwise each cost
     // their own round of sub-queries: content_format (economyFor), resolving
     // prefixed "Class::Item" gear strings to a real class_id (below), and the
@@ -342,7 +349,8 @@ class CharacterService {
     const maps = await this.adapter.getClassContentLookupMaps();
     const { classRows } = maps;
     const classRow = (classRows || []).find(row => row.id === prepared.class_id);
-    const contentFormat = classRow && classRow.content_format;
+    const contentFormat = Object.hasOwn(classRulesResult, 'classRules')
+      ? classRulesResult.contentFormat : classRow && classRow.content_format;
     if (economyFor({ contentFormat, creatorMode: prepared.creator_mode }) !== 'advent') {
       const error = await this.aspirantAccessError(actor);
       if (error) return { data: null, error };
@@ -490,13 +498,10 @@ class CharacterService {
         `class is immutable on update, keeping "${storedClassId}"`
       );
     }
-    // Both keys, not just class_id: resolveClassReference re-derives class_id
-    // from a submitted class NAME, so pinning the id alone would leave a
-    // bypass -- and keeping the submitted name would desync the denormalized
-    // `class` column from class_id. Dropping `class` lets resolveClassReference
-    // fill it back in from the stored id.
+    // Pin both stored keys. Resolving an owned character's existing class
+    // through the anonymous catalog would reject edits after its unlock lapses.
     prepared.class_id = storedClassId;
-    delete prepared.class;
+    prepared.class = existing.data.class ?? null;
 
     // creator_mode is immutable on update too, for the same reason class_id
     // is just above: the classic/expert edit form submits no creator_mode
@@ -521,8 +526,11 @@ class CharacterService {
     // this is the one query updateCharacter already pays unconditionally, not
     // a new one, and it is not the auto_calculate-only catalogue lookup below.
     const rulesVersionResult = await this.adapter.getClassRulesVersion(storedClassId);
+    if (rulesVersionResult.error) return { data: null, error: rulesVersionResult.error };
     const rulesVersion = characterRulesVersion({
-      classRulesVersion: rulesVersionResult.data,
+      ...(Object.hasOwn(rulesVersionResult, 'classRules')
+        ? { classRules: rulesVersionResult.classRules }
+        : { classRulesVersion: rulesVersionResult.data }),
       creatorMode: prepared.creator_mode
     });
     const contentFormat = rulesVersionResult.contentFormat;
@@ -639,7 +647,7 @@ class CharacterService {
         offscreenMissions: offscreenMissions.data || [],
         rulesVersion,
         economy: economyFor({
-          contentFormat: classRow && classRow.content_format,
+          contentFormat,
           creatorMode: characterInput.creator_mode
         }),
         classFamilyOf
@@ -1017,100 +1025,77 @@ class CharacterService {
 
   async levelUp(actor, id, body = {}) {
     const character = await requireOwnedCharacter(this.adapter, actor, id);
-    if (await resolveMutationEconomy(this.adapter, character) !== 'advent') {
-      const error = await this.aspirantAccessError(actor);
-      if (error) return { data: null, error };
+    const requestId = body.request_id || randomUUID();
+    if (typeof requestId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestId)) {
+      return { data: null, error: { status: 400, message: 'Invalid level-up request ID' } };
     }
-
+    const hash = requestHash(body);
+    if (this.adapter.getLevelUpResult) {
+      const replay = await this.adapter.getLevelUpResult(id, character.creator_id, requestId, hash);
+      if (replay.error) return replay;
+      if (replay.data) {
+        const { id, name, level, completed_missions, commissary_reward } = replay.data;
+        return { data: { id, name, level, completed_missions, commissary_reward }, error: null };
+      }
+    }
     const currentLevel = Math.max(1, parseInteger(character.level, 1));
-    const requestedLevel = Math.max(currentLevel + 1, Math.min(LEVEL_CEILING, parseInteger(body.level, currentLevel + 1)));
-    const currentCompleted = Math.max(0, parseInteger(character.completed_missions, 0));
-    const requestedCompleted = Math.max(currentCompleted, parseInteger(body.completed_missions, currentCompleted));
+    const requestedLevel = currentLevel + 1;
+    if (currentLevel >= MAX_LEVEL || (body.level != null && Number(body.level) !== requestedLevel)) {
+      return { data: null, error: { status: 409, message: 'Level Up must promote to the next level, up to level 10. Reload the character.' } };
+    }
     const missionNames = Array.isArray(body.mission_names)
       ? body.mission_names.map(v => String(v || '').trim()).filter(Boolean)
       : [];
     const useConduitCredit = body.use_conduit_credit === true || body.use_conduit_credit === 'true' || body.use_conduit_credit === 'on';
-    const creditCount = useConduitCredit ? Math.max(0, requestedCompleted - currentCompleted - missionNames.length) : 0;
-
-    if (!useConduitCredit && requestedCompleted > currentCompleted + missionNames.length) {
-      return {
-        data: null,
-        error: { status: 400, message: 'Provide mission names for each missing mission, or spend Conduit Credits.' }
-      };
+    if (useConduitCredit && missionNames.length) {
+      return { data: null, error: { status: 400, message: 'Choose named missions or Conduit Credits for this promotion.' } };
     }
-
+    const [missionsRes, offscreenRes, rulesVersionResult, families] = await Promise.all([
+      this.adapter.getRealMissions(id),
+      this.adapter.listOffscreenMissions(id),
+      this.adapter.getClassRulesVersion(character.class_id),
+      character.class_id ? this.adapter.getClassFamilyRows() : { data: [], error: null }
+    ]);
+    const readError = missionsRes.error || offscreenRes.error || rulesVersionResult.error || families.error;
+    if (readError) return { data: null, error: readError };
+    const rulesVersion = characterRulesVersion({
+      ...(Object.hasOwn(rulesVersionResult, 'classRules')
+        ? { classRules: rulesVersionResult.classRules }
+        : { classRulesVersion: rulesVersionResult.data }),
+      creatorMode: character.creator_mode
+    });
+    const mechanics = `advent-${rulesVersion}`;
+    const completed = deriveCompletedMissions(missionsRes.data, offscreenRes.data);
+    const required = missionsRequiredForLevel(requestedLevel, mechanics);
+    const creditCount = useConduitCredit ? Math.max(0, required - completed) : 0;
     let creditSources = [];
     if (creditCount > 0) {
-      const { data: availableHostedMissions, error: availableError } = await this.adapter.getAvailableHostedMissions(actor.profileId);
-      if (availableError) return { data: null, error: availableError };
-      creditSources = (availableHostedMissions || []).slice(0, creditCount);
-      if (creditSources.length < creditCount) {
+      const available = await this.adapter.getAvailableHostedMissions(actor.profileId);
+      if (available.error) return { data: null, error: available.error };
+      creditSources = (available.data || []).slice(0, creditCount);
+      if (creditSources.length !== creditCount) {
         return { data: null, error: { status: 400, message: 'Not enough Conduit Credits available.' } };
       }
     }
-
-    for (const name of missionNames) {
-      const { error } = await this.adapter.createBackfillMission({ characterId: id, name, profileId: actor.profileId });
-      if (error) return { data: null, error };
+    const economy = economyFor({ contentFormat: rulesVersionResult.contentFormat, creatorMode: character.creator_mode });
+    if (economy !== 'advent') {
+      const accessError = await this.aspirantAccessError(actor);
+      if (accessError) return { data: null, error: accessError };
     }
-
-    for (let i = 0; i < creditSources.length; i++) {
-      const src = creditSources[i];
-      const sourceDate = typeof src.date === 'string'
-        ? src.date.slice(0, 10)
-        : new Date(src.date).toISOString().slice(0, 10);
-      const { error } = await this.adapter.createOffscreenMissionRow({
-        characterId: id,
-        profileId: actor.profileId,
-        payload: {
-          name: `Conduit Credit: Level ${requestedLevel}`,
-          summary: 'Spent through the level-up modal.',
-          merx_gained: 0,
-          source_mission_id: src.id,
-          source_mission_name: src.name || `Hosted mission ${i + 1}`,
-          source_mission_date: sourceDate
-        }
-      });
-      if (error) return { data: null, error };
-    }
-
-    // Re-derive level / completed_missions / commissary_reward from the rows
-    // we just created (real success missions and offscreen credits) so the
-    // stored counters match what every derive-path computes — see
-    // deriveCharacterTotals. Writing raw requested values here would leave
-    // commissary_reward stale (each backfilled success mission is worth
-    // MERX_PER_MISSION_SUCCESS that never landed in the column).
-    const [missionsRes, offscreenRes] = await Promise.all([
-      this.adapter.getRealMissions(id),
-      this.adapter.listOffscreenMissions(id)
-    ]);
-    if (missionsRes.error || offscreenRes.error) {
-      return { data: null, error: missionsRes.error || offscreenRes.error };
-    }
-
-    const rulesVersionResult = character.class_id
-      ? await this.adapter.getClassRulesVersion(character.class_id)
-      : { data: 'v1', contentFormat: null };
-    const rulesVersion = characterRulesVersion({
-      classRulesVersion: rulesVersionResult.data,
-      creatorMode: character.creator_mode
-    });
-    const economy = economyFor({
-      contentFormat: rulesVersionResult.contentFormat,
-      creatorMode: character.creator_mode
-    });
-
-    const classFamilyOf = character.class_id
-      ? familyResolver((await this.adapter.getClassFamilyRows()).data, character.class_id)
-      : null;
+    const classFamilyOf = character.class_id ? familyResolver(families.data, character.class_id) : null;
     const derived = deriveCharacterTotals({
       character,
-      realMissions: missionsRes.data || [],
-      offscreenMissions: offscreenRes.data || [],
+      realMissions: [...(missionsRes.data || []), ...missionNames.map(() => ({ outcome: 'success' }))],
+      offscreenMissions: [...(offscreenRes.data || []), ...creditSources.map(() => ({ merx_gained: 0 }))],
       rulesVersion,
       economy,
       classFamilyOf
     });
+    if (derived.level !== requestedLevel) {
+      return { data: null, error: { status: 409, message: derived.level < requestedLevel
+        ? `Level ${requestedLevel} requires ${required} recorded completed missions. Add mission names or spend Conduit Credits.`
+        : 'Recorded mission history implies a different level. Review your totals in Edit Character before promoting.' } };
+    }
 
     const stats = normalizeStatsPayload(body.stats || body);
     // The per-stat Cap only -- not the creation allotment, which a level-up
@@ -1166,7 +1151,21 @@ class CharacterService {
       characterId: id,
       creatorId: character.creator_id,
       fields,
-      perks: perkRows
+      perks: perkRows,
+      requestId,
+      requestHash: hash,
+      profileId: actor.profileId,
+      missionNames,
+      creditSourceIds: creditSources.map(source => source.id),
+      snapshot: {
+        updated_at: character.updated_at ?? null,
+        level: character.level,
+        class_id: character.class_id ?? null,
+        creator_mode: character.creator_mode ?? null,
+        class_rules: rulesVersionResult.classRules ?? null,
+        build: buildSnapshot(character),
+        ...historySnapshot(missionsRes.data, offscreenRes.data)
+      }
     });
     if (error) return { data: null, error };
     if (!data) return { data: null, error: { status: 404, message: 'Character update returned no rows' } };

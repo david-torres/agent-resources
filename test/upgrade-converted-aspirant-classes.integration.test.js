@@ -72,7 +72,7 @@ beforeAll(async () => {
     gear: [{ name: 'Revolver' }, { name: 'Duster' }], abilities: [{ name: 'Trickshot' }, { name: 'Shootout' }]
   });
   classes.fork = await insertClass({
-    name: `Up Gunslinger ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
+    name: `Up Gunslinger ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v1',
     base_class_id: classes.legacy.id, gear: [{ name: 'Revolver' }], abilities: [{ name: 'Trickshot' }]
   });
   classes.loner = await insertClass({

@@ -1,16 +1,22 @@
 const { deriveCharacterTotals } = require('../../util/character-derived');
 const { familyResolver } = require('../../util/class-family');
 const { economyFor } = require('../../util/merx-economy');
-const { characterRulesVersion } = require('../../util/character-rules');
+const { resolveCharacterMechanics } = require('../../util/character-rules');
 
 const progressFields = ['completed_missions', 'commissary_reward', 'level'];
 
 const calculateCharacterProgress = ({ character, realMissions, offscreenMissions, classRules, classFamilyOf = null }) => {
+  if (classRules.error) throw classRules.error;
   const derived = deriveCharacterTotals({
     character,
     realMissions,
     offscreenMissions,
-    rulesVersion: characterRulesVersion({ classRulesVersion: classRules.data, creatorMode: character.creator_mode }),
+    mechanics: resolveCharacterMechanics({
+      classRules: Object.hasOwn(classRules, 'classRules') ? classRules.classRules
+        : typeof classRules.data === 'object' ? classRules.data
+          : { rules_edition: 'advent', rules_version: classRules.data },
+      creatorMode: character.creator_mode
+    }),
     economy: economyFor({
       contentFormat: classRules.contentFormat,
       creatorMode: character.creator_mode
@@ -46,15 +52,18 @@ const inspectCharacterProgress = async (characterId, repository) => {
   });
   const current = Object.fromEntries(progressFields.map(field => [field, character[field]]));
   const changed = progressFields.some(field => current[field] !== totals[field]);
-  return { current, totals, changed };
+  return { current, totals, changed, ...(character.updated_at ? { expectedUpdatedAt: character.updated_at } : {}) };
 };
 
 const recalculateCharacterProgress = async (characterId, repository) => {
-  const inspection = await inspectCharacterProgress(characterId, repository);
-  if (!inspection || !inspection.changed) return inspection;
-  const { error } = await repository.updateCharacterProgress(characterId, inspection.totals);
-  if (error) throw error;
-  return inspection;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const inspection = await inspectCharacterProgress(characterId, repository);
+    if (!inspection || !inspection.changed) return inspection;
+    const { error, stale } = await repository.updateCharacterProgress(characterId, inspection.totals, inspection.expectedUpdatedAt);
+    if (error) throw error;
+    if (!stale) return inspection;
+  }
+  throw Object.assign(new Error('Character progress changed concurrently; retry the operation'), { status: 409 });
 };
 
 module.exports = { calculateCharacterProgress, inspectCharacterProgress, recalculateCharacterProgress };

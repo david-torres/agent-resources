@@ -1,3 +1,4 @@
+const { assertPublishedClassRules } = require("./character-rules");
 const z = require("zod");
 const { OpenAIChatApi } = require("llm-api");
 const { completion } = require("zod-gpt");
@@ -87,7 +88,7 @@ const schema = z.object({
   status: z.enum(["alpha", "beta", "release"]).optional().describe("Class status; PCCs default to alpha"),
   is_public: z.boolean().optional().describe("Whether the PCC should be public"),
   rules_edition: z.enum(["advent", "aspirant"]).optional().describe("Rules edition; defaults to advent"),
-  rules_version: z.enum(["v1", "v2"]).optional().describe("Character rules version for an Advent-format class; defaults to v1. An Aspirant-format class is always v2"),
+  rules_version: z.enum(["v1", "v2"]).optional().describe("Published version within the edition; defaults to v1. Aspirant supports only v1"),
   content_format: z.enum(["advent", "aspirant"]).optional().describe("Content format; defaults to advent"),
   expanded_tips: z.object({
     player: z.array(noteSchema).nullable().optional().describe("Tips addressed to the player"),
@@ -237,9 +238,7 @@ JSON output:`;
       status: parsed.status || "alpha",
       is_public: parsed.is_public ?? false,
       rules_edition: parsed.rules_edition || "advent",
-      // Aspirant V1 builds on the Advent v2 character rules, so an
-      // aspirant-format class is v2 whatever the writeup says.
-      rules_version: format === "aspirant" ? "v2" : (parsed.rules_version || "v1"),
+      rules_version: parsed.rules_version || "v1",
       content_format: format,
       expanded_tips: normalizeExpandedTips(parsed.expanded_tips),
       is_player_created: true,
@@ -251,6 +250,7 @@ JSON output:`;
     // admin's first save flips it to NULL and bumps `updated_at` -- exactly the
     // no-op-save mutation Tasks 14-17 closed on every other write path.
     blankTextToNull(classData);
+    assertPublishedClassRules(classData);
 
     if (!actor?.profileId) {
       throw new Error("Missing profile id for PCC creation");

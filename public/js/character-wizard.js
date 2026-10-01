@@ -36,6 +36,9 @@ window.CharacterWizard = (function () {
     (s && s.classId && DATA.economyByClassId[s.classId]) || DATA.economyWhenClassless
   );
   const economyForState = () => economyOf(state);
+  const progressionForState = () => state.classId
+    ? (DATA.progressionByClassId || {})[state.classId]
+    : DATA.progressionWhenClassless;
 
   const params = new URLSearchParams(window.location.search);
   const forceFresh = params.get('fresh') === '1';
@@ -352,7 +355,7 @@ window.CharacterWizard = (function () {
       + 'background-color:#222;';
   };
 
-  // Edition label for the bottom ribbon, e.g. "Advent v1" / "Aspirant v2".
+  // Edition label for the bottom ribbon, e.g. "Advent v1" / "Aspirant v1".
   const editionLabel = (c) => {
     const edRaw = (c.rules_edition || 'advent');
     const ed = edRaw === 'aspirant' ? 'Aspirant' : (edRaw.charAt(0).toUpperCase() + edRaw.slice(1));
@@ -574,7 +577,9 @@ window.CharacterWizard = (function () {
   // re-render below doesn't touch them).
   const renderSummaryMeta = () => {
     const lvl = state.level || 1;
-    const missions = missionsForLevel(lvl);
+    const progression = progressionForState();
+    if (!progression) { updateSubmitButton(); return; }
+    const missions = missionsForLevel(lvl, progression);
     let successful = parseInt(state.successfulMissions, 10) || 0;
     if (successful < 0) successful = 0;
     if (successful > missions) successful = missions;
@@ -1507,7 +1512,7 @@ window.CharacterWizard = (function () {
   const onLevelChange = () => {
     let v = parseInt(levelInput.value, 10);
     if (isNaN(v) || v < 1) v = 1;
-    if (v > 20) v = 20;
+    if (v > STAT_FIGURES.LEVEL_CEILING) v = STAT_FIGURES.LEVEL_CEILING;
     if (levelInput.value !== String(v)) levelInput.value = String(v);
     state.level = v;
     capUserStats();
@@ -3726,6 +3731,8 @@ window.CharacterWizard = (function () {
 // (the pseudo-class name is already gated on step 1), so only the character
 // name gates submit there.
   const isStep5Valid = () => {
+    const progression = progressionForState();
+    if (!progression || !Number.isInteger(Number(state.level)) || state.level < 1 || state.level > progression.maxLevel) return false;
     if (DATA.mode === 'aspiring') {
       return (state.name || '').trim().length > 0;
     }
@@ -4087,6 +4094,7 @@ window.CharacterWizard = (function () {
   // names on the expert form at views/character-form.handlebars so the
   // server-side handler is a thin shim.
   const serializePayload = () => {
+    missionsForLevel(state.level || 1, progressionForState());
     const combined = (typeof getCombinedStats === 'function') ? getCombinedStats() : (state.stats || {});
     const payload = {
       name: (state.name || '').trim(),

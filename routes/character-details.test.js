@@ -21,6 +21,7 @@ const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
 const realOffscreen = require('../models/offscreen-mission');
+const realCharacterRepository = require('../services/character/repository');
 
 const { statList } = require('../util/enclave-consts');
 
@@ -95,7 +96,7 @@ mock.module('../models/character', () => ({
   getCharacterRecentMissions: async () => ({ data: [], error: null }),
 }));
 mock.module('../models/class', () => ({
-  getClass: async () => ({ data: { id: 'class-a', rules_version: state.rulesVersion }, error: null }),
+  getClass: async () => state.classLookupError ? { data: null, error: new Error('lookup failed') } : ({ data: { id: 'class-a', rules_edition: state.rulesEdition || 'advent', rules_version: state.rulesVersion, content_format: 'advent' }, error: null }),
   getUnlockedClassIdsForUser: async () => {
     if (state.unlocksThrow) throw new Error('unlock lookup failed');
     return { data: state.unlockedIds, error: null };
@@ -119,6 +120,9 @@ mock.module('../util/system-message', () => ({ getSystemMessage: () => null }));
 mock.module('../util/nav-loader', () => ({
   populateNavItems: async () => {},
   loadNavItems: (req, res, next) => next(),
+}));
+mock.module('../services/character/repository', () => ({ ...realCharacterRepository,
+  getRealMissions: async () => ({ data: [], error: null })
 }));
 mock.module('../models/offscreen-mission', () => ({
   listOffscreenMissions: async () => ({ data: [], error: null }),
@@ -186,6 +190,7 @@ afterAll(async () => {
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
   mock.module('../models/offscreen-mission', () => realOffscreen);
+  mock.module('../services/character/repository', () => realCharacterRepository);
   delete require.cache[require.resolve('./characters')];
   delete require.cache[require.resolve('../services/character/description-gate')];
 });
@@ -197,6 +202,8 @@ beforeEach(() => {
   state.unlocksThrow = false;
   state.lfgPost = null;
   state.rulesVersion = 'v1';
+  state.rulesEdition = 'advent';
+  state.classLookupError = false;
 });
 
 const get = (url, signedIn = false) => fetch(`${baseUrl}${url}`, {
@@ -348,4 +355,20 @@ test('an Aspirant character on a v1 class shows its v2 fields', async () => {
   const html = await res.text();
   expect(html).toContain('Defining Quirk');
   expect(html).toContain('Night Owl');
+});
+
+
+test('linked class lookup failures stop both sheet and fragment instead of guessing v1', async () => {
+  state.classLookupError = true;
+  for (const path of [`/characters/${CHAR_ID}`, `/characters/${CHAR_ID}/details`]) {
+    const res = await get(path);
+    expect(res.status).toBe(503);
+  }
+});
+
+test('an unsupported linked identity stops fragment rendering despite aspirant mode', async () => {
+  state.rulesEdition = 'unknown';
+  state.character.creator_mode = 'aspirant';
+  const res = await get(`/characters/${CHAR_ID}/details`);
+  expect(res.status).toBe(503);
 });

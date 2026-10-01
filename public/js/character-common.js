@@ -20,19 +20,14 @@ window.CharacterCommon = (function () {
     'vigor', 'skill', 'intelligence', 'luck'
   ];
 
-  // Mission count per level (cumulative). Each step costs 2, 2, 3, 3, 4, 4,
-  // 5, 5, 6, 6 missions; missionsForLevel returns the running total needed to
-  // reach the given level (matches v2LevelingSequence in
-  // util/enclave-consts.js).
-  const v2LevelingSequence = [2, 2, 3, 3, 4, 4, 5, 5, 6, 6];
-  const missionsForLevel = (level) => {
-    const lvl = Math.max(1, parseInt(level, 10) || 1);
-    if (lvl <= 1) return 0;
-    let sum = 0;
-    for (let i = 0; i < lvl - 1 && i < v2LevelingSequence.length; i++) {
-      sum += v2LevelingSequence[i];
+  // Thresholds are supplied by the server for the selected class and mode.
+  const missionsForLevel = (level, progression) => {
+    const lvl = Number(level);
+    if (!progression || !Number.isInteger(lvl) || lvl < 1 || lvl > progression.maxLevel
+        || !Array.isArray(progression.thresholds) || !Number.isFinite(progression.thresholds[lvl - 1])) {
+      throw new Error('Character progression rules unavailable');
     }
-    return sum;
+    return progression.thresholds[lvl - 1];
   };
 
   // Run fn once the DOM is parsed.
@@ -62,5 +57,5 @@ window.CharacterCommon = (function () {
     box.textContent = '';
   };
 
-  return { STATS, v2LevelingSequence, missionsForLevel, ready, getAuthHeader, showError, clearError };
+  return { STATS, missionsForLevel, ready, getAuthHeader, showError, clearError };
 })();

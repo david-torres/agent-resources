@@ -1,3 +1,4 @@
+const { assertPublishedClassRules } = require("../util/character-rules");
 const express = require('express');
 const multer = require('multer');
 const router = express.Router();
@@ -607,6 +608,9 @@ router.post('/:id/duplicate', isAuthenticated, async (req, res) => {
     if (!isAdminCaller && !isOwner) {
         return sendError(req, res, null, { status: 403, title: 'No access', message: FRIENDLY_NOT_FOUND });
     }
+
+    try { assertPublishedClassRules({ rules_edition: new_edition || sourceClass.rules_edition, rules_version: new_version?.trim() }); }
+    catch (error) { return sendError(req, res, error, { status: 400 }); }
 
     const { data: newClassId, error } = await duplicateClass(id, new_version, new_edition || null);
     if (error) return sendError(req, res, error);

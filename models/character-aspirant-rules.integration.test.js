@@ -8,7 +8,7 @@ const { Client } = require('pg');
 const { supabaseAdmin } = require('./_base');
 const { updateCharacter } = require('./character');
 const { statList } = require('../util/enclave-consts');
-const { createAuthUserAndProfile } = require('../test/helpers/auth-user-fixture');
+const { createAuthUserAndProfile, grantAspirantBook } = require('../test/helpers/auth-user-fixture');
 
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const email = `aspirant-rules-${suffix}@example.test`;
@@ -42,10 +42,11 @@ let updateResult;
 beforeAll(async () => {
   await db.connect();
   ({ authUserId, profile } = await createAuthUserAndProfile(db, { email, profileName: `Aspirant Rules ${suffix}` }));
+  await grantAspirantBook(db, profile);
   ({ data: aspirantClass } = await supabaseAdmin.from('classes')
     .insert({
       name: `Aspirant Rules Class ${suffix}`, is_public: true,
-      rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
+      rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v1',
       gear: [{ name: 'Rifle' }], abilities: [{ name: 'Aim' }], advanced_abilities: []
     })
     .select()
@@ -93,13 +94,14 @@ beforeAll(async () => {
 
 afterAll(async () => {
   if (profile?.id) await db.query('delete from characters where creator_id = $1', [profile.id]);
+  if (profile?.id) await db.query('delete from rules_pdfs where created_by = $1', [profile.id]);
   if (profile?.id) await db.query('delete from profiles where id = $1', [profile.id]);
   if (aspirantClass?.id) await db.query('delete from classes where id = $1', [aspirantClass.id]);
   if (authUserId) await db.query('delete from auth.users where id = $1', [authUserId]);
   await db.end();
 });
 
-test('an edit of an aspirant-format v2 character writes its Defining Quirk, Accessories and Ability Perks', async () => {
+test('an edit of an Aspirant v1 character with Advent v2 mechanics writes its Defining Quirk, Accessories and Ability Perks', async () => {
   expect(updateResult.error).toBeNull();
   const { rows: [row] } = await db.query('select name, quirks, accessories from characters where id = $1', [characterId]);
   expect(row.name).toBe(`Aspirant Rules Edited ${suffix}`);
@@ -114,7 +116,7 @@ test('an edit of an aspirant-format v2 character writes its Defining Quirk, Acce
   expect(perks).toEqual([{ text: EDITED_PERK, ability: 'Aim' }]);
 });
 
-test('an auto-calculated aspirant-format v2 character levels on the v2 curve', async () => {
+test('an auto-calculated Aspirant v1 character with Advent v2 mechanics levels on the v2 curve', async () => {
   const { rows: [row] } = await db.query('select level, completed_missions from characters where id = $1', [characterId]);
   expect(row.completed_missions).toBe(OFFSCREEN_MISSIONS);
   expect(row.level).toBe(3);
