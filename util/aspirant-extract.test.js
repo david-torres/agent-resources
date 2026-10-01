@@ -3161,3 +3161,90 @@ describe('assembling a class record', () => {
     expect(() => extractBook(fixturePages)).toThrow('page 25');
   });
 });
+
+const { execFileSync } = require('node:child_process');
+const { extractStandaloneClass } = require('./aspirant-extract');
+
+// The standalone class PDFs print the book's page design one class at a time,
+// so these tests read the real files rather than hand-built fixtures: what is
+// under test is that the book's geometry holds once the cadence and the
+// page-parity shift are gone.
+const STANDALONE_DIR = '/home/dave/Documents/Enclave/classes';
+const standaloneCache = {};
+const standalonePages = (className) => {
+  standaloneCache[className] ??= parseBboxPages(execFileSync('pdftotext',
+    ['-bbox-layout', `${STANDALONE_DIR}/${className} (Aspirant).pdf`, '-'],
+    { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }));
+  return standaloneCache[className];
+};
+
+describe('a standalone single-class PDF', () => {
+  test('the class name comes from the core page header', () => {
+    expect(extractStandaloneClass(standalonePages('Squire')).name).toBe('Squire');
+    expect(extractStandaloneClass(standalonePages('Ardent')).name).toBe('Ardent');
+    expect(extractStandaloneClass(standalonePages('Offdriver')).name).toBe('Offdriver');
+  });
+
+  test('core abilities are read off page 2', () => {
+    expect(extractStandaloneClass(standalonePages('Squire')).abilities.map((a) => a.name))
+      .toEqual(['By Your Leave', 'Entrust', 'Be Brave']);
+    expect(extractStandaloneClass(standalonePages('Ardent')).abilities.map((a) => a.name))
+      .toEqual(['Mood Swing', 'Outburst', 'Zen Slap']);
+    expect(extractStandaloneClass(standalonePages('Offdriver')).abilities.map((a) => a.name))
+      .toEqual(['Lay Bare', 'Object of Desire', 'As It Was']);
+  });
+
+  test('advanced abilities are read off page 5', () => {
+    expect(extractStandaloneClass(standalonePages('Squire')).advanced_abilities.map((a) => a.name))
+      .toEqual(['Followed Footsteps', 'Zero to Hero', 'On a Pedestal']);
+    expect(extractStandaloneClass(standalonePages('Ardent')).advanced_abilities.map((a) => a.name))
+      .toEqual(['Dark Mirror', 'Forbidden Technique', 'Fudoshin']);
+    expect(extractStandaloneClass(standalonePages('Offdriver')).advanced_abilities.map((a) => a.name))
+      .toEqual(['Hax, Pax, Max', 'Lustrate', 'Rhyme or Reason']);
+  });
+
+  test('the signature spread on pages 3 and 4 reads as four columns of three', () => {
+    const gear = extractStandaloneClass(standalonePages('Squire')).gear;
+    expect(gear.map((item) => item.name)).toEqual(['Waster', 'Favor Token', 'Polishing Rag',
+      'Shining Armor', 'Heirloom Weapon', 'Escutcheon', 'Tabard', 'Frangible Lances', 'Goblet',
+      'Quest Scroll', 'Quintain', 'Sumpter Mule']);
+    expect(gear.map((item) => item.column)).toEqual([1, 1, 1, 2, 2, 2, 3, 3, 3, 4, 4, 4]);
+    expect(gear.map((item) => item.position)).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 2, 3]);
+    expect(Object.keys(gear[0])).toEqual([
+      'name', 'description', 'category', 'meters', 'notes', 'default_enchantment',
+      'column', 'position'
+    ]);
+  });
+
+  test('the cover is read off page 1', () => {
+    const ardent = extractStandaloneClass(standalonePages('Ardent'));
+    expect(ardent.stat_line).toBe('++Will, +Might');
+    expect(ardent.stat_spread).toEqual({ will: 2, might: 1 });
+    expect(ardent.challenge_level).toBe('High');
+    expect(extractStandaloneClass(standalonePages('Squire')).challenge_level).toBe('Mid');
+  });
+
+  test('the Expanded Tips on page 6 split into player and conduit lists', () => {
+    const tips = extractStandaloneClass(standalonePages('Squire')).expanded_tips;
+    expect(tips.player.length).toBeGreaterThan(0);
+    expect(tips.conduit.length).toBeGreaterThan(0);
+  });
+
+  test('the record has the book record\'s keys, no designer, and PDF pages 1 to 6', () => {
+    const record = extractStandaloneClass(standalonePages('Squire'));
+    expect(Object.keys(record)).toEqual([
+      'name', 'designer', 'stat_line', 'stat_note', 'stat_spread', 'quote', 'quote_source',
+      'overview', 'conduit_notes', 'grounding', 'examples_heading', 'examples',
+      'tips_heading', 'tips', 'challenge_level', 'abilities', 'advanced_abilities',
+      'gear', 'expanded_tips', 'page_range'
+    ]);
+    expect(record.designer).toBeNull();
+    expect(record.page_range).toEqual([1, 6]);
+  });
+
+  test('a trailing collaboration credits page contributes nothing', () => {
+    const pages = standalonePages('Ardent');
+    expect(pages).toHaveLength(7);
+    expect(extractStandaloneClass(pages)).toEqual(extractStandaloneClass(pages.slice(0, 6)));
+  });
+});
