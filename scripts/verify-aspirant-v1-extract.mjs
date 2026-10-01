@@ -47,8 +47,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import {
-  checkBareRatings, checkSupMarkup, gutterOf, indentOf, misdeclaredChrome, repairRaisedRatings,
-  rowsOf, surplus, tokenize, unlocatable,
+  checkBareRatings, checkSupMarkup, gutterOf, indentOf, joinWrappedHyphens, misdeclaredChrome,
+  repairRaisedRatings, rowsOf, surplus, tokenize, unlocatable,
   untilNextColumn,
 } from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
@@ -168,11 +168,13 @@ const compare = (where, pdfTokens, recordTokens, allowances) => {
   }
 };
 
-const bandOf = (lines) => repairRaisedRatings(rowsOf(lines.map(untilNextColumn)));
+const wordsOf = (rows) => joinWrappedHyphens(repairRaisedRatings(rows));
+
+const bandOf = (lines) => wordsOf(rowsOf(lines.map(untilNextColumn)));
 
 const printedLinesOf = (lines) => lines.filter((line) => line.trim());
 
-const readingOf = (lines) => repairRaisedRatings(rowsOf(lines));
+const readingOf = (lines) => wordsOf(rowsOf(lines));
 
 const tokensIn = (rows) => rows.flatMap((row) => row.tokens);
 
@@ -379,7 +381,7 @@ const verifyCover = (row, lines, review) => {
     fail(where, `the stat line printed "${statLine.trim()}" but the record holds "${row.stat_line}"`);
   }
   // A footnoted stat line is the only thing that prints below the Challenge Level.
-  const footnote = lines.slice(lines.indexOf(challenge) + 1).flatMap(tokenize);
+  const footnote = tokensIn(readingOf(lines.slice(lines.indexOf(challenge) + 1)));
   const printedNote = statLine.includes(STAT_NOTE_MARK) ? footnote.join(' ') : null;
   if (row.stat_note === null ? printedNote !== null
     : tokenize(row.stat_note).join(' ') !== printedNote) {

@@ -1,6 +1,6 @@
 const { describe, test, expect } = require('bun:test');
 const {
-  indentOf, rowsOf, untilNextColumn, repairRaisedRatings, surplus,
+  indentOf, rowsOf, untilNextColumn, repairRaisedRatings, joinWrappedHyphens, surplus,
   gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, unlocatable, MIN_GUTTER_WIDTH, RAISED_NOTATION, STRANDED_MARK
 } = require('./aspirant-verify');
 
@@ -149,6 +149,53 @@ describe('checkBareRatings', () => {
     checkBareRatings(fail, 'Gunslinger p13', ['“Keep it intimidating and cool.” – Lee H.']);
     expect(found.length).toBe(1);
     expect(found[0]).toContain('"H."');
+  });
+});
+
+describe('joinWrappedHyphens', () => {
+  // Read off PDF page 69, printed page 64 (Infiltrator, Makeup Compact): the book breaks
+  // "non-allies" across two lines at its hyphen, and the record holds the word whole.
+  const makeupCompact = [
+    '         makeup from this compact while undetected by non-',
+    '         allies (instead of its usual Paired Action).',
+  ];
+
+  test('closes a word the page breaks at its hyphen back up with its continuation', () => {
+    const [first, second] = joinWrappedHyphens(rowsOf(makeupCompact));
+    expect(first.tokens.slice(-2)).toEqual(['by', 'non-allies']);
+    expect(second.tokens[0]).toBe('(instead');
+  });
+
+  // Read off PDF page 49, printed page 44 (Wanderer, By the Wayside): the meter table and the
+  // ability name share output lines with the description, so the hyphen ends a column of the
+  // line rather than the line, and the continuation opens that same column on the next.
+  test('joins a hyphen that ends a column of the line to that column on the next', () => {
+    const [first, second] = joinWrappedHyphens(rowsOf([
+      '                                       Pitch a fitting, single-use magical power to infuse a newly-                      Essence Cost          Low',
+      'By the Wayside                         found object with.                                                                  Cooldown            Low',
+    ]));
+    expect(first.tokens).toContain('newly-found');
+    expect(first.tokens).not.toContain('newly-');
+    expect(second.tokens).toEqual(['By', 'the', 'Wayside', 'object', 'with.', 'Cooldown', 'Low']);
+  });
+
+  test('drops a line the join leaves with no words', () => {
+    const rows = joinWrappedHyphens(rowsOf([makeupCompact[0], '         allies.', '         Next line.']));
+    expect(rows.map((row) => row.tokens)).toEqual([
+      ['makeup', 'from', 'this', 'compact', 'while', 'undetected', 'by', 'non-allies.'],
+      ['Next', 'line.'],
+    ]);
+    expect(rows[1].at).toBe(2);
+  });
+
+  test('leaves a line ending in a dash that is not an ASCII hyphen apart from the next', () => {
+    const rows = joinWrappedHyphens(rowsOf(['         a range of 0–', '         M onlookers']));
+    expect(rows.map((row) => row.tokens)).toEqual([['a', 'range', 'of', '0–'], ['M', 'onlookers']]);
+  });
+
+  test('leaves a hyphen on the last line where it is', () => {
+    const rows = joinWrappedHyphens(rowsOf([makeupCompact[0]]));
+    expect(rows[0].tokens[rows[0].tokens.length - 1]).toBe('non-');
   });
 });
 

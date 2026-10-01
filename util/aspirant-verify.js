@@ -129,6 +129,45 @@ const repairRaisedRatings = (rows) => {
     tokens: merged.filter((cell) => cell.line === line).map((cell) => cell.token) }));
 };
 
+// The book breaks a word across lines only at a hyphen it prints, so a column of a line that
+// ends in an ASCII hyphen continues the same word on the next line, and the record holds it
+// closed up. A meter table or an ability name can share the output line, so the continuation
+// is looked for at the same left edge as the broken column, and only for the line's last
+// column at the next line's first. The en dash of a rating range is a different character and
+// is never broken this way.
+const WRAPPED_HYPHEN = /-$/;
+const COLUMN_TEXT = /\S+(?: {1,2}\S+)*/g;
+
+const columnsIn = (line) => [...line.matchAll(COLUMN_TEXT)]
+  .map((match) => ({ start: match.index, words: tokenize(match[0]) }))
+  .filter((column) => column.words.length);
+
+const removeOne = (tokens, token) => {
+  const at = tokens.indexOf(token);
+  if (at !== -1) tokens.splice(at, 1);
+  return at !== -1;
+};
+
+const joinWrappedHyphens = (rows) => {
+  const joined = rows.map((row) => ({ ...row, tokens: [...row.tokens] }));
+  joined.forEach((row, at) => {
+    const next = joined[at + 1];
+    if (!next) return;
+    const columns = columnsIn(row.line);
+    const following = columnsIn(next.line);
+    columns.forEach((column, index) => {
+      const broken = column.words[column.words.length - 1];
+      if (!WRAPPED_HYPHEN.test(broken) || !row.tokens.includes(broken)) return;
+      const continuation = following.find((other) => other.start === column.start)
+        ?? (index === columns.length - 1 ? following[0] : undefined);
+      const word = continuation?.words[0];
+      if (!word || !removeOne(next.tokens, word)) return;
+      row.tokens[row.tokens.indexOf(broken)] = `${broken}${word}`;
+    });
+  });
+  return joined.filter((row) => row.tokens.length);
+};
+
 // A meter row is printed in a column down the right of the entry and lands on the same output
 // line as a note whenever the two share a baseline. Nothing within a line of prose is set more
 // than one space apart, so the run of spaces between them is what separates the two columns --
@@ -181,7 +220,7 @@ const gutterOf = (fail, where, lines) => {
 };
 
 module.exports = {
-  tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings,
+  tokenize, indentOf, surplus, rowsOf, untilNextColumn, repairRaisedRatings, joinWrappedHyphens,
   gutterOf, checkSupMarkup, checkBareRatings, misdeclaredChrome, unlocatable,
   RAISED_NOTATION, STRANDED_MARK, MIN_GUTTER_WIDTH,
 };
