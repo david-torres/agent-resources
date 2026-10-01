@@ -81,7 +81,7 @@ const CODES = [
   }
 ];
 
-const UNLOCKABLE_CLASSES = [{ id: CLASS_EXCL, name: 'Arbiter' }];
+const UNLOCKABLE_CLASSES = [{ id: CLASS_EXCL, label: 'Arbiter (Aspirant)' }];
 
 const CONTEXT = { rules: RULES, unlockableRules: [RULES[0]], unlockableClasses: UNLOCKABLE_CLASSES, grants: GRANTS, codes: CODES, breadcrumbs: [] };
 
@@ -117,7 +117,7 @@ test('both document selects are named unlock_target and group Rulebooks apart fr
     expect(rulebooks).toContain(`value="pdf:${PDF_A}"`);
     const classes = select.match(/<optgroup label="Exclusive Classes">([\s\S]*?)<\/optgroup>/)[1];
     expect(classes).toContain(`value="class:${CLASS_EXCL}"`);
-    expect(classes).toContain('>Arbiter<');
+    expect(classes).toContain('>Arbiter (Aspirant)<');
   }
 });
 

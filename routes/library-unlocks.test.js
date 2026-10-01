@@ -10,6 +10,7 @@ const CLASS_EXCL_Z = '55555555-5555-4555-8555-555555555555';
 const CLASS_EXCL_A = '66666666-6666-4666-8666-666666666666';
 const CLASS_PUBLIC = '77777777-7777-4777-8777-777777777777';
 const CLASS_PRERELEASE = '88888888-8888-4888-8888-888888888888';
+const CLASS_EXCL_A_ASPIRANT = '99999999-9999-4999-8999-999999999990';
 const ADMIN_CLIENT = { name: 'admin-client' };
 
 // Mutable per-test state.
@@ -23,10 +24,11 @@ let classMintCall = null;
 // Deliberately unsorted, mixing sections; the exclusive Zephyr is not public
 // so only an admin-client read would see it.
 const CLASS_ROWS = [
-  { id: CLASS_EXCL_Z, name: 'Zephyr', prerelease_section: 'exclusive', is_public: false },
-  { id: CLASS_PUBLIC, name: 'Brawler', prerelease_section: null, is_public: true },
-  { id: CLASS_EXCL_A, name: 'Arbiter', prerelease_section: 'exclusive', is_public: true },
-  { id: CLASS_PRERELEASE, name: 'Courier', prerelease_section: 'prerelease', is_public: true }
+  { id: CLASS_EXCL_Z, name: 'Zephyr', prerelease_section: 'exclusive', content_format: 'advent', is_public: false },
+  { id: CLASS_PUBLIC, name: 'Brawler', prerelease_section: null, content_format: 'advent', is_public: true },
+  { id: CLASS_EXCL_A_ASPIRANT, name: 'Arbiter', prerelease_section: 'exclusive', content_format: 'aspirant', is_public: true },
+  { id: CLASS_EXCL_A, name: 'Arbiter', prerelease_section: 'exclusive', content_format: 'advent', is_public: true },
+  { id: CLASS_PRERELEASE, name: 'Courier', prerelease_section: 'prerelease', content_format: 'advent', is_public: true }
 ];
 
 const RULES_ROWS = [
@@ -292,15 +294,16 @@ test('the replaced path-param endpoints are gone', async () => {
   expect(codesGetRes.status).toBe(404);
 });
 
-test('GET /library/unlocks offers only the exclusive classes, sorted by name, read with the admin client', async () => {
+test('GET /library/unlocks offers only the exclusive classes, labelled by edition and sorted, read with the admin client', async () => {
   getClassesCall = null;
   const res = await fetch(`${baseUrl}/library/unlocks`, { headers: authHeaders });
   expect(res.status).toBe(200);
   const { ctx } = await res.json();
   expect(getClassesCall.client).toBe(ADMIN_CLIENT);
-  expect(ctx.unlockableClasses.map(({ id, name }) => ({ id, name }))).toEqual([
-    { id: CLASS_EXCL_A, name: 'Arbiter' },
-    { id: CLASS_EXCL_Z, name: 'Zephyr' }
+  expect(ctx.unlockableClasses).toEqual([
+    { id: CLASS_EXCL_A, label: 'Arbiter (Advent)' },
+    { id: CLASS_EXCL_A_ASPIRANT, label: 'Arbiter (Aspirant)' },
+    { id: CLASS_EXCL_Z, label: 'Zephyr (Advent)' }
   ]);
 });
 

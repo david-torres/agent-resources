@@ -23,7 +23,7 @@ const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = re
 const { getProfileByNameAdmin, getProfileByIdAdmin, patchOnboarding } = require('../models/profile');
 const { getClasses, getClass, upsertClassUnlock, createUnlockCodes } = require('../models/class');
 const { supabaseAdmin } = require('../models/_base');
-const { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS } = require('../util/starter-content');
+const { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS, EDITION_LABELS } = require('../util/starter-content');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
 const { expandRulesUnlocksByTitle } = require('../util/rules-family');
@@ -229,8 +229,8 @@ router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
         .map(({ primary, previous }) => [primary, ...previous].find((rule) => rule.is_active) || primary);
     const unlockableClasses = (classesResult.data || [])
         .filter((cls) => cls.prerelease_section === 'exclusive')
-        .map(({ id, name }) => ({ id, name }))
-        .sort((a, b) => a.name.localeCompare(b.name));
+        .map(({ id, name, content_format }) => ({ id, label: `${name} (${EDITION_LABELS[content_format]})` }))
+        .sort((a, b) => a.label.localeCompare(b.label));
 
     return res.render('library-unlocks', {
         profile,
