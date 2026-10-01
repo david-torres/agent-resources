@@ -382,6 +382,18 @@ describe('Power Rating superscripts', () => {
     ] };
     expect(markPowerRatings(line)).toBe('Advent, pg.');
   });
+
+  test('Ardent p5 "process .": a mark standing apart from its word still attaches to it', () => {
+    // pdftotext sets this full stop 2.343 clear of "process" -- wider than the
+    // narrowest real inter-word gap -- but a word made only of closing marks
+    // never takes a space before it.
+    const line = { xMin: 271.7, yMin: 339.035, yMax: 353.39, words: [
+      { xMin: 271.7, yMin: 339.035, xMax: 293.1, yMax: 353.39, text: 'the' },
+      { xMin: 339.135, yMin: 339.035, xMax: 370.507, yMax: 353.39, text: 'process' },
+      { xMin: 372.85, yMin: 339.035, xMax: 375.446, yMax: 353.39, text: '.' },
+    ] };
+    expect(markPowerRatings(line)).toBe('the process.');
+  });
 });
 
 const { noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP } =
@@ -482,6 +494,20 @@ describe('glyphless note trees', () => {
     const notes = noteTree([ln(90.72, 100, 'alone')],
       { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
     expect(notes).toEqual([{ text: 'alone', children: [] }]);
+  });
+
+  test('a line ending in a hyphen joins the next with no space, keeping the hyphen', () => {
+    const notes = noteTree([
+      ln(72.0, 100, 'your two Class-'), ln(72.0, 112.0, 'based Traits')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([{ text: 'your two Class-based Traits', children: [] }]);
+  });
+
+  test('a line ending in an en dash still joins the next with a space', () => {
+    const notes = noteTree([
+      ln(72.0, 100, 'a pause –'), ln(72.0, 112.0, 'then more')
+    ], { step: TIPS_NOTE_STEP, threshold: TIPS_NOTE_THRESHOLD });
+    expect(notes).toEqual([{ text: 'a pause – then more', children: [] }]);
   });
 
   test('no lines is no notes', () => {
@@ -3240,6 +3266,24 @@ describe('a standalone single-class PDF', () => {
     ]);
     expect(record.designer).toBeNull();
     expect(record.page_range).toEqual([1, 6]);
+  });
+
+  test('a compound word wrapped at its hyphen reads as one word', () => {
+    expect(extractStandaloneClass(standalonePages('Squire')).stat_note).toContain('Class-based');
+    expect(extractStandaloneClass(standalonePages('Offdriver')).stat_note).toContain('Class-based');
+    for (const className of ['Squire', 'Ardent', 'Offdriver']) {
+      expect(JSON.stringify(extractStandaloneClass(standalonePages(className))))
+        .not.toMatch(/\w- \w/);
+    }
+  });
+
+  test('a mark pdftotext detaches from its word reads against it', () => {
+    const forbidden = extractStandaloneClass(standalonePages('Ardent')).advanced_abilities
+      .find((ability) => ability.name === 'Forbidden Technique');
+    expect(forbidden.description).toContain('in the process.');
+    const pinshooter = extractStandaloneClass(standalonePages('Offdriver')).gear
+      .find((item) => item.name === 'Pinshooter');
+    expect(pinshooter.notes[1].text).toContain('using magic, scaling');
   });
 
   test('a trailing collaboration credits page contributes nothing', () => {
