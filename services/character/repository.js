@@ -164,7 +164,7 @@ const getCharacterAdmin = async (id) => {
 const getRealMissions = async (characterId) => {
   const { data, error } = await supabaseAdmin
     .from('mission_characters')
-    .select(`mission_id, missions ( id, outcome )`)
+    .select(`mission_id, missions ( id, outcome, difficulty, danger )`)
     .eq('character_id', characterId);
   if (error) {
     console.error(error);

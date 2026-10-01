@@ -645,3 +645,19 @@ describe('Signatures priced by class version family', () => {
     expect(totals(undefined).commissary_reward).toBe(9);
   });
 });
+
+test('Aspirant p. 97 stakes pay success bonuses without extra level progress', () => {
+  const { deriveMissionMerx } = require('./character-derived');
+  const stakes = [['conventional', 0], ['critical', 1], ['crisis', 3]];
+  for (const [difficulty, difficultyBonus] of stakes) {
+    for (const [danger, dangerBonus] of stakes) {
+      const mission = { difficulty, danger, outcome: 'success' };
+      expect(deriveMissionMerx({ realMissions: [mission] })).toBe(1 + difficultyBonus + dangerBonus);
+      expect(deriveCompletedMissions([mission], [])).toBe(1);
+      for (const outcome of ['failure', 'pending']) {
+        expect(deriveMissionMerx({ realMissions: [{ ...mission, outcome }] })).toBe(0);
+      }
+    }
+  }
+  expect(deriveMissionMerx({ realMissions: [{ outcome: 'success' }], offscreenMissions: [{ merx_gained: 2 }] })).toBe(3);
+});

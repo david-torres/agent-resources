@@ -311,3 +311,15 @@ test('isCreator compatibility check returns a boolean without throwing', async (
   expect(await service.isCreator(CREATOR, MISSION_ID)).toBe(true);
   expect(await service.isCreator(HOST, MISSION_ID)).toBe(false);
 });
+
+test('saving changed stakes persists both axes and refreshes character progress', async () => {
+  const repo = makeRepo();
+  const service = new MissionService(repo);
+  await service.createMission(CREATOR, { name: 'Double Crisis', difficulty: 'crisis', danger: 'crisis' });
+  expect(repo.calls[0][1]).toMatchObject({ difficulty: 'crisis', danger: 'crisis' });
+  await service.updateMission(CREATOR, MISSION_ID, { difficulty: 'conventional', danger: 'critical' });
+  expect(repo.calls).toContainEqual(['update', MISSION_ID, { difficulty: 'conventional', danger: 'critical' }]);
+  expect(repo.calls).toContainEqual(['progress', 'char-1']);
+  await expect(service.updateMission(CREATOR, MISSION_ID, { danger: 'extreme' })).rejects.toMatchObject({ status: 400 });
+  expect(repo.calls.filter(call => call[0] === 'update')).toHaveLength(1);
+});

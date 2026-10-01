@@ -88,8 +88,15 @@ const gearSpendFor = (economy, gearList, characterClassId, aspiringSignatures, c
 const deriveMissionMerx = ({ realMissions, offscreenMissions } = {}) => {
   const real = Array.isArray(realMissions) ? realMissions : [];
   const offscreen = Array.isArray(offscreenMissions) ? offscreenMissions : [];
-  const successes = real.filter(m => m && m.outcome === 'success').length;
-  return successes * MERX_PER_MISSION_SUCCESS
+  // Aspirant p. 97: stakes apply to all characters, only on success,
+  // and never multiply completed missions or level progress.
+  const bonus = { conventional: 0, critical: 1, crisis: 3 };
+  const earned = real.reduce((sum, mission) => {
+    if (!mission || mission.outcome !== 'success') return sum;
+    return sum + MERX_PER_MISSION_SUCCESS
+      + (bonus[mission.difficulty] || 0) + (bonus[mission.danger] || 0);
+  }, 0);
+  return earned
     + offscreen.reduce((sum, om) => sum + coerceMerx(om && om.merx_gained), 0);
 };
 

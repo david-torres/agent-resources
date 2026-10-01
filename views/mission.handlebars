@@ -28,6 +28,9 @@
       <p><strong>Conduit:</strong> {{mission.host_name}}</p>
       {{/if}}
       <p><strong>Status:</strong> {{mission.outcome}}</p>
+      {{#if (or (eq mission.difficulty 'critical') (eq mission.difficulty 'crisis') (eq mission.danger 'critical') (eq mission.danger 'crisis'))}}
+      <p><strong>High stakes:</strong> Difficulty: {{capitalize mission.difficulty}} · Danger: {{capitalize mission.danger}}</p>
+      {{/if}}
       <p><strong>Focus Words:</strong> {{mission.focus_words}}</p>
     </div>
 

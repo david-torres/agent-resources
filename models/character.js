@@ -212,6 +212,8 @@ const getCharacterRecentMissions = async (characterId, limit = 5) => {
         name,
         date,
         outcome,
+        difficulty,
+        danger,
         is_public,
         creator_id
       )
@@ -253,6 +255,8 @@ const getCharacterAllMissions = async (characterId) => {
         name,
         date,
         outcome,
+        difficulty,
+        danger,
         summary,
         is_public,
         creator_id
@@ -278,7 +282,7 @@ const getCharacterAllMissions = async (characterId) => {
 const getCharacterRealMissionsForDerivation = async (characterId, client = supabase) => {
   const { data, error } = await client
     .from('mission_characters')
-    .select(`mission_id, missions ( id, outcome )`)
+    .select(`mission_id, missions ( id, outcome, difficulty, danger )`)
     .eq('character_id', characterId);
 
   if (error) {

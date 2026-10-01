@@ -149,6 +149,31 @@
     </div>
   </div>
 
+  <details class="box" {{#if (or (eq mission.difficulty 'critical') (eq mission.difficulty 'crisis') (eq mission.danger 'critical') (eq mission.danger 'crisis'))}}open{{/if}}>
+    <summary>High stakes (optional)</summary>
+    <p class="help mb-3">Most missions are Conventional. Use higher stakes only when the whole group, including the Conduit, agreed before the mission. Successful missions earn +1 Merx per Critical and +3 per Crisis, with no extra level progress (Aspirant, p. 97).</p>
+    <div class="field">
+      <label class="label" for="mission-difficulty">Difficulty</label>
+      <div class="control"><div class="select">
+        <select name="difficulty" id="mission-difficulty">
+          <option value="conventional">Conventional (standard)</option>
+          <option value="critical" {{#if (eq mission.difficulty 'critical')}}selected{{/if}}>Critical (+1 Merx on success)</option>
+          <option value="crisis" {{#if (eq mission.difficulty 'crisis')}}selected{{/if}}>Crisis (+3 Merx on success)</option>
+        </select>
+      </div></div>
+    </div>
+    <div class="field">
+      <label class="label" for="mission-danger">Danger</label>
+      <div class="control"><div class="select">
+        <select name="danger" id="mission-danger">
+          <option value="conventional">Conventional (standard)</option>
+          <option value="critical" {{#if (eq mission.danger 'critical')}}selected{{/if}}>Critical (+1 Merx on success)</option>
+          <option value="crisis" {{#if (eq mission.danger 'crisis')}}selected{{/if}}>Crisis (+3 Merx on success)</option>
+        </select>
+      </div></div>
+    </div>
+  </details>
+
   <div class="field">
     <label class="label" for="mission-media-url">Media Link</label>
     <div class="control">

@@ -245,3 +245,48 @@ test('a mission can be deleted from its detail page', async ({ page }) => {
   const { rows } = await db.query('select id from missions where id = $1', [id]);
   expect(rows).toHaveLength(0);
 });
+
+test('high stakes are optional, persist on edit, and can return to Conventional', async ({ page }) => {
+  const stakesCharacter = await seedCharacter(prefix, profile, classRow, {
+    name: `${prefix} Stakes Character`, auto_calculate: 'on', is_public: 'on'
+  });
+  const id = await createMissionViaUi(page, `${prefix} Stakes`);
+  const search = page.locator('input[name="q"][hx-get^="/characters/add-to-mission-search"]');
+  await search.fill(stakesCharacter.name);
+  const result = page.locator(`#characterSearchResults button.button.is-text:has-text("${stakesCharacter.name}")`);
+  await expect(result).toBeVisible();
+  await result.click();
+  await expect.poll(async () => {
+    const { rows: [row] } = await db.query('select completed_missions from characters where id = $1', [stakesCharacter.id]);
+    return row.completed_missions;
+  }).toBe(1);
+  const { rows: [ordinary] } = await db.query('select commissary_reward, level from characters where id = $1', [stakesCharacter.id]);
+  const details = page.locator('details').filter({ has: page.locator('#mission-difficulty') });
+  await expect(details).not.toHaveAttribute('open');
+  await expect(page.locator('#mission-difficulty')).toHaveValue('conventional');
+  await expect(page.locator('#mission-danger')).toHaveValue('conventional');
+  await details.locator('summary').click();
+  await page.selectOption('#mission-difficulty', 'crisis');
+  await page.selectOption('#mission-danger', 'critical');
+  await page.getByRole('button', { name: 'Update Mission', exact: true }).click();
+  await page.waitForLoadState('networkidle');
+  await page.goto(`/missions/${id}/edit`);
+  await expect(details).toHaveAttribute('open');
+  await expect(page.locator('#mission-difficulty')).toHaveValue('crisis');
+  await expect(page.locator('#mission-danger')).toHaveValue('critical');
+  const { rows: [mission] } = await db.query('select difficulty, danger from missions where id = $1', [id]);
+  expect(mission).toEqual({ difficulty: 'crisis', danger: 'critical' });
+  const { rows: [high] } = await db.query('select commissary_reward, completed_missions, level from characters where id = $1', [stakesCharacter.id]);
+  expect(high).toEqual({ commissary_reward: ordinary.commissary_reward + 4, completed_missions: 1, level: ordinary.level });
+  await page.goto(`/missions/${id}`);
+  await expect(page.locator('.box').filter({ hasText: 'High stakes:' })).toContainText('Difficulty: Crisis');
+  await page.goto(`/missions/${id}/edit`);
+  await page.selectOption('#mission-difficulty', 'conventional');
+  await page.selectOption('#mission-danger', 'conventional');
+  await page.getByRole('button', { name: 'Update Mission', exact: true }).click();
+  await page.waitForLoadState('networkidle');
+  await page.goto(`/missions/${id}/edit`);
+  await expect(details).not.toHaveAttribute('open');
+  const { rows: [restored] } = await db.query('select commissary_reward, level from characters where id = $1', [stakesCharacter.id]);
+  expect(restored).toEqual(ordinary);
+});

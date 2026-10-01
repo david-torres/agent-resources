@@ -135,3 +135,18 @@ test('calculateCharacterProgress prices with the classFamilyOf it is handed', ()
   expect(reward(familyResolver(FORK_FAMILY, 'gs-fork'))).toBe(OWN_RATE_REWARD);
   expect(reward(null)).toBe(CREATION_GRANT.aspirant - priceOfSignature({ crossClass: true }));
 });
+
+test('high stakes reach stored progress in every economy with ordinary level credit', () => {
+  for (const creator_mode of ['advent', 'aspirant', 'aspiring']) {
+    const common = {
+      character: { creator_mode, gear: [], common_items: [] },
+      offscreenMissions: [],
+      classRules: { data: 'v2', contentFormat: 'aspirant' }
+    };
+    const ordinary = calculateCharacterProgress({ ...common, realMissions: [{ outcome: 'success' }] });
+    const high = calculateCharacterProgress({ ...common, realMissions: [{ outcome: 'success', difficulty: 'crisis', danger: 'crisis' }] });
+    expect(high.commissary_reward).toBe(ordinary.commissary_reward + 6);
+    expect(high.completed_missions).toBe(ordinary.completed_missions);
+    expect(high.level).toBe(ordinary.level);
+  }
+});
