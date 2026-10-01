@@ -6,11 +6,28 @@ const PDF_A = '11111111-1111-4111-8111-111111111111';
 const PDF_FREE = '22222222-2222-4222-8222-222222222222';
 const PDF_A_OLD = '33333333-3333-4333-8333-333333333333';
 const PDF_OTHER = '44444444-4444-4444-8444-444444444444';
+const CLASS_EXCL_Z = '55555555-5555-4555-8555-555555555555';
+const CLASS_EXCL_A = '66666666-6666-4666-8666-666666666666';
+const CLASS_PUBLIC = '77777777-7777-4777-8777-777777777777';
+const CLASS_PRERELEASE = '88888888-8888-4888-8888-888888888888';
+const ADMIN_CLIENT = { name: 'admin-client' };
 
 // Mutable per-test state.
 let currentRole = 'admin';
 let upsertCall = null;
 let mintCall = null;
+let getClassesCall = null;
+let classUnlockCall = null;
+let classMintCall = null;
+
+// Deliberately unsorted, mixing sections; the exclusive Zephyr is not public
+// so only an admin-client read would see it.
+const CLASS_ROWS = [
+  { id: CLASS_EXCL_Z, name: 'Zephyr', prerelease_section: 'exclusive', is_public: false },
+  { id: CLASS_PUBLIC, name: 'Brawler', prerelease_section: null, is_public: true },
+  { id: CLASS_EXCL_A, name: 'Arbiter', prerelease_section: 'exclusive', is_public: true },
+  { id: CLASS_PRERELEASE, name: 'Courier', prerelease_section: 'prerelease', is_public: true }
+];
 
 const RULES_ROWS = [
   { id: PDF_A, title: 'Core Rules', edition: 'v2', is_active: true, free_access: false },
@@ -81,13 +98,29 @@ const fakeRules = {
   listAllUnlockCodesAdmin: async () => ({ data: CODE_ROWS, error: null }),
 };
 
+const fakeClass = {
+  getClasses: async (filters, client) => {
+    getClassesCall = { filters, client };
+    return { data: CLASS_ROWS, error: null };
+  },
+  getClass: async (id) => {
+    const row = CLASS_ROWS.find((cls) => cls.id === id);
+    return row ? { data: row, error: null } : { data: null, error: { message: 'not found' } };
+  },
+  upsertClassUnlock: async (payload) => { classUnlockCall = payload; return { data: payload, error: null }; },
+  createUnlockCodes: async (actor, opts) => {
+    classMintCall = { actor, opts };
+    return { data: [{ code: 'class-code', max_uses: opts.maxUses, expires_at: opts.expiresAt }], error: null };
+  },
+};
+
 const overrides = new Map([
   // util/auth.js reads supabase/createUserClient directly from
   // models/_base; res.locals.supabase is never consulted by the routes
   // under test, so an inert stand-in is enough.
   [require.resolve('../models/_base'), {
     supabase: {},
-    supabaseAdmin: {},
+    supabaseAdmin: ADMIN_CLIENT,
     anonKey: 'test-anon-key',
     createUserClient: () => ({})
   }],
@@ -102,6 +135,7 @@ const overrides = new Map([
       (id === 'p1' ? { data: { id: 'p1', user_id: 'user-1' } } : { data: null }),
   }],
   [require.resolve('../models/rules'), fakeRules],
+  [require.resolve('../models/class'), fakeClass],
   [require.resolve('../models/pdf'), {
     storeRulesPdf: async () => ({ data: null, error: null }),
     deletePdfObject: async () => ({ error: null }),
@@ -182,7 +216,7 @@ test('POST /library/unlocks grants by profile name and redirects to the dashboar
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
     redirect: 'manual',
-    body: JSON.stringify({ rules_pdf_id: PDF_A, profile_name: 'Alice', expires_at: '' })
+    body: JSON.stringify({ unlock_target: `pdf:${PDF_A}`, profile_name: 'Alice', expires_at: '' })
   });
   expect(res.status).toBe(302);
   expect(res.headers.get('location')).toBe('/library/unlocks');
@@ -195,13 +229,13 @@ test('POST /library/unlocks grants by profile name and redirects to the dashboar
   });
 });
 
-test('POST /library/unlocks with a non-UUID rules_pdf_id is a 400', async () => {
+test('POST /library/unlocks with a non-UUID pdf target is a 400', async () => {
   upsertCall = null;
   const res = await fetch(`${baseUrl}/library/unlocks`, {
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
     redirect: 'manual',
-    body: JSON.stringify({ rules_pdf_id: 'not-a-uuid', profile_name: 'Alice' })
+    body: JSON.stringify({ unlock_target: 'pdf:not-a-uuid', profile_name: 'Alice' })
   });
   expect(res.status).toBe(400);
   expect(upsertCall).toBeNull();
@@ -213,7 +247,7 @@ test('POST /library/unlocks with an unknown profile is a 400', async () => {
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
     redirect: 'manual',
-    body: JSON.stringify({ rules_pdf_id: PDF_A, profile_name: 'Nobody' })
+    body: JSON.stringify({ unlock_target: `pdf:${PDF_A}`, profile_name: 'Nobody' })
   });
   expect(res.status).toBe(400);
   expect(upsertCall).toBeNull();
@@ -224,7 +258,7 @@ test('POST /library/codes mints codes for the selected document and renders the 
   const res = await fetch(`${baseUrl}/library/codes`, {
     method: 'POST',
     headers: { ...authHeaders, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ rules_pdf_id: PDF_A, expires_at: '', max_uses: '5', amount: '3' })
+    body: JSON.stringify({ unlock_target: `pdf:${PDF_A}`, expires_at: '', max_uses: '5', amount: '3' })
   });
   expect(res.status).toBe(200);
   const { view } = await res.json();
@@ -256,4 +290,121 @@ test('the replaced path-param endpoints are gone', async () => {
 
   const codesGetRes = await fetch(`${baseUrl}/library/${PDF_A}/codes`, { headers: authHeaders });
   expect(codesGetRes.status).toBe(404);
+});
+
+test('GET /library/unlocks offers only the exclusive classes, sorted by name, read with the admin client', async () => {
+  getClassesCall = null;
+  const res = await fetch(`${baseUrl}/library/unlocks`, { headers: authHeaders });
+  expect(res.status).toBe(200);
+  const { ctx } = await res.json();
+  expect(getClassesCall.client).toBe(ADMIN_CLIENT);
+  expect(ctx.unlockableClasses.map(({ id, name }) => ({ id, name }))).toEqual([
+    { id: CLASS_EXCL_A, name: 'Arbiter' },
+    { id: CLASS_EXCL_Z, name: 'Zephyr' }
+  ]);
+});
+
+test('POST /library/unlocks with an exclusive class target upserts a class unlock and redirects', async () => {
+  classUnlockCall = null;
+  upsertCall = null;
+  const res = await fetch(`${baseUrl}/library/unlocks`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    redirect: 'manual',
+    body: JSON.stringify({ unlock_target: `class:${CLASS_EXCL_Z}`, profile_name: 'Alice', expires_at: '2027-01-02T00:00:00Z' })
+  });
+  expect(res.status).toBe(302);
+  expect(res.headers.get('location')).toBe('/library/unlocks');
+  expect(classUnlockCall).toEqual({
+    userId: 'user-1',
+    classId: CLASS_EXCL_Z,
+    expiresAt: '2027-01-02T00:00:00.000Z'
+  });
+  expect(upsertCall).toBeNull();
+});
+
+test('POST /library/unlocks with a non-exclusive class target is a 400', async () => {
+  classUnlockCall = null;
+  const res = await fetch(`${baseUrl}/library/unlocks`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
+    redirect: 'manual',
+    body: JSON.stringify({ unlock_target: `class:${CLASS_PUBLIC}`, profile_name: 'Alice' })
+  });
+  expect(res.status).toBe(400);
+  expect(classUnlockCall).toBeNull();
+});
+
+test('POST /library/unlocks with an unknown class target is a 404', async () => {
+  classUnlockCall = null;
+  const res = await fetch(`${baseUrl}/library/unlocks`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
+    redirect: 'manual',
+    body: JSON.stringify({ unlock_target: 'class:99999999-9999-4999-8999-999999999999', profile_name: 'Alice' })
+  });
+  expect(res.status).toBe(404);
+  expect(classUnlockCall).toBeNull();
+});
+
+for (const target of [PDF_A, `book:${PDF_A}`, 'class:not-a-uuid', '']) {
+  test(`POST /library/unlocks with the malformed target ${JSON.stringify(target)} is a 400`, async () => {
+    upsertCall = null;
+    classUnlockCall = null;
+    const res = await fetch(`${baseUrl}/library/unlocks`, {
+      method: 'POST',
+      headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
+      redirect: 'manual',
+      body: JSON.stringify({ unlock_target: target, profile_name: 'Alice' })
+    });
+    expect(res.status).toBe(400);
+    expect(upsertCall).toBeNull();
+    expect(classUnlockCall).toBeNull();
+  });
+}
+
+test('POST /library/codes mints class codes for an exclusive class target', async () => {
+  classMintCall = null;
+  mintCall = null;
+  const res = await fetch(`${baseUrl}/library/codes`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ unlock_target: `class:${CLASS_EXCL_A}`, expires_at: '', max_uses: '2', amount: '1' })
+  });
+  expect(res.status).toBe(200);
+  const { view, ctx } = await res.json();
+  expect(view).toBe('partials/unlock-code-result');
+  expect(ctx.code).toBe('class-code');
+  expect(classMintCall.opts).toEqual({
+    classId: CLASS_EXCL_A,
+    createdByProfileId: 'admin-profile',
+    expiresAt: null,
+    maxUses: 2,
+    amount: 1
+  });
+  expect(mintCall).toBeNull();
+});
+
+test('POST /library/codes with a non-exclusive class target is a 400', async () => {
+  classMintCall = null;
+  const res = await fetch(`${baseUrl}/library/codes`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ unlock_target: `class:${CLASS_PRERELEASE}`, max_uses: '1', amount: '1' })
+  });
+  expect(res.status).toBe(400);
+  expect(classMintCall).toBeNull();
+});
+
+test('POST /library/codes with a malformed target is a 400', async () => {
+  mintCall = null;
+  classMintCall = null;
+  const res = await fetch(`${baseUrl}/library/codes`, {
+    method: 'POST',
+    headers: { ...authHeaders, 'Content-Type': 'application/json', Accept: 'application/json' },
+    body: JSON.stringify({ unlock_target: PDF_A, max_uses: '1', amount: '1' })
+  });
+  expect(res.status).toBe(400);
+  expect(mintCall).toBeNull();
+  expect(classMintCall).toBeNull();
 });

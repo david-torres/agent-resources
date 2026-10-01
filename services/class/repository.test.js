@@ -17,6 +17,7 @@ const expectedMethods = [
   'saveClassPdfMetadata',
   'insertUnlockCodes',
   'insertUnlock',
+  'upsertUnlock',
   'fetchClassFamilyRows',
   'unlockedClassIdRows',
   'classRowsByIds',

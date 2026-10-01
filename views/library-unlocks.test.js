@@ -13,6 +13,9 @@ function renderUnlocks(context) {
   hb.registerPartial('breadcrumbs', fs.readFileSync(
     path.join(__dirname, 'partials', 'breadcrumbs.handlebars'), 'utf8'
   ));
+  hb.registerPartial('unlock-target-options', fs.readFileSync(
+    path.join(__dirname, 'partials', 'unlock-target-options.handlebars'), 'utf8'
+  ));
   const src = fs.readFileSync(
     path.join(__dirname, 'library-unlocks.handlebars'), 'utf8'
   );
@@ -22,6 +25,7 @@ function renderUnlocks(context) {
 const PDF_A = '11111111-1111-4111-8111-111111111111';
 const PDF_B = '22222222-2222-4222-8222-222222222222';
 const PDF_FREE = '33333333-3333-4333-8333-333333333333';
+const CLASS_EXCL = '44444444-4444-4444-8444-444444444444';
 
 const RULES = [
   { id: PDF_A, title: 'Core Rules', edition: 'Advent v2', is_active: true },
@@ -77,15 +81,17 @@ const CODES = [
   }
 ];
 
-const CONTEXT = { rules: RULES, unlockableRules: [RULES[0]], grants: GRANTS, codes: CODES, breadcrumbs: [] };
+const UNLOCKABLE_CLASSES = [{ id: CLASS_EXCL, name: 'Arbiter' }];
+
+const CONTEXT = { rules: RULES, unlockableRules: [RULES[0]], unlockableClasses: UNLOCKABLE_CLASSES, grants: GRANTS, codes: CODES, breadcrumbs: [] };
 
 test('grant and code selectors show one paid version per family; history filter retains all PDFs', () => {
   const html = renderUnlocks(CONTEXT);
   for (const id of ['grant-document', 'codes-document']) {
     const select = html.match(new RegExp(`<select[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`))[1];
-    expect(select).toContain(`value="${PDF_A}"`);
-    expect(select).not.toContain(`value="${PDF_B}"`);
-    expect(select).not.toContain(`value="${PDF_FREE}"`);
+    expect(select).toContain(`value="pdf:${PDF_A}"`);
+    expect(select).not.toContain(PDF_B);
+    expect(select).not.toContain(PDF_FREE);
     expect(select).toContain('>Core Rules<');
   }
   const filter = html.match(/<select id="filter-document"[^>]*>([\s\S]*?)<\/select>/)[1];
@@ -93,12 +99,26 @@ test('grant and code selectors show one paid version per family; history filter 
   expect(filter).toContain(`value="${PDF_B}"`);
 });
 
-test('grant form posts rules_pdf_id to /library/unlocks', () => {
+test('grant form posts unlock_target to /library/unlocks', () => {
   const html = renderUnlocks(CONTEXT);
   expect(html).toContain('action="/library/unlocks"');
-  expect(html).toContain('name="rules_pdf_id"');
+  expect(html).not.toContain('name="rules_pdf_id"');
   expect(html).toContain('name="profile_name"');
   expect(html).toContain('name="profile_id"');
+});
+
+test('both document selects are named unlock_target and group Rulebooks apart from Exclusive Classes', () => {
+  const html = renderUnlocks(CONTEXT);
+  for (const id of ['grant-document', 'codes-document']) {
+    const selectTag = html.match(new RegExp(`<select[^>]*id="${id}"[^>]*>`))[0];
+    expect(selectTag).toContain('name="unlock_target"');
+    const select = html.match(new RegExp(`<select[^>]*id="${id}"[^>]*>([\\s\\S]*?)<\\/select>`))[1];
+    const rulebooks = select.match(/<optgroup label="Rulebooks">([\s\S]*?)<\/optgroup>/)[1];
+    expect(rulebooks).toContain(`value="pdf:${PDF_A}"`);
+    const classes = select.match(/<optgroup label="Exclusive Classes">([\s\S]*?)<\/optgroup>/)[1];
+    expect(classes).toContain(`value="class:${CLASS_EXCL}"`);
+    expect(classes).toContain('>Arbiter<');
+  }
 });
 
 test('codes form hx-posts to /library/codes with a codeResult target', () => {
