@@ -961,7 +961,55 @@ a.dropdown-item:hover {
    sets display in the author origin (.level-item is flex, .box and .column
    are block), which outranks the user agent's [hidden] { display: none }. */
 #signatureDrawer[hidden],
+#purchaseDrawer[hidden],
 #baseGearColumn[hidden] { display: none !important; }
+
+/* The interactive Signature entry (public/js/signature-entry.js), styled to
+   match the character page's read-only twin
+   (views/partials/signature-entry.handlebars), which uses Bulma helpers. */
+.entry-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+.entry-name { font-size: 1.25rem; font-weight: 600; color: var(--bulma-text-strong); }
+.entry-price { font-size: 0.75rem; color: var(--bulma-grey); white-space: nowrap; }
+.entry-description { font-size: 0.75rem; }
+.entry-description p:not(:last-child) { margin-bottom: 0.5em; }
+.entry-meters { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.5rem; font-size: 0.75rem; }
+.entry-meter-label { font-weight: 600; }
+.entry-divider {
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--bulma-grey);
+}
+.entry-enchantment-name { font-weight: 700; margin-bottom: 0.25rem; }
+.entry-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 1.25rem; margin-top: 0.75rem; }
+.entry-option { cursor: pointer; }
+.entry-option input { margin-right: 0.25rem; }
+.entry-custom { flex-basis: 100%; display: flex; flex-direction: column; gap: 0.5rem; }
+.entry-mods { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.75rem; }
+.entry-mod { display: flex; align-items: center; gap: 0.5rem; }
+.entry-mod [data-mod-name] { flex: 0 1 12rem; min-width: 0; }
+.entry-mod [data-mod-description] { flex: 1 1 auto; min-width: 0; }
+.entry-custom input,
+.entry-custom textarea,
+.entry-mod input {
+  width: 100%;
+  padding: 0.375em 0.625em;
+  border: 1px solid var(--bulma-border);
+  border-radius: var(--bulma-control-radius);
+  background: var(--bulma-scheme-main);
+  color: var(--bulma-text-strong);
+  font: inherit;
+}
+.entry-custom textarea { min-height: 5em; resize: vertical; }
+.entry-wordcount { font-size: 0.75rem; color: var(--bulma-grey); text-align: right; }
+.entry-wordcount.is-over { color: var(--bulma-danger); }
 
 /* Kiosk: single horizontal row of class cards. One card is centered in the
    frame at any time; the track scrolls horizontally and snaps card centers
