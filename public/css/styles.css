@@ -1854,6 +1854,15 @@ a.dropdown-item:hover {
 }
 
 /* Character purchases start with the owned roster; browsing is optional. */
+/* The theme's reset leaves descendants of <details> using content-box.
+   Include padding and borders in full-width controls and column widths. */
+[data-catalogue-browser],
+[data-catalogue-browser] *,
+[data-catalogue-browser] *::before,
+[data-catalogue-browser] *::after {
+  box-sizing: border-box;
+}
+
 [data-catalogue-browser] > summary {
   cursor: pointer;
 }
