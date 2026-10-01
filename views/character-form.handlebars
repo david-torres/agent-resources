@@ -123,7 +123,7 @@
     {{#if aspirantConversion.upgrade.target}}
     <p>{{character.name}} can switch to the Aspirant rules and move to <strong>the Aspirant version of {{aspirantConversion.upgrade.target.name}}</strong>.</p>
     {{else}}
-    <p>{{character.name}} can switch to the Aspirant rules. It keeps its class and its whole build.</p>
+    <p>{{character.name}} can switch to the Aspirant rules. It keeps its class{{#unless aspirantConversion.upgrade.moved.length}} and its whole build{{/unless}}.</p>
     {{/if}}
     {{#if aspirantConversion.upgrade.moved.length}}
     <p class="mt-2">Moves to its Aspirant version:</p>

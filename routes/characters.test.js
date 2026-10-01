@@ -1138,7 +1138,8 @@ test('without an Aspirant version the form lists a cross-class item that moves, 
     kept: [{ kind: 'Signature', name: 'Bedroll', className: 'Drifter' }]
   });
   const body = await editPage();
-  expect(body).toContain('It keeps its class and its whole build.');
+  expect(body).toContain('Ash can switch to the Aspirant rules. It keeps its class.</p>');
+  expect(body).not.toContain('its whole build');
   expect(body).toContain('<li>Ability: Familiar Face (Wanderer)</li>');
   expect(body).not.toContain('Stays as it is:');
 });
