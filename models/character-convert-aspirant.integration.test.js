@@ -116,6 +116,10 @@ beforeAll(async () => {
     name: `Conv Wanderer ${suffix}`, rules_edition: 'aspirant', content_format: 'aspirant', rules_version: 'v2',
     base_class_id: classes.wanderer.id, abilities: [{ name: 'Familiar Face' }]
   });
+  // Conversion moves only onto an Aspirant version the owner has unlocked.
+  for (const fork of [classes.gunslingerFork, classes.wandererFork]) {
+    await db.query('insert into class_unlocks (user_id, class_id) values ($1, $2)', [authUserId, fork.id]);
+  }
   classes.drifter = await insertClass({
     name: `Conv Drifter ${suffix}`, rules_edition: 'advent', content_format: 'advent', rules_version: 'v2',
     gear: [{ name: 'Bedroll' }], abilities: [{ name: 'Wayfinding' }]
@@ -190,6 +194,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  if (authUserId) await db.query('delete from class_unlocks where user_id = $1', [authUserId]);
   if (profile?.id) await db.query('delete from characters where creator_id = $1', [profile.id]);
   if (profile?.id) await db.query('delete from profiles where id = $1', [profile.id]);
   for (const key of ['gunslingerFork', 'wandererFork', 'gunslinger', 'wanderer', 'drifter']) {
