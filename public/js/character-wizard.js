@@ -231,6 +231,7 @@ window.CharacterWizard = (function () {
   // grid to show.
   const signaturePanel = document.getElementById('signaturePanel');
   const signatureGrid = document.getElementById('signatureGrid');
+  const yourSignatures = document.getElementById('yourSignatures');
   const signatureDrawer = document.getElementById('signatureDrawer');
   const merxSpentEl = document.getElementById('merxSpent');
   const merxBudgetEl = document.getElementById('merxBudget');
@@ -2853,6 +2854,17 @@ window.CharacterWizard = (function () {
     return itemsForClass(c.id).map((entry) => ({ entry: entry, classId: c.id }));
   };
 
+  // Every Signature the character bought, own-class and cross-class, in
+  // purchase order. The grid only prints the own Class, so this is where a
+  // cross-class one opens its drawer.
+  const ownedSignatures = () => {
+    if (!usesSignatureGrid()) return [];
+    return gearList().slice(freeBaseCount())
+      .filter((g) => g && g.kind === 'class')
+      .map((g) => ({ entry: signatureIn(g.class_id, g.name), classId: g.class_id }))
+      .filter((cell) => cell.entry);
+  };
+
   // Build a flat spend-pool for the shop = common items + the class gear the
   // grid does not sell. Each entry is a "shop item" with
   // { key, name, description_html, cost, kind, subtype }.
@@ -3244,7 +3256,7 @@ window.CharacterWizard = (function () {
 
   // The purchase controls the entry sits above: buy it, or give it back.
   // Neither names the Signature -- the drawer only ever shows the open one,
-  // and only the grid's cells carry data-signature-name.
+  // and only the cells carry data-signature-name.
   const renderPurchaseControls = (cell, purchase) => {
     if (purchase) {
       return '<p class="control mt-3"><button type="button"'
@@ -3279,13 +3291,22 @@ window.CharacterWizard = (function () {
     }) + renderPurchaseControls(cell, purchase);
   };
 
+  const renderYourSignatures = (owned) => {
+    if (!yourSignatures) return;
+    yourSignatures.innerHTML = owned.length
+      ? '<h5 class="title is-6 mb-2">Your Signatures</h5>' + owned.map(renderSignatureCell).join('')
+      : '';
+  };
+
   // The book prints a Class's Signatures down four columns; `column` and
   // `position` carry that layout, so the grid groups the cells by column and
   // keeps each column's printed order. A roster with no column recorded
   // prints as the single column it arrives as.
   const renderSignatureGrid = () => {
     const cells = signatureEntries();
-    if (signaturePanel) signaturePanel.hidden = cells.length === 0;
+    const owned = ownedSignatures();
+    if (signaturePanel) signaturePanel.hidden = cells.length === 0 && owned.length === 0;
+    renderYourSignatures(owned);
     if (!signatureGrid) return;
     const columns = [];
     cells.forEach((cell) => {
@@ -3299,7 +3320,7 @@ window.CharacterWizard = (function () {
       ? '<div class="columns is-multiline">' + columns.map((column) => '<div class="column">'
           + column.cells.map(renderSignatureCell).join('') + '</div>').join('') + '</div>'
       : '';
-    renderSignatureDrawer(cells);
+    renderSignatureDrawer(cells.concat(owned));
   };
 
   // ----- Left column: base gear (auto-loaded) -----
@@ -3782,22 +3803,22 @@ window.CharacterWizard = (function () {
       pickShopItem(card.getAttribute('data-shop-key'));
     });
   }
-  // Grid clicks open and close the entry drawer; nothing is bought by
-  // opening one.
-  if (signatureGrid) {
-    signatureGrid.addEventListener('click', (e) => {
-      const cell = e.target.closest('[data-signature-name]');
-      if (!cell) return;
-      e.preventDefault();
-      const name = cell.getAttribute('data-signature-name');
-      const classId = cell.getAttribute('data-signature-class');
-      const open = state.openSignature;
-      state.openSignature = (open && open.name === name && open.classId === classId)
-        ? null
-        : { name: name, classId: classId };
-      renderGearStep();
-    });
-  }
+  // Grid and Your Signatures clicks open and close the entry drawer;
+  // nothing is bought by opening one.
+  const toggleSignatureDrawer = (e) => {
+    const cell = e.target.closest('[data-signature-name]');
+    if (!cell) return;
+    e.preventDefault();
+    const name = cell.getAttribute('data-signature-name');
+    const classId = cell.getAttribute('data-signature-class');
+    const open = state.openSignature;
+    state.openSignature = (open && open.name === name && open.classId === classId)
+      ? null
+      : { name: name, classId: classId };
+    renderGearStep();
+  };
+  if (signatureGrid) signatureGrid.addEventListener('click', toggleSignatureDrawer);
+  if (yourSignatures) yourSignatures.addEventListener('click', toggleSignatureDrawer);
 
   // Reads the drawer's text fields into the open purchase. The Enchantment
   // name and description are only read when a Custom is the one chosen; the
