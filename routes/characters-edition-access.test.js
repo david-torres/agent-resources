@@ -30,6 +30,7 @@ beforeEach(() => {
 });
 
 const overrides = new Map([
+  [require.resolve('../services/access/service'), { ...require('../services/access/service'), getEditionAccess: async () => state.editionAccess }],
   [require.resolve('../models/_base'), { supabase: {}, supabaseAdmin: {}, anonKey: 'test-anon-key', createUserClient: () => ({}) }],
   [require.resolve('../models/auth'), { getUserFromToken: async (token) => (token === 'valid-jwt' ? { id: 'u1' } : false) }],
   [require.resolve('../models/profile'), {
@@ -144,10 +145,11 @@ test('a lapsed Advent trial keeps the Advent class in the wizard as a locked tea
   expect(ctx.adventTrialEndedAt).toBe('2026-09-20T12:00:00Z');
 });
 
-test('the Aspirant wizard teases locked classes of both formats and shows no Advent-trial alert', async () => {
+test('the unlocked Aspirant wizard teases locked Advent classes and shows no Advent-trial alert', async () => {
+  state.editionAccess = { ...EXPIRED, aspirant: { state: 'owned' } };
   const { ctx } = await get('/characters/wizard?mode=aspirant');
   expect(ctx.lockedClassGroups.map(g => ({ edition: g.edition, ids: g.classes.map(c => c.id) })))
-    .toEqual([{ edition: 'advent', ids: [ADVENT_GUN.id] }, { edition: 'aspirant', ids: [ASPIRANT_GUN.id] }]);
+    .toEqual([{ edition: 'advent', ids: [ADVENT_GUN.id] }]);
   expect(ctx.adventTrialEndedAt).toBeNull();
 });
 
@@ -158,11 +160,12 @@ test('an Advent trial user plays the Advent class and sees only Aspirant locked'
   expect(advent.lockedClassGroups).toEqual([]);
   expect(wizardIds(advent)).toContain(ADVENT_GUN.id);
   expect(advent.adventTrialEndedAt).toBeNull();
-  const aspirant = (await get('/characters/wizard?mode=aspirant')).ctx;
-  expect(aspirant.lockedClassGroups.map(g => g.edition)).toEqual(['aspirant']);
+  const response = await fetch(`${baseUrl}/characters/wizard?mode=aspirant`, { headers: { Authorization: 'Bearer valid-jwt' } });
+  expect(response.status).toBe(403);
 });
 
-test('the aspiring builder gets no locked list and no Advent-trial alert', async () => {
+test('the unlocked aspiring builder gets no locked list and no Advent-trial alert', async () => {
+  state.editionAccess = { ...EXPIRED, aspirant: { state: 'trial' } };
   const { ctx } = await get('/characters/wizard?mode=aspiring');
   expect(ctx.lockedClassGroups).toEqual([]);
   expect(ctx.adventTrialEndedAt).toBeNull();
@@ -198,3 +201,18 @@ test('the expert form does not mark an Advent class outdated when its fork is no
   const { ctx } = await get('/characters/new/expert');
   expect(expertClass(ctx, ADVENT_GUN.id).outdated).toBeFalsy();
 });
+
+for (const stateName of ['none', 'expired']) {
+  test(`an Aspirant book with ${stateName} access blocks both wizard modes`, async () => {
+    state.editionAccess = { ...TRIAL, aspirant: { state: stateName } };
+    for (const mode of ['aspiring', 'aspirant']) {
+      const res = await fetch(`${baseUrl}/characters/wizard?mode=${mode}`, { headers: { Authorization: 'Bearer valid-jwt' } });
+      expect(res.status).toBe(403);
+      const page = await res.json();
+      expect(page.view).toBe('character-aspirant-unlock');
+      expect(page.ctx.mode).toBe(mode);
+    }
+    const { ctx } = await get('/characters/new');
+    expect(ctx.canUseAspirant).toBe(false);
+  });
+}

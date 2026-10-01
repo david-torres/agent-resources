@@ -30,6 +30,7 @@ const renderWizardView = ({ mode, wizardData, ...extra }) => {
   registerAccessPartials(hb);
   return hb.compile(SRC)({
     mode,
+    canUseAspirant: true,
     economy: economyFigures(),
     state: {},
     wizardData,
@@ -102,4 +103,12 @@ test('a lapsed trial alerts above the class pickers', () => {
 test('the aspiring builder shows no locked list', () => {
   const html = renderWizardView({ mode: 'aspiring', wizardData: fixture({ mode: 'aspiring' }), lockedClassGroups: LOCKED });
   expect(html).not.toContain('Unlock to play');
+});
+
+test('the locked Advent wizard keeps Aspirant visible and offers purchase and redemption', () => {
+  const html = renderWizardView({ mode: 'advent', wizardData: fixture({ mode: 'advent' }), canUseAspirant: false });
+  expect(html).toContain('href="/characters/wizard?mode=aspirant"');
+  expect(html).toContain('Requires Aspirant book');
+  expect(html).toContain('Buy Aspirant');
+  expect(html).toContain('href="/classes/redeem/bulk"');
 });

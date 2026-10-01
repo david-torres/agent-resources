@@ -50,11 +50,29 @@ const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissio
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, sendRouteError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { renderMarkdown } = require('../util/markdown');
+const { getEditionAccess, hasAspirantAccess, ASPIRANT_ACCESS_ERROR } = require('../services/access/service');
 const { trialEndedAt } = require('../util/edition-access');
 const { processCharacterImport } = require('../util/character-import');
 const { exportCharacter, getSupportedFormats, EXPORT_FORMATS } = require('../util/character-export');
 const { parseImageCrop } = require('../util/crop');
 
+
+const sendAspirantUnlock = (req, res, mode = 'aspirant') => {
+  if (!req.accepts('html') && !req.get('HX-Request')) return sendRouteError(req, res, ASPIRANT_ACCESS_ERROR);
+  const inline = Boolean(req.get('HX-Request'));
+  if (inline) res.set('HX-Retarget', '#alerts').set('HX-Reswap', 'innerHTML');
+  return res.status(403).render('character-aspirant-unlock', {
+    mode,
+    inline,
+    ...(inline ? { layout: false } : {}),
+    activeNav: 'characters',
+    breadcrumbs: [{ label: 'Characters', href: '/characters' }, { label: 'Unlock Aspirant' }]
+  });
+};
+
+const sendCharacterRouteError = (req, res, error) => error?.status === 403 && error.message === ASPIRANT_ACCESS_ERROR.message
+  ? sendAspirantUnlock(req, res)
+  : sendRouteError(req, res, error);
 
 // createCharacter/updateCharacter return a bare STRING for every validation
 // failure normalizeCharacterInput reports (over-budget, over-cap, invalid
@@ -83,7 +101,7 @@ const sendCharacterSaveError = (req, res, error) => {
     // (null-error) base values survive to the response.
     return sendError(req, res, null, { status: 400, title: 'Invalid submission', message: error });
   }
-  return sendRouteError(req, res, error);
+  return sendCharacterRouteError(req, res, error);
 };
 
 // A locked class reaches the picker as its name and teaser only: nothing a
@@ -230,9 +248,10 @@ router.get('/', isAuthenticated, async (req, res) => {
   }
 });
 
-router.get('/new', isAuthenticated, (req, res) => {
+router.get('/new', isAuthenticated, asyncHandler(async (req, res) => {
   const { profile } = res.locals;
   res.render('character-new-selector', {
+    canUseAspirant: hasAspirantAccess(await getEditionAccess(res.locals.user.id)),
     profile,
     activeNav: 'characters',
     breadcrumbs: [
@@ -240,7 +259,7 @@ router.get('/new', isAuthenticated, (req, res) => {
       { label: 'New Character', href: '/characters/new' }
     ]
   });
-});
+}));
 
 router.get('/new/expert', isAuthenticated, async (req, res) => {
   const { profile, user } = res.locals;
@@ -304,6 +323,8 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
   if (!allowed.includes(mode)) {
     return sendError(req, res, null, { status: 400, message: `Invalid mode: ${mode}` });
   }
+  const canUseAspirant = hasAspirantAccess(await getEditionAccess(user.id));
+  if (mode !== 'advent' && !canUseAspirant) return sendAspirantUnlock(req, res, mode);
   const preselectedClassId = (req.query.class || '').toString() || null;
 
   // The class pool, filtered to advent-format classes in advent mode (the
@@ -412,6 +433,7 @@ router.get('/wizard', isAuthenticated, async (req, res) => {
 
   res.render('character-wizard', {
     profile,
+    canUseAspirant,
     mode,
     preselectedClassId,
     wizardClasses,
@@ -612,7 +634,10 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       upgradeTargets = await findUpgradeTargetsFor(characterClass.id, res.locals.supabase);
     }
 
-    const { data: aspirantConversion } = await planCharacterAspirantConversion(actorFromLocals(res.locals), id);
+    const canUseAspirant = hasAspirantAccess(await getEditionAccess(res.locals.user.id));
+    const { data: aspirantConversion } = canUseAspirant
+      ? await planCharacterAspirantConversion(actorFromLocals(res.locals), id)
+      : { data: null };
     const aspirantConversionHasHardBreach = Boolean(aspirantConversion)
       && aspirantConversion.breaches.some((breach) => breach.severity === 'hard');
 
@@ -632,6 +657,7 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       effectiveVersion,
       characterClass,
       upgradeTargets,
+      showAspirantUpsell: !canUseAspirant,
       aspirantConversion,
       aspirantConversionHasHardBreach,
       derived,
@@ -1329,7 +1355,7 @@ router.patch('/:id/stats', isAuthenticated, asyncHandler(async (req, res) => {
   // { data, error } for sendRouteError to render (matching the pre-service
   // behavior of getOwnedCharacterForMutation/updateOwnedCharacterFields).
   const { data, error } = await updateCharacterStats(actor, id, req.body || {});
-  if (error) return sendRouteError(req, res, error);
+  if (error) return sendCharacterRouteError(req, res, error);
   return res.status(200).json({ character: data });
 }));
 
@@ -1343,7 +1369,7 @@ router.post('/:id/level-up', isAuthenticated, asyncHandler(async (req, res) => {
   // as { data, error } exactly as the pre-service route did, so
   // sendRouteError keeps rendering their specific status/message.
   const { data, error } = await levelUpCharacter(actor, id, req.body || {});
-  if (error) return sendRouteError(req, res, error);
+  if (error) return sendCharacterRouteError(req, res, error);
   return res.status(200).json({ character: data });
 }));
 
@@ -1398,7 +1424,7 @@ router.post('/:id/upgrade', isAuthenticated, asyncHandler(async (req, res) => {
   const { id } = req.params;
   const { target_class_id } = req.body;
   const { data, error } = await upgradeCharacterClass(actor, id, target_class_id, res.locals.supabase);
-  if (error) return sendError(req, res, error);
+  if (error) return sendCharacterRouteError(req, res, error);
   return res.header('HX-Location', `/characters/${id}/edit`).send();
 }));
 
@@ -1406,7 +1432,7 @@ router.post('/:id/convert-aspirant', isAuthenticated, asyncHandler(async (req, r
   const actor = actorFromLocals(res.locals);
   const { id } = req.params;
   const { data, error } = await convertCharacterToAspirant(actor, id);
-  if (error) return sendRouteError(req, res, error);
+  if (error) return sendCharacterRouteError(req, res, error);
   return res.header('HX-Location', `/characters/${id}/${encodeURIComponent(data.name)}`).send();
 }));
 

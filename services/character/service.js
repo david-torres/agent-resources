@@ -22,9 +22,12 @@ const { AuthorizationError } = require('../../util/errors');
 const { canMutateCharacter } = require('./policy');
 const { characterRulesVersion } = require('../../util/character-rules');
 
+const { hasAspirantAccess, ASPIRANT_ACCESS_ERROR } = require('../access/service');
+
 const V2_ONLY_FIELDS = ['quirks', 'accessories', 'ability_perks'];
 
 const REQUIRED_ADAPTER_METHODS = [
+  'getEditionAccess',
   'getRulesVersion',
   'resolveClassReference',
   'getCharacter',
@@ -318,6 +321,10 @@ class CharacterService {
     this.adapter = adapter;
   }
 
+  async aspirantAccessError(actor) {
+    return hasAspirantAccess(await this.adapter.getEditionAccess(actor)) ? null : ASPIRANT_ACCESS_ERROR;
+  }
+
   async createCharacter(input, actor) {
     // Preserve historical ordering: creation chooses the version before a
     // class-name lookup may populate class_id.
@@ -336,6 +343,10 @@ class CharacterService {
     const { classRows } = maps;
     const classRow = (classRows || []).find(row => row.id === prepared.class_id);
     const contentFormat = classRow && classRow.content_format;
+    if (economyFor({ contentFormat, creatorMode: prepared.creator_mode }) !== 'advent') {
+      const error = await this.aspirantAccessError(actor);
+      if (error) return { data: null, error };
+    }
     // The classic/expert create form submits gear as "<classId>::Item"
     // strings with no class_id field (views/partials/character-class-gear.
     // handlebars), and isCrossClass (util/merx-economy.js) reads a missing
@@ -515,6 +526,10 @@ class CharacterService {
       creatorMode: prepared.creator_mode
     });
     const contentFormat = rulesVersionResult.contentFormat;
+    if (economyFor({ contentFormat, creatorMode: prepared.creator_mode }) !== 'advent') {
+      const error = await this.aspirantAccessError(actor);
+      if (error) return { data: null, error };
+    }
     if (rulesVersion !== 'v2') {
       for (const field of V2_ONLY_FIELDS) delete prepared[field];
     }
@@ -928,6 +943,10 @@ class CharacterService {
     const candidates = await this.adapter.findUpgradeTargets(character.class_id, client);
     const target = (candidates || []).find(c => c.id === targetClassId);
     if (!target) return { data: null, error: 'Target class is not a valid upgrade for this character' };
+    if (target.rules_edition === 'aspirant' || await resolveMutationEconomy(this.adapter, character) !== 'advent') {
+      const error = await this.aspirantAccessError(actor);
+      if (error) return { data: null, error };
+    }
 
     const { data, error } = await this.adapter.updateClass({
       id, creatorId: character.creator_id, classId: target.id, className: target.name
@@ -938,6 +957,8 @@ class CharacterService {
   }
 
   async planAspirantConversion(actor, id) {
+    const error = await this.aspirantAccessError(actor);
+    if (error) return { data: null, error };
     const loaded = await loadAspirantConversion(this.adapter, actor, id);
     if (loaded.error) return { data: null, error: loaded.error };
     return { data: loaded.plan ?? null, error: null };
@@ -946,6 +967,8 @@ class CharacterService {
   // One-way: a converted character is on the aspirant economy, which is never
   // eligible. The plan is recomputed here, never taken from the client.
   async convertToAspirant(actor, id) {
+    const error = await this.aspirantAccessError(actor);
+    if (error) return { data: null, error };
     const loaded = await loadAspirantConversion(this.adapter, actor, id);
     if (loaded.error) return { data: null, error: loaded.error };
     if (loaded.ineligible) return { data: null, error: { status: 400, message: loaded.ineligible } };
@@ -971,6 +994,8 @@ class CharacterService {
 
     const economy = await resolveMutationEconomy(this.adapter, character);
     if (economy !== 'advent') {
+      const error = await this.aspirantAccessError(actor);
+      if (error) return { data: null, error };
       const capError = statCapError(character, stats);
       if (capError) return { data: null, error: capError };
     }
@@ -992,6 +1017,10 @@ class CharacterService {
 
   async levelUp(actor, id, body = {}) {
     const character = await requireOwnedCharacter(this.adapter, actor, id);
+    if (await resolveMutationEconomy(this.adapter, character) !== 'advent') {
+      const error = await this.aspirantAccessError(actor);
+      if (error) return { data: null, error };
+    }
 
     const currentLevel = Math.max(1, parseInteger(character.level, 1));
     const requestedLevel = Math.max(currentLevel + 1, Math.min(LEVEL_CEILING, parseInteger(body.level, currentLevel + 1)));

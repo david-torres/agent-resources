@@ -21,4 +21,7 @@ const getEditionAccess = async (userId, now = new Date(), { timeZone = null } = 
   }
 };
 
-module.exports = { getEditionAccess };
+const hasAspirantAccess = (access) => ['owned', 'trial'].includes(access?.aspirant?.state);
+const ASPIRANT_ACCESS_ERROR = Object.freeze({ status: 403, message: 'Unlock the Aspirant book to use Aspiring and Aspirant features.' });
+
+module.exports = { getEditionAccess, hasAspirantAccess, ASPIRANT_ACCESS_ERROR };

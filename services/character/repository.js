@@ -294,6 +294,16 @@ module.exports = {
   // getClassContentLookupMaps — don't touch supabaseAdmin and stay composed
   // directly in models/character.js to avoid a circular require back into
   // this file.)
+  getEditionAccess: async (actor) => {
+    let userId = actor.userId || actor.user_id;
+    if (!userId) {
+      const { data, error } = await supabaseAdmin.from('profiles').select('user_id').eq('id', actor.profileId || actor.id).single();
+      if (error) return null;
+      userId = data?.user_id;
+    }
+    if (!userId) return null;
+    return require('../access/service').getEditionAccess(userId);
+  },
   getCharacter: id => getCharacterAdmin(id),
   createCharacterRow: input => supabaseAdmin.from('characters').insert(input).select(),
   updateCharacterRow: (id, input, actor) => supabaseAdmin

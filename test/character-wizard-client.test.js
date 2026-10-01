@@ -1106,6 +1106,7 @@ describe('an enforced creation prices the grant alone, everywhere', () => {
   const serviceOnAspirantClass = () => {
     const saved = {};
     const adapter = {
+      getEditionAccess: async () => ({ aspirant: { state: 'owned' } }),
       getRulesVersion: async () => 'v1',
       resolveClassReference: async (input) => ({ ...input }),
       getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', abilities: [] }),

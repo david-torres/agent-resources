@@ -99,8 +99,12 @@
 
   <div class="buttons has-addons mb-3" id="wizardModeToggle" role="group" aria-label="Rules">
     <a href="/characters/wizard?mode=advent" class="button is-small{{#if (eq mode 'advent')}} is-primary is-selected{{/if}}"{{#if (eq mode 'advent')}} aria-current="true"{{/if}}>Advent</a>
-    <a href="/characters/wizard?mode=aspirant" class="button is-small{{#if (eq mode 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq mode 'aspirant')}} aria-current="true"{{/if}}>Aspirant</a>
+    <a href="/characters/wizard?mode=aspirant" class="button is-small{{#if (eq mode 'aspirant')}} is-success is-selected{{/if}}"{{#if (eq mode 'aspirant')}} aria-current="true"{{/if}}>Aspirant{{#unless canUseAspirant}} <span class="icon is-small"><i class="fas fa-lock" aria-label="Requires Aspirant book"></i></span>{{/unless}}</a>
   </div>
+
+  {{#unless canUseAspirant}}
+  {{> access/aspirant-feature-upsell}}
+  {{/unless}}
 
   <div class="field">
     <div class="control has-icons-left">

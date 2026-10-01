@@ -41,6 +41,7 @@ const OWNED_CHARACTER = {
 };
 
 const makeAdapter = (calls, overrides = {}) => ({
+  getEditionAccess: async () => ({ aspirant: { state: 'owned' } }),
   getRulesVersion: async () => 'v1',
   resolveClassReference: async input => ({ ...input }),
   getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', abilities: [] }),
@@ -2526,4 +2527,39 @@ test('convertToAspirant reads a raced duplicate-Ability violation as the friendl
   adapter.saveCharacterAtomic = async () => ({ data: null, error: violation });
   const result = await new CharacterService(adapter).convertToAspirant(CREATOR, 'character-1');
   expect(result).toEqual({ data: null, error: { status: 400, message: 'Caroline already has Trickshot.' } });
+});
+
+for (const state of ['none', 'expired', null]) {
+  test(`Aspirant book ${state}: refuses creation, conversion and progression before writing`, async () => {
+    const calls = [];
+    const service = new CharacterService(makeAdapter(calls, {
+      getEditionAccess: async () => state ? { aspirant: { state } } : null,
+      getCharacter: async () => ok({ ...OWNED_CHARACTER, creator_mode: 'aspiring', class_id: null }),
+    }));
+    for (const mode of ['aspiring', 'aspirant']) {
+      expect((await service.createCharacter({ name: 'Locked', creator_mode: mode }, { id: 'profile-1' })).error.status).toBe(403);
+    }
+    expect((await service.updateCharacter('character-1', {}, { id: 'profile-1' })).error.status).toBe(403);
+    expect((await service.convertToAspirant(CREATOR, 'character-1')).error.status).toBe(403);
+    expect((await service.planAspirantConversion(CREATOR, 'character-1')).data).toBeNull();
+    expect((await service.updateStats(CREATOR, 'character-1', {})).error.status).toBe(403);
+    expect((await service.levelUp(CREATOR, 'character-1')).error.status).toBe(403);
+    expect(calls).toEqual([]);
+  });
+}
+
+test('an individually unlocked Aspirant-format class still requires its book', async () => {
+  const calls = [];
+  const adapter = makeAdapter(calls, {
+    getEditionAccess: async () => ({ aspirant: { state: 'none' } }),
+    getClassContentLookupMaps: async () => ({ classRows: [{ id: 'asp-class', content_format: 'aspirant' }] }),
+  });
+  const result = await new CharacterService(adapter).createCharacter({ name: 'Locked', class_id: 'asp-class', creator_mode: 'advent' }, { id: 'profile-1' });
+  expect(result.error.status).toBe(403);
+  expect(calls).toEqual([]);
+});
+
+test('active trial book access permits Aspirant features', async () => {
+  const service = new CharacterService(makeAdapter([], { getEditionAccess: async () => ({ aspirant: { state: 'trial' } }) }));
+  expect(await service.aspirantAccessError(CREATOR)).toBeNull();
 });

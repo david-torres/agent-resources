@@ -118,6 +118,10 @@
   </div>
   {{/if}}
 
+  {{#if showAspirantUpsell}}
+  {{> access/aspirant-feature-upsell}}
+  {{/if}}
+
   {{#if aspirantConversion}}
   <div class="notification is-link is-light" id="aspirant-conversion">
     {{#if aspirantConversion.upgrade.target}}

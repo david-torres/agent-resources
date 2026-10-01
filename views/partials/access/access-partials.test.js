@@ -121,3 +121,12 @@ test('the edition upsell shows each locked edition as its label, blurb, and CTA,
   expect(html).not.toContain('<ul');
   expect(html).not.toMatch(/href="\/classes\/(?!redeem\/)/);
 });
+
+test('the Aspirant feature upsell explains creation and conversion and links to buying and redemption', () => {
+  const html = render('{{> access/aspirant-feature-upsell}}');
+  expect(html).toContain('Aspiring');
+  expect(html).toContain('convert an Advent character');
+  expect(html).toContain('Buy Aspirant');
+  expect(html).toContain(EDITION_PURCHASE_URLS.aspirant);
+  expect(html).toContain('/classes/redeem/bulk');
+});

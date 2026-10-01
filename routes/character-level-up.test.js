@@ -89,6 +89,7 @@ let backfilledMissions;
 let perkIdSeq;
 
 mock.module('../services/character/repository', () => ({
+  getEditionAccess: async () => ({ aspirant: { state: 'owned' } }),
   // ability_perks ride along the way getCharacterAdmin returns them, so the
   // ratchet levelUp runs sees the Perks the character already carries rather
   // than an empty list that makes every level-up look affordable.

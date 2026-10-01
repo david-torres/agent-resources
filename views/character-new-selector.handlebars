@@ -12,13 +12,13 @@
   <div class="column is-one-quarter">
     <a href="/characters/wizard?mode=aspiring&fresh=1" class="button is-info is-large is-fullwidth">
       <span class="icon"><i class="fas fa-seedling"></i></span>
-      <span>Aspiring</span>
+      <span>Aspiring{{#unless canUseAspirant}} <i class="fas fa-lock" aria-label="Requires Aspirant book"></i>{{/unless}}</span>
     </a>
   </div>
   <div class="column is-one-quarter">
     <a href="/characters/wizard?mode=aspirant&fresh=1" class="button is-success is-large is-fullwidth">
       <span class="icon"><i class="fas fa-scroll"></i></span>
-      <span>Aspirant</span>
+      <span>Aspirant{{#unless canUseAspirant}} <i class="fas fa-lock" aria-label="Requires Aspirant book"></i>{{/unless}}</span>
     </a>
   </div>
   <div class="column is-one-quarter">
@@ -28,6 +28,10 @@
     </a>
   </div>
 </div>
+
+{{#unless canUseAspirant}}
+{{> access/aspirant-feature-upsell}}
+{{/unless}}
 
 <p class="has-text-centered has-text-grey mt-2 is-size-7">
   Expert Mode uses the original form-based creator.

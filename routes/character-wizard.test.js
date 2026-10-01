@@ -19,6 +19,9 @@ process.env.SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY || 'test-secre
 // Capture real modules up front so afterAll can restore them — bun's
 // mock.module is process-global and would otherwise leak into other files.
 const realBase = require('../models/_base');
+const realBookAccess = require('../services/access/service');
+let aspirantBookState = 'owned';
+mock.module('../services/access/service', () => ({ ...realBookAccess, getEditionAccess: async () => ({ aspirant: { state: aspirantBookState } }) }));
 const realAuth = require('../models/auth');
 const realProfile = require('../models/profile');
 const realClass = require('../models/class');
@@ -164,6 +167,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopHttpServer(server);
+  mock.module('../services/access/service', () => realBookAccess);
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);

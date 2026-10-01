@@ -56,6 +56,9 @@ const makeClient = () => ({
 // every getClassFamilyRows/getRealMissions call the edit-form route makes
 // would then hit a real, unreachable network address instead of this fake.
 const realBase = require('../models/_base');
+const realBookAccess = require('../services/access/service');
+let aspirantBookState = 'owned';
+mock.module('../services/access/service', () => ({ ...realBookAccess, getEditionAccess: async () => ({ aspirant: { state: aspirantBookState } }) }));
 mock.module('../models/_base', () => ({
   supabase: makeClient(),
   supabaseAdmin: makeClient(),
@@ -406,6 +409,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopHttpServer(server);
+  mock.module('../services/access/service', () => realBookAccess);
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
@@ -1344,4 +1348,42 @@ test('a business error the create service returns reaches the player as its own 
 
   expect(res.status).toBe(400);
   expect(await res.text()).toContain('Raven already has Veneer.');
+});
+
+test('locked creation options and the conversion offer remain visible with purchase links', async () => {
+  aspirantBookState = 'none';
+  try {
+    const selector = await fetch(`${baseUrl}/characters/new`, { headers: { Accept: 'text/html', Authorization: 'Bearer test-token' } });
+    const selectorHtml = await selector.text();
+    expect(selectorHtml).toContain('/characters/wizard?mode=aspiring&fresh=1');
+    expect(selectorHtml).toContain('/characters/wizard?mode=aspirant&fresh=1');
+    expect(selectorHtml).toContain('Buy Aspirant');
+    const editHtml = await editPage();
+    expect(editHtml).toContain('convert an Advent character');
+    expect(editHtml).toContain('Buy Aspirant');
+    expect(editHtml).not.toContain(`hx-post="/characters/${CHAR_ID}/convert-aspirant"`);
+    for (const mode of ['aspiring', 'aspirant']) {
+      const locked = await fetch(`${baseUrl}/characters/wizard?mode=${mode}`, { headers: { Accept: 'text/html', Authorization: 'Bearer test-token' } });
+      expect(locked.status).toBe(403);
+      const html = await locked.text();
+      expect(html).toContain('Buy Aspirant');
+      expect(html).toContain('/classes/redeem/bulk');
+      expect(html).not.toContain('id="wizard-data"');
+    }
+  } finally {
+    aspirantBookState = 'owned';
+  }
+});
+
+test('a book-locked conversion returns a purchase prompt in the htmx alerts area', async () => {
+  pageState.conversionResult = { data: null, error: realBookAccess.ASPIRANT_ACCESS_ERROR };
+  const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/convert-aspirant`, {
+    method: 'POST', headers: { Authorization: 'Bearer test-token', 'HX-Request': 'true' },
+  });
+  expect(res.status).toBe(403);
+  expect(res.headers.get('HX-Retarget')).toBe('#alerts');
+  expect(res.headers.get('HX-Location')).toBeNull();
+  const html = await res.text();
+  expect(html).toContain('Buy Aspirant');
+  expect(html).not.toContain('<!DOCTYPE');
 });
