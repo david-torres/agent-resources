@@ -127,6 +127,21 @@ describe('CatalogueControls', () => {
     expect(root.querySelectorAll('[data-entry]').length).toBe(4);
   });
 
+  // A caller whose list changes (the Signature grid's owned Signatures) hands
+  // a function, so each render reads the list as it is now.
+  test('entries given as a function are read again on every render', () => {
+    let current = entriesFixture();
+    const { root, control } = mountControls(baseOptions(() => current));
+    expect(root.querySelectorAll('[data-entry]').length).toBe(4);
+
+    current = [...current, { name: 'Spurs', class: 'Rider' }];
+    control.render();
+    const groups = [...root.querySelectorAll('[data-catalogue-group]')];
+    expect(groups.map((g) => g.querySelector('[data-catalogue-group-heading]').textContent))
+      .toEqual(['Gunslinger', 'Wrangler', 'Rider']);
+    expect(root.querySelectorAll('[data-entry]').length).toBe(5);
+  });
+
   // Both catalogues mount inside <form hx-put=...>, which carries a
   // type="submit" button (views/character-form.handlebars), so Enter in any
   // field it owns is an implicit submit -- Enter in a search box would save

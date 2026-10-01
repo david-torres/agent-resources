@@ -19,6 +19,17 @@ const { economyFigures, equipmentSpend } = require('../util/merx-economy');
 
 const FIGURES = economyFigures();
 
+const OTHER_CLASS_ID = 'c-other';
+const OTHER_CLASS_NAME = 'Other Class';
+
+// Two classes of two Signatures each, so a test can tell one group from another.
+const twoClassEntries = () => ([
+  { name: 'Cowboy Hat', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 1 },
+  { name: 'Duster', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 2 },
+  { name: 'Lasso', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 1 },
+  { name: 'Spurs', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 2 }
+]);
+
 const enchanted = (name) => ({
   name,
   class_id: OWN_CLASS_ID,
@@ -148,16 +159,6 @@ describe('the surface', () => {
 // would stay green even if groupBy or searchOf were mis-wired or swapped for
 // the wrong field.
 describe('grouping and search, through the real grid', () => {
-  const OTHER_CLASS_ID = 'c-other';
-  const OTHER_CLASS_NAME = 'Other Class';
-
-  const twoClassEntries = () => ([
-    { name: 'Cowboy Hat', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 1 },
-    { name: 'Duster', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 2 },
-    { name: 'Lasso', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 1 },
-    { name: 'Spurs', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 2 }
-  ]);
-
   test('the group headings are the class names entries are grouped by', () => {
     mountPurchases(fixtureCharacter({ gear: [], entries: twoClassEntries() }));
     const grid = document.getElementById('purchaseGrid');
@@ -455,22 +456,14 @@ describe('owning Signatures is limited by Merx alone', () => {
 // click on a cell looks like it did nothing. The drawer opens beside the
 // group the clicked cell sits in, and is brought into view.
 describe('the drawer opens where the clicked Signature is', () => {
-  const OTHER_CLASS_ID = 'c-other';
-  const OTHER_CLASS_NAME = 'Other Class';
-
-  const twoClassEntries = () => ([
-    { name: 'Cowboy Hat', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 1 },
-    { name: 'Duster', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 2 },
-    { name: 'Lasso', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 1 },
-    { name: 'Spurs', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 2 }
-  ]);
-
   const mountTwoClasses = () => mountPurchases(fixtureCharacter({
     gear: [], entries: twoClassEntries(), earnedMerx: 100
   }));
 
+  // The class-group copy of a cell; an owned Signature has a second copy in
+  // Your Signatures.
   const cellFor = (name) => document.querySelector(
-    `#purchaseGrid [data-signature-name="${name}"]`
+    `#purchaseGrid [data-signature-name="${name}"]:not([data-signature-yours])`
   );
 
   const expectDrawerAfterGroupOf = (name) => {
@@ -557,5 +550,148 @@ describe('the drawer opens where the clicked Signature is', () => {
     search('');
     expectDrawerInDocument();
     expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+});
+
+// Owned Signatures are otherwise only an "Owned" tag scattered across every
+// class's group, so the grid opens with a group of just the character's own.
+describe('Your Signatures', () => {
+  const YOURS = 'Your Signatures';
+
+  const bare = (name, classId) => ({ name, class_id: classId, enchantment: null, mods: [] });
+
+  const mountOwning = (gear) => mountPurchases(fixtureCharacter({
+    gear, entries: twoClassEntries(), earnedMerx: 100
+  }));
+
+  const groups = () => [...document.querySelectorAll('#purchaseGrid [data-catalogue-group]')];
+  const headingOf = (group) => {
+    const heading = group.querySelector('[data-catalogue-group-heading]');
+    return heading ? heading.textContent : null;
+  };
+  const headings = () => groups().map(headingOf);
+  const namesIn = (group) => [...group.querySelectorAll('[data-signature-name]')]
+    .map((cell) => cell.getAttribute('data-signature-name'));
+  const yoursGroup = () => groups().find((group) => headingOf(group) === YOURS) || null;
+  const namesInYours = () => (yoursGroup() ? namesIn(yoursGroup()) : []);
+
+  const yoursCell = (name) => document.querySelector(
+    `#purchaseGrid [data-signature-yours][data-signature-name="${name}"]`
+  );
+  const classCell = (name) => document.querySelector(
+    `#purchaseGrid [data-signature-name="${name}"]:not([data-signature-yours])`
+  );
+
+  const followerOf = (group) => {
+    const next = group.nextElementSibling;
+    return next ? (next.id || next.outerHTML.slice(0, 60)) : null;
+  };
+
+  const search = (term) => {
+    const searchInput = document.querySelector('#purchaseGrid [data-catalogue-search]');
+    searchInput.value = term;
+    searchInput.dispatchEvent(new document.defaultView.Event('input', { bubbles: true }));
+  };
+
+  test('the first group is Your Signatures, listing what the character owns in purchase order', () => {
+    // Bought in the reverse of catalogue order, so purchase order is what shows.
+    mountOwning([bare('Lasso', OTHER_CLASS_ID), bare('Cowboy Hat', OWN_CLASS_ID)]);
+    expect(headings()).toEqual([YOURS, OWN_CLASS_NAME, OTHER_CLASS_NAME]);
+    expect(namesIn(groups()[0])).toEqual(['Lasso', 'Cowboy Hat']);
+  });
+
+  test('an owned Signature still appears in its own class group, tagged Owned', () => {
+    mountOwning([bare('Lasso', OTHER_CLASS_ID)]);
+    const cell = classCell('Lasso');
+    expect(cell).not.toBeNull();
+    expect(headingOf(cell.closest('[data-catalogue-group]'))).toBe(OTHER_CLASS_NAME);
+    expect(cell.textContent).toContain('Owned');
+  });
+
+  test('every cell in Your Signatures, and no other, is marked data-signature-yours', () => {
+    mountOwning([bare('Lasso', OTHER_CLASS_ID), bare('Cowboy Hat', OWN_CLASS_ID)]);
+    const marked = [...document.querySelectorAll('#purchaseGrid [data-signature-yours]')];
+    expect(marked.map((cell) => cell.getAttribute('data-signature-name'))).toEqual(['Lasso', 'Cowboy Hat']);
+    marked.forEach((cell) => {
+      expect(headingOf(cell.closest('[data-catalogue-group]'))).toBe(YOURS);
+    });
+    expect(namesIn(yoursGroup())).toHaveLength(marked.length);
+  });
+
+  test('a character owning no Signature gets no Your Signatures group', () => {
+    mountOwning([]);
+    expect(headings()).toEqual([OWN_CLASS_NAME, OTHER_CLASS_NAME]);
+  });
+
+  test('buying a Signature through the handle adds it to Your Signatures', () => {
+    const form = mountOwning([bare('Lasso', OTHER_CLASS_ID)]);
+    expect(form.buySignature('Cowboy Hat', OWN_CLASS_ID)).toBe(true);
+    expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
+  });
+
+  test('buying a Signature through the drawer adds it to Your Signatures', () => {
+    const form = mountOwning([]);
+    form.openSignature('Spurs', OTHER_CLASS_ID);
+    document.querySelector('#purchaseDrawer [data-signature-buy]').click();
+    expect(headings()[0]).toBe(YOURS);
+    expect(namesInYours()).toEqual(['Spurs']);
+  });
+
+  test('removing a Signature through the handle takes it out of Your Signatures', () => {
+    const form = mountOwning([bare('Lasso', OTHER_CLASS_ID), bare('Cowboy Hat', OWN_CLASS_ID)]);
+    form.removeSignature('Lasso', OTHER_CLASS_ID);
+    expect(namesInYours()).toEqual(['Cowboy Hat']);
+  });
+
+  test('removing the last owned Signature takes the Your Signatures group away', () => {
+    const form = mountOwning([bare('Lasso', OTHER_CLASS_ID)]);
+    expect(yoursGroup()).not.toBeNull();
+    form.removeSignature('Lasso', OTHER_CLASS_ID);
+    expect(headings()).toEqual([OWN_CLASS_NAME, OTHER_CLASS_NAME]);
+  });
+
+  test('removing through the drawer, once its warning is confirmed, takes it out of Your Signatures', () => {
+    const form = mountOwning([enchanted('Cowboy Hat'), bare('Lasso', OTHER_CLASS_ID)]);
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    document.querySelector('#purchaseDrawer [data-signature-sell]').click();
+    expect(namesInYours()).toEqual(['Cowboy Hat', 'Lasso']);
+    document.querySelector('#purchasePending [data-confirm-removal]').click();
+    expect(namesInYours()).toEqual(['Lasso']);
+  });
+
+  test('clicking a cell in Your Signatures opens the drawer right after Your Signatures', () => {
+    mountOwning([bare('Lasso', OTHER_CLASS_ID)]);
+    expect(yoursCell('Lasso')).not.toBeNull();
+    yoursCell('Lasso').click();
+    const drawer = document.getElementById('purchaseDrawer');
+    expect(drawer.hidden).toBe(false);
+    expect(drawer.innerHTML).toContain('Lasso');
+    expect(followerOf(yoursGroup())).toBe('purchaseDrawer');
+  });
+
+  test('clicking the same Signature in its class group opens the drawer right after that class group', () => {
+    mountOwning([bare('Lasso', OTHER_CLASS_ID)]);
+    classCell('Lasso').click();
+    expect(document.getElementById('purchaseDrawer').hidden).toBe(false);
+    expect(followerOf(classCell('Lasso').closest('[data-catalogue-group]'))).toBe('purchaseDrawer');
+  });
+
+  test('buying from a class group keeps the drawer after that class group', () => {
+    const form = mountOwning([]);
+    classCell('Cowboy Hat').click();
+    document.querySelector('#purchaseDrawer [data-signature-buy]').click();
+    expect(form.serialize().gear.map((g) => g.name)).toEqual(['Cowboy Hat']);
+    expect(yoursGroup()).not.toBeNull();
+    expect(followerOf(classCell('Cowboy Hat').closest('[data-catalogue-group]'))).toBe('purchaseDrawer');
+  });
+
+  test('search filters Your Signatures like any other group', () => {
+    mountOwning([bare('Lasso', OTHER_CLASS_ID), bare('Cowboy Hat', OWN_CLASS_ID)]);
+    search('Cow');
+    expect(namesInYours()).toEqual(['Cowboy Hat']);
+    search('Spurs');
+    expect(yoursGroup()).toBeNull();
+    search('');
+    expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
   });
 });
