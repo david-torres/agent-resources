@@ -339,6 +339,116 @@ test('the twelve minted ids are pinned to their exact values', () => {
   });
 });
 
+// The Aspirant versions of the three pre-release Exclusives. Their Advent
+// parents were inserted by the pre-release load with Postgres-minted ids, so no
+// roster names them and their ids differ between environments: the parent is
+// found by its columns instead.
+const EXCLUSIVE_FORK_IDS = {
+  Ardent: '07b32465-be5d-46ec-84d2-4d5574b151bc',
+  Offdriver: '2a836d69-2b76-4770-bb15-83ef652e312b',
+  Squire: '0730b2b5-8327-4bc1-8400-16edde552b1a'
+};
+const exclusiveRecord = (name, over = {}) => ({
+  name, challenge_level: 'Medium', stat_line: '++Skill, +Sensory', stat_spread: { skill: 2, sensory: 1 },
+  abilities: [], advanced_abilities: [], gear: [], expanded_tips: { player: [], conduit: [] },
+  ...teaserFields, ...over
+});
+const exclusiveParent = (name, over = {}) => row(name, { id: `advent-exclusive-${name}`,
+  rules_version: 'v2', prerelease_section: 'exclusive', ...over });
+const exclusivesBook = () => bookFor('aspirant-exclusives');
+
+test('the Aspirant Exclusives book is an unlock-only forking book of three released classes', () => {
+  const descriptor = exclusivesBook();
+  expect(descriptor.key).toBe('aspirant-exclusives');
+  expect(descriptor.artifact.endsWith('aspirant-exclusives-classes-2026-10.json')).toBe(true);
+  expect(descriptor.remap).toBeNull();
+  expect(descriptor.aliases).toEqual({});
+  expect(descriptor.publishedByLoad).toEqual(['Ardent', 'Offdriver', 'Squire']);
+  expect(descriptor.contentFormat).toBe('aspirant');
+  expect(descriptor.rulesEdition).toBe('aspirant');
+  expect(descriptor.status).toBe('release');
+  expect(descriptor.rulesVersion).toBe('v2');
+  expect(descriptor.forks).toBe(true);
+});
+
+test('each Exclusive forks off its Advent exclusive row under its own minted id', () => {
+  const names = Object.keys(EXCLUSIVE_FORK_IDS);
+  const rows = [
+    ...names.map((name) => exclusiveParent(name)),
+    row('Ardent', { id: 'id-pcc-ardent', prerelease_section: 'pcc', is_player_created: true })
+  ];
+  const plans = planLoad(names.map((name) => exclusiveRecord(name)), rows, exclusivesBook());
+  expect(plans.map((plan) => [plan.payload.name, plan.disposition, plan.payload.id,
+    plan.payload.base_class_id, plan.parent.id]))
+      .toEqual(names.map((name) =>
+        [name, 'fork', EXCLUSIVE_FORK_IDS[name], `advent-exclusive-${name}`, `advent-exclusive-${name}`]));
+});
+
+// The admin unlock dashboard only grants a class whose prerelease_section is
+// 'exclusive', and the owner decided these three are unlock-only.
+test('an Exclusive fork is aspirant on both axes, sectioned exclusive and not free play', () => {
+  const [plan] = planLoad([exclusiveRecord('Ardent')], [exclusiveParent('Ardent')], exclusivesBook());
+  expect(plan.payload.content_format).toBe('aspirant');
+  expect(plan.payload.rules_edition).toBe('aspirant');
+  expect(plan.payload.prerelease_section).toBe('exclusive');
+  expect(plan.payload.free_play_access).toBe(false);
+  expect(Object.keys(plan.payload).sort()).toEqual([...fieldsFor(exclusivesBook()), ...FORK_ONLY].sort());
+});
+
+test('an Exclusive fork is inserted released, at v2, and not player-created', () => {
+  const [plan] = planLoad([exclusiveRecord('Squire')], [exclusiveParent('Squire')], exclusivesBook());
+  const inserted = insertRow(plan, exclusivesBook());
+  expect(inserted.status).toBe('release');
+  expect(inserted.rules_version).toBe('v2');
+  expect(inserted.is_player_created).toBe(false);
+  expect(inserted.id).toBe(EXCLUSIVE_FORK_IDS.Squire);
+});
+
+test('an Exclusive with no Advent exclusive row of its name stops the run', () => {
+  const notParents = [
+    row('Ardent', { id: 'id-pcc', prerelease_section: 'pcc' }),
+    row('Ardent', { id: 'id-unsectioned', prerelease_section: null }),
+    row('Ardent', { id: 'id-mine', prerelease_section: 'exclusive', is_player_created: true })
+  ];
+  for (const rows of [[], notParents]) {
+    expect(() => planLoad([exclusiveRecord('Ardent')], rows, exclusivesBook()))
+        .toThrow(/fork parent.*"Ardent"/);
+  }
+});
+
+test('an Exclusive with two Advent exclusive rows of its name stops the run', () => {
+  const rows = [exclusiveParent('Ardent'), exclusiveParent('Ardent', { id: 'advent-exclusive-Ardent-2' })];
+  expect(() => planLoad([exclusiveRecord('Ardent')], rows, exclusivesBook()))
+      .toThrow(/fork parent.*"Ardent"/);
+});
+
+test('re-running the Exclusives load updates the fork and keeps its section and access', () => {
+  const fork = row('Ardent', { id: EXCLUSIVE_FORK_IDS.Ardent, content_format: 'aspirant',
+    rules_edition: 'aspirant', base_class_id: 'advent-exclusive-Ardent' });
+  const [plan] = planLoad([exclusiveRecord('Ardent')], [exclusiveParent('Ardent'), fork], exclusivesBook());
+  expect(plan.disposition).toBe('update');
+  expect(plan.row.id).toBe(EXCLUSIVE_FORK_IDS.Ardent);
+  expect(plan.payload.prerelease_section).toBe('exclusive');
+  expect(plan.payload.free_play_access).toBe(false);
+});
+
+// A V1 name minted under the Exclusives book, or an Exclusive under V1, would
+// insert a row under another book's id.
+test('a minted fork id resolves only through its own book', () => {
+  expect(() => planLoad([exclusiveRecord('Berserker')], [parentRow('Berserker')], exclusivesBook()))
+      .toThrow('no minted class id for "Berserker"');
+  expect(() => planLoad([exclusiveRecord('Ardent')], [exclusiveParent('Ardent')], forkBook))
+      .toThrow('no minted class id for "Ardent"');
+});
+
+test('the Exclusives book writes prerelease_section and the V1 book still does not', () => {
+  expect(fieldsFor(exclusivesBook())).toContain('prerelease_section');
+  expect(fieldsFor(forkBook)).not.toContain('prerelease_section');
+  const [v1] = planLoad([forkRecord()], [parentRow('Berserker')], forkBook);
+  expect(v1.payload).not.toHaveProperty('prerelease_section');
+  expect(v1.payload.free_play_access).toBe(false);
+});
+
 test('the document title casing reproduces the catalogue names', () => {
   expect(displayName('BEASTMASTER')).toBe('Beastmaster');
   expect(displayName('SHŌNEN')).toBe('Shōnen');
