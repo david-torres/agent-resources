@@ -717,3 +717,29 @@ test('the class select has no outdated toggle when no listed class is outdated',
 
   expect(html).not.toContain('char-show-outdated-classes');
 });
+
+
+test('edit class select selects only the stored class ID when names repeat across versions', () => {
+  const html = renderCharacterForm({
+    character: { class_id: 'gunslinger-v1', class: 'Gunslinger' },
+    context: {
+      adventV1Classes: [{ id: 'gunslinger-v1', name: 'Gunslinger', outdated: true }],
+      adventV2Classes: [{ id: 'gunslinger-v2', name: 'Gunslinger' }],
+      aspirantPreviewV2Classes: [{ id: 'gunslinger-aspirant', name: 'Gunslinger' }]
+    }
+  });
+  const { JSDOM } = require('jsdom');
+  const select = new JSDOM(html).window.document.getElementById('char-class-id');
+  expect(select.value).toBe('gunslinger-v1');
+  expect([...select.options].filter(option => option.defaultSelected).map(option => option.value))
+    .toEqual(['gunslinger-v1']);
+});
+
+test('legacy characters without a class ID still select their class by name', () => {
+  const html = renderCharacterForm({
+    character: { class: 'Gunslinger' },
+    context: { adventV1Classes: [{ id: 'other', name: 'Other' }, { id: 'gunslinger', name: 'Gunslinger' }] }
+  });
+  const { JSDOM } = require('jsdom');
+  expect(new JSDOM(html).window.document.getElementById('char-class-id').value).toBe('gunslinger');
+});

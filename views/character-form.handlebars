@@ -36,56 +36,56 @@
           {{#if adventV1Classes.length}}
           <option disabled>Advent v1 Classes</option>
           {{#each adventV1Classes}}
-          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if adventV2Classes.length}}
           <option disabled>Advent v2 Classes</option>
           {{#each adventV2Classes}}
-          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if aspirantPreviewV1Classes.length}}
           <option disabled>Aspirant Preview v1 Classes</option>
           {{#each aspirantPreviewV1Classes}}
-          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if aspirantPreviewV2Classes.length}}
           <option disabled>Aspirant Preview v2 Classes</option>
           {{#each aspirantPreviewV2Classes}}
-          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAdventV1Classes.length}}
           <option disabled>Player Created · Advent v1</option>
           {{#each playerCreatedAdventV1Classes}}
-          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAdventV2Classes.length}}
           <option disabled>Player Created · Advent v2</option>
           {{#each playerCreatedAdventV2Classes}}
-          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAspirantV1Classes.length}}
           <option disabled>Player Created · Aspirant v1</option>
           {{#each playerCreatedAspirantV1Classes}}
-          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v1" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
 
           {{#if playerCreatedAspirantV2Classes.length}}
           <option disabled>Player Created · Aspirant v2</option>
           {{#each playerCreatedAspirantV2Classes}}
-          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (eq ../character.class this.name))}}selected{{/if}}>{{this.name}}</option>
+          <option value="{{this.id}}" data-version="v2" {{#if this.outdated}}data-outdated{{/if}} {{#if (or (eq ../character.class_id this.id) (and (not ../character.class_id) (eq ../character.class this.name)))}}selected{{/if}}>{{this.name}}</option>
           {{/each}}
           {{/if}}
           {{> access/locked-class-options groups=lockedClassGroups}}
