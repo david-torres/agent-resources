@@ -54,17 +54,24 @@ const OWNED_EDITIONS = Object.keys(CORE_CLASS_UNLOCKS);
 // the viewer cannot play goes to its edition's locked section (lockedIds,
 // from lockedRosterIds) instead of "Other Released". Artwork is release
 // content and appears only for released classes covered by a book the viewer
-// owns; the other sections stay art-free (views/classes.handlebars).
-const partitionClassCatalog = (groups, bookClassIds = new Set(), lockedIds = {}) => {
+// owns; the other sections stay art-free (views/classes.handlebars). An
+// Aspirant Exclusive is unlock-only, so it is decided before pre-release by
+// the viewer's own access ids (accessIds): unlocked, it is one of their
+// released classes; otherwise it is teased in the Exclusive section.
+const isAspirantExclusive = (cls) => cls?.prerelease_section === 'exclusive' && cls?.content_format === 'aspirant';
+
+const partitionClassCatalog = (groups, bookClassIds = new Set(), lockedIds = {}, accessIds = new Set()) => {
   const list = Array.isArray(groups) ? groups : [];
   const ownedReleases = [];
   const otherReleases = [];
   const prerelease = [];
   const pcc = [];
+  const exclusive = [];
   const locked = Object.fromEntries(OWNED_EDITIONS.map(edition => [edition, []]));
   for (const group of list) {
     const cls = group && group.primary;
-    if (cls?.prerelease_section) prerelease.push(group);
+    if (isAspirantExclusive(cls)) (accessIds.has(cls.id) ? ownedReleases : exclusive).push(group);
+    else if (cls?.prerelease_section) prerelease.push(group);
     else if (isUnreleasedPcc(cls)) pcc.push(group);
     else if (bookClassIds.has(cls?.id)) ownedReleases.push(group);
     else {
@@ -72,7 +79,7 @@ const partitionClassCatalog = (groups, bookClassIds = new Set(), lockedIds = {})
       (edition ? locked[edition] : otherReleases).push(group);
     }
   }
-  return { ownedReleases, otherReleases, prerelease, pcc, locked };
+  return { ownedReleases, otherReleases, prerelease, pcc, exclusive, locked };
 };
 
 // Roster ids of every edition the viewer neither owns nor is trialling, minus

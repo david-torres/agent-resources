@@ -131,6 +131,19 @@
 </section>
 {{/each}}
 
+{{#if exclusiveGroups.length}}
+<section class="block" data-exclusive-classes>
+  <h2 class="title is-4" id="exclusive-classes">
+    <span class="icon has-text-grey"><i class="fas fa-lock"></i></span>
+    <span>Exclusive Classes</span>
+  </h2>
+  <div class="buttons mt-2 access-unlock-cta">
+    <a class="button is-light" href="/classes/redeem/bulk">Redeem a code</a>
+  </div>
+  {{> class-difficulty-buckets buckets=exclusiveGroups listId="exclusiveClassList" locked=true}}
+</section>
+{{/if}}
+
 {{#if otherReleaseGroups.length}}
 {{> section-heading tag="h2" class="title is-4" id="released-classes" title="Other Released Classes"}}
 {{> class-difficulty-buckets buckets=otherReleaseGroups listId="otherClassList"}}

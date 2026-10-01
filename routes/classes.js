@@ -153,11 +153,13 @@ router.get('/', authOptional, async (req, res) => {
         otherReleases: otherReleaseGroups,
         prerelease: prereleaseGroups,
         pcc: pccGroups,
+        exclusive: exclusiveGroups,
         locked: lockedGroups
     } = partitionClassCatalog(
         classGroups,
         access.bookIds,
-        lockedRosterIds(editionAccess, access.rosterIdsByEdition, access.ids)
+        lockedRosterIds(editionAccess, access.rosterIdsByEdition, access.ids),
+        access.ids
     );
     const owned = splitOwnedByEdition(ownedReleaseGroups, req.query.yours);
     const adventTrialRunning = owned.edition === 'advent' && Boolean(trialStatus(editionAccess, 'advent'));
@@ -181,6 +183,7 @@ router.get('/', authOptional, async (req, res) => {
                 trialEndedAt: trialEndedAt(editionAccess, edition),
                 buckets: groupByDifficulty(groups)
             })),
+        exclusiveGroups: groupByDifficulty(exclusiveGroups),
         otherReleaseGroups: groupByDifficulty(otherReleaseGroups),
         prereleaseGroups: groupByDifficulty(prereleaseGroups),
         pccGroups: groupByDifficulty(pccGroups),
