@@ -1,6 +1,6 @@
-// One-time fix for characters converted to Aspirant before conversion moved
-// them onto their class's Aspirant version. Default is read-only. Pass
-// --apply only after reviewing the list.
+// Moves characters already on the Aspirant rules onto their class's Aspirant
+// version, when the owner has unlocked it. Default is read-only. Pass --apply
+// only after reviewing the list.
 const characterRepository = require('../services/character/repository');
 const { fetchAll } = require('./lib/fetch-all');
 const { findAspirantFork } = require('../util/class-family');

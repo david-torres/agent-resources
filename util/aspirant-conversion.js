@@ -1,6 +1,6 @@
 // Moves an Advent character onto the Aspirant rules, as a plan: the build it
-// takes onto its class's Aspirant version, what blocks the move, and what it
-// shows afterwards. Pure -- the caller loads everything and saves the result.
+// takes onto whichever Aspirant versions its owner can access, what blocks the
+// move, and what it shows afterwards. Pure -- the caller loads everything and saves the result.
 const { statList } = require('./enclave-consts');
 const { deriveBuildBreaches, derivePerkBreakdown, deriveMerxBreakdown } = require('./character-derived');
 const { validateTraits, validateStatLimits } = require('../services/character/input');
@@ -31,8 +31,8 @@ const findInCatalogue = (cls, lists, name) => {
 };
 
 // Each row moves to the Aspirant target of its OWN class, so a cross-class
-// item follows its donor. A row with no Aspirant version, one the owner cannot
-// access, or already on one, stays exactly as stored. The lists are null when
+// item follows its donor. A row already on an Aspirant version, or whose class
+// has no Aspirant version the owner can access, stays exactly as stored. The lists are null when
 // no row moves, so the save leaves every row and its id alone.
 const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks, accessibleClassIds }) => {
   const catalogue = listOf(classes);
