@@ -342,3 +342,37 @@ test('no TRIAL badge without an Advent trial', () => {
   const html = renderClasses(baseContext({ ownedReleaseGroups: unrated([group('own-1', 'Gunslinger')]) }));
   expect(html).not.toContain('TRIAL ·');
 });
+
+const exclusiveGroup = (id, name) => {
+  const g = group(id, name, { image: true });
+  g.primary.rules_edition = 'aspirant';
+  g.primary.content_format = 'aspirant';
+  g.primary.prerelease_section = 'exclusive';
+  return g;
+};
+
+const exclusiveSection = (doc) => doc.querySelector('[data-exclusive-classes]');
+
+test('Aspirant Exclusives render in their own locked section with a redeem-code call to action', () => {
+  const doc = parse(renderClasses(baseContext({
+    profile: { timezone: 'UTC' },
+    exclusiveGroups: unrated([exclusiveGroup('ardent-asp', 'Ardent'), exclusiveGroup('squire-asp', 'Squire')]),
+    prereleaseGroups: unrated([group('ardent-adv', 'Ardent', { status: 'beta' })])
+  })));
+  const section = exclusiveSection(doc);
+  expect(section).not.toBeNull();
+  expect(section.querySelector('h2').textContent).toContain('Exclusive Classes');
+  expect(section.querySelector('h2 .fa-lock')).not.toBeNull();
+  const cards = [...section.querySelectorAll('.card')];
+  expect(cards.map(c => c.querySelector('h5 a').textContent.trim())).toEqual(['Ardent', 'Squire']);
+  for (const card of cards) {
+    expect(card.hasAttribute('data-locked-card')).toBe(true);
+    expect(card.querySelector('h5 .fa-lock')).not.toBeNull();
+    expect(card.querySelector('.image-crop-render')).toBeNull();
+  }
+  const redeem = [...section.querySelectorAll('a')].find(a => a.textContent.trim() === 'Redeem a code');
+  expect(redeem?.getAttribute('href')).toBe('/classes/redeem/bulk');
+  expect(section.innerHTML).not.toContain('backerkit');
+  expect([...doc.querySelectorAll('#prereleaseClassList .card h5 a')].map(a => a.getAttribute('href')))
+    .toEqual(['/classes/ardent-adv/Ardent']);
+});

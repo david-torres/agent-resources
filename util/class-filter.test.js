@@ -100,6 +100,7 @@ describe('partitionClassCatalog', () => {
       otherReleases: [other],
       prerelease: [teaser],
       pcc: [pcc],
+      exclusive: [],
       locked: { advent: [], aspirant: [] }
     });
   });
@@ -151,7 +152,7 @@ describe('partitionClassCatalog', () => {
     const bookIds = new Set(advent.map((g) => g.primary.id));
     const out = partitionClassCatalog([...teasers, ...aspirant, ...pccs, ...advent], bookIds);
     expect(out).toEqual({
-      ownedReleases: advent, otherReleases: aspirant, prerelease: teasers, pcc: pccs,
+      ownedReleases: advent, otherReleases: aspirant, prerelease: teasers, pcc: pccs, exclusive: [],
       locked: { advent: [], aspirant: [] }
     });
   });
@@ -186,6 +187,62 @@ describe('partitionClassCatalog', () => {
     const out = partitionClassCatalog([teaser], new Set(), { aspirant: ASPIRANT_ROSTER });
     expect(out.prerelease).toEqual([teaser]);
     expect(out.locked.aspirant).toEqual([]);
+  });
+
+  // Aspirant Exclusives are unlock-only (class_unlocks): no book roster and no
+  // free play, so the viewer's own access ids are what open them.
+  const exclusive = (id, content_format, extra = {}) => ({
+    primary: {
+      id, status: 'release', is_player_created: false, prerelease_section: 'exclusive',
+      content_format, rules_edition: content_format, free_play_access: content_format === 'advent', ...extra
+    },
+    previous: []
+  });
+
+  test('an Aspirant Exclusive the viewer has not unlocked goes to the Exclusive section, not pre-release', () => {
+    const ardent = exclusive('ardent-asp', 'aspirant');
+    const out = partitionClassCatalog([ardent], new Set(), {}, new Set());
+    expect(out.exclusive).toEqual([ardent]);
+    expect(out.prerelease).toEqual([]);
+    expect(out.ownedReleases).toEqual([]);
+  });
+
+  test('an anonymous viewer sees every Aspirant Exclusive in the Exclusive section', () => {
+    const ardent = exclusive('ardent-asp', 'aspirant');
+    const squire = exclusive('squire-asp', 'aspirant');
+    const out = partitionClassCatalog([ardent, squire]);
+    expect(out.exclusive).toEqual([ardent, squire]);
+    expect(out.prerelease).toEqual([]);
+  });
+
+  test("an Aspirant Exclusive the viewer has unlocked is one of the viewer's released classes", () => {
+    const ardent = exclusive('ardent-asp', 'aspirant');
+    const offdriver = exclusive('offdriver-asp', 'aspirant');
+    const out = partitionClassCatalog([ardent, offdriver], new Set(), {}, new Set(['ardent-asp']));
+    expect(out.ownedReleases).toEqual([ardent]);
+    expect(out.exclusive).toEqual([offdriver]);
+    expect(out.prerelease).toEqual([]);
+  });
+
+  test('the Advent version of an Exclusive stays pre-release whatever the viewer can play', () => {
+    const ardentAdvent = exclusive('ardent-adv', 'advent');
+    const locked = partitionClassCatalog([ardentAdvent], new Set(), {}, new Set());
+    const unlocked = partitionClassCatalog([ardentAdvent], new Set(), {}, new Set(['ardent-adv']));
+    for (const out of [locked, unlocked]) {
+      expect(out.prerelease).toEqual([ardentAdvent]);
+      expect(out.exclusive).toEqual([]);
+      expect(out.ownedReleases).toEqual([]);
+    }
+  });
+
+  test('other pre-release sections stay pre-release when the viewer can play them', () => {
+    const berserker = group('berserker-asp', { prerelease_section: 'aspirant' });
+    berserker.primary.content_format = 'aspirant';
+    const pccTeaser = group('pcc-teaser', { prerelease_section: 'pcc', is_player_created: true });
+    const out = partitionClassCatalog([berserker, pccTeaser], new Set(), {}, new Set(['berserker-asp', 'pcc-teaser']));
+    expect(out.prerelease).toEqual([berserker, pccTeaser]);
+    expect(out.exclusive).toEqual([]);
+    expect(out.ownedReleases).toEqual([]);
   });
 });
 
