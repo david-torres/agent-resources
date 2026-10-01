@@ -279,8 +279,10 @@ const rethreadSuperscripts = (page) => {
 // stand apart, and no genuine space is anywhere near this threshold.
 const WORD_GAP_MIN = 0.5;
 
+const CLOSING_MARKS = /^[.,;:!?)\]’”…]+$/;
+
 const joinWords = (words) => words.reduce((text, word, index) => (index === 0 ? word.text
-  : `${text}${word.xMin - words[index - 1].xMax >= WORD_GAP_MIN ? ' ' : ''}${word.text}`), '');
+  : `${text}${word.xMin - words[index - 1].xMax >= WORD_GAP_MIN && !CLOSING_MARKS.test(word.text) ? ' ' : ''}${word.text}`), '');
 
 // The whole line as the page prints it, for the labels and headings the cadence is read off and
 // for the four cover values that are a single printed line. Measured over the book, the gap-aware
@@ -314,6 +316,8 @@ const TIPS_NOTE_THRESHOLD = 16.0;
 // their whole run then reads as a single note.
 const NOTE_LEADING_RATIO = 0.93;
 
+const joinWrapped = (text, next) => `${text}${text.endsWith('-') ? '' : ' '}${next}`;
+
 const startsNewNote = (line, previous, threshold) => {
   if (previous === null) return true;
   return (line.yMin - previous.yMin) > (threshold ?? NOTE_LEADING_RATIO * lineHeightOf(previous));
@@ -337,7 +341,7 @@ const noteTree = (lines, { step, threshold }) => {
       notes.push({ text: markPowerRatings(line), children: [] });
     } else {
       const current = notes[notes.length - 1];
-      current.text = `${current.text} ${markPowerRatings(line)}`;
+      current.text = joinWrapped(current.text, markPowerRatings(line));
     }
     previous = line;
   }
@@ -439,7 +443,7 @@ const visualLines = (lines) => [...lines]
 const joinLines = (lines) => visualLines(lines)
   .flatMap((band) => band.sort((a, b) => lineXMin(a) - lineXMin(b)))
   .map(markPowerRatings)
-  .join(' ');
+  .reduce((text, next) => (text === null ? next : joinWrapped(text, next)), null) ?? '';
 
 // Everything in an entry mirrors recto/verso at 11.52 except the note frame,
 // which mirrors at 16.32 (geometry doc, section 3a), so the column origin is
