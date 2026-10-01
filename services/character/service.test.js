@@ -2197,6 +2197,7 @@ const adventGunslinger = (overrides = {}) => ({
 const conversionAdapter = (calls, character = adventGunslinger()) => makeAdapter(calls, {
   getCharacter: async () => ok(character),
   getConversionClasses: async () => ok(CONVERSION_CLASSES),
+  getAccessibleClassIds: async () => ok(new Set(CONVERSION_CLASSES.map(row => row.id))),
   getClassRulesVersion: async (classId) => ({
     data: 'v1',
     contentFormat: (CONVERSION_CLASSES.find(row => row.id === classId) || {}).content_format,
@@ -2360,6 +2361,58 @@ test('planAspirantConversion returns the plan for an eligible character', async 
   expect(data.upgrade.target.id).toBe('gunslinger-aspirant');
   expect(data.blockers).toEqual([]);
   expect(data.perkBreakdown).not.toBeNull();
+});
+
+// Advent Ardent is free to play; its Aspirant version is unlock-only. The
+// player's own access decides the target, so an admin converting someone
+// else's character reads the owner's access, not the admin's.
+const ARDENT_CLASSES = [
+  { id: 'ardent-advent', name: 'Ardent', rules_edition: 'advent', content_format: 'advent', base_class_id: null,
+    free_play_access: true, prerelease_section: 'exclusive',
+    gear: [{ name: 'Brand' }], abilities: [{ name: 'Kindle' }], advanced_abilities: [] },
+  { id: 'ardent-aspirant', name: 'Ardent', rules_edition: 'aspirant', content_format: 'aspirant', base_class_id: 'ardent-advent',
+    gear: [{ name: 'Brand', description: 'Aspirant brand.' }], abilities: [{ name: 'Kindle', description: 'Aspirant kindle.' }], advanced_abilities: [] }
+];
+
+const ardentConversionAdapter = (calls, accessibleIds) => ({
+  ...conversionAdapter(calls, adventGunslinger({
+    name: 'Ember', class: 'Ardent', class_id: 'ardent-advent',
+    gear: [{ id: 'g1', name: 'Brand', class_id: 'ardent-advent', enchantment: null, mods: [] }],
+    abilities: [{ id: 'ab-1', name: 'Kindle', class_id: 'ardent-advent', type: 'core' }],
+    ability_perks: []
+  })),
+  getConversionClasses: async () => ok(ARDENT_CLASSES),
+  getClassRulesVersion: async (classId) => ({
+    data: 'v1', contentFormat: (ARDENT_CLASSES.find(row => row.id === classId) || {}).content_format, error: null
+  }),
+  getAccessibleClassIds: async (ownerProfileId) => {
+    calls.push(['getAccessibleClassIds', ownerProfileId]);
+    return ok(new Set(accessibleIds));
+  }
+});
+
+test('convertToAspirant keeps the class and items on Advent when the player has not unlocked the Aspirant version', async () => {
+  const calls = [];
+  const service = new CharacterService(ardentConversionAdapter(calls, ['ardent-advent']));
+  expect((await service.convertToAspirant(CREATOR, 'character-1')).error).toBeNull();
+  expect(calls.filter(([name]) => name === 'saveCharacterAtomic')).toEqual([['saveCharacterAtomic', MODE_ONLY_SAVE]]);
+});
+
+test('convertToAspirant moves onto the Aspirant version the character\'s owner has unlocked, whoever converts', async () => {
+  const calls = [];
+  const service = new CharacterService(ardentConversionAdapter(calls, ['ardent-advent', 'ardent-aspirant']));
+  expect((await service.convertToAspirant(ADMIN, 'character-1')).error).toBeNull();
+  expect(calls).toContainEqual(['getAccessibleClassIds', 'profile-1']);
+  const [, save] = calls.find(([name]) => name === 'saveCharacterAtomic');
+  expect(save.character).toEqual({ creator_mode: 'aspirant', class_id: 'ardent-aspirant', class: 'Ardent' });
+});
+
+test('planAspirantConversion does not advertise an Aspirant version the player cannot access', async () => {
+  const { data } = await new CharacterService(ardentConversionAdapter([], ['ardent-advent']))
+    .planAspirantConversion(CREATOR, 'character-1');
+  expect(data.upgrade.target).toBeNull();
+  expect(data.upgrade.moved).toEqual([]);
+  expect(data.blockers).toEqual([]);
 });
 
 test('planAspirantConversion returns no plan for an ineligible character', async () => {

@@ -464,3 +464,61 @@ describe('planConversion: judged on the upgraded build', () => {
     expect(planConversion(forked()).blockers).toEqual([]);
   });
 });
+
+// A player converts onto an Aspirant version only if they can open it: a book
+// grant, a class unlock (family-expanded), free play, and so on. The caller
+// passes the ids it already resolved; a locked version counts as no version.
+describe('upgradeBuild: only onto an Aspirant version the player can access', () => {
+  const ADVENT_IDS = ['gs-v1', 'gs-v2', 'wd-v1', 'dr-v1'];
+
+  test('with every Aspirant version locked, the class and every item stay Advent', () => {
+    const upgrade = upgradeBuild({ ...upgradeInput(), accessibleClassIds: new Set(ADVENT_IDS) });
+    expect(upgrade.target).toBeNull();
+    expect([upgrade.gear, upgrade.abilities, upgrade.abilityPerks]).toEqual([null, null, null]);
+    expect(upgrade.moved).toEqual([]);
+    expect(upgrade.kept.map(item => item.name)).toEqual([
+      'Revolver', 'Revolver', 'Duster', 'Satchel', 'Bedroll',
+      'trickshot', 'Standoff', 'Shootout', 'Familiar Face', 'Wayfinding', 'Quick Study'
+    ]);
+  });
+
+  // Gunslinger's Aspirant version is unlocked, Wanderer's is not: the
+  // cross-class Familiar Face stays on Advent Wanderer.
+  test('an accessible Aspirant version is moved onto while a locked one is not', () => {
+    const upgrade = upgradeBuild({
+      ...upgradeInput({ gear: [gearRow('g2', 'Revolver', 'gs-v2')], abilityPerks: [] }),
+      accessibleClassIds: new Set([...ADVENT_IDS, 'gs-asp'])
+    });
+    expect(upgrade.target.id).toBe('gs-asp');
+    expect(upgrade.gear).toEqual([
+      { name: 'Revolver', class_id: 'gs-asp', description: 'Aspirant six-shooter.', enchantment: null, mods: [] }
+    ]);
+    expect(upgrade.abilities).toEqual([
+      { name: 'Trickshot', class_id: 'gs-asp', description: 'Aspirant trick.', type: 'core' },
+      { name: 'Standoff', class_id: 'gs-asp', description: 'Aspirant standoff.', type: 'advanced' },
+      { name: 'Shootout', class_id: 'gs-v1', description: 'Guns out.', type: 'core' },
+      { name: 'Familiar Face', class_id: 'wd-v1', description: null, type: 'core' },
+      { name: 'Wayfinding', class_id: 'dr-v1', description: null, type: 'core' },
+      { name: 'Quick Study', class_id: 'sc-asp', description: null, type: 'core' }
+    ]);
+    expect(upgrade.kept).toContainEqual({ kind: 'Ability', name: 'Familiar Face', className: 'Wanderer' });
+  });
+});
+
+describe('planConversion: a locked Aspirant version never blocks', () => {
+  test('the character converts staying on its Advent class, with nothing blocking', () => {
+    const plan = planConversion({
+      ...carolineDenton({
+        classes: UPGRADE_CLASSES,
+        character: { class_id: 'gs-v2' },
+        gear: [gearRow('g1', 'Revolver', 'gs-v1')],
+        abilities: [abilityRow('a1', 'Trickshot', 'gs-v1')],
+        abilityPerks: []
+      }),
+      accessibleClassIds: new Set(['gs-v1', 'gs-v2'])
+    });
+    expect(plan.upgrade.target).toBeNull();
+    expect([plan.upgrade.gear, plan.upgrade.abilities]).toEqual([null, null]);
+    expect(plan.blockers).toEqual([]);
+  });
+});
