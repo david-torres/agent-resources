@@ -250,10 +250,20 @@ const readPerks = async (locator) => {
 const abilityEntry = (page, name, classId) =>
   page.locator(`[data-ability-entry][data-ability-name="${name}"][data-ability-class="${classId}"]`);
 
+const browseAbility = async (page, name) => {
+  const browser = page.locator('#abilityCatalogue [data-catalogue-browser]');
+  if (!await browser.evaluate((el) => el.open)) await browser.locator('summary').click();
+  await browser.locator('[data-catalogue-search]').fill(name);
+};
+
 test('an aspirant character buys an own-class Advanced Ability for 2 Perks, and the character page shows the balance fall', async ({ page }) => {
   await page.goto(`/characters/${aspirant1.id}/edit`);
   await page.waitForLoadState('networkidle');
 
+  await expect(page.locator('#abilityCatalogue [data-catalogue-owned]')).toBeVisible();
+  await page.locator('#abilityCatalogue summary').click();
+  await page.locator('#abilityCatalogue [data-catalogue-class]').selectOption(ownClass.name);
+  await expect(page.locator('#abilityCatalogue [data-catalogue-groups] [data-catalogue-group]:visible')).toHaveCount(1);
   const entry = abilityEntry(page, OWN_ADVANCED, ownClass.id);
   await expect(entry).toBeVisible();
   const price = await readPerks(entry.locator('.tag.is-warning'));
@@ -289,6 +299,7 @@ test('an aspirant character buys a Cross-Class Core ability for 3 Perks, the ent
   await page.goto(`/characters/${aspirant2.id}/edit`);
   await page.waitForLoadState('networkidle');
 
+  await browseAbility(page, CROSS_CORE);
   const entry = abilityEntry(page, CROSS_CORE, crossClass.id);
   await expect(entry).toBeVisible();
 
@@ -443,12 +454,14 @@ test('an aspiring character selects three picks from three donor classes, buys n
   await expect(page.locator('[data-perks-spent]')).toHaveText('0');
   await expect(page.locator('[data-perks-earned]')).toHaveText('3');
 
+  await browseAbility(page, donorCoreName('alpha'));
   const coreEntry = abilityEntry(page, donorCoreName('alpha'), donors.alpha.id);
   const corePrice = await readPerks(coreEntry.locator('.tag.is-warning'));
   expect(corePrice, "a pool Core pick must cost 1 Perk").toBe(1);
   await coreEntry.locator('[data-ability-buy]').click();
   await expect(page.locator('[data-perks-spent]')).toHaveText('1');
 
+  await browseAbility(page, donorAdvancedName('gamma'));
   const advancedEntry = abilityEntry(page, donorAdvancedName('gamma'), donors.gamma.id);
   const advancedPrice = await readPerks(advancedEntry.locator('.tag.is-warning'));
   expect(advancedPrice, 'the pool Advanced pick must cost 2 Perks').toBe(2);
@@ -457,6 +470,7 @@ test('an aspiring character selects three picks from three donor classes, buys n
 
   // The third pick sits unbought -- assert its Buy button is still offered,
   // proving "some" is a real state distinct from "none" and "all".
+  await browseAbility(page, donorCoreName('beta'));
   const untouchedEntry = abilityEntry(page, donorCoreName('beta'), donors.beta.id);
   await expect(untouchedEntry.locator('[data-ability-buy]'), 'the third pick must remain unbought, still offered for sale').toBeVisible();
 
@@ -524,17 +538,19 @@ test("the catalogue's search finds an ability in a class that is not the charact
   await page.waitForLoadState('networkidle');
 
   const groupHeading = page.locator(`[data-catalogue-group-heading]:text-is("${searchDonor.name}")`);
-  await expect(groupHeading, 'before searching, the donor class group must already be present in the whole-roster catalogue').toBeVisible();
+  await expect(groupHeading).toHaveCount(1);
+  await expect(groupHeading, 'the catalogue starts collapsed').toBeHidden();
+  await page.locator('#abilityCatalogue summary').click();
 
   const searchInput = page.locator('#abilityCatalogue [data-catalogue-search]');
   await searchInput.fill('Findable Cross Core');
 
-  await expect(page.locator('[data-catalogue-group]'), 'search must narrow the catalogue to exactly the one matching group').toHaveCount(1);
-  await expect(page.locator('[data-catalogue-group-heading]')).toHaveText(searchDonor.name);
+  await expect(page.locator('#abilityCatalogue [data-catalogue-groups] [data-catalogue-group]'), 'search must narrow the catalogue to exactly the one matching group').toHaveCount(1);
+  await expect(page.locator('#abilityCatalogue [data-catalogue-groups] [data-catalogue-group-heading]')).toHaveText(searchDonor.name);
   await expect(abilityEntry(page, SEARCH_TARGET_ABILITY, searchDonor.id)).toBeVisible();
   await expect(page.getByText(`${prefix} Search Donor Filler`), 'the non-matching entry in the SAME group must be filtered out too').toHaveCount(0);
 
-  // Own class's group must be gone entirely -- the search reaches every
-  // group, not just the one being demonstrated.
-  await expect(page.locator(`[data-catalogue-group-heading]:text-is("${ownClass.name}")`)).toHaveCount(0);
+  // Owned abilities remain visible while search filters the browse results.
+  await expect(page.locator(`#abilityCatalogue [data-catalogue-groups] [data-catalogue-group-heading]:text-is("${ownClass.name}")`)).toHaveCount(0);
+  await expect(page.locator('#abilityCatalogue [data-catalogue-owned]')).toBeVisible();
 });

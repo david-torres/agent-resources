@@ -57,28 +57,83 @@
     var renderEntry = options.renderEntry;
     var term = '';
 
-    root.innerHTML = ''
-      + '<input type="search" class="input mb-3" placeholder="Search..." data-catalogue-search>'
-      + '<div data-catalogue-groups></div>';
+    var compact = typeof options.isOwned === 'function';
+    var selectedClass = '';
+    root.innerHTML = (compact
+      ? '<div data-catalogue-owned></div>'
+        + '<details class="box mt-3" data-catalogue-browser><summary class="has-text-link has-text-weight-semibold">'
+        + esc(options.addLabel || 'Add items') + '</summary><div class="mt-4">'
+      : '')
+      + '<label class="field is-block"><span class="label">Search'
+      + (compact ? ' all classes' : '') + '</span>'
+      + '<input type="search" class="input mb-3" placeholder="Search by name or class…" data-catalogue-search></label>'
+      + (compact ? '<label class="field is-block"><span class="label">Browse class</span>'
+        + '<span class="select is-fullwidth"><select data-catalogue-class></select></span></label>'
+        + '<p class="help mb-3" data-catalogue-count aria-live="polite"></p>' : '')
+      + '<div data-catalogue-groups></div>'
+      + (compact ? '</div></details>' : '');
     var input = root.querySelector('[data-catalogue-search]');
     var groupsEl = root.querySelector('[data-catalogue-groups]');
+    var ownedEl = root.querySelector('[data-catalogue-owned]');
+    var classSelect = root.querySelector('[data-catalogue-class]');
+    var countEl = root.querySelector('[data-catalogue-count]');
 
     var matchesTerm = function (entry) {
       if (!term) return true;
-      return String(searchOf(entry) || '').toLowerCase().indexOf(term) !== -1;
+      var text = String(searchOf(entry) || '');
+      if (compact) text += ' ' + (groupBy(entry) || '');
+      return text.toLowerCase().indexOf(term) !== -1;
     };
 
-    var render = function () {
-      var groups = groupEntries(readEntries(), groupBy);
-      groupsEl.innerHTML = groups.map(function (group) {
-        var visible = group.entries.filter(matchesTerm);
+    var renderGroups = function (entries, browse) {
+      return groupEntries(entries, groupBy).map(function (group) {
+        var visible = compact && !browse ? group.entries : group.entries.filter(matchesTerm);
         if (!visible.length) return '';
         var heading = group.label
           ? '<h4 class="title is-6" data-catalogue-group-heading>' + esc(group.label) + '</h4>'
           : '';
-        return '<div class="block" data-catalogue-group>' + heading + renderEntry(visible) + '</div>';
+        var hidden = browse && !term && selectedClass !== String(group.label || '');
+        return '<div class="block" data-catalogue-group' + (hidden ? ' hidden' : '') + '>'
+          + heading + renderEntry(visible) + '</div>';
       }).join('');
     };
+
+    var render = function () {
+      var entries = readEntries();
+      var browsing = compact ? entries.filter(function (entry) { return !options.isOwned(entry); }) : entries;
+      if (compact) {
+        var classes = groupEntries(browsing, groupBy);
+        if (!classes.some(function (group) { return String(group.label || '') === selectedClass; })) {
+          selectedClass = classes.length ? String(classes[0].label || '') : '';
+        }
+        classSelect.innerHTML = classes.map(function (group) {
+          var label = String(group.label || '');
+          return '<option value="' + esc(label) + '"' + (label === selectedClass ? ' selected' : '') + '>'
+            + esc(label || 'Other') + '</option>';
+        }).join('');
+        classSelect.disabled = !!term || !classes.length;
+        var owned = entries.filter(options.isOwned);
+        ownedEl.innerHTML = renderGroups(owned, false)
+          || '<p class="has-text-grey">' + esc(options.emptyLabel || 'No items owned yet.') + '</p>';
+        var count = browsing.filter(function (entry) {
+          return matchesTerm(entry) && (term || String(groupBy(entry) || '') === selectedClass);
+        }).length;
+        countEl.textContent = count ? count + (count === 1 ? ' choice' : ' choices')
+          : 'No matching choices. Try another search or class.';
+      }
+      groupsEl.innerHTML = renderGroups(browsing, compact);
+    };
+
+    if (compact) {
+      classSelect.addEventListener('change', function () {
+        selectedClass = classSelect.value;
+        render();
+        if (options.onViewChange) options.onViewChange();
+      });
+      root.querySelector('[data-catalogue-browser]').addEventListener('toggle', function () {
+        if (options.onViewChange) options.onViewChange();
+      });
+    }
 
     var setSearch = function (value) {
       var raw = value == null ? '' : String(value);

@@ -383,6 +383,10 @@
       if (gridControl) { gridControl.render(); return; }
       gridControl = window.CatalogueControls.mount(grid, {
         entries: function () { return yourSignatures().concat(entries); },
+        isOwned: function (entry) { return !!entry.yours; },
+        addLabel: 'Add signature gear',
+        emptyLabel: 'No signature gear yet. Add gear to build your loadout.',
+        onViewChange: function () { open = null; renderDrawer(); },
         groupBy: function (entry) { return entry.yours ? 'Your Signatures' : entry.class_name; },
         searchOf: function (entry) { return entry.name; },
         renderEntry: renderColumnsFor
@@ -442,7 +446,10 @@
       target = target || fallback;
       if (!target) return;
       var group = target.closest('[data-catalogue-group]');
-      if (group) group.parentNode.insertBefore(drawer, group.nextSibling);
+      if (group) {
+        group.parentNode.insertBefore(drawer, group.nextSibling);
+        drawer.hidden = group.hidden;
+      }
     };
 
     var renderDrawer = function () {

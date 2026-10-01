@@ -277,6 +277,9 @@ test('a player can acquire a Signature the character never chose, charged at the
 
   await expect(page.locator('[data-merx-spent]'), 'the edit form must carry forward what the wizard already spent').toHaveText('9');
 
+  await expect(page.locator('#purchaseGrid [data-catalogue-owned]')).toBeVisible();
+  await page.locator('#purchaseGrid summary').click();
+  await page.locator('#purchaseGrid [data-catalogue-search]').fill(CATALOGUE_ITEM_NAME);
   const purchaseDrawer = page.locator('#purchaseDrawer');
   await page.locator(`#purchaseGrid [data-signature-name="${CATALOGUE_ITEM_NAME}"]`).click();
   await expect(purchaseDrawer).toBeVisible();

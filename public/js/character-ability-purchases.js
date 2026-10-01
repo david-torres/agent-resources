@@ -258,6 +258,9 @@
       if (catalogueControl) { catalogueControl.render(); return; }
       catalogueControl = window.CatalogueControls.mount(catalogue, {
         entries: listedEntries,
+        isOwned: function (entry) { return !!findPurchase(entry.name, entry.class_id); },
+        addLabel: 'Add abilities',
+        emptyLabel: 'No abilities yet. Add abilities to build your roster.',
         groupBy: function (entry) { return entry.class_name; },
         searchOf: function (entry) { return entry.name; },
         renderEntry: renderGroupBody

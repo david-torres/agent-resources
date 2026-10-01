@@ -173,15 +173,13 @@ describe('grouping and search, through the real grid', () => {
     const searchInput = grid.querySelector('[data-catalogue-search]');
     expect(searchInput).not.toBeNull();
 
-    // 'o' is in Cowboy Hat (own) and Lasso (other) but not Duster (own) or
-    // Spurs (other) -- a term that survives in both groups at once, proving
-    // search reaches every group rather than only the first.
+    // Search matches item names and class names, including every Other Class item.
     const Event = document.defaultView.Event;
     searchInput.value = 'o';
     searchInput.dispatchEvent(new Event('input', { bubbles: true }));
     const visible = [...grid.querySelectorAll('[data-signature-name]')]
       .map((el) => el.getAttribute('data-signature-name'));
-    expect(visible.sort()).toEqual(['Cowboy Hat', 'Lasso']);
+    expect(visible.sort()).toEqual(['Cowboy Hat', 'Lasso', 'Spurs']);
 
     // A term only one class's entries match hides the other group entirely.
     searchInput.value = 'Cowboy';
@@ -685,12 +683,12 @@ describe('Your Signatures', () => {
     expect(followerOf(classCell('Cowboy Hat').closest('[data-catalogue-group]'))).toBe('purchaseDrawer');
   });
 
-  test('search filters Your Signatures like any other group', () => {
+  test('search keeps Your Signatures visible while browsing', () => {
     mountOwning([bare('Lasso', OTHER_CLASS_ID), bare('Cowboy Hat', OWN_CLASS_ID)]);
     search('Cow');
-    expect(namesInYours()).toEqual(['Cowboy Hat']);
+    expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
     search('Spurs');
-    expect(yoursGroup()).toBeNull();
+    expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
     search('');
     expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
   });

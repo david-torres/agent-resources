@@ -1852,3 +1852,23 @@ a.dropdown-item:hover {
 @media (max-width: 768px) {
   .library-section { grid-template-columns: 1fr; padding: 1.25rem; gap: 1.25rem; }
 }
+
+/* Character purchases start with the owned roster; browsing is optional. */
+[data-catalogue-browser] > summary {
+  cursor: pointer;
+}
+[data-catalogue-browser] > summary:focus-visible {
+  outline: 2px solid var(--bulma-link, #485fc7);
+  outline-offset: 4px;
+}
+[data-catalogue-group][hidden] {
+  display: none;
+}
+#purchaseGrid [data-signature-name] {
+  height: auto;
+  min-height: 2.5em;
+  white-space: normal;
+  flex-wrap: wrap;
+  gap: 0.4em;
+  text-align: left;
+}

@@ -166,3 +166,55 @@ describe('CatalogueControls', () => {
     expect(event.defaultPrevented).toBe(false);
   });
 });
+
+describe('compact purchase browser', () => {
+  const setup = () => {
+    const entries = entriesFixture();
+    entries[0].owned = true;
+    return { entries, ...mountControls({
+      ...baseOptions(entries), isOwned: (entry) => !!entry.owned,
+      addLabel: 'Add gear', emptyLabel: 'No gear yet.'
+    }) };
+  };
+  const shownGroups = (root) => [...root.querySelectorAll('[data-catalogue-groups] [data-catalogue-group]')]
+    .filter((el) => !el.hidden).map((el) => el.textContent);
+
+  test('starts with owned items visible and the catalogue collapsed', () => {
+    const { root } = setup();
+    expect(root.querySelector('[data-catalogue-owned]').textContent).toContain('Cowboy Hat');
+    expect(root.querySelector('[data-catalogue-owned]').textContent).not.toContain('Lasso');
+    expect(root.querySelector('details').open).toBe(false);
+    expect(root.querySelector('summary').textContent).toBe('Add gear');
+  });
+
+  test('browses one class at a time and searches across classes without hiding owned gear', () => {
+    const { root, control } = setup();
+    const select = root.querySelector('select');
+    expect(shownGroups(root)).toHaveLength(1);
+    select.value = 'Wrangler';
+    select.dispatchEvent(new window.Event('change'));
+    expect(shownGroups(root)[0]).toContain('Lasso');
+    control.setSearch('rifle');
+    expect(shownGroups(root)[0]).toContain('Sharps Rifle');
+    expect(select.disabled).toBe(true);
+    expect(root.querySelector('[data-catalogue-owned]').textContent).toContain('Cowboy Hat');
+    control.setSearch('');
+    expect(select.disabled).toBe(false);
+    expect(shownGroups(root)[0]).toContain('Lasso');
+  });
+
+  test('purchase updates retain the open browser and show an empty search state', () => {
+    const { root, control, entries } = setup();
+    root.querySelector('details').open = true;
+    entries[2].owned = true;
+    control.render();
+    expect(root.querySelector('details').open).toBe(true);
+    expect(root.querySelector('[data-catalogue-owned]').textContent).toContain('Lasso');
+    control.setSearch('nonexistent');
+    expect(root.querySelector('[data-catalogue-count]').textContent).toContain('No matching choices');
+    expect(shownGroups(root)).toHaveLength(0);
+    entries.forEach((entry) => { entry.owned = false; });
+    control.render();
+    expect(root.querySelector('[data-catalogue-owned]').textContent).toBe('No gear yet.');
+  });
+});
