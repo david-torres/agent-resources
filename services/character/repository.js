@@ -8,6 +8,7 @@ const {
   getAvailableHostedMissionsForPicker
 } = require('../../models/offscreen-mission');
 const { getProfileConduitCredits } = require('../../models/profile');
+const { getUnlockedClassIdsForUser } = require('../../models/class');
 const { createMission, addCharacterToMission } = require('../../models/mission');
 const { SYSTEM_ACTOR } = require('../../util/actor');
 const { escapeLikePattern } = require('../../util/validate');
@@ -223,6 +224,25 @@ const getConversionClasses = async () => {
   return { data: data || [], error: null };
 };
 
+// Every class the profile's player can open (unlocks, books, free play),
+// family-expanded. Keyed by profile so an admin acting on another player's
+// character reads the owner's access.
+const getAccessibleClassIds = async (profileId) => {
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select('user_id')
+    .eq('id', profileId)
+    .maybeSingle();
+  if (error) {
+    console.error(error);
+    return { data: null, error };
+  }
+  if (!profile || !profile.user_id) return { data: new Set(), error: null };
+  const { data, error: unlockError } = await getUnlockedClassIdsForUser(profile.user_id);
+  if (unlockError) return { data: null, error: unlockError };
+  return { data: data instanceof Set ? data : new Set(), error: null };
+};
+
 const searchCharactersForAgent = async (query, actor = {}) => {
   const q = typeof query === 'string' ? query.trim() : '';
   let builder = supabaseAdmin
@@ -398,6 +418,7 @@ module.exports = {
   getClassRulesVersion,
   getClassFamilyRows,
   getConversionClasses,
+  getAccessibleClassIds,
 
   // Perk-build reads (level-up flow) — CharacterService#buildPerkRows uses
   // these to filter to allowed abilities and compute per-ability position

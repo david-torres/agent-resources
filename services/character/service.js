@@ -46,6 +46,7 @@ const REQUIRED_ADAPTER_METHODS = [
   'getClassRulesVersion',
   'getClassFamilyRows',
   'getConversionClasses',
+  'getAccessibleClassIds',
   'fetchAllowedAbilityIds',
   'fetchExistingPerks',
   'levelUpAtomic',
@@ -144,16 +145,18 @@ const loadAspirantConversion = async (adapter, actor, id) => {
   if (economy !== 'advent') {
     return { ineligible: `${character.name} is not on the Advent rules, so there is nothing to convert.` };
   }
-  const [classes, missions, offscreenMissions] = await Promise.all([
+  const [classes, accessibleClassIds, missions, offscreenMissions] = await Promise.all([
     adapter.getConversionClasses(),
+    adapter.getAccessibleClassIds(character.creator_id),
     adapter.getRealMissions(id),
     adapter.listOffscreenMissions(id)
   ]);
-  const readError = classes.error || missions.error || offscreenMissions.error;
+  const readError = classes.error || accessibleClassIds.error || missions.error || offscreenMissions.error;
   if (readError) return { error: readError };
   const plan = planConversion({
     character,
     classes: classes.data,
+    accessibleClassIds: accessibleClassIds.data,
     gear: character.gear,
     abilities: character.abilities,
     abilityPerks: character.ability_perks,

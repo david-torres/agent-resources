@@ -12,7 +12,7 @@ const describeItems = (items) => items
 
 const upgradeConvertedCharacters = async ({ apply = false, characterIds = null, log = console.log } = {}) => {
   const [characters, classesResult] = await Promise.all([
-    fetchAll('characters', 'id, name, class_id, profile:creator_id(name)', (q) => {
+    fetchAll('characters', 'id, name, class_id, creator_id, profile:creator_id(name)', (q) => {
       const converted = q.eq('creator_mode', 'aspirant');
       return characterIds ? converted.in('id', characterIds) : converted;
     }),
@@ -29,6 +29,16 @@ const upgradeConvertedCharacters = async ({ apply = false, characterIds = null, 
     return own && own.content_format === 'advent' && findAspirantFork(classes, own.id);
   });
 
+  const accessByOwner = new Map();
+  const accessibleClassIdsOf = async (profileId) => {
+    if (!accessByOwner.has(profileId)) {
+      const { data, error } = await characterRepository.getAccessibleClassIds(profileId);
+      if (error) throw new Error(`Failed to read class access for ${profileId}: ${error.message}`);
+      accessByOwner.set(profileId, data);
+    }
+    return accessByOwner.get(profileId);
+  };
+
   const report = { candidates: [], applied: [], failed: [] };
   for (const summary of selected) {
     try {
@@ -39,8 +49,17 @@ const upgradeConvertedCharacters = async ({ apply = false, characterIds = null, 
         continue;
       }
       const upgrade = upgradeBuild({
-        character, classes, gear: character.gear, abilities: character.abilities, abilityPerks: character.ability_perks
+        character,
+        classes,
+        gear: character.gear,
+        abilities: character.abilities,
+        abilityPerks: character.ability_perks,
+        accessibleClassIds: await accessibleClassIdsOf(summary.creator_id)
       });
+      if (!upgrade.target) {
+        log(`${character.id} ${character.name}: skipped. Its owner has not unlocked the Aspirant version.`);
+        continue;
+      }
       const duplicates = duplicateAbilityBlockers({ character, abilities: upgrade.abilities ?? character.abilities });
       if (duplicates.length > 0) {
         const message = duplicates.map(blocker => blocker.detail).join(' ');

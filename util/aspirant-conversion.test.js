@@ -34,6 +34,7 @@ const carolineDenton = (overrides = {}) => ({
     ...overrides.character
   },
   classes: 'classes' in overrides ? overrides.classes : CAROLINE_CLASSES,
+  accessibleClassIds: new Set(('classes' in overrides ? overrides.classes : CAROLINE_CLASSES).map(row => row.id)),
   gear: overrides.gear || [
     signature('Revolver', 'gunslinger-v2'),
     signature('Revolver', 'gunslinger-v2'),
@@ -209,6 +210,7 @@ const abilityRow = (id, name, classId, extra = {}) => ({ id, name, class_id: cla
 const upgradeInput = (overrides = {}) => ({
   character: { id: 'char-1', creator_id: 'profile-1', name: 'Caroline', class: 'Gunslinger', class_id: 'gs-v2', traits: TRAITS, ...overrides.character },
   classes: overrides.classes || UPGRADE_CLASSES,
+  accessibleClassIds: new Set((overrides.classes || UPGRADE_CLASSES).map(row => row.id)),
   gear: overrides.gear || [
     gearRow('g1', 'Revolver', 'gs-v1', { enchantment: ENCHANTMENT, mods: MODS }),
     gearRow('g2', 'Revolver', 'gs-v2'),

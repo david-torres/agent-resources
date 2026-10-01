@@ -79,6 +79,7 @@ beforeAll(async () => {
     name: `Up Loner ${suffix}`, rules_edition: 'advent', content_format: 'advent', rules_version: 'v2',
     gear: [{ name: 'Bedroll' }], abilities: [{ name: 'Campfire' }]
   });
+  await db.query('insert into class_unlocks (user_id, class_id) values ($1, $2)', [authUserId, classes.fork.id]);
 
   // Converted before conversion upgraded the class. Perk positions are
   // numbered per Ability, so the kept Campfire and Shootout and the moving
@@ -115,6 +116,7 @@ beforeAll(async () => {
 afterAll(async () => {
   if (profile?.id) await db.query('delete from characters where creator_id = $1', [profile.id]);
   if (profile?.id) await db.query('delete from profiles where id = $1', [profile.id]);
+  if (authUserId) await db.query('delete from class_unlocks where user_id = $1', [authUserId]);
   for (const key of ['fork', 'legacy', 'loner']) {
     if (classes[key]?.id) await db.query('delete from classes where id = $1', [classes[key].id]);
   }

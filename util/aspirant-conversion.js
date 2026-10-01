@@ -31,15 +31,19 @@ const findInCatalogue = (cls, lists, name) => {
 };
 
 // Each row moves to the Aspirant target of its OWN class, so a cross-class
-// item follows its donor. A row with no Aspirant version, or already on one,
-// stays exactly as stored. The lists are null when no row moves, so the save
-// leaves every row and its id alone.
-const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks }) => {
+// item follows its donor. A row with no Aspirant version, one the owner cannot
+// access, or already on one, stays exactly as stored. The lists are null when
+// no row moves, so the save leaves every row and its id alone.
+const upgradeBuild = ({ character, classes, gear, abilities, abilityPerks, accessibleClassIds }) => {
   const catalogue = listOf(classes);
   const classesById = new Map(catalogue.map(row => [row.id, row]));
+  const accessible = accessibleClassIds instanceof Set ? accessibleClassIds : new Set();
   const targets = new Map();
   const targetOf = (classId) => {
-    if (!targets.has(classId)) targets.set(classId, aspirantTargetOf(catalogue, classId));
+    if (!targets.has(classId)) {
+      const target = aspirantTargetOf(catalogue, classId);
+      targets.set(classId, target && accessible.has(target.id) ? target : null);
+    }
     return targets.get(classId);
   };
   const moved = [];
@@ -122,9 +126,9 @@ const duplicateAbilityBlockers = ({ character, abilities }) => duplicateNames(li
 // Judged under the aspirant economy on the upgraded build, with own class
 // taken from the class the character lands on.
 const planConversion = ({
-  character, classes, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions
+  character, classes, gear, abilities, abilityPerks, traits, realMissions, offscreenMissions, accessibleClassIds
 }) => {
-  const upgrade = upgradeBuild({ character, classes, gear, abilities, abilityPerks });
+  const upgrade = upgradeBuild({ character, classes, gear, abilities, abilityPerks, accessibleClassIds });
   const characterClassId = upgrade.target ? upgrade.target.id : (character.class_id ?? null);
   const classFamilyOf = familyResolver(classes, characterClassId);
 
