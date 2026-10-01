@@ -24,10 +24,13 @@ const realCharacter = require('../models/character');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
+const realBookAccess = require('../services/access/service');
 
 // Mutable test state.
 let canEditResult = false;
 const calls = { add: 0, remove: 0 };
+let aspirantBookState = 'owned';
+const renders = [];
 
 mock.module('../models/auth', () => ({
   // Consumed by the real isAuthenticated middleware:
@@ -41,7 +44,11 @@ mock.module('../models/mission', () => ({
   canEditMission: async () => canEditResult,
   addCharacterToMission: async () => { calls.add++; return { error: null }; },
   removeCharacterFromMission: async () => { calls.remove++; return { error: null }; },
+  getMission: async (id) => ({ data: { id, name: 'Silent Harbor' }, error: null }),
+  getMissionEditors: async () => ({ data: [], error: null }),
+  isCreator: async () => true,
 }));
+mock.module('../services/access/service', () => ({ ...realBookAccess, getEditionAccess: async () => ({ aspirant: { state: aspirantBookState } }) }));
 mock.module('../models/character', () => ({
   // Force the post-mutation render path to bail via sendError (JSON), so the
   // authorized-case assertions don't need a Handlebars view engine.
@@ -55,6 +62,7 @@ mock.module('../util/nav-loader', () => ({
 }));
 
 const express = require('express');
+const path = require('path');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
 let server;
 let baseUrl;
@@ -63,6 +71,14 @@ beforeAll(async () => {
   delete require.cache[require.resolve('./missions')];
   const app = express();
   app.use(express.json());
+  // Records the view and its context instead of rendering, so the form tests
+  // can read what the route hands the template.
+  app.engine('handlebars', (file, options, done) => {
+    renders.push({ view: path.basename(file, '.handlebars'), options });
+    done(null, 'rendered');
+  });
+  app.set('view engine', 'handlebars');
+  app.set('views', path.join(__dirname, '..', 'views'));
   app.use('/missions', require('./missions'));
   ({ server, baseUrl } = await startHttpServer(app));
 });
@@ -76,6 +92,7 @@ afterAll(async () => {
   mock.module('../util/system-message', () => realSystemMessage);
   mock.module('../models/lfg', () => realLfg);
   mock.module('../util/nav-loader', () => realNavLoader);
+  mock.module('../services/access/service', () => realBookAccess);
   delete require.cache[require.resolve('./missions')];
 });
 
@@ -114,3 +131,27 @@ test('DELETE remove-character proceeds to the mutation when caller CAN edit the 
   expect(calls.remove).toBe(1);
   expect(res.status).not.toBe(403);
 });
+
+const missionFormContext = async (url, state) => {
+  aspirantBookState = state;
+  canEditResult = true;
+  renders.length = 0;
+  try {
+    const res = await fetch(`${baseUrl}${url}`, { headers: { Accept: 'text/html', Authorization: 'Bearer valid-jwt' } });
+    expect(res.status).toBe(200);
+  } finally {
+    aspirantBookState = 'owned';
+  }
+  const render = renders.find(r => r.view === 'mission-form');
+  expect(render).toBeDefined();
+  return render.options;
+};
+
+for (const [label, url] of [['new', '/missions/new'], ['edit', `/missions/${MISSION}/edit`]]) {
+  for (const [state, expected] of [['owned', true], ['trial', true], ['none', false], ['expired', false]]) {
+    test(`the ${label} mission form is told canUseAspirant=${expected} when the Aspirant book is ${state}`, async () => {
+      const context = await missionFormContext(url, state);
+      expect(context.canUseAspirant).toBe(expected);
+    });
+  }
+}

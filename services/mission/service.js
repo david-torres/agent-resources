@@ -2,6 +2,8 @@ const { normalizeMissionInput } = require('./input');
 const { AuthorizationError } = require('../../util/errors');
 const { isSystem, isAdmin } = require('../../util/actor');
 const { canEditMission: policyCanEdit, isMissionCreator: policyIsCreator } = require('./policy');
+const { hasAspirantAccess, ASPIRANT_ACCESS_ERROR } = require('../access/service');
+const { hasHighStakes } = require('../../util/mission-stakes');
 
 const REQUIRED_REPOSITORY_METHODS = [
   'getHost', 'createMissionRow', 'updateMissionRow', 'deleteMissionRow',
@@ -9,7 +11,7 @@ const REQUIRED_REPOSITORY_METHODS = [
   'deleteMissionCharacter', 'mergeMissions', 'getMission', 'recalcBadges',
   'updateUnregisteredNames', 'upsertEditor', 'deleteEditor',
   'fetchMissionPermissionRow', 'fetchEditorRow', 'fetchCreatorId',
-  'getMissionCharacterIds', 'recalcCharacterProgress'
+  'getMissionCharacterIds', 'recalcCharacterProgress', 'getEditionAccess'
 ];
 
 const loadEditorRow = async (repo, missionId, actor) => {
@@ -58,6 +60,8 @@ class MissionService {
   // system actor, which is allowed to set an explicit creator (e.g. backfill
   // missions created on a user's behalf).
   async createMission(actor, input) {
+    const accessError = await this.highStakesAccessError(actor, input);
+    if (accessError) return { data: null, error: accessError };
     const creatorId = isSystem(actor) ? (input?.creator_id ?? null) : (actor?.profileId ?? null);
     const data = normalizeMissionInput(input, { creatorId });
     const result = await this.repo.createMissionRow(data);
@@ -67,6 +71,8 @@ class MissionService {
 
   async updateMission(actor, id, input) {
     await requireEditable(this.repo, actor, id);
+    const accessError = await this.highStakesAccessError(actor, input);
+    if (accessError) return { data: null, error: accessError };
     const existing = await this.repo.getHost(id);
     const data = normalizeMissionInput(input);
     const result = await this.repo.updateMissionRow(id, data);
@@ -75,6 +81,11 @@ class MissionService {
       await this.repo.recalcBadges([existing.data?.host_id, data.host_id]);
     }
     return result;
+  }
+
+  async highStakesAccessError(actor, input) {
+    if (isSystem(actor) || !hasHighStakes(input)) return null;
+    return hasAspirantAccess(await this.repo.getEditionAccess(actor)) ? null : ASPIRANT_ACCESS_ERROR;
   }
 
   async deleteMission(actor, id) {

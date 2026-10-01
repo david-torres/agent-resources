@@ -9,6 +9,7 @@ const { v1LevelingSequence, v2LevelingSequence, personalityMap } = require('./en
 // Re-exported rather than reimplemented so the rule has one home.
 const { gearCategory } = require('./class-gear');
 const { EDITION_LABELS, EDITION_PURCHASE_URLS } = require('./starter-content');
+const { hasHighStakes } = require('./mission-stakes');
 
 const edition_label = (edition) => EDITION_LABELS[edition] || '';
 const edition_purchase_url = (edition) => EDITION_PURCHASE_URLS[edition] || '';
@@ -304,5 +305,6 @@ module.exports = {
   json: jsonH,
   edition_label,
   edition_purchase_url,
-  anyOutdated: anyOutdatedH
+  anyOutdated: anyOutdatedH,
+  isHighStakes: hasHighStakes
 }

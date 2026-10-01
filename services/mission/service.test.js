@@ -3,6 +3,7 @@ const { normalizeMissionInput } = require('./input');
 const { MissionService } = require('./service');
 const { AuthorizationError } = require('../../util/errors');
 const { SYSTEM_ACTOR } = require('../../util/actor');
+const { ASPIRANT_ACCESS_ERROR } = require('../access/service');
 
 const MISSION_ID = 'mission-1';
 
@@ -12,10 +13,11 @@ const EDITOR = { profileId: 'editor-1', role: 'user' };
 const STRANGER = { profileId: 'stranger', role: 'user' };
 const ADMIN = { profileId: 'admin-1', role: 'admin' };
 
-const makeRepo = ({ mission = { creator_id: 'creator-1', host_id: 'host-1' }, editorProfileIds = ['editor-1'] } = {}) => {
+const makeRepo = ({ mission = { creator_id: 'creator-1', host_id: 'host-1' }, editorProfileIds = ['editor-1'], access = { aspirant: { state: 'owned' } } } = {}) => {
   const calls = [];
   return {
     calls,
+    getEditionAccess: async () => access,
     getHost: async () => ({ data: { host_id: 'old-host' }, error: null }),
     createMissionRow: async data => { calls.push(['create', data]); return { data: [data], error: null }; },
     updateMissionRow: async (id, data) => { calls.push(['update', id, data]); return { data: [data], error: null }; },
@@ -322,4 +324,77 @@ test('saving changed stakes persists both axes and refreshes character progress'
   expect(repo.calls).toContainEqual(['progress', 'char-1']);
   await expect(service.updateMission(CREATOR, MISSION_ID, { danger: 'extreme' })).rejects.toMatchObject({ status: 400 });
   expect(repo.calls.filter(call => call[0] === 'update')).toHaveLength(1);
+});
+
+test('constructor requires getEditionAccess so high stakes can be gated on the Aspirant book', () => {
+  const { getEditionAccess, ...withoutAccess } = makeRepo();
+  expect(() => new MissionService(withoutAccess)).toThrow(/getEditionAccess/);
+});
+
+const HIGH_STAKES_INPUTS = [
+  { difficulty: 'critical' },
+  { difficulty: 'crisis' },
+  { danger: 'critical' },
+  { danger: 'crisis' }
+];
+
+for (const access of [{ aspirant: { state: 'none' } }, { aspirant: { state: 'expired' } }, null]) {
+  const label = access ? access.aspirant.state : 'unknown';
+  for (const stakes of HIGH_STAKES_INPUTS) {
+    test(`Aspirant book ${label}: creating a mission with ${JSON.stringify(stakes)} is refused before writing`, async () => {
+      const repo = makeRepo({ access });
+      const service = new MissionService(repo);
+      const result = await service.createMission(CREATOR, { name: 'High stakes', ...stakes });
+      expect(result).toEqual({ data: null, error: ASPIRANT_ACCESS_ERROR });
+      expect(repo.calls.some(c => c[0] === 'create')).toBe(false);
+    });
+
+    test(`Aspirant book ${label}: updating a mission to ${JSON.stringify(stakes)} is refused before writing`, async () => {
+      const repo = makeRepo({ access });
+      const service = new MissionService(repo);
+      const result = await service.updateMission(CREATOR, MISSION_ID, stakes);
+      expect(result).toEqual({ data: null, error: ASPIRANT_ACCESS_ERROR });
+      expect(repo.calls.some(c => c[0] === 'update')).toBe(false);
+    });
+  }
+}
+
+test('without Aspirant book access, a stranger updating to high stakes still gets the editability error first', async () => {
+  const repo = makeRepo({ access: { aspirant: { state: 'none' } } });
+  const service = new MissionService(repo);
+  await expect(service.updateMission(STRANGER, MISSION_ID, { danger: 'crisis' })).rejects.toThrow(AuthorizationError);
+});
+
+for (const state of ['owned', 'trial']) {
+  test(`Aspirant book ${state}: high-stakes creates and updates go through`, async () => {
+    const repo = makeRepo({ access: { aspirant: { state } } });
+    const service = new MissionService(repo);
+    await service.createMission(CREATOR, { name: 'High stakes', difficulty: 'crisis', danger: 'critical' });
+    await service.updateMission(CREATOR, MISSION_ID, { difficulty: 'critical', danger: 'crisis' });
+    expect(repo.calls).toContainEqual(['create', { name: 'High stakes', difficulty: 'crisis', danger: 'critical', creator_id: 'creator-1' }]);
+    expect(repo.calls).toContainEqual(['update', MISSION_ID, { difficulty: 'critical', danger: 'crisis' }]);
+  });
+}
+
+test('conventional or omitted stakes never require the Aspirant book', async () => {
+  const repo = makeRepo({ access: { aspirant: { state: 'none' } } });
+  const service = new MissionService(repo);
+  const created = await service.createMission(CREATOR, { name: 'Standard', difficulty: 'conventional', danger: 'conventional' });
+  const createdPlain = await service.createMission(CREATOR, { name: 'Plain' });
+  const updated = await service.updateMission(CREATOR, MISSION_ID, { difficulty: 'conventional', danger: 'conventional' });
+  const updatedPlain = await service.updateMission(CREATOR, MISSION_ID, { name: 'Renamed' });
+  for (const result of [created, createdPlain, updated, updatedPlain]) expect(result.error).toBeNull();
+  expect(repo.calls.filter(c => c[0] === 'create')).toHaveLength(2);
+  expect(repo.calls.filter(c => c[0] === 'update')).toHaveLength(2);
+});
+
+test('the system actor may write high stakes without Aspirant book access', async () => {
+  const repo = makeRepo({ access: { aspirant: { state: 'none' } } });
+  const service = new MissionService(repo);
+  const created = await service.createMission(SYSTEM_ACTOR, { name: 'Backfill', difficulty: 'crisis', danger: 'crisis' });
+  const updated = await service.updateMission(SYSTEM_ACTOR, MISSION_ID, { difficulty: 'critical' });
+  expect(created.error).toBeNull();
+  expect(updated.error).toBeNull();
+  expect(repo.calls.filter(c => c[0] === 'create')).toHaveLength(1);
+  expect(repo.calls.filter(c => c[0] === 'update')).toHaveLength(1);
 });

@@ -692,7 +692,8 @@ missionService = new MissionService({
   // only when a mission mutation actually needs to refresh character totals.
   recalcCharacterProgress: id => recalculateCharacterProgress(
     id, require('../services/character/repository')
-  )
+  ),
+  getEditionAccess: actor => require('../services/character/repository').getEditionAccess(actor)
 });
 
 module.exports = {

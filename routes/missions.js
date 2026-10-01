@@ -38,6 +38,7 @@ const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
 const { processMissionImport } = require('../util/mission-import');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
+const { getEditionAccess, hasAspirantAccess } = require('../services/access/service');
 
 router.get('/search', authOptional, async (req, res) => {
   const { profile } = res.locals;
@@ -151,6 +152,7 @@ router.get('/new', isAuthenticated, asyncHandler(async (req, res) => {
     { label: 'Missions', href: '/missions' },
     { label: 'New Mission', href: '/missions/new' }
   ];
+  const canUseAspirant = hasAspirantAccess(await getEditionAccess(res.locals.user.id));
 
   // "Log this game": ?lfg=<post> pre-fills the form from an LFG post whose
   // date has passed. The draft is never persisted -- it exists only as the
@@ -173,6 +175,7 @@ router.get('/new', isAuthenticated, asyncHandler(async (req, res) => {
       profile,
       isNew: true,
       mission: buildMissionDraft(post),
+      canUseAspirant,
       activeNav: 'missions',
       breadcrumbs
     });
@@ -181,6 +184,7 @@ router.get('/new', isAuthenticated, asyncHandler(async (req, res) => {
   res.render('mission-form', {
     profile,
     isNew: true,
+    canUseAspirant,
     activeNav: 'missions',
     breadcrumbs
   });
@@ -334,10 +338,11 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     return sendError(req, res, null, { status: 403, title: 'No access', message: 'You do not have permission to edit this mission' });
   }
 
-  const [{ data: mission, error }, { data: editors }, userIsCreator] = await Promise.all([
+  const [{ data: mission, error }, { data: editors }, userIsCreator, editionAccess] = await Promise.all([
     getMission(id, res.locals.supabase),
     getMissionEditors(id, res.locals.supabase),
-    isCreator(id, profile)
+    isCreator(id, profile),
+    getEditionAccess(res.locals.user.id)
   ]);
 
   if (error) {
@@ -351,6 +356,7 @@ router.get('/:id/edit', isAuthenticated, async (req, res) => {
     isNew: false,
     isCreator: userIsCreator,
     canRemoveEditors: userIsCreator,
+    canUseAspirant: hasAspirantAccess(editionAccess),
     activeNav: 'missions',
     breadcrumbs: [
       { label: 'Missions', href: '/missions' },

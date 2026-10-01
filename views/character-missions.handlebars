@@ -58,7 +58,7 @@
         <tr>
           <td>
             <a href="/missions/{{this.id}}">{{this.name}}</a>
-            {{#if (or (eq this.difficulty 'critical') (eq this.difficulty 'crisis') (eq this.danger 'critical') (eq this.danger 'crisis'))}}
+            {{#if (isHighStakes this)}}
             <span class="tag is-warning is-light" title="Difficulty: {{capitalize this.difficulty}}; Danger: {{capitalize this.danger}}">High stakes</span>
             {{/if}}
             {{#if this.media_url}}

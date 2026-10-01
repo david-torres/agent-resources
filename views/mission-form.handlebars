@@ -149,7 +149,8 @@
     </div>
   </div>
 
-  <details class="box" {{#if (or (eq mission.difficulty 'critical') (eq mission.difficulty 'crisis') (eq mission.danger 'critical') (eq mission.danger 'crisis'))}}open{{/if}}>
+  {{#if canUseAspirant}}
+  <details class="box" {{#if (isHighStakes mission)}}open{{/if}}>
     <summary>High stakes (optional)</summary>
     <p class="help mb-3">Most missions are Conventional. Use higher stakes only when the whole group, including the Conduit, agreed before the mission. Successful missions earn +1 Merx per Critical and +3 per Crisis, with no extra level progress (Aspirant, p. 97).</p>
     <div class="field">
@@ -173,6 +174,17 @@
       </div></div>
     </div>
   </details>
+  {{else}}
+  <div class="box" data-upsell-edition="aspirant">
+    {{#if (isHighStakes mission)}}
+    <p><strong>High stakes:</strong> Difficulty: {{capitalize mission.difficulty}} · Danger: {{capitalize mission.danger}}</p>
+    {{else}}
+    <p><strong>High stakes</strong></p>
+    {{/if}}
+    <p class="help mb-3">Critical and Crisis missions are an Aspirant feature. Unlock the Aspirant book to set higher stakes.</p>
+    {{> access/unlock-cta edition="aspirant"}}
+  </div>
+  {{/if}}
 
   <div class="field">
     <label class="label" for="mission-media-url">Media Link</label>

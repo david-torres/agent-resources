@@ -26,6 +26,8 @@ const realClass = require('../models/class');
 const realSystemMessage = require('../util/system-message');
 const realLfg = require('../models/lfg');
 const realNavLoader = require('../util/nav-loader');
+const realBookAccess = require('../services/access/service');
+mock.module('../services/access/service', () => ({ ...realBookAccess, getEditionAccess: async () => ({ aspirant: { state: 'owned' } }) }));
 
 const POST_ID = '44444444-4444-4444-4444-444444444444';
 const CREATOR = '11111111-1111-1111-1111-111111111111';
@@ -134,7 +136,8 @@ const path = require('path');
 const {
   times, date_tz, calendar_link, getTotalV1MissionsNeeded, getTotalV2MissionsNeeded,
   setVariable, encodeURIComponentH, dump, videoEmbed, isSupportedVideoUrl,
-  substring, concat, wordCount, perksForAbility, nextPerkPosition, json
+  substring, concat, wordCount, perksForAbility, nextPerkPosition, json,
+  isHighStakes, edition_label, edition_purchase_url
 } = require('../util/handlebars');
 const { renderMarkdown } = require('../util/markdown');
 const { startHttpServer, stopHttpServer } = require('../test/helpers/http-server');
@@ -157,6 +160,7 @@ beforeAll(async () => {
       getTotalV1MissionsNeeded, getTotalV2MissionsNeeded, setVariable, dump,
       videoEmbed, isSupportedVideoUrl, substring, concat,
       wordCount, perksForAbility, nextPerkPosition, json, markdown: renderMarkdown,
+      isHighStakes, edition_label, edition_purchase_url,
     },
   }));
   app.set('view engine', 'handlebars');
@@ -174,6 +178,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await stopHttpServer(server);
+  mock.module('../services/access/service', () => realBookAccess);
   mock.module('../models/_base', () => realBase);
   mock.module('../models/auth', () => realAuth);
   mock.module('../models/profile', () => realProfile);
