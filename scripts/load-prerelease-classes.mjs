@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-// Loads the verbatim pre-release extraction into `classes`.
+// Loads a book's verbatim class extraction into `classes`.
 //
 // Idempotent: re-running resolves the same rows and writes the same values, and
 // a run with nothing to change issues no request at all. Dry-run by default --
@@ -10,8 +10,8 @@
 // own `content_format` and `rules_edition`, and an id minted in
 // util/starter-content.js; the parent -- the row that module's roster names, or
 // the one row matching the book's `forkParentWhere` -- is left exactly as it
-// stands. A second run finds that row and updates it,
-// which is what keeps a repeated --apply a no-op.
+// stands. A second run finds that row and updates it, which is what keeps a
+// repeated --apply a no-op.
 //
 // An --apply run does three things in order: writes the class rows, renames the
 // character-held item rows this document renames, and publishes the classes
@@ -39,7 +39,7 @@ import { createClient } from '@supabase/supabase-js';
 
 import { CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
 import { buildClassTeaser } from '../services/class/teaser.js';
-import { bookFor } from './lib/books.mjs';
+import { SECTION_FROM_RECORD, bookFor } from './lib/books.mjs';
 import {
   ROW_TABLE, catalogueNames, fetchHeldRows, groupUnresolvable, projectImport
 } from './lib/character-impact.mjs';
@@ -53,9 +53,8 @@ const CONTENT_FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'qu
     'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear',
     'advanced_abilities', 'expanded_tips', 'teaser'];
 
-// The V1 artifact carries no `prerelease_section` key, and
-// DERIVED.prerelease_section would throw on a record without one rather than
-// store a null.
+// A book with a null `section` leaves `prerelease_section` out of the payload,
+// so the load neither sets nor clears it.
 export const fieldsFor = (book) => CONTENT_FIELDS
     .filter((field) => field !== 'prerelease_section' || book.section !== null);
 
@@ -99,7 +98,7 @@ const tipsMarkdown = (tips) => tips.map((tip) => `- ${tip}`).join('\n');
 
 const DERIVED = {
   name: (record) => displayName(record.name),
-  prerelease_section: (record, book) => (book.section === 'from-record'
+  prerelease_section: (record, book) => (book.section === SECTION_FROM_RECORD
     ? sectionEnum(record.prerelease_section) : book.section),
   free_play_access: (record, book) => book.freePlay,
   tips: (record) => tipsMarkdown(record.tips),
@@ -241,9 +240,7 @@ const forkPlan = (payload, matches, book) => {
   // A fork states its own identity, its parent and the two axes that separate
   // it from that parent, because it must not inherit any of the four. The pair
   // that separates fork from parent is `content_format` always, and
-  // `rules_edition` only for the six Advent parents (Gunslinger, Illusionist,
-  // Librarian, Thane, Thunderbird, Wanderer) -- the other six already carry
-  // 'aspirant'. A create takes the four from the row's column defaults; an
+  // `rules_edition` only where the parent carries a different one. A create takes the four from the row's column defaults; an
   // update leaves the columns alone entirely.
   return {
     payload: {
@@ -260,8 +257,8 @@ const forkPlan = (payload, matches, book) => {
 // `content_format`. A name shared across formats names two different classes,
 // so the scoped list is what decides the disposition and what the ambiguity
 // report prints. A forking book is deliberately not scoped here: forkPlan picks
-// its fork by both axes and its parent by id or columns, and a fork's parent is by
-// definition in another format.
+// its fork by both axes and its parent by roster id or by columns, and a fork's
+// parent is by definition in another format.
 export const planLoad = (records, rows, book) => records.map((record) => {
   const payload = buildPayload(record, book);
   const matches = resolveTarget(payload, rows, book);

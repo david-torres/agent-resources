@@ -32,7 +32,7 @@ test('the pre-release book keeps the Witchhunter alias and the Aspirant book doe
   expect(bookFor('aspirant-v1').aliases).toEqual({});
 });
 
-test('only the Aspirant book forks, and only it carries aspirant content', () => {
+test('the pre-release book loads Advent content in place, and the Aspirant V1 book forks it as Aspirant content', () => {
   expect(bookFor('prerelease').forks).toBe(false);
   expect(bookFor('prerelease').contentFormat).toBe('advent');
   expect(bookFor('aspirant-v1').forks).toBe(true);

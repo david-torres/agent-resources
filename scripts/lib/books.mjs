@@ -10,12 +10,15 @@ const DATA = join(REPO_ROOT, 'docs', 'data');
 // never from docs/data alongside the committed remap.
 const ARTIFACT_DIR = process.env.CLASS_DATA_DIR || join(REPO_ROOT, 'private-data');
 
+// A book whose `section` is this writes each record's own section heading.
+export const SECTION_FROM_RECORD = 'from-record';
+
 // One book's ingestion in one place: where its artifact lives, what names it
 // resolves under, and what the load is authorised to make visible.
 //
-// `section` is what `prerelease_section` a class is written with: 'from-record'
-// reads each record's own heading, a section name stamps every class, and null
-// leaves the column out. A forking book names its fork ids in `mintedIds` and
+// `section` is what `prerelease_section` a class is written with:
+// SECTION_FROM_RECORD reads each record's own heading, a section name stamps
+// every class, and null leaves the column out. A forking book names its fork ids in `mintedIds` and
 // finds each parent either through the class-unlock roster (`forkParentWhere`
 // null) or as the one row of the class's name matching those columns.
 export const BOOKS = {
@@ -35,7 +38,7 @@ export const BOOKS = {
     status: 'release',
     rulesVersion: 'v2',
     forks: false,
-    section: 'from-record',
+    section: SECTION_FROM_RECORD,
     // The pre-release book was given away, so its classes are free to play.
     freePlay: true,
     mintedIds: null,
