@@ -316,6 +316,9 @@
         ? null
         : { name: entry.name, classId: entry.class_id };
       render();
+      // Only on opening: re-renders follow every Mod or Enchantment change and
+      // must not move the page.
+      if (open && drawer && drawer.scrollIntoView) drawer.scrollIntoView({ block: 'nearest' });
       return true;
     };
 
@@ -404,6 +407,22 @@
       for (var i = 0; i < named.length; i++) named[i].setAttribute('form', NO_FORM_OWNER);
     };
 
+    // The full grid runs far taller than the screen, so the drawer follows the
+    // group of the open cell. The grid re-renders its groups each time, so the
+    // drawer is moved back in after every render. A search re-render detaches
+    // it; a cell filtered out by search leaves it detached until shown again.
+    var placeDrawer = function (entry) {
+      if (!grid) return;
+      var cells = grid.querySelectorAll('[data-signature-name]');
+      for (var i = 0; i < cells.length; i++) {
+        if (cells[i].getAttribute('data-signature-name') !== entry.name) continue;
+        if (cells[i].getAttribute('data-signature-class') !== entry.class_id) continue;
+        var group = cells[i].closest('[data-catalogue-group]');
+        if (group) group.parentNode.insertBefore(drawer, group.nextSibling);
+        return;
+      }
+    };
+
     var renderDrawer = function () {
       if (!drawer) return;
       var entry = open ? findEntry(open.name, open.classId) : null;
@@ -412,6 +431,7 @@
         drawer.innerHTML = '';
         return;
       }
+      placeDrawer(entry);
       var purchase = findPurchase(entry.name, entry.class_id);
       drawer.hidden = false;
       drawer.innerHTML = SignatureEntry.render(entry, purchase, {
@@ -470,6 +490,12 @@
         e.preventDefault();
         openSignature(cell.getAttribute('data-signature-name'),
           cell.getAttribute('data-signature-class'));
+      });
+      // CatalogueControls re-renders the groups before this bubbles up.
+      grid.addEventListener('input', function (e) {
+        if (!e.target.closest('[data-catalogue-search]')) return;
+        var entry = open ? findEntry(open.name, open.classId) : null;
+        if (entry) placeDrawer(entry);
       });
     }
 

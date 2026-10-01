@@ -449,3 +449,113 @@ describe('owning Signatures is limited by Merx alone', () => {
     expect(form.serialize().gear).toHaveLength(7);
   });
 });
+
+// With every class's Signatures listed the grid runs thousands of pixels
+// tall, so a drawer parked after the whole grid opens far off-screen and a
+// click on a cell looks like it did nothing. The drawer opens beside the
+// group the clicked cell sits in, and is brought into view.
+describe('the drawer opens where the clicked Signature is', () => {
+  const OTHER_CLASS_ID = 'c-other';
+  const OTHER_CLASS_NAME = 'Other Class';
+
+  const twoClassEntries = () => ([
+    { name: 'Cowboy Hat', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 1 },
+    { name: 'Duster', class_id: OWN_CLASS_ID, class_name: OWN_CLASS_NAME, column: 2 },
+    { name: 'Lasso', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 1 },
+    { name: 'Spurs', class_id: OTHER_CLASS_ID, class_name: OTHER_CLASS_NAME, column: 2 }
+  ]);
+
+  const mountTwoClasses = () => mountPurchases(fixtureCharacter({
+    gear: [], entries: twoClassEntries(), earnedMerx: 100
+  }));
+
+  const cellFor = (name) => document.querySelector(
+    `#purchaseGrid [data-signature-name="${name}"]`
+  );
+
+  const expectDrawerAfterGroupOf = (name) => {
+    const drawer = document.getElementById('purchaseDrawer');
+    const group = cellFor(name).closest('[data-catalogue-group]');
+    expect(drawer.hidden).toBe(false);
+    // Compared by description rather than identity, so a failure names what
+    // does follow the group instead of printing two whole elements.
+    const follower = group.nextElementSibling;
+    expect(follower ? (follower.id || follower.outerHTML.slice(0, 60)) : null).toBe('purchaseDrawer');
+  };
+
+  test('opening a Signature in the first group puts the drawer right after that group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+
+  test('opening a Signature in the last group puts the drawer right after that group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Lasso', OTHER_CLASS_ID);
+    expectDrawerAfterGroupOf('Lasso');
+  });
+
+  test('clicking a Signature cell opens the drawer right after its group', () => {
+    mountTwoClasses();
+    cellFor('Cowboy Hat').click();
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+
+  test('buying the open Signature through the drawer keeps the drawer after its group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    document.querySelector('#purchaseDrawer [data-signature-buy]').click();
+    expect(form.serialize().gear.map((g) => g.name)).toEqual(['Cowboy Hat']);
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+
+  test('buying the open Signature through the handle keeps the drawer after its group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    expect(form.buySignature('Cowboy Hat', OWN_CLASS_ID)).toBe(true);
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+
+  test('opening a Signature scrolls the drawer into view', () => {
+    const form = mountTwoClasses();
+    // jsdom does not implement scrollIntoView, so the spy is installed on this
+    // window's Element and removed again afterwards.
+    const proto = document.defaultView.Element.prototype;
+    const scrolled = [];
+    proto.scrollIntoView = function () { scrolled.push(this); };
+    try {
+      form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+      const drawer = document.getElementById('purchaseDrawer');
+      expect(scrolled.some((el) => el === drawer)).toBe(true);
+    } finally {
+      delete proto.scrollIntoView;
+    }
+  });
+
+  const search = (term) => {
+    const searchInput = document.querySelector('#purchaseGrid [data-catalogue-search]');
+    searchInput.value = term;
+    searchInput.dispatchEvent(new document.defaultView.Event('input', { bubbles: true }));
+  };
+
+  const expectDrawerInDocument = () => {
+    expect(document.getElementById('purchaseDrawer')).not.toBeNull();
+  };
+
+  test('searching for a term the open Signature still matches keeps the drawer after its group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    search('Cow');
+    expectDrawerInDocument();
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+
+  test('clearing a search that filtered out the open Signature puts the drawer back after its group', () => {
+    const form = mountTwoClasses();
+    form.openSignature('Cowboy Hat', OWN_CLASS_ID);
+    search('Lasso');
+    search('');
+    expectDrawerInDocument();
+    expectDrawerAfterGroupOf('Cowboy Hat');
+  });
+});
