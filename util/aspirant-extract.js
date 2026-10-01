@@ -2,8 +2,9 @@
 // parse. Pure: no I/O, no database, no PDF library.
 //
 // The wide export surface is deliberate. Only scripts/extract-aspirant-v1-classes.mjs
-// consumes this module in production, and it uses two of the 28 exports
-// (parseBboxPages, extractBook); the other 26 exist so util/aspirant-extract.test.js
+// and scripts/extract-standalone-aspirant-classes.mjs consume this module in
+// production, and they use three of the 29 exports (parseBboxPages, extractBook,
+// extractStandaloneClass); the other 26 exist so util/aspirant-extract.test.js
 // can test each seam of the geometry directly -- page shift, column split, note
 // threading, superscript rethreading -- against the page it came from. The
 // alternative is asserting twelve classes' geometry through extractBook alone,
@@ -89,10 +90,12 @@ const HEADER_BAND_TOLERANCE = 0.5;
 const RECTO_SHIFT = 11.52;
 const SIGNATURE_NOTE_RECTO_SHIFT = 16.32;
 
-const shiftFor = (pdfPage, kind) => {
-  if (!isRecto(pdfPage)) return 0;
+const rectoShift = (recto, kind) => {
+  if (!recto) return 0;
   return kind === 'signature-note' ? SIGNATURE_NOTE_RECTO_SHIFT : RECTO_SHIFT;
 };
+
+const shiftFor = (pdfPage, kind) => rectoShift(isRecto(pdfPage), kind);
 
 const centreOf = (words) => {
   const xMins = words.map((w) => w.xMin);
@@ -100,10 +103,10 @@ const centreOf = (words) => {
   return (Math.min(...xMins) + Math.max(...xMaxs)) / 2;
 };
 
-const isStatLine = (block) => {
+const isStatLine = (block, statLineY = STAT_LINE_Y) => {
   if (block.lines.length !== 1) return false;
   const [line] = block.lines;
-  if (Math.abs(line.yMin - STAT_LINE_Y) > Y_TOLERANCE) return false;
+  if (Math.abs(line.yMin - statLineY) > Y_TOLERANCE) return false;
   if (Math.abs((line.yMax - line.yMin) - STAT_LINE_HEIGHT) > HEIGHT_TOLERANCE) return false;
   return Math.abs(centreOf(line.words) - PAGE_CENTRE) <= CENTRE_TOLERANCE;
 };
@@ -115,7 +118,7 @@ const hasChallengeLevel = (block) => block.lines.some((line) => {
 });
 
 const isCoverPage = (page) =>
-  page.blocks.some(isStatLine) && page.blocks.some(hasChallengeLevel);
+  page.blocks.some((block) => isStatLine(block)) && page.blocks.some(hasChallengeLevel);
 
 const headerName = (page) => {
   for (const block of page.blocks) {
@@ -441,8 +444,8 @@ const joinLines = (lines) => visualLines(lines)
 // Everything in an entry mirrors recto/verso at 11.52 except the note frame,
 // which mirrors at 16.32 (geometry doc, section 3a), so the column origin is
 // taken back to its verso coordinate before the note frame's own shift applies.
-const noteIndentFor = (pdfPage, colLeft) =>
-  colLeft - shiftFor(pdfPage, 'body') + BODY_NOTE_STEP + shiftFor(pdfPage, 'signature-note');
+const noteIndentFor = (recto, colLeft) =>
+  colLeft - rectoShift(recto, 'body') + BODY_NOTE_STEP + rectoShift(recto, 'signature-note');
 
 const meterCells = (lines) => lines.flatMap((line) => line.words.reduce((cells, word) => {
   const open = cells[cells.length - 1];
@@ -489,18 +492,25 @@ const readMeters = (lines) => {
   });
 };
 
-const entryFrom = (pdfPage, colLeft, nameBlock, ownBlocks) => {
+const entryFrom = (recto, colLeft, nameBlock, ownBlocks) => {
   const dividerBlock = ownBlocks.find((block) =>
     block.lines.some((line) => markPowerRatings(line) === DIVIDER_TEXT));
   if (!dividerBlock) {
     throw new Error(`signature entry with no ${DIVIDER_TEXT}: ${joinLines(nameBlock.lines)}`);
   }
   const dividerY = blockTop(dividerBlock);
+  const isHanging = (line) =>
+    Math.abs(lineHeightOf(line) - DEDICATION_HEIGHT) <= HEIGHT_TOLERANCE;
   const body = ownBlocks.filter((block) => block !== dividerBlock);
-  const above = body.filter((block) => blockTop(block) < dividerY);
+  // The standalone PDFs hang a respelling under some item names, set at the
+  // dedication's size; the book prints none.
+  const respellingBlocks = body.filter((block) =>
+    blockTop(block) < dividerY && block.lines.every(isHanging));
+  const above = body.filter((block) => blockTop(block) < dividerY
+    && !respellingBlocks.includes(block));
   const below = body.filter((block) => blockTop(block) > dividerY);
 
-  const noteIndent = noteIndentFor(pdfPage, colLeft);
+  const noteIndent = noteIndentFor(recto, colLeft);
   const meterBlocks = above.filter((block) => blockLeft(block) >= colLeft + METER_GUTTER_MIN);
   const descriptionBlocks = above.filter((block) =>
     Math.abs(blockLeft(block) - colLeft) <= COLUMN_X_TOLERANCE);
@@ -520,25 +530,25 @@ const entryFrom = (pdfPage, colLeft, nameBlock, ownBlocks) => {
   const signatureLines = below
     .filter((block) => block !== signatureNameBlock)
     .flatMap((block) => block.lines);
-  const isDedication = (line) =>
-    Math.abs(lineHeightOf(line) - DEDICATION_HEIGHT) <= HEIGHT_TOLERANCE;
-  const dedications = signatureLines.filter(isDedication);
+  const dedications = signatureLines.filter(isHanging);
 
   return {
     name: joinLines(nameBlock.lines.filter((line) => lineHeightOf(line) >= NAME_MIN_HEIGHT)),
+    ...(respellingBlocks.length === 0 ? {}
+      : { pronunciation: joinLines(respellingBlocks.flatMap((block) => block.lines)) }),
     description: joinLines(descriptionBlocks.flatMap((block) => block.lines)),
     meters: readMeters(meterBlocks.flatMap((block) => block.lines)),
     notes: noteTree(noteBlocks.flatMap((block) => block.lines),
       { step: BODY_NOTE_STEP, threshold: null }),
     default_enchantment: {
       name: joinLines(signatureNameBlock.lines),
-      description: joinLines(signatureLines.filter((line) => !isDedication(line))),
+      description: joinLines(signatureLines.filter((line) => !isHanging(line))),
       dedication: dedications.length > 0 ? joinLines(dedications) : null,
     },
   };
 };
 
-const columnEntries = (pdfPage, blocks) => {
+const columnEntries = (recto, blocks) => {
   const nameLines = blocks.flatMap((block) => block.lines)
     .filter((line) => lineHeightOf(line) >= NAME_MIN_HEIGHT);
   if (nameLines.length === 0) return [];
@@ -553,13 +563,13 @@ const columnEntries = (pdfPage, blocks) => {
     const bottom = nameBlocks[i + 1] ? blockTop(nameBlocks[i + 1]) - ENTRY_LEAD : Infinity;
     const ownBlocks = blocks.filter((block) => block !== nameBlock
       && blockTop(block) >= top && blockTop(block) < bottom);
-    return entryFrom(pdfPage, colLeft, nameBlock, ownBlocks);
+    return entryFrom(recto, colLeft, nameBlock, ownBlocks);
   });
 };
 
 // Re-threading runs first: a detached one-character cell sits in the middle of
 // the column and pollutes every x-band it is measured against.
-const signatureColumns = (page) => {
+const signatureColumns = (page, recto) => {
   const blocks = rethreadSuperscripts(page).blocks
     .map((block) => ({
       ...block,
@@ -567,12 +577,12 @@ const signatureColumns = (page) => {
     }))
     .filter((block) => block.lines.length > 0);
   return [
-    columnEntries(page.page, blocks.filter((block) => blockLeft(block) < COLUMN_SPLIT_X)),
-    columnEntries(page.page, blocks.filter((block) => blockLeft(block) >= COLUMN_SPLIT_X)),
+    columnEntries(recto, blocks.filter((block) => blockLeft(block) < COLUMN_SPLIT_X)),
+    columnEntries(recto, blocks.filter((block) => blockLeft(block) >= COLUMN_SPLIT_X)),
   ];
 };
 
-const signatureEntries = (page) => signatureColumns(page).flat();
+const signatureEntries = (page) => signatureColumns(page, isRecto(page.page)).flat();
 
 // "Paired Action:", "Sample Perks" and "(Compounded)" each print exactly three
 // times on every one of the 24 ability pages. "Paired Action:" and
@@ -644,12 +654,13 @@ const abilityFrom = (ownLines, label, nameLines) => {
   const perksHeading = soleLine(SAMPLE_PERKS_HEADING);
   const compounded = soleLine(COMPOUNDED_LABEL);
 
-  // "In Honor of ..." and the one respelling the book prints are both set
-  // smaller than every body font and both hang under the name they belong to,
-  // so they are lifted out by height before any reflow.
+  // A dedication ("In Honor of ...") and a respelling are both set smaller than
+  // every body font and both hang under the name they belong to, so they are
+  // lifted out by height before any reflow. pdftotext can split one across two
+  // lines on a shared baseline, so each printed line is judged whole.
   const isHanging = (line) =>
     Math.abs(lineHeightOf(line) - DEDICATION_HEIGHT) <= HEIGHT_TOLERANCE;
-  const hanging = ownLines.filter(isHanging);
+  const hanging = visualLines(ownLines.filter(isHanging)).map(mergeGroup);
   const structural = new Set([label, perksHeading, compounded, ...nameLines]);
   const content = ownLines.filter((line) => !structural.has(line) && !isHanging(line));
   const meterLines = content.filter((line) => lineXMin(line) - labelLeft >= ABILITY_METER_GUTTER);
@@ -680,10 +691,7 @@ const abilityFrom = (ownLines, label, nameLines) => {
       && textOf(line).startsWith(DEDICATION_PREFIX) === dedication);
     return found.length > 0 ? joinLines(found) : null;
   };
-  // Only a dedication hangs under a perk name, and only the ability carries a
-  // respelling, so anything else set at this size would be read by no field.
-  const stray = hanging.find((line) => hostOf(line) === undefined
-    || (hostOf(line) !== abilityHost && !textOf(line).startsWith(DEDICATION_PREFIX)));
+  const stray = hanging.find((line) => hostOf(line) === undefined);
   if (stray) throw new Error(`hanging line under no name: ${joinLines([stray])}`);
 
   // A perk body opens 0.13 to 4.64 below its own name -- never above it, but by
@@ -692,8 +700,12 @@ const abilityFrom = (ownLines, label, nameLines) => {
   const perkAt = (index) => {
     const nameLine = perkNameLines[index];
     const next = perkNameLines[index + 1];
+    // The book respells no perk and the standalone PDFs respell some; the key
+    // is present only where a respelling is printed.
+    const pronunciation = hangingUnder(nameLine, false);
     return {
       name: joinLines([nameLine]),
+      ...(pronunciation === null ? {} : { pronunciation }),
       dedication: hangingUnder(nameLine, true),
       text: joinLines(perkBand.filter((line) => inTextFrame(line)
         && line.yMin >= nameLine.yMin && (!next || line.yMin < next.yMin))),
@@ -744,10 +756,10 @@ const abilityEntries = (page) => {
 const classOnPage = (pdfPage) =>
   CLASS_NAMES[Math.floor((pdfPage - FIRST_CLASS_PAGE) / PAGES_PER_CLASS)];
 
-const soleLine = (lines, predicate, what, page) => {
+const soleLine = (lines, predicate, what, page, className) => {
   const found = lines.filter(predicate);
   if (found.length !== 1) {
-    throw new Error(`${found.length} ${what} lines on ${classOnPage(page.page)} page ${page.page}`);
+    throw new Error(`${found.length} ${what} lines on ${className} page ${page.page}`);
   }
   return found[0];
 };
@@ -764,6 +776,14 @@ const CHALLENGE_LEVELS = ['Low', 'Mid', 'High'];
 // it is what closes the quote's band. The class view prints the dash itself, so
 // what is stored is the name that follows it.
 const ATTRIBUTION_DASH = '—';
+
+// A standalone class PDF credits its collaborators between the stat line and the
+// quote, the names themselves set as art; the book prints no such line.
+const COLLABORATION_CREDIT = 'In collaboration with';
+
+// A stat line ending a stat in "*" is footnoted at the foot of the cover, below
+// the Challenge Level, by a note that opens with the same mark.
+const STAT_NOTE_MARK = '*';
 
 // All three prose paragraphs set to 336.00 and paragraphs 2 and 3 open on a
 // 3.84 pt first-line indent, which is the only thing that tells them apart.
@@ -787,12 +807,12 @@ const PROSE_OPENINGS = [
 const EXAMPLES_ITEM_X = 355.68;
 const QUICK_TIPS_ITEM_X = 60.48;
 
-const coverFields = (page) => {
-  const className = classOnPage(page.page);
+const coverFields = (page,
+  { className = classOnPage(page.page), statLineY = STAT_LINE_Y } = {}) => {
   const lines = page.blocks.flatMap((block) => block.lines).sort((a, b) => a.yMin - b.yMin);
-  const sole = (predicate, what) => soleLine(lines, predicate, what, page);
+  const sole = (predicate, what) => soleLine(lines, predicate, what, page, className);
 
-  const statBlock = page.blocks.find(isStatLine);
+  const statBlock = page.blocks.find((block) => isStatLine(block, statLineY));
   if (!statBlock) throw new Error(`no stat line on ${className} page ${page.page}`);
   const attribution = sole((line) => textOf(line).startsWith(ATTRIBUTION_DASH), 'quote attribution');
   const examplesHeading = sole((line) => EXAMPLES_HEADING.test(textOf(line)), 'Examples heading');
@@ -841,13 +861,14 @@ const coverFields = (page) => {
   };
 
   const statLine = joinLines(statBlock.lines);
-  // The other book marks a stat whose allocation is footnoted with a trailing
-  // "*" and prints the note below the stat line. No Aspirant cover prints
-  // either, which is why stat_note is null; the marker is what would say
-  // otherwise.
-  if (statLine.includes('*')) {
+  // No cover in the book prints the marker or the note; the standalone covers
+  // print both. A marker with no note under it is refused rather than dropped.
+  const footLines = lines.filter((line) => line.yMin > challenge.yMin);
+  const statNote = statLine.includes(STAT_NOTE_MARK) ? joinLines(footLines) : null;
+  if (statNote !== null && !statNote.startsWith(STAT_NOTE_MARK)) {
     throw new Error(`${className} stat line carries a note marker: ${statLine}`);
   }
+  const credit = lines.find((line) => textOf(line) === COLLABORATION_CREDIT);
   const challengeLevel = textOf(challenge).slice(CHALLENGE_LEVEL_LABEL.length).trim();
   if (!CHALLENGE_LEVELS.includes(challengeLevel)) {
     throw new Error(`${className} challenge level "${challengeLevel}"`);
@@ -855,9 +876,9 @@ const coverFields = (page) => {
 
   return {
     stat_line: statLine,
-    stat_note: null,
+    stat_note: statNote,
     stat_spread: parseStatLine(statLine),
-    quote: joinLines(between(statBlock.lines[0], attribution)),
+    quote: joinLines(between(credit ?? statBlock.lines[0], attribution)),
     quote_source: textOf(attribution).slice(ATTRIBUTION_DASH.length).trim(),
     overview,
     conduit_notes: conduitNotes,
@@ -881,9 +902,9 @@ const coverFields = (page) => {
 const TIPS_PLAYER_HEADING = 'Player';
 const TIPS_CONDUIT_HEADING = 'Conduit';
 
-const expandedTips = (page) => {
+const expandedTips = (page, className = classOnPage(page.page)) => {
   const lines = page.blocks.flatMap((block) => block.lines);
-  const heading = (text) => soleLine(lines, (line) => textOf(line) === text, text, page);
+  const heading = (text) => soleLine(lines, (line) => textOf(line) === text, text, page, className);
 
   // The two lists interleave down the page and share no baselines, so one
   // y-sorted list of both reads the 12.00 pt step across the gutter as a
@@ -929,6 +950,7 @@ const ENTRIES_PER_COLUMN = 3;
 
 const gearFrom = (entry, column, position) => ({
   name: entry.name,
+  ...(entry.pronunciation === undefined ? {} : { pronunciation: entry.pronunciation }),
   description: entry.description,
   category: column === DEFAULT_ROSTER_COLUMN ? 'default' : 'elective',
   meters: entry.meters,
@@ -941,9 +963,9 @@ const gearFrom = (entry, column, position) => ({
 // The spread reads as four columns: the left page carries 1 and 2, the right 3
 // and 4. Neither page says which pair it holds -- that is its place in the
 // cadence -- so the two arrive already ordered.
-const spreadGear = (leftPage, rightPage) =>
-  [leftPage, rightPage]
-    .flatMap((page) => signatureColumns(page).map((entries) => ({ page, entries })))
+const spreadGear = (left, right) =>
+  [left, right]
+    .flatMap(({ page, recto }) => signatureColumns(page, recto).map((entries) => ({ page, entries })))
     .flatMap(({ page, entries }, index) => {
       if (entries.length !== ENTRIES_PER_COLUMN) {
         throw new Error(`${entries.length} signature entries in column ${index + 1}`
@@ -952,18 +974,19 @@ const spreadGear = (leftPage, rightPage) =>
       return entries.map((entry, position) => gearFrom(entry, index + 1, position + 1));
     });
 
-const extractClass = (pages, index) => {
-  const className = CLASS_NAMES[index];
-  const numbers = classPageNumbers(index);
-  const pageOf = (offset) => pageIn(pages, numbers[offset], className);
-
+// Reads one class's six pages, wherever they sit: `pageOf` and `isRectoAt` take
+// an offset name, and say which page holds it and whether that page is set
+// shifted.
+const readClass = ({ className, pageOf, isRectoAt, statLineY, pageRange }) => {
   for (const offset of HEADER_PAGES) {
     const header = headerName(pageOf(offset));
     if (header !== className) {
-      throw new Error(`page ${numbers[offset]} heads ${JSON.stringify(header)}`
+      throw new Error(`page ${pageOf(offset).page} heads ${JSON.stringify(header)}`
         + ` where the cadence expects ${className}`);
     }
   }
+
+  const spreadPage = (offset) => ({ page: pageOf(offset), recto: isRectoAt(offset) });
 
   return {
     name: headerName(pageOf('core')),
@@ -972,16 +995,50 @@ const extractClass = (pages, index) => {
     designer: null,
     // coverFields returns the cover's thirteen fields in the artifact's own key
     // order, so spreading it here is what places them.
-    ...coverFields(pageOf('cover')),
+    ...coverFields(pageOf('cover'), { className, statLineY }),
     abilities: abilityEntries(pageOf('core')),
     advanced_abilities: abilityEntries(pageOf('advanced')),
-    gear: spreadGear(pageOf('sigLeft'), pageOf('sigRight')),
-    expanded_tips: expandedTips(pageOf('tips')),
-    page_range: [printedPage(numbers.cover), printedPage(numbers.tips)],
+    gear: spreadGear(spreadPage('sigLeft'), spreadPage('sigRight')),
+    expanded_tips: expandedTips(pageOf('tips'), className),
+    page_range: pageRange,
   };
 };
 
+const extractClass = (pages, index) => {
+  const className = CLASS_NAMES[index];
+  const numbers = classPageNumbers(index);
+  return readClass({
+    className,
+    pageOf: (offset) => pageIn(pages, numbers[offset], className),
+    isRectoAt: (offset) => isRecto(numbers[offset]),
+    statLineY: STAT_LINE_Y,
+    pageRange: [printedPage(numbers.cover), printedPage(numbers.tips)],
+  });
+};
+
 const extractBook = (pages) => CLASS_NAMES.map((_, index) => extractClass(pages, index));
+
+// A standalone class PDF prints the book's six pages for one class as PDF pages
+// 1-6, then at most a collaboration credits page that carries nothing the record
+// holds. Its pages are not set by parity: measured on all three, the core,
+// advanced and tips pages are shifted and the cover and both signature pages are
+// not. Its stat line also sits 1.20 higher than the book's.
+const STANDALONE_PAGES = { cover: 1, core: 2, sigLeft: 3, sigRight: 4, advanced: 5, tips: 6 };
+const STANDALONE_RECTO_PAGES = ['core', 'advanced', 'tips'];
+const STANDALONE_STAT_LINE_Y = 75.527;
+
+const extractStandaloneClass = (pages) => {
+  const core = pageIn(pages, STANDALONE_PAGES.core, 'the standalone class');
+  const className = headerName(core);
+  if (className === null) throw new Error(`page ${core.page} prints no class header`);
+  return readClass({
+    className,
+    pageOf: (offset) => pageIn(pages, STANDALONE_PAGES[offset], className),
+    isRectoAt: (offset) => STANDALONE_RECTO_PAGES.includes(offset),
+    statLineY: STANDALONE_STAT_LINE_Y,
+    pageRange: [STANDALONE_PAGES.cover, STANDALONE_PAGES.tips],
+  });
+};
 
 module.exports = {
   decodeEntities, parseBboxPages, CLASS_NAMES, FIRST_CLASS_PAGE, PAGES_PER_CLASS,
@@ -990,5 +1047,5 @@ module.exports = {
   POWER_RATINGS, isSuperscript, rethreadSuperscripts, markPowerRatings,
   noteTree, TIPS_NOTE_STEP, TIPS_NOTE_THRESHOLD, BODY_NOTE_STEP,
   signatureEntries, COLUMN_SPLIT_X, abilityEntries, coverFields, expandedTips,
-  extractClass, extractBook,
+  extractClass, extractBook, extractStandaloneClass,
 };
