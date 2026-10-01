@@ -309,12 +309,13 @@
       return changed;
     };
 
-    var openSignature = function (name, classId) {
+    var openSignature = function (name, classId, yours) {
       var entry = findEntry(name, classId);
       if (!entry) return false;
-      open = (open && open.name === entry.name && open.classId === entry.class_id)
+      yours = !!yours;
+      open = (open && open.name === entry.name && open.classId === entry.class_id && open.yours === yours)
         ? null
-        : { name: entry.name, classId: entry.class_id };
+        : { name: entry.name, classId: entry.class_id, yours: yours };
       render();
       // Only on opening: re-renders follow every Mod or Enchantment change and
       // must not move the page.
@@ -324,7 +325,8 @@
 
     // ---- rendering ----------------------------------------------------
     var isOpen = function (entry) {
-      return !!open && open.name === entry.name && open.classId === entry.class_id;
+      return !!open && open.name === entry.name && open.classId === entry.class_id
+        && open.yours === !!entry.yours;
     };
 
     var renderCell = function (entry) {
@@ -339,7 +341,8 @@
         + ' class="button is-small is-fullwidth is-justify-content-space-between mb-2'
         + (isOpen(entry) ? ' is-active' : '') + '"'
         + ' data-signature-name="' + esc(entry.name) + '"'
-        + ' data-signature-class="' + esc(entry.class_id) + '">'
+        + ' data-signature-class="' + esc(entry.class_id) + '"'
+        + (entry.yours ? ' data-signature-yours' : '') + '>'
         + '<span>' + esc(entry.name) + '</span>' + origin + tag
         + '</button>';
     };
@@ -365,13 +368,22 @@
         : '';
     };
 
+    var yourSignatures = function () {
+      var copies = [];
+      purchases.forEach(function (p) {
+        var entry = findEntry(p.name, p.class_id);
+        if (entry) copies.push(Object.assign({}, entry, { yours: true }));
+      });
+      return copies;
+    };
+
     var gridControl = null;
     var renderGrid = function () {
       if (!grid) return;
       if (gridControl) { gridControl.render(); return; }
       gridControl = window.CatalogueControls.mount(grid, {
-        entries: entries,
-        groupBy: function (entry) { return entry.class_name; },
+        entries: function () { return yourSignatures().concat(entries); },
+        groupBy: function (entry) { return entry.yours ? 'Your Signatures' : entry.class_name; },
         searchOf: function (entry) { return entry.name; },
         renderEntry: renderColumnsFor
       });
@@ -411,16 +423,26 @@
     // group of the open cell. The grid re-renders its groups each time, so the
     // drawer is moved back in after every render. A search re-render detaches
     // it; a cell filtered out by search leaves it detached until shown again.
+    // Prefers the copy the player clicked; falls back to the other copy when
+    // that one is gone (a Signature removed while open in Your Signatures).
     var placeDrawer = function (entry) {
       if (!grid) return;
       var cells = grid.querySelectorAll('[data-signature-name]');
+      var fallback = null;
+      var target = null;
       for (var i = 0; i < cells.length; i++) {
         if (cells[i].getAttribute('data-signature-name') !== entry.name) continue;
         if (cells[i].getAttribute('data-signature-class') !== entry.class_id) continue;
-        var group = cells[i].closest('[data-catalogue-group]');
-        if (group) group.parentNode.insertBefore(drawer, group.nextSibling);
-        return;
+        if (cells[i].hasAttribute('data-signature-yours') === !!(open && open.yours)) {
+          target = cells[i];
+          break;
+        }
+        if (!fallback) fallback = cells[i];
       }
+      target = target || fallback;
+      if (!target) return;
+      var group = target.closest('[data-catalogue-group]');
+      if (group) group.parentNode.insertBefore(drawer, group.nextSibling);
     };
 
     var renderDrawer = function () {
@@ -489,7 +511,8 @@
         if (!cell) return;
         e.preventDefault();
         openSignature(cell.getAttribute('data-signature-name'),
-          cell.getAttribute('data-signature-class'));
+          cell.getAttribute('data-signature-class'),
+          cell.hasAttribute('data-signature-yours'));
       });
       // CatalogueControls re-renders the groups before this bubbles up.
       grid.addEventListener('input', function (e) {

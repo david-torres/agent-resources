@@ -47,7 +47,11 @@
 
   var mount = function (root, options) {
     if (!root) return null;
-    var entries = Array.isArray(options.entries) ? options.entries : [];
+    // A function is read on every render, for a caller whose list changes.
+    var readEntries = function () {
+      var list = typeof options.entries === 'function' ? options.entries() : options.entries;
+      return Array.isArray(list) ? list : [];
+    };
     var groupBy = options.groupBy;
     var searchOf = options.searchOf;
     var renderEntry = options.renderEntry;
@@ -65,7 +69,7 @@
     };
 
     var render = function () {
-      var groups = groupEntries(entries, groupBy);
+      var groups = groupEntries(readEntries(), groupBy);
       groupsEl.innerHTML = groups.map(function (group) {
         var visible = group.entries.filter(matchesTerm);
         if (!visible.length) return '';
