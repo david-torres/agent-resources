@@ -207,10 +207,10 @@ test.skipIf(!forkRecords)("a player's own class of the same name is not a fork p
 
 test.skipIf(!forkRecords)('re-running after a fork updates the fork and never creates a second one', () => {
   const rows = [parentRow('Berserker', { rules_edition: 'aspirant' }),
-    row('Berserker', { id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant' })];
+    row('Berserker', { id: ASPIRANT_V1_CLASS_IDS.Berserker, rules_edition: 'aspirant', content_format: 'aspirant' })];
   const [plan] = planLoad([berserkerRecord], rows, forkBook);
   expect(plan.disposition).toBe('update');
-  expect(plan.row.id).toBe('id-v1fork');
+  expect(plan.row.id).toBe(ASPIRANT_V1_CLASS_IDS.Berserker);
 });
 
 // Six of the Advent-format parents (Berserker among them) are themselves
@@ -252,7 +252,7 @@ test.skipIf(!forkRecords)("an update carries art from its parent when the fork's
     image_url: 'https://example.com/berserker.png', image_crop: { x: 1, y: 2 }
   });
   const existingFork = row('Berserker', {
-    id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant',
+    id: ASPIRANT_V1_CLASS_IDS.Berserker, rules_edition: 'aspirant', content_format: 'aspirant',
     base_class_id: PARENT_IDS.Berserker, image_url: null, image_crop: null
   });
   const [plan] = planLoad([berserkerRecord], [parent, existingFork], forkBook);
@@ -269,7 +269,7 @@ test.skipIf(!forkRecords)("an update never overwrites art the fork's own row alr
     image_url: 'https://example.com/berserker.png', image_crop: { x: 1, y: 2 }
   });
   const existingFork = row('Berserker', {
-    id: 'id-v1fork', rules_edition: 'aspirant', content_format: 'aspirant',
+    id: ASPIRANT_V1_CLASS_IDS.Berserker, rules_edition: 'aspirant', content_format: 'aspirant',
     base_class_id: PARENT_IDS.Berserker,
     image_url: 'https://example.com/owner-set.png', image_crop: { x: 9, y: 9 }
   });
@@ -288,18 +288,18 @@ test.skipIf(!forkRecords)("a row matching one axis only is neither this book's f
 });
 
 // A parent and its own fork share a name for good, so the name alone cannot
-// decide the row. Two forks is the ambiguity, reported rather than picked from;
-// a second row of the parent's name is simply not the parent.
-test.skipIf(!forkRecords)('two forks of one name are ambiguous, and a second row of the parent name is not a parent', () => {
+// decide the row: the fork is the row carrying the minted id, and a second row
+// of the parent's name is simply not the parent.
+test.skipIf(!forkRecords)('only the minted id is the fork, and a second row of the parent name is not a parent', () => {
   const [byParent] = planLoad([berserkerRecord],
       [parentRow('Berserker'), row('Berserker', { id: 'id-other' })], forkBook);
   expect(byParent.parent.id).toBe(PARENT_IDS.Berserker);
   expect(byParent.matches).toHaveLength(1);
 
-  const fork = (id) => row('Berserker', { id, rules_edition: 'aspirant', content_format: 'aspirant' });
-  const [byFork] = planLoad([berserkerRecord], [parentRow('Berserker'), fork('f1'), fork('f2')], forkBook);
-  expect(byFork.matches).toHaveLength(2);
-  expect(byFork.row).toBeNull();
+  const lookalike = (id) => row('Berserker', { id, rules_edition: 'aspirant', content_format: 'aspirant' });
+  const [byFork] = planLoad([berserkerRecord], [parentRow('Berserker'), lookalike('f1'), lookalike('f2')], forkBook);
+  expect(byFork.disposition).toBe('fork');
+  expect(byFork.matches).toHaveLength(1);
 });
 
 // An id Postgres mints instead would differ between local and production, which
@@ -432,6 +432,21 @@ test('re-running the Exclusives load updates the fork and keeps its section and 
   expect(plan.payload.free_play_access).toBe(false);
 });
 
+test('a player\'s own Aspirant class of the same name is never taken for the fork', () => {
+  const homebrew = row('Ardent', { id: 'player-ardent', content_format: 'aspirant',
+    rules_edition: 'aspirant', is_player_created: true, is_public: false });
+  const [first] = planLoad([exclusiveRecord('Ardent')], [exclusiveParent('Ardent'), homebrew], exclusivesBook());
+  expect(first.disposition).toBe('fork');
+  expect(first.payload.id).toBe(EXCLUSIVE_FORK_IDS.Ardent);
+
+  const fork = row('Ardent', { id: EXCLUSIVE_FORK_IDS.Ardent, content_format: 'aspirant',
+    rules_edition: 'aspirant', base_class_id: 'advent-exclusive-Ardent' });
+  const [rerun] = planLoad([exclusiveRecord('Ardent')], [exclusiveParent('Ardent'), homebrew, fork], exclusivesBook());
+  expect(rerun.disposition).toBe('update');
+  expect(rerun.row.id).toBe(EXCLUSIVE_FORK_IDS.Ardent);
+  expect(rerun.matches).toHaveLength(1);
+});
+
 // A V1 name minted under the Exclusives book, or an Exclusive under V1, would
 // insert a row under another book's id.
 test('a minted fork id resolves only through its own book', () => {
@@ -560,7 +575,7 @@ const teaserFields = {
 const pccRecord = (over = {}) =>
     ({ name: 'ZOOLOGIST', prerelease_section: 'PCCs', ...teaserFields, ...over });
 const forkRecord = (over = {}) => ({ name: 'BERSERKER', ...teaserFields, ...over });
-const existingBerserkerFork = (over = {}) => row('Berserker', { id: 'fork-berserker',
+const existingBerserkerFork = (over = {}) => row('Berserker', { id: ASPIRANT_V1_CLASS_IDS.Berserker,
   content_format: 'aspirant', rules_edition: 'aspirant', base_class_id: PARENT_IDS.Berserker, ...over });
 const changedFields = (plan) => diffFields(plan.payload, plan.row).map((change) => change.field);
 

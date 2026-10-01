@@ -217,23 +217,22 @@ const inheritedArt = (parent, fork) => (
     : {}
 );
 
-// A fork of this book already in the catalogue means the load has run before, so
-// the second run updates the fork it made rather than making another. Otherwise
-// the load descends from the parent, which it leaves untouched. Two forks of one
-// name is a name the loader cannot resolve, reported through `matches`; a
-// parent that is not exactly one row stops the run.
+// The row carrying this book's minted id means the load has run before, so the
+// second run updates the fork it made rather than making another. Otherwise the
+// load descends from the parent, which it leaves untouched. The fork is found by
+// id alone: the read sees private classes, and a player's own class of the same
+// name and format must never be overwritten and published. A parent that is not
+// exactly one row stops the run.
 const forkPlan = (payload, matches, book) => {
-  const existing = matches.filter((row) => row.content_format === book.contentFormat
-      && row.rules_edition === book.rulesEdition);
-  if (existing.length) {
-    const row = existing.length === 1 ? existing[0] : null;
-    const parent = row && matches.find((candidate) => candidate.id === row.base_class_id);
+  const id = mintedId(payload.name, book);
+  const row = matches.find((candidate) => candidate.id === id);
+  if (row) {
+    const parent = matches.find((candidate) => candidate.id === row.base_class_id);
     return {
       payload: { ...payload, ...inheritedArt(parent, row) },
-      matches: existing, row, parent: null, disposition: 'update'
+      matches: [row], row, parent: null, disposition: 'update'
     };
   }
-  const id = mintedId(payload.name, book);
   const parent = book.forkParentWhere
     ? parentByColumns(payload.name, matches, book.forkParentWhere)
     : parentByRoster(payload.name, matches);
