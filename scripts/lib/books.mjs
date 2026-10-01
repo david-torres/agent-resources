@@ -1,6 +1,8 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { ASPIRANT_EXCLUSIVE_CLASS_IDS, ASPIRANT_V1_CLASS_IDS } from '../../util/starter-content.js';
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 const DATA = join(REPO_ROOT, 'docs', 'data');
 // Extracted book content is never committed: it resolves from a gitignored
@@ -10,6 +12,12 @@ const ARTIFACT_DIR = process.env.CLASS_DATA_DIR || join(REPO_ROOT, 'private-data
 
 // One book's ingestion in one place: where its artifact lives, what names it
 // resolves under, and what the load is authorised to make visible.
+//
+// `section` is what `prerelease_section` a class is written with: 'from-record'
+// reads each record's own heading, a section name stamps every class, and null
+// leaves the column out. A forking book names its fork ids in `mintedIds` and
+// finds each parent either through the class-unlock roster (`forkParentWhere`
+// null) or as the one row of the class's name matching those columns.
 export const BOOKS = {
   prerelease: {
     key: 'prerelease',
@@ -26,7 +34,12 @@ export const BOOKS = {
     // latest Advent version.
     status: 'release',
     rulesVersion: 'v2',
-    forks: false
+    forks: false,
+    section: 'from-record',
+    // The pre-release book was given away, so its classes are free to play.
+    freePlay: true,
+    mintedIds: null,
+    forkParentWhere: null
   },
   'aspirant-v1': {
     key: 'aspirant-v1',
@@ -44,7 +57,33 @@ export const BOOKS = {
     status: 'release',
     // Aspirant V1 characters are built under the Advent v2 character rules.
     rulesVersion: 'v2',
-    forks: true
+    forks: true,
+    section: null,
+    // The grant lives in the class-unlock roster; free play on top of it would
+    // make the roster meaningless.
+    freePlay: false,
+    mintedIds: ASPIRANT_V1_CLASS_IDS,
+    forkParentWhere: null
+  },
+  'aspirant-exclusives': {
+    key: 'aspirant-exclusives',
+    artifact: join(ARTIFACT_DIR, 'aspirant-exclusives-classes-2026-10.json'),
+    remap: null,
+    aliases: {},
+    publishedByLoad: ['Ardent', 'Offdriver', 'Squire'],
+    contentFormat: 'aspirant',
+    rulesEdition: 'aspirant',
+    status: 'release',
+    rulesVersion: 'v2',
+    forks: true,
+    // The admin unlock dashboard grants only 'exclusive' classes, and these are
+    // unlock-only.
+    section: 'exclusive',
+    freePlay: false,
+    mintedIds: ASPIRANT_EXCLUSIVE_CLASS_IDS,
+    // The pre-release load inserted these parents with Postgres-minted ids, so
+    // no roster names them and their ids differ between environments.
+    forkParentWhere: { content_format: 'advent', prerelease_section: 'exclusive', is_player_created: false }
   }
 };
 

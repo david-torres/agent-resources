@@ -28,6 +28,15 @@ const ASPIRANT_V1_CLASS_IDS = {
   Witchfinder: '81bccc24-a7f3-4217-8bf8-de65d1ae4633',
 };
 
+// The three rows the loader forks for the Aspirant Exclusives, minted for the
+// same reason. Absent from CORE_CLASS_UNLOCKS: no book grants them, only a
+// per-class unlock does.
+const ASPIRANT_EXCLUSIVE_CLASS_IDS = {
+  Ardent:    '07b32465-be5d-46ec-84d2-4d5574b151bc',
+  Offdriver: '2a836d69-2b76-4770-bb15-83ef652e312b',
+  Squire:    '0730b2b5-8327-4bc1-8400-16edde552b1a',
+};
+
 // ruleset -> class name -> ids. Holding a rules PDF for a ruleset grants that
 // ruleset's roster (util/book-classes.js). New profiles receive the Advent
 // book, so the advent roster is also what a new account starts with.
@@ -84,6 +93,7 @@ module.exports = {
   STARTER_RULES_PDF_ID,
   CORE_CLASS_UNLOCKS,
   ASPIRANT_V1_CLASS_IDS,
+  ASPIRANT_EXCLUSIVE_CLASS_IDS,
   EDITION_LABELS,
   EDITION_UPSELL_BLURBS,
   EDITION_PURCHASE_URLS

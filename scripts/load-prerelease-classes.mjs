@@ -8,8 +8,9 @@
 // A book whose descriptor sets `forks` never writes over the class it shares a
 // name with. It inserts a row of its own instead, carrying `base_class_id`, its
 // own `content_format` and `rules_edition`, and an id minted in
-// util/starter-content.js; the parent -- the row that module's roster names --
-// is left exactly as it stands. A second run finds that row and updates it,
+// util/starter-content.js; the parent -- the row that module's roster names, or
+// the one row matching the book's `forkParentWhere` -- is left exactly as it
+// stands. A second run finds that row and updates it,
 // which is what keeps a repeated --apply a no-op.
 //
 // An --apply run does three things in order: writes the class rows, renames the
@@ -36,7 +37,7 @@ import { readFileSync } from 'node:fs';
 
 import { createClient } from '@supabase/supabase-js';
 
-import { ASPIRANT_V1_CLASS_IDS, CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
+import { CORE_CLASS_UNLOCKS } from '../util/starter-content.js';
 import { buildClassTeaser } from '../services/class/teaser.js';
 import { bookFor } from './lib/books.mjs';
 import {
@@ -52,11 +53,11 @@ const CONTENT_FIELDS = ['name', 'challenge_level', 'stat_line', 'stat_note', 'qu
     'tips', 'designer', 'prerelease_section', 'free_play_access', 'stat_spread', 'abilities', 'gear',
     'advanced_abilities', 'expanded_tips', 'teaser'];
 
-// `prerelease_section` is the pre-release document's own sectioning: the V1
-// artifact carries no such key, and DERIVED.prerelease_section would throw on a
-// record without one rather than store a null.
+// The V1 artifact carries no `prerelease_section` key, and
+// DERIVED.prerelease_section would throw on a record without one rather than
+// store a null.
 export const fieldsFor = (book) => CONTENT_FIELDS
-    .filter((field) => field !== 'prerelease_section' || book.key === 'prerelease');
+    .filter((field) => field !== 'prerelease_section' || book.section !== null);
 
 // Rich-text trees whose `text` leaves are runs within a line rather than whole
 // values: trimming each leaf independently would delete the space between two
@@ -98,11 +99,9 @@ const tipsMarkdown = (tips) => tips.map((tip) => `- ${tip}`).join('\n');
 
 const DERIVED = {
   name: (record) => displayName(record.name),
-  prerelease_section: (record) => sectionEnum(record.prerelease_section),
-  // The pre-release book was given away, so its classes are free to play. The
-  // Aspirant book's grant lives in the class-unlock roster instead, so
-  // free-play access on top of the roster would make the roster meaningless.
-  free_play_access: (record, book) => book.key === 'prerelease',
+  prerelease_section: (record, book) => (book.section === 'from-record'
+    ? sectionEnum(record.prerelease_section) : book.section),
+  free_play_access: (record, book) => book.freePlay,
   tips: (record) => tipsMarkdown(record.tips),
   // The August 2026 artifact predates Aspirant V1 and carries neither key, so
   // those records load the empty shape. Both are emitted unconditionally
@@ -176,8 +175,8 @@ export const resolveTarget = (payload, rows, book) => {
 // An id Postgres mints instead would differ between environments, which is the
 // one thing minting them by hand prevents -- and a payload with no `id` key is
 // exactly what makes Postgres mint one.
-const mintedId = (name) => {
-  const id = ASPIRANT_V1_CLASS_IDS[name];
+const mintedId = (name, book) => {
+  const id = book.mintedIds[name];
   if (!id) throw new Error(`no minted class id for ${JSON.stringify(name)}`);
   return id;
 };
@@ -191,6 +190,26 @@ const mintedId = (name) => {
 export const forkParentId = (name) =>
   (CORE_CLASS_UNLOCKS.advent[name] ?? CORE_CLASS_UNLOCKS.aspirant[name])?.[0] ?? null;
 
+const parentByRoster = (name, matches) => {
+  const parentId = forkParentId(name);
+  const parent = matches.find((row) => row.id === parentId);
+  if (!parent) {
+    throw new Error(`no fork parent for ${JSON.stringify(name)}: the catalogue holds no ` +
+        `row of that name with the roster id ${parentId ?? '(none)'}`);
+  }
+  return parent;
+};
+
+const parentByColumns = (name, matches, where) => {
+  const candidates = matches.filter((row) =>
+    Object.entries(where).every(([column, value]) => row[column] === value));
+  if (candidates.length !== 1) {
+    throw new Error(`${candidates.length ? 'ambiguous' : 'no'} fork parent for ` +
+        `${JSON.stringify(name)}: ${candidates.length} rows of that name match ${JSON.stringify(where)}`);
+  }
+  return candidates[0];
+};
+
 // The book prints no art, so a fork shows its parent's -- unless it already
 // has art of its own.
 const inheritedArt = (parent, fork) => (
@@ -202,8 +221,8 @@ const inheritedArt = (parent, fork) => (
 // A fork of this book already in the catalogue means the load has run before, so
 // the second run updates the fork it made rather than making another. Otherwise
 // the load descends from the parent, which it leaves untouched. Two forks of one
-// name is a name the loader cannot resolve, reported through `matches`; the
-// parent is a single row by construction.
+// name is a name the loader cannot resolve, reported through `matches`; a
+// parent that is not exactly one row stops the run.
 const forkPlan = (payload, matches, book) => {
   const existing = matches.filter((row) => row.content_format === book.contentFormat
       && row.rules_edition === book.rulesEdition);
@@ -215,13 +234,10 @@ const forkPlan = (payload, matches, book) => {
       matches: existing, row, parent: null, disposition: 'update'
     };
   }
-  const id = mintedId(payload.name);
-  const parentId = forkParentId(payload.name);
-  const parent = matches.find((row) => row.id === parentId);
-  if (!parent) {
-    throw new Error(`no fork parent for ${JSON.stringify(payload.name)}: the catalogue holds no ` +
-        `row of that name with the roster id ${parentId ?? '(none)'}`);
-  }
+  const id = mintedId(payload.name, book);
+  const parent = book.forkParentWhere
+    ? parentByColumns(payload.name, matches, book.forkParentWhere)
+    : parentByRoster(payload.name, matches);
   // A fork states its own identity, its parent and the two axes that separate
   // it from that parent, because it must not inherit any of the four. The pair
   // that separates fork from parent is `content_format` always, and
@@ -244,7 +260,7 @@ const forkPlan = (payload, matches, book) => {
 // `content_format`. A name shared across formats names two different classes,
 // so the scoped list is what decides the disposition and what the ambiguity
 // report prints. A forking book is deliberately not scoped here: forkPlan picks
-// its fork by both axes and its parent by id, and a fork's parent is by
+// its fork by both axes and its parent by id or columns, and a fork's parent is by
 // definition in another format.
 export const planLoad = (records, rows, book) => records.map((record) => {
   const payload = buildPayload(record, book);
