@@ -43,7 +43,12 @@ test('metadata migration preserves production-shaped characters, timestamps, lin
     };
     const before = await snapshot();
     const beforeReport = buildEditionMechanicsAudit(before);
-    expect(beforeReport.safe_metadata_change).toBe(true);
+    expect(beforeReport.safe_metadata_change).toBe(false);
+    // Obsolete identities are now rejected at runtime. Preserve the migration's
+    // historical curve assertion using the corrected edition identity.
+    const expectedReport = buildEditionMechanicsAudit({ ...before, classes: before.classes.map(row =>
+      row.rules_edition === 'aspirant' ? { ...row, rules_version: 'v1' } : row) });
+    expect(expectedReport.safe_metadata_change).toBe(true);
     await db.query(migration);
     const after = await snapshot();
     expect(after.characters).toEqual(before.characters);
@@ -52,7 +57,7 @@ test('metadata migration preserves production-shaped characters, timestamps, lin
     expect(computeVersionFamily(after.classes, classes[0].id)).toEqual(computeVersionFamily(before.classes, classes[0].id));
     const afterReport = buildEditionMechanicsAudit(after);
     expect(afterReport.safe_metadata_change).toBe(true);
-    expect(afterReport.characters.map(row => row.proposed)).toEqual(beforeReport.characters.map(row => row.proposed));
+    expect(afterReport.characters.map(row => row.proposed)).toEqual(expectedReport.characters.map(row => row.proposed));
     expect(after.characters.find(row => row.id === characters[0].id).level).toBe(5);
     await db.query(migration);
     expect(await snapshot()).toEqual(after);

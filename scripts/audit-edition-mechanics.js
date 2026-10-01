@@ -10,8 +10,7 @@ const buildEditionMechanicsAudit = ({ classes, characters, links = [], offscreen
   const errors = [];
   for (const row of classes) {
     try {
-      assertPublishedClassRules(row.rules_edition === 'aspirant' && row.rules_version === 'v2'
-        ? { ...row, rules_version: 'v1' } : row);
+      assertPublishedClassRules(row);
       if (!['advent', 'aspirant'].includes(row.content_format)) throw new Error('Unsupported content format');
     } catch (error) { errors.push({ class_id: row.id, message: error.message }); }
   }

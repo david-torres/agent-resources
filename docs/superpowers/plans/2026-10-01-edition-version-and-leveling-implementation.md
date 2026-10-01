@@ -1,24 +1,24 @@
 # Edition version and leveling repair — implementation plan
 
-Date: 2026-10-01. Status: application implementation and local migration rehearsal complete; production rollout pending.
+Date: 2026-10-01. Status: production correction verified; temporary read compatibility retired in this revision.
 
 Design contract: [spec](../specs/2026-10-01-edition-version-and-leveling-design.md).
 Production evidence: [investigation](2026-10-01-edition-version-and-leveling-repair.md).
 
 ## Implementation and validation record
 
-Tasks 1–8 are implemented. Edition-aware mechanics, canonical progression, browser requirements, atomic mission/credit/character/perk persistence, idempotent retries, writer validation, agent metadata, and the read-only audit are present in the workspace.
+Tasks 1–10 are implemented. Edition-aware mechanics, canonical progression, browser requirements, atomic mission/credit/character/perk persistence, idempotent retries, writer validation, agent metadata, and the read-only audit are present in the workspace.
 
 - Complete isolated unit and HTTP suites passed (224 unit files and 28 HTTP files at this checkout).
 - Local level-up integration covers failed-perk rollback including new missions and credits, retries, concurrent duplicate requests, stale history, concurrent history writes, stale perk builds, insufficient history, and level 10.
 - Production-shaped metadata rehearsal passed with 21 classes/48 characters and the 11-mission level-5 case; timestamps, character snapshots, mission links, and class families were unchanged; rerun was a no-op.
 - Local Aspirant conversion/edit and published-identity integration tests pass. All 11 browser checks for leveling, Advent creation, and Aspiring creation passed in the final combined run.
 - The broad local integration run passed 22/25 files. Remaining failures in character-content integrity, class form round trips, and image-crop integrity also reproduce under the original repository code in a temporary checkout. They are existing local data/audit issues, not repaired by this change.
-- Syntax and whitespace checks passed. Production was read only; no cloud migrations or character repairs were applied. A read-only production check confirmed no character above level 10.
+- Syntax and whitespace checks passed. Pre-rollout production checks confirmed no character above level 10. The rollout applied the two scoped migrations below; no character reconciliation was run.
 
 The atomic migration takes short history-table locks before the character lock, then build-table locks in the same order as ordinary atomic edits, to serialize promotion with inserts and updates, and compares the rules, timestamp, mission history, and build snapshot before committing. Delayed automatic progress writes use timestamp compare-and-swap and retry. This favors straightforward transaction correctness for an infrequent operation; lock contention should be observed during rollout.
 
-Tasks 9–10 remain deployment steps. Keep legacy Aspirant/v2 read compatibility while production still has those values. Apply the atomic RPC migration before deploying its caller, then the edition metadata correction after compatible application deployment; only retire compatibility after verification. The deprecated agent API alias remains until consumers migrate.
+Tasks 9–10 completed in order: atomic RPC installation, compatible application deployment, metadata correction, snapshot verification, then strict identity cleanup. The deprecated agent API alias remains until consumers migrate.
 
 ## Delivery order
 
@@ -134,7 +134,7 @@ Done when the report proves metadata-only changes, detects unexpected targets, a
 5. Exercise read-only production class filters, sheets, and agent reads. Use local/staging for writer smoke tests unless production test writes have separate authorization.
 6. Record before/after audit and deployment versions. Report automatic discrepancies separately; do not rewrite manual totals or invoke broad reconciliation.
 
-Rollback order: retain the compatible resolver after data correction. If the old application must return, restore captured class versions first while preserving timestamps. Transactional RPC additions remain backward compatible with the prior application until rollback is no longer needed.
+Rollback order: deploy the compatible edition-aware release `2284ba7` first if the strict reader is live. Before returning to pre-repair application code, drop `classes_published_rules_identity` and restore only the captured class versions transactionally with the timestamp trigger disabled/re-enabled. The saved rollback SQL targets the 21 audited IDs. Transactional RPC additions remain backward compatible; leave them installed.
 
 Done when production labels say Aspirant v1 and all affected progression behavior is preserved.
 
@@ -154,4 +154,15 @@ Done when supported published identities are enforced consistently and productio
 - Tasks 6–8: writers, API metadata, and rehearsed migration preserve the corrected contract.
 - Task 9: production rollout evidence shows no character changes caused by metadata correction.
 
-Application implementation and local validation are complete. Production deployment, the corrective production migration, and compatibility retirement remain pending.
+Application implementation, local validation, and the production correction are complete. The final strict identity revision removes the temporary Aspirant/v2 reader and retains the deprecated agent API alias.
+
+
+## Production rollout evidence — 2026-10-01
+
+- Verified full database archive: `backups/backup-20261001-153122.dump` (5.6 MiB, 936 archive entries). Row snapshots are private local files under `/tmp/edition-rollout-snapshot-*.json`; verification is `/tmp/edition-rollout-verification.json`.
+- Applied and recorded `20261001000001_atomic_level_up_missions`, then deployed compatible release `2284ba7` through Railway (deployment `81b5fe6b-b85a-4da2-91f2-17db59a02752`, SUCCESS), then applied and recorded `20261001000002_aspirant_edition_versions`.
+- The installed Supabase CLI rejected the RPC migration during parsing and rolled its transaction back. The repository's database-driver migration method then applied each scoped file and ledger entry in one transaction; both versions appear in the normal CLI ledger.
+- Exactly 21 class `rules_version` values changed from v2 to v1. All other class fields, including timestamps and family links, were identical. Full snapshots of 343 characters, 752 mission links, offscreen entries, gear, abilities, perks, and traits were identical. All audited mechanics, calculated progression, and economies were identical. No Aspirant/v2 rows remain.
+- Live class listing labels say Aspirant v1. The legacy automatic character `1426d69f-19b6-4203-912a-ae6feef65704` remains level 5 at 11 completed missions, needing 3 more for level 6. Production agent serialization reports published Aspirant v1 and Advent v2 mechanics.
+- Strict cleanup passed the complete unit and HTTP suites, 12 local identity/migration/atomic-level-up integration checks, and syntax/whitespace checks. Audit tests now detect obsolete identities even without linked characters; the historical migration rehearsal proves its corrected mechanics separately from runtime acceptance.
+- Unrelated untracked `scripts/sql/audit-aspirant-characters-without-access.sql` was excluded from the release.

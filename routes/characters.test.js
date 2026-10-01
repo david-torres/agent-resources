@@ -290,6 +290,7 @@ const GS_FORK = {
   id: 'class-gs-fork',
   base_class_id: GS_ADVENT.id,
   rules_edition: 'aspirant',
+  rules_version: 'v1',
   content_format: 'aspirant',
   gear: [{ name: 'Revolver', description: '' }],
   abilities: [{ name: 'Trickshot', description: '' }],
@@ -315,6 +316,7 @@ const LN_FORK = {
   id: 'class-ln-fork',
   base_class_id: LN_ADVENT.id,
   rules_edition: 'aspirant',
+  rules_version: 'v1',
   content_format: 'aspirant',
   gear: [{ name: 'RAPIER', description: '' }],
   abilities: [{ name: 'RIPOSTE', description: '' }],
@@ -1161,7 +1163,7 @@ test('the conversion footer about Illegal Build lines appears only when there is
 const LEGACY_BLOCK_COPY = 'preserved as a read-only legacy block';
 
 const upgradePage = async (creatorMode) => {
-  pageState.upgradeTargets = [{ id: 'class-a-v2', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v2' }];
+  pageState.upgradeTargets = [{ id: 'class-a-v1', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v1' }];
   pageState.character = { ...makePageCharacter(3), creator_id: 'profile-1', creator_mode: creatorMode };
   const res = await fetch(`${baseUrl}/characters/${CHAR_ID}/edit`, {
     headers: { Accept: 'text/html', Authorization: 'Bearer test-token' },
@@ -1172,13 +1174,13 @@ const upgradePage = async (creatorMode) => {
 
 test('the Upgrade block warns of the read-only legacy block for an Advent character on a v1 class', async () => {
   const body = await upgradePage(null);
-  expect(body).toContain('Upgrade to Aspirant v2');
+  expect(body).toContain('Upgrade to Aspirant v1');
   expect(body).toContain(LEGACY_BLOCK_COPY);
 });
 
 test('the Upgrade block omits the legacy-block warning for an Aspirant character already on the v2 rules', async () => {
   const body = await upgradePage('aspirant');
-  expect(body).toContain('Upgrade to Aspirant v2');
+  expect(body).toContain('Upgrade to Aspirant v1');
   expect(body).not.toContain(LEGACY_BLOCK_COPY);
 });
 

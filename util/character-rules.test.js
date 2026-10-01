@@ -4,7 +4,7 @@ const { resolveCharacterMechanics, characterRulesVersion, assertPublishedClassRu
 for (const creatorMode of [null, '', 'advent', 'aspirant', 'aspiring']) {
   for (const [edition, version, expected] of [
     ['advent', 'v1', 'advent-v1'], ['advent', 'v2', 'advent-v2'],
-    ['aspirant', 'v1', 'advent-v2'], ['aspirant', 'v2', 'advent-v2']
+    ['aspirant', 'v1', 'advent-v2']
   ]) {
     for (const content_format of ['advent', 'aspirant']) {
       test(`${edition} ${version}, mode ${creatorMode}, format ${content_format}`, () => {
@@ -21,12 +21,12 @@ for (const creatorMode of [null, '', 'advent', 'aspirant', 'aspiring']) {
 }
 
 test('invalid identity is rejected before mode overrides', () => {
-  for (const classRules of [undefined, {}, { rules_edition: 'unknown', rules_version: 'v1' }, { rules_edition: 'advent', rules_version: 'v3' }]) {
+  for (const classRules of [undefined, {}, { rules_edition: 'unknown', rules_version: 'v1' }, { rules_edition: 'advent', rules_version: 'v3' }, { rules_edition: 'aspirant', rules_version: 'v2' }]) {
     expect(() => resolveCharacterMechanics({ classRules, creatorMode: 'aspirant' })).toThrow();
   }
   expect(() => resolveCharacterMechanics({ classRules: null, creatorMode: 'unknown' })).toThrow();
 });
-test('published writes reject legacy Aspirant v2', () => {
+test('published writes reject unsupported Aspirant v2', () => {
   expect(() => assertPublishedClassRules({ rules_edition: 'aspirant', rules_version: 'v2' })).toThrow();
   expect(assertPublishedClassRules({ rules_edition: 'aspirant', rules_version: 'v1' }).rules_version).toBe('v1');
 });

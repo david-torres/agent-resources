@@ -12,7 +12,7 @@ const { CREATION_GRANT, priceOfSignature } = require('../../util/merx-economy');
 const GUNSLINGER_FAMILY_AND_FORK = [
   { id: 'gunslinger-v1', name: 'Gunslinger', rules_edition: 'advent', rules_version: 'v1', content_format: 'advent', base_class_id: null },
   { id: 'gunslinger-v2', name: 'Gunslinger', rules_edition: 'advent', rules_version: 'v2', content_format: 'advent', base_class_id: 'gunslinger-v1' },
-  { id: 'gunslinger-aspirant-v1', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v2', content_format: 'aspirant', base_class_id: 'gunslinger-v1' }
+  { id: 'gunslinger-aspirant-v1', name: 'Gunslinger', rules_edition: 'aspirant', rules_version: 'v1', content_format: 'aspirant', base_class_id: 'gunslinger-v1' }
 ];
 
 const ok = data => ({ data, error: null });

@@ -1,6 +1,6 @@
 # Edition version and leveling repair — design spec
 
-Date: 2026-10-01. Status: implemented and locally validated; production rollout pending.
+Date: 2026-10-01. Status: implemented; production metadata and progression verified on 2026-10-01.
 
 Implementation plan: [task sequence](../plans/2026-10-01-edition-version-and-leveling-implementation.md).
 Evidence: [production investigation](../plans/2026-10-01-edition-version-and-leveling-repair.md).
@@ -35,7 +35,7 @@ Provide a pure `resolveCharacterMechanics({ classRules, creatorMode })` function
 | Advent v2 | `advent-v2` | `advent-v2` |
 | Aspirant v1 | `advent-v2` | `advent-v2` |
 | Classless | `advent-v1` | `advent-v2` |
-| Legacy Aspirant v2, rollout only | `advent-v2` | `advent-v2` |
+| Aspirant v2 (obsolete) | Rejected | Rejected |
 
 Validate a supplied class identity before applying a mode override. Unsupported pairs are an explicit rules error, not a fallback to Advent v1. Unknown modes use existing mode validation. Classless fallback preserves current behavior; a missing/deleted linked class or database failure does not qualify as classless.
 
@@ -87,7 +87,7 @@ On validation failure, stale state, insufficient credits, or injected database f
 
 ## Edition/version writes and public metadata
 
-Aspirant v1 book loaders, imports, admin forms, creation, and forks write Aspirant v1. Supported published identities are Advent v1, Advent v2, and Aspirant v1. New writes of Aspirant v2 are rejected even while legacy reads remain compatible. Import defaults use the edition's published version; explicit unsupported pairs produce an error rather than being silently rewritten. Forks across editions validate the destination pair rather than inheriting the source version blindly.
+Aspirant v1 book loaders, imports, admin forms, creation, and forks write Aspirant v1. Supported published identities are Advent v1, Advent v2, and Aspirant v1. Writes and runtime reads of Aspirant v2 are rejected after the verified production correction. Import defaults use the edition's published version; explicit unsupported pairs produce an error rather than being silently rewritten. Forks across editions validate the destination pair rather than inheriting the source version blindly.
 
 Class labels, filters, history, exports, and class API metadata continue to show the stored published edition/version. Remove hardcoded Aspirant v2 options. Mechanics labels in character progress should identify the applicable rules clearly; avoid presenting the underlying mechanics version as the class's published version.
 

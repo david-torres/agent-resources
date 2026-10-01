@@ -2,11 +2,11 @@
 const V2_MODES = new Set(['aspirant', 'aspiring']);
 const rulesError = message => Object.assign(new Error(message), { code: 'CHARACTER_RULES_UNAVAILABLE', status: 503 });
 
-const validateClassRules = (classRules, { allowLegacy = true } = {}) => {
+const validateClassRules = classRules => {
   if (!classRules || typeof classRules !== 'object') throw rulesError('Class rules are unavailable');
   const { rules_edition: edition, rules_version: version } = classRules;
   if (edition === 'advent' && ['v1', 'v2'].includes(version)) return classRules;
-  if (edition === 'aspirant' && (version === 'v1' || (allowLegacy && version === 'v2'))) return classRules;
+  if (edition === 'aspirant' && version === 'v1') return classRules;
   throw rulesError(`Unsupported class rules: ${edition || 'unknown'} ${version || 'unknown'}`);
 };
 
@@ -29,7 +29,7 @@ const characterRulesVersion = (args = {}) => {
 };
 
 const assertPublishedClassRules = classRules => {
-  try { return validateClassRules(classRules, { allowLegacy: false }); }
+  try { return validateClassRules(classRules); }
   catch (error) { throw Object.assign(error, { code: 'INVALID_CLASS_RULES', status: 400 }); }
 };
 module.exports = { assertPublishedClassRules, resolveCharacterMechanics, characterRulesVersion, validateClassRules, rulesError };
