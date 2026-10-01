@@ -1999,3 +1999,125 @@ describe('the aspirant shops sell each name once per lineage', () => {
     expect(wizard.canAcquire(state, { classId: 'ms', abilityName: 'FAMILIAR FACE', type: 'core', crossClass: true })).toBe(false);
   });
 });
+
+// An aspirant buys Signatures from its own Class's grid and from the shop's
+// other classes. Only the grid's cells open a drawer, so "Your Signatures"
+// lists everything owned -- own-class and cross-class alike -- and each of
+// its cells opens the same drawer the grid does.
+describe('Your Signatures', () => {
+  const FIGURES = economyFigures();
+  const ownClass = (classGear = twelveItems()) => ({
+    id: 'c-v1',
+    name: 'Gunslinger',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: classGear,
+    base_gear: [],
+    abilities: [],
+    advanced_abilities: []
+  });
+  const otherClass = () => ({
+    id: 'c-other',
+    name: 'Drifter',
+    content_format: 'aspirant',
+    stat_spread: {},
+    gear: [],
+    class_gear: twelveItems().map((g) => ({
+      ...g,
+      name: 'Drifter ' + g.name,
+      default_enchantment: { name: 'Drifter ' + g.name + ' Enchantment', description: 'Does a thing.' }
+    })),
+    base_gear: [],
+    abilities: [],
+    advanced_abilities: []
+  });
+  const bootAspirant = (classes = [ownClass(), otherClass()]) => {
+    const wizard = bootWizard(fixture({ mode: 'aspirant', classes }));
+    wizard.getState().classId = 'c-v1';
+    wizard.renderGearStep();
+    return wizard;
+  };
+  const yourCells = () => [...document.querySelectorAll(
+    '[data-your-signatures] [data-signature-name][data-signature-class]'
+  )].map((el) => ({
+    name: el.getAttribute('data-signature-name'),
+    classId: el.getAttribute('data-signature-class')
+  }));
+  const buyFromShop = (classId, name) => {
+    document.querySelector('[data-shop-key="class:' + classId + ':' + name + '"]').click();
+  };
+  const openYourSignature = (name) => {
+    const cell = document.querySelector('[data-your-signatures] [data-signature-name="' + name + '"]');
+    expect(cell).not.toBeNull();
+    cell.click();
+  };
+
+  test('the view puts Your Signatures above the class grid', () => {
+    const view = require('fs').readFileSync('views/character-wizard.handlebars', 'utf8');
+    const list = view.indexOf('data-your-signatures');
+    expect(list).toBeGreaterThan(view.indexOf('id="signaturePanel"'));
+    expect(list).toBeLessThan(view.indexOf('id="signatureGrid"'));
+  });
+
+  test('lists every owned Signature, own-class and cross-class, in purchase order', () => {
+    const wizard = bootAspirant();
+    expect(yourCells()).toEqual([]);
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    wizard.buySignature('Cowboy Hat', 'c-v1');
+    wizard.renderGearStep();
+    expect(yourCells()).toEqual([
+      { name: 'Drifter Sharps Rifle', classId: 'c-other' },
+      { name: 'Cowboy Hat', classId: 'c-v1' }
+    ]);
+  });
+
+  test('opening a cross-class Signature shows its entry and Remove in the drawer', () => {
+    bootAspirant();
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    openYourSignature('Drifter Sharps Rifle');
+    const drawer = document.getElementById('signatureDrawer');
+    expect(drawer.hidden).toBe(false);
+    expect(drawer.innerHTML).toContain('Drifter Sharps Rifle Enchantment');
+    expect(drawer.querySelector('[data-signature-sell]')).not.toBeNull();
+  });
+
+  test('a cross-class Signature takes an Enchantment and a Mod through its drawer', () => {
+    const wizard = bootAspirant();
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    openYourSignature('Drifter Sharps Rifle');
+    const drawer = document.getElementById('signatureDrawer');
+    const defaultRadio = drawer.querySelector('input[name="enchantment"][value="default"]');
+    defaultRadio.checked = true;
+    defaultRadio.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const modName = drawer.querySelector('[data-mod-name]');
+    modName.value = 'Long Barrel';
+    modName.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    const bought = wizard.getState().gear.find((g) => g.name === 'Drifter Sharps Rifle');
+    expect(bought.class_id).toBe('c-other');
+    expect(bought.enchantment).toEqual({ source: 'default' });
+    expect(bought.mods).toEqual([{ name: 'Long Barrel', description: '' }]);
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.cross
+      + FIGURES.prices.defaultEnchantment.cross + FIGURES.prices.mod.cross[0]);
+  });
+
+  test('buying from the shop adds a Signature; removing it from its drawer takes it out', () => {
+    const wizard = bootAspirant();
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    expect(wizard.getState().gear.map((g) => g.name)).toEqual(['Drifter Sharps Rifle']);
+    expect(yourCells()).toEqual([{ name: 'Drifter Sharps Rifle', classId: 'c-other' }]);
+    openYourSignature('Drifter Sharps Rifle');
+    document.querySelector('#signatureDrawer [data-signature-sell]').click();
+    expect(wizard.getState().gear).toHaveLength(0);
+    expect(yourCells()).toEqual([]);
+  });
+
+  test('the panel shows whenever a Signature is owned, even with an empty class grid', () => {
+    bootAspirant([ownClass([]), otherClass()]);
+    expect(document.getElementById('signaturePanel').hidden).toBe(true);
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    expect(document.getElementById('signaturePanel').hidden).toBe(false);
+    expect(yourCells()).toEqual([{ name: 'Drifter Sharps Rifle', classId: 'c-other' }]);
+  });
+});

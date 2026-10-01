@@ -202,6 +202,7 @@ const buildHtml = () => `
     <span id="merxSpent">0</span> / <span id="merxBudget">0</span>
     <p id="merxRemainderNote" hidden></p>
     <div id="signaturePanel" hidden>
+      <div id="yourSignatures" data-your-signatures></div>
       <div id="signatureGrid"></div>
       <div id="signatureDrawer" hidden></div>
     </div>
