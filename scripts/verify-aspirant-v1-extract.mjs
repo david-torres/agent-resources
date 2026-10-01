@@ -53,8 +53,14 @@ import {
 } from '../util/aspirant-verify.js';
 import { bookFor } from './lib/books.mjs';
 
-const PDF = process.argv[2];
-const ARTIFACT = process.argv[3] || bookFor('aspirant-v1').artifact;
+// `--standalone <artifact.json> <pdf>...` verifies standalone class PDFs instead of the book:
+// record i is read from the i-th PDF, whose PDF pages 1-6 are the class's six pages. Those
+// pages print no folio, and the tips page closes on the class's design credits.
+const STANDALONE_FLAG = '--standalone';
+const STANDALONE = process.argv[2] === STANDALONE_FLAG;
+const [ARTIFACT, ...PDFS] = STANDALONE
+  ? process.argv.slice(3)
+  : [process.argv[3] || bookFor('aspirant-v1').artifact, process.argv[2]];
 const REVIEW_DIR = '/tmp/aspirant-v1-review';
 
 // A class runs six pages and the record stores the printed numbers of the first and last.
@@ -82,6 +88,9 @@ const CHALLENGE_LEVEL_LABEL = 'Challenge Level:';
 const CHALLENGE_LEVEL = new RegExp(`^${CHALLENGE_LEVEL_LABEL}\\s*(\\S+)$`);
 const FOLIO = /^\d+$/;
 const ATTRIBUTION_DASH = '—';
+const STAT_NOTE_MARK = '*';
+const COLLABORATION_CREDIT = 'In collaboration with';
+const DESIGN_CREDITS = 'Design Contributors:';
 
 const SUP_OPEN = '<sup>';
 const SUP_CLOSE = '</sup>';
@@ -93,8 +102,8 @@ const SUP_MARKUP = /<\/?sup>/g;
 // in, which is read off the page's gutter and the cadence.
 const DEFAULT_ROSTER_COLUMN = 1;
 
-const pageLines = (page) => execFileSync('pdftotext',
-    ['-f', String(page), '-l', String(page), '-layout', PDF, '-'],
+const pageLines = (pdf, page) => execFileSync('pdftotext',
+    ['-f', String(page), '-l', String(page), '-layout', pdf, '-'],
     { encoding: 'utf8', maxBuffer: 1 << 26 })
   .replace(/\f/g, '')
   .split('\n');
@@ -313,14 +322,23 @@ const chromeOf = (where, lines, className, printed, hasHeader, review) => {
     return null;
   }
   const allowances = [];
-  const folio = filled[filled.length - 1];
-  if (!FOLIO.test(folio.text.trim())) {
-    fail(where, `the last printed line is "${folio.text.trim()}", not a page number`);
-  } else if (Number(folio.text.trim()) !== printed) {
-    fail(where, `the footer prints page ${folio.text.trim()} where page_range puts ${printed}`);
+  let footer = filled[filled.length - 1];
+  if (STANDALONE) {
+    const credits = filled.find((line) => line.text.trim() === DESIGN_CREDITS);
+    footer = credits ?? { index: lines.length };
+    if (credits) {
+      allowances.push(allow('pdf', tokenize(lines.slice(credits.index).join(' ')),
+        'the class\'s design credits, which the record has no field for'));
+    }
+  } else {
+    if (!FOLIO.test(footer.text.trim())) {
+      fail(where, `the last printed line is "${footer.text.trim()}", not a page number`);
+    } else if (Number(footer.text.trim()) !== printed) {
+      fail(where, `the footer prints page ${footer.text.trim()} where page_range puts ${printed}`);
+    }
+    allowances.push(allow('pdf', tokenize(footer.text),
+      'the printed page number in the footer; page_range holds it as a number'));
   }
-  allowances.push(allow('pdf', tokenize(folio.text),
-    'the printed page number in the footer; page_range holds it as a number'));
 
   const head = filled[0];
   let first = 0;
@@ -337,7 +355,12 @@ const chromeOf = (where, lines, className, printed, hasHeader, review) => {
   for (const detail of misdeclaredChrome(allowances)) fail(`${where} chrome`, detail);
   review.push(...allowances.map((allowance) =>
     `   allowed (${allowance.side}): ${allowance.tokens.join(' ')} -- ${allowance.why}`));
-  return lines.slice(first, folio.index);
+  const content = lines.slice(first, footer.index);
+  if (!STANDALONE) return content;
+  // With the credits off, nothing on a standalone page reaches the left margin, so `-layout`
+  // leaves a blank channel there that the gutter search would take for a second gutter.
+  const margin = Math.min(...content.filter((line) => line.trim()).map(indentOf));
+  return content.map((line) => line.slice(margin));
 };
 
 const verifyCover = (row, lines, review) => {
@@ -355,10 +378,20 @@ const verifyCover = (row, lines, review) => {
   if (statLine.trim() !== row.stat_line) {
     fail(where, `the stat line printed "${statLine.trim()}" but the record holds "${row.stat_line}"`);
   }
-  if (row.stat_note !== null) {
-    fail(where, `stat_note holds ${JSON.stringify(row.stat_note)} but no Aspirant cover prints one`);
+  // A footnoted stat line is the only thing that prints below the Challenge Level.
+  const footnote = lines.slice(lines.indexOf(challenge) + 1).flatMap(tokenize);
+  const printedNote = statLine.includes(STAT_NOTE_MARK) ? footnote.join(' ') : null;
+  if (row.stat_note === null ? printedNote !== null
+    : tokenize(row.stat_note).join(' ') !== printedNote) {
+    fail(where, `stat_note holds ${JSON.stringify(row.stat_note)} but the page prints`
+      + ` ${JSON.stringify(printedNote)} under a stat line of "${statLine.trim()}"`);
   }
-  checkQuote(where, [...between(statLine, attribution), attribution].flatMap(tokenize), row);
+  const credit = lines.find((line) => line.trim() === COLLABORATION_CREDIT);
+  if (credit) {
+    allowances.push(allow('pdf', tokenize(credit),
+      'the collaboration credit over the quote, whose names are set as art'));
+  }
+  checkQuote(where, [...between(credit ?? statLine, attribution), attribution].flatMap(tokenize), row);
   allowances.push(allow('pdf', [ATTRIBUTION_DASH],
     'the em dash that opens the attribution; quote_source holds only the name after it'));
 
@@ -638,22 +671,29 @@ const verifyTipsPage = (row, printed, lines, review) => {
 // Action, Sample Perks, (Compounded) and Default Enchantment, none of which that book prints).
 // The pre-release book's own gate is scripts/verify-prerelease-extract.mjs, which is where the
 // one sanctioned skip -- hand-appended CHARLATAN, no page_range -- lives and is expected.
-if (!PDF) throw new Error('usage: verify-aspirant-v1-extract.mjs <pdf> [artifact.json]');
+if (!PDFS[0]) {
+  throw new Error('usage: verify-aspirant-v1-extract.mjs <pdf> [artifact.json]\n'
+    + `       verify-aspirant-v1-extract.mjs ${STANDALONE_FLAG} <artifact.json> <pdf>...`);
+}
 
 const rows = JSON.parse(readFileSync(ARTIFACT, 'utf8'));
+if (STANDALONE && PDFS.length !== rows.length) {
+  throw new Error(`${rows.length} records against ${PDFS.length} PDFs; give one PDF per record`);
+}
 mkdirSync(REVIEW_DIR, { recursive: true });
 
 let cleanClasses = 0;
 
 const unread = unlocatable(rows);
 
-for (const row of rows) {
+for (const [index, row] of rows.entries()) {
+  const pdf = STANDALONE ? PDFS[index] : PDFS[0];
   if (unread.includes(row.name)) {
     report.push(`SKIP  ${row.name} (no page_range)`);
     continue;
   }
   const before = failures.length;
-  const review = [`${row.name} -- printed pages ${row.page_range.join('-')} of ${PDF}`, ''];
+  const review = [`${row.name} -- printed pages ${row.page_range.join('-')} of ${pdf}`, ''];
   const [first, last] = row.page_range;
   if (last - first + 1 !== PAGES_PER_CLASS) {
     fail(row.name, `page_range spans ${last - first + 1} pages, expected ${PAGES_PER_CLASS}`);
@@ -663,7 +703,8 @@ for (const row of rows) {
     const printed = first + offset;
     const where = `${row.name} p${printed}`;
     review.push(`== chrome, printed page ${printed}`);
-    body.push(chromeOf(where, pageLines(printed + PRINTED_FOLIO_OFFSET), row.name, printed,
+    const pdfPage = STANDALONE ? printed : printed + PRINTED_FOLIO_OFFSET;
+    body.push(chromeOf(where, pageLines(pdf, pdfPage), row.name, printed,
       HEADER_OFFSETS.includes(offset), review));
   }
   review.push('');
