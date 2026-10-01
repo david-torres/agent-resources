@@ -21,6 +21,8 @@ const {
 } = require('../models/rules');
 const { storeRulesPdf, deletePdfObject, getSignedPdfUrl, RULES_PDF_BUCKET } = require('../models/pdf');
 const { getProfileByNameAdmin, getProfileByIdAdmin, patchOnboarding } = require('../models/profile');
+const { getClasses, getClass, upsertClassUnlock, createUnlockCodes } = require('../models/class');
+const { supabaseAdmin } = require('../models/_base');
 const { STARTER_RULES_PDF_ID, CORE_CLASS_UNLOCKS } = require('../util/starter-content');
 const { isAuthenticated, requireAdmin, authOptional } = require('../util/auth');
 const { sendError } = require('../util/http-error');
@@ -158,17 +160,55 @@ router.get('/manage', isAuthenticated, requireAdmin, async (req, res) => {
     });
 });
 
+// An unlock target names a rulebook (pdf:<id>) or an Exclusive Class (class:<id>).
+const parseUnlockTarget = (value) => {
+    const [kind, id, ...rest] = String(value || '').split(':');
+    if (rest.length || !['pdf', 'class'].includes(kind) || !isValidUuid(id)) return null;
+    return { kind, id };
+};
+
+const loadExclusiveClass = async (req, res, classId) => {
+    const { data: cls, error } = await getClass(classId, supabaseAdmin);
+    if (error || !cls) {
+        sendError(req, res, error, { status: 404, message: 'Class not found' });
+        return null;
+    }
+    if (cls.prerelease_section !== 'exclusive') {
+        sendError(req, res, null, { status: 400, message: 'Only Exclusive Classes can be unlocked here' });
+        return null;
+    }
+    return cls;
+};
+
+const loadRulesPdf = async (req, res, rulesPdfId) => {
+    const { data: rulesPdf, error } = await getRulesPdf(rulesPdfId);
+    if (error || !rulesPdf) {
+        sendError(req, res, error, { status: 404, message: 'Rules PDF not found' });
+        return null;
+    }
+    return rulesPdf;
+};
+
+const findGrantProfile = async (profileId, profileName) => {
+    const id = profileId?.trim();
+    if (id) return (await getProfileByIdAdmin(id))?.data || null;
+    const name = profileName?.trim();
+    if (name) return (await getProfileByNameAdmin(name))?.data || null;
+    return null;
+};
+
 // Admin: unlock dashboard — every grant and code across every PDF.
 router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     const { profile } = res.locals;
 
-    const [rulesResult, grantsResult, codesResult] = await Promise.all([
+    const [rulesResult, grantsResult, codesResult, classesResult] = await Promise.all([
         getRulesPdfs({ includeInactive: true }),
         listAllUnlockGrantsAdmin(),
-        listAllUnlockCodesAdmin()
+        listAllUnlockCodesAdmin(),
+        getClasses({}, supabaseAdmin)
     ]);
 
-    const error = rulesResult.error || grantsResult.error || codesResult.error;
+    const error = rulesResult.error || grantsResult.error || codesResult.error || classesResult.error;
     if (error) {
         return sendError(req, res, error, { message: 'Failed to load unlock dashboard' });
     }
@@ -187,12 +227,17 @@ router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     }));
     const unlockableRules = groupRulesVersions((rulesResult.data || []).filter((rule) => !rule.free_access))
         .map(({ primary, previous }) => [primary, ...previous].find((rule) => rule.is_active) || primary);
+    const unlockableClasses = (classesResult.data || [])
+        .filter((cls) => cls.prerelease_section === 'exclusive')
+        .map(({ id, name }) => ({ id, name }))
+        .sort((a, b) => a.name.localeCompare(b.name));
 
     return res.render('library-unlocks', {
         profile,
         title: 'Unlock Dashboard',
         rules: rulesResult.data || [],
         unlockableRules,
+        unlockableClasses,
         grants,
         codes,
         activeNav: 'library',
@@ -204,33 +249,20 @@ router.get('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     });
 });
 
-// Admin: grant a user access to a rules PDF (document chosen in the form).
+// Admin: grant a user access to a rules PDF or Exclusive Class (chosen in the form).
 router.post('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
-    const { rules_pdf_id, profile_name, profile_id, expires_at } = req.body;
+    const { unlock_target, profile_name, profile_id, expires_at } = req.body;
     const { profile } = res.locals;
 
-    if (!isValidUuid(rules_pdf_id)) {
-        return sendError(req, res, null, { status: 400, message: 'Invalid rules PDF id' });
+    const target = parseUnlockTarget(unlock_target);
+    if (!target) {
+        return sendError(req, res, null, { status: 400, message: 'Invalid unlock target' });
     }
 
-    const { data: rulesPdf, error: loadError } = await getRulesPdf(rules_pdf_id);
-    if (loadError || !rulesPdf) {
-        return sendError(req, res, loadError, { status: 404, message: 'Rules PDF not found' });
-    }
+    const loadTarget = target.kind === 'class' ? loadExclusiveClass : loadRulesPdf;
+    if (!await loadTarget(req, res, target.id)) return;
 
-    let profileRecord = null;
-    if (profile_id && profile_id.trim()) {
-        const result = await getProfileByIdAdmin(profile_id.trim());
-        if (result?.data) {
-            profileRecord = result.data;
-        }
-    } else if (profile_name && profile_name.trim()) {
-        const result = await getProfileByNameAdmin(profile_name.trim());
-        if (result?.data) {
-            profileRecord = result.data;
-        }
-    }
-
+    const profileRecord = await findGrantProfile(profile_id, profile_name);
     if (!profileRecord) {
         return sendError(req, res, null, { status: 400, message: 'Profile not found' });
     }
@@ -239,13 +271,16 @@ router.post('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
         return sendError(req, res, null, { status: 400, message: 'Profile is missing a linked user' });
     }
 
-    const { error } = await upsertRulesPdfUnlock({
-        userId: profileRecord.user_id,
-        profileId: profileRecord.id,
-        rulesPdfId: rules_pdf_id,
-        expiresAt: parseExpiresAt(expires_at),
-        grantedBy: profile?.id || null
-    });
+    const expiresAt = parseExpiresAt(expires_at);
+    const { error } = target.kind === 'class'
+        ? await upsertClassUnlock({ userId: profileRecord.user_id, classId: target.id, expiresAt })
+        : await upsertRulesPdfUnlock({
+            userId: profileRecord.user_id,
+            profileId: profileRecord.id,
+            rulesPdfId: target.id,
+            expiresAt,
+            grantedBy: profile?.id || null
+        });
 
     if (error) {
         return sendError(req, res, error, { message: 'Failed to grant access' });
@@ -254,24 +289,27 @@ router.post('/unlocks', isAuthenticated, requireAdmin, async (req, res) => {
     return res.redirect('/library/unlocks');
 });
 
-// Admin: generate unlock codes (document chosen in the form).
+// Admin: generate unlock codes (rules PDF or Exclusive Class chosen in the form).
 router.post('/codes', isAuthenticated, requireAdmin, asyncHandler(async (req, res) => {
-    const { rules_pdf_id, expires_at, max_uses, amount } = req.body;
+    const { unlock_target, expires_at, max_uses, amount } = req.body;
 
-    if (!isValidUuid(rules_pdf_id)) {
-        return sendError(req, res, null, { status: 400, message: 'Invalid rules PDF id' });
+    const target = parseUnlockTarget(unlock_target);
+    if (!target) {
+        return sendError(req, res, null, { status: 400, message: 'Invalid unlock target' });
     }
+    if (target.kind === 'class' && !await loadExclusiveClass(req, res, target.id)) return;
 
-    const createdByProfileId = res.locals.profile.id;
     const count = parseInt(amount, 10) || 1;
     const actor = actorFromLocals(res.locals);
-    const { data, error } = await createRulesPdfUnlockCodes(actor, {
-        rulesPdfId: rules_pdf_id,
-        createdByProfileId,
+    const codeOptions = {
+        createdByProfileId: res.locals.profile.id,
         expiresAt: parseExpiresAt(expires_at),
         maxUses: parseInt(max_uses, 10) || 1,
         amount: count
-    });
+    };
+    const { data, error } = target.kind === 'class'
+        ? await createUnlockCodes(actor, { classId: target.id, ...codeOptions })
+        : await createRulesPdfUnlockCodes(actor, { rulesPdfId: target.id, ...codeOptions });
     if (error) return sendError(req, res, error);
 
     if (count > 1) {

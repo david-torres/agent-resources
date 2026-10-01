@@ -35,6 +35,9 @@ module.exports = {
   insertUnlock: (payload) => withResult(
     supabaseAdmin.from('class_unlocks').insert([payload]).select().single()
   ),
+  upsertUnlock: (payload) => withResult(
+    supabaseAdmin.from('class_unlocks').upsert(payload, { onConflict: 'user_id,class_id' }).select().single()
+  ),
 
   // Reads
   // Lean projection of all classes for version-family resolution. Admin

@@ -527,6 +527,9 @@ const unlockClass = async (userId, classId, expiresAt = null) => {
     return { data, error: null };
 };
 
+const upsertClassUnlock = async ({ userId, classId, expiresAt = null }) =>
+    classRepository.upsertUnlock({ user_id: userId, class_id: classId, expires_at: expiresAt });
+
 // History is the class plus its children WITHIN its version family, so a fork
 // onto a different edition or content shape is not listed as derived from the
 // row it forked off.
@@ -667,6 +670,7 @@ module.exports = {
     getUnlockedClasses,
     getUnlockedClassIdsForUser,
     unlockClass,
+    upsertClassUnlock,
     isClassUnlocked,
     getEffectiveClassUnlock,
     getEffectiveClassAccess,

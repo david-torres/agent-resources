@@ -1,0 +1,10 @@
+<optgroup label="Rulebooks">
+  {{#each unlockableRules}}
+  <option value="pdf:{{this.id}}">{{this.title}}{{#unless this.is_active}} (inactive){{/unless}}</option>
+  {{/each}}
+</optgroup>
+<optgroup label="Exclusive Classes">
+  {{#each unlockableClasses}}
+  <option value="class:{{this.id}}">{{this.name}}</option>
+  {{/each}}
+</optgroup>
