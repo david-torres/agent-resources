@@ -6,7 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
 const hbsHelpers = require('handlebars-helpers')();
-const { renderMarkdown } = require('../../util/markdown');
+const { renderMarkdown, renderPowerRatings } = require('../../util/markdown');
 
 const TAG_SRC = fs.readFileSync(path.join(__dirname, 'character-detail-tag.handlebars'), 'utf8');
 const CHARACTER_PAGE_SRC = fs.readFileSync(path.join(__dirname, '..', 'character.handlebars'), 'utf8');
@@ -15,7 +15,16 @@ const render = (context) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper('markdown', renderMarkdown);
+  hb.registerHelper('powerRatings', renderPowerRatings);
+  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks']) {
+    hb.registerPartial(partial, fs.readFileSync(path.join(__dirname, `${partial}.handlebars`), 'utf8'));
+  }
   return hb.compile(TAG_SRC)(context);
+};
+
+const tooltipContent = (html) => {
+  const match = html.match(/<div id="[^"]+" class="is-hidden">([\s\S]*)<\/div>/);
+  return match ? match[1] : '';
 };
 
 test('an item with a description renders a tooltip tag plus hidden markdown', () => {
@@ -30,11 +39,54 @@ test('an item with a description renders a tooltip tag plus hidden markdown', ()
   expect(html).toContain('tag is-primary is-medium');
 });
 
+test('a structured ability tooltip shows its meters, paired action, notes and sample perks', () => {
+  const tooltip = tooltipContent(render({
+    item: {
+      name: 'Quickdraw',
+      class_id: 'gunslinger',
+      description: 'Draw and fire in one motion.',
+      meters: [{ label: 'Ammunition', value: 'Mid' }],
+      paired_action: 'Holster as a free action',
+      notes: [{ text: 'Only with a sidearm', children: [{ text: 'Not a rifle' }] }],
+      sample_perks: [{ name: 'Fan the Hammer', dedication: null, text: 'Fire twice', compound_text: null }],
+    },
+    idPrefix: 'ability',
+    className: 'tag',
+  }));
+  expect(tooltip).toContain('Draw and fire in one motion.');
+  expect(tooltip).toContain('Ammunition');
+  expect(tooltip).toContain('Mid');
+  expect(tooltip).toContain('Paired Action');
+  expect(tooltip).toContain('Holster as a free action');
+  expect(tooltip).toContain('Only with a sidearm');
+  expect(tooltip).toContain('Not a rifle');
+  expect(tooltip).toContain('Fan the Hammer');
+  expect(tooltip).toContain('Fire twice');
+});
+
+test('an item whose text lives only in notes still gets a tooltip', () => {
+  const html = render({
+    item: {
+      name: 'Cowboy Hat',
+      class_id: 'gunslinger',
+      description: '',
+      notes: [{ text: 'Provides Ward against sun and glare', children: [] }],
+    },
+    idPrefix: 'gear',
+    className: 'tag',
+  });
+  expect(html).toContain('data-tooltip-markdown="#gear-gunslinger-cowboy-hat"');
+  expect(tooltipContent(html)).toContain('Provides Ward against sun and glare');
+});
+
 test('a blanked description renders a plain tag with no tooltip hook', () => {
   // This is what a gated item looks like: the gate emptied description, the
   // name still shows, nothing invites a tooltip that would come up empty.
   const html = render({
-    item: { name: 'Fireball', description: '', class_id: 'class-a' },
+    item: {
+      name: 'Fireball', description: '', class_id: 'class-a',
+      meters: [], paired_action: null, notes: [], sample_perks: [],
+    },
     idPrefix: 'detail-char-1-ability',
     className: 'tag is-primary is-medium',
   });

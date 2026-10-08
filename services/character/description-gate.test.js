@@ -82,7 +82,9 @@ test('signed-out and locked viewers lose class-authored Default text, but retain
   for (const profile of [null, { id: 'p1', user_id: 'u1' }]) {
     const character = makeEquippedCharacter();
     await applyDescriptionGate({ character, profile, client: {} });
-    expect(character.gear.map(g => g.description)).toEqual(['', '']);
+    // The Hat carries a Default Enchantment, so it is structured: its short
+    // summary stays visible. The legacy Coat's full blob is hidden.
+    expect(character.gear.map(g => g.description)).toEqual(['signature secret', '']);
     expectEquipment(character, '');
   }
 });
@@ -294,5 +296,76 @@ test('an unexpected error while gating blanks everything and reports it gated', 
   });
   const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, userId: 'u1', client: {} });
   expect(descriptions(result.character)).toEqual({ abilities: ['', ''], gear: [''] });
+  expect(result.gated).toBe(true);
+});
+
+const makeStructuredCharacter = () => ({
+  id: 'char-1',
+  abilities: [{
+    name: 'Overclock', class_id: 'class-a', description: 'short summary',
+    meters: [{ label: 'Heat', value: '3' }],
+    paired_action: 'Vent',
+    notes: [{ text: 'secret note', children: [{ text: 'nested secret', children: [] }] }],
+    sample_perks: ['Hot Hands'],
+  }],
+  gear: [{
+    name: 'Reactor', class_id: 'class-a', description: 'gear summary',
+    meters: [{ label: 'Charge', value: '2' }],
+    notes: [{ text: 'gear secret note', children: [] }],
+    default_enchantment: { name: 'Meltdown', dedication: 'Fire', description: 'enchantment secret' },
+  }],
+});
+
+const expandedFields = (character) => ({
+  ability: {
+    meters: character.abilities[0].meters,
+    paired_action: character.abilities[0].paired_action,
+    notes: character.abilities[0].notes,
+    sample_perks: character.abilities[0].sample_perks,
+  },
+  gear: {
+    meters: character.gear[0].meters,
+    notes: character.gear[0].notes,
+    enchantment: character.gear[0].default_enchantment.description,
+  },
+});
+
+const emptiedExpandedFields = {
+  ability: { meters: [], paired_action: '', notes: [], sample_perks: [] },
+  gear: { meters: [], notes: [], enchantment: '' },
+};
+
+test('a locked viewer keeps a structured item\'s short summary but loses its expanded fields', async () => {
+  const character = makeStructuredCharacter();
+  const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, client: {} });
+  expect(descriptions(character)).toEqual({ abilities: ['short summary'], gear: ['gear summary'] });
+  expect(expandedFields(character)).toEqual(emptiedExpandedFields);
+  expect(result.gated).toBe(true);
+});
+
+test('the approved LFG host sees a structured item\'s expanded fields in full', async () => {
+  state.lfgPost = {
+    host_id: 'host-1',
+    join_requests: [{ status: 'approved', character: { id: 'char-1' } }],
+  };
+  const character = makeStructuredCharacter();
+  const result = await applyDescriptionGate({
+    character, profile: { id: 'host-1', user_id: 'u1' }, lfgPostId: 'post-1', client: {},
+  });
+  expect(character).toEqual(makeStructuredCharacter());
+  expect(result.gated).toBe(false);
+});
+
+test('an unexpected error while gating empties structured items\' expanded fields', async () => {
+  let armed = true;
+  const character = makeStructuredCharacter();
+  Object.defineProperty(character.abilities[0], 'class_id', {
+    get() {
+      if (armed) { armed = false; throw new Error('boom'); }
+      return 'class-a';
+    }
+  });
+  const result = await applyDescriptionGate({ character, profile: { id: 'p1', user_id: 'u1' }, userId: 'u1', client: {} });
+  expect(expandedFields(result.character)).toEqual(emptiedExpandedFields);
   expect(result.gated).toBe(true);
 });

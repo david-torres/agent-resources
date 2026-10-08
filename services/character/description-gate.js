@@ -1,9 +1,10 @@
-// Render-time gating for class ability/gear descriptions and the class-authored
-// Default Enchantment on purchased gear. Extracted from the
-// inline block that lived at routes/characters.js:863-939 so /characters/:id,
-// the /characters/:id/details fragment, and (through it) /party and /lfg all
-// enforce the same rule: names are always visible, descriptions require the
-// item's class family to be unlocked for the viewer.
+// Render-time gating for class ability/gear text and the class-authored
+// Default Enchantment on purchased gear. /characters/:id, the
+// /characters/:id/details fragment, and (through it) /party and /lfg all
+// enforce the same rule: names and short summaries are always visible, full
+// text requires the item's class family to be unlocked for the viewer.
+// A structured item's full text lives in its expanded fields, so its short
+// description stays; a legacy item's description is its full text.
 const { getLfgPost } = require('../../models/lfg');
 const { getUnlockedClassIdsForUser } = require('../../models/class');
 
@@ -21,18 +22,46 @@ const blankDefaultEnchantment = (gear) => {
   return true;
 };
 
+const EXPANDED_LISTS = ['meters', 'notes', 'sample_perks'];
+
+const hasEntries = (item, key) => Array.isArray(item[key]) && item[key].length > 0;
+
+const isStructured = (item) =>
+  EXPANDED_LISTS.some(key => hasEntries(item, key)) ||
+  Boolean(item.paired_action) ||
+  Boolean(item.default_enchantment?.description);
+
+const blankExpanded = (item) => {
+  let gated = false;
+  for (const key of EXPANDED_LISTS) {
+    if (hasEntries(item, key)) {
+      item[key] = [];
+      gated = true;
+    }
+  }
+  gated = blankField(item, 'paired_action') || gated;
+  return gated;
+};
+
+const blankFullText = (item) =>
+  isStructured(item) ? blankExpanded(item) : blankField(item, 'description');
+
 const blankAll = (character) => {
   let gated = false;
   try {
     if (Array.isArray(character.abilities)) {
       for (const ability of character.abilities) {
-        if (ability) gated = blankField(ability, 'description') || gated;
+        if (ability) {
+          gated = blankField(ability, 'description') || gated;
+          gated = blankExpanded(ability) || gated;
+        }
       }
     }
     if (Array.isArray(character.gear)) {
       for (const gear of character.gear) {
         if (gear) {
           gated = blankField(gear, 'description') || gated;
+          gated = blankExpanded(gear) || gated;
           gated = blankDefaultEnchantment(gear) || gated;
         }
       }
@@ -80,7 +109,7 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
             (ability.class_id && !unlockedClassIds.has(ability.class_id)) ||
             (!ability.class_id && !profile)
           )) {
-            gated = blankField(ability, 'description') || gated;
+            gated = blankFullText(ability) || gated;
           }
         }
       }
@@ -91,7 +120,7 @@ const applyDescriptionGate = async ({ character, profile, userId = null, lfgPost
             (gear.class_id && !unlockedClassIds.has(gear.class_id)) ||
             (!gear.class_id && !profile)
           ) {
-            gated = blankField(gear, 'description') || gated;
+            gated = blankFullText(gear) || gated;
           }
           // A Default Enchantment comes from the class book, even if the
           // purchase row has no class_id. Without one, access cannot be proven.

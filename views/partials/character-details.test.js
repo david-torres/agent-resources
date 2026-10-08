@@ -29,6 +29,9 @@ const render = (character, effectiveVersion = 'v1', showGearPurchases = false) =
   hb.registerPartial('stat-blocks-readonly', READONLY_SRC);
   hb.registerPartial('signature-entry', SIGNATURE_ENTRY_SRC);
   hb.registerPartial('class-enchantment', CLASS_ENCHANTMENT_SRC);
+  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks']) {
+    hb.registerPartial(partial, fs.readFileSync(path.join(__dirname, `${partial}.handlebars`), 'utf8'));
+  }
   return hb.compile(DETAILS_SRC)({ character, effectiveVersion, statList, showGearPurchases });
 };
 

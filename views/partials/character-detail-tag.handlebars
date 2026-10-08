@@ -1,15 +1,26 @@
-{{!-- One ability/gear name with its tooltip description. Shared by the
-      character page and the character-details fragment so the tooltip markup
-      exists exactly once. The element id is "<idPrefix>-<class_id>-<name>":
-      the character page passes idPrefix "ability"/"gear" (reproducing its
-      historical ids exactly), the fragment passes
+{{!-- One ability/gear name with its tooltip. Shared by the character page
+      and the character-details fragment so the tooltip markup exists exactly
+      once. The hidden tooltip shows the item's description, meters, Paired
+      Action, notes and sample perks, each when present. Gear reaches this
+      partial only on the Advent economy, which has no Default Enchantment;
+      Aspirant gear renders through signature-entry instead. An item with
+      none of these (everything blanked by
+      services/character/description-gate.js) renders as a plain tag.
+
+      The element id is "<idPrefix>-<class_id>-<name>": the character page
+      passes idPrefix "ability"/"gear", the fragment passes
       "detail-<character id>-ability" so two same-class party members on one
-      page cannot collide. An item whose description was blanked by
-      services/character/description-gate.js renders as a plain tag. --}}
-{{#if item.description}}
+      page cannot collide. --}}
+{{#if (or item.description item.meters.length item.paired_action item.notes.length item.sample_perks.length)}}
 <span class="{{className}}" data-tooltip-markdown="#{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}">{{capitalize item.name}}</span>
 <div id="{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}" class="is-hidden">
-  {{{markdown item.description}}}
+  {{#if item.description}}{{{markdown item.description}}}{{/if}}
+  {{> class-meters meters=item.meters}}
+  {{#if item.paired_action}}
+  <p><strong>Paired Action:</strong> {{{powerRatings item.paired_action}}}</p>
+  {{/if}}
+  {{> class-notes notes=item.notes}}
+  {{> class-sample-perks perks=item.sample_perks}}
 </div>
 {{else}}
 <span class="{{className}}">{{capitalize item.name}}</span>

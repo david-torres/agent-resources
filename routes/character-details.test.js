@@ -293,7 +293,9 @@ for (const suffix of ['', '/details']) {
     const html = await res.text();
     expect(html).toContain('Hats Off to You');
     expect(html).not.toContain('SECRET DEFAULT TEXT');
-    expect(html).not.toContain('SECRET SIGNATURE TEXT');
+    // The Hat is structured, so its summary stays; the legacy Coat's text is its full text.
+    expect(html).toContain('SECRET SIGNATURE TEXT');
+    expect(html).not.toContain('SECOND SIGNATURE TEXT');
     expect(html).toContain('Player-written Enchantment');
     expect(html).toContain('Player-written Mod');
   });

@@ -1,5 +1,5 @@
 {{!-- Read-only twin of public/js/signature-entry.js's readOnly render(): a
-      Signature's class-authored name and description, the Enchantment
+      Signature's class-authored name, description, meters and notes, the Enchantment
       actually bought on it (the class's Default text via class-enchantment,
       or a Custom the player named and wrote), and every Mod the player named
       and described. `item.enchantment` and `item.mods` are the stored
@@ -21,6 +21,8 @@
   {{#if item.description}}
   <div class="content is-size-7">{{{markdown item.description}}}</div>
   {{/if}}
+  {{> class-meters meters=item.meters}}
+  {{> class-notes notes=item.notes}}
   {{#with item.enchantment}}
     {{#if (eq source 'default')}}
     {{> class-enchantment enchantment=../item.default_enchantment}}

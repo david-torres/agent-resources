@@ -109,6 +109,10 @@ const registerSignatureEntryPartials = (hb) => {
     fs.readFileSync(path.join(__dirname, 'partials/character-detail-tag.handlebars'), 'utf8'));
   hb.registerPartial('class-enchantment',
     fs.readFileSync(path.join(__dirname, 'partials/class-enchantment.handlebars'), 'utf8'));
+  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks']) {
+    hb.registerPartial(partial,
+      fs.readFileSync(path.join(__dirname, `partials/${partial}.handlebars`), 'utf8'));
+  }
 };
 
 const renderGearSection = (locals) => {
