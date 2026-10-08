@@ -282,3 +282,29 @@ test('the level-up modal is unchanged for an advent character', () => {
   }, 'advent');
   for (const stat of statList) expect(levelUpBoxes(html, stat)).toBe(5);
 });
+
+// --- existing perks in the level-up modal ----------------------------------
+
+const renderLevelUpAbilities = (character) => {
+  const hb = Handlebars.create();
+  hb.registerHelper(hbsHelpers);
+  hb.registerHelper(customHelpers);
+  const src = read('character-level-up.handlebars');
+  const abilities = src.slice(src.indexOf('<div id="levelUpAbilities">'), src.indexOf('<div id="levelUpError"'));
+  return hb.compile(abilities)({ character });
+};
+
+test('an existing perk shows its name ahead of its text, and an unnamed perk shows text alone', async () => {
+  await render(renderLevelUpAbilities({
+    abilities: [{ id: 'ability-1', name: 'Quick Draw' }],
+    ability_perks: [
+      { id: 'perk-named', class_ability_id: 'ability-1', name: 'Dead Eye', text: 'Crits on a 19', position: 0 },
+      { id: 'perk-plain', class_ability_id: 'ability-1', name: null, text: 'Reload as a free action', position: 1 }
+    ]
+  }));
+  const [named, plain] = document.querySelectorAll('.level-up-existing-perk');
+  expect(named.querySelector('strong').textContent).toBe('Dead Eye');
+  expect(named.textContent.indexOf('Dead Eye')).toBeLessThan(named.textContent.indexOf('Crits on a 19'));
+  expect(plain.querySelector('strong')).toBeNull();
+  expect(plain.textContent).toContain('Reload as a free action');
+});

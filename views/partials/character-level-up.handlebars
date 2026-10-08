@@ -92,6 +92,7 @@
             <ol>
               {{#each perks}}
               <li class="level-up-existing-perk" data-perk-id="{{this.id}}" data-position="{{this.position}}">
+                {{#if this.name}}<strong class="level-up-existing-perk-name">{{this.name}}</strong>{{/if}}
                 <span class="level-up-existing-perk-text">{{this.text}}</span>
                 {{#if this.compounds_with}}<span class="tag is-info is-light ml-1">compounding</span>{{/if}}
               </li>

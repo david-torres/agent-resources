@@ -81,12 +81,19 @@ window.CharacterLevelUp = (function () {
   };
 
   let perkRefSeq = 0;
+  // Mirrors PERK_NAME_MAX_LENGTH in util/perk-economy.js; the server enforces it.
+  const PERK_NAME_MAX_LENGTH = 60;
 
   const truncateLabel = (s) => {
     s = (s || '').trim();
     if (s.length > 40) s = s.slice(0, 39) + '…';
     return s || '(empty)';
   };
+
+  // A perk is labelled by its name when it has one, else by its text.
+  const perkLabel = (name, text) => truncateLabel((name || '').trim() || text);
+  const valueOf = (el) => (el ? el.value : '');
+  const textOf = (el) => (el ? el.textContent : '');
 
   const makeOption = (value, label) => {
     const o = document.createElement('option');
@@ -102,13 +109,12 @@ window.CharacterLevelUp = (function () {
   // inject markup. The server validates the chosen target independently.
   const refreshCompoundOptions = (box) => {
     const existingPerks = Array.from(box.querySelectorAll('.level-up-existing-perk'))
-      .map((el) => {
-        const textEl = el.querySelector('.level-up-existing-perk-text');
-        return {
-          value: el.getAttribute('data-perk-id'),
-          label: 'Existing: ' + truncateLabel(textEl ? textEl.textContent : '')
-        };
-      });
+      .map((el) => ({
+        value: el.getAttribute('data-perk-id'),
+        label: 'Existing: ' + perkLabel(
+          textOf(el.querySelector('.level-up-existing-perk-name')),
+          textOf(el.querySelector('.level-up-existing-perk-text')))
+      }));
     const newWrappers = Array.from(box.querySelectorAll('.level-up-perk'));
 
     newWrappers.forEach((wrapper) => {
@@ -125,8 +131,10 @@ window.CharacterLevelUp = (function () {
       newWrappers.forEach((other) => {
         const ref = other.getAttribute('data-ref');
         if (ref === selfRef) return;
-        const t = other.querySelector('.level-up-perk-text');
-        sel.appendChild(makeOption('new:' + ref, 'New: ' + truncateLabel(t ? t.value : '')));
+        const label = perkLabel(
+          valueOf(other.querySelector('.level-up-perk-name')),
+          valueOf(other.querySelector('.level-up-perk-text')));
+        sel.appendChild(makeOption('new:' + ref, 'New: ' + label));
       });
 
       // Keep the prior choice when its target still exists; else clear it.
@@ -140,6 +148,16 @@ window.CharacterLevelUp = (function () {
     wrapper.className = 'field has-addons mb-2 level-up-perk';
     wrapper.setAttribute('data-ability-id', abilityId);
     wrapper.setAttribute('data-ref', 'p' + (++perkRefSeq));
+
+    const nameControl = document.createElement('div');
+    nameControl.className = 'control';
+    const nameInput = document.createElement('input');
+    nameInput.className = 'input is-small level-up-perk-name';
+    nameInput.type = 'text';
+    nameInput.placeholder = 'Perk name (optional)';
+    nameInput.maxLength = PERK_NAME_MAX_LENGTH;
+    nameControl.appendChild(nameInput);
+    wrapper.appendChild(nameControl);
 
     const c1 = document.createElement('div');
     c1.className = 'control is-expanded';
@@ -162,11 +180,13 @@ window.CharacterLevelUp = (function () {
     c2.appendChild(selectWrap);
     wrapper.appendChild(c2);
 
-    // Refresh sibling labels when this perk's text settles.
-    input.addEventListener('change', () => {
+    // Refresh sibling labels when this perk's name or text settles.
+    const refreshSiblings = () => {
       const box = wrapper.closest('.level-up-ability');
       if (box) refreshCompoundOptions(box);
-    });
+    };
+    nameInput.addEventListener('change', refreshSiblings);
+    input.addEventListener('change', refreshSiblings);
 
     const c3 = document.createElement('div');
     c3.className = 'control';
@@ -267,12 +287,13 @@ window.CharacterLevelUp = (function () {
       // is an existing perk's id. Empty perks are skipped.
       const flatPerks = [];
       document.querySelectorAll('.level-up-perk').forEach((wrapper) => {
-        const textEl = wrapper.querySelector('.level-up-perk-text');
-        const text = (textEl && textEl.value || '').trim();
+        const text = valueOf(wrapper.querySelector('.level-up-perk-text')).trim();
         if (!text) return;
+        const name = valueOf(wrapper.querySelector('.level-up-perk-name')).trim();
         const sel = wrapper.querySelector('.level-up-perk-compound');
         flatPerks.push({
           class_ability_id: wrapper.getAttribute('data-ability-id'),
+          name: name || null,
           text: text,
           ref: wrapper.getAttribute('data-ref'),
           compounds_with: (sel && sel.value) ? sel.value : null

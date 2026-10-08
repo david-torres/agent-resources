@@ -2,13 +2,14 @@ const { test, expect } = require('bun:test');
 const { JSDOM } = require('jsdom');
 const fs = require('fs');
 
-const boot = ({ level = 4, required = 14, completed = 11 } = {}) => {
+const boot = ({ level = 4, required = 14, completed = 11, abilities = '' } = {}) => {
   const dom = new JSDOM(`<button id="levelUpBtn"></button>
     <div id="statsBox" data-character-id="character-a" data-character-level="${level}"></div>
     <div id="levelUpModal" data-next-level="${level < 10 ? level + 1 : ''}"
       data-required-missions="${required}" data-completed-missions="${completed}">
       <div id="levelUpMissingMissions"></div><button id="levelUpSaveBtn"></button>
       <div id="levelUpError" class="is-hidden"></div>
+      ${abilities}
     </div>`, { url: 'http://localhost' });
   const { window } = dom;
   new Function('window', 'document', 'localStorage', fs.readFileSync('public/js/character-common.js', 'utf8'))(window, window.document, window.localStorage);
@@ -59,5 +60,46 @@ test('level-ten modal disables opening and cannot send a promotion', () => {
   expect(page.document.getElementById('levelUpBtn').disabled).toBe(true);
   page.document.getElementById('levelUpSaveBtn').click();
   expect(page.requests).toHaveLength(0);
+  page.window.close();
+});
+
+const NAMED_PERK_ABILITY = `<div class="level-up-ability" data-ability-id="ability-1">
+  <button type="button" class="level-up-add-perk"></button>
+  <ol>
+    <li class="level-up-existing-perk" data-perk-id="perk-named">
+      <strong class="level-up-existing-perk-name">Dead Eye</strong>
+      <span class="level-up-existing-perk-text">Crits on a 19</span>
+    </li>
+    <li class="level-up-existing-perk" data-perk-id="perk-plain">
+      <span class="level-up-existing-perk-text">Reload as a free action</span>
+    </li>
+  </ol>
+  <div class="level-up-perks"></div>
+</div>`;
+
+test('new perks send their optional name and compound choices are labelled by name when one exists', async () => {
+  const page = boot({ abilities: NAMED_PERK_ABILITY });
+  page.document.querySelectorAll('.level-up-mission').forEach((input, index) => { input.value = `Mission ${index}`; });
+  const addPerk = page.document.querySelector('.level-up-add-perk');
+  addPerk.click();
+  addPerk.click();
+  const [named, unnamed] = page.document.querySelectorAll('.level-up-perk');
+  named.querySelector('.level-up-perk-name').value = '  Quick Hands  ';
+  named.querySelector('.level-up-perk-text').value = 'Draw and fire in one action';
+  named.querySelector('.level-up-perk-name').dispatchEvent(new page.window.Event('change'));
+  unnamed.querySelector('.level-up-perk-text').value = 'Ignore cover';
+  unnamed.querySelector('.level-up-perk-text').dispatchEvent(new page.window.Event('change'));
+
+  const labels = Array.from(unnamed.querySelectorAll('.level-up-perk-compound option')).map(o => o.textContent);
+  expect(labels).toEqual(['(no compound)', 'Existing: Dead Eye', 'Existing: Reload as a free action', 'New: Quick Hands']);
+  const namedLabels = Array.from(named.querySelectorAll('.level-up-perk-compound option')).map(o => o.textContent);
+  expect(namedLabels).toContain('New: Ignore cover');
+
+  page.document.getElementById('levelUpSaveBtn').click();
+  await settled();
+  expect(page.requests[0].ability_perks.map(({ name, text }) => ({ name, text }))).toEqual([
+    { name: 'Quick Hands', text: 'Draw and fire in one action' },
+    { name: null, text: 'Ignore cover' }
+  ]);
   page.window.close();
 });
