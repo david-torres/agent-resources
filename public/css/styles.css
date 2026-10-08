@@ -1881,3 +1881,28 @@ a.dropdown-item:hover {
   gap: 0.4em;
   text-align: left;
 }
+/* Messages from app.js's _displayNotification, pinned to the viewport so a
+   user scrolled down to a form's submit button still sees a save error.
+   Sits above the feedback button (which shares the bottom-right corner) and
+   below Bulma's .modal (z-index 40). The empty region must not swallow clicks. */
+.toast-region {
+  position: fixed;
+  right: 1rem;
+  bottom: 4.5rem;
+  z-index: 35;
+  max-width: min(28rem, calc(100vw - 2rem));
+  pointer-events: none;
+}
+.toast-region > * {
+  pointer-events: auto;
+}
+.toast-region .notification {
+  margin-bottom: 0;
+  box-shadow: 0 0.5rem 1rem rgba(10, 10, 10, 0.2);
+}
+@media screen and (max-width: 768px) {
+  .toast-region {
+    left: 1rem;
+    max-width: none;
+  }
+}

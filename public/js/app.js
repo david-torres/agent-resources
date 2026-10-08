@@ -92,15 +92,29 @@ const App = (function (document, supabase, htmx) {
     return refreshToken || localStorage.getItem('refreshToken');
   };
 
+  const TOAST_AUTO_DISMISS_MS = 5000;
+  let toastTimer = null;
+
   const _displayNotification = (alertType, message) => {
     const messageContainer = document.getElementById('alerts');
     const validTypes = ['danger', 'success', 'info', 'warning', 'primary', 'link'];
     const safeType = validTypes.includes(alertType) ? alertType : 'info';
     const notification = document.createElement('div');
     notification.className = `notification is-${safeType}`;
-    notification.textContent = message;
+    const dismiss = document.createElement('button');
+    dismiss.className = 'delete';
+    dismiss.setAttribute('aria-label', 'Dismiss');
+    dismiss.addEventListener('click', () => notification.remove());
+    notification.appendChild(dismiss);
+    notification.appendChild(document.createTextNode(message));
+    clearTimeout(toastTimer);
+    toastTimer = null;
     messageContainer.innerHTML = '';
     messageContainer.appendChild(notification);
+    // Errors stay until dismissed so a user can't miss why a save failed.
+    if (safeType !== 'danger') {
+      toastTimer = setTimeout(() => notification.remove(), TOAST_AUTO_DISMISS_MS);
+    }
   }
 
   const _displayError = (message) => {
