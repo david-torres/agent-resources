@@ -322,7 +322,8 @@
           {{!-- A <div>, not a <label>: the stat is now a radiogroup of
                 blocks, not a single labellable control, so a <label> here
                 would have no `for` target and clicking it would move focus
-                nowhere. The group carries its own aria-label. --}}
+          <div class="label" tabindex="0" data-tooltip-markdown="">{{capitalize this}}</div>
+          {{> stat-scaling-row stat=this}}
           <div class="label">{{capitalize this}}</div>
           <div class="control">
             {{!-- The block count is this Stat's real Cap, computed by
