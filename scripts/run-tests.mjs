@@ -10,6 +10,7 @@ const integrationFiles = new Set([
   'models/character-convert-aspirant.integration.test.js',
   'models/character-level-up.integration.test.js',
   'models/nav-rls.integration.test.js',
+  'models/game-tables-rls.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
   'routes/mcp-oauth.integration.test.js',
