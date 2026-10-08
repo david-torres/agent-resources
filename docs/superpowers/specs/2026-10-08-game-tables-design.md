@@ -82,14 +82,19 @@ the Advent table (Baseline through `+++++`, pp. 35–36) and the Aspirant
 expanded rows (`++++++` through `++++++++`, p. 4). It is fixed book content
 that nobody edits in-app, so it is code, not a table.
 
-A lookup takes a stat, a plus count, and an edition, and returns the entry or
-nothing. Advent characters, guests, and party totals use the Advent table;
-Aspirant characters fall through to the expanded rows above five pluses.
+A lookup takes a stat and a plus count and returns the entry or nothing. No
+edition is needed: Advent caps a Stat at five pluses, so only Aspirant
+characters ever reach the expanded rows.
 
-A `stat-value` partial wraps every displayed stat number: the party summary,
-the per-member breakdown, the character page, and the character wizard. It
-shows, for example, **"+ Might: Crush an apple one-handed."** on hover, and on
-tap where there is no hover.
+A `stat-value` partial wraps every displayed per-character stat: the
+per-member party breakdown, the character page, and the character details
+fragment. It shows, for example, **"+ Might — Crush an apple one-handed."** on
+hover, and on tap where there is no hover. Party **totals** get no tooltip —
+a summed seven Might is not a capacity anyone has.
+
+Where a stat is being *chosen* — the wizard, the character form, the stats
+editor, level-up — the stat's name carries the whole Baseline–`+++++` row
+instead, so a player sees what each plus buys before spending it.
 
 ## 2. Data model
 
