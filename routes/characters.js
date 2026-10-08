@@ -662,6 +662,8 @@ router.get('/:id/edit', isAuthenticated, asyncHandler(async (req, res) => {
       profile,
       isNew: false,
       character,
+      // Aspirant and Aspiring Trait words may be self-made (pg. 3).
+      customTraits: economy !== 'advent',
       // See the create render above: the Ability-Perk editor's limits, served
       // rather than written into the partials that name them.
       perkFigures: perkFigures(),

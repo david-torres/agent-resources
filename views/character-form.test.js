@@ -349,6 +349,76 @@ test('submitting the rendered form preserves all three names and Stats', () => {
   expect(childData.traits).toEqual(traits);
 });
 
+// --- entering a self-made Trait on the EDIT form (issue #185) -------------
+//
+// Aspirant and Aspiring characters may make up a Trait word (pg. 3). With
+// `customTraits` the route asks for the wizard's split slot instead of the
+// vocabulary dropdown: a Stat <select> named trait{n}_stat beside a free-text
+// trait{n} input, suggested from per-Stat datalists. Advent keeps the dropdown.
+
+const { JSDOM } = require('jsdom');
+
+const STORED_TRAITS = [
+  { name: 'brave', stat: 'might' },
+  { name: 'wanderer', stat: 'arcane' },
+  { name: 'calm', stat: 'will' }
+];
+
+const renderSplitPersonality = (character) => new JSDOM(
+  renderPersonality({ statList, customTraits: true, character })
+).window.document;
+
+const submitSplitPersonality = (doc) => {
+  const payload = {};
+  for (const slot of [0, 1, 2]) {
+    payload[`trait${slot}`] = doc.querySelector(`input[name="trait${slot}"]`).value;
+    payload[`trait${slot}_stat`] = doc.querySelector(`select[name="trait${slot}_stat"]`).value;
+  }
+  return payload;
+};
+
+test('with custom Traits, a stored self-made word fills a free-text slot beside its Stat', () => {
+  const doc = renderSplitPersonality({ traits: STORED_TRAITS });
+
+  const name = doc.querySelector('input[type="text"][name="trait1"]');
+  expect(name).toBeTruthy();
+  expect(name.value).toBe('wanderer');
+  expect(name.required).toBe(true);
+
+  const stat = doc.querySelector('select[name="trait1_stat"]');
+  expect(stat).toBeTruthy();
+  expect(stat.required).toBe(true);
+  expect(stat.value).toBe('arcane');
+  expect([...stat.options].map(option => option.value).filter(Boolean)).toEqual(statList);
+
+  expect(doc.querySelector('select[name="trait1"]')).toBeNull();
+  expect(doc.querySelector('input[type="hidden"][name="trait1_stat"]')).toBeNull();
+});
+
+test('with custom Traits, submitting the rendered form preserves all three names and Stats', () => {
+  const doc = renderSplitPersonality({ traits: STORED_TRAITS });
+
+  const { childData, error } = normalizeCharacterInput(submitSplitPersonality(doc), {});
+
+  expect(error).toBeNull();
+  expect(childData.traits).toEqual(STORED_TRAITS);
+});
+
+test('with custom Traits, a fresh slot makes the player pick a Stat and a word from its suggestions', () => {
+  const doc = renderSplitPersonality({});
+
+  for (const slot of [0, 1, 2]) {
+    expect(doc.querySelector(`select[name="trait${slot}_stat"]`).value).toBe('');
+    expect(doc.querySelector(`input[name="trait${slot}"]`).value).toBe('');
+  }
+
+  const suggestions = [...doc.querySelectorAll('datalist')]
+    .map(list => [...list.options].map(option => option.value));
+  for (const words of Object.values(personalityMap)) {
+    expect(suggestions).toContainEqual(words);
+  }
+});
+
 // --- the per-Stat Cap on the EDIT form ------------------------------------
 //
 // routes/characters.js renders this form for the edit route and the wizard only
