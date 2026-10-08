@@ -1919,6 +1919,48 @@ describe('the attached Ability Perk is part of the Perk spend', () => {
   });
 });
 
+// A Perk's name sits outside its word limit, so the wizard collects it in its
+// own field and submits it beside the text rather than folding it in.
+describe('the aspirant Perk carries an optional name', () => {
+  const attachPerk = (wizard, fields) => {
+    Object.assign(wizard.getState(), { perkAbilityName: 'Own Core A', perk: 'Never misses twice.', ...fields });
+    return wizard;
+  };
+
+  test('the submitted Ability Perk carries the trimmed name, and a blank name as null', () => {
+    const named = attachPerk(aspirantStateAtLevel(1), { perkName: '  Dead Eye  ' });
+    expect(named.buildSubmitPayload().ability_perks[0])
+      .toMatchObject({ class_ability_id: 'Own Core A', name: 'Dead Eye', text: 'Never misses twice.' });
+
+    const blank = attachPerk(aspirantStateAtLevel(1), { perkName: '   ' });
+    expect(blank.buildSubmitPayload().ability_perks[0].name).toBeNull();
+  });
+
+  test('the inline editor shows the name and typing in it updates state', () => {
+    const wizard = attachPerk(aspirantStateAtLevel(1), { perkName: 'Dead Eye' });
+    wizard.renderAbilityPrimer();
+    const input = document.querySelector('[data-wizard-perk-name]');
+    expect(input.value).toBe('Dead Eye');
+    expect(Number(input.getAttribute('maxlength'))).toBe(perkFigures().perkNameMaxLength);
+
+    input.value = 'Quick Draw';
+    input.dispatchEvent(new window.Event('input', { bubbles: true }));
+    expect(wizard.getState().perkName).toBe('Quick Draw');
+    expect(wizard.getState().perk).toBe('Never misses twice.');
+  });
+
+  test('a draft saved before Perks had names still renders and submits', () => {
+    const draft = { ...aspirantStateAtLevel(1).getState(), perkAbilityName: 'Own Core A', perk: 'Never misses twice.' };
+    delete draft.perkName;
+    const wizard = bootWizard(fixture({
+      mode: 'aspirant', classes: [ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS], preselectedClassId: ASPIRANT_OWN_CLASS.id
+    }), { draft });
+    wizard.renderAbilityPrimer();
+    expect(document.querySelector('[data-wizard-perk-name]').value).toBe('');
+    expect(wizard.buildSubmitPayload().ability_perks[0].name).toBeNull();
+  });
+});
+
 describe('the aspirant shops sell each name once per lineage', () => {
   const card = (id, name, format, lineage, own, lists) => ({
     id, name, content_format: format, lineage_id: lineage, own_class_ids: own,

@@ -73,6 +73,9 @@ window.CharacterWizard = (function () {
       appearance: '',
       background: '',
       perk: '',
+      // The Perk's optional name, kept apart from its text because a name
+      // does not count toward the Perk word limit.
+      perkName: '',
       // Name of the ability the perk is currently attached to in aspirant
       // mode. Null while the perk is unspent (no + button clicked yet or the
       // user cleared the textarea). Persisted via writeStorage so a draft
@@ -1696,6 +1699,10 @@ window.CharacterWizard = (function () {
           perkArea = ''
             + '<div class="mt-3 wizard-perk-inline">'
             +   '<label class="label is-small">Perk</label>'
+            +   '<input type="text" class="input is-small mb-2" maxlength="' + PERKS.perkNameMaxLength + '"'
+            +          ' data-wizard-perk-name'
+            +          ' placeholder="Perk name (optional)"'
+            +          ' value="' + esc(state.perkName || '') + '">'
             +   '<textarea class="textarea is-small" rows="3" maxlength="500"'
             +             ' data-wizard-perk-editor'
             +             ' placeholder="One small advantage — a contact, a habit, an heirloom. Up to 500 characters.">'
@@ -4021,11 +4028,12 @@ window.CharacterWizard = (function () {
   //                        Click assigns the perk to that card and re-renders
   //                        so the editor appears inline on the chosen card.
   //   .wizard-perk-remove — aspirant: "Remove perk" on the assigned card.
-  //                        Clears both the text and the assignment,
+  //                        Clears the name, text and assignment, and
   //                        re-renders so the + buttons come back everywhere.
-  //   [data-wizard-perk-editor] — aspirant: the inline textarea. Updates
-  //                        state.perk without re-rendering (re-rendering
-  //                        would yank the caret mid-keystroke).
+  //   [data-wizard-perk-name] / [data-wizard-perk-editor] — aspirant: the
+  //                        inline name input and textarea. Update
+  //                        state.perkName / state.perk without re-rendering
+  //                        (re-rendering would yank the caret mid-keystroke).
   //   .wizard-pick-buy / .wizard-pick-drop — aspiring's picks and the
   //                        aspirant shop's rows alike: acquires or drops the
   //                        pick named on the button's data-pick-* attributes.
@@ -4057,6 +4065,7 @@ window.CharacterWizard = (function () {
       const removeBtn = e.target.closest && e.target.closest('.wizard-perk-remove');
       if (removeBtn) {
         state.perk = '';
+        state.perkName = '';
         state.perkAbilityName = null;
         renderAbilityPrimer();
         return;
@@ -4071,9 +4080,11 @@ window.CharacterWizard = (function () {
       if (editor) editor.focus();
     });
     abilityPrimerList.addEventListener('input', (e) => {
-      const ta = e.target.closest && e.target.closest('[data-wizard-perk-editor]');
-      if (!ta) return;
-      state.perk = ta.value;
+      if (!e.target.closest) return;
+      const nameInput = e.target.closest('[data-wizard-perk-name]');
+      if (nameInput) state.perkName = nameInput.value;
+      const ta = e.target.closest('[data-wizard-perk-editor]');
+      if (ta) state.perk = ta.value;
     });
   }
   if (isPublicEl) {
@@ -4151,6 +4162,7 @@ window.CharacterWizard = (function () {
     if (attachesAbilityPerk(state)) {
       payload.ability_perks = [{
         class_ability_id: state.perkAbilityName,
+        name: (state.perkName || '').trim() || null,
         text: state.perk.trim(),
         position: 0
       }];
