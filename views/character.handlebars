@@ -280,7 +280,7 @@
         {{#each character.gear}}
         <div class="column is-one-third">
           {{#if ../showGearPurchases}}
-          {{> signature-entry item=this}}
+          {{> signature-entry item=this idPrefix="gear" className="is-size-5"}}
           {{else}}
           {{> character-detail-tag item=this idPrefix="gear" className="is-size-5"}}
           {{/if}}

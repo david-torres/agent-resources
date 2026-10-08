@@ -1,11 +1,13 @@
-{{!-- Read-only twin of public/js/signature-entry.js's readOnly render(): a
-      Signature's class-authored name, description, meters and notes, the Enchantment
-      actually bought on it (the class's Default text via class-enchantment,
-      or a Custom the player named and wrote), and every Mod the player named
-      and described. `item.enchantment` and `item.mods` are the stored
-      purchase shape (services/character/input.js); `item.default_enchantment`
-      is the class's own text, already merged onto the row by
-      services/character/repository.js#mergeClassItems.
+{{!-- An owned Aspirant Signature: its name, badged with what is fitted
+      ("Default Ench" / "Custom Ench", "Mod" / "Mod xN" -- the same badges
+      public/js/signature-entry.js's loadout() puts in Your Signatures), and
+      a tooltip holding the class-authored description, meters and notes,
+      the Enchantment actually bought on it (the class's Default text via
+      class-enchantment, or a Custom the player named and wrote), and every
+      Mod the player named and described. `item.enchantment` and `item.mods`
+      are the stored purchase shape (services/character/input.js);
+      `item.default_enchantment` is the class's own text, already merged onto
+      the row by services/character/repository.js#mergeClassItems.
 
       Player-authored text (a Custom Enchantment's name/description, a Mod's
       name/description) is rendered with `{{ }}` so it is always escaped --
@@ -14,13 +16,15 @@
 
       Shared by views/character.handlebars and
       views/partials/character-details.handlebars so the two cannot drift on
-      what a Signature shows. Neither renders this for an advent character --
-      the caller decides that, this partial only renders what it is given. --}}
-<div class="signature-entry-readonly">
-  <p class="has-text-weight-semibold is-size-5">{{capitalize item.name}}</p>
-  {{#if item.description}}
-  <div class="content is-size-7">{{{markdown item.description}}}</div>
-  {{/if}}
+      what a Signature shows; the tooltip id follows character-detail-tag's
+      "<idPrefix>-<class_id>-<name>" scheme, and like it a Signature with
+      nothing to show (blanked by services/character/description-gate.js,
+      nothing fitted) is a plain name. Neither renders this for an
+      advent character -- the caller decides that. --}}
+{{#if (or item.description item.meters.length item.notes.length item.enchantment.source item.mods.length)}}
+<span class="{{className}}" data-tooltip-markdown="#{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}">{{capitalize item.name}}</span>
+<div id="{{idPrefix}}-{{dashcase item.class_id}}-{{dashcase item.name}}" class="is-hidden">
+  {{#if item.description}}{{{markdown item.description}}}{{/if}}
   {{> class-meters meters=item.meters}}
   {{> class-notes notes=item.notes}}
   {{#with item.enchantment}}
@@ -45,3 +49,13 @@
   </div>
   {{/if}}
 </div>
+{{else}}
+<span class="{{className}}">{{capitalize item.name}}</span>
+{{/if}}
+{{#if (or (eq item.enchantment.source 'default') (eq item.enchantment.source 'custom') item.mods.length)}}
+<div class="tags mt-1" data-signature-loadout>
+  {{#if (eq item.enchantment.source 'default')}}<span class="tag is-light">Default Ench</span>{{/if}}
+  {{#if (eq item.enchantment.source 'custom')}}<span class="tag is-light">Custom Ench</span>{{/if}}
+  {{#if item.mods.length}}<span class="tag is-light">{{#if (eq item.mods.length 1)}}Mod{{else}}Mod x{{item.mods.length}}{{/if}}</span>{{/if}}
+</div>
+{{/if}}
