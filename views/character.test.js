@@ -268,6 +268,21 @@ test('a v2 character sheet shows its Defining Quirk with the downside', () => {
   expect(html).toContain('Spots blood instantly');
 });
 
+test('a v2 character sheet shows a named perk with its name in bold before the text', () => {
+  const character = {
+    gear: [], common_items: [], accessories: [], quirks: [],
+    abilities: [{ id: 'ab-1', name: 'Fireball' }],
+    ability_perks: [
+      { class_ability_id: 'ab-1', name: 'Searing Brand', text: 'Deal extra damage', position: 0, compounds_with: null },
+      { class_ability_id: 'ab-1', name: null, text: 'Unnamed perk', position: 1, compounds_with: null }
+    ]
+  };
+
+  const html = renderFromPerksToAppearance({ character, effectiveVersion: 'v2' });
+  expect(html).toMatch(/<strong>Searing Brand<\/strong>\s*Deal extra damage/);
+  expect(html).toMatch(/<li>\s*Unnamed perk/);
+});
+
 const { registerAccessPartials } = require('../test/helpers/access-partials');
 
 const renderSheetHeader = (locals) => {

@@ -942,7 +942,7 @@ router.get('/ability-perk', authOptional, (req, res) => {
   res.render('partials/character-ability-perk', {
     layout: false,
     perkFigures: perkFigures(),
-    perk: { text: '', compounds_with: null },
+    perk: { name: '', text: '', compounds_with: null },
     abilityId,
     position,
     siblingPerks: []

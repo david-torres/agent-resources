@@ -3,6 +3,9 @@
   <input type="hidden" name="ability_perk_position[]" value="{{position}}">
   <div class="field has-addons">
     <div class="control is-expanded">
+      <input class="input perk-name mb-2" type="text" name="ability_perk_name[]"
+             placeholder="Perk name (optional)" maxlength="{{perkFigures.perkNameMaxLength}}"
+             value="{{perk.name}}">
       <div x-data="{ text: {{json perk.text}} || '' }">
         <textarea class="textarea perk-text" name="ability_perk_text[]"
                    placeholder="Perk text (≤{{perkFigures.perkWordLimit}} words)" x-model="text"
@@ -17,7 +20,7 @@
           {{#each siblingPerks}}
             {{#unless (eq this.position ../position)}}
             <option value="position-{{this.position}}" {{#if (eq ../perk.compounds_with (concat 'position-' this.position))}}selected{{/if}}>
-              Compounds with #{{add this.position 1}}: {{this.text}}
+              Compounds with #{{add this.position 1}}: {{#if this.name}}{{this.name}}{{else}}{{this.text}}{{/if}}
             </option>
             {{/unless}}
           {{/each}}

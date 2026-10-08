@@ -5,7 +5,7 @@ const Handlebars = require('handlebars');
 const customHelpers = require('../../util/handlebars');
 
 const handlebarsHelpers = require('handlebars-helpers')();
-const { perkFigures, PERK_WORD_LIMIT } = require('../../util/perk-economy');
+const { perkFigures, PERK_WORD_LIMIT, PERK_NAME_MAX_LENGTH } = require('../../util/perk-economy');
 
 function renderPartial(context) {
   const hb = Handlebars.create();
@@ -165,4 +165,41 @@ test('character-ability-perk names the served word limit, not a figure of its ow
     path.join(__dirname, 'character-ability-perk.handlebars'), 'utf8'
   );
   expect(src).not.toContain(String(PERK_WORD_LIMIT) + ' words');
+});
+
+// A Perk's name is posted beside its text and kept out of the word count, so
+// the row offers it as its own input capped at the served name length.
+test('character-ability-perk offers the perk name as its own input, prefilled and capped', () => {
+  const figures = perkFigures();
+  const html = renderPartial({
+    abilityId: 'ability-1',
+    position: 0,
+    perk: { name: 'Searing Brand', text: 'Deal extra damage', compounds_with: '' },
+    siblingPerks: [],
+    perkFigures: figures
+  });
+
+  const nameInput = html.match(/<input[^>]*name="ability_perk_name\[\]"[^>]*>/);
+  expect(nameInput).not.toBeNull();
+  expect(nameInput[0]).toContain('value="Searing Brand"');
+  expect(nameInput[0]).toContain('maxlength="' + PERK_NAME_MAX_LENGTH + '"');
+  expect(figures.perkNameMaxLength).toBe(PERK_NAME_MAX_LENGTH);
+  // The word counter still counts the text alone.
+  expect(html).toContain('>3</span>');
+});
+
+test('character-ability-perk labels a compound option by the sibling name, else its text', () => {
+  const html = renderPartial({
+    abilityId: 'ability-1',
+    position: 2,
+    perk: { text: 'Third', compounds_with: '' },
+    siblingPerks: [
+      { position: 0, name: 'Searing Brand', text: 'Deal extra damage' },
+      { position: 1, name: null, text: 'Unnamed perk text' }
+    ]
+  });
+
+  expect(html).toMatch(/Compounds with #1: Searing Brand\s*</);
+  expect(html).not.toContain('Deal extra damage');
+  expect(html).toMatch(/Compounds with #2: Unnamed perk text\s*</);
 });

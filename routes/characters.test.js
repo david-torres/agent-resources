@@ -991,6 +991,8 @@ test('GET /characters/ability-perk serves the Perk word limit to the row it rend
   const body = await res.text();
   expect(body).toContain('placeholder="Perk text (\u2264' + figures.perkWordLimit + ' words)"');
   expect(body).toContain('/ ' + figures.perkWordLimit + ' words');
+  expect(body).toMatch(/<input[^>]*name="ability_perk_name\[\]"[^>]*value=""/);
+  expect(body).toContain('maxlength="' + figures.perkNameMaxLength + '"');
 });
 
 test('GET /characters/version-fields serves both Ability-Perk limits to the v2 block', async () => {

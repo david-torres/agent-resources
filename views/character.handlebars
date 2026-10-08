@@ -337,7 +337,7 @@
             <ol>
               {{#each perks}}
                 <li>
-                  {{this.text}}
+                  {{#if this.name}}<strong>{{this.name}}</strong> {{/if}}{{this.text}}
                   {{#if this.compounds_with}}<span class="tag is-info is-light ml-2">compounding</span>{{/if}}
                 </li>
               {{/each}}

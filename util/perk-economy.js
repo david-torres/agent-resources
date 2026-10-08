@@ -113,6 +113,7 @@ const perkFigures = () => ({
     aspiringAdvancedPicks: ASPIRING_ADVANCED_PICKS,
     abilityPerkCost: ABILITY_PERK_COST,
     perkWordLimit: PERK_WORD_LIMIT,
+    perkNameMaxLength: PERK_NAME_MAX_LENGTH,
     compoundWordBonus: COMPOUND_WORD_BONUS,
     perksPerAbility: PERKS_PER_ABILITY,
     prices: {
