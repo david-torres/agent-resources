@@ -350,11 +350,12 @@
               },
               "ability_perks": {
                 "type": "array",
-                "description": "v2 only. Each item is at most 25 words; up to 5 per class_ability_id.",
+                "description": "v2 only. Each item's text is at most 25 words (the optional name does not count); up to 5 per class_ability_id.",
                 "items": {
                   "type": "object",
                   "properties": {
                     "class_ability_id": { "type": "string", "format": "uuid" },
+                    "name": { "type": ["string", "null"], "maxLength": 60 },
                     "text": { "type": "string" },
                     "position": { "type": "integer" },
                     "compounds_with": { "type": ["string", "null"], "format": "uuid" }
