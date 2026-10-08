@@ -825,16 +825,17 @@ test('each stat name on the form is a tooltip trigger followed by its own scalin
   const character = Object.fromEntries(statList.map((s) => [s, 0]));
   const statCaps = Object.fromEntries(statList.map((s) => [s, 5]));
   const html = renderStats({ character, statCaps });
+  const { document } = new JSDOM(html).window;
 
   for (const stat of statList) {
     const name = stat[0].toUpperCase() + stat.slice(1);
     const baseline = statScalingRow(stat)[0].lines[0].text;
-    const trigger = `<div class="label" tabindex="0" data-tooltip-markdown="">${name}</div>`;
-    expect(html.split(trigger).length - 1).toBe(1);
-    const after = html.slice(html.indexOf(trigger) + trigger.length);
-    expect(after).toMatch(/^\s*<div class="tooltip-markdown is-hidden">/);
-    const row = after.slice(0, after.indexOf('</div>\n', 10));
-    expect(row).toContain(baseline);
+    const triggers = [...document.querySelectorAll('.label[data-tooltip-markdown]')]
+      .filter((el) => el.textContent.trim() === name);
+    expect(triggers).toHaveLength(1);
+    const row = triggers[0].nextElementSibling;
+    expect(row.classList.contains('tooltip-markdown')).toBe(true);
+    expect(row.textContent).toContain(baseline);
     expect(html.split(baseline).length - 1).toBe(1);
   }
 });

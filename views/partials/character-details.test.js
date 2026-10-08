@@ -134,7 +134,9 @@ test('a gated item shows its name but offers no tooltip', () => {
     gear: [],
   }));
   expect(html).toContain('Fireball');
-  expect(html.slice(html.indexOf('Class Abilities'))).not.toContain('data-tooltip-markdown');
+  const abilitiesStart = html.indexOf('Class Abilities');
+  expect(abilitiesStart).toBeGreaterThan(-1);
+  expect(html.slice(abilitiesStart)).not.toContain('data-tooltip-markdown');
 });
 
 test('personality traits render each trait name, not [object Object]', () => {
