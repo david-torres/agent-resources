@@ -8,12 +8,16 @@
 -- from 20260728000000_level_up_character_atomic.sql; only their perk writes
 -- change, to carry the name. Both signatures are unchanged, so CREATE OR
 -- REPLACE keeps the service_role-only grants set by the earlier migrations.
+--
+-- The function names are quoted because Supabase CLI v2.84's statement splitter
+-- reads an unquoted name containing "atomic" as a BEGIN ATOMIC body and runs
+-- the rest of the file as one prepared statement, which Postgres rejects.
 
 ALTER TABLE public.character_perks
   ADD COLUMN name text
   CONSTRAINT character_perks_name_length CHECK (name IS NULL OR char_length(name) <= 60);
 
-CREATE OR REPLACE FUNCTION public.save_character_atomic(
+CREATE OR REPLACE FUNCTION public."save_character_atomic"(
   p_character_id uuid,
   p_creator_id uuid,
   p_character jsonb,
@@ -289,7 +293,7 @@ BEGIN
   RETURN saved;
 END;$$;
 
-CREATE OR REPLACE FUNCTION public.level_up_character_atomic(
+CREATE OR REPLACE FUNCTION public."level_up_character_atomic"(
   p_character_id uuid,
   p_creator_id uuid,
   p_fields jsonb,
