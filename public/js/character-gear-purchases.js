@@ -630,6 +630,14 @@
       });
     }
 
+    // Each row's editor writes its textarea and fires `input` as it is typed
+    // into; htmx adds and removes whole rows. Either moves what is spent.
+    var commonItemsList = document.getElementById('common-items-list');
+    if (commonItemsList) {
+      commonItemsList.addEventListener('input', renderReadouts);
+      new window.MutationObserver(renderReadouts).observe(commonItemsList, { childList: true, subtree: true });
+    }
+
     render();
 
     return {

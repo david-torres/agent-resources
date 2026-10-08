@@ -693,3 +693,60 @@ describe('Your Signatures', () => {
     expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
   });
 });
+
+// Common Items spend the same Merx as Signatures. Their rows are added by htmx,
+// filled in through the ToastUI editor (which writes the textarea and fires a
+// bubbling `input`), and removed by htmx.remove -- the readout has to follow
+// every one of those, not just the next Signature purchase.
+describe('the spent readout follows the Common Items list', () => {
+  const { MOUNT_HTML } = require('./helpers/gear-purchase-fixture');
+  const { json: jsonHelper } = require('../util/handlebars');
+
+  const COMMON_ITEM_ROW = (value) => `
+    <div class="column is-full">
+      <textarea name="common_items[]">${value}</textarea>
+    </div>`;
+
+  const nextTick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  // jsdom fires its own DOMContentLoaded a macrotask after the fixture's,
+  // booting the surface a second time and repainting the readout. Letting that
+  // settle first means a later repaint can only come from the list changing.
+  const mountWithCommonItems = async (rowsHtml) => {
+    const data = fixtureCharacter({ gear: [] });
+    const html = MOUNT_HTML(jsonHelper(data)).replace(
+      '<div id="common-items-list"></div>',
+      `<div id="common-items-list">${rowsHtml}</div>`
+    );
+    const form = mountPurchases(data, { html });
+    await nextTick();
+    return form;
+  };
+
+  const spentReadout = () => Number(document.querySelector('[data-merx-spent]').textContent);
+
+  test('filling in a newly added Common Item raises the spent readout by its price', async () => {
+    await mountWithCommonItems('');
+    const before = spentReadout();
+
+    const list = document.getElementById('common-items-list');
+    list.insertAdjacentHTML('beforeend', COMMON_ITEM_ROW(''));
+    const textarea = list.querySelector('textarea[name="common_items[]"]');
+    textarea.value = 'Fifty feet of rope';
+    textarea.dispatchEvent(new window.Event('input', { bubbles: true }));
+    await nextTick();
+
+    expect(spentReadout()).toBe(before + FIGURES.prices.commonItem);
+  });
+
+  test('removing a filled Common Item row lowers the spent readout by its price', async () => {
+    await mountWithCommonItems(COMMON_ITEM_ROW('Fifty feet of rope'));
+    const before = spentReadout();
+    expect(before).toBe(FIGURES.prices.commonItem);
+
+    document.querySelector('#common-items-list .is-full').remove();
+    await nextTick();
+
+    expect(spentReadout()).toBe(before - FIGURES.prices.commonItem);
+  });
+});
