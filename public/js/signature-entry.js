@@ -243,6 +243,41 @@
     return '<div class="entry-mods">' + rows + '</div>';
   };
 
+  var NO_LOADOUT = Object.freeze({ buttonAttrs: '', after: '' });
+
+  // What is fitted to an owned Signature, for its cell in Your Signatures:
+  // badges, plus the hover text. app.js's initTooltips reads a
+  // data-tooltip-markdown element's next .tooltip-markdown sibling, so the
+  // hidden text must directly follow the cell's button. Nothing fitted
+  // yields nothing, so the cell carries no tooltip.
+  var loadout = function (entry, purchase) {
+    var enchantment = (purchase && purchase.enchantment) || null;
+    var mods = Array.isArray(purchase && purchase.mods) ? purchase.mods : [];
+    var badges = [];
+    var text = [];
+    if (enchantment && enchantment.source === 'default') {
+      badges.push('Default Ench');
+      var printed = (entry && entry.default_enchantment) || {};
+      text.push('<div class="entry-enchantment-name">' + escapeHtml(printed.name) + '</div>');
+      text.push('<div class="entry-enchantment-text">'
+        + (printed.description_html || escapeHtml(printed.description || '')) + '</div>');
+    } else if (enchantment && enchantment.source === 'custom') {
+      badges.push('Custom Ench');
+      text.push('<div class="entry-enchantment-name">' + escapeHtml(enchantment.name) + '</div>');
+      text.push('<div class="entry-enchantment-text">' + escapeHtml(enchantment.description) + '</div>');
+    }
+    if (mods.length) badges.push(mods.length === 1 ? 'Mod' : 'Mod x' + mods.length);
+    if (!badges.length) return NO_LOADOUT;
+    text.push(modsReadOnly(purchase));
+    return {
+      buttonAttrs: ' data-tooltip-markdown=""',
+      after: '<div class="tooltip-markdown is-hidden">' + text.join('') + '</div>'
+        + '<div class="tags mb-2" data-signature-loadout>' + badges.map(function (badge) {
+          return '<span class="tag is-light">' + escapeHtml(badge) + '</span>';
+        }).join('') + '</div>'
+    };
+  };
+
   // Book order: name, description, meters, the Default Enchantment divider
   // and its text (always printed, whether or not the Signature is owned),
   // then the Enchantment controls and Mods -- both editable when owned and
@@ -283,6 +318,8 @@
     totalOf: totalOf,
     countWords: countWords,
     isCrossClass: isCrossClass,
-    describePurchase: describePurchase
+    describePurchase: describePurchase,
+    loadout: loadout,
+    NO_LOADOUT: NO_LOADOUT
   };
 })();

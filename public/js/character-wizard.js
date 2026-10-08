@@ -3252,19 +3252,23 @@ window.CharacterWizard = (function () {
     && state.openSignature.name === cell.entry.name
     && state.openSignature.classId === cell.classId;
 
-  const renderSignatureCell = (cell) => {
+  const renderSignatureCell = (cell, fitted) => {
     const owned = !!findPurchase(cell.entry.name, cell.classId);
     const tag = owned
       ? '<span class="tag is-success is-light ml-2">Owned</span>'
       : '<span class="tag is-warning is-light ml-2">' + signaturePriceFor(cell.classId, cell.entry.name) + ' Merx</span>';
     return ''
-      + '<button type="button" class="button is-small is-fullwidth is-justify-content-space-between mb-2'
+      + '<button type="button" class="button is-small is-fullwidth is-justify-content-space-between '
+      +   (fitted.after ? 'mb-1' : 'mb-2')
       +   (isOpenSignature(cell) ? ' is-active' : '') + '"'
       +   ' data-signature-name="' + esc(cell.entry.name) + '"'
-      +   ' data-signature-class="' + esc(cell.classId) + '">'
+      +   ' data-signature-class="' + esc(cell.classId) + '"' + fitted.buttonAttrs + '>'
       +   '<span>' + esc(cell.entry.name) + '</span>' + tag
-      + '</button>';
+      + '</button>' + fitted.after;
   };
+  const renderGridSignatureCell = (cell) => renderSignatureCell(cell, SignatureEntry.NO_LOADOUT);
+  const renderOwnedSignatureCell = (cell) => renderSignatureCell(cell,
+    SignatureEntry.loadout(cell.entry, findPurchase(cell.entry.name, cell.classId)));
 
   // The purchase controls the entry sits above: buy it, or give it back.
   // Neither names the Signature -- the drawer only ever shows the open one,
@@ -3305,9 +3309,11 @@ window.CharacterWizard = (function () {
 
   const renderYourSignatures = (owned) => {
     if (!yourSignatures) return;
+    if (typeof App !== 'undefined') App.destroyTooltips(yourSignatures);
     yourSignatures.innerHTML = owned.length
-      ? '<h5 class="title is-6 mb-2">Your Signatures</h5>' + owned.map(renderSignatureCell).join('')
+      ? '<h5 class="title is-6 mb-2">Your Signatures</h5>' + owned.map(renderOwnedSignatureCell).join('')
       : '';
+    if (typeof App !== 'undefined') App.initTooltips(yourSignatures);
   };
 
   // The book prints a Class's Signatures down four columns; `column` and
@@ -3330,7 +3336,7 @@ window.CharacterWizard = (function () {
     columns.sort((a, b) => a.key - b.key);
     signatureGrid.innerHTML = columns.length
       ? '<div class="columns is-multiline">' + columns.map((column) => '<div class="column">'
-          + column.cells.map(renderSignatureCell).join('') + '</div>').join('') + '</div>'
+          + column.cells.map(renderGridSignatureCell).join('') + '</div>').join('') + '</div>'
       : '';
     renderSignatureDrawer(cells.concat(owned));
   };

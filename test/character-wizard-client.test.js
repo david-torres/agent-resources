@@ -2159,6 +2159,41 @@ describe('Your Signatures', () => {
     expect(yourCells()).toEqual([]);
   });
 
+  // app.js's tooltip init takes the button's next sibling when it carries
+  // .tooltip-markdown, so the hidden text sits right after the button and the
+  // badges after that.
+  test('an owned Signature shows its loadout as badges and its text on hover', () => {
+    const wizard = bootAspirant();
+    wizard.buySignature('Cowboy Hat', 'c-v1');
+    expect(wizard.setEnchantment('Cowboy Hat', { source: 'default' }, 'c-v1')).toBe(true);
+    wizard.getState().gear.find((g) => g.name === 'Cowboy Hat').mods = [
+      { name: 'Scope', description: 'Sees <far>' },
+      { name: 'Band', description: 'Holds a feather' }
+    ];
+    wizard.renderGearStep();
+
+    const cell = document.querySelector('[data-your-signatures] [data-signature-name="Cowboy Hat"]');
+    expect(cell.getAttribute('data-tooltip-markdown')).toBe('');
+    const tooltip = cell.nextElementSibling;
+    expect(tooltip).not.toBeNull();
+    expect(tooltip.classList.contains('tooltip-markdown')).toBe(true);
+    expect(tooltip.classList.contains('is-hidden')).toBe(true);
+    expect(tooltip.textContent).toContain('Cowboy Hat Enchantment');
+    expect(tooltip.textContent).toContain('Does a thing.');
+    expect(tooltip.textContent).toContain('Scope');
+    expect(tooltip.textContent).toContain('Sees <far>');
+    expect(tooltip.textContent).toContain('Band');
+
+    const loadout = tooltip.nextElementSibling;
+    expect(loadout.matches('.tags[data-signature-loadout]')).toBe(true);
+    expect([...loadout.querySelectorAll('.tag')].map((tag) => tag.textContent.trim()))
+      .toEqual(['Default Ench', 'Mod x2']);
+
+    const gridCell = document.querySelector('#signatureGrid [data-signature-name="Cowboy Hat"]');
+    expect(gridCell.hasAttribute('data-tooltip-markdown')).toBe(false);
+    expect(document.querySelectorAll('[data-signature-loadout]')).toHaveLength(1);
+  });
+
   test('the panel shows whenever a Signature is owned, even with an empty class grid', () => {
     bootAspirant([ownClass([]), otherClass()]);
     expect(document.getElementById('signaturePanel').hidden).toBe(true);

@@ -337,14 +337,16 @@
       var origin = crossClassFor(entry.class_id, entry.name) && entry.class_name
         ? '<span class="tag is-info is-light ml-2">' + esc(entry.class_name) + '</span>'
         : '';
+      var fitted = entry.yours ? window.SignatureEntry.loadout(entry, purchase) : window.SignatureEntry.NO_LOADOUT;
       return '<button type="button"'
-        + ' class="button is-small is-fullwidth is-justify-content-space-between mb-2'
+        + ' class="button is-small is-fullwidth is-justify-content-space-between '
+        + (fitted.after ? 'mb-1' : 'mb-2')
         + (isOpen(entry) ? ' is-active' : '') + '"'
         + ' data-signature-name="' + esc(entry.name) + '"'
         + ' data-signature-class="' + esc(entry.class_id) + '"'
-        + (entry.yours ? ' data-signature-yours' : '') + '>'
+        + (entry.yours ? ' data-signature-yours' : '') + fitted.buttonAttrs + '>'
         + '<span>' + esc(entry.name) + '</span>' + origin + tag
-        + '</button>';
+        + '</button>' + fitted.after;
     };
 
     // The book prints a class's Signatures down columns; `column` carries that
@@ -389,7 +391,9 @@
         onViewChange: function () { open = null; renderDrawer(); },
         groupBy: function (entry) { return entry.yours ? 'Your Signatures' : entry.class_name; },
         searchOf: function (entry) { return entry.name; },
-        renderEntry: renderColumnsFor
+        renderEntry: renderColumnsFor,
+        beforeRender: function (root) { if (typeof App !== 'undefined') App.destroyTooltips(root); },
+        afterRender: function (root) { if (typeof App !== 'undefined') App.initTooltips(root); }
       });
     };
 

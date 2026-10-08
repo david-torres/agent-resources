@@ -99,6 +99,7 @@
     };
 
     var render = function () {
+      if (options.beforeRender) options.beforeRender(root);
       var entries = readEntries();
       var browsing = compact ? entries.filter(function (entry) { return !options.isOwned(entry); }) : entries;
       if (compact) {
@@ -122,6 +123,7 @@
           : 'No matching choices. Try another search or class.';
       }
       groupsEl.innerHTML = renderGroups(browsing, compact);
+      if (options.afterRender) options.afterRender(root);
     };
 
     if (compact) {

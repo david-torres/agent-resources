@@ -1642,6 +1642,13 @@ const App = (function (document, supabase, htmx) {
   return {
     init,
     initTooltips: (root) => { try { _initTooltips(root); } catch (e) { /* noop */ } },
+    // Tippy appends its popper to document.body, so a tooltip showing when its
+    // element is replaced would stay on screen; call this before re-rendering.
+    destroyTooltips: (root) => {
+      (root || document).querySelectorAll('[data-tooltip-markdown]').forEach((el) => {
+        if (el._tippy) el._tippy.destroy();
+      });
+    },
     dismissSystemMessage: (id) => {
       try {
         localStorage.setItem('dismissedSystemMessageId', id);

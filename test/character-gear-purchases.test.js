@@ -692,6 +692,114 @@ describe('Your Signatures', () => {
     search('');
     expect(namesInYours()).toEqual(['Lasso', 'Cowboy Hat']);
   });
+
+  // Each owned Signature shows at a glance what is fitted to it, and hovering
+  // it shows the text. app.js's tooltip init takes the button's next sibling
+  // when it carries .tooltip-markdown, so the hidden text sits right after
+  // the button and the badges after that.
+  describe('the loadout on each owned Signature', () => {
+    const entriesWithDefaults = () => twoClassEntries().map((entry) => ({
+      ...entry,
+      default_enchantment: {
+        name: `${entry.name} Charm`,
+        description: `${entry.name} plain text`,
+        description_html: `<p>${entry.name} rides with the wind.</p>`
+      }
+    }));
+    const mountLoadout = (gear) => mountPurchases(fixtureCharacter({
+      gear, entries: entriesWithDefaults(), earnedMerx: 100
+    }));
+    const owned = (name, classId, enchantment, mods) => ({ name, class_id: classId, enchantment, mods });
+    const mod = (name, description) => ({ name, description });
+
+    const loadoutOf = (cell) => {
+      for (let el = cell.nextElementSibling; el && !el.matches('[data-signature-name]'); el = el.nextElementSibling) {
+        if (el.matches('[data-signature-loadout]')) return el;
+      }
+      return null;
+    };
+    const badgesOf = (cell) => {
+      const row = loadoutOf(cell);
+      return row ? [...row.querySelectorAll('.tag')].map((tag) => tag.textContent.trim()) : [];
+    };
+    const tooltipOf = (cell) => {
+      const next = cell.nextElementSibling;
+      return cell.hasAttribute('data-tooltip-markdown') && next && next.classList.contains('tooltip-markdown')
+        ? next
+        : null;
+    };
+
+    test('badges name the Enchantment first, then the Mods', () => {
+      mountLoadout([
+        owned('Cowboy Hat', OWN_CLASS_ID, { source: 'default' }, [mod('Scope', 'Sees far')]),
+        owned('Lasso', OTHER_CLASS_ID, { source: 'custom', name: 'Hex', description: 'Shades.' },
+          [mod('Scope', 'Sees far'), mod('Barb', 'Bites')]),
+        owned('Duster', OWN_CLASS_ID, null, [mod('Lining', 'Warm'), mod('Pockets', 'Deep')])
+      ]);
+      const row = loadoutOf(yoursCell('Cowboy Hat'));
+      expect(row).not.toBeNull();
+      expect(row.classList.contains('tags')).toBe(true);
+      expect(badgesOf(yoursCell('Cowboy Hat'))).toEqual(['Default Ench', 'Mod']);
+      expect(badgesOf(yoursCell('Lasso'))).toEqual(['Custom Ench', 'Mod x2']);
+      expect(badgesOf(yoursCell('Duster'))).toEqual(['Mod x2']);
+    });
+
+    test('a Signature with nothing fitted gets no badges and no tooltip', () => {
+      mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, null, [])]);
+      expect(loadoutOf(yoursCell('Cowboy Hat'))).toBeNull();
+      expect(yoursCell('Cowboy Hat').hasAttribute('data-tooltip-markdown')).toBe(false);
+      expect(tooltipOf(yoursCell('Cowboy Hat'))).toBeNull();
+    });
+
+    test('the class grid copy of an owned Signature carries no loadout', () => {
+      mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, { source: 'default' }, [mod('Scope', 'Sees far')])]);
+      expect(badgesOf(yoursCell('Cowboy Hat'))).toEqual(['Default Ench', 'Mod']);
+      expect(loadoutOf(classCell('Cowboy Hat'))).toBeNull();
+      expect(classCell('Cowboy Hat').hasAttribute('data-tooltip-markdown')).toBe(false);
+      expect(document.querySelectorAll('#purchaseGrid [data-signature-loadout]')).toHaveLength(1);
+    });
+
+    test('hovering shows the Default Enchantment\'s book text and each Mod', () => {
+      mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, { source: 'default' },
+        [mod('Scope', 'Sees far'), mod('Band', 'Holds a feather')])]);
+      const tooltip = tooltipOf(yoursCell('Cowboy Hat'));
+      expect(tooltip).not.toBeNull();
+      expect(tooltip.getAttribute('data-tooltip-markdown')).toBeNull();
+      expect(yoursCell('Cowboy Hat').getAttribute('data-tooltip-markdown')).toBe('');
+      expect(tooltip.classList.contains('is-hidden')).toBe(true);
+      expect(tooltip.textContent).toContain('Cowboy Hat Charm');
+      expect(tooltip.innerHTML).toContain('<p>Cowboy Hat rides with the wind.</p>');
+      for (const text of ['Scope', 'Sees far', 'Band', 'Holds a feather']) {
+        expect(tooltip.textContent).toContain(text);
+      }
+      expect(tooltip.nextElementSibling).toBe(loadoutOf(yoursCell('Cowboy Hat')));
+    });
+
+    test('hovering a Custom Enchantment shows the player\'s text, escaped', () => {
+      mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID,
+        { source: 'custom', name: 'Hex <b>', description: '<script>alert(1)</script>' },
+        [mod('<img src=x onerror=alert(2)>', 'Sees <i>far</i>')])]);
+      const tooltip = tooltipOf(yoursCell('Cowboy Hat'));
+      expect(tooltip).not.toBeNull();
+      expect(tooltip.textContent).toContain('Hex <b>');
+      expect(tooltip.textContent).toContain('<script>alert(1)</script>');
+      expect(tooltip.textContent).toContain('<img src=x onerror=alert(2)>');
+      expect(tooltip.textContent).toContain('Sees <i>far</i>');
+      expect(tooltip.querySelector('script, img, b, i')).toBeNull();
+      expect(tooltip.textContent).not.toContain('Cowboy Hat Charm');
+    });
+
+    test('naming a Mod in the drawer adds its badge to Your Signatures', () => {
+      const form = mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, null, [])]);
+      yoursCell('Cowboy Hat').click();
+      const modName = document.querySelector('#purchaseDrawer [data-mod-name]');
+      modName.value = 'Scope';
+      modName.dispatchEvent(new window.Event('change', { bubbles: true }));
+      expect(form.getState().purchases[0].mods).toEqual([{ name: 'Scope', description: '' }]);
+      expect(badgesOf(yoursCell('Cowboy Hat'))).toEqual(['Mod']);
+      expect(tooltipOf(yoursCell('Cowboy Hat')).textContent).toContain('Scope');
+    });
+  });
 });
 
 // Common Items spend the same Merx as Signatures. Their rows are added by htmx,
