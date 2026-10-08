@@ -53,6 +53,45 @@ const App = (function (document, supabase, htmx) {
       _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
     });
 
+  const _initTooltips = (root) => {
+    const container = root || document;
+    const els = container.querySelectorAll('[data-tooltip-markdown]');
+    if (!els.length) return;
+    const doInit = () => {
+      if (typeof tippy !== 'function') return;
+      els.forEach((el) => {
+      try {
+        if (el._tippy) return;
+        const ref = el.getAttribute('data-tooltip-markdown');
+        let contentEl = null;
+        if (ref) {
+          if (ref.startsWith('#')) {
+            const id = ref.slice(1);
+            contentEl = document.getElementById(id) || (container.getElementById ? container.getElementById(id) : null);
+          }
+          if (!contentEl) {
+            try { contentEl = container.querySelector(ref) || document.querySelector(ref); } catch (_) { /* ignore */ }
+          }
+        }
+        if (!contentEl && el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('tooltip-markdown')) {
+          contentEl = el.nextElementSibling;
+        }
+        if (!contentEl) return;
+        tippy(el, {
+          theme: 'light-border',
+          allowHTML: true,
+          interactive: true,
+          maxWidth: 350,
+          content: contentEl.innerHTML,
+          placement: 'top',
+          appendTo: () => document.body,
+        });
+      } catch (e) { /* noop per element */ }
+    });
+    };
+    if (typeof tippy === 'function') { doInit(); } else { _loadTippy().then(doInit).catch(() => {}); }
+  };
+
   const _loadTomSelect = () => {
     _loadStylesheet('https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css');
     return _loadScript('https://cdn.jsdelivr.net/npm/tom-select@2/dist/js/tom-select.complete.min.js');
@@ -976,45 +1015,6 @@ const App = (function (document, supabase, htmx) {
           document.body.setAttribute('data-auth-optional', 'false');
         }
       });
-
-      const _initTooltips = (root) => {
-        const container = root || document;
-        const els = container.querySelectorAll('[data-tooltip-markdown]');
-        if (!els.length) return;
-        const doInit = () => {
-          if (typeof tippy !== 'function') return;
-          els.forEach((el) => {
-          try {
-            if (el._tippy) return;
-            const ref = el.getAttribute('data-tooltip-markdown');
-            let contentEl = null;
-            if (ref) {
-              if (ref.startsWith('#')) {
-                const id = ref.slice(1);
-                contentEl = document.getElementById(id) || (container.getElementById ? container.getElementById(id) : null);
-              }
-              if (!contentEl) {
-                try { contentEl = container.querySelector(ref) || document.querySelector(ref); } catch (_) { /* ignore */ }
-              }
-            }
-            if (!contentEl && el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('tooltip-markdown')) {
-              contentEl = el.nextElementSibling;
-            }
-            if (!contentEl) return;
-            tippy(el, {
-              theme: 'light-border',
-              allowHTML: true,
-              interactive: true,
-              maxWidth: 350,
-              content: contentEl.innerHTML,
-              placement: 'top',
-              appendTo: () => document.body,
-            });
-          } catch (e) { /* noop per element */ }
-        });
-        };
-        if (typeof tippy === 'function') { doInit(); } else { _loadTippy().then(doInit).catch(() => {}); }
-      };
 
       const _initSearchableSelects = (root) => {
         const container = root || document;
