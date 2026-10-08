@@ -506,6 +506,7 @@ const normalizeAbilityPerks = (perks) => {
     if (!text || !classAbilityId) return null;
     return {
       class_ability_id: classAbilityId,
+      name: blankToNull(perk.name),
       text,
       position: Number.isFinite(Number(perk.position)) ? Number(perk.position) : index,
       compounds_with: perk.compounds_with_id || perk.compounds_with || null
@@ -851,6 +852,7 @@ const formText = (v) => (v || '').toString().trim();
 
 const collectAbilityPerksFromForm = (body) => {
   const ids = asArray(body.ability_perk_class_ability_id);
+  const names = asArray(body.ability_perk_name);
   const texts = asArray(body.ability_perk_text);
   const pos = asArray(body.ability_perk_position);
   const cw = asArray(body.ability_perk_compounds_with);
@@ -862,6 +864,7 @@ const collectAbilityPerksFromForm = (body) => {
     if (!id || !text) continue;
     perks.push({
       class_ability_id: id,
+      name: formText(names[i]) || null,
       text: String(text),
       position: Number(pos[i]) || i,
       compounds_with: cw[i] || null
@@ -897,7 +900,7 @@ const collectQuirksFromForm = (body) => {
 };
 
 const FORM_ARRAY_KEYS = [
-  'ability_perk_class_ability_id', 'ability_perk_text', 'ability_perk_position',
+  'ability_perk_class_ability_id', 'ability_perk_name', 'ability_perk_text', 'ability_perk_position',
   'ability_perk_compounds_with', 'quirk_name', 'quirk_downside', 'quirk_upside',
   'accessory_name', 'accessory_description'
 ];

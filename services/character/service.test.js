@@ -436,6 +436,27 @@ test('levelUp allows a compounded perk five more words than the baseline limit',
   expect(calls[0].perks[1]).toMatchObject({ class_ability_id: 'ab-1', text: compoundText, position: 1, compounds_with: 'position-0' });
 });
 
+test('levelUp hands each new perk\'s name to the atomic level-up', async () => {
+  const calls = [];
+  const adapter = {
+    ...minimalRequiredAdapter(),
+    getCharacter: async () => ok({ id: 'character-1', creator_id: 'profile-1', class_id: 'class-1', level: 1, completed_missions: 0, commissary_reward: 0, abilities: [] }),
+    getRealMissions: async () => ok([{ outcome: 'success' }, { outcome: 'success' }]),
+    listOffscreenMissions: async () => ok([]),
+    getClassRulesVersion: async () => ok('v2'),
+    fetchAllowedAbilityIds: async () => ok([{ id: 'ab-1' }]),
+    fetchExistingPerks: async () => ok([]),
+    levelUpAtomic: async (args) => { calls.push(args); return ok({ id: 'character-1', name: 'Hero', level: 2, completed_missions: 0, commissary_reward: 0 }); }
+  };
+  const svc = new CharacterService(adapter);
+  const { error } = await svc.levelUp(CREATOR, 'character-1', {
+    level: 2,
+    ability_perks: [{ class_ability_id: 'ab-1', name: ' Dead Eye ', text: 'Crits on a 19', ref: 'r1' }]
+  });
+  expect(error).toBeNull();
+  expect(calls[0].perks[0]).toMatchObject({ class_ability_id: 'ab-1', name: 'Dead Eye', text: 'Crits on a 19' });
+});
+
 test('levelUp rejects a runaway requested level without spending credits', async () => {
   const writes = [];
   const svc = new CharacterService(makeAdapter([], {
@@ -991,6 +1012,44 @@ test('shaped traits reach the atomic p_traits payload with both name and stat', 
     { name: 'brave', stat: 'might' },
     { name: 'calm', stat: 'will' }
   ]);
+});
+
+test('a v2 save hands each perk\'s name to the atomic p_perks payload', async () => {
+  let saved = null;
+  const service = new CharacterService(makeAdapter([], {
+    saveCharacterAtomic: async (args) => {
+      saved = args;
+      return ok({ id: 'character-1' });
+    }
+  }));
+  const result = await service.saveCharacterAtomic({
+    id: 'character-1',
+    actor: { id: 'profile-1' },
+    characterInput: { name: 'Hero' },
+    childData: { abilityPerks: [{ class_ability_id: 'ability-1', name: 'Dead Eye', text: 'Crits on a 19', position: 0 }] },
+    rulesVersion: 'v2',
+    previousAbilities: [{ id: 'ability-1', name: 'Quick Draw' }]
+  });
+  expect(result.error).toBeNull();
+  expect(saved.perks).toHaveLength(1);
+  expect(saved.perks[0]).toMatchObject({ ability_name: 'Quick Draw', name: 'Dead Eye', text: 'Crits on a 19' });
+});
+
+test('reconcilePerks persists a renamed perk as an update to its existing row', async () => {
+  const calls = [];
+  const service = new CharacterService(makeAdapter(calls, {
+    getChildRows: async (table) => ok(table === 'character_perks'
+      ? [{ id: 'perk-1', class_ability_id: 'ability-1', name: 'Old Name', text: 'Crits on a 19', position: 0, compounds_with: null }]
+      : [])
+  }));
+  const result = await service.reconcilePerks('character-1', [
+    { class_ability_id: 'ability-1', name: 'Dead Eye', text: 'Crits on a 19', position: 0 }
+  ]);
+  expect(result.error).toBeNull();
+  const update = calls.find(c => c[0] === 'updateChildRow' && c[1] === 'character_perks');
+  expect(update).toBeDefined();
+  expect(update[2]).toBe('perk-1');
+  expect(update[3]).toMatchObject({ name: 'Dead Eye' });
 });
 
 // The fallback path (reconcileTraits) is what an adapter without

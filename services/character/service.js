@@ -900,7 +900,7 @@ class CharacterService {
     const desired = normalizeAbilityPerks(perks);
     const applied = await this.applyChildDiff('character_perks', characterId, diffChildRows(existing.data, desired, {
       keyOf: row => `${row.class_ability_id}:${row.position}`,
-      rowFields: perk => ({ class_ability_id: perk.class_ability_id, text: perk.text, position: perk.position })
+      rowFields: perk => ({ class_ability_id: perk.class_ability_id, name: perk.name, text: perk.text, position: perk.position })
     }));
     if (applied.error) return applied;
     const current = await this.adapter.getChildRows('character_perks', characterId);
@@ -1228,6 +1228,7 @@ class CharacterService {
       existingCounts.set(classAbilityId, nextPosition);
       rows.push({
         class_ability_id: classAbilityId,
+        name: typeof p.name === 'string' && p.name.trim() ? p.name.trim() : null,
         text,
         position: nextPosition,
         compounds_with: null

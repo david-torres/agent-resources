@@ -251,7 +251,7 @@ test('collectCharacterFormArrays assembles perks/quirks/accessories and strips r
     accessory_description: ['']
   });
   expect(out.name).toBe('Hero');
-  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'first', position: 0, compounds_with: null }]);
+  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', name: null, text: 'first', position: 0, compounds_with: null }]);
   expect(out.quirks).toEqual([{ name: 'Synthetic', downside: 'Rusts in rain', upside: 'Never sleeps' }]);
   expect(out.accessories).toEqual([{ name: 'Ring' }]);
   expect(out.ability_perk_class_ability_id).toBeUndefined();
@@ -282,7 +282,33 @@ test('collectCharacterFormArrays tolerates single (non-array) form values', () =
     ability_perk_position: '3',
     ability_perk_compounds_with: ''
   });
-  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', text: 'solo', position: 3, compounds_with: null }]);
+  expect(out.ability_perks).toEqual([{ class_ability_id: 'a1', name: null, text: 'solo', position: 3, compounds_with: null }]);
+});
+
+test('collectCharacterFormArrays carries each perk row\'s optional name, trimmed, with blank as null', () => {
+  const out = collectCharacterFormArrays({
+    ability_perk_class_ability_id: ['a1', 'a2'],
+    ability_perk_name: ['  Dead Eye  ', '  '],
+    ability_perk_text: ['Crits on a 19', 'Reload as a free action'],
+    ability_perk_position: ['0', '1'],
+    ability_perk_compounds_with: ['', '']
+  });
+  expect(out.ability_perks.map(perk => perk.name)).toEqual(['Dead Eye', null]);
+  expect(out.ability_perk_name).toBeUndefined();
+});
+
+// The perk name is a label, not perk text: it never counts toward the 25-word
+// limit, but it is capped so a "name" cannot smuggle in the perk's mechanics.
+test('a perk name does not count toward the word limit but is capped at 60 characters', () => {
+  const twentyFiveWords = Array.from({ length: 25 }, (_, index) => `word${index}`).join(' ');
+  // Level 2 earns an advent character its first Perk, so the one Perk here is paid for.
+  const perkNamed = (name) => normalizeCharacterInput({
+    level: 2,
+    ability_perks: [{ class_ability_id: 'a', name, text: twentyFiveWords }]
+  }, { rulesVersion: 'v2' });
+
+  expect(perkNamed('n'.repeat(60)).error).toBeNull();
+  expect(perkNamed('n'.repeat(61)).error).toMatch(/name.*60 characters/i);
 });
 
 test('normalizeCharacterInput accepts a YYYY-MM-DD created_at and normalizes it to ISO', () => {

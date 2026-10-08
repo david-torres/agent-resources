@@ -67,6 +67,7 @@ const ABILITY_PERK_COST = 1;
 // The parenthetical is already true without code: a compound is its own row,
 // so it already occupies one of the PERKS_PER_ABILITY slots.
 const PERK_WORD_LIMIT = 25;
+const PERK_NAME_MAX_LENGTH = 60;
 const COMPOUND_WORD_BONUS = 5;
 const PERKS_PER_ABILITY = 5;
 
@@ -285,6 +286,7 @@ module.exports = {
     PERKS_PER_LEVEL,
     ABILITY_PERK_COST,
     PERK_WORD_LIMIT,
+    PERK_NAME_MAX_LENGTH,
     COMPOUND_WORD_BONUS,
     PERKS_PER_ABILITY,
     ABILITY_CAP,

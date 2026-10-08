@@ -1,4 +1,4 @@
-const { COMPOUND_WORD_BONUS, PERK_WORD_LIMIT, PERKS_PER_ABILITY } = require('./perk-economy');
+const { COMPOUND_WORD_BONUS, PERK_NAME_MAX_LENGTH, PERK_WORD_LIMIT, PERKS_PER_ABILITY } = require('./perk-economy');
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -67,6 +67,9 @@ function validateAbilityPerks(perks, { wordLimit = PERK_WORD_LIMIT, perAbility =
     const limit = wordLimit + (perk.compounds_with ? COMPOUND_WORD_BONUS : 0);
     if (words > limit) {
       errors.push(`Perk #${i + 1}: must be at most ${limit} words (was ${words}).`);
+    }
+    if (typeof perk.name === 'string' && perk.name.length > PERK_NAME_MAX_LENGTH) {
+      errors.push(`Perk #${i + 1}: name must be at most ${PERK_NAME_MAX_LENGTH} characters.`);
     }
 
     if (abilityId) {
