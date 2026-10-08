@@ -136,4 +136,13 @@ test('the wizard creates a character end to end', async ({ page }) => {
   expect(rows[0].class_id).toBe(classRow.id);
 
   await expect(page.locator('#statsBox')).toHaveAttribute('data-character-name', name);
+
+  // A successful create must discard the draft, or /characters/new offers to
+  // resume a character that already exists.
+  const draft = await page.evaluate(() => localStorage.getItem('agentResources.characterWizard'));
+  expect(draft, 'the saved wizard draft must be cleared after create').toBeNull();
+
+  await page.goto('/characters/new');
+  await page.waitForLoadState('networkidle');
+  await expect(page.locator('#restoreDraftModal')).not.toHaveClass(/is-active/);
 });

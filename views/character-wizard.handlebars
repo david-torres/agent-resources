@@ -424,12 +424,13 @@
   <div class="field is-grouped is-grouped-right mt-4">
     <p class="control"><button type="button" class="button" data-wizard-prev>Back</button></p>
     <p class="control">
+      {{!-- Checks the status, not event.detail.successful: htmx leaves that unset on HX-Location responses. --}}
       <button type="button" class="button is-success" id="wizardSubmit" disabled
               hx-post="/characters/wizard"
               hx-vals='js:{payload: JSON.stringify(CharacterWizard.buildSubmitPayload())}'
               hx-disabled-elt="this"
               hx-indicator="this"
-              hx-on::after-request="if(event.detail.successful) CharacterWizard.onSubmitSuccess()">Create character</button>
+              hx-on::after-request="if(event.detail.xhr.status >= 200 && event.detail.xhr.status < 300) CharacterWizard.onSubmitSuccess()">Create character</button>
     </p>
   </div>
 </section>
