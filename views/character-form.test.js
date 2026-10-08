@@ -159,6 +159,9 @@ test('every stat POSTs its own name from a hidden input', async () => {
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
   ));
+  for (const name of ['stat-scaling-row', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, 'partials', `${name}.handlebars`), 'utf8'));
+  }
 
   const statsSection = FORM_SRC.slice(
     FORM_SRC.indexOf('<label class="label">Stats</label>'),
@@ -440,6 +443,9 @@ const renderStats = (context) => {
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
   ));
+  for (const name of ['stat-scaling-row', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, 'partials', `${name}.handlebars`), 'utf8'));
+  }
   const section = FORM_SRC.slice(
     FORM_SRC.indexOf('<label class="label">Stats</label>'),
     FORM_SRC.indexOf('Signature Gear')
@@ -812,4 +818,23 @@ test('legacy characters without a class ID still select their class by name', ()
   });
   const { JSDOM } = require('jsdom');
   expect(new JSDOM(html).window.document.getElementById('char-class-id').value).toBe('gunslinger');
+});
+
+test('each stat name on the form is a tooltip trigger followed by its own scaling row', () => {
+  const { statScalingRow } = customHelpers;
+  const character = Object.fromEntries(statList.map((s) => [s, 0]));
+  const statCaps = Object.fromEntries(statList.map((s) => [s, 5]));
+  const html = renderStats({ character, statCaps });
+
+  for (const stat of statList) {
+    const name = stat[0].toUpperCase() + stat.slice(1);
+    const baseline = statScalingRow(stat)[0].lines[0].text;
+    const trigger = `<div class="label" tabindex="0" data-tooltip-markdown="">${name}</div>`;
+    expect(html.split(trigger).length - 1).toBe(1);
+    const after = html.slice(html.indexOf(trigger) + trigger.length);
+    expect(after).toMatch(/^\s*<div class="tooltip-markdown is-hidden">/);
+    const row = after.slice(0, after.indexOf('</div>\n', 10));
+    expect(row).toContain(baseline);
+    expect(html.split(baseline).length - 1).toBe(1);
+  }
 });
