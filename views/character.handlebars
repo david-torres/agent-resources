@@ -240,10 +240,7 @@
         {{#each statList}}
         <div class="wizard-stat-row" data-stat="{{this}}">
           <div class="wizard-stat-name">{{capitalize this}}</div>
-          {{> stat-blocks-readonly value=(lookup ../character this) max=5}}
-          {{#if (gt (lookup ../character this) 5)}}
-          <span class="stat-blocks-over">{{lookup ../character this}} points</span>
-          {{/if}}
+          {{> stat-value stat=this value=(lookup ../character this) blocks=true}}
         </div>
         {{/each}}
       </div>

@@ -11,6 +11,7 @@ const { personalityMap } = require('./enclave-consts');
 const { gearCategory } = require('./class-gear');
 const { EDITION_LABELS, EDITION_PURCHASE_URLS } = require('./starter-content');
 const { hasHighStakes } = require('./mission-stakes');
+const { statScaling, statScalingRow } = require('./stat-scaling');
 
 const edition_label = (edition) => EDITION_LABELS[edition] || '';
 const edition_purchase_url = (edition) => EDITION_PURCHASE_URLS[edition] || '';
@@ -282,6 +283,8 @@ const anyOutdatedH = (...args) => args.slice(0, -1)
 
 module.exports = {
   times,
+  statScaling,
+  statScalingRow,
   customTrait: customTraitH,
   date_tz,
   time_ago,

@@ -1906,3 +1906,8 @@ a.dropdown-item:hover {
     max-width: none;
   }
 }
+
+/* A stat with Stat Scaling text behind it. Bare numbers get the dotted
+   underline; block rows are already visibly interactive enough. */
+.stat-value[data-tooltip-markdown] { cursor: help; }
+td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }

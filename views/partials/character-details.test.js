@@ -29,7 +29,7 @@ const render = (character, effectiveVersion = 'v1', showGearPurchases = false) =
   hb.registerPartial('stat-blocks-readonly', READONLY_SRC);
   hb.registerPartial('signature-entry', SIGNATURE_ENTRY_SRC);
   hb.registerPartial('class-enchantment', CLASS_ENCHANTMENT_SRC);
-  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks']) {
+  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks', 'stat-value', 'stat-scaling-entry']) {
     hb.registerPartial(partial, fs.readFileSync(path.join(__dirname, `${partial}.handlebars`), 'utf8'));
   }
   return hb.compile(DETAILS_SRC)({ character, effectiveVersion, statList, showGearPurchases });
@@ -134,7 +134,7 @@ test('a gated item shows its name but offers no tooltip', () => {
     gear: [],
   }));
   expect(html).toContain('Fireball');
-  expect(html).not.toContain('data-tooltip-markdown');
+  expect(html.slice(html.indexOf('Class Abilities'))).not.toContain('data-tooltip-markdown');
 });
 
 test('personality traits render each trait name, not [object Object]', () => {
@@ -203,11 +203,11 @@ test('a character no Stat of which exceeds the blocks renders unchanged', () => 
 
   expect(html).not.toContain('stat-blocks-over');
   expect(html).not.toContain('points');
-  // The stats section is exactly one readonly row per Stat and nothing else.
+  // The stats section is exactly one stat-value wrapping one readonly row per Stat and nothing else.
   const section = statsSection(html);
   expect(section.match(/<span class="stat-blocks is-readonly">/g)).toHaveLength(statList.length);
   expect((section.match(/<span/g) || []).length)
-    .toBe(statList.length + (section.match(/wizard-stat-box/g) || []).length);
+    .toBe(2 * statList.length + (section.match(/wizard-stat-box/g) || []).length);
 });
 
 // -- Signature Gear: Enchantments and Mods (Task 11) ------------------------

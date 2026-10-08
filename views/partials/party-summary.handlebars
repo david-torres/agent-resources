@@ -58,7 +58,7 @@
             <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
             {{/if}}
           </td>
-          {{#each this.stats}}<td>{{this}}</td>{{/each}}
+          {{#each this.stats}}<td>{{> stat-value stat=@key value=this}}</td>{{/each}}
         </tr>
         {{/each}}
       </tbody>
