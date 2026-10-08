@@ -8,24 +8,29 @@ const App = (function (document, supabase, htmx) {
 
   // Lazy-loading utilities for on-demand script/stylesheet loading
   const _loadedAssets = new Set();
+  // A second caller while a script is still downloading waits for the same load.
+  const _pendingScripts = new Map();
 
   const _loadScript = (src, options = {}) => {
     const { crossOrigin } = options;
     if (_loadedAssets.has(src)) return Promise.resolve();
+    if (_pendingScripts.has(src)) return _pendingScripts.get(src);
     if (document.querySelector(`script[src="${src}"]`)) {
       _loadedAssets.add(src);
       return Promise.resolve();
     }
-    return new Promise((resolve, reject) => {
+    const loading = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
       if (crossOrigin) {
         script.crossOrigin = crossOrigin;
       }
-      script.onload = () => { _loadedAssets.add(src); resolve(); };
-      script.onerror = reject;
+      script.onload = () => { _loadedAssets.add(src); _pendingScripts.delete(src); resolve(); };
+      script.onerror = (e) => { _pendingScripts.delete(src); reject(e); };
       document.head.appendChild(script);
     });
+    _pendingScripts.set(src, loading);
+    return loading;
   };
 
   const _loadStylesheet = (href, options = {}) => {
@@ -53,6 +58,11 @@ const App = (function (document, supabase, htmx) {
       _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
     });
 
+  // A tap fires mouseenter and then mouseleave straight away, so a hover
+  // trigger shows and hides the tooltip in one tap. Touch-only screens open
+  // it on tap instead, and close it on a tap elsewhere.
+  const _canHover = () => !window.matchMedia || !window.matchMedia('(hover: none)').matches;
+
   const _initTooltips = (root) => {
     const container = root || document;
     const els = container.querySelectorAll('[data-tooltip-markdown]');
@@ -78,6 +88,7 @@ const App = (function (document, supabase, htmx) {
         }
         if (!contentEl) return;
         tippy(el, {
+          trigger: _canHover() ? 'mouseenter focus' : 'click',
           theme: 'light-border',
           allowHTML: true,
           interactive: true,
