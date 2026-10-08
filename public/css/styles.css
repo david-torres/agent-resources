@@ -1911,3 +1911,13 @@ a.dropdown-item:hover {
    underline; block rows are already visibly interactive enough. */
 .stat-value[data-tooltip-markdown] { cursor: help; }
 td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }
+.wizard-stat-name[data-tooltip-markdown],
+.label[data-tooltip-markdown] { cursor: help; }
+
+/* A whole Baseline-+++++ row is taller than most screens. Capped below half
+   the viewport so it fits above or below its trigger, and scrolls inside. */
+.stat-scaling-row {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
