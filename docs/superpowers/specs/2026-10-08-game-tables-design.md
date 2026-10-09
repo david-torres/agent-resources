@@ -297,8 +297,16 @@ the state row, calls `applyAction`, and writes through the per-request client
 so RLS decides who may write, saving the prior state into `undo`.
 
 Writes are conditional on `version`. On a conflict the server re-reads and
-re-applies once. Undo is refused, with a toast naming who changed the row,
-when the row's version has moved past the snapshot.
+re-applies once, then answers 409. Each successful action's toast carries an
+Undo button; the undo sends the version that action produced and is refused,
+with a toast naming who changed the row, when the row has moved past it.
+
+Who may act: the seated character's owner, or the table's creator or Conduit
+(guests: creator or Conduit). Only the Conduit imposes or lifts Limiters.
+
+Printed costs come from the class's ability and Signature meters, merged onto
+the character's rows by the existing character loader; a range such as
+`Low–High` offers one Use button per level.
 
 ### Live updates
 
@@ -310,14 +318,16 @@ response. If Realtime disconnects, the page polls every 5 seconds until it
 reconnects.
 
 **Everyone else**, signed-out viewers included, polls every 5 seconds. They
-have no RLS read access, so Realtime would deliver them nothing.
+have no RLS read access, so Realtime would deliver them nothing. A poll sends
+the version it holds and gets 204 while nothing changed.
 
 ### New session
 
 Creator or Conduit, behind a confirm. Resets every member to Green with
 nothing spent, clears counts, cooldowns, imposed Limiters and undo, and
 stamps `session_started_at`. Not undoable — the rules reset everything at
-mission end.
+mission end. The reset runs with the service-role client after the creator or
+Conduit check, because `session_started_at` is not user-writable.
 
 ## 6. Conduit run view (#168)
 
