@@ -744,19 +744,27 @@ describe('Your Signatures', () => {
       expect(badgesOf(yoursCell('Duster'))).toEqual(['Mod x2']);
     });
 
-    test('a Signature with nothing fitted gets no badges and no tooltip', () => {
+    test('a Signature with nothing fitted gets no badges but still hovers its printed Default', () => {
       mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, null, [])]);
       expect(loadoutOf(yoursCell('Cowboy Hat'))).toBeNull();
-      expect(yoursCell('Cowboy Hat').hasAttribute('data-tooltip-markdown')).toBe(false);
-      expect(tooltipOf(yoursCell('Cowboy Hat'))).toBeNull();
+      const tooltip = tooltipOf(yoursCell('Cowboy Hat'));
+      expect(tooltip).not.toBeNull();
+      expect(tooltip.textContent).toContain('Cowboy Hat Charm');
+      expect(tooltip.innerHTML).toContain('<p>Cowboy Hat rides with the wind.</p>');
     });
 
-    test('the class grid copy of an owned Signature carries no loadout', () => {
+    test('class grid cells, owned or not, hover their printed text but carry no badges', () => {
       mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, { source: 'default' }, [mod('Scope', 'Sees far')])]);
       expect(badgesOf(yoursCell('Cowboy Hat'))).toEqual(['Default Ench', 'Mod']);
       expect(loadoutOf(classCell('Cowboy Hat'))).toBeNull();
-      expect(classCell('Cowboy Hat').hasAttribute('data-tooltip-markdown')).toBe(false);
       expect(document.querySelectorAll('#purchaseGrid [data-signature-loadout]')).toHaveLength(1);
+      for (const name of ['Cowboy Hat', 'Spurs']) {
+        const tooltip = tooltipOf(classCell(name));
+        expect(tooltip).not.toBeNull();
+        expect(tooltip.textContent).toContain(`${name} Charm`);
+        expect(tooltip.innerHTML).toContain(`<p>${name} rides with the wind.</p>`);
+        expect(tooltip.textContent).not.toContain('Scope');
+      }
     });
 
     test('hovering shows the Default Enchantment\'s book text and each Mod', () => {

@@ -306,3 +306,66 @@ describe('render', () => {
     expect(html).toContain('<p>Provides Ward');
   });
 });
+
+// Every Signature cell -- owned or not, Your Signatures or the class grid --
+// hovers the item's full text. app.js's initTooltips reads the button's next
+// .tooltip-markdown sibling, so `after` opens with the hidden text; the
+// badges follow it only when something is fitted.
+describe('cell', () => {
+  const SE = boot();
+  const mount = (after) => {
+    const host = document.createElement('div');
+    host.innerHTML = after;
+    return host;
+  };
+  const tooltipIn = (host) => {
+    const first = host.firstElementChild;
+    return first && first.classList.contains('tooltip-markdown') ? first : null;
+  };
+  const badgesIn = (host) => [...host.querySelectorAll('[data-signature-loadout] .tag')]
+    .map((tag) => tag.textContent.trim());
+  const notesHtml = '<ul><li>Only while worn</li></ul>';
+
+  test('an unowned Signature hovers its description, meters, notes and printed Default, with no badges', () => {
+    const fitted = SE.cell({ ...entry, notes_html: notesHtml }, null);
+    expect(fitted.buttonAttrs).toBe(' data-tooltip-markdown=""');
+    const host = mount(fitted.after);
+    const tooltip = tooltipIn(host);
+    expect(tooltip).not.toBeNull();
+    expect(tooltip.classList.contains('is-hidden')).toBe(true);
+    expect(tooltip.innerHTML).toContain('<p>Provides Ward against sun and glare <sup>M</sup></p>');
+    expect(tooltip.textContent).toContain('Ammunition');
+    expect(tooltip.textContent).toContain('Mid');
+    expect(tooltip.innerHTML).toContain(notesHtml);
+    expect(tooltip.textContent).toContain('Hats Off to You');
+    expect(tooltip.textContent).toContain('Portray a Turning Point.');
+    expect(badgesIn(host)).toEqual([]);
+    expect(host.querySelector('[data-signature-loadout]')).toBeNull();
+  });
+
+  test('a fitted Custom Enchantment replaces the printed Default in the hover, escaped, and earns its badges', () => {
+    const fitted = SE.cell(entry, {
+      owned: true,
+      enchantment: { source: 'custom', name: 'Hex <b>', description: 'Shades <i>you</i>.' },
+      mods: [{ name: 'Scope', description: 'Sees far' }]
+    });
+    const host = mount(fitted.after);
+    const tooltip = tooltipIn(host);
+    expect(tooltip).not.toBeNull();
+    expect(tooltip.textContent).toContain('Provides Ward');
+    expect(tooltip.textContent).toContain('Hex <b>');
+    expect(tooltip.textContent).toContain('Shades <i>you</i>.');
+    expect(tooltip.querySelector('b, i')).toBeNull();
+    expect(tooltip.textContent).not.toContain('Hats Off to You');
+    expect(tooltip.textContent).toContain('Scope');
+    expect(tooltip.textContent).toContain('Sees far');
+    expect(tooltip.nextElementSibling.matches('.tags[data-signature-loadout]')).toBe(true);
+    expect(badgesIn(host)).toEqual(['Custom Ench', 'Mod']);
+  });
+
+  test('a Signature with nothing to say gets no tooltip at all', () => {
+    const bare = { name: 'Blank', description_html: '', meters: [], notes_html: '', default_enchantment: null };
+    expect(SE.cell(bare, { owned: true, enchantment: null, mods: [] })).toEqual({ buttonAttrs: '', after: '' });
+    expect(SE.cell(bare, null)).toEqual({ buttonAttrs: '', after: '' });
+  });
+});

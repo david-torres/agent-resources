@@ -243,38 +243,42 @@
     return '<div class="entry-mods">' + rows + '</div>';
   };
 
-  var NO_LOADOUT = Object.freeze({ buttonAttrs: '', after: '' });
-
-  // What is fitted to an owned Signature, for its cell in Your Signatures:
-  // badges, plus the hover text. app.js's initTooltips reads a
-  // data-tooltip-markdown element's next .tooltip-markdown sibling, so the
-  // hidden text must directly follow the cell's button. Nothing fitted
-  // yields nothing, so the cell carries no tooltip.
-  var loadout = function (entry, purchase) {
+  // A Signature cell's hover text and fitted badges. app.js's initTooltips
+  // reads a data-tooltip-markdown element's next .tooltip-markdown sibling,
+  // so `after` opens with the hidden text and must directly follow the
+  // cell's button. The text is the printed entry plus the Enchantment -- a
+  // fitted Custom in place of the printed Default -- and any fitted Mods;
+  // the badges follow only when something is fitted. Pass a null purchase
+  // for a printed-only cell. Nothing to show yields empty strings.
+  var cell = function (entry, purchase) {
     var enchantment = (purchase && purchase.enchantment) || null;
     var mods = Array.isArray(purchase && purchase.mods) ? purchase.mods : [];
     var badges = [];
     var text = [];
-    if (enchantment && enchantment.source === 'default') {
-      badges.push('Default Ench');
-      var printed = (entry && entry.default_enchantment) || {};
+    if (entry.description_html) text.push('<div class="entry-description">' + entry.description_html + '</div>');
+    text.push(metersHtml(entry.meters));
+    if (entry.notes_html) text.push('<div class="entry-notes">' + entry.notes_html + '</div>');
+    var printed = entry.default_enchantment || null;
+    if (enchantment && enchantment.source === 'custom') {
+      text.push('<div class="entry-enchantment-name">' + escapeHtml(enchantment.name) + '</div>');
+      text.push('<div class="entry-enchantment-text">' + escapeHtml(enchantment.description) + '</div>');
+    } else if (printed && printed.name) {
       text.push('<div class="entry-enchantment-name">' + escapeHtml(printed.name) + '</div>');
       text.push('<div class="entry-enchantment-text">'
         + (printed.description_html || escapeHtml(printed.description || '')) + '</div>');
-    } else if (enchantment && enchantment.source === 'custom') {
-      badges.push('Custom Ench');
-      text.push('<div class="entry-enchantment-name">' + escapeHtml(enchantment.name) + '</div>');
-      text.push('<div class="entry-enchantment-text">' + escapeHtml(enchantment.description) + '</div>');
     }
-    if (mods.length) badges.push(mods.length === 1 ? 'Mod' : 'Mod x' + mods.length);
-    if (!badges.length) return NO_LOADOUT;
     text.push(modsReadOnly(purchase));
+    if (enchantment && enchantment.source === 'default') badges.push('Default Ench');
+    if (enchantment && enchantment.source === 'custom') badges.push('Custom Ench');
+    if (mods.length) badges.push(mods.length === 1 ? 'Mod' : 'Mod x' + mods.length);
+    var tooltip = text.join('');
+    if (!tooltip) return { buttonAttrs: '', after: '' };
     return {
       buttonAttrs: ' data-tooltip-markdown=""',
-      after: '<div class="tooltip-markdown is-hidden">' + text.join('') + '</div>'
-        + '<div class="tags mb-2" data-signature-loadout>' + badges.map(function (badge) {
+      after: '<div class="tooltip-markdown is-hidden">' + tooltip + '</div>'
+        + (badges.length ? '<div class="tags mb-2" data-signature-loadout>' + badges.map(function (badge) {
           return '<span class="tag is-light">' + escapeHtml(badge) + '</span>';
-        }).join('') + '</div>'
+        }).join('') + '</div>' : '')
     };
   };
 
@@ -321,7 +325,6 @@
     countWords: countWords,
     isCrossClass: isCrossClass,
     describePurchase: describePurchase,
-    loadout: loadout,
-    NO_LOADOUT: NO_LOADOUT
+    cell: cell
   };
 })();

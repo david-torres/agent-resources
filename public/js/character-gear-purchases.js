@@ -337,7 +337,7 @@
       var origin = crossClassFor(entry.class_id, entry.name) && entry.class_name
         ? '<span class="tag is-info is-light ml-2">' + esc(entry.class_name) + '</span>'
         : '';
-      var fitted = entry.yours ? window.SignatureEntry.loadout(entry, purchase) : window.SignatureEntry.NO_LOADOUT;
+      var fitted = window.SignatureEntry.cell(entry, entry.yours ? purchase : null);
       return '<button type="button"'
         + ' class="button is-small is-fullwidth is-justify-content-space-between '
         + (fitted.after ? 'mb-1' : 'mb-2')

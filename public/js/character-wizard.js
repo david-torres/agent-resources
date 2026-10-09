@@ -3266,9 +3266,9 @@ window.CharacterWizard = (function () {
       +   '<span>' + esc(cell.entry.name) + '</span>' + tag
       + '</button>' + fitted.after;
   };
-  const renderGridSignatureCell = (cell) => renderSignatureCell(cell, SignatureEntry.NO_LOADOUT);
+  const renderGridSignatureCell = (cell) => renderSignatureCell(cell, SignatureEntry.cell(cell.entry, null));
   const renderOwnedSignatureCell = (cell) => renderSignatureCell(cell,
-    SignatureEntry.loadout(cell.entry, findPurchase(cell.entry.name, cell.classId)));
+    SignatureEntry.cell(cell.entry, findPurchase(cell.entry.name, cell.classId)));
 
   // The purchase controls the entry sits above: buy it, or give it back.
   // Neither names the Signature -- the drawer only ever shows the open one,
