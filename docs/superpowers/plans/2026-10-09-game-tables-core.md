@@ -46,7 +46,7 @@
   - `bun run test:unit`, `bun run test:http` and `bun run test:integration` run the tiers. Integration needs local Supabase (`SUPABASE_URL=http://127.0.0.1:54321`); never point any test at production.
   - Known pre-existing red: `test/load-prerelease-classes.test.js` (unit), `routes/open-graph.test.js` (http). Compare failures by name, not count.
   - Several jsdom/Alpine view tests contaminate each other when run in one `bun test` call. Run them individually or through the tier script.
-- **Migrations:** apply locally with `supabase migration up`, or `supabase db reset` followed by `bun run seed:local`. Production is applied by the user with `supabase db push --linked`. Never apply a migration to production yourself.
+- **Migrations:** apply locally with `supabase migration up`, or by re-running the file with `psql postgresql://postgres:postgres@127.0.0.1:54322/postgres -v ON_ERROR_STOP=1 -f <file>`. **Never run `supabase db reset`**: the local database holds restored data that a reset destroys. Production is applied by the user with `supabase db push --linked`. Never apply a migration to production yourself.
 - **Commits:** only the files you touched (`git add <paths>`, never `git commit -a`). End messages with `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`.
 
 ## Review Focus
@@ -248,7 +248,7 @@ update public.nav_items set url = '/tables', label = 'Game Tables' where url = '
 - [ ] **Step 2: Apply it locally**
 
 Run: `supabase migration up`
-Expected: `Applying migration 20261009000000_game_tables.sql...` with no error. If the CLI reports the local database out of sync, run `supabase db reset && bun run seed:local` instead.
+Expected: `Applying migration 20261009000000_game_tables.sql...` with no error. If the CLI reports the local database out of sync, apply the file with the `psql -f` command from Global Constraints instead. Never `supabase db reset`.
 
 - [ ] **Step 3: Write the RLS integration tests**
 
@@ -418,7 +418,7 @@ Add `'models/game-tables-rls.integration.test.js',` to the `integrationFiles` se
 Run: `bun test models/game-tables-rls.integration.test.js`
 Expected: 9 pass. If `makeCharacter` fails on a NOT NULL column, add that column to `row`; the full list is in `supabase/migrations/20240101000000_baseline_schema.sql` (`characters`, ~lines 38–77).
 
-To prove the tests can fail, temporarily comment out `revoke all … from anon, authenticated;` and run `supabase db reset`. The `anon reads no tables` and column-grant tests go red. Restore the line and reset again.
+To prove the tests can fail, temporarily drop the revoke with `psql` (`grant all on public.game_tables, public.game_table_members to anon, authenticated;`). The column-grant tests go red. Re-apply the migration file with the `psql -f` command to restore it. Never `supabase db reset`.
 
 - [ ] **Step 5: Commit**
 
