@@ -1921,3 +1921,15 @@ td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+
+/* Bulma pins .level-left to its content width, so a long table or character
+   name pushes the page wider than a phone instead of wrapping. */
+.table-heading .level-left,
+.table-roster .level-left {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.table-heading .title,
+.table-roster strong {
+  overflow-wrap: anywhere;
+}
