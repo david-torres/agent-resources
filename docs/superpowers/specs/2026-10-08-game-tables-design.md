@@ -251,16 +251,27 @@ so their tracker is the two pools and narrative spends.
 ### LFG link
 
 The post's creator or approved Conduit sees **Open table** on the post. The
-first click creates a linked table seeded with the approved roster and that
-Conduit as `conduit_id`; later clicks open it.
+first click creates a linked table seeded with the approved roster, with the
+post's creator as its creator and the post's Conduit as `conduit_id`; later
+clicks open it.
 
-While linked, approving a join request seats its character and withdrawing
-or rejecting one unseats it, and a change of approved Conduit updates
+While linked, approving a join request seats its character if that character
+is public, and withdrawing or rejecting one unseats it. A private character is
+never seated by the sync: seating it is its owner's consent, so the player
+seats it from the table page. A change of approved Conduit updates
 `conduit_id`. The hook sits in `LfgService` beside `syncConduitHostId` and
 never fails the moderation that triggered it. The sync only removes seats it
 made (`lfg_join_request_id`), so guests and characters seated by hand are
-never touched, and it seats nobody past the cap. Deleting the post clears
-`lfg_post_id`; the table survives.
+never touched, and it seats nobody past the cap.
+
+When approved players are missing from a linked table, the table page says
+how many ("2 approved players aren't seated yet") and why: players with a
+private character seat it themselves, or the table is full. Removing an LFG
+seat by hand lasts only until the post's roster next changes; to remove a
+player for good, reject them on the post.
+
+Deleting the post clears `lfg_post_id`; the table survives with its roster,
+and the LFG seats become ordinary hand seats.
 
 Everyone viewing a linked post sees a link to its table. Without one, the
 creator or Conduit sees **Open table** and other viewers see a link to the

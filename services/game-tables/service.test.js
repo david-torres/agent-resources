@@ -24,7 +24,7 @@ const fakeRepo = (state) => {
   const record = (name) => async (...args) => { calls.push({ name, args }); return { data: null, error: null }; };
   return {
     calls,
-    writes: () => calls.filter((c) => !['loadTable', 'getCharacterSeatInfo', 'findTableIdByPostId', 'findLinkedTable', 'getPostRoster', 'listTables'].includes(c.name)),
+    writes: () => calls.filter((c) => !['loadTable', 'getCharacterSeatInfo', 'findTableIdByPostId', 'findLinkedTable', 'getPostRoster', 'listApprovedPlayers', 'listTables'].includes(c.name)),
     loadTable: async (id) => { calls.push({ name: 'loadTable', args: [id] }); return { data: state.table ? { ...state.table, members: [...(state.members || [])] } : null, error: null }; },
     listTables: record('listTables'),
     insertTable: record('insertTable'),
@@ -38,6 +38,7 @@ const fakeRepo = (state) => {
     findTableIdByPostId: async () => ({ data: state.linkedTableId || null, error: null }),
     findLinkedTable: async () => ({ data: state.linked || null, error: null }),
     getPostRoster: async () => ({ data: state.roster || null, error: null }),
+    listApprovedPlayers: async (postId) => { calls.push({ name: 'listApprovedPlayers', args: [postId] }); return { data: state.roster?.approved || [], error: null }; },
   };
 };
 
@@ -180,9 +181,9 @@ test('only the post\'s creator or Conduit opens its table; a second open reuses 
   expect((await svc.openForPost({ profileId: 'conduit' }, POST)).data).toEqual({ id: 'existing' });
 });
 
-test('opening a new linked table names it after the post and makes the post\'s Conduit its Conduit', async () => {
+test('opening a new linked table names it after the post and gives it the post\'s creator and Conduit', async () => {
   const { svc, repo } = service({});
-  await svc.openForPost(CREATOR, POST);
+  await svc.openForPost({ profileId: 'conduit' }, POST);
   expect(repo.calls.find((c) => c.name === 'insertTable').args).toEqual([
     { id: 'new-id', name: 'Heist night', creator_id: 'creator', conduit_id: 'conduit', lfg_post_id: 'post1' }, SYSTEM,
   ]);
@@ -192,7 +193,7 @@ test('sync seats newly approved characters and unseats withdrawn ones, through t
   const linked = { id: 't1', creator_id: 'creator', conduit_id: 'conduit', members: [
     { id: 'm-old', character_id: 'c-old', lfg_join_request_id: 'r-old' },
   ] };
-  const roster = { host_id: 'conduit', approved: [{ id: 'r-new', character_id: 'c-new' }] };
+  const roster = { host_id: 'conduit', approved: [{ id: 'r-new', character_id: 'c-new', is_public: true }] };
   const { svc, repo } = service({ linked, roster });
   await svc.syncLinkedTable('post1');
   expect(repo.calls.find((c) => c.name === 'deleteMembers').args).toEqual([['m-old'], SYSTEM]);
@@ -205,7 +206,7 @@ test('sync never touches manual seats or guests, and skips a character already s
     { id: 'm-hand', character_id: 'c1', lfg_join_request_id: null },
     { id: 'g1', character_id: null, lfg_join_request_id: null },
   ] };
-  const { svc, repo } = service({ linked, roster: { host_id: 'conduit', approved: [{ id: 'r1', character_id: 'c1' }] } });
+  const { svc, repo } = service({ linked, roster: { host_id: 'conduit', approved: [{ id: 'r1', character_id: 'c1', is_public: true }] } });
   await svc.syncLinkedTable('post1');
   expect(repo.writes()).toEqual([]);
 });
@@ -213,11 +214,61 @@ test('sync never touches manual seats or guests, and skips a character already s
 test('sync respects the cap', async () => {
   const members = Array.from({ length: 7 }, (_, i) => ({ id: `g${i}`, character_id: null, lfg_join_request_id: null }));
   const linked = { id: 't1', creator_id: 'creator', conduit_id: 'conduit', members };
-  const roster = { host_id: 'conduit', approved: [{ id: 'r1', character_id: 'c1' }, { id: 'r2', character_id: 'c2' }] };
+  const roster = { host_id: 'conduit', approved: [{ id: 'r1', character_id: 'c1', is_public: true }, { id: 'r2', character_id: 'c2', is_public: true }] };
   const { svc, repo } = service({ linked, roster });
   await svc.syncLinkedTable('post1');
   const [rows] = repo.calls.find((c) => c.name === 'insertMembers').args;
   expect(rows.map((r) => r.character_id)).toEqual(['c1']);
+});
+
+test('sync seats only public characters; a private one waits for its owner to seat it', async () => {
+  const linked = { id: 't1', creator_id: 'creator', conduit_id: 'conduit', members: [
+    { id: 'm-priv', character_id: 'c-seated-priv', lfg_join_request_id: 'r-seated-priv' },
+  ] };
+  const roster = { host_id: 'conduit', approved: [
+    { id: 'r-priv', character_id: 'c-priv', is_public: false },
+    { id: 'r-pub', character_id: 'c-pub', is_public: true },
+    { id: 'r-seated-priv', character_id: 'c-seated-priv', is_public: false },
+  ] };
+  const { svc, repo } = service({ linked, roster });
+  await svc.syncLinkedTable('post1');
+  expect(repo.writes()).toEqual([
+    { name: 'insertMembers', args: [[{ table_id: 't1', character_id: 'c-pub', lfg_join_request_id: 'r-pub' }], SYSTEM] },
+  ]);
+});
+
+test('a seat another sync already made does not stop the rest from being seated', async () => {
+  const linked = { id: 't1', creator_id: 'creator', conduit_id: 'conduit', members: [] };
+  const roster = { host_id: 'conduit', approved: [
+    { id: 'r1', character_id: 'c1', is_public: true },
+    { id: 'r2', character_id: 'c2', is_public: true },
+  ] };
+  const { svc, repo } = service({ linked, roster });
+  const seated = [];
+  repo.insertMembers = async (rows) => {
+    if (rows.some((row) => row.character_id === 'c1')) return { data: null, error: { code: '23505', message: 'duplicate' } };
+    seated.push(...rows.map((row) => row.character_id));
+    return { data: null, error: null };
+  };
+  expect((await svc.syncLinkedTable('post1')).error).toBeUndefined();
+  expect(seated).toEqual(['c2']);
+});
+
+test('a linked table counts the approved players it has not seated', async () => {
+  const linkedTable = { ...TABLE, lfg_post_id: 'post1' };
+  const roster = { approved: [
+    { id: 'r1', character_id: 'c1', is_public: true },
+    { id: 'r2', character_id: 'c2', is_public: false },
+    { id: 'r3', character_id: null, is_public: false },
+  ] };
+  const { svc } = service({ table: linkedTable, members: [seat('m1', 'c1', 'p1')], roster });
+  expect((await svc.load('t1', CREATOR)).data.unseatedApproved).toBe(1);
+});
+
+test('a standalone table never asks about an LFG roster', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [] });
+  expect((await svc.load('t1', CREATOR)).data.unseatedApproved).toBe(0);
+  expect(repo.calls.some((c) => c.name === 'listApprovedPlayers')).toBe(false);
 });
 
 test('sync follows the post\'s Conduit, falling back to the table creator', async () => {

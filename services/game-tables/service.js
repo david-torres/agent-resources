@@ -4,8 +4,9 @@
 //
 // Tables are read with the service-role client because a link is a capability:
 // anyone holding it may view, signed in or not. Each user write first checks
-// permission here, then runs through the caller's own RLS client, so the
-// database rejects anything this layer misses. Roster sync is system
+// permission here, then runs through the caller's own RLS client as a second
+// guard: a disallowed insert is rejected, while a disallowed update or delete
+// matches no rows and silently changes nothing. Roster sync is system
 // bookkeeping and writes with the service-role client.
 const crypto = require('crypto');
 const { summarizeParty, PARTY_CAP } = require('../../util/party-stats');
@@ -15,6 +16,7 @@ const { normalizeGuestInput, normalizeTableName, toDisplayMember, capabilitiesFo
 const REQUIRED_REPOSITORY_METHODS = [
   'loadTable', 'listTables', 'insertTable', 'updateTable', 'deleteTable', 'insertMembers', 'updateMember',
   'deleteMember', 'deleteMembers', 'getCharacterSeatInfo', 'findTableIdByPostId', 'findLinkedTable', 'getPostRoster',
+  'listApprovedPlayers',
 ];
 
 const notFound = () => ({ status: 404, code: 'not_found', message: FRIENDLY_NOT_FOUND });
@@ -22,6 +24,7 @@ const forbidden = (message) => ({ status: 403, code: 'forbidden', title: 'No acc
 const invalid = (message) => ({ status: 400, code: 'invalid', title: 'Invalid submission', message });
 const tableFull = () => invalid(`A table seats at most ${PARTY_CAP}.`);
 const SEAT_CAP_VIOLATION = '23514';
+const UNIQUE_VIOLATION = '23505';
 const seatError = (error) => (error.code === SEAT_CAP_VIOLATION ? tableFull() : error);
 
 class GameTableService {
@@ -50,9 +53,21 @@ class GameTableService {
       }));
 
     return {
-      data: { table, members, summary: summarizeParty(members), capabilities, isFull: members.length >= PARTY_CAP },
+      data: {
+        table, members, summary: summarizeParty(members), capabilities, isFull: members.length >= PARTY_CAP,
+        unseatedApproved: await this.countUnseatedApproved(table, members),
+      },
       error: undefined,
     };
+  }
+
+  // Approved LFG players whose character is not at the table: private
+  // characters the sync leaves for their owners to seat, or a full table.
+  async countUnseatedApproved(table, members) {
+    if (!table.lfg_post_id) return 0;
+    const { data: approved } = await this.repo.listApprovedPlayers(table.lfg_post_id, this.system);
+    const seatedIds = new Set(members.filter((member) => !member.isGuest).map((member) => member.id));
+    return (approved || []).filter((request) => request.character_id && !seatedIds.has(request.character_id)).length;
   }
 
   listFor(client) {
@@ -172,10 +187,10 @@ class GameTableService {
     const id = this.newId();
     const name = String(post.title || '').trim().slice(0, TABLE_NAME_MAX) || 'Game night';
     const inserted = await this.repo.insertTable(
-      { id, name, creator_id: profileId, conduit_id: post.host_id || profileId, lfg_post_id: post.id }, this.system);
+      { id, name, creator_id: post.creator_id, conduit_id: post.host_id || post.creator_id, lfg_post_id: post.id }, this.system);
     if (inserted.error) {
       // Two clicks raced; the unique lfg_post_id kept one table. Use it.
-      if (inserted.error.code === '23505') {
+      if (inserted.error.code === UNIQUE_VIOLATION) {
         const winner = await this.repo.findTableIdByPostId(post.id, this.system);
         if (winner.data) return { data: { id: winner.data }, error: undefined };
       }
@@ -191,9 +206,10 @@ class GameTableService {
     return this.repo.findTableIdByPostId(postId, this.system);
   }
 
-  // Seats approved player characters the table lacks (while seats remain) and
-  // unseats any it seated for a request that is no longer approved. Seats it
-  // did not make -- guests, characters seated by hand -- are never touched.
+  // Seats approved players' public characters the table lacks (while seats
+  // remain) and unseats any it seated for a request that is no longer
+  // approved. Seats it did not make -- guests, characters seated by hand --
+  // are never touched.
   async syncLinkedTable(postId) {
     const linked = await this.repo.findLinkedTable(postId, this.system);
     if (linked.error) return { data: null, error: linked.error };
@@ -219,14 +235,18 @@ class GameTableService {
     const toSeat = [];
     for (const request of approved) {
       if (room <= 0) break;
+      if (!request.is_public) continue;
       if (seatedRequestIds.has(request.id) || seatedCharacterIds.has(request.character_id)) continue;
       toSeat.push({ table_id: table.id, character_id: request.character_id, lfg_join_request_id: request.id });
       seatedCharacterIds.add(request.character_id);
       room -= 1;
     }
-    if (toSeat.length) {
-      const seated = await this.repo.insertMembers(toSeat, this.system);
-      if (seated.error) return { data: null, error: seated.error };
+    // One row at a time, so a seat a concurrent sync already made (23505)
+    // does not cost the others theirs.
+    for (const row of toSeat) {
+      const seated = await this.repo.insertMembers([row], this.system);
+      if (seated.error?.code === SEAT_CAP_VIOLATION) break;
+      if (seated.error && seated.error.code !== UNIQUE_VIOLATION) return { data: null, error: seated.error };
     }
 
     const conduitId = roster.data?.host_id || table.creator_id;

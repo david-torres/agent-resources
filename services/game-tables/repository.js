@@ -23,16 +23,26 @@ const TABLE_SELECT = `id, name, creator_id, conduit_id, lfg_post_id, session_sta
   members:game_table_members (id, character_id, lfg_join_request_id, guest_name, guest_class_label, guest_stats, created_at,
     character:character_id (${CHARACTER_COLUMNS}))`;
 
-const getPostRoster = async (postId, client) => {
-  const post = await withResult(client.from('lfg_posts').select('host_id').eq('id', postId).maybeSingle());
-  if (post.error) return post;
-  const requests = await withResult(client.from('lfg_join_requests')
-    .select('id, character_id')
+// Approved player requests with their character's visibility: the sync
+// seats only public characters, since seating a private one is its owner's call.
+const listApprovedPlayers = async (postId, client) => {
+  const result = await withResult(client.from('lfg_join_requests')
+    .select('id, character_id, character:character_id (is_public)')
     .eq('lfg_post_id', postId)
     .eq('status', 'approved')
     .eq('join_type', 'player'));
-  if (requests.error) return requests;
-  return { data: { host_id: post.data?.host_id || null, approved: requests.data || [] }, error: null };
+  if (result.error) return result;
+  const approved = (result.data || []).map(({ id, character_id, character }) =>
+    ({ id, character_id, is_public: Boolean(character?.is_public) }));
+  return { data: approved, error: null };
+};
+
+const getPostRoster = async (postId, client) => {
+  const post = await withResult(client.from('lfg_posts').select('host_id').eq('id', postId).maybeSingle());
+  if (post.error) return post;
+  const approved = await listApprovedPlayers(postId, client);
+  if (approved.error) return approved;
+  return { data: { host_id: post.data?.host_id || null, approved: approved.data }, error: null };
 };
 
 const findTableIdByPostId = async (postId, client) => {
@@ -60,4 +70,5 @@ module.exports = {
     .select('id, creator_id, conduit_id, members:game_table_members (id, character_id, lfg_join_request_id)')
     .eq('lfg_post_id', postId).maybeSingle()),
   getPostRoster,
+  listApprovedPlayers,
 };
