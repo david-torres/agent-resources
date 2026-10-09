@@ -1,5 +1,5 @@
 // Tests for GET /characters/:id/details — the shared, description-gated
-// character details fragment lazy-loaded by /party and the LFG post page.
+// character details fragment lazy-loaded by game tables and the LFG post page.
 //
 // Harness mirrors routes/characters.test.js: mock the data layer, boot a
 // real Express app with the full Handlebars engine (helpers + partials),

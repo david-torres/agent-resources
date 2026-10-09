@@ -40,10 +40,28 @@ mock.module('../models/_base', () => ({
   anonKey: 'test-anon-key',
 }));
 
+const uuid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const ID = Array.from({ length: 10 }, (_, i) => uuid(i + 1));
+// Stands in for a character RLS will not return; ID[6] is a private member.
+const INVISIBLE = ID[9];
+const PRIVATE_MEMBER = ID[6];
+const characterRow = (id, overrides = {}) => ({ id, name: `Character ${ID.indexOf(id) + 1}`, class: 'Tester', level: 3, is_public: true, might: 1, ...overrides });
+
+let throwOnPartyLoad = false;
+
+// Rows come back reversed: the draft must impose the URL's order itself.
 mock.module('../models/character', () => ({
   getOwnCharacters: async () => ({ data: [] }),
-  searchPublicCharacters: async () => ({ data: [], error: null }),
-  getPartyCharacters: async () => ({ data: [], error: null }),
+  searchPublicCharacters: async (q) => ({ data: q ? [characterRow(ID[0])] : [], error: null }),
+  getPartyCharacters: async (ids) => {
+    if (throwOnPartyLoad) throw new Error('boom');
+    return {
+      data: ids.filter((id) => id !== INVISIBLE)
+        .map((id) => characterRow(id, id === PRIVATE_MEMBER ? { is_public: false } : {}))
+        .reverse(),
+      error: null,
+    };
+  },
 }));
 
 // Tests replace these methods; the router reaches them through the model seam.
@@ -107,7 +125,9 @@ beforeAll(async () => {
     next();
   });
 
-  app.use('/tables', require('./tables'));
+  const tableRoutes = require('./tables');
+  app.get('/party', tableRoutes.partyRedirect);
+  app.use('/tables', tableRoutes);
   ({ server, baseUrl } = await startHttpServer(app));
 });
 
@@ -224,4 +244,76 @@ test('the list shows the viewer\'s tables', async () => {
   fake.listFor = async () => ({ data: [{ id: TABLE_ID, name: 'Friday', lfg_post_id: null }] });
   const html = await (await fetch(`${baseUrl}/tables`, { headers: authed })).text();
   expect(html).toContain(`href="/tables/${TABLE_ID}"`);
+});
+
+const csvFrom = (html) => {
+  const match = html.match(/id="table-csv"[^>]*value="([^"]*)"/);
+  return match ? match[1] : null;
+};
+
+test('a draft renders signed out, carrying its roster in #table-csv', async () => {
+  const res = await get(`/tables/new?c=${ID[0]},${ID[1]},${ID[0]}`);
+  expect(res.status).toBe(200);
+  const html = await res.text();
+  expect(csvFrom(html)).toBe(`${ID[0]},${ID[1]}`);
+  const rendered = [...html.matchAll(/data-member-id="([^"]+)"/g)].map((match) => match[1]);
+  expect(rendered).toEqual([ID[0], ID[1]]);
+});
+
+test('the panel adds to the roster it was given and pushes the draft URL', async () => {
+  const res = await get(`/tables/new/panel?c=${ID[0]}&add=${ID[1]}`);
+  expect(csvFrom(await res.text())).toBe(`${ID[0]},${ID[1]}`);
+  expect(res.headers.get('HX-Push-Url')).toBe(`/tables/new?c=${ID[0]},${ID[1]}`);
+});
+
+test('the panel removes one member and keeps the rest in order', async () => {
+  const res = await get(`/tables/new/panel?c=${ID[0]},${ID[1]},${ID[2]}&remove=${ID[1]}`);
+  expect(csvFrom(await res.text())).toBe(`${ID[0]},${ID[2]}`);
+});
+
+test('adding past the cap drops the addition and says so', async () => {
+  const full = ID.slice(0, 8).join(',');
+  const html = await (await get(`/tables/new/panel?c=${full}&add=${ID[8]}`)).text();
+  expect(csvFrom(html)).toBe(full);
+  expect(html).toContain('A table seats at most 8');
+});
+
+test('unresolved and private members surface their notices', async () => {
+  const unresolved = await (await get(`/tables/new?c=${ID[0]},${INVISIBLE}`)).text();
+  expect(csvFrom(unresolved)).toBe(ID[0]);
+  expect(unresolved).toContain('could not be loaded');
+  const priv = await (await get(`/tables/new?c=${ID[0]},${PRIVATE_MEMBER}`)).text();
+  expect(priv).toContain('1 member is private');
+});
+
+test('a repeated or object-shaped q does not hang the search', async () => {
+  expect((await get('/tables/s?q=a&q=b')).status).toBe(200);
+  expect((await get('/tables/s?q[x]=1')).status).toBe(200);
+});
+
+test('a handler that throws answers instead of hanging', async () => {
+  throwOnPartyLoad = true;
+  try {
+    expect((await get(`/tables/new?c=${ID[0]}`)).status).toBe(500);
+  } finally {
+    throwOnPartyLoad = false;
+  }
+});
+
+test('/party sends old links to the draft, keeping the roster', async () => {
+  const res = await fetch(`${baseUrl}/party?c=${uuid(1)},${uuid(2)}`, { redirect: 'manual' });
+  expect(res.status).toBe(301);
+  expect(res.headers.get('Location')).toBe(`/tables/new?c=${encodeURIComponent(`${uuid(1)},${uuid(2)}`)}`);
+});
+
+test('a signed-in draft offers to save, posting its roster', async () => {
+  const html = await (await fetch(`${baseUrl}/tables/new?c=${uuid(1)}`, { headers: authed })).text();
+  expect(html).toContain('hx-post="/tables"');
+  expect(html).toContain('hx-include="#table-csv"');
+});
+
+test('a signed-out draft asks the visitor to sign in to save', async () => {
+  const html = await (await get(`/tables/new?c=${uuid(1)}`)).text();
+  expect(html).not.toContain('hx-post="/tables"');
+  expect(html).toContain('Sign in');
 });

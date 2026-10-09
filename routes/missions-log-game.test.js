@@ -5,7 +5,7 @@
 // lfg_post_id the caller is actually entitled to link.
 //
 // The draft half is asserted against the real Handlebars render (helpers and
-// partials included, as routes/party.test.js does) because the pre-fill only
+// partials included, as routes/tables.test.js does) because the pre-fill only
 // exists as rendered form values -- nothing is written until the user saves.
 const { test, expect, mock, beforeAll, afterAll } = require('bun:test');
 

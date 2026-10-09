@@ -1,6 +1,6 @@
 // Render-time gating for class ability/gear text and the class-authored
 // Default Enchantment on purchased gear. /characters/:id, the
-// /characters/:id/details fragment, and (through it) /party and /lfg all
+// /characters/:id/details fragment, and (through it) game tables and /lfg all
 // enforce the same rule: names and short summaries are always visible, full
 // text requires the item's class family to be unlocked for the viewer.
 // A structured item's full text lives in its expanded fields, so its short

@@ -59,7 +59,6 @@ const httpFiles = new Set([
   'routes/oauth-metadata.test.js',
   'routes/open-graph.test.js',
   'routes/pages.test.js',
-  'routes/party.test.js',
   'routes/tables.test.js',
   'routes/sitemap.test.js'
 ]);

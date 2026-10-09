@@ -1,5 +1,5 @@
 // The full-sheet details fragment served by GET /characters/:id/details and
-// lazy-loaded into the /party roster and the LFG post page. These tests are
+// lazy-loaded into the table roster and the LFG post page. These tests are
 // the contract for what an expanded member shows on both pages.
 const { test, expect } = require('bun:test');
 const fs = require('fs');
@@ -159,7 +159,7 @@ test('common items render as a markdown list', () => {
 // stat-blocks-readonly documents its own contract: a value above `max` "fills
 // every block and stops there", and "callers that can exceed max (party totals)
 // print the real number alongside". This fragment was the one caller that did
-// not, so a Stat of 6 rendered identically to a Stat of 5 on the /party roster
+// not, so a Stat of 6 rendered identically to a Stat of 5 on the table roster
 // and the LFG post page -- a player reading their own character as weaker than
 // it is, with nothing to indicate the rounding. A Trait raises a V1 Stat's Cap
 // to 6 (pg. 3, restated pg. 6), which is what makes a 6 ordinary rather than
@@ -186,7 +186,7 @@ test('a Stat at the blocks shown prints no number', () => {
   expect(html).not.toContain('stat-blocks-over');
 });
 
-// This fragment is served to the /party roster and the LFG post page for any
+// This fragment is served to the table roster and the LFG post page for any
 // character a viewer can see, so a missing or null Stat has to render as
 // quietly as it did before rather than as "null points".
 test('a missing or null Stat prints no number', () => {
@@ -195,7 +195,7 @@ test('a missing or null Stat prints no number', () => {
   expect(html).not.toContain('points');
 });
 
-// This fragment is lazy-loaded into the /party roster and the LFG post page, so
+// This fragment is lazy-loaded into the table roster and the LFG post page, so
 // a stray character in the common output would be visible on both. Nothing may
 // change for a character at or below the blocks shown.
 test('a character no Stat of which exceeds the blocks renders unchanged', () => {

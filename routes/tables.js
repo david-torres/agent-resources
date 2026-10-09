@@ -12,6 +12,7 @@ const { statList } = require('../util/enclave-consts');
 const { PARTY_CAP } = require('../util/party-stats');
 const { getOwnCharacters, getPartyCharacters, searchPublicCharacters } = require('../models/character');
 const { gameTables } = require('../models/game-tables');
+const { resolveDraft } = require('../util/table-draft');
 
 const router = express.Router();
 
@@ -83,6 +84,29 @@ router.get('/s', authOptional, asyncHandler(async (req, res) => {
   res.render('partials/table-search-results', { layout: false, characters, q, tableId });
 }));
 
+const draftContext = (draft, profile) => ({ draft: true, ...draft, partyCap: PARTY_CAP, profile, statList });
+
+router.get('/new', authOptional, asyncHandler(async (req, res) => {
+  const draft = await resolveDraft(req.query, res.locals.supabase);
+  if (draft.error) return sendRouteError(req, res, draft.error);
+  res.render('table', {
+    ...draftContext(draft, res.locals.profile),
+    ownCharacters: await ownCharactersFor(res),
+    authOptional: true,
+    activeNav: 'tables',
+    breadcrumbs: [{ label: 'New Table', href: '/tables/new' }],
+  });
+}));
+
+router.get('/new/panel', authOptional, asyncHandler(async (req, res) => {
+  const draft = await resolveDraft(req.query, res.locals.supabase);
+  if (draft.error) return sendRouteError(req, res, draft.error);
+  // The panel owns draft membership, so the address bar learns the new URL
+  // from the response.
+  res.header('HX-Push-Url', `/tables/new?c=${draft.tableCsv}`);
+  res.render('partials/table-panel-update', { layout: false, ...draftContext(draft, res.locals.profile) });
+}));
+
 router.get('/:id', authOptional, asyncHandler(async (req, res) => {
   if (!validIds(req, res, 'id')) return;
   const { data: view, error } = await gameTables.load(req.params.id, actorFromLocals(res.locals));
@@ -151,5 +175,11 @@ router.put('/:id/members/:memberId', isAuthenticated, asyncHandler(async (req, r
   if (error) return sendRouteError(req, res, error);
   renderPanel(res, data, { resetGuestForm: true });
 }));
+
+// /party became the draft table; old links and bookmarks keep their roster.
+router.partyRedirect = (req, res) => {
+  const csv = String(req.query.c || '');
+  res.redirect(301, csv ? `/tables/new?c=${encodeURIComponent(csv)}` : '/tables/new');
+};
 
 module.exports = router;

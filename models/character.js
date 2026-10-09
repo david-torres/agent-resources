@@ -322,7 +322,7 @@ const searchPublicCharacters = async (q, count, options = {}) => {
   }
 }
 
-// Fetches the character rows for a virtual party (routes/party.js) or an LFG
+// Fetches the character rows for a draft table (util/table-draft.js) or an LFG
 // party. Deliberately applies NO is_public filter: the caller passes its
 // request-scoped client, and the characters SELECT policies
 // (characters_public_select OR characters_owner_admin_select) already resolve

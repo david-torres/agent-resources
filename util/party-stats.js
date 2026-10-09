@@ -1,6 +1,6 @@
 const { statList } = require('./enclave-consts');
 
-// Every consumer of a party summary — routes/party.js and routes/lfg.js —
+// Every consumer of a party summary — routes/lfg.js and util/table-draft.js —
 // goes through this function. It is pure so it can be tested without a
 // database, and shared so the two pages cannot drift apart the way they
 // would if each kept its own reduce.

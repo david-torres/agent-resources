@@ -117,7 +117,6 @@ test.each([
   ['/library', true],
   ['/pages/some-slug', true],
   ['/profile/view/nadia', true],
-  ['/party', true],
 
   // Gated indexes, blocked without taking their detail pages with them.
   ['/characters', false],
@@ -147,8 +146,9 @@ test.each([
   ['/characters/s', false],
   ['/missions/search', false],
   ['/missions/s', false],
-  ['/party/s', false],
-  ['/party/panel', false],
+  ['/tables/s', false],
+  ['/tables/new', false],
+  ['/tables/new/panel', false],
   ['/lfg/abc-123/join', false]
 ])('%s is %s to crawlers', (url, allowed) => {
   expect(isAllowed(parseRules(body), url)).toBe(allowed);

@@ -1132,7 +1132,7 @@ router.get('/:id/export', isAuthenticated, async (req, res) => {
   res.send(content);
 });
 
-// Full-sheet details fragment, lazy-loaded by the /party roster and the LFG
+// Full-sheet details fragment, lazy-loaded by the table roster and the LFG
 // post page (which passes ?lfg=<postId> so a hosting Conduit sees approved
 // applicants ungated). Visibility is RLS's: a character the viewer cannot
 // see never comes back from getCharacter. Must stay mounted before

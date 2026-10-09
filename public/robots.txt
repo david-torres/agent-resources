@@ -47,7 +47,7 @@ Disallow: /classes/redeem
 Disallow: /*/search
 Disallow: /*/s$
 Disallow: /*/similar
-Disallow: /party/panel
+Disallow: /tables/new/panel
 Disallow: /characters/class-gear
 Disallow: /characters/class-abilities
 Disallow: /characters/common-item

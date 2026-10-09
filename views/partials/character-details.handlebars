@@ -1,6 +1,6 @@
 {{!-- Full-sheet character details fragment. Rendered by
       GET /characters/:id/details with { character, effectiveVersion,
-      statList } and lazy-loaded into the /party roster and the LFG post
+      statList } and lazy-loaded into the table roster and the LFG post
       page. Descriptions arrive already gated by
       services/character/description-gate.js — a gated item has a blank
       description and renders as a plain tag (see character-detail-tag). --}}
@@ -13,7 +13,7 @@
       {{!-- stat-value renders the blocks (which fill and stop at `max`) and the
             real number beside them for a value above 5: a Trait raises a V1
             Stat's Cap to 6 (pg. 3, restated pg. 6), so without it a 6 would
-            read as a 5 on the /party roster and the LFG post page. --}}
+            read as a 5 on the table roster and the LFG post page. --}}
       {{> stat-value stat=this value=(lookup ../character this) blocks=true}}
     </div>
     {{/each}}

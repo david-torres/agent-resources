@@ -89,7 +89,7 @@ test('the Personality box renders each trait name, not [object Object]', () => {
 //
 // views/character.handlebars is the full page; views/partials/character-
 // details.handlebars is the htmx fragment rendered for the same character on
-// /party and the LFG post page. Both render Signature Gear through the same
+// game tables and the LFG post page. Both render Signature Gear through the same
 // views/partials/signature-entry.handlebars partial so they cannot drift --
 // see views/partials/character-details.test.js for the fragment's half of
 // this contract.

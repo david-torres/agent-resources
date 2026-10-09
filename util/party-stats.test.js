@@ -1,5 +1,5 @@
 // The whole of the party summary arithmetic. This module is pure on purpose:
-// routes/party.js and routes/lfg.js both call it, and neither should own a
+// routes/lfg.js and util/table-draft.js both call it, and neither should own a
 // copy of the reduce that routes/lfg.js used to carry inline.
 const { test, expect } = require('bun:test');
 const { statList } = require('./enclave-consts');

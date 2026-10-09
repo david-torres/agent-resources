@@ -77,12 +77,12 @@ test('the empty details container keeps its id prefix for the history probe', ()
 test('the party stats box renders the shared summary partial', () => {
   // The numeral-beside-blocks assertion moved to
   // views/partials/party-summary.test.js, which now owns that contract for
-  // both this page and /party. Keeping a copy here would let the two drift.
+  // both this page and game tables. Keeping a copy here would let the two drift.
   const partySection = LFG_SRC.slice(LFG_SRC.indexOf('Party Stats'));
   expect(partySection).toContain('{{> party-summary');
   expect(LFG_SRC).not.toContain('lookup ../partyStats');
 });
 
-test('the post links out to the party tool with its approved members', () => {
-  expect(LFG_SRC).toContain('/party?c=');
+test('the post links out to a draft table with its approved members', () => {
+  expect(LFG_SRC).toContain('/tables/new?c=');
 });

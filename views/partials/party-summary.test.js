@@ -1,4 +1,4 @@
-// party-summary is rendered by BOTH /party and the LFG post page. These tests
+// party-summary is rendered by BOTH game tables and the LFG post page. These tests
 // are the contract between them: whatever changes here changes both pages.
 const { test, expect } = require('bun:test');
 const fs = require('fs');
