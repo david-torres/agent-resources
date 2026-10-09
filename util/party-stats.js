@@ -11,6 +11,10 @@ const HIGHLIGHT_COUNT = 3;
 // column is nullable). Both mean "contributes nothing", not NaN.
 const statValue = (character, stat) => Number(character?.[stat]) || 0;
 
+// A party or game table seats at most this many: it keeps the breakdown
+// table readable and a shared draft URL short.
+const PARTY_CAP = 8;
+
 const summarizeParty = (characters = []) => {
   const members = Array.isArray(characters) ? characters : [];
 
@@ -44,4 +48,4 @@ const summarizeParty = (characters = []) => {
   };
 };
 
-module.exports = { summarizeParty };
+module.exports = { summarizeParty, PARTY_CAP };
