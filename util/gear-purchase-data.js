@@ -8,7 +8,7 @@
 // and the missions it already fetched for deriveCharacterTotals. Nothing here
 // queries.
 const { economyFigures, sameFamily } = require('./merx-economy');
-const { renderMarkdown } = require('./markdown');
+const { renderMarkdown, renderNotes } = require('./markdown');
 
 // A Signature is identified by the class that prints it plus its name -- two
 // classes may print the same name, and they are different items.
@@ -31,6 +31,7 @@ const toEntry = (item, classId, className) => ({
   class_name: className || '',
   description_html: renderMarkdown(item.description || ''),
   meters: Array.isArray(item.meters) ? item.meters : [],
+  notes_html: renderNotes(item.notes),
   column: item.column || null,
   position: item.position || null,
   default_enchantment: item.default_enchantment || null

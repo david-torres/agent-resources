@@ -1,4 +1,5 @@
 const { test, expect, describe } = require('bun:test');
+const { JSDOM } = require('jsdom');
 const { buildGearPurchaseData, applyGearPurchases } = require('./gear-purchase-data');
 const { economyFigures } = require('./merx-economy');
 
@@ -100,6 +101,41 @@ describe('what the island carries', () => {
     expect(entries[0].default_enchantment.name).toBe('Shade');
     expect(entries[0].meters).toEqual([{ label: 'Wear', value: '3' }]);
     expect(entries[0].class_id).toBe('c-v1');
+  });
+
+  test('a printed Signature carries its rules notes as a nested list, ratings kept and other markup stripped', () => {
+    const { entries } = build({
+      characterClass: {
+        ...V1_CLASS,
+        gear: [{
+          name: 'Cowboy Hat',
+          description: 'A hat.',
+          column: 1,
+          position: 1,
+          notes: [
+            {
+              text: 'Ward against sun and glare <sup>M</sup>',
+              children: [{ text: 'Only while worn <b>outdoors</b><script>alert(1)</script>' }]
+            },
+            { text: 'Tip it to Portray respect' }
+          ]
+        }]
+      }
+    });
+    const notesHtml = entries[0].notes_html;
+    const dom = new JSDOM(`<div id="root">${notesHtml}</div>`);
+    const outer = dom.window.document.querySelector('#root > ul');
+    expect(outer).not.toBeNull();
+    const items = outer.querySelectorAll(':scope > li');
+    expect(items).toHaveLength(2);
+    expect(items[0].innerHTML).toContain('Ward against sun and glare <sup>M</sup>');
+    const nested = items[0].querySelectorAll(':scope > ul > li');
+    expect(nested).toHaveLength(1);
+    expect(nested[0].textContent).toContain('Only while worn outdoors');
+    expect(items[1].textContent).toContain('Tip it to Portray respect');
+    expect(notesHtml).not.toContain('<b>');
+    expect(notesHtml).not.toContain('<script');
+    expect(notesHtml).not.toContain('alert(1)');
   });
 
   test('a stored Signature the class no longer prints is offered too', () => {

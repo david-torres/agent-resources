@@ -979,6 +979,9 @@ a.dropdown-item:hover {
 .entry-description { font-size: 0.75rem; }
 .entry-description p:not(:last-child) { margin-bottom: 0.5em; }
 .entry-meters { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; margin-top: 0.5rem; font-size: 0.75rem; }
+.entry-notes { margin-top: 0.5rem; font-size: 0.75rem; }
+.entry-notes ul { list-style: disc; padding-left: 1.25rem; }
+.entry-notes ul ul { list-style: circle; }
 .entry-meter-label { font-weight: 600; }
 .entry-divider {
   margin-top: 0.75rem;

@@ -49,4 +49,18 @@ const renderPowerRatings = (input) => sanitizeHtml(String(input ?? ''), {
   allowedAttributes: {}
 });
 
-module.exports = { renderMarkdown, renderPowerRatings };
+// Gear notes as views/partials/class-notes.handlebars prints them, for
+// surfaces that build their HTML outside Handlebars.
+const renderNotes = (notes) => {
+  if (!Array.isArray(notes) || notes.length === 0) return '';
+  const items = notes.map((note) => {
+    const children = Array.isArray(note && note.children) ? note.children : [];
+    const nested = children.length
+      ? '<ul>' + children.map((child) => '<li>' + renderPowerRatings(child && child.text) + '</li>').join('') + '</ul>'
+      : '';
+    return '<li>' + renderPowerRatings(note && note.text) + nested + '</li>';
+  });
+  return '<ul>' + items.join('') + '</ul>';
+};
+
+module.exports = { renderMarkdown, renderPowerRatings, renderNotes };

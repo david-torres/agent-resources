@@ -278,10 +278,11 @@
     };
   };
 
-  // Book order: name, description, meters, the Default Enchantment divider
-  // and its text (always printed, whether or not the Signature is owned),
-  // then the Enchantment controls and Mods -- both editable when owned and
-  // interactive, read-only when owned and readOnly, absent when not owned.
+  // Book order: name, description, meters, rules notes, the Default
+  // Enchantment divider and its text (always printed, whether or not the
+  // Signature is owned), then the Enchantment controls and Mods -- both
+  // editable when owned and interactive, read-only when owned and readOnly,
+  // absent when not owned.
   var render = function (entry, purchase, opts) {
     var options = opts || {};
     var figures = options.figures;
@@ -302,6 +303,7 @@
     parts.push('</div>');
     parts.push('<div class="entry-description">' + (entry.description_html || '') + '</div>');
     parts.push(metersHtml(entry.meters));
+    if (entry.notes_html) parts.push('<div class="entry-notes">' + entry.notes_html + '</div>');
     parts.push(enchantmentSection(entry, p, { figures: figures, crossClass: crossClass, readOnly: readOnly, owned: owned }));
 
     if (owned) {

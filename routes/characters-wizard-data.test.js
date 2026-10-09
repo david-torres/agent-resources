@@ -251,6 +251,25 @@ test('each served Signature keeps its printed position and its Default', async (
   expect(first.default_enchantment).toMatchObject({ name: expect.any(String) });
 });
 
+test('each served Signature carries its rules notes as HTML', async () => {
+  const data = await renderWizardData({
+    mode: 'aspirant',
+    classes: [{
+      id: 'c-v1',
+      content_format: 'aspirant',
+      gear: [{
+        name: 'Cowboy Hat',
+        column: 1,
+        position: 1,
+        notes: [{ text: 'Ward against sun <sup>M</sup>', children: [{ text: 'Only while worn' }] }]
+      }]
+    }]
+  });
+  const notesHtml = data.classes[0].class_gear[0].notes_html;
+  expect(notesHtml).toContain('Ward against sun <sup>M</sup>');
+  expect(notesHtml).toContain('<li>Only while worn</li>');
+});
+
 test('the served order is the printed order', async () => {
   const data = await renderWizardData({
     mode: 'aspirant',

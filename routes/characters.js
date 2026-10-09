@@ -50,7 +50,7 @@ const { lineageCatalogue, lineageIdOf, purchaseCatalogue } = require('../util/cl
 const { getOffscreenMissionById, listOffscreenMissions, getAvailableHostedMissionsForPicker } = require('../models/offscreen-mission');
 const { isAuthenticated, authOptional } = require('../util/auth');
 const { sendError, sendRouteError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
-const { renderMarkdown } = require('../util/markdown');
+const { renderMarkdown, renderNotes } = require('../util/markdown');
 const { getEditionAccess, hasAspirantAccess, ASPIRANT_ACCESS_ERROR } = require('../services/access/service');
 const { trialEndedAt } = require('../util/edition-access');
 const { processCharacterImport } = require('../util/character-import');
@@ -327,6 +327,7 @@ const wizardClassGear = (c) => (Array.isArray(c.gear)
       name: g.name || '',
       description_html: renderMarkdown(g.description || ''),
       meters: Array.isArray(g.meters) ? g.meters : [],
+      notes_html: renderNotes(g.notes),
       column: g.column || null,
       position: g.position || null,
       default_enchantment: g.default_enchantment || null,

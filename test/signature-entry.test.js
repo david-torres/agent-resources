@@ -252,6 +252,17 @@ describe('render', () => {
     expect(html).toContain('Portray a Turning Point.');
   });
 
+  test('shows the class-authored rules notes after the meters and before the Default Enchantment', () => {
+    const notesHtml = '<ul><li>Ward against sun and glare <sup>M</sup><ul><li>Only while worn</li></ul></li></ul>';
+    const html = SE.render({ ...entry, notes_html: notesHtml },
+                           { owned: false, enchantment: null, mods: [] },
+                           { figures: FIGURES, economy: 'aspirant' });
+    const notesAt = html.indexOf(notesHtml);
+    expect(notesAt).toBeGreaterThan(-1);
+    expect(notesAt).toBeGreaterThan(html.indexOf('Ammunition'));
+    expect(notesAt).toBeLessThan(html.indexOf('Default Enchantment'));
+  });
+
   test('an unowned Signature shows the Default Enchantment text but no controls to buy it', () => {
     const html = SE.render(entry, { owned: false, enchantment: null, mods: [] },
                            { figures: FIGURES, economy: 'aspirant' });
