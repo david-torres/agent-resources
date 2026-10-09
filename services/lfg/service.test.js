@@ -428,9 +428,22 @@ test('approving or withdrawing a join request tells the roster hook which post c
 });
 
 test('a failing roster hook does not fail the moderation', async () => {
+  const ran = [];
   const service = new LfgService(makeRepo(), {
-    afterRosterChange: async () => { throw new Error('table sync down'); },
+    afterRosterChange: async (postId) => { ran.push(postId); throw new Error('table sync down'); },
   });
   const result = await service.updateJoinRequest(CREATOR, { requestId: 'req-1', status: 'approved' });
+  expect(ran).toEqual(['post-1']);
   expect(result.error).toBeFalsy();
+});
+
+test('the creator\'s auto-approved join notifies the roster hook, a pending join does not', async () => {
+  const changed = [];
+  const service = new LfgService(makeRepo(), {
+    afterRosterChange: async (postId) => { changed.push(postId); },
+  });
+  await service.join(CREATOR, { postId: 'post-1', joinType: 'player', characterId: 'char-1' });
+  expect(changed).toEqual(['post-1']);
+  await service.join(STRANGER, { postId: 'post-1', joinType: 'conduit' });
+  expect(changed).toEqual(['post-1']);
 });

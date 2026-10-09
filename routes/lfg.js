@@ -150,6 +150,7 @@ router.post('/:id/table', isAuthenticated, asyncHandler(async (req, res) => {
   if (error || !post) return sendError(req, res, error || null);
   const opened = await gameTables.openForPost(actorFromLocals(res.locals), post);
   if (!opened.data) return sendRouteError(req, res, opened.error);
+  if (opened.error) console.error(opened.error);
   res.header('HX-Location', `/tables/${opened.data.id}`).send();
 }));
 

@@ -205,7 +205,10 @@ class LfgService {
 
     const { data, error } = await this.repo.insertJoinRequest(joinRequest);
     if (error) return { data, error };
-    if (status === 'approved' && joinType === 'conduit') await this.syncConduitHostId(postId);
+    if (status === 'approved') {
+      if (joinType === 'conduit') await this.syncConduitHostId(postId);
+      await this.notifyRosterChange(postId);
+    }
     return { data, error };
   }
 
