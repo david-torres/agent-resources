@@ -13,8 +13,9 @@ const db = new Client({ connectionString: process.env.SUPABASE_DB_URL || 'postgr
 const clientOptions = { auth: { autoRefreshToken: false, persistSession: false } };
 const anonClient = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_PUBLISHABLE_KEY, clientOptions);
 
-const created = { authUserIds: [], profileIds: [], characterIds: [], tableIds: [] };
+const created = { authUserIds: [], profileIds: [], characterIds: [], tableIds: [], postIds: [] };
 let users;
+let connected = false;
 
 const makeUser = async (tag) => {
   const email = `gt-rls-${tag}-${suffix}@example.test`;
@@ -49,8 +50,9 @@ const makeCharacter = async (profileId, { isPublic }) => {
 // public one and is otherwise unrelated.
 const setup = async () => {
   if (users) return users;
-  await db.connect();
+  if (!connected) { await db.connect(); connected = true; }
   const [creator, player, stranger] = await Promise.all([makeUser('creator'), makeUser('player'), makeUser('stranger')]);
+  const outsider = await makeUser('outsider');
   const playerPrivate = await makeCharacter(player.profile.id, { isPublic: false });
   const strangerPublic = await makeCharacter(stranger.profile.id, { isPublic: true });
   const tableId = crypto.randomUUID();
@@ -58,7 +60,7 @@ const setup = async () => {
     .insert({ id: tableId, name: `GT table ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id });
   if (error) throw error;
   created.tableIds.push(tableId);
-  users = { creator, player, stranger, playerPrivate, strangerPublic, tableId };
+  users = { outsider, creator, player, stranger, playerPrivate, strangerPublic, tableId };
   return users;
 };
 
@@ -66,11 +68,12 @@ const membersOf = async (tableId) =>
   (await supabaseAdmin.from('game_table_members').select('*').eq('table_id', tableId)).data;
 
 afterAll(async () => {
+  if (created.postIds.length) await supabaseAdmin.from('lfg_posts').delete().in('id', created.postIds);
   if (created.tableIds.length) await supabaseAdmin.from('game_tables').delete().in('id', created.tableIds);
   if (created.characterIds.length) await supabaseAdmin.from('characters').delete().in('id', created.characterIds);
   for (const id of created.profileIds) await db.query('delete from profiles where id = $1', [id]);
   for (const id of created.authUserIds) await db.query('delete from auth.users where id = $1', [id]);
-  await db.end();
+  if (connected) await db.end();
 });
 
 test('anon reads no tables and cannot create one', async () => {
@@ -93,11 +96,16 @@ test('users cannot create a table for someone else or pre-linked to an LFG post'
   const forOther = await creator.client.from('game_tables')
     .insert({ id: crypto.randomUUID(), name: 'x', creator_id: player.profile.id, conduit_id: player.profile.id });
   expect(forOther.error?.code).toBe('42501');
+  const { data: post, error: postError } = await supabaseAdmin.from('lfg_posts')
+    .insert({ title: `GT post ${suffix}`, description: 'x', date: new Date().toISOString(), creator_id: creator.profile.id, max_characters: 4 })
+    .select('id').single();
+  if (postError) throw postError;
+  created.postIds.push(post.id);
   const linked = await creator.client.from('game_tables').insert({
     id: crypto.randomUUID(), name: 'x', creator_id: creator.profile.id, conduit_id: creator.profile.id,
-    lfg_post_id: crypto.randomUUID(),
+    lfg_post_id: post.id,
   });
-  expect(linked.error).not.toBeNull();
+  expect(linked.error?.code).toBe('42501');
 });
 
 test('a player seats their own private character and becomes a participant', async () => {
@@ -146,9 +154,36 @@ test('users cannot set the columns the LFG roster sync trusts', async () => {
 });
 
 test('the creator renames the table; a participant who is not the creator cannot', async () => {
-  const { creator, player, tableId } = await setup();
-  await player.client.from('game_tables').update({ name: 'Player rename' }).eq('id', tableId);
+  const { creator, stranger, tableId } = await setup();
+  expect((await stranger.client.from('game_tables').select('id').eq('id', tableId)).data).toHaveLength(1);
+  await stranger.client.from('game_tables').update({ name: 'Player rename' }).eq('id', tableId);
   expect((await supabaseAdmin.from('game_tables').select('name').eq('id', tableId).single()).data.name).not.toBe('Player rename');
   expect((await creator.client.from('game_tables').update({ name: `Renamed ${suffix}` }).eq('id', tableId)).error).toBeNull();
   expect((await supabaseAdmin.from('game_tables').select('name').eq('id', tableId).single()).data.name).toBe(`Renamed ${suffix}`);
+});
+
+test('anon and a user with no part in the table read none of its members', async () => {
+  const { outsider, tableId } = await setup();
+  expect((await membersOf(tableId)).length).toBeGreaterThan(0);
+  expect((await anonClient.from('game_table_members').select('id').eq('table_id', tableId)).data || []).toEqual([]);
+  expect((await outsider.client.from('game_table_members').select('id').eq('table_id', tableId)).data).toEqual([]);
+});
+
+test('a table seats at most 8, whoever adds the ninth', async () => {
+  const { creator, player, tableId: _ } = await setup();
+  const fullId = crypto.randomUUID();
+  expect((await creator.client.from('game_tables')
+    .insert({ id: fullId, name: `GT full ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id })).error).toBeNull();
+  created.tableIds.push(fullId);
+  for (let i = 0; i < 8; i++) {
+    const { error } = await creator.client.from('game_table_members')
+      .insert({ table_id: fullId, guest_name: `Seat ${i}`, guest_stats: {} });
+    expect(error).toBeNull();
+  }
+  const ninthGuest = await creator.client.from('game_table_members').insert({ table_id: fullId, guest_name: 'Ninth', guest_stats: {} });
+  expect(ninthGuest.error?.code).toBe('23514');
+  const playerChar = await makeCharacter(player.profile.id, { isPublic: false });
+  const ninthPlayer = await player.client.from('game_table_members').insert({ table_id: fullId, character_id: playerChar });
+  expect(ninthPlayer.error?.code).toBe('23514');
+  expect(await membersOf(fullId)).toHaveLength(8);
 });

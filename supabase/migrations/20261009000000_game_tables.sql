@@ -87,6 +87,30 @@ as $$
   );
 $$;
 
+revoke execute on function public.can_manage_game_table(uuid), public.owns_character(uuid), public.is_game_table_participant(uuid) from public, anon;
+grant execute on function public.can_manage_game_table(uuid), public.owns_character(uuid), public.is_game_table_participant(uuid) to authenticated, service_role;
+
+-- Locks the table row so concurrent inserts serialize; SECURITY DEFINER so the
+-- count sees every member regardless of the caller's RLS.
+create or replace function public.enforce_game_table_seat_cap()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  perform 1 from game_tables where id = new.table_id for update;
+  if (select count(*) from game_table_members where table_id = new.table_id) >= 8 then
+    raise exception 'A table seats at most 8.' using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists game_table_members_seat_cap on public.game_table_members;
+create trigger game_table_members_seat_cap
+  before insert on public.game_table_members
+  for each row
+  execute function public.enforce_game_table_seat_cap();
+
 alter table public.game_tables enable row level security;
 alter table public.game_table_members enable row level security;
 
