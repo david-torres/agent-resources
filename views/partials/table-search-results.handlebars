@@ -1,0 +1,43 @@
+{{!-- Dense candidate rows with an Add button. On a saved table (tableId set)
+      Add seats the character; on a draft it adds to #table-csv, the draft's
+      only record of membership (see table-panel). --}}
+{{#if characters.length}}
+<div>
+  {{#each characters}}
+  <div class="is-flex is-justify-content-space-between is-align-items-center py-2 px-2">
+    <span>
+      <strong>{{this.name}}</strong>
+      {{#if this.class}}<span class="has-text-grey is-size-7"> · {{this.class}}</span>{{/if}}
+      {{#unless this.is_public}}
+      <span class="icon is-small has-text-grey" title="Private"><i class="fas fa-lock"></i></span>
+      {{/unless}}
+      {{#if this.is_deceased}}
+      <span class="icon is-small has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
+      {{/if}}
+    </span>
+    {{#if ../tableId}}
+    <button type="button" class="button is-small is-primary"
+      data-add-character="{{this.id}}"
+      aria-label="Seat {{this.name}} at the table"
+      hx-post="/tables/{{../tableId}}/members"
+      hx-vals='{"character_id": "{{this.id}}"}'
+      hx-target="#table-panel"
+      hx-swap="outerHTML">Add</button>
+    {{else}}
+    <button type="button" class="button is-small is-primary"
+      data-add-character="{{this.id}}"
+      aria-label="Add {{this.name}} to the table"
+      hx-get="/tables/new/panel"
+      hx-vals='{"add": "{{this.id}}"}'
+      hx-include="#table-csv"
+      hx-target="#table-panel"
+      hx-swap="outerHTML">Add</button>
+    {{/if}}
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<div class="notification is-info is-light">
+  {{#if q}}No characters found matching "{{q}}".{{else}}Type a name to search.{{/if}}
+</div>
+{{/if}}

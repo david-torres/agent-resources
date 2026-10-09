@@ -1,0 +1,19 @@
+{{> breadcrumbs}}
+<div class="level is-mobile">
+  <div class="level-left"><h2 class="title is-2">Game Tables</h2></div>
+  <div class="level-right">
+    <a class="button is-primary" href="/tables/new"><span class="icon"><i class="fas fa-plus"></i></span><span>New table</span></a>
+  </div>
+</div>
+<p class="subtitle is-6 has-text-grey">Tables you created, run as Conduit, or have a character seated at.</p>
+{{#if tables.length}}
+<div class="box">
+  {{#each tables}}
+  <a class="is-block py-2" href="/tables/{{this.id}}" data-table-id="{{this.id}}">
+    <strong>{{this.name}}</strong>{{#if this.lfg_post_id}} <span class="tag is-light">LFG</span>{{/if}}
+  </a>
+  {{/each}}
+</div>
+{{else}}
+<p class="has-text-grey">No tables yet. Start a <a href="/tables/new">new table</a>, or open one from an LFG post you're running.</p>
+{{/if}}

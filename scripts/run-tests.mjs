@@ -60,6 +60,7 @@ const httpFiles = new Set([
   'routes/open-graph.test.js',
   'routes/pages.test.js',
   'routes/party.test.js',
+  'routes/tables.test.js',
   'routes/sitemap.test.js'
 ]);
 const TIERS = ['unit', 'http', 'integration'];

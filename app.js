@@ -12,6 +12,7 @@ const authRoutes = require('./routes/auth');
 const charactersRoutes = require('./routes/characters');
 const lfgRoutes = require('./routes/lfg');
 const partyRoutes = require('./routes/party');
+const tableRoutes = require('./routes/tables');
 const profileRoutes = require('./routes/profile');
 const missionsRoutes = require('./routes/missions');
 const classesRoutes = require('./routes/classes');
@@ -80,6 +81,7 @@ const createApp = () => {
   app.use('/characters', charactersRoutes);
   app.use('/lfg', lfgRoutes);
   app.use('/party', partyRoutes);
+  app.use('/tables', tableRoutes);
   app.use('/missions', missionsRoutes);
   app.use('/classes', classesRoutes);
   app.use('/library', libraryRoutes);

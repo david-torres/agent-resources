@@ -1,0 +1,35 @@
+{{!-- The roster and party stats. On a draft, #table-csv is the single source
+      of truth for membership: every Add/Remove hx-includes it, because the
+      Add buttons live in the left column, which does not re-render when this
+      panel swaps. A saved table's membership lives in the database. --}}
+<div id="table-panel" class="box">
+  {{#if draft}}<input type="hidden" id="table-csv" name="c" value="{{tableCsv}}">{{/if}}
+
+  <h3 class="title is-4">Roster <span class="tag is-light">{{summary.memberCount}}/{{partyCap}}</span></h3>
+
+  {{#if droppedOverCap}}
+  <div class="notification is-warning is-light">
+    A table seats at most {{partyCap}}. {{droppedOverCap}} {{#if (eq droppedOverCap 1)}}character was{{else}}characters were{{/if}} left out.
+  </div>
+  {{/if}}
+
+  {{#if unresolved}}
+  <div class="notification is-warning is-light">
+    {{unresolved}} {{#if (eq unresolved 1)}}character{{else}}characters{{/if}} could not be loaded. They may be private or no longer exist.
+  </div>
+  {{/if}}
+
+  {{> table-roster members=members draft=draft tableId=tableId}}
+
+  {{#if privateCount}}
+  <div class="notification is-info is-light mt-3">
+    <span class="icon"><i class="fas fa-lock"></i></span>
+    {{privateCount}} {{#if (eq privateCount 1)}}member is private{{else}}members are private{{/if}}.
+    Anyone you share this draft's link with will see a {{subtract summary.memberCount privateCount}}-member table. Save it as a table to share private members.
+  </div>
+  {{/if}}
+
+  <hr>
+
+  {{> party-summary summary=summary}}
+</div>
