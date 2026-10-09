@@ -67,7 +67,10 @@ The gotchas below were each learned the expensive way. The findings report's
 
 - Keep route URLs, response shapes, and templates stable unless the change
   explicitly includes a product/API change.
-- Add or update focused tests for changed behavior.
+- Add or update focused tests for changed behavior that could plausibly regress
+  and that someone would care about. Skip new tests for cosmetic changes,
+  trivial wiring, or behavior an existing test already covers; never write
+  tests that merely restate the implementation.
 - Put schema changes in a new timestamped `supabase/migrations/` file. Do not
   edit an applied migration or add a parallel schema file.
 - Run the relevant test tier. Run local integration tests for database writes.
