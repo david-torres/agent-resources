@@ -224,7 +224,12 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId, client = supab
 // RLS policies (schema.sql) and by the character-view helper (routes/characters.js).
 // All conduit state changes go through lfg_join_requests; this helper mirrors the result.
 // Internal denormalization only — no policy check applies (see LfgService.syncConduitHostId).
-const syncConduitHostId = (postId) => lfgService.syncConduitHostId(postId);
+// A linked game table's Conduit follows host_id, so it is told too.
+const syncConduitHostId = async (postId) => {
+  const result = await lfgService.syncConduitHostId(postId);
+  await lfgService.notifyRosterChange(postId);
+  return result;
+};
 
 // Approve/reject a join request. Previously caller-enforced (routes/models
 // checked host-ness before calling); the capability now verifies it itself.

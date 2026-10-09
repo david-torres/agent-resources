@@ -196,7 +196,7 @@ async function seedNavItems() {
         if (searchChars.error) console.error('Error creating Search Characters:', searchChars.error);
         else console.log('Created Search Characters');
 
-        const virtualParty = await createNavItemDirect({
+        const gameTables = await createNavItemDirect({
             label: 'Game Tables',
             type: 'link',
             url: '/tables',
@@ -207,8 +207,8 @@ async function seedNavItems() {
             requires_admin: false,
             is_active: true
         });
-        if (virtualParty.error) console.error('Error creating Game Tables:', virtualParty.error);
-        else console.log('Created Virtual Party');
+        if (gameTables.error) console.error('Error creating Game Tables:', gameTables.error);
+        else console.log('Created Game Tables');
 
         const searchMissions = await createNavItemDirect({
             label: 'Search Mission Logs',

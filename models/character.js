@@ -295,7 +295,7 @@ const searchPublicCharacters = async (q, count, options = {}) => {
   try {
     let query = supabase
       .from('characters')
-      .select('id, name, image_url, class_id, class, is_deceased')
+      .select('id, name, image_url, class_id, class, is_deceased, is_public')
       .eq('is_public', true)
       .eq('hide_from_search', false)
       .limit(count);
