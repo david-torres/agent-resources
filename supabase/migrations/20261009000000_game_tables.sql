@@ -111,6 +111,30 @@ create trigger game_table_members_seat_cap
   for each row
   execute function public.enforce_game_table_seat_cap();
 
+-- Deleting a post cascades to its join requests, and a withdrawn request
+-- unseats its character. Detach the post's seats first so the table keeps
+-- its roster as hand seats when the whole post goes.
+create or replace function public.keep_game_table_seats_on_post_delete()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+begin
+  update game_table_members m
+     set lfg_join_request_id = null
+    from lfg_join_requests r
+   where r.id = m.lfg_join_request_id and r.lfg_post_id = old.id;
+  return old;
+end;
+$$;
+
+revoke execute on function public.keep_game_table_seats_on_post_delete() from public, anon, authenticated;
+
+drop trigger if exists lfg_posts_keep_game_table_seats on public.lfg_posts;
+create trigger lfg_posts_keep_game_table_seats
+  before delete on public.lfg_posts
+  for each row
+  execute function public.keep_game_table_seats_on_post_delete();
+
 alter table public.game_tables enable row level security;
 alter table public.game_table_members enable row level security;
 

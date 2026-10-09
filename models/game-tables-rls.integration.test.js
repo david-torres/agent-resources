@@ -187,3 +187,45 @@ test('a table seats at most 8, whoever adds the ninth', async () => {
   expect(ninthPlayer.error?.code).toBe('23514');
   expect(await membersOf(fullId)).toHaveLength(8);
 });
+
+test('a Conduit who did not create the table manages it', async () => {
+  const { creator, player, strangerPublic } = await setup();
+  const hostedId = crypto.randomUUID();
+  const { error } = await supabaseAdmin.from('game_tables')
+    .insert({ id: hostedId, name: `GT hosted ${suffix}`, creator_id: creator.profile.id, conduit_id: player.profile.id });
+  if (error) throw error;
+  created.tableIds.push(hostedId);
+  expect((await player.client.from('game_table_members').insert({ table_id: hostedId, character_id: strangerPublic })).error).toBeNull();
+  expect((await player.client.from('game_table_members')
+    .insert({ table_id: hostedId, guest_name: `Conduit guest ${suffix}`, guest_stats: {} })).error).toBeNull();
+  expect(await membersOf(hostedId)).toHaveLength(2);
+});
+
+test('deleting a linked LFG post keeps the table and its LFG-seated members', async () => {
+  const { creator, stranger, strangerPublic } = await setup();
+  const { data: post, error: postError } = await supabaseAdmin.from('lfg_posts')
+    .insert({ title: `GT linked ${suffix}`, description: 'x', date: new Date().toISOString(), creator_id: creator.profile.id, max_characters: 4 })
+    .select('id').single();
+  if (postError) throw postError;
+  created.postIds.push(post.id);
+  const { data: request, error: requestError } = await supabaseAdmin.from('lfg_join_requests')
+    .insert({ lfg_post_id: post.id, profile_id: stranger.profile.id, join_type: 'player', character_id: strangerPublic, status: 'approved' })
+    .select('id').single();
+  if (requestError) throw requestError;
+  const linkedId = crypto.randomUUID();
+  const linked = await supabaseAdmin.from('game_tables')
+    .insert({ id: linkedId, name: `GT linked ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id, lfg_post_id: post.id });
+  if (linked.error) throw linked.error;
+  created.tableIds.push(linkedId);
+  const seat = await supabaseAdmin.from('game_table_members')
+    .insert({ table_id: linkedId, character_id: strangerPublic, lfg_join_request_id: request.id });
+  if (seat.error) throw seat.error;
+
+  expect((await supabaseAdmin.from('lfg_posts').delete().eq('id', post.id)).error).toBeNull();
+
+  const table = (await supabaseAdmin.from('game_tables').select('lfg_post_id').eq('id', linkedId).single()).data;
+  expect(table.lfg_post_id).toBeNull();
+  const members = await membersOf(linkedId);
+  expect(members).toHaveLength(1);
+  expect(members[0]).toMatchObject({ character_id: strangerPublic, lfg_join_request_id: null });
+});
