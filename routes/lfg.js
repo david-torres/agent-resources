@@ -22,7 +22,8 @@ const { getOwnCharacters } = require('../models/character');
 const { getMissionByLfgPostId } = require('../models/mission');
 const { canLogGame } = require('../util/lfg-mission-draft');
 const { isAuthenticated, authOptional } = require('../util/auth');
-const { sendError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { sendError, sendRouteError, FRIENDLY_NOT_FOUND } = require('../util/http-error');
+const { gameTables } = require('../models/game-tables');
 const { actorFromLocals } = require('../util/actor');
 const { asyncHandler } = require('../util/async-handler');
 const { summarizeParty } = require('../util/party-stats');
@@ -120,9 +121,14 @@ router.get('/:id', authOptional, async (req, res) => {
     // would not show it to; the page falls back to offering the log action.
     const { data: loggedMission } = await getMissionByLfgPostId(data.id, res.locals.supabase);
 
+    const { data: linkedTableId } = await gameTables.findTableIdForPost(data.id);
+    const canOpenTable = Boolean(profile) && (data.creator_id === profile.id || data.host_id === profile.id);
+
     res.render('lfg-post', {
       profile,
       post: data,
+      linkedTableId,
+      canOpenTable,
       partySummary,
       partyCsv,
       approvedCount,
@@ -138,6 +144,14 @@ router.get('/:id', authOptional, async (req, res) => {
     });
   }
 });
+
+router.post('/:id/table', isAuthenticated, asyncHandler(async (req, res) => {
+  const { data: post, error } = await getLfgPost(req.params.id, res.locals.supabase);
+  if (error || !post) return sendError(req, res, error || null);
+  const opened = await gameTables.openForPost(actorFromLocals(res.locals), post);
+  if (!opened.data) return sendRouteError(req, res, opened.error);
+  res.header('HX-Location', `/tables/${opened.data.id}`).send();
+}));
 
 router.get('/:id/edit', isAuthenticated, async (req, res) => {
   const { profile } = res.locals;

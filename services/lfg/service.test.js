@@ -414,3 +414,23 @@ test('listForAgent returns an empty list for scope=joined with no joined posts',
   expect(result.error).toBeNull();
   expect(result.data).toEqual([]);
 });
+
+// ─── roster hook ───────────────────────────────────────────────────────────
+
+test('approving or withdrawing a join request tells the roster hook which post changed', async () => {
+  const changed = [];
+  const service = new LfgService(makeRepo(), {
+    afterRosterChange: async (postId) => { changed.push(postId); },
+  });
+  await service.updateJoinRequest(CREATOR, { requestId: 'req-1', status: 'approved' });
+  await service.leave(CREATOR, 'req-1');
+  expect(changed).toEqual(['post-1', 'post-1']);
+});
+
+test('a failing roster hook does not fail the moderation', async () => {
+  const service = new LfgService(makeRepo(), {
+    afterRosterChange: async () => { throw new Error('table sync down'); },
+  });
+  const result = await service.updateJoinRequest(CREATOR, { requestId: 'req-1', status: 'approved' });
+  expect(result.error).toBeFalsy();
+});

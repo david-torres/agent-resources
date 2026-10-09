@@ -34,6 +34,7 @@ const integrationFiles = new Set([
 ]);
 const httpFiles = new Set([
   'routes/badges.test.js',
+  'routes/lfg-table.test.js',
   'routes/agent-read.test.js',
   'routes/bot-link-confirm.test.js',
   'routes/character-details.test.js',

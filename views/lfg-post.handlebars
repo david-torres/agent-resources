@@ -142,10 +142,17 @@
   <div class="box mt-4">
     <div class="is-flex is-justify-content-space-between is-align-items-center mb-3">
       <h4 class="title is-5 mb-0">Party Stats</h4>
-      {{#if (gt approvedCount 0)}}
+      {{#if linkedTableId}}
+      <a class="button is-small is-link is-light" href="/tables/{{linkedTableId}}">
+        <span class="icon"><i class="fas fa-users"></i></span><span>Open table</span>
+      </a>
+      {{else if canOpenTable}}
+      <button type="button" class="button is-small is-link" hx-post="/lfg/{{post.id}}/table">
+        <span class="icon"><i class="fas fa-users"></i></span><span>Open table</span>
+      </button>
+      {{else if (gt approvedCount 0)}}
       <a class="button is-small is-light" href="/tables/new?c={{partyCsv}}">
-        <span class="icon"><i class="fas fa-users"></i></span>
-        <span>Open as a draft table</span>
+        <span class="icon"><i class="fas fa-users"></i></span><span>Open as a draft table</span>
       </a>
       {{/if}}
     </div>

@@ -232,3 +232,8 @@ test('sync does nothing for a post with no table', async () => {
   expect((await svc.syncLinkedTable('post1')).data).toBeNull();
   expect(repo.writes()).toEqual([]);
 });
+
+test('a post\'s table is found through the system client', async () => {
+  const { svc } = service({ linkedTableId: 't9' });
+  expect((await svc.findTableIdForPost('post1')).data).toBe('t9');
+});

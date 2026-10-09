@@ -83,6 +83,9 @@ test('the party stats box renders the shared summary partial', () => {
   expect(LFG_SRC).not.toContain('lookup ../partyStats');
 });
 
-test('the post links out to a draft table with its approved members', () => {
-  expect(LFG_SRC).toContain('/tables/new?c=');
+test('the party box offers a linked table, opening one, or a draft table', () => {
+  const partySection = LFG_SRC.slice(LFG_SRC.indexOf('Party Stats'));
+  expect(partySection).toContain('href="/tables/{{linkedTableId}}"');
+  expect(partySection).toContain('hx-post="/lfg/{{post.id}}/table"');
+  expect(partySection).toContain('/tables/new?c=');
 });

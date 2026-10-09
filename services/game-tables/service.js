@@ -187,6 +187,10 @@ class GameTableService {
     return { data: { id }, error: undefined };
   }
 
+  findTableIdForPost(postId) {
+    return this.repo.findTableIdByPostId(postId, this.system);
+  }
+
   // Seats approved player characters the table lacks (while seats remain) and
   // unseats any it seated for a request that is no longer approved. Seats it
   // did not make -- guests, characters seated by hand -- are never touched.
