@@ -29,6 +29,8 @@ const panelContext = (view, profile) => ({
   members: view.members,
   summary: view.summary,
   capabilities: view.capabilities,
+  isFull: view.isFull,
+  unseatedApproved: view.unseatedApproved,
   partyCap: PARTY_CAP,
   profile,
   statList,
@@ -45,15 +47,18 @@ const validIds = (req, res, ...names) => {
   return false;
 };
 
-router.get('/', isAuthenticated, asyncHandler(async (req, res) => {
-  const { data, error } = await gameTables.listFor(res.locals.supabase);
-  if (error) return sendRouteError(req, res, error);
-  res.render('tables', {
+router.get('/', authOptional, asyncHandler(async (req, res) => {
+  const page = {
     profile: res.locals.profile,
-    tables: data || [],
+    authOptional: true,
+    noindex: true,
     activeNav: 'tables',
     breadcrumbs: [{ label: 'Game Tables', href: '/tables' }],
-  });
+  };
+  if (!res.locals.profile) return res.render('tables', { ...page, tables: [] });
+  const { data, error } = await gameTables.listFor(res.locals.supabase);
+  if (error) return sendRouteError(req, res, error);
+  res.render('tables', { ...page, tables: data || [] });
 }));
 
 router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
@@ -93,6 +98,7 @@ router.get('/new', authOptional, asyncHandler(async (req, res) => {
     ...draftContext(draft, res.locals.profile),
     ownCharacters: await ownCharactersFor(res),
     authOptional: true,
+    noindex: true,
     activeNav: 'tables',
     breadcrumbs: [{ label: 'New Table', href: '/tables/new' }],
   });
@@ -115,6 +121,7 @@ router.get('/:id', authOptional, asyncHandler(async (req, res) => {
     ...panelContext(view, res.locals.profile),
     ownCharacters: await ownCharactersFor(res),
     authOptional: true,
+    noindex: true,
     activeNav: 'tables',
     breadcrumbs: [{ label: 'Game Tables', href: '/tables' }, { label: view.table.name, href: `/tables/${view.table.id}` }],
   });

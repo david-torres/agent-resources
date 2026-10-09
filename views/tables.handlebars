@@ -5,6 +5,7 @@
     <a class="button is-primary" href="/tables/new"><span class="icon"><i class="fas fa-plus"></i></span><span>New table</span></a>
   </div>
 </div>
+{{#if profile}}
 <p class="subtitle is-6 has-text-grey">Tables you created, run as Conduit, or have a character seated at.</p>
 {{#if tables.length}}
 <div class="box">
@@ -16,4 +17,7 @@
 </div>
 {{else}}
 <p class="has-text-grey">No tables yet. Start a <a href="/tables/new">new table</a>, or open one from an LFG post you're running.</p>
+{{/if}}
+{{else}}
+<p class="subtitle is-6 has-text-grey">Compare a group's stats in a <a href="/tables/new">new table</a>. <a href="/auth">Sign in</a> to save tables and see the ones you're part of.</p>
 {{/if}}

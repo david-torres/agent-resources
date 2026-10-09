@@ -13,14 +13,18 @@
             {{#if this.isGuest}}
             <strong>{{this.name}}</strong> <span class="tag is-light">Unregistered</span>
             {{else}}
+            {{#if this.canViewDetails}}
             <a href="/characters/{{this.id}}/{{encodeURIComponentH this.name}}"><strong>{{this.name}}</strong></a>
+            {{else}}
+            <strong>{{this.name}}</strong>
+            {{/if}}
             {{#unless this.is_public}}
             <span class="icon is-small" title="Private"><i class="fas fa-lock"></i></span>
             {{/unless}}
             {{#if this.is_deceased}}
             <span class="icon is-small" title="Deceased"><i class="fas fa-skull"></i></span>
             {{/if}}
-            {{#if this.fromLfg}}<span class="tag is-light" title="Seated from the LFG post">LFG</span>{{/if}}
+            {{#if this.fromLfg}}<span class="tag is-light" title="Seated from the LFG post. Removing this seat lasts only until the post's roster changes; to remove a player for good, reject them on the post.">LFG</span>{{/if}}
             {{/if}}
             <p class="help mb-0">{{this.class}}{{#if this.level}} · Level {{this.level}}{{/if}}</p>
           </div>

@@ -26,6 +26,9 @@ Allow: /profile/view/
 Disallow: /lfg/tab/
 Disallow: /lfg/events/
 
+# Game tables are shared by link, not published.
+Disallow: /tables
+
 # Admin screens.
 Disallow: /badges/
 Disallow: /nav/
@@ -47,7 +50,6 @@ Disallow: /classes/redeem
 Disallow: /*/search
 Disallow: /*/s$
 Disallow: /*/similar
-Disallow: /tables/new/panel
 Disallow: /characters/class-gear
 Disallow: /characters/class-abilities
 Disallow: /characters/common-item

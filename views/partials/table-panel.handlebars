@@ -21,6 +21,13 @@
 
   {{> table-roster members=members draft=draft tableId=tableId}}
 
+  {{#if unseatedApproved}}
+  <div class="notification is-info is-light mt-3" data-unseated-note>
+    {{unseatedApproved}} approved {{#if (eq unseatedApproved 1)}}player isn't{{else}}players aren't{{/if}} seated yet.
+    {{#if isFull}}The table is full.{{else}}Players with a private character seat it themselves from this page.{{/if}}
+  </div>
+  {{/if}}
+
   {{#if privateCount}}
   <div class="notification is-info is-light mt-3">
     <span class="icon"><i class="fas fa-lock"></i></span>

@@ -51,7 +51,7 @@ let throwOnPartyLoad = false;
 
 // Rows come back reversed: the draft must impose the URL's order itself.
 mock.module('../models/character', () => ({
-  getOwnCharacters: async () => ({ data: [] }),
+  getOwnCharacters: async () => ({ data: [characterRow(ID[7], { name: 'Private Character', is_public: false })], error: null }),
   searchPublicCharacters: async (q) => ({ data: q ? [characterRow(ID[0])] : [], error: null }),
   getPartyCharacters: async (ids) => {
     if (throwOnPartyLoad) throw new Error('boom');
@@ -246,6 +246,29 @@ test('the list shows the viewer\'s tables', async () => {
   expect(html).toContain(`href="/tables/${TABLE_ID}"`);
 });
 
+test('signed out, the list page offers a new table and asks the visitor to sign in', async () => {
+  let listed = false;
+  fake.listFor = async () => { listed = true; return { data: [] }; };
+  const res = await get('/tables');
+  const html = await res.text();
+  expect(res.status).toBe(200);
+  expect(html).toContain('href="/tables/new"');
+  expect(html).toContain('href="/auth"');
+  expect(listed).toBe(false);
+});
+
+test('table pages ask search engines not to index them', async () => {
+  fake.load = async () => ({ data: view() });
+  expect(await (await get(`/tables/${TABLE_ID}`)).text()).toContain('<meta name="robots" content="noindex">');
+});
+
+test('a linked table says how many approved players are not seated yet', async () => {
+  fake.load = async () => ({ data: view({ unseatedApproved: 2 }) });
+  const html = await (await get(`/tables/${TABLE_ID}`)).text();
+  expect(html).toContain("2 approved players aren't seated yet");
+  expect(html).toContain('seat it themselves');
+});
+
 const csvFrom = (html) => {
   const match = html.match(/id="table-csv"[^>]*value="([^"]*)"/);
   return match ? match[1] : null;
@@ -316,4 +339,12 @@ test('a signed-out draft asks the visitor to sign in to save', async () => {
   const html = await (await get(`/tables/new?c=${uuid(1)}`)).text();
   expect(html).not.toContain('hx-post="/tables"');
   expect(html).toContain('Sign in');
+});
+
+test('a signed-in draft lists your own characters, private included', async () => {
+  // getOwnCharacters is RLS-scoped, which is how a private character -- one
+  // the public search can never surface -- reaches the page.
+  const html = await (await fetch(`${baseUrl}/tables/new`, { headers: authed })).text();
+  expect(html).toContain('Private Character');
+  expect(html).toContain(`data-add-character="${ID[7]}"`);
 });

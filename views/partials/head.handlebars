@@ -14,6 +14,7 @@
        path-based. -->
   <meta name="htmx-config" content='{"includeIndicatorStyles": false, "defaultSettleDelay": 0, "methodsThatUseUrlParams": ["get"]}'>
   <title>{{#if title}}{{title}} - Agent Resources{{else}}Agent Resources{{/if}}</title>
+  {{#if noindex}}<meta name="robots" content="noindex">{{/if}}
   {{#if og}}
   <meta property="og:site_name" content="Agent Resources">
   <meta property="og:type" content="{{og.type}}">
