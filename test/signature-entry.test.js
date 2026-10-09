@@ -326,7 +326,7 @@ describe('cell', () => {
     .map((tag) => tag.textContent.trim());
   const notesHtml = '<ul><li>Only while worn</li></ul>';
 
-  test('an unowned Signature hovers its description, meters, notes and printed Default, with no badges', () => {
+  test('an unowned Signature hovers its description, meters and notes but not the printed Default, with no badges', () => {
     const fitted = SE.cell({ ...entry, notes_html: notesHtml }, null);
     expect(fitted.buttonAttrs).toBe(' data-tooltip-markdown=""');
     const host = mount(fitted.after);
@@ -337,8 +337,7 @@ describe('cell', () => {
     expect(tooltip.textContent).toContain('Ammunition');
     expect(tooltip.textContent).toContain('Mid');
     expect(tooltip.innerHTML).toContain(notesHtml);
-    expect(tooltip.textContent).toContain('Hats Off to You');
-    expect(tooltip.textContent).toContain('Portray a Turning Point.');
+    expect(tooltip.textContent).not.toContain('Hats Off to You');
     expect(badgesIn(host)).toEqual([]);
     expect(host.querySelector('[data-signature-loadout]')).toBeNull();
   });
@@ -363,8 +362,18 @@ describe('cell', () => {
     expect(badgesIn(host)).toEqual(['Custom Ench', 'Mod']);
   });
 
+  test('an owned Signature hovers the printed Default only once it is applied', () => {
+    const unfitted = mount(SE.cell(entry, { owned: true, enchantment: null, mods: [] }).after);
+    expect(tooltipIn(unfitted).textContent).not.toContain('Hats Off to You');
+    const applied = mount(SE.cell(entry, { owned: true, enchantment: { source: 'default' }, mods: [] }).after);
+    expect(tooltipIn(applied).textContent).toContain('Hats Off to You');
+    expect(tooltipIn(applied).textContent).toContain('Portray a Turning Point.');
+    expect(badgesIn(applied)).toEqual(['Default Ench']);
+  });
+
   test('a Signature with nothing to say gets no tooltip at all', () => {
-    const bare = { name: 'Blank', description_html: '', meters: [], notes_html: '', default_enchantment: null };
+    const bare = { name: 'Blank', description_html: '', meters: [], notes_html: '',
+      default_enchantment: { name: 'Unbought', description: 'Never shown unless applied.' } };
     expect(SE.cell(bare, { owned: true, enchantment: null, mods: [] })).toEqual({ buttonAttrs: '', after: '' });
     expect(SE.cell(bare, null)).toEqual({ buttonAttrs: '', after: '' });
   });

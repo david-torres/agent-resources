@@ -700,6 +700,7 @@ describe('Your Signatures', () => {
   describe('the loadout on each owned Signature', () => {
     const entriesWithDefaults = () => twoClassEntries().map((entry) => ({
       ...entry,
+      description_html: `<p>${entry.name} description.</p>`,
       default_enchantment: {
         name: `${entry.name} Charm`,
         description: `${entry.name} plain text`,
@@ -744,16 +745,16 @@ describe('Your Signatures', () => {
       expect(badgesOf(yoursCell('Duster'))).toEqual(['Mod x2']);
     });
 
-    test('a Signature with nothing fitted gets no badges but still hovers its printed Default', () => {
+    test('a Signature with nothing fitted gets no badges and hovers its description but not the printed Default', () => {
       mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, null, [])]);
       expect(loadoutOf(yoursCell('Cowboy Hat'))).toBeNull();
       const tooltip = tooltipOf(yoursCell('Cowboy Hat'));
       expect(tooltip).not.toBeNull();
-      expect(tooltip.textContent).toContain('Cowboy Hat Charm');
-      expect(tooltip.innerHTML).toContain('<p>Cowboy Hat rides with the wind.</p>');
+      expect(tooltip.textContent).toContain('Cowboy Hat description.');
+      expect(tooltip.textContent).not.toContain('Cowboy Hat Charm');
     });
 
-    test('class grid cells, owned or not, hover their printed text but carry no badges', () => {
+    test('class grid cells, owned or not, hover their description but no Enchantment, Mods or badges', () => {
       mountLoadout([owned('Cowboy Hat', OWN_CLASS_ID, { source: 'default' }, [mod('Scope', 'Sees far')])]);
       expect(badgesOf(yoursCell('Cowboy Hat'))).toEqual(['Default Ench', 'Mod']);
       expect(loadoutOf(classCell('Cowboy Hat'))).toBeNull();
@@ -761,8 +762,8 @@ describe('Your Signatures', () => {
       for (const name of ['Cowboy Hat', 'Spurs']) {
         const tooltip = tooltipOf(classCell(name));
         expect(tooltip).not.toBeNull();
-        expect(tooltip.textContent).toContain(`${name} Charm`);
-        expect(tooltip.innerHTML).toContain(`<p>${name} rides with the wind.</p>`);
+        expect(tooltip.textContent).toContain(`${name} description.`);
+        expect(tooltip.textContent).not.toContain(`${name} Charm`);
         expect(tooltip.textContent).not.toContain('Scope');
       }
     });

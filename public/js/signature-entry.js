@@ -246,10 +246,10 @@
   // A Signature cell's hover text and fitted badges. app.js's initTooltips
   // reads a data-tooltip-markdown element's next .tooltip-markdown sibling,
   // so `after` opens with the hidden text and must directly follow the
-  // cell's button. The text is the printed entry plus the Enchantment -- a
-  // fitted Custom in place of the printed Default -- and any fitted Mods;
-  // the badges follow only when something is fitted. Pass a null purchase
-  // for a printed-only cell. Nothing to show yields empty strings.
+  // cell's button. The text is the printed entry plus whatever is fitted:
+  // the applied Enchantment (Default or Custom) and any Mods, with badges
+  // for them. Pass a null purchase for a printed-only cell. Nothing to show
+  // yields empty strings.
   var cell = function (entry, purchase) {
     var enchantment = (purchase && purchase.enchantment) || null;
     var mods = Array.isArray(purchase && purchase.mods) ? purchase.mods : [];
@@ -258,11 +258,11 @@
     if (entry.description_html) text.push('<div class="entry-description">' + entry.description_html + '</div>');
     text.push(metersHtml(entry.meters));
     if (entry.notes_html) text.push('<div class="entry-notes">' + entry.notes_html + '</div>');
-    var printed = entry.default_enchantment || null;
     if (enchantment && enchantment.source === 'custom') {
       text.push('<div class="entry-enchantment-name">' + escapeHtml(enchantment.name) + '</div>');
       text.push('<div class="entry-enchantment-text">' + escapeHtml(enchantment.description) + '</div>');
-    } else if (printed && printed.name) {
+    } else if (enchantment && enchantment.source === 'default') {
+      var printed = entry.default_enchantment || {};
       text.push('<div class="entry-enchantment-name">' + escapeHtml(printed.name) + '</div>');
       text.push('<div class="entry-enchantment-text">'
         + (printed.description_html || escapeHtml(printed.description || '')) + '</div>');

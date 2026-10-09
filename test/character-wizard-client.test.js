@@ -2192,20 +2192,20 @@ describe('Your Signatures', () => {
     expect(document.querySelectorAll('[data-signature-loadout]')).toHaveLength(1);
   });
 
-  test('every class grid Signature, owned or not, hovers its printed text without badges', () => {
+  test('class grid Signatures, owned or not, never hover an Enchantment or badges', () => {
     const wizard = bootAspirant();
     wizard.buySignature('Cowboy Hat', 'c-v1');
-    wizard.getState().gear.find((g) => g.name === 'Cowboy Hat').mods = [{ name: 'Scope', description: 'Sees far' }];
+    const hat = wizard.getState().gear.find((g) => g.name === 'Cowboy Hat');
+    hat.enchantment = { source: 'default' };
+    hat.mods = [{ name: 'Scope', description: 'Sees far' }];
     wizard.renderGearStep();
 
     for (const name of ['Cowboy Hat', 'Duster']) {
       const cell = document.querySelector('#signatureGrid [data-signature-name="' + name + '"]');
-      expect(cell.getAttribute('data-tooltip-markdown')).toBe('');
-      const tooltip = cell.nextElementSibling;
-      expect(tooltip).not.toBeNull();
-      expect(tooltip.classList.contains('tooltip-markdown')).toBe(true);
-      expect(tooltip.textContent).toContain(name + ' Enchantment');
-      expect(tooltip.textContent).toContain('Does a thing.');
+      const next = cell.nextElementSibling;
+      const tooltipText = next && next.classList.contains('tooltip-markdown') ? next.textContent : '';
+      expect(tooltipText).not.toContain(name + ' Enchantment');
+      expect(tooltipText).not.toContain('Scope');
     }
     expect(document.querySelectorAll('#signatureGrid [data-signature-loadout]')).toHaveLength(0);
   });
