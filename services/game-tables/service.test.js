@@ -132,6 +132,46 @@ test('only the creator renames or deletes', async () => {
   expect((await svc.rename(CREATOR, 't1', 'New', USER_CLIENT)).error).toBeUndefined();
 });
 
+test('losing the seat-cap race in the database reads as a full table', async () => {
+  const raced = (extra) => {
+    const { svc, repo } = service(extra);
+    repo.insertMembers = async () => ({ data: null, error: { code: '23514', message: 'trigger' } });
+    return svc;
+  };
+  const characters = { c9: { id: 'c9', is_public: false, creator_id: 'player' } };
+  const seated = await raced({ table: TABLE, members: [], characters }).seatCharacter(USER, 't1', 'c9', USER_CLIENT);
+  expect(seated.error.status).toBe(400);
+  expect(seated.error.message).toContain('seats at most');
+  expect((await raced({ table: TABLE, members: [] }).addGuest(CREATOR, 't1', { name: 'Mira' }, USER_CLIENT)).error.status).toBe(400);
+  const created = await raced({}).create(CREATOR, { name: 'Friday', characterIds: ['a'] }, USER_CLIENT);
+  expect(created.error.status).toBe(400);
+});
+
+test('members seated in the same instant keep a stable order by id', async () => {
+  const at = '2026-10-09T00:00:00Z';
+  const members = [guest('g2'), guest('g3'), guest('g1')].map((m) => ({ ...m, created_at: at }));
+  const { svc } = service({ table: TABLE, members });
+  expect((await svc.load('t1', CREATOR)).data.members.map((m) => m.memberId)).toEqual(['g1', 'g2', 'g3']);
+});
+
+test('a non-array character list seats nobody', async () => {
+  const { svc, repo } = service({});
+  expect((await svc.create(CREATOR, { name: 'Friday', characterIds: 'abc' }, USER_CLIENT)).error).toBeUndefined();
+  expect(repo.calls.some((c) => c.name === 'insertMembers')).toBe(false);
+});
+
+test('every user-initiated write runs through the caller\'s client, never the system one', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1'), guest('g2')] });
+  await svc.addGuest(CREATOR, 't1', { name: 'Mira' }, USER_CLIENT);
+  await svc.editGuest(CREATOR, 't1', 'g1', { name: 'Mira' }, USER_CLIENT);
+  await svc.removeMember(CREATOR, 't1', 'g2', USER_CLIENT);
+  await svc.rename(CREATOR, 't1', 'New', USER_CLIENT);
+  await svc.destroy(CREATOR, 't1', USER_CLIENT);
+  const writes = repo.writes();
+  expect(writes.map((c) => c.name)).toEqual(['insertMembers', 'updateMember', 'deleteMember', 'updateTable', 'deleteTable']);
+  for (const call of writes) expect(call.args.at(-1)).toBe(USER_CLIENT);
+});
+
 const POST = { id: 'post1', title: 'Heist night', creator_id: 'creator', host_id: 'conduit' };
 
 test('only the post\'s creator or Conduit opens its table; a second open reuses it', async () => {

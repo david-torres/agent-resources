@@ -21,6 +21,8 @@ const notFound = () => ({ status: 404, code: 'not_found', message: FRIENDLY_NOT_
 const forbidden = (message) => ({ status: 403, code: 'forbidden', title: 'No access', message });
 const invalid = (message) => ({ status: 400, code: 'invalid', title: 'Invalid submission', message });
 const tableFull = () => invalid(`A table seats at most ${PARTY_CAP}.`);
+const SEAT_CAP_VIOLATION = '23514';
+const seatError = (error) => (error.code === SEAT_CAP_VIOLATION ? tableFull() : error);
 
 class GameTableService {
   constructor(repository, { systemClient, newId = () => crypto.randomUUID() } = {}) {
@@ -39,7 +41,7 @@ class GameTableService {
     const capabilities = capabilitiesFor(table, actor);
     const profileId = actor?.profileId || null;
     const members = [...(table.members || [])]
-      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)) || String(a.id).localeCompare(String(b.id)))
       .map((row) => toDisplayMember(row, profileId))
       .map((member) => ({
         ...member,
@@ -57,7 +59,7 @@ class GameTableService {
     return this.repo.listTables(client);
   }
 
-  async create(actor, { name, characterIds = [] } = {}, client) {
+  async create(actor, { name, characterIds } = {}, client) {
     if (!actor?.profileId) return { data: null, error: forbidden('Sign in to save a table.') };
     const named = normalizeTableName(name);
     if (named.error) return { data: null, error: invalid(named.error) };
@@ -67,10 +69,10 @@ class GameTableService {
       { id, name: named.name, creator_id: actor.profileId, conduit_id: actor.profileId }, client);
     if (inserted.error) return { data: null, error: inserted.error };
 
-    const seats = [...new Set(characterIds)].slice(0, PARTY_CAP).map((characterId) => ({ table_id: id, character_id: characterId }));
+    const seats = [...new Set(Array.isArray(characterIds) ? characterIds : [])].slice(0, PARTY_CAP).map((characterId) => ({ table_id: id, character_id: characterId }));
     if (seats.length) {
       const seated = await this.repo.insertMembers(seats, client);
-      if (seated.error) return { data: { id }, error: seated.error };
+      if (seated.error) return { data: { id }, error: seatError(seated.error) };
     }
     return { data: { id }, error: undefined };
   }
@@ -110,7 +112,7 @@ class GameTableService {
     }
 
     const seated = await this.repo.insertMembers([{ table_id: tableId, character_id: characterId }], client);
-    if (seated.error) return { data: null, error: seated.error };
+    if (seated.error) return { data: null, error: seatError(seated.error) };
     return this.load(tableId, actor);
   }
 
@@ -122,7 +124,7 @@ class GameTableService {
     const guest = normalizeGuestInput(body);
     if (guest.errors) return { data: null, error: invalid(guest.errors.join(' ')) };
     const inserted = await this.repo.insertMembers([{ table_id: tableId, ...guest.data }], client);
-    if (inserted.error) return { data: null, error: inserted.error };
+    if (inserted.error) return { data: null, error: seatError(inserted.error) };
     return this.load(tableId, actor);
   }
 
