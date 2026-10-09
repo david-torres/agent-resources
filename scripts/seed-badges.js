@@ -110,6 +110,17 @@ for (const person of ['Dippy', 'Julian', 'Meeks', 'Robby', 'Tomas']) {
   });
 }
 
+catalog.push({
+  slug: 'personal-bugfinder',
+  name: 'BugFinder',
+  description: 'Personal badge for MushroomPlant, finder of bugs.',
+  category: 'personal',
+  track: null,
+  rank: null,
+  threshold: null,
+  file: path.join('More AR Badges', 'AR Badge BugFinder.png')
+});
+
 // Not earnable: locked/placeholder art for unstarted veteran tracks. Uploaded
 // to the bucket (the UI references it) but gets no catalog row.
 const EXTRA_UPLOADS = [
