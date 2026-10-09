@@ -16,7 +16,7 @@ const render = (context) => {
   hb.registerHelper(hbsHelpers);
   hb.registerHelper('markdown', renderMarkdown);
   hb.registerHelper('powerRatings', renderPowerRatings);
-  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks']) {
+  for (const partial of ['class-meters', 'class-notes']) {
     hb.registerPartial(partial, fs.readFileSync(path.join(__dirname, `${partial}.handlebars`), 'utf8'));
   }
   return hb.compile(TAG_SRC)(context);
@@ -39,7 +39,7 @@ test('an item with a description renders a tooltip tag plus hidden markdown', ()
   expect(html).toContain('tag is-primary is-medium');
 });
 
-test('a structured ability tooltip shows its meters, paired action, notes and sample perks', () => {
+test('a structured ability tooltip shows its meters, paired action and notes, but not its sample perks', () => {
   const tooltip = tooltipContent(render({
     item: {
       name: 'Quickdraw',
@@ -60,8 +60,8 @@ test('a structured ability tooltip shows its meters, paired action, notes and sa
   expect(tooltip).toContain('Holster as a free action');
   expect(tooltip).toContain('Only with a sidearm');
   expect(tooltip).toContain('Not a rifle');
-  expect(tooltip).toContain('Fan the Hammer');
-  expect(tooltip).toContain('Fire twice');
+  expect(tooltip).not.toContain('Fan the Hammer');
+  expect(tooltip).not.toContain('Fire twice');
 });
 
 test('an item whose text lives only in notes still gets a tooltip', () => {
