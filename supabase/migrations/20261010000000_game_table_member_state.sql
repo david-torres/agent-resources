@@ -72,6 +72,49 @@ create policy "game_table_member_state_tracker_update"
     and (updated_by is null or exists (select 1 from profiles p where p.id = updated_by and p.user_id = auth.uid()))
   );
 
+-- User writes bump the version by exactly one, are stamped with the writer, and
+-- leave Limiters to the Conduit. The service role (null auth.uid()) is unrestricted.
+create or replace function public.guard_game_table_member_state_update()
+returns trigger
+language plpgsql security definer set search_path = public
+as $$
+declare
+  v_profile_id uuid;
+begin
+  if auth.uid() is null then
+    return new;
+  end if;
+
+  select id into v_profile_id from profiles where user_id = auth.uid();
+
+  if new.imposed_limiters is distinct from old.imposed_limiters
+     and not is_admin()
+     and not exists (
+       select 1 from game_tables t
+       where t.id = new.table_id and t.conduit_id = v_profile_id
+     ) then
+    raise exception 'Only the Conduit imposes or lifts Limiters.' using errcode = '42501';
+  end if;
+
+  -- Not 40001: PostgREST retries serialization failures until the request hangs.
+  if new.version is distinct from old.version + 1 then
+    raise exception 'Tracker changed elsewhere.' using errcode = '55P03';
+  end if;
+
+  new.updated_at := now();
+  new.updated_by := v_profile_id;
+  return new;
+end;
+$$;
+
+revoke all on function public.guard_game_table_member_state_update() from public, anon, authenticated;
+
+drop trigger if exists game_table_member_state_guard on public.game_table_member_state;
+create trigger game_table_member_state_guard
+  before update on public.game_table_member_state
+  for each row
+  execute function public.guard_game_table_member_state_update();
+
 revoke all on public.game_table_member_state from anon, authenticated;
 
 do $do$

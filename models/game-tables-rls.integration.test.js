@@ -271,6 +271,91 @@ test('a tracker write cannot move its row or claim another author', async () => 
   const moved = await creator.client.from('game_table_member_state').update({ table_id: crypto.randomUUID() }).eq('member_id', row.member_id);
   expect(moved.error?.code).toBe('42501');
   const forged = await creator.client.from('game_table_member_state')
-    .update({ updated_by: player.profile.id }).eq('member_id', row.member_id).select('member_id');
-  expect(forged.error?.code === '42501' || (forged.data || []).length === 0).toBe(true);
+    .update({ version: 1, updated_by: player.profile.id }).eq('member_id', row.member_id).select('updated_by');
+  expect(forged.data).toEqual([{ updated_by: creator.profile.id }]);
+});
+
+const seatTable = async ({ creator, conduitId, tag }) => {
+  const tableId = crypto.randomUUID();
+  const { error } = await supabaseAdmin.from('game_tables')
+    .insert({ id: tableId, name: `GT ${tag} ${suffix}`, creator_id: creator.profile.id, conduit_id: conduitId ?? creator.profile.id });
+  if (error) throw error;
+  created.tableIds.push(tableId);
+  return tableId;
+};
+
+const seatCharacter = async (tableId, profileId) => {
+  const characterId = await makeCharacter(profileId, { isPublic: false });
+  const { data, error } = await supabaseAdmin.from('game_table_members')
+    .insert({ table_id: tableId, character_id: characterId }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
+
+const seatGuest = async (tableId, name) => {
+  const { data, error } = await supabaseAdmin.from('game_table_members')
+    .insert({ table_id: tableId, guest_name: name, guest_stats: {} }).select('id').single();
+  if (error) throw error;
+  return data.id;
+};
+
+const stateOf = async (memberId) =>
+  (await supabaseAdmin.from('game_table_member_state').select('*').eq('member_id', memberId).single()).data;
+
+test('only the Conduit or an admin changes imposed Limiters', async () => {
+  const { creator, player, stranger } = await setup();
+  const tableId = await seatTable({ creator, conduitId: stranger.profile.id, tag: 'lim' });
+  const memberId = await seatCharacter(tableId, player.profile.id);
+  const limiters = { 'ability:x': { text: 'Silenced' } };
+
+  const byOwner = await player.client.from('game_table_member_state')
+    .update({ imposed_limiters: limiters, version: 1 }).eq('member_id', memberId).select('version');
+  expect(byOwner.error?.code).toBe('42501');
+  const byCreator = await creator.client.from('game_table_member_state')
+    .update({ imposed_limiters: limiters, version: 1 }).eq('member_id', memberId).select('version');
+  expect(byCreator.error?.code).toBe('42501');
+  expect((await stateOf(memberId)).imposed_limiters).toEqual({});
+
+  const byConduit = await stranger.client.from('game_table_member_state')
+    .update({ imposed_limiters: limiters, version: 1 }).eq('member_id', memberId).select('version');
+  expect(byConduit.data).toEqual([{ version: 1 }]);
+  expect((await stateOf(memberId)).imposed_limiters).toEqual(limiters);
+
+  const ownerKeepsThem = await player.client.from('game_table_member_state')
+    .update({ essence_spent: 1, version: 2 }).eq('member_id', memberId).select('version');
+  expect(ownerKeepsThem.data).toEqual([{ version: 2 }]);
+});
+
+test('a tracker write must bump the version by one and is stamped with its writer', async () => {
+  const { creator, player } = await setup();
+  const tableId = await seatTable({ creator, tag: 'ver' });
+  const memberId = await seatCharacter(tableId, player.profile.id);
+
+  for (const version of [0, 2]) {
+    const stale = await player.client.from('game_table_member_state')
+      .update({ essence_spent: 1, version }).eq('member_id', memberId).select('version');
+    expect(stale.error?.code).toBe('55P03');
+  }
+  const ok = await player.client.from('game_table_member_state')
+    .update({ essence_spent: 1, version: 1, updated_by: null }).eq('member_id', memberId).select('version');
+  expect(ok.data).toEqual([{ version: 1 }]);
+  expect((await stateOf(memberId)).updated_by).toBe(player.profile.id);
+});
+
+test('a seat owner writes only their own seat; participants read the others', async () => {
+  const { creator, player, stranger } = await setup();
+  const tableId = await seatTable({ creator, tag: 'own' });
+  const mine = await seatCharacter(tableId, player.profile.id);
+  const theirs = await seatCharacter(tableId, stranger.profile.id);
+  const guest = await seatGuest(tableId, `Guest ${suffix}`);
+
+  for (const memberId of [guest, theirs]) {
+    const res = await player.client.from('game_table_member_state')
+      .update({ essence_spent: 4, version: 1 }).eq('member_id', memberId).select('version');
+    expect(res.data || []).toEqual([]);
+    expect(await stateOf(memberId)).toMatchObject({ essence_spent: 0, version: 0 });
+  }
+
+  const read = await player.client.from('game_table_member_state').select('member_id').eq('table_id', tableId);
+  expect(read.data.map((r) => r.member_id).sort()).toEqual([mine, theirs, guest].sort());
 });
