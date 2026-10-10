@@ -52,23 +52,30 @@ window.TableLive = window.TableLive || (function () {
   };
 
   document.addEventListener('DOMContentLoaded', scan);
-  document.body.addEventListener('htmx:afterSettle', scan);
+  document.addEventListener('htmx:afterSettle', scan);
 
   // A tracker swap replaces its <details>; carry the open state across.
-  document.body.addEventListener('htmx:beforeSwap', (event) => {
+  // Bound to document: the app replaces <body> on signed-in page loads.
+  document.addEventListener('htmx:beforeSwap', (event) => {
+    if (!event.detail.shouldSwap) return;
     const target = event.detail.target;
     if (!target || !target.hasAttribute || !target.hasAttribute('data-tracker')) return;
     const sources = target.querySelector('.tracker-sources');
     if (sources && sources.open) openSources.add(target.id);
     else openSources.delete(target.id);
   });
-  document.body.addEventListener('htmx:afterSwap', () => {
-    openSources.forEach((id) => {
-      const sources = document.querySelector(`#${CSS.escape(id)} .tracker-sources`);
-      if (sources) sources.open = true;
-    });
-    openSources.clear();
+  document.addEventListener('htmx:afterSwap', (event) => {
+    const id = event.detail.elt && event.detail.elt.id;
+    if (!id || !openSources.delete(id)) return;
+    const sources = document.querySelector(`#${CSS.escape(id)} .tracker-sources`);
+    if (sources) sources.open = true;
   });
+
+  const watchSession = () => {
+    const client = typeof App !== 'undefined' && App.getSupabaseClient();
+    if (client && client.auth) client.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') stop(); });
+  };
+  watchSession();
 
   document.addEventListener('trackerActed', (event) => {
     const detail = event.detail || {};
@@ -77,11 +84,17 @@ window.TableLive = window.TableLive || (function () {
       type: 'info',
       action: detail.undoable ? {
         label: 'Undo',
-        run: () => htmx.ajax('POST', detail.actionUrl, {
-          target: `#tracker-${detail.memberId}`,
-          swap: 'outerHTML',
-          values: { type: 'undo', version: detail.version },
-        }),
+        run: () => {
+          if (!document.getElementById(`tracker-${detail.memberId}`)) {
+            App.showToast('That tracker is gone.', { type: 'info' });
+            return;
+          }
+          htmx.ajax('POST', detail.actionUrl, {
+            target: `#tracker-${detail.memberId}`,
+            swap: 'outerHTML',
+            values: { type: 'undo', version: detail.version },
+          });
+        },
       } : null,
     });
   });

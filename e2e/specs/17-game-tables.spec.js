@@ -134,13 +134,33 @@ test.describe('signed in', () => {
     await expect(tracker.locator('.tracker-sources')).toHaveJSProperty('open', true);
 
     const viewer = await browser.newContext();
-    const viewerPage = await viewer.newPage();
-    await viewerPage.goto(page.url());
-    const viewerTag = viewerPage.locator(`#${trackerId}`).locator('[data-pool="essence"] .tracker-threshold');
-    const before = await viewerTag.textContent();
-    await tracker.getByRole('button', { name: 'Spend High Essence' }).click();
-    await expect(essenceTag).not.toHaveText(before.trim());
-    await expect(viewerTag).not.toHaveText(before.trim(), { timeout: 8000 });
-    await viewer.close();
+    try {
+      const viewerPage = await viewer.newPage();
+      await viewerPage.goto(page.url());
+      const viewerTag = viewerPage.locator(`#${trackerId}`).locator('[data-pool="essence"] .tracker-threshold');
+      const before = await viewerTag.textContent();
+      await tracker.getByRole('button', { name: 'Spend High Essence' }).click();
+      await expect(essenceTag).not.toHaveText(before.trim());
+      await expect(viewerTag).not.toHaveText(before.trim(), { timeout: 8000 });
+    } finally {
+      await viewer.close();
+    }
+  });
+
+  test('sources stay open across a tracker swap after a direct signed-in load', async ({ page }) => {
+    await page.goto(`/tables/new?c=${alpha.id}`);
+    await page.fill('form[hx-post="/tables"] input[name="name"]', `${prefix} direct`);
+    await page.click('form[hx-post="/tables"] button[type="submit"]');
+    await expect(page).toHaveURL(/\/tables\/[0-9a-f-]{36}$/);
+    await page.goto(page.url());
+
+    const tracker = page.locator('[data-tracker]').first();
+    await expect(tracker.getByRole('button', { name: 'Spend High Essence' })).toBeVisible();
+    const sources = tracker.locator('.tracker-sources');
+    await sources.locator('summary').click();
+    await expect(sources).toHaveJSProperty('open', true);
+    await tracker.locator('[data-source="mechanic:pitch"]').getByRole('button', { name: 'Use', exact: true }).click();
+    await expect(tracker.locator('[data-source="mechanic:pitch"]')).toContainText('Used ×1');
+    await expect(page.locator('[data-tracker]').first().locator('.tracker-sources')).toHaveJSProperty('open', true);
   });
 });
