@@ -418,3 +418,60 @@ test('a new session resets every seat through the system client; only a manager 
   }
   expect(repo.calls.find((c) => c.name === 'setSessionStarted').args[2]).toBe(SYSTEM);
 });
+
+test('a seat that changes mid-reset is re-read and reset; the session is stamped once all are reset', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1'), guest('g2')], trackerRows: { g1: row('g1', { essence_spent: 2 }), g2: row('g2') }, updateResults: [[], [{ version: 4 }]] });
+  expect((await svc.newSession(CREATOR, 't1')).error).toBeUndefined();
+  expect(repo.calls.filter((c) => c.name === 'updateState')).toHaveLength(3);
+  expect(repo.calls.some((c) => c.name === 'setSessionStarted')).toBe(true);
+});
+
+test('a seat that never resets gives a 409 and the session is not stamped', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1'), guest('g2')], trackerRows: { g1: row('g1'), g2: row('g2') }, updateResults: [[], [], []] });
+  const { error } = await svc.newSession(CREATOR, 't1');
+  expect(error).toMatchObject({ status: 409, message: 'A tracker changed while the session was resetting. Try again.' });
+  expect(repo.calls.some((c) => c.name === 'setSessionStarted')).toBe(false);
+});
+
+test('an unchanged tracker answers a poll without loading the character', async () => {
+  let loads = 0;
+  const repo = fakeRepo({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
+  const svc = new GameTableService(repo, { systemClient: SYSTEM, loadCharacter: async () => { loads += 1; return { data: null }; } });
+  expect((await svc.tracker(USER, 't1', 'm1', { sinceVersion: 3 })).data).toEqual({ unchanged: true, version: 3 });
+  expect(loads).toBe(0);
+  expect((await svc.tracker(USER, 't1', 'm1', { sinceVersion: 2 })).data.tracker.version).toBe(3);
+});
+
+test('a character that fails to load is an error, not a mechanics-only tracker', async () => {
+  const boom = { code: 'x', message: 'down' };
+  const repo = fakeRepo({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
+  const svc = new GameTableService(repo, { systemClient: SYSTEM, loadCharacter: async () => ({ data: null, error: boom }) });
+  const view = (await svc.load('t1', USER)).data;
+  expect((await svc.tracker(USER, 't1', 'm1')).error).toBe(boom);
+  expect((await svc.trackers(view, USER)).error).toBe(boom);
+  expect((await svc.act(USER, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error).toBe(boom);
+});
+
+test('an undo that loses the write race answers that someone changed it', async () => {
+  const snapshot = { stamina_threshold: 0, stamina_spent: 0, essence_threshold: 0, essence_spent: 0, use_counts: {}, cooldowns: {}, imposed_limiters: {} };
+  for (const lost of [[], { error: { code: '55P03' } }]) {
+    const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1', { essence_spent: 3, undo: snapshot }) }, updateResults: [lost] });
+    const { error } = await svc.act(CREATOR, 't1', 'g1', { type: 'undo', version: 3 }, USER_CLIENT);
+    expect(error).toMatchObject({ status: 409, message: 'Changed by Ash since — undo unavailable.' });
+  }
+});
+
+test('trackers maps each member id to a view; a seat with no state row is empty at version 0', async () => {
+  const { svc } = service({ table: TABLE, members: [guest('g1'), guest('g2')], trackerRows: { g1: row('g1', { essence_spent: 2 }) } });
+  const view = (await svc.load('t1', CREATOR)).data;
+  const { data } = await svc.trackers(view, CREATOR);
+  expect([...data.keys()]).toEqual(['g1', 'g2']);
+  expect(data.get('g1').version).toBe(3);
+  expect(data.get('g2')).toMatchObject({ version: 0 });
+  expect(data.get('g2').pools.every((p) => p.spent === 0 && p.threshold === 0)).toBe(true);
+});
+
+test('a signed-in non-manager may not act on a guest seat', async () => {
+  const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') } });
+  expect((await svc.act(USER, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error.status).toBe(403);
+});

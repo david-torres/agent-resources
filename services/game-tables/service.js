@@ -26,6 +26,8 @@ const notFound = () => ({ status: 404, code: 'not_found', message: FRIENDLY_NOT_
 const forbidden = (message) => ({ status: 403, code: 'forbidden', title: 'No access', message });
 const invalid = (message) => ({ status: 400, code: 'invalid', title: 'Invalid submission', message });
 const conflict = (message) => ({ status: 409, code: 'conflict', title: 'Changed elsewhere', message });
+const undoUnavailable = (row) => conflict(`Changed by ${row.updater?.name || 'someone else'} since \u2014 undo unavailable.`);
+const RESET_ATTEMPTS = 3;
 const tableFull = () => invalid(`A table seats at most ${PARTY_CAP}.`);
 const VERSION_CONFLICT = '55P03';
 const SEAT_CAP_VIOLATION = '23514';
@@ -102,7 +104,8 @@ class GameTableService {
 
   async trackerContext(member) {
     if (member.isGuest) return { stats: member, sources: sourcesFor(null) };
-    const { data: character } = await this.loadCharacter(member.id);
+    const { data: character, error } = await this.loadCharacter(member.id);
+    if (error) return { error };
     return { stats: member, sources: sourcesFor(character) };
   }
 
@@ -124,19 +127,25 @@ class GameTableService {
     const byMember = new Map((rows || []).map((row) => [row.member_id, row]));
     const entries = await Promise.all(view.members.map(async (member) => {
       const context = await this.trackerContext(member);
+      if (context.error) return { error: context.error };
       return [member.memberId, this.trackerViewFor(view, member, byMember.get(member.memberId), context, actor)];
     }));
+    const failed = entries.find((entry) => entry.error);
+    if (failed) return { data: null, error: failed.error };
     return { data: new Map(entries), error: undefined };
   }
 
-  async tracker(actor, tableId, memberId) {
+  async tracker(actor, tableId, memberId, { sinceVersion } = {}) {
     const loaded = await this.load(tableId, actor);
     if (loaded.error) return loaded;
     const member = loaded.data.members.find((m) => m.memberId === memberId);
     if (!member) return { data: null, error: notFound() };
     const { data: row, error } = await this.repo.getState(memberId, this.system);
     if (error) return { data: null, error };
+    const version = row?.version ?? 0;
+    if (typeof sinceVersion === 'number' && sinceVersion === version) return { data: { unchanged: true, version }, error: undefined };
     const context = await this.trackerContext(member);
+    if (context.error) return { data: null, error: context.error };
     return { data: { tracker: this.trackerViewFor(loaded.data, member, row, context, actor), member, tableId }, error: undefined };
   }
 
@@ -153,6 +162,7 @@ class GameTableService {
       return { data: null, error: forbidden('Only the Conduit imposes or lifts Limiters.') };
     }
     const context = await this.trackerContext(member);
+    if (context.error) return { data: null, error: context.error };
 
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const { data: row, error } = await this.repo.getState(memberId, this.system);
@@ -163,7 +173,7 @@ class GameTableService {
       let next;
       if (action.type === 'undo') {
         if (Number(action.version) !== row.version) {
-          return { data: null, error: conflict(`Changed by ${row.updater?.name || 'someone else'} since \u2014 undo unavailable.`) };
+          return { data: null, error: undoUnavailable(row) };
         }
         if (!row.undo) return { data: null, error: invalid('Nothing to undo.') };
         next = stateFromRow(row.undo);
@@ -196,7 +206,10 @@ class GameTableService {
           error: undefined,
         };
       }
-      if (action.type === 'undo') break;
+      if (action.type === 'undo') {
+        const { data: latest } = await this.repo.getState(memberId, this.system);
+        return { data: null, error: undoUnavailable(latest || row) };
+      }
     }
     return { data: null, error: conflict('Someone else changed this tracker at the same moment. Try again.') };
   }
@@ -208,10 +221,24 @@ class GameTableService {
     const { data: rows, error } = await this.repo.listStates(tableId, this.system);
     if (error) return { data: null, error };
     const reset = { ...stateToColumns(emptyState()), undo: null, updated_by: actor.profileId, updated_at: new Date().toISOString() };
-    for (const row of rows || []) {
-      const updated = await this.repo.updateState(row.member_id, row.version, { ...reset, version: row.version + 1 }, this.system);
-      if (updated.error) return { data: null, error: updated.error };
+    let unreset = false;
+    for (const listed of rows || []) {
+      let row = listed;
+      let done = false;
+      for (let attempt = 0; attempt < RESET_ATTEMPTS && !done; attempt += 1) {
+        if (attempt > 0) {
+          const fresh = await this.repo.getState(row.member_id, this.system);
+          if (fresh.error) return { data: null, error: fresh.error };
+          if (!fresh.data) { done = true; break; }
+          row = fresh.data;
+        }
+        const updated = await this.repo.updateState(row.member_id, row.version, { ...reset, version: row.version + 1 }, this.system);
+        if (updated.error && updated.error.code !== VERSION_CONFLICT) return { data: null, error: updated.error };
+        done = Boolean(updated.data?.length);
+      }
+      if (!done) unreset = true;
     }
+    if (unreset) return { data: null, error: conflict('A tracker changed while the session was resetting. Try again.') };
     const stamped = await this.repo.setSessionStarted(tableId, new Date().toISOString(), this.system);
     return { data: null, error: stamped.error || undefined };
   }
