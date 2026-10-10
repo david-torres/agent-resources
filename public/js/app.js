@@ -145,7 +145,7 @@ const App = (function (document, supabase, htmx) {
   const TOAST_AUTO_DISMISS_MS = 5000;
   let toastTimer = null;
 
-  const _displayNotification = (alertType, message) => {
+  const _displayNotification = (alertType, message, { action } = {}) => {
     const messageContainer = document.getElementById('alerts');
     const validTypes = ['danger', 'success', 'info', 'warning', 'primary', 'link'];
     const safeType = validTypes.includes(alertType) ? alertType : 'info';
@@ -157,6 +157,14 @@ const App = (function (document, supabase, htmx) {
     dismiss.addEventListener('click', () => notification.remove());
     notification.appendChild(dismiss);
     notification.appendChild(document.createTextNode(message));
+    if (action && action.label && typeof action.run === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button is-small is-light ml-3';
+      button.textContent = action.label;
+      button.addEventListener('click', () => { notification.remove(); action.run(); });
+      notification.appendChild(button);
+    }
     clearTimeout(toastTimer);
     toastTimer = null;
     messageContainer.innerHTML = '';
@@ -1666,6 +1674,7 @@ const App = (function (document, supabase, htmx) {
 
   return {
     init,
+    showToast: (message, { type = 'info', action } = {}) => _displayNotification(type, message, { action }),
     initTooltips: (root) => { try { _initTooltips(root); } catch (e) { /* noop */ } },
     // Tippy appends its popper to document.body, so a tooltip showing when its
     // element is replaced would stay on screen; call this before re-rendering.

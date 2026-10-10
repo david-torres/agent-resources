@@ -74,6 +74,9 @@
         {{/if}}
       </div>
     </div>
+    {{#if (lookup ../trackers this.memberId)}}
+    {{> table-tracker tracker=(lookup ../trackers this.memberId) tableId=../tableId memberId=this.memberId}}
+    {{/if}}
     <div id="member-details-{{this.memberId}}" x-show="open" x-cloak class="mt-3"></div>
   </div>
   {{/each}}

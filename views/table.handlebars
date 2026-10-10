@@ -8,13 +8,18 @@
 {{else}}
 <div class="level is-mobile mb-2 table-heading">
   <div class="level-left"><h2 class="title is-2 mb-0" data-table-name>{{table.name}}</h2></div>
-  {{#if capabilities.isCreator}}
   <div class="level-right">
+    {{#if capabilities.canManage}}
+    <button type="button" class="button is-small is-warning is-light mr-2"
+      hx-post="/tables/{{table.id}}/session"
+      hx-confirm="Start a new session? Every tracker resets to Green with nothing spent, and counts, cooldowns and Limiters clear. This cannot be undone.">New session</button>
+    {{/if}}
+    {{#if capabilities.isCreator}}
     <button type="button" class="button is-small is-danger is-light"
       hx-delete="/tables/{{table.id}}"
       hx-confirm="Delete this table? This cannot be undone.">Delete</button>
+    {{/if}}
   </div>
-  {{/if}}
 </div>
 <p class="subtitle is-6 has-text-grey">
   Created by {{table.creator.name}}{{#if table.conduit}} · Conduit: {{table.conduit.name}}{{/if}}.
@@ -31,6 +36,7 @@
 {{/if}}
 {{/if}}
 
+<div{{#unless draft}} data-table-live="{{table.id}}" data-live-mode="{{liveMode}}"{{/unless}}>
 <div class="columns">
   {{#if (or draft profile)}}
   <div class="column is-5">
@@ -81,3 +87,5 @@
     {{> table-panel}}
   </div>
 </div>
+</div>
+{{#unless draft}}<script src="/js/table-live.js" defer></script>{{/unless}}

@@ -22,7 +22,31 @@ const ownCharactersFor = async (res) => {
   return data || [];
 };
 
-const panelContext = (view, profile) => ({
+// Node rejects header values outside Latin-1, and class text is full of
+// curly apostrophes; JSON allows \u escapes for exactly this.
+const asciiJson = (value) => JSON.stringify(value).replace(/[\u007f-\uffff]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+const isParticipantView = (view, profile) =>
+  Boolean(profile) && (view.capabilities.canManage || view.members.some((m) => m.ownerId === profile.id));
+
+const actionFrom = (body = {}) => ({
+  type: String(body.type || ''),
+  pool: body.pool === undefined ? undefined : String(body.pool),
+  amount: body.amount === undefined ? undefined : String(body.amount),
+  level: body.level === undefined ? undefined : String(body.level),
+  source: body.source === undefined ? undefined : String(body.source),
+  threshold: body.threshold === undefined ? undefined : Number(body.threshold),
+  spent: body.spent === undefined ? undefined : Number(body.spent),
+  kind: body.kind === undefined ? undefined : String(body.kind),
+  rating: body.rating === undefined ? undefined : String(body.rating),
+  index: body.index === undefined ? undefined : Number(body.index),
+  version: body.version === undefined ? undefined : Number(body.version),
+});
+
+const renderTracker = (res, { tracker, tableId, member }) =>
+  res.render('partials/table-tracker', { layout: false, tracker, tableId, memberId: member.memberId });
+
+const panelContext = (view, profile, trackers) => ({
   draft: false,
   table: view.table,
   tableId: view.table.id,
@@ -32,14 +56,18 @@ const panelContext = (view, profile) => ({
   isFull: view.isFull,
   unseatedApproved: view.unseatedApproved,
   partyCap: PARTY_CAP,
+  trackers: trackers ? Object.fromEntries(trackers) : {},
   profile,
   statList,
 });
 
-const renderPanel = (res, view, { resetGuestForm = false } = {}) =>
-  res.render('partials/table-panel-update', {
-    layout: false, ...panelContext(view, res.locals.profile), resetGuestForm,
+const renderPanel = async (res, view, { resetGuestForm = false } = {}) => {
+  const { data: trackers, error } = await gameTables.trackers(view, actorFromLocals(res.locals));
+  if (error) return sendRouteError(res.req, res, error);
+  return res.render('partials/table-panel-update', {
+    layout: false, ...panelContext(view, res.locals.profile, trackers), resetGuestForm,
   });
+};
 
 const validIds = (req, res, ...names) => {
   if (names.every((name) => isValidUuid(req.params[name]))) return true;
@@ -117,8 +145,11 @@ router.get('/:id', authOptional, asyncHandler(async (req, res) => {
   if (!validIds(req, res, 'id')) return;
   const { data: view, error } = await gameTables.load(req.params.id, actorFromLocals(res.locals));
   if (error) return sendRouteError(req, res, error);
+  const { data: trackers, error: trackersError } = await gameTables.trackers(view, actorFromLocals(res.locals));
+  if (trackersError) return sendRouteError(req, res, trackersError);
   res.render('table', {
-    ...panelContext(view, res.locals.profile),
+    ...panelContext(view, res.locals.profile, trackers),
+    liveMode: isParticipantView(view, res.locals.profile) ? 'realtime' : 'poll',
     ownCharacters: await ownCharactersFor(res),
     authOptional: true,
     noindex: true,
@@ -147,21 +178,21 @@ router.post('/:id/members', isAuthenticated, asyncHandler(async (req, res) => {
   if (!isValidUuid(characterId)) return sendError(req, res, null);
   const { data, error } = await gameTables.seatCharacter(actorFromLocals(res.locals), req.params.id, characterId, res.locals.supabase);
   if (error) return sendRouteError(req, res, error);
-  renderPanel(res, data);
+  return renderPanel(res, data);
 }));
 
 router.delete('/:id/members/:memberId', isAuthenticated, asyncHandler(async (req, res) => {
   if (!validIds(req, res, 'id', 'memberId')) return;
   const { data, error } = await gameTables.removeMember(actorFromLocals(res.locals), req.params.id, req.params.memberId, res.locals.supabase);
   if (error) return sendRouteError(req, res, error);
-  renderPanel(res, data);
+  return renderPanel(res, data);
 }));
 
 router.post('/:id/guests', isAuthenticated, asyncHandler(async (req, res) => {
   if (!validIds(req, res, 'id')) return;
   const { data, error } = await gameTables.addGuest(actorFromLocals(res.locals), req.params.id, req.body, res.locals.supabase);
   if (error) return sendRouteError(req, res, error);
-  renderPanel(res, data, { resetGuestForm: true });
+  return renderPanel(res, data, { resetGuestForm: true });
 }));
 
 router.get('/:id/guests/new', isAuthenticated, asyncHandler(async (req, res) => {
@@ -180,7 +211,34 @@ router.put('/:id/members/:memberId', isAuthenticated, asyncHandler(async (req, r
   if (!validIds(req, res, 'id', 'memberId')) return;
   const { data, error } = await gameTables.editGuest(actorFromLocals(res.locals), req.params.id, req.params.memberId, req.body, res.locals.supabase);
   if (error) return sendRouteError(req, res, error);
-  renderPanel(res, data, { resetGuestForm: true });
+  return renderPanel(res, data, { resetGuestForm: true });
+}));
+
+router.get('/:id/members/:memberId/tracker', authOptional, asyncHandler(async (req, res) => {
+  if (!validIds(req, res, 'id', 'memberId')) return;
+  const sinceVersion = req.query.v === undefined ? undefined : Number(req.query.v);
+  const { data, error } = await gameTables.tracker(actorFromLocals(res.locals), req.params.id, req.params.memberId, { sinceVersion });
+  if (error) return sendRouteError(req, res, error);
+  if (data.unchanged) return res.status(204).send();
+  renderTracker(res, data);
+}));
+
+router.post('/:id/members/:memberId/actions', isAuthenticated, asyncHandler(async (req, res) => {
+  if (!validIds(req, res, 'id', 'memberId')) return;
+  const { data, error } = await gameTables.act(
+    actorFromLocals(res.locals), req.params.id, req.params.memberId, actionFrom(req.body), res.locals.supabase);
+  if (error) return sendRouteError(req, res, error);
+  res.header('HX-Trigger', asciiJson({
+    trackerActed: { memberId: data.member.memberId, actionUrl: data.tracker.actionUrl, ...data.acted },
+  }));
+  renderTracker(res, data);
+}));
+
+router.post('/:id/session', isAuthenticated, asyncHandler(async (req, res) => {
+  if (!validIds(req, res, 'id')) return;
+  const { error } = await gameTables.newSession(actorFromLocals(res.locals), req.params.id);
+  if (error) return sendRouteError(req, res, error);
+  res.header('HX-Refresh', 'true').send();
 }));
 
 // /party became the draft table; old links and bookmarks keep their roster.

@@ -1933,3 +1933,14 @@ td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }
 .table-roster strong {
   overflow-wrap: anywhere;
 }
+
+/* Live trackers: a threshold tag coloured Green→Below Red and a bar of
+   Low-cost segments. Segments shrink to fit large budgets. */
+.tracker-threshold.is-threshold-0 { background: hsl(141, 53%, 53%); color: #fff; }
+.tracker-threshold.is-threshold-1 { background: hsl(48, 100%, 67%); color: rgba(0, 0, 0, 0.7); }
+.tracker-threshold.is-threshold-2 { background: hsl(348, 86%, 61%); color: #fff; }
+.tracker-threshold.is-threshold-3 { background: hsl(0, 0%, 21%); color: #fff; }
+.tracker-bar { display: inline-flex; gap: 2px; max-width: 12rem; flex-wrap: wrap; }
+.tracker-seg { width: 0.6rem; height: 0.8rem; border-radius: 2px; background: hsl(0, 0%, 86%); }
+.tracker-seg.is-filled { background: hsl(204, 71%, 39%); }
+.tracker-source + .tracker-source { border-top: 1px solid hsl(0, 0%, 93%); }

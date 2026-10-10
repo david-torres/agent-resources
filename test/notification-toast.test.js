@@ -90,7 +90,7 @@ async function bootApp() {
   await waitFor(() => window.localStorage.getItem('authToken') === null);
   clock.manual = true;
 
-  return { window, clock };
+  return { window, clock, App };
 }
 
 function fireResponseError(window, response) {
@@ -143,5 +143,19 @@ test('a non-error toast clears itself after a few seconds', async () => {
   expect(toasts(window).length).toBe(1);
 
   clock.advance(5_000);
+  expect(toasts(window).length).toBe(0);
+});
+
+test('a toast action button runs its callback and dismisses the toast', async () => {
+  const { window, App } = await bootApp();
+  let ran = 0;
+
+  App.showToast('Mira spent Low Essence.', { action: { label: 'Undo', run: () => { ran += 1; } } });
+
+  expect(toasts(window).length).toBe(1);
+  const button = toasts(window)[0].querySelector('button:not(.delete)');
+  expect(button.textContent).toBe('Undo');
+  button.click();
+  expect(ran).toBe(1);
   expect(toasts(window).length).toBe(0);
 });

@@ -65,7 +65,7 @@ mock.module('../models/character', () => ({
 }));
 
 // Tests replace these methods; the router reaches them through the model seam.
-const fake = {};
+const fake = { trackers: async () => ({ data: new Map() }) };
 mock.module('../models/game-tables', () => ({ gameTables: fake }));
 
 // A bearer token routes authOptional down its signed-in branch; without one
@@ -347,4 +347,79 @@ test('a signed-in draft lists your own characters, private included', async () =
   const html = await (await fetch(`${baseUrl}/tables/new`, { headers: authed })).text();
   expect(html).toContain('Private Character');
   expect(html).toContain(`data-add-character="${ID[7]}"`);
+});
+
+const TRACKER = {
+  version: 5, canTrack: true, isConduit: false, actionUrl: `/tables/${TABLE_ID}/members/${MEMBER_ID}/actions`,
+  pools: [{ name: 'essence', label: 'Essence', threshold: 1, thresholdLabel: 'Yellow', spent: 2, budget: 6, approximate: false,
+    segments: [true, true, false, false, false, false], thresholdOptions: [], actionUrl: `/tables/${TABLE_ID}/members/${MEMBER_ID}/actions`, canTrack: true }],
+  sources: [],
+};
+
+test('an action renders the new tracker and announces it for the undo toast', async () => {
+  let received;
+  fake.act = async (actor, tableId, memberId, action, client) => {
+    received = { actor, tableId, memberId, action, client };
+    return { data: { tracker: TRACKER, member: { memberId: MEMBER_ID }, tableId, acted: { message: 'Mira spent Low Essence.', undoable: true, version: 5 } } };
+  };
+  const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/members/${MEMBER_ID}/actions`, {
+    method: 'POST', headers: { ...hx, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'type=spend&pool=essence&amount=Low',
+  });
+  expect(res.status).toBe(200);
+  expect(received.action).toMatchObject({ type: 'spend', pool: 'essence', amount: 'Low' });
+  expect(received.client).toBeDefined();
+  expect(await res.text()).toContain(`id="tracker-${MEMBER_ID}"`);
+  const trigger = JSON.parse(res.headers.get('HX-Trigger'));
+  expect(trigger.trackerActed).toMatchObject({ memberId: MEMBER_ID, version: 5, undoable: true });
+});
+
+test('the toast header survives a curly apostrophe', async () => {
+  fake.act = async (actor, tableId) => ({ data: { tracker: TRACKER, member: { memberId: MEMBER_ID }, tableId, acted: { message: 'Mira used Harrow\u2019s Mark.', undoable: true, version: 5 } } });
+  const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/members/${MEMBER_ID}/actions`, {
+    method: 'POST', headers: { ...hx, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'type=use&source=mechanic%3Apitch',
+  });
+  expect(res.status).toBe(200);
+  expect(JSON.parse(res.headers.get('HX-Trigger')).trackerActed.message).toBe('Mira used Harrow\u2019s Mark.');
+});
+
+test('a refused action is a toast', async () => {
+  fake.act = async () => ({ error: { status: 409, code: 'conflict', title: 'Changed elsewhere', message: 'Changed by Ash since \u2014 undo unavailable.' } });
+  const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/members/${MEMBER_ID}/actions`, {
+    method: 'POST', headers: { ...hx, 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'type=undo&version=2',
+  });
+  expect(res.status).toBe(409);
+  expect(res.headers.get('HX-Retarget')).toBe('#alerts');
+});
+
+test('polling an unchanged tracker is a 204; a changed one renders', async () => {
+  const received = [];
+  fake.tracker = async (actor, tableId, memberId, { sinceVersion } = {}) => {
+    received.push(sinceVersion);
+    if (sinceVersion === 5) return { data: { unchanged: true, version: 5 } };
+    return { data: { tracker: TRACKER, member: { memberId: MEMBER_ID }, tableId: TABLE_ID } };
+  };
+  expect((await get(`/tables/${TABLE_ID}/members/${MEMBER_ID}/tracker?v=5`)).status).toBe(204);
+  const res = await get(`/tables/${TABLE_ID}/members/${MEMBER_ID}/tracker?v=4`);
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('data-version="5"');
+  expect(received).toEqual([5, 4]);
+});
+
+test('polling a removed member is a 404', async () => {
+  fake.tracker = async () => ({ error: { status: 404, code: 'not_found', message: "We couldn't find that, or you don't have access to it." } });
+  expect((await get(`/tables/${TABLE_ID}/members/${MEMBER_ID}/tracker?v=1`)).status).toBe(404);
+});
+
+test('starting a new session refreshes the page', async () => {
+  fake.newSession = async () => ({ data: null });
+  const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/session`, { method: 'POST', headers: hx });
+  expect(res.headers.get('HX-Refresh')).toBe('true');
+});
+
+test('the table page renders each member\'s tracker', async () => {
+  fake.load = async () => ({ data: view() });
+  fake.trackers = async () => ({ data: new Map([[MEMBER_ID, TRACKER]]) });
+  const html = await (await get(`/tables/${TABLE_ID}`)).text();
+  expect(html).toContain(`id="tracker-${MEMBER_ID}"`);
+  expect(html).toContain('Yellow');
 });

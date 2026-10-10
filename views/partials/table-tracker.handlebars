@@ -1,0 +1,71 @@
+{{!-- One member's live tracker (docs/superpowers/specs/2026-10-08-game-tables-design.md §5).
+      Every button posts one action and swaps this element with the answer;
+      non-participants (and participants while Realtime is down) re-fetch it
+      every 5 seconds, which answers 204 while nothing changed. --}}
+<div id="tracker-{{memberId}}" class="table-tracker mt-2" data-tracker data-version="{{tracker.version}}"
+  hx-get="/tables/{{tableId}}/members/{{memberId}}/tracker?v={{tracker.version}}"
+  hx-trigger="every 5s [window.TableLive && window.TableLive.shouldPoll()]"
+  hx-target="this" hx-swap="outerHTML">
+  {{#each tracker.pools}}
+  <div class="tracker-pool is-flex is-align-items-center is-flex-wrap-wrap mb-1" data-pool="{{this.name}}">
+    <strong class="tracker-pool-label mr-2">{{this.label}}</strong>
+    <span class="tag tracker-threshold is-threshold-{{this.threshold}} mr-2" data-threshold="{{this.threshold}}">{{this.thresholdLabel}}</span>
+    <span class="tracker-bar mr-2" title="{{this.spent}} of {{this.budget}} Low-cost units{{#if this.approximate}} (approximate){{/if}}">{{#each this.segments}}<span class="tracker-seg{{#if this}} is-filled{{/if}}"></span>{{/each}}</span>
+    {{#if this.canTrack}}
+    <div class="buttons are-small mb-0">
+      {{#each this.spendAmounts}}
+      <button type="button" class="button" hx-post="{{../actionUrl}}" hx-vals='{"type":"spend","pool":"{{../name}}","amount":"{{this}}"}' aria-label="Spend {{this}} {{../label}}">−{{this}}</button>
+      {{/each}}
+      {{#each this.restoreAmounts}}
+      <button type="button" class="button is-light" hx-post="{{../actionUrl}}" hx-vals='{"type":"restore","pool":"{{../name}}","amount":"{{this}}"}' aria-label="Restore {{this}} {{../label}}">+{{this}}</button>
+      {{/each}}
+      <form class="is-inline-flex" hx-post="{{this.actionUrl}}">
+        <input type="hidden" name="type" value="set"><input type="hidden" name="pool" value="{{this.name}}"><input type="hidden" name="spent" value="0">
+        <div class="select is-small"><select name="threshold" aria-label="Set {{this.label}} Threshold" onchange="this.form.requestSubmit()">
+          {{#each this.thresholdOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
+        </select></div>
+      </form>
+    </div>
+    {{/if}}
+  </div>
+  {{/each}}
+
+  <details class="tracker-sources mt-1">
+    <summary class="is-size-7 has-text-link">Abilities, Signatures &amp; mechanics</summary>
+    {{#each tracker.sources}}
+    <div class="tracker-source is-flex is-align-items-center is-flex-wrap-wrap py-1" data-source="{{this.key}}">
+      <span class="mr-2"><strong>{{this.name}}</strong> <span class="has-text-grey is-size-7">{{this.kind}}</span></span>
+      {{#if this.used}}<span class="tag is-light mr-1{{#if this.heavyUse}} is-warning{{/if}}">Used ×{{this.used}} this session</span>{{/if}}
+      {{#if this.uses}}<span class="tag is-light mr-1" title="Finite Uses {{this.uses.label}}">{{this.remaining}} left</span>{{/if}}
+      {{#each this.printed}}<span class="tag is-white mr-1">{{this.label}}: {{this.value}}</span>{{/each}}
+      {{#each this.imposed}}
+      <span class="tag is-danger is-light mr-1" title="Conduit-imposed">{{this.kind}}: {{this.rating}}
+        {{#if ../isConduit}}<button type="button" class="delete is-small" hx-post="{{../actionUrl}}" hx-vals='{"type":"lift","source":"{{../key}}","index":"{{this.index}}"}' aria-label="Lift this Limiter"></button>{{/if}}
+      </span>
+      {{/each}}
+      {{#if this.canTrack}}
+      <div class="buttons are-small mb-0 ml-auto">
+        {{#if this.needsLevel}}
+        {{#each this.levels}}
+        <button type="button" class="button is-primary is-light" hx-post="{{../actionUrl}}" hx-vals='{"type":"use","source":"{{../key}}","level":"{{this}}"}'>Use ({{this}})</button>
+        {{/each}}
+        {{else}}
+        <button type="button" class="button is-primary is-light" hx-post="{{this.actionUrl}}" hx-vals='{"type":"use","source":"{{this.key}}"}'>Use</button>
+        {{/if}}
+        {{#if (or this.hasCooldown this.cooldownOn)}}
+        <button type="button" class="button{{#if this.cooldownOn}} is-warning{{/if}}" hx-post="{{this.actionUrl}}" hx-vals='{"type":"toggle_cooldown","source":"{{this.key}}"}'>{{#if this.cooldownOn}}On cooldown{{else}}Cooldown{{/if}}</button>
+        {{/if}}
+        {{#if this.isConduit}}
+        <form class="is-inline-flex" hx-post="{{this.actionUrl}}">
+          <input type="hidden" name="type" value="impose"><input type="hidden" name="source" value="{{this.key}}">
+          <div class="select is-small"><select name="kind" aria-label="Limiter kind"><option>Essence Cost</option><option>Stamina Cost</option><option>Cooldown</option></select></div>
+          <div class="select is-small"><select name="rating" aria-label="Limiter rating"><option>Low</option><option>Mid</option><option>High</option></select></div>
+          <button class="button" type="submit">Impose</button>
+        </form>
+        {{/if}}
+      </div>
+      {{/if}}
+    </div>
+    {{/each}}
+  </details>
+</div>
