@@ -229,3 +229,48 @@ test('deleting a linked LFG post keeps the table and its LFG-seated members', as
   expect(members).toHaveLength(1);
   expect(members[0]).toMatchObject({ character_id: strangerPublic, lfg_join_request_id: null });
 });
+
+test('seating a member creates its tracker state', async () => {
+  const { creator } = await setup();
+  const tableId = crypto.randomUUID();
+  await creator.client.from('game_tables').insert({ id: tableId, name: `GT state ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id });
+  created.tableIds.push(tableId);
+  await creator.client.from('game_table_members').insert({ table_id: tableId, guest_name: `State ${suffix}`, guest_stats: {} });
+  const { data: rows } = await supabaseAdmin.from('game_table_member_state').select('table_id, essence_threshold, version').eq('table_id', tableId);
+  expect(rows).toEqual([{ table_id: tableId, essence_threshold: 0, version: 0 }]);
+});
+
+test('an owner updates their seat\'s tracker; a stranger and anon cannot read or write it', async () => {
+  const { creator, player, stranger } = await setup();
+  const tableId = crypto.randomUUID();
+  await creator.client.from('game_tables').insert({ id: tableId, name: `GT state2 ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id });
+  created.tableIds.push(tableId);
+  const ownChar = await makeCharacter(player.profile.id, { isPublic: false });
+  await player.client.from('game_table_members').insert({ table_id: tableId, character_id: ownChar });
+  const { data: [member] } = await supabaseAdmin.from('game_table_members').select('id').eq('character_id', ownChar);
+
+  const mine = await player.client.from('game_table_member_state')
+    .update({ essence_spent: 3, version: 1, updated_by: player.profile.id }).eq('member_id', member.id).select('version');
+  expect(mine.data).toEqual([{ version: 1 }]);
+
+  expect((await stranger.client.from('game_table_member_state').select('member_id').eq('member_id', member.id)).data).toEqual([]);
+  expect((await anonClient.from('game_table_member_state').select('member_id').eq('member_id', member.id)).data || []).toEqual([]);
+  const theirs = await stranger.client.from('game_table_member_state').update({ essence_spent: 5 }).eq('member_id', member.id).select('version');
+  expect(theirs.data || []).toEqual([]);
+  const { data: [row] } = await supabaseAdmin.from('game_table_member_state').select('essence_spent').eq('member_id', member.id);
+  expect(row.essence_spent).toBe(3);
+});
+
+test('a tracker write cannot move its row or claim another author', async () => {
+  const { creator, player } = await setup();
+  const tableId = crypto.randomUUID();
+  await creator.client.from('game_tables').insert({ id: tableId, name: `GT state3 ${suffix}`, creator_id: creator.profile.id, conduit_id: creator.profile.id });
+  created.tableIds.push(tableId);
+  await creator.client.from('game_table_members').insert({ table_id: tableId, guest_name: `Forge ${suffix}`, guest_stats: {} });
+  const { data: [row] } = await supabaseAdmin.from('game_table_member_state').select('member_id, table_id').eq('table_id', tableId);
+  const moved = await creator.client.from('game_table_member_state').update({ table_id: crypto.randomUUID() }).eq('member_id', row.member_id);
+  expect(moved.error?.code).toBe('42501');
+  const forged = await creator.client.from('game_table_member_state')
+    .update({ updated_by: player.profile.id }).eq('member_id', row.member_id).select('member_id');
+  expect(forged.error?.code === '42501' || (forged.data || []).length === 0).toBe(true);
+});
