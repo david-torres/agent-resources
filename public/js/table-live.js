@@ -45,7 +45,18 @@ window.TableLive = window.TableLive || (function () {
       .subscribe((status) => { connected = status === 'SUBSCRIBED'; });
   };
 
+  // The client only exists once App.init has run, so this registers from scan().
+  let watchingSession = false;
+  const watchSession = () => {
+    if (watchingSession) return;
+    const client = typeof App !== 'undefined' && App.getSupabaseClient();
+    if (!client || !client.auth) return;
+    watchingSession = true;
+    client.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') stop(); });
+  };
+
   const scan = () => {
+    watchSession();
     const root = document.querySelector('[data-table-live]');
     if (root) start(root);
     else stop();
@@ -70,12 +81,6 @@ window.TableLive = window.TableLive || (function () {
     const sources = document.querySelector(`#${CSS.escape(id)} .tracker-sources`);
     if (sources) sources.open = true;
   });
-
-  const watchSession = () => {
-    const client = typeof App !== 'undefined' && App.getSupabaseClient();
-    if (client && client.auth) client.auth.onAuthStateChange((event) => { if (event === 'SIGNED_OUT') stop(); });
-  };
-  watchSession();
 
   document.addEventListener('trackerActed', (event) => {
     const detail = event.detail || {};
