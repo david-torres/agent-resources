@@ -39,12 +39,28 @@ const fakeRepo = (state) => {
     findLinkedTable: async () => ({ data: state.linked || null, error: null }),
     getPostRoster: async () => ({ data: state.roster || null, error: null }),
     listApprovedPlayers: async (postId) => { calls.push({ name: 'listApprovedPlayers', args: [postId] }); return { data: state.roster?.approved || [], error: null }; },
+    listStates: async (tableId) => { calls.push({ name: 'listStates', args: [tableId] }); return { data: Object.values(state.trackerRows || {}), error: null }; },
+    getState: async (memberId) => {
+      const found = (state.trackerRows || {})[memberId];
+      return { data: found ? { ...found, updater: { name: found.updaterName } } : null, error: null };
+    },
+    updateState: async (...args) => {
+      calls.push({ name: 'updateState', args });
+      const scripted = state.updateResults?.shift();
+      if (scripted && !Array.isArray(scripted)) return { data: null, error: scripted.error };
+      return { data: scripted ?? [{ version: args[2].version }], error: null };
+    },
+    setSessionStarted: async (...args) => { calls.push({ name: 'setSessionStarted', args }); return { data: null, error: null }; },
   };
 };
 
 const service = (state) => {
   const repo = fakeRepo(state);
-  return { repo, svc: new GameTableService(repo, { systemClient: SYSTEM, newId: () => 'new-id' }) };
+  return { repo, svc: new GameTableService(repo, {
+    systemClient: SYSTEM,
+    newId: () => 'new-id',
+    loadCharacter: async (id) => ({ data: state.characters?.[id] ?? { abilities: [], gear: [] } }),
+  }) };
 };
 
 const TABLE = { id: 't1', name: 'Friday', creator_id: 'creator', conduit_id: 'creator' };
@@ -287,4 +303,118 @@ test('sync does nothing for a post with no table', async () => {
 test('a post\'s table is found through the system client', async () => {
   const { svc } = service({ linkedTableId: 't9' });
   expect((await svc.findTableIdForPost('post1')).data).toBe('t9');
+});
+
+const row = (memberId, extra = {}) => ({
+  member_id: memberId, table_id: 't1', stamina_threshold: 0, stamina_spent: 0, essence_threshold: 0, essence_spent: 0,
+  use_counts: {}, cooldowns: {}, imposed_limiters: {}, undo: null, version: 3, updaterName: 'Ash', ...extra,
+});
+
+test('the owner or a manager may track a seat; anyone else may not', async () => {
+  const { svc } = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
+  expect((await svc.act(USER, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error).toBeUndefined();
+  expect((await svc.act(CREATOR, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error).toBeUndefined();
+  expect((await svc.act(STRANGER, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error.status).toBe(403);
+});
+
+test('a write goes through the caller\'s client, bumps the version, and saves the prior state for undo', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
+  const { data } = await svc.act(USER, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Mid' }, USER_CLIENT);
+  const [memberId, expectedVersion, patch, client] = repo.calls.find((c) => c.name === 'updateState').args;
+  expect([memberId, expectedVersion, client]).toEqual(['m1', 3, USER_CLIENT]);
+  expect(patch).toMatchObject({ essence_spent: 3, version: 4, updated_by: 'player', undo: { essence_spent: 0 } });
+  expect(data.acted).toMatchObject({ undoable: true, version: 4 });
+});
+
+test('only the Conduit imposes or lifts Limiters', async () => {
+  const conduitTable = { ...TABLE, conduit_id: 'conduit' };
+  const { svc } = service({ table: conduitTable, members: [guest('g1')], trackerRows: { g1: row('g1') } });
+  const impose = { type: 'impose', source: 'mechanic:pitch', kind: 'Cooldown', rating: 'Low' };
+  expect((await svc.act(CREATOR, 't1', 'g1', impose, USER_CLIENT)).error.status).toBe(403);
+  expect((await svc.act({ profileId: 'conduit' }, 't1', 'g1', impose, USER_CLIENT)).error).toBeUndefined();
+});
+
+test('a version conflict is retried once against the fresh row', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') }, updateResults: [[], [{ version: 4 }]] });
+  const { error } = await svc.act(CREATOR, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT);
+  expect(error).toBeUndefined();
+  expect(repo.calls.filter((c) => c.name === 'updateState')).toHaveLength(2);
+});
+
+test('a version guard rejection (55P03) is a conflict too, retried once', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') }, updateResults: [{ error: { code: '55P03' } }, [{ version: 4 }]] });
+  const { error } = await svc.act(CREATOR, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT);
+  expect(error).toBeUndefined();
+  expect(repo.calls.filter((c) => c.name === 'updateState')).toHaveLength(2);
+});
+
+test('any other write error passes through unchanged', async () => {
+  const denied = { code: '42501', message: 'Only the Conduit imposes or lifts Limiters.' };
+  const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') }, updateResults: [{ error: denied }] });
+  const { error } = await svc.act(CREATOR, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT);
+  expect(error).toBe(denied);
+});
+
+test('a second conflict gives up with a 409', async () => {
+  const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') }, updateResults: [[], []] });
+  expect((await svc.act(CREATOR, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error.status).toBe(409);
+});
+
+test('undo restores the snapshot only while nobody has changed the row since', async () => {
+  const snapshot = { stamina_threshold: 0, stamina_spent: 0, essence_threshold: 0, essence_spent: 0, use_counts: {}, cooldowns: {}, imposed_limiters: {} };
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1', { essence_spent: 3, undo: snapshot }) } });
+  const stale = await svc.act(CREATOR, 't1', 'g1', { type: 'undo', version: 2 }, USER_CLIENT);
+  expect(stale.error.status).toBe(409);
+  expect(stale.error.message).toBe('Changed by Ash since \u2014 undo unavailable.');
+  await svc.act(CREATOR, 't1', 'g1', { type: 'undo', version: 3 }, USER_CLIENT);
+  const [, , patch] = repo.calls.find((c) => c.name === 'updateState').args;
+  expect(patch).toMatchObject({ essence_spent: 0, undo: null, version: 4 });
+});
+
+test('an owner\'s undo leaves the Conduit\'s imposed Limiters as they are; the Conduit\'s undo restores them', async () => {
+  const limiter = { kind: 'Cooldown', rating: 'Low' };
+  const snapshot = { stamina_threshold: 0, stamina_spent: 0, essence_threshold: 0, essence_spent: 0, use_counts: {}, cooldowns: {}, imposed_limiters: {} };
+  const current = row('m1', { essence_spent: 3, imposed_limiters: { 'mechanic:pitch': [limiter] }, undo: snapshot });
+  const conduitTable = { ...TABLE, conduit_id: 'conduit' };
+  const { svc, repo } = service({ table: conduitTable, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: current } });
+  await svc.act(USER, 't1', 'm1', { type: 'undo', version: 3 }, USER_CLIENT);
+  const [, , ownerPatch] = repo.calls.find((c) => c.name === 'updateState').args;
+  expect(ownerPatch).toMatchObject({ essence_spent: 0, imposed_limiters: { 'mechanic:pitch': [limiter] } });
+  await svc.act({ profileId: 'conduit' }, 't1', 'm1', { type: 'undo', version: 3 }, USER_CLIENT);
+  const [, , conduitPatch] = repo.calls.filter((c) => c.name === 'updateState')[1].args;
+  expect(conduitPatch.imposed_limiters).toEqual({});
+});
+
+test('bad tracker input is a 400 naming the problem', async () => {
+  const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') } });
+  const { error } = await svc.act(CREATOR, 't1', 'g1', { type: 'spend', pool: 'mana', amount: 'Low' }, USER_CLIENT);
+  expect(error).toMatchObject({ status: 400, message: 'Unknown pool.' });
+});
+
+test('a guest tracks pools and mechanics only, budgeted from its own stats', async () => {
+  const g = { ...guest('g1'), guest_stats: { will: 2 } };
+  const { svc } = service({ table: TABLE, members: [g], trackerRows: { g1: row('g1') } });
+  const { data } = await svc.tracker(CREATOR, 't1', 'g1');
+  expect(data.tracker.sources.every((s) => s.kind === 'Mechanic')).toBe(true);
+  expect(data.tracker.pools.find((p) => p.name === 'essence').budget).toBe(9);
+});
+
+test('a seated character\'s abilities and Signatures come from its sheet', async () => {
+  const characters = { c1: { abilities: [{ id: 'a1', name: 'Bolt', meters: [{ label: 'Essence Cost', value: 'Mid' }] }], gear: [] } };
+  const { svc } = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') }, characters });
+  const { data } = await svc.tracker(USER, 't1', 'm1');
+  expect(data.tracker.sources[0]).toMatchObject({ key: 'ability:a1', name: 'Bolt', kind: 'Ability' });
+});
+
+test('a new session resets every seat through the system client; only a manager may start one', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [guest('g1'), guest('g2')], trackerRows: { g1: row('g1', { essence_spent: 2 }), g2: row('g2', { use_counts: { 'mechanic:pitch': 3 } }) } });
+  expect((await svc.newSession(USER, 't1')).error.status).toBe(403);
+  await svc.newSession(CREATOR, 't1');
+  const updates = repo.calls.filter((c) => c.name === 'updateState');
+  expect(updates).toHaveLength(2);
+  for (const [, , patch, client] of updates.map((c) => c.args)) {
+    expect(patch).toMatchObject({ essence_spent: 0, use_counts: {}, cooldowns: {}, imposed_limiters: {}, undo: null, version: 4 });
+    expect(client).toBe(SYSTEM);
+  }
+  expect(repo.calls.find((c) => c.name === 'setSessionStarted').args[2]).toBe(SYSTEM);
 });

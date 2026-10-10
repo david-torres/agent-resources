@@ -43,8 +43,15 @@ test('a private seated character shows details only to its owner', () => {
 
 test('capabilities follow creator, Conduit and admin', () => {
   const table = { creator_id: 'creator', conduit_id: 'conduit' };
-  expect(capabilitiesFor(table, { profileId: 'creator' })).toEqual({ signedIn: true, isCreator: true, canManage: true });
-  expect(capabilitiesFor(table, { profileId: 'conduit' })).toEqual({ signedIn: true, isCreator: false, canManage: true });
-  expect(capabilitiesFor(table, { profileId: 'p', role: 'admin' })).toEqual({ signedIn: true, isCreator: true, canManage: true });
-  expect(capabilitiesFor(table, { profileId: null })).toEqual({ signedIn: false, isCreator: false, canManage: false });
+  expect(capabilitiesFor(table, { profileId: 'creator' })).toEqual({ signedIn: true, isCreator: true, canManage: true, isConduit: false });
+  expect(capabilitiesFor(table, { profileId: 'conduit' })).toEqual({ signedIn: true, isCreator: false, canManage: true, isConduit: true });
+  expect(capabilitiesFor(table, { profileId: 'p', role: 'admin' })).toEqual({ signedIn: true, isCreator: true, canManage: true, isConduit: true });
+  expect(capabilitiesFor(table, { profileId: null })).toEqual({ signedIn: false, isCreator: false, canManage: false, isConduit: false });
+});
+
+test('the Conduit is the table\'s conduit_id, or an admin', () => {
+  const table = { creator_id: 'creator', conduit_id: 'conduit' };
+  expect(capabilitiesFor(table, { profileId: 'conduit' }).isConduit).toBe(true);
+  expect(capabilitiesFor(table, { profileId: 'creator' }).isConduit).toBe(false);
+  expect(capabilitiesFor(table, { profileId: 'x', role: 'admin' }).isConduit).toBe(true);
 });

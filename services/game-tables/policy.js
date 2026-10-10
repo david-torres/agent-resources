@@ -83,7 +83,8 @@ const capabilitiesFor = (table, actor) => {
   const isAdmin = actor?.role === 'admin';
   const isCreator = isAdmin || (Boolean(profileId) && table.creator_id === profileId);
   const canManage = isCreator || (Boolean(profileId) && table.conduit_id === profileId);
-  return { signedIn: Boolean(profileId), isCreator, canManage };
+  const isConduit = isAdmin || (Boolean(profileId) && table.conduit_id === profileId);
+  return { signedIn: Boolean(profileId), isCreator, canManage, isConduit };
 };
 
 module.exports = { normalizeGuestInput, normalizeTableName, toDisplayMember, capabilitiesFor, TABLE_NAME_MAX };

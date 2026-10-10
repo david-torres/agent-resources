@@ -71,4 +71,13 @@ module.exports = {
     .eq('lfg_post_id', postId).maybeSingle()),
   getPostRoster,
   listApprovedPlayers,
+  listStates: (tableId, client) => withResult(client.from('game_table_member_state').select('*').eq('table_id', tableId)),
+  getState: (memberId, client) => withResult(client.from('game_table_member_state')
+    .select('*, updater:updated_by (name)').eq('member_id', memberId).maybeSingle()),
+  // Conditional on the version the caller read; an empty result means someone
+  // else wrote first (or RLS refused the row).
+  updateState: (memberId, expectedVersion, patch, client) => withResult(client.from('game_table_member_state')
+    .update(patch).eq('member_id', memberId).eq('version', expectedVersion).select('version')),
+  setSessionStarted: (tableId, at, client) => withResult(client.from('game_tables')
+    .update({ session_started_at: at }).eq('id', tableId)),
 };

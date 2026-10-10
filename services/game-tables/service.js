@@ -11,29 +11,53 @@
 const crypto = require('crypto');
 const { summarizeParty, PARTY_CAP } = require('../../util/party-stats');
 const { FRIENDLY_NOT_FOUND } = require('../../util/http-error');
+const { applyAction, stateFromRow, stateToColumns, snapshotOf, emptyState } = require('../../util/exertion');
+const { sourcesFor } = require('../../util/source-meters');
+const { buildTrackerView } = require('./tracker-view');
 const { normalizeGuestInput, normalizeTableName, toDisplayMember, capabilitiesFor, TABLE_NAME_MAX } = require('./policy');
 
 const REQUIRED_REPOSITORY_METHODS = [
   'loadTable', 'listTables', 'insertTable', 'updateTable', 'deleteTable', 'insertMembers', 'updateMember',
   'deleteMember', 'deleteMembers', 'getCharacterSeatInfo', 'findTableIdByPostId', 'findLinkedTable', 'getPostRoster',
-  'listApprovedPlayers',
+  'listApprovedPlayers', 'listStates', 'getState', 'updateState', 'setSessionStarted',
 ];
 
 const notFound = () => ({ status: 404, code: 'not_found', message: FRIENDLY_NOT_FOUND });
 const forbidden = (message) => ({ status: 403, code: 'forbidden', title: 'No access', message });
 const invalid = (message) => ({ status: 400, code: 'invalid', title: 'Invalid submission', message });
+const conflict = (message) => ({ status: 409, code: 'conflict', title: 'Changed elsewhere', message });
 const tableFull = () => invalid(`A table seats at most ${PARTY_CAP}.`);
+const VERSION_CONFLICT = '55P03';
 const SEAT_CAP_VIOLATION = '23514';
 const UNIQUE_VIOLATION = '23505';
 const seatError = (error) => (error.code === SEAT_CAP_VIOLATION ? tableFull() : error);
 
+// The toast after an action: short, and naming what changed.
+const describeAction = (action, sources, member) => {
+  const source = sources.find((s) => s.key === action.source);
+  const who = member.name;
+  const pool = action.pool === 'essence' ? 'Essence' : 'Stamina';
+  switch (action.type) {
+    case 'use': return `${who} used ${source?.name || 'a source'}${action.level ? ` (${action.level})` : ''}.`;
+    case 'spend': return `${who} spent ${action.amount} ${pool}.`;
+    case 'restore': return `${who} restored ${action.amount === 'Threshold' ? 'a Threshold of' : action.amount} ${pool}.`;
+    case 'set': return `${who}'s ${pool} set.`;
+    case 'toggle_cooldown': return `${source?.name || 'Cooldown'} cooldown toggled.`;
+    case 'impose': return `Limiter imposed on ${source?.name || 'a source'}.`;
+    case 'lift': return `Limiter lifted from ${source?.name || 'a source'}.`;
+    case 'undo': return 'Undone.';
+    default: return 'Updated.';
+  }
+};
+
 class GameTableService {
-  constructor(repository, { systemClient, newId = () => crypto.randomUUID() } = {}) {
+  constructor(repository, { systemClient, newId = () => crypto.randomUUID(), loadCharacter = async () => ({ data: null }) } = {}) {
     const missing = REQUIRED_REPOSITORY_METHODS.filter((method) => typeof repository?.[method] !== 'function');
     if (missing.length) throw new TypeError(`GameTableService requires repository methods: ${missing.join(', ')}`);
     this.repo = repository;
     this.system = systemClient;
     this.newId = newId;
+    this.loadCharacter = loadCharacter;
   }
 
   async load(tableId, actor) {
@@ -68,6 +92,128 @@ class GameTableService {
     const { data: approved } = await this.repo.listApprovedPlayers(table.lfg_post_id, this.system);
     const seatedIds = new Set(members.filter((member) => !member.isGuest).map((member) => member.id));
     return (approved || []).filter((request) => request.character_id && !seatedIds.has(request.character_id)).length;
+  }
+
+  // Who may change a member's tracker: its character's owner, or the
+  // table's creator/Conduit (the only ones who can for a guest).
+  canTrack(capabilities, member, actor) {
+    return capabilities.canManage || (Boolean(actor?.profileId) && member.ownerId === actor.profileId);
+  }
+
+  async trackerContext(member) {
+    if (member.isGuest) return { stats: member, sources: sourcesFor(null) };
+    const { data: character } = await this.loadCharacter(member.id);
+    return { stats: member, sources: sourcesFor(character) };
+  }
+
+  trackerViewFor(view, member, row, context, actor) {
+    return buildTrackerView({
+      state: row ? stateFromRow(row) : emptyState(),
+      version: row?.version ?? 0,
+      sources: context.sources,
+      stats: context.stats,
+      canTrack: this.canTrack(view.capabilities, member, actor),
+      isConduit: view.capabilities.isConduit,
+      actionUrl: `/tables/${view.table.id}/members/${member.memberId}/actions`,
+    });
+  }
+
+  async trackers(view, actor) {
+    const { data: rows, error } = await this.repo.listStates(view.table.id, this.system);
+    if (error) return { data: null, error };
+    const byMember = new Map((rows || []).map((row) => [row.member_id, row]));
+    const entries = await Promise.all(view.members.map(async (member) => {
+      const context = await this.trackerContext(member);
+      return [member.memberId, this.trackerViewFor(view, member, byMember.get(member.memberId), context, actor)];
+    }));
+    return { data: new Map(entries), error: undefined };
+  }
+
+  async tracker(actor, tableId, memberId) {
+    const loaded = await this.load(tableId, actor);
+    if (loaded.error) return loaded;
+    const member = loaded.data.members.find((m) => m.memberId === memberId);
+    if (!member) return { data: null, error: notFound() };
+    const { data: row, error } = await this.repo.getState(memberId, this.system);
+    if (error) return { data: null, error };
+    const context = await this.trackerContext(member);
+    return { data: { tracker: this.trackerViewFor(loaded.data, member, row, context, actor), member, tableId }, error: undefined };
+  }
+
+  async act(actor, tableId, memberId, action, client) {
+    const loaded = await this.load(tableId, actor);
+    if (loaded.error) return loaded;
+    const view = loaded.data;
+    const member = view.members.find((m) => m.memberId === memberId);
+    if (!member) return { data: null, error: notFound() };
+    if (!this.canTrack(view.capabilities, member, actor)) {
+      return { data: null, error: forbidden('Only the character\'s owner or the table\'s creator or Conduit can change this tracker.') };
+    }
+    if ((action.type === 'impose' || action.type === 'lift') && !view.capabilities.isConduit) {
+      return { data: null, error: forbidden('Only the Conduit imposes or lifts Limiters.') };
+    }
+    const context = await this.trackerContext(member);
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const { data: row, error } = await this.repo.getState(memberId, this.system);
+      if (error) return { data: null, error };
+      if (!row) return { data: null, error: notFound() };
+      const current = stateFromRow(row);
+
+      let next;
+      if (action.type === 'undo') {
+        if (Number(action.version) !== row.version) {
+          return { data: null, error: conflict(`Changed by ${row.updater?.name || 'someone else'} since \u2014 undo unavailable.`) };
+        }
+        if (!row.undo) return { data: null, error: invalid('Nothing to undo.') };
+        next = stateFromRow(row.undo);
+        if (!view.capabilities.isConduit) next.imposedLimiters = current.imposedLimiters;
+      } else {
+        const result = applyAction(current, action, context);
+        if (result.error) return { data: null, error: invalid(result.error) };
+        next = result.state;
+      }
+
+      const version = row.version + 1;
+      const patch = {
+        ...stateToColumns(next),
+        undo: action.type === 'undo' ? null : snapshotOf(current),
+        version,
+        updated_by: actor.profileId,
+        updated_at: new Date().toISOString(),
+      };
+      const updated = await this.repo.updateState(memberId, row.version, patch, client);
+      if (updated.error && updated.error.code !== VERSION_CONFLICT) return { data: null, error: updated.error };
+      if (updated.data?.length) {
+        const fresh = { ...row, ...patch };
+        return {
+          data: {
+            tracker: this.trackerViewFor(view, member, fresh, context, actor),
+            member,
+            tableId,
+            acted: { message: describeAction(action, context.sources, member), undoable: action.type !== 'undo', version },
+          },
+          error: undefined,
+        };
+      }
+      if (action.type === 'undo') break;
+    }
+    return { data: null, error: conflict('Someone else changed this tracker at the same moment. Try again.') };
+  }
+
+  async newSession(actor, tableId) {
+    const loaded = await this.load(tableId, actor);
+    if (loaded.error) return loaded;
+    if (!loaded.data.capabilities.canManage) return { data: null, error: forbidden('Only the table\'s creator or Conduit can start a new session.') };
+    const { data: rows, error } = await this.repo.listStates(tableId, this.system);
+    if (error) return { data: null, error };
+    const reset = { ...stateToColumns(emptyState()), undo: null, updated_by: actor.profileId, updated_at: new Date().toISOString() };
+    for (const row of rows || []) {
+      const updated = await this.repo.updateState(row.member_id, row.version, { ...reset, version: row.version + 1 }, this.system);
+      if (updated.error) return { data: null, error: updated.error };
+    }
+    const stamped = await this.repo.setSessionStarted(tableId, new Date().toISOString(), this.system);
+    return { data: null, error: stamped.error || undefined };
   }
 
   listFor(client) {
