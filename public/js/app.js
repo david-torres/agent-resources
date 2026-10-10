@@ -1674,6 +1674,7 @@ const App = (function (document, supabase, htmx) {
 
   return {
     init,
+    getSupabaseClient: () => supabaseClient || null,
     showToast: (message, { type = 'info', action } = {}) => _displayNotification(type, message, { action }),
     initTooltips: (root) => { try { _initTooltips(root); } catch (e) { /* noop */ } },
     // Tippy appends its popper to document.body, so a tooltip showing when its

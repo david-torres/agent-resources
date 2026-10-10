@@ -105,4 +105,42 @@ test.describe('signed in', () => {
     await expect(page.locator('#table-panel')).toContainText(`Guest ${prefix}`);
     await expect(page.locator('#table-panel')).toContainText('Unregistered');
   });
+  test('trackers spend and undo with a toast, keep sources open across a swap, and a signed-out viewer polls the change', async ({ page, browser }) => {
+    await page.goto(`/tables/new?c=${alpha.id}`);
+    await page.fill('form[hx-post="/tables"] input[name="name"]', `${prefix} trackers`);
+    await page.click('form[hx-post="/tables"] button[type="submit"]');
+    await expect(page).toHaveURL(/\/tables\/[0-9a-f-]{36}$/);
+
+    await page.fill('[data-guest-form] input[name="name"]', `Tracked ${prefix}`);
+    await page.click('[data-guest-form] button[type="submit"]');
+    const guestRow = page.locator('#table-panel [data-member-id]').filter({ hasText: `Tracked ${prefix}` });
+    await expect(guestRow).toBeVisible();
+    const trackerId = await guestRow.locator('[data-tracker]').getAttribute('id');
+    const tracker = page.locator(`#${trackerId}`);
+    const essenceTag = tracker.locator('[data-pool="essence"] .tracker-threshold');
+    await expect(essenceTag).toHaveText('Green');
+
+    await tracker.getByRole('button', { name: 'Spend High Essence' }).click();
+    await expect(essenceTag).toHaveText('Yellow');
+    await expect(page.getByRole('button', { name: 'Undo' })).toBeVisible();
+    await page.getByRole('button', { name: 'Undo' }).click();
+    await expect(essenceTag).toHaveText('Green');
+
+    const sources = tracker.locator('.tracker-sources');
+    await sources.locator('summary').click();
+    await expect(sources).toHaveJSProperty('open', true);
+    await tracker.locator('[data-source="mechanic:pitch"]').getByRole('button', { name: 'Use', exact: true }).click();
+    await expect(tracker.locator('[data-source="mechanic:pitch"]')).toContainText('Used ×1');
+    await expect(tracker.locator('.tracker-sources')).toHaveJSProperty('open', true);
+
+    const viewer = await browser.newContext();
+    const viewerPage = await viewer.newPage();
+    await viewerPage.goto(page.url());
+    const viewerTag = viewerPage.locator(`#${trackerId}`).locator('[data-pool="essence"] .tracker-threshold');
+    const before = await viewerTag.textContent();
+    await tracker.getByRole('button', { name: 'Spend High Essence' }).click();
+    await expect(essenceTag).not.toHaveText(before.trim());
+    await expect(viewerTag).not.toHaveText(before.trim(), { timeout: 8000 });
+    await viewer.close();
+  });
 });
