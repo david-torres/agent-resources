@@ -5,7 +5,7 @@
 <div id="tracker-{{memberId}}" class="table-tracker mt-2" data-tracker data-version="{{tracker.version}}"
   hx-get="/tables/{{tableId}}/members/{{memberId}}/tracker?v={{tracker.version}}"
   hx-trigger="every 5s [window.TableLive && window.TableLive.shouldPoll()]"
-  hx-target="this" hx-swap="outerHTML">
+  hx-target="this" hx-swap="outerHTML" hx-sync="this:replace">
   {{#each tracker.pools}}
   <div class="tracker-pool is-flex is-align-items-center is-flex-wrap-wrap mb-1" data-pool="{{this.name}}">
     <strong class="tracker-pool-label mr-2">{{this.label}}</strong>
@@ -19,9 +19,9 @@
       {{#each this.restoreAmounts}}
       <button type="button" class="button is-light" hx-post="{{../actionUrl}}" hx-vals='{"type":"restore","pool":"{{../name}}","amount":"{{this}}"}' aria-label="Restore {{this}} {{../label}}">+{{this}}</button>
       {{/each}}
-      <form class="is-inline-flex" hx-post="{{this.actionUrl}}">
+      <form class="is-inline-flex" hx-post="{{this.actionUrl}}" hx-trigger="change">
         <input type="hidden" name="type" value="set"><input type="hidden" name="pool" value="{{this.name}}"><input type="hidden" name="spent" value="0">
-        <div class="select is-small"><select name="threshold" aria-label="Set {{this.label}} Threshold" onchange="this.form.requestSubmit()">
+        <div class="select is-small"><select name="threshold" aria-label="Set {{this.label}} Threshold">
           {{#each this.thresholdOptions}}<option value="{{this.value}}"{{#if this.selected}} selected{{/if}}>{{this.label}}</option>{{/each}}
         </select></div>
       </form>

@@ -218,6 +218,8 @@ router.get('/:id/members/:memberId/tracker', authOptional, asyncHandler(async (r
   if (!validIds(req, res, 'id', 'memberId')) return;
   const sinceVersion = req.query.v === undefined ? undefined : Number(req.query.v);
   const { data, error } = await gameTables.tracker(actorFromLocals(res.locals), req.params.id, req.params.memberId, { sinceVersion });
+  // An htmx poll of a removed member swaps in nothing, which also ends its polling.
+  if (error && error.status === 404 && req.get('HX-Request')) return res.status(200).send('');
   if (error) return sendRouteError(req, res, error);
   if (data.unchanged) return res.status(204).send();
   renderTracker(res, data);

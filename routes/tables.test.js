@@ -410,6 +410,50 @@ test('polling a removed member is a 404', async () => {
   expect((await get(`/tables/${TABLE_ID}/members/${MEMBER_ID}/tracker?v=1`)).status).toBe(404);
 });
 
+test('an htmx poll of a removed member answers an empty 200 so the swap removes the tracker', async () => {
+  fake.tracker = async () => ({ error: { status: 404, code: 'not_found', message: 'gone' } });
+  const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/members/${MEMBER_ID}/tracker?v=1`, { headers: hx });
+  expect(res.status).toBe(200);
+  expect(await res.text()).toBe('');
+});
+
+const RICH = {
+  ...TRACKER,
+  pools: [{ ...TRACKER.pools[0], spendAmounts: ['Low', 'Mid'], restoreAmounts: ['Low'], thresholdOptions: [{ value: 0, label: 'Green', selected: false }, { value: 1, label: 'Yellow', selected: true }] }],
+  sources: [{
+    key: 'ability:abc', name: 'Fire Bolt', kind: 'Ability', actionUrl: TRACKER.actionUrl, needsLevel: true, levels: ['Low', 'High'],
+    printed: [{ label: 'Cost', value: 'Low–High' }], imposed: [{ kind: 'Essence Cost', rating: 'Mid', index: 0 }],
+  }],
+};
+const renderRich = async (flags) => {
+  fake.load = async () => ({ data: view() });
+  fake.trackers = async () => ({ data: new Map([[MEMBER_ID, {
+    ...RICH, ...flags, pools: RICH.pools.map((p) => ({ ...p, canTrack: flags.canTrack })), sources: RICH.sources.map((s) => ({ ...s, ...flags })),
+  }]]) });
+  return (await get(`/tables/${TABLE_ID}`)).text();
+};
+
+test('a viewer who cannot track sees the tracker with no controls', async () => {
+  const html = await renderRich({ canTrack: false, isConduit: false });
+  expect(html).toContain('Fire Bolt');
+  expect(html).toContain('Cost: Low–High');
+  expect(html).toContain('Essence Cost: Mid');
+  expect(html).not.toContain('Spend Low Essence');
+  expect(html).not.toContain('Use (Low)');
+  expect(html).not.toContain('Limiter kind');
+  expect(html).not.toContain('Lift this Limiter');
+});
+
+test('a Conduit sees spend, per-level Use, Impose and Lift controls', async () => {
+  const html = await renderRich({ canTrack: true, isConduit: true });
+  expect(html).toContain('Spend Low Essence');
+  expect(html).toContain('Restore Low Essence');
+  expect(html).toContain('Use (Low)');
+  expect(html).toContain('Use (High)');
+  expect(html).toContain('Limiter kind');
+  expect(html).toContain('Lift this Limiter');
+});
+
 test('starting a new session refreshes the page', async () => {
   fake.newSession = async () => ({ data: null });
   const res = await fetch(`${baseUrl}/tables/${TABLE_ID}/session`, { method: 'POST', headers: hx });
