@@ -1935,7 +1935,8 @@ td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }
 }
 
 /* Live trackers: a threshold tag coloured Green→Below Red and a bar of
-   Low-cost segments. Segments shrink to fit large budgets. */
+   Low-cost segments. The bar is capped in width, so large budgets wrap onto
+   further rows. */
 .tracker-threshold.is-threshold-0 { background: hsl(141, 53%, 53%); color: #fff; }
 .tracker-threshold.is-threshold-1 { background: hsl(48, 100%, 67%); color: rgba(0, 0, 0, 0.7); }
 .tracker-threshold.is-threshold-2 { background: hsl(348, 86%, 61%); color: #fff; }

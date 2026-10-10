@@ -129,6 +129,8 @@ begin
        where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'game_table_member_state'
      ) then
     execute 'alter publication supabase_realtime add table public.game_table_member_state';
+  elsif not exists (select 1 from pg_publication where pubname = 'supabase_realtime') then
+    raise notice 'supabase_realtime publication not found; game_table_member_state is not published';
   end if;
 end
 $do$;

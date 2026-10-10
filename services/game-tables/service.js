@@ -62,7 +62,7 @@ class GameTableService {
     this.loadCharacter = loadCharacter;
   }
 
-  async load(tableId, actor) {
+  async load(tableId, actor, { withUnseated = true } = {}) {
     const { data: table, error } = await this.repo.loadTable(tableId, this.system);
     if (error) return { data: null, error };
     if (!table) return { data: null, error: notFound() };
@@ -81,7 +81,7 @@ class GameTableService {
     return {
       data: {
         table, members, summary: summarizeParty(members), capabilities, isFull: members.length >= PARTY_CAP,
-        unseatedApproved: await this.countUnseatedApproved(table, members),
+        unseatedApproved: withUnseated ? await this.countUnseatedApproved(table, members) : 0,
       },
       error: undefined,
     };
@@ -127,30 +127,40 @@ class GameTableService {
     const byMember = new Map((rows || []).map((row) => [row.member_id, row]));
     const entries = await Promise.all(view.members.map(async (member) => {
       const context = await this.trackerContext(member);
-      if (context.error) return { error: context.error };
+      if (context.error) {
+        console.error(context.error);
+        return null;
+      }
       return [member.memberId, this.trackerViewFor(view, member, byMember.get(member.memberId), context, actor)];
     }));
-    const failed = entries.find((entry) => entry.error);
-    if (failed) return { data: null, error: failed.error };
-    return { data: new Map(entries), error: undefined };
+    return { data: new Map(entries.filter(Boolean)), error: undefined };
   }
 
   async tracker(actor, tableId, memberId, { sinceVersion } = {}) {
-    const loaded = await this.load(tableId, actor);
+    let polled;
+    // An unchanged poll costs one query. A row at this table is proof the
+    // member sits here, so the table load is only for the full path.
+    if (typeof sinceVersion === 'number') {
+      polled = await this.repo.getState(memberId, this.system);
+      if (polled.error) return { data: null, error: polled.error };
+      if (!polled.data) return { data: null, error: notFound() };
+      if (polled.data.table_id === tableId && polled.data.version === sinceVersion) {
+        return { data: { unchanged: true, version: sinceVersion }, error: undefined };
+      }
+    }
+    const loaded = await this.load(tableId, actor, { withUnseated: false });
     if (loaded.error) return loaded;
     const member = loaded.data.members.find((m) => m.memberId === memberId);
     if (!member) return { data: null, error: notFound() };
-    const { data: row, error } = await this.repo.getState(memberId, this.system);
+    const { data: row, error } = polled || await this.repo.getState(memberId, this.system);
     if (error) return { data: null, error };
-    const version = row?.version ?? 0;
-    if (typeof sinceVersion === 'number' && sinceVersion === version) return { data: { unchanged: true, version }, error: undefined };
     const context = await this.trackerContext(member);
     if (context.error) return { data: null, error: context.error };
     return { data: { tracker: this.trackerViewFor(loaded.data, member, row, context, actor), member, tableId }, error: undefined };
   }
 
   async act(actor, tableId, memberId, action, client) {
-    const loaded = await this.load(tableId, actor);
+    const loaded = await this.load(tableId, actor, { withUnseated: false });
     if (loaded.error) return loaded;
     const view = loaded.data;
     const member = view.members.find((m) => m.memberId === memberId);

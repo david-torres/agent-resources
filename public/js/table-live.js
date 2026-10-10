@@ -17,9 +17,14 @@ window.TableLive = window.TableLive || (function () {
     clearTimeout(pending.get(memberId));
     pending.set(memberId, setTimeout(() => {
       const el = document.getElementById(`tracker-${memberId}`);
-      if (!el) return;
-      htmx.ajax('GET', `/tables/${tableId}/members/${memberId}/tracker?v=${el.dataset.version}`, { target: el, swap: 'outerHTML' });
+      if (!el || el.classList.contains('htmx-request') || el.querySelector('.htmx-request')) return;
+      htmx.ajax('GET', `/tables/${tableId}/members/${memberId}/tracker?v=${el.dataset.version}`, { source: el, target: el, swap: 'outerHTML' });
     }, 250));
+  };
+
+  // Unchanged trackers answer 204, so this is cheap.
+  const refreshAll = () => {
+    document.querySelectorAll('[data-tracker]').forEach((el) => refresh(el.id.replace(/^tracker-/, '')));
   };
 
   const stop = () => {
@@ -42,7 +47,11 @@ window.TableLive = window.TableLive || (function () {
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'game_table_member_state', filter: `table_id=eq.${tableId}` },
         (payload) => refresh(payload.new.member_id))
-      .subscribe((status) => { connected = status === 'SUBSCRIBED'; });
+      .subscribe((status) => {
+        const wasConnected = connected;
+        connected = status === 'SUBSCRIBED';
+        if (connected && !wasConnected) refreshAll();
+      });
   };
 
   // The client only exists once App.init has run, so this registers from scan().
@@ -64,6 +73,9 @@ window.TableLive = window.TableLive || (function () {
 
   document.addEventListener('DOMContentLoaded', scan);
   document.addEventListener('htmx:afterSettle', scan);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && tableId) refreshAll();
+  });
 
   // A tracker swap replaces its <details>; carry the open state across.
   // Bound to document: the app replaces <body> on signed-in page loads.
@@ -95,6 +107,7 @@ window.TableLive = window.TableLive || (function () {
             return;
           }
           htmx.ajax('POST', detail.actionUrl, {
+            source: document.getElementById(`tracker-${detail.memberId}`),
             target: `#tracker-${detail.memberId}`,
             swap: 'outerHTML',
             values: { type: 'undo', version: detail.version },
@@ -107,7 +120,7 @@ window.TableLive = window.TableLive || (function () {
   // A poll must not abort an in-flight action (hx-sync replaces).
   const requestInFlight = () => !!document.querySelector('[data-tracker].htmx-request, [data-tracker] .htmx-request');
 
-  return { shouldPoll: () => !connected && !requestInFlight(), scan };
+  return { shouldPoll: () => !connected && document.visibilityState === 'visible' && !requestInFlight(), scan };
 })();
 
 // On a boosted navigation this script runs long after DOMContentLoaded, and

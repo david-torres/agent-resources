@@ -433,22 +433,42 @@ test('a seat that never resets gives a 409 and the session is not stamped', asyn
   expect(repo.calls.some((c) => c.name === 'setSessionStarted')).toBe(false);
 });
 
-test('an unchanged tracker answers a poll without loading the character', async () => {
+test('an unchanged tracker poll is one state read: no table or character load', async () => {
   let loads = 0;
   const repo = fakeRepo({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
   const svc = new GameTableService(repo, { systemClient: SYSTEM, loadCharacter: async () => { loads += 1; return { data: null }; } });
+  const calls = [];
+  for (const name of Object.keys(repo)) {
+    const original = repo[name];
+    repo[name] = (...args) => { calls.push(name); return original(...args); };
+  }
   expect((await svc.tracker(USER, 't1', 'm1', { sinceVersion: 3 })).data).toEqual({ unchanged: true, version: 3 });
+  expect(calls).toEqual(['getState']);
   expect(loads).toBe(0);
   expect((await svc.tracker(USER, 't1', 'm1', { sinceVersion: 2 })).data.tracker.version).toBe(3);
 });
 
-test('a character that fails to load is an error, not a mechanics-only tracker', async () => {
+test('a poll for a member with no state row is not found', async () => {
+  const { svc } = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: {} });
+  expect((await svc.tracker(USER, 't1', 'm1', { sinceVersion: 0 })).error).toMatchObject({ status: 404 });
+});
+
+test('a state row belonging to another table never short-circuits a poll', async () => {
+  const { svc } = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1'), x9: row('x9', { table_id: 't2' }) } });
+  expect((await svc.tracker(USER, 't1', 'x9', { sinceVersion: 3 })).error).toMatchObject({ status: 404 });
+  const mismatched = service({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1', { table_id: 't2' }) } });
+  expect((await mismatched.svc.tracker(USER, 't1', 'm1', { sinceVersion: 3 })).data.tracker).toBeDefined();
+});
+
+test('a character that fails to load is an error for one tracker and an omission for the page', async () => {
   const boom = { code: 'x', message: 'down' };
   const repo = fakeRepo({ table: TABLE, members: [seat('m1', 'c1', 'player')], trackerRows: { m1: row('m1') } });
   const svc = new GameTableService(repo, { systemClient: SYSTEM, loadCharacter: async () => ({ data: null, error: boom }) });
   const view = (await svc.load('t1', USER)).data;
   expect((await svc.tracker(USER, 't1', 'm1')).error).toBe(boom);
-  expect((await svc.trackers(view, USER)).error).toBe(boom);
+  const omitted = await svc.trackers(view, USER);
+  expect(omitted.error).toBeUndefined();
+  expect(omitted.data.has('m1')).toBe(false);
   expect((await svc.act(USER, 't1', 'm1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error).toBe(boom);
 });
 
