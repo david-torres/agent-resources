@@ -78,14 +78,15 @@ const costFor = (options, level) => {
   return { units: COST_UNITS[level] };
 };
 
-const applyAction = (current, action = {}, { stats = {}, sources = [] } = {}) => {
+const applyAction = (current, requested, { stats = {}, sources = [] } = {}) => {
+  const action = requested ?? {};
   const state = structuredClone(current);
   const budgets = {
     stamina: budgetFor(stats[POOL_STAT.stamina]).budget,
     essence: budgetFor(stats[POOL_STAT.essence]).budget,
   };
   const sourceFor = (key) => sources.find((s) => s.key === key);
-  const needPool = () => (POOL_STAT[action.pool] ? null : 'Unknown pool.');
+  const needPool = () => (Object.hasOwn(POOL_STAT, action.pool) ? null : 'Unknown pool.');
 
   switch (action.type) {
     case 'spend':
@@ -93,7 +94,7 @@ const applyAction = (current, action = {}, { stats = {}, sources = [] } = {}) =>
       const poolError = needPool();
       if (poolError) return { error: poolError };
       const restoringThreshold = action.type === 'restore' && action.amount === 'Threshold';
-      if (!restoringThreshold && !COST_UNITS[action.amount]) return { error: 'Pick Low, Mid or High.' };
+      if (!restoringThreshold && !Object.hasOwn(COST_UNITS, action.amount)) return { error: 'Pick Low, Mid or High.' };
       const units = restoringThreshold ? budgets[action.pool] : COST_UNITS[action.amount];
       const move = action.type === 'spend' ? spendUnits : restoreUnits;
       state[action.pool] = move(state[action.pool], units, budgets[action.pool]);
@@ -133,13 +134,14 @@ const applyAction = (current, action = {}, { stats = {}, sources = [] } = {}) =>
     case 'impose': {
       const source = sourceFor(action.source);
       if (!source) return { error: 'That source is not on this sheet.' };
-      if (!(action.kind in IMPOSABLE)) return { error: 'Pick a Limiter kind.' };
+      if (!Object.hasOwn(IMPOSABLE, action.kind)) return { error: 'Pick a Limiter kind.' };
       if (!LEVELS.includes(action.rating)) return { error: 'Pick Low, Mid or High.' };
       state.imposedLimiters[source.key] = [...(state.imposedLimiters[source.key] || []), { kind: action.kind, rating: action.rating }];
       return { state };
     }
     case 'lift': {
-      const list = state.imposedLimiters[action.source] || [];
+      const held = Object.hasOwn(state.imposedLimiters, action.source) ? state.imposedLimiters[action.source] : null;
+      const list = Array.isArray(held) ? held : [];
       const index = Number(action.index);
       if (!Number.isInteger(index) || index < 0 || index >= list.length) return { error: 'That Limiter is already gone.' };
       list.splice(index, 1);

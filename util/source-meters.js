@@ -27,7 +27,7 @@ const parseUses = (value) => {
   const label = String(value ?? '').trim();
   const counted = label.match(/^(\d+)(?:\s*[–-]\s*(\d+))?x$/);
   if (counted) return { label, max: Number(counted[2] ?? counted[1]) };
-  if (USES_APPROX[label]) return { label, approx: USES_APPROX[label] };
+  if (Object.hasOwn(USES_APPROX, label)) return { label, approx: USES_APPROX[label] };
   return null;
 };
 

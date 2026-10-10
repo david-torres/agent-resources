@@ -94,3 +94,24 @@ test('state round-trips through table columns, and a snapshot holds no undo of i
   expect(stateFromRow({ ...columns, undo: { x: 1 }, version: 4 })).toEqual(state);
   expect(snapshotOf(state)).toEqual(columns);
 });
+
+test('names that exist on every object are not pools, amounts, kinds or sources', () => {
+  const before = emptyState();
+  const errorOf = (action) => {
+    const result = applyAction(before, action, ctx());
+    expect(result.state).toBeUndefined();
+    return result.error;
+  };
+  expect(errorOf({ type: 'spend', pool: 'constructor', amount: 'Low' })).toBe('Unknown pool.');
+  expect(errorOf({ type: 'spend', pool: 'essence', amount: 'toString' })).toBe('Pick Low, Mid or High.');
+  expect(errorOf({ type: 'restore', pool: 'essence', amount: 'constructor' })).toBe('Pick Low, Mid or High.');
+  expect(errorOf({ type: 'impose', source: 'mechanic:pitch', kind: 'toString', rating: 'Low' })).toBe('Pick a Limiter kind.');
+  expect(errorOf({ type: 'lift', source: '__proto__', index: 0 })).toBe('That Limiter is already gone.');
+  expect(errorOf({ type: 'lift', source: 'constructor', index: 0 })).toBe('That Limiter is already gone.');
+  expect(before).toEqual(emptyState());
+});
+
+test('a missing action is an unknown action, not a crash', () => {
+  expect(applyAction(emptyState(), null, ctx()).error).toBe('Unknown action.');
+  expect(applyAction(emptyState(), undefined, ctx()).error).toBe('Unknown action.');
+});

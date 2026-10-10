@@ -47,3 +47,7 @@ test('sources list abilities, then Signatures, then the fixed mechanics', () => 
   expect(sources.slice(2).map((s) => s.key)).toEqual(MECHANICS.map(([slug]) => `mechanic:${slug}`));
   expect(sourcesFor(null).every((s) => s.kind === 'Mechanic')).toBe(true);
 });
+
+test('an inherited object name is not a uses rating', () => {
+  expect(parseUses('toString')).toBeNull();
+});
