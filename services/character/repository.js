@@ -72,6 +72,34 @@ const getCharacterGear = async (id, client = supabase) => {
   return { data: mergedGear, error: null };
 };
 
+const findClassAbility = (cls, row) => {
+  const core = cls?.abilities;
+  const advanced = cls?.advanced_abilities;
+  const byName = (list) => list?.find(entry => entry && nameKey(entry.name) === nameKey(row.name));
+  if (row.type === 'advanced') {
+    return byName(advanced) || null;
+  }
+  if (row.type === 'core') {
+    return byName(core) || null;
+  }
+  // Legacy rows without a type: prefer core, but fall back to advanced.
+  return byName(core) || byName(advanced) || null;
+};
+
+const mergeCharacterAbilities = (abilities, classes) => abilities.map((row) => {
+  const cls = classes?.find(c => c.id === row.class_id);
+  const match = findClassAbility(cls, row);
+  if (!match) return row;
+  const merged = { ...match, ...row };
+  // If the stored row never captured the class description (older rows or
+  // advanced abilities saved before the lookup map included them), use the
+  // class-authored text for tooltips.
+  if ((merged.description == null || merged.description === '') && match.description) {
+    merged.description = match.description;
+  }
+  return merged;
+});
+
 const getCharacterAbilities = async (id, client = supabase) => {
   const { data: abilities, error: abilitiesError } = await supabaseAdmin
     .from('class_abilities')
@@ -93,14 +121,14 @@ const getCharacterAbilities = async (id, client = supabase) => {
 
   const { data: classes, error: classesError } = await client
     .from('classes')
-    .select('id, name, abilities')
+    .select('id, name, abilities, advanced_abilities')
     .in('id', classIds);
 
   if (classesError) {
     return { data: abilities, error: null };
   }
 
-  const mergedAbilities = mergeClassItems(abilities, classes, 'abilities');
+  const mergedAbilities = mergeCharacterAbilities(abilities, classes);
 
   return { data: mergedAbilities, error: null };
 };
@@ -397,6 +425,7 @@ module.exports = {
   getCharacterAbilities,
   getCharacterAbilityPerks,
   mergeClassItems,
+  mergeCharacterAbilities,
 
   // Agent-search reads.
   searchCharactersForAgent,

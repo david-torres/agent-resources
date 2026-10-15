@@ -1,5 +1,5 @@
 const { test, expect } = require('bun:test');
-const { mergeClassItems } = require('./repository');
+const { mergeClassItems, mergeCharacterAbilities } = require('./repository');
 
 test('merges a class item description despite a whitespace mismatch', () => {
   const classes = [{ id: 'c1', gear: [{ name: 'Training Weights ', description: 'Heavy.' }] }];
@@ -27,6 +27,34 @@ test('the character row wins over the class JSONB on a shared key', () => {
   const rows = [{ name: 'Training Weights', description: 'Custom description', class_id: 'c1', character_id: 'ch1' }];
   const [merged] = mergeClassItems(rows, classes, 'gear');
   expect(merged.description).toBe('Custom description');
+});
+
+test('merges an advanced ability from the advanced_abilities list', () => {
+  const classes = [{ id: 'c1', abilities: [{ name: 'Core Shot', description: 'Core.' }], advanced_abilities: [{ name: 'Private Reality', description: 'Advanced.' }] }];
+  const rows = [{ name: 'Private Reality', class_id: 'c1', character_id: 'ch1', type: 'advanced' }];
+  const [merged] = mergeCharacterAbilities(rows, classes);
+  expect(merged.description).toBe('Advanced.');
+});
+
+test('merges a core ability from the abilities list when type is core', () => {
+  const classes = [{ id: 'c1', abilities: [{ name: 'Core Shot', description: 'Core.' }], advanced_abilities: [{ name: 'Private Reality', description: 'Advanced.' }] }];
+  const rows = [{ name: 'Core Shot', class_id: 'c1', character_id: 'ch1', type: 'core' }];
+  const [merged] = mergeCharacterAbilities(rows, classes);
+  expect(merged.description).toBe('Core.');
+});
+
+test('falls back to either class list when ability type is missing', () => {
+  const classes = [{ id: 'c1', abilities: [], advanced_abilities: [{ name: 'Seeing is Believing', description: 'Fallback.' }] }];
+  const rows = [{ name: 'Seeing is Believing', class_id: 'c1', character_id: 'ch1' }];
+  const [merged] = mergeCharacterAbilities(rows, classes);
+  expect(merged.description).toBe('Fallback.');
+});
+
+test('fills a null stored description from the class list for an advanced ability', () => {
+  const classes = [{ id: 'c1', abilities: [], advanced_abilities: [{ name: 'Private Reality', description: 'Class text.' }] }];
+  const rows = [{ name: 'Private Reality', class_id: 'c1', character_id: 'ch1', type: 'advanced', description: null }];
+  const [merged] = mergeCharacterAbilities(rows, classes);
+  expect(merged.description).toBe('Class text.');
 });
 
 const { getClassRules } = require('./repository');
