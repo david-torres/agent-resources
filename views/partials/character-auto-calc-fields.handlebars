@@ -6,7 +6,9 @@
         <div class="control">
           <input class="input" type="number" name="level" id="char-level" placeholder="Level"
             value="{{#if autoCalculate}}{{derived.level}}{{else}}{{#if character.level}}{{character.level}}{{else}}1{{/if}}{{/if}}"
-            {{#if fieldsProgress.targetLevel}}
+            {{#if autoCalculate}}disabled{{/if}} required min="1" max="10">
+        </div>
+        {{#if fieldsProgress.targetLevel}}
           <p class="help">
             Need {{fieldsProgress.remainingMissions}} more completed missions to reach level {{fieldsProgress.targetLevel}}.
           </p>

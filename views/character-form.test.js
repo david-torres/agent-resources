@@ -813,3 +813,35 @@ test('legacy characters without a class ID still select their class by name', ()
   const { JSDOM } = require('jsdom');
   expect(new JSDOM(html).window.document.getElementById('char-class-id').value).toBe('gunslinger');
 });
+
+test('Aspiring edit shows the invented class rather than selecting a roster class', () => {
+  const { JSDOM } = require('jsdom');
+  const doc = new JSDOM(renderCharacterForm({
+    character: { creator_mode: 'aspiring', class_id: null, class: 'Cloud Weaver', pseudo_class_tagline: 'Threads of sky' },
+    context: { adventV1Classes: [{ id: 'first', name: 'First Class' }] }
+  })).window.document;
+  expect(doc.getElementById('char-aspiring-class').value).toBe('Cloud Weaver');
+  expect(doc.getElementById('char-class-id')).toBeNull();
+  expect(doc.body.textContent).toContain('Threads of sky');
+});
+
+test('replacing auto-calculated fields preserves the rest of the edit form', () => {
+  const { JSDOM } = require('jsdom');
+  const hb = Handlebars.create();
+  const template = hb.compile(fs.readFileSync(path.join(__dirname, 'partials/character-auto-calc-fields.handlebars'), 'utf8'));
+  const doc = new JSDOM(renderCharacterForm({ character: { level: 2 }, context: { fieldsProgress: { targetLevel: 3, remainingMissions: 2 } } })).window.document;
+  const form = doc.querySelector('form');
+  const submit = form.querySelector('[type="submit"]');
+  expect(submit).not.toBeNull();
+  expect(doc.getElementById('auto-calc-fields').contains(submit)).toBe(false);
+  for (const on of [true, false]) {
+    doc.getElementById('auto-calc-fields').outerHTML = template({
+      character: { level: 2 }, derived: { level: 3 }, autoCalculate: on,
+      fieldsProgress: { targetLevel: 4, remainingMissions: 1 }
+    });
+    expect(form.contains(submit)).toBe(true);
+    expect(doc.getElementById('char-level').value).toBe(on ? '3' : '2');
+    expect(doc.getElementById('char-level').disabled).toBe(on);
+    expect(doc.getElementById('auto-calc-fields').querySelectorAll('input').length).toBe(3);
+  }
+});

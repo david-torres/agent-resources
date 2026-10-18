@@ -22,6 +22,15 @@
     </div>
   </div>
 
+  {{#if (eq character.creator_mode 'aspiring')}}
+  <div class="field">
+    <label class="label" for="char-aspiring-class">Class</label>
+    <div class="control">
+      <input class="input" id="char-aspiring-class" value="{{character.class}}" readonly>
+    </div>
+    {{#if character.pseudo_class_tagline}}<p class="help">{{character.pseudo_class_tagline}}</p>{{/if}}
+  </div>
+  {{else}}
   <div class="field">
     <label class="label" for="char-class-id">Class</label>
     <div class="control">
@@ -97,6 +106,8 @@
     <p class="help">Outdated classes are ones you've unlocked a newer version of, including Advent classes that now have an Aspirant version.</p>
     {{/if}}
   </div>
+
+  {{/if}}
 
   {{#if upgradeTargets.length}}
   <div class="notification is-info is-light">
