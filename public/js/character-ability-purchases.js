@@ -226,9 +226,10 @@
           + (canBuy(entry) ? '' : ' disabled')
           + ' data-ability-buy data-ability-name="' + esc(entry.name) + '"'
           + ' data-ability-class="' + esc(entry.class_id || '') + '">Buy</button>';
-      return '<div class="box mb-2" data-ability-entry'
+      return '<div class="box mb-2 shop-preview" tabindex="0" data-ability-entry'
         + ' data-ability-name="' + esc(entry.name) + '"'
         + ' data-ability-class="' + esc(entry.class_id || '') + '">'
+        + '<div class="shop-preview-tooltip content" role="tooltip">' + (entry.description_html || 'No description available.') + '</div>'
         + '<p><strong>' + esc(entry.name) + '</strong>' + origin + priceTag + '</p>'
         + '<p class="control mt-2">' + button + '</p>'
         + '</div>';

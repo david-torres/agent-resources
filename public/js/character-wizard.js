@@ -2042,7 +2042,9 @@ window.CharacterWizard = (function () {
     const entries = [];
     const push = (cls, a, type) => {
       if (!a || !a.name) return;
-      entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, type: type, crossClass: !isOwnClass(cls.id) });
+      const htmlRows = type === 'advanced' ? cls.advanced_abilities_html : cls.abilities_html;
+      const html = (htmlRows || []).find(row => row.name === a.name);
+      entries.push({ classId: cls.id, className: cls.name || '', abilityName: a.name, description_html: a.description_html || (html && html.description_html) || '', type: type, crossClass: !isOwnClass(cls.id) });
     };
     if (own) (own.advanced_abilities || []).forEach((a) => push(own, a, 'advanced'));
     shopClassesFor(s).forEach((cls) => {
@@ -2083,7 +2085,8 @@ window.CharacterWizard = (function () {
           +   'Buy'
           + '</button>';
       return ''
-        + '<div class="card mb-3">'
+        + '<div class="card mb-3 shop-preview" tabindex="0">'
+        +   '<div class="shop-preview-tooltip content" role="tooltip">' + (entry.description_html || 'No description available.') + '</div>'
         +   '<div class="card-content">'
         +     '<div class="content">'
         +       '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-2">'
@@ -2368,7 +2371,8 @@ window.CharacterWizard = (function () {
         return !usedClassIds.has(o.classId);
       });
       const optionLis = visibleOptions.map((o) => {
-        return '<li role="option" data-class-id="' + esc(o.classId) + '" data-item-name="' + esc(o.name) + '" data-type="' + esc(o.type || 'gear') + '" data-description="' + esc(o.description || '') + '">'
+        return '<li role="option" data-class-id="' + esc(o.classId) + '" data-item-name="' + esc(o.name) + '" data-type="' + esc(o.type || 'gear') + '" data-description="' + esc(o.description || '') + '" class="shop-preview" tabindex="0">'
+          + '<div class="shop-preview-tooltip content" role="tooltip">' + (o.description || 'No description available.') + '</div>'
           + '<span class="toggler-option-class">' + esc(o.className) + '</span>'
           + '<span class="toggler-option-sep"> · </span>'
           + '<span class="toggler-option-item">' + esc(o.name) + '</span>'
@@ -3428,7 +3432,7 @@ window.CharacterWizard = (function () {
         // The same Merx gate pickShopItem enforces decides whether this card
         // can still be clicked.
         const canAfford = affordsChange(it.cost);
-        const cardCls = 'card mb-2 gear-shop-item' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
+        const cardCls = 'card mb-2 gear-shop-item shop-preview' + (picked ? ' is-picked' : '') + (canAfford ? '' : ' is-disabled');
         const removable = removablePicks(it.key);
         const removeCtl = removable
           ? ' <a class="gear-remove has-text-danger ml-2" data-shop-remove="' + esc(it.key) + '">Remove</a>'
@@ -3455,7 +3459,8 @@ window.CharacterWizard = (function () {
           originTag = '<span class="tag is-light mr-1">' + esc(it.origin_class_name) + '</span>';
         }
         return ''
-          + '<div class="' + cardCls + '" data-shop-key="' + esc(it.key) + '">'
+          + '<div class="' + cardCls + '" tabindex="0" data-shop-key="' + esc(it.key) + '">'
+          +   '<div class="shop-preview-tooltip content" role="tooltip">' + (it.description_html || 'No description available.') + '</div>'
           +   '<div class="card-content p-3">'
           +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
           +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'
@@ -3491,6 +3496,7 @@ window.CharacterWizard = (function () {
         if (!it || !it.custom) return '';
         return ''
           + '<div class="card mb-2 gear-shop-item is-picked">'
+          +   '<div class="shop-preview-tooltip content" role="tooltip">' + (it.description_html || 'No description available.') + '</div>'
           +   '<div class="card-content p-3">'
           +     '<div class="is-flex is-justify-content-space-between is-align-items-flex-start mb-1">'
           +       '<h5 class="title is-6 mb-0">' + esc(it.name) + '</h5>'

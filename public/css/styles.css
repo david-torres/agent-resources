@@ -1909,3 +1909,33 @@ a.dropdown-item:hover {
     max-width: none;
   }
 }
+
+/* Preview shop choices with a pointer or keyboard before buying. */
+.shop-preview { position: relative; }
+.shop-preview-tooltip {
+  display: none;
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 0.25rem);
+  z-index: 50;
+  width: min(28rem, 85vw);
+  max-height: 18rem;
+  overflow: auto;
+  padding: 0.85rem;
+  border: 1px solid var(--bulma-border, #ddd);
+  border-radius: 6px;
+  background: var(--bulma-scheme-main, white);
+  color: var(--bulma-text, #363636);
+  box-shadow: 0 4px 16px #0003;
+  font-size: 0.875rem;
+  font-weight: normal;
+}
+.shop-preview:hover > .shop-preview-tooltip,
+.shop-preview:focus-within > .shop-preview-tooltip { display: block; }
+
+/* Keep previews inside the scrolling option list. */
+li.shop-preview > .shop-preview-tooltip {
+  position: static;
+  width: auto;
+  margin: 0.25rem 0;
+}

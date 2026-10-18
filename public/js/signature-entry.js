@@ -300,7 +300,8 @@
     var placement = '';
     if (entry.column != null) placement += ' data-column="' + entry.column + '"';
     if (entry.position != null) placement += ' data-position="' + entry.position + '"';
-    parts.push('<div class="entry"' + placement + '>');
+    parts.push('<div class="entry shop-preview" tabindex="0"' + placement + '>');
+    if (!owned) parts.push('<div class="shop-preview-tooltip content" role="tooltip">' + (entry.description_html || 'No description available.') + (entry.notes_html || '') + '</div>');
     parts.push('<div class="entry-header">');
     parts.push('<span class="entry-name">' + escapeHtml(entry.name) + '</span>');
     if (!readOnly) parts.push(priceTag(figures.prices.signature[t]));

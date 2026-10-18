@@ -330,7 +330,7 @@ const wizardClassGear = (c) => (Array.isArray(c.gear)
       notes_html: renderNotes(g.notes),
       column: g.column || null,
       position: g.position || null,
-      default_enchantment: g.default_enchantment || null,
+      default_enchantment: g.default_enchantment ? { ...g.default_enchantment, description_html: renderMarkdown(g.default_enchantment.description || '') } : null,
       subtype: idx < ADVENT_DEFAULT_SIGNATURES ? 'base' : 'elective'
     }))
   : []);
@@ -439,8 +439,8 @@ router.get('/wizard', isAuthenticated, asyncHandler(async (req, res) => {
         name: c.name,
         lineage_id: c.lineage_id,
         class_gear: wizardClassGear(c),
-        abilities: c.abilities,
-        advanced_abilities: c.advanced_abilities
+        abilities: (c.abilities || []).map(a => ({ ...a, description_html: renderMarkdown(a.description || '') })),
+        advanced_abilities: (c.advanced_abilities || []).map(a => ({ ...a, description_html: renderMarkdown(a.description || '') }))
       }))
     : wizardClasses;
 

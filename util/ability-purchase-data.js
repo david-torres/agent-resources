@@ -8,6 +8,7 @@
 //
 // It is built from data the edit GET already holds: the character, its
 // class, and every class the player has unlocked. Nothing here queries.
+const { renderMarkdown } = require('./markdown');
 const { perkFigures, priceOfAbility } = require('./perk-economy');
 const { tagAbilities } = require('./character-derived');
 const { normalizeLevel } = require('./stat-caps');
@@ -23,6 +24,7 @@ const toRow = (item, classId, className, type) => ({
   name: (item && item.name) || '',
   class_id: classId || null,
   class_name: className || '',
+  description_html: renderMarkdown(item && item.description || ''),
   type: type === 'advanced' ? 'advanced' : 'core'
 });
 

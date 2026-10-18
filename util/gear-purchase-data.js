@@ -34,7 +34,7 @@ const toEntry = (item, classId, className) => ({
   notes_html: renderNotes(item.notes),
   column: item.column || null,
   position: item.position || null,
-  default_enchantment: item.default_enchantment || null
+  default_enchantment: item.default_enchantment ? { ...item.default_enchantment, description_html: renderMarkdown(item.default_enchantment.description || '') } : null
 });
 
 // What the grid offers: every Signature the character's class prints (its

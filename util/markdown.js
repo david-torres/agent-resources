@@ -7,7 +7,7 @@ const markedInstance = new Marked({
 });
 
 const allowedTags = sanitizeHtml.defaults.allowedTags.concat([
-  'img', 'h1', 'h2'
+  'img', 'h1', 'h2', 'sup'
 ]);
 
 const allowedAttributes = {
