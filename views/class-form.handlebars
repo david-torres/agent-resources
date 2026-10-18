@@ -194,6 +194,15 @@
       Public (visible to everyone)
     </label>
   </div>
+  {{#if (eq profile.role 'admin')}}
+  <div class="field">
+    <label class="checkbox">
+      <input type="checkbox" name="free_play_access" {{#if class.free_play_access}}checked{{/if}}>
+      Free pre-release access (unlocked for everyone)
+    </label>
+    <p class="help">Lets every user access this class without an individual unlock. The class must also be public to appear in the catalog.</p>
+  </div>
+  {{/if}}
   <div class="field">
     <label class="label" for="class-tips-heading">Tips Heading</label>
     <div class="control">

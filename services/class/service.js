@@ -1,7 +1,7 @@
 const { assertPublishedClassRules } = require("../../util/character-rules");
 const { normalizeClassInput } = require('./input');
 const { AuthorizationError } = require('../../util/errors');
-const { isSystem } = require('../../util/actor');
+const { isAdmin, isSystem } = require('../../util/actor');
 const { canManageClass, canMintUnlockCodes } = require('./policy');
 const { findItemNameConflicts, ITEM_FIELDS } = require('./item-uniqueness');
 
@@ -46,6 +46,7 @@ class ClassService {
   async createClass(actor, input) {
     const created_by = isSystem(actor) ? (input?.created_by ?? null) : (actor?.profileId ?? null);
     const data = normalizeClassInput({ rules_edition: "advent", rules_version: "v1", ...input, created_by });
+    if (!isAdmin(actor) && !isSystem(actor)) delete data.free_play_access;
     try { assertPublishedClassRules(data); } catch (error) { return { data: null, error }; }
     if (carriesItems(data)) {
       const conflict = await itemConflictError(this.repo, { ...data, id: null });
@@ -58,6 +59,7 @@ class ClassService {
     const { existing, error } = await requireManageable(this.repo, actor, id);
     if (error) return { data: null, error };
     const data = normalizeClassInput(input);
+    if (!isAdmin(actor) && !isSystem(actor)) delete data.free_play_access;
     if (Object.hasOwn(data, "rules_edition") || Object.hasOwn(data, "rules_version")) {
       try { assertPublishedClassRules({ ...existing, ...data }); } catch (error) { return { data: null, error }; }
     }

@@ -73,13 +73,11 @@ const parseStatSpread = (body) => {
     return spread;
 };
 
-// Curation and provenance, not player-editable metadata: prerelease_section
-// records which section of the source document a class was printed under, and
-// designer credits its author. The form hides all three from non-admins, so the
-// handlers drop them rather than trust them. Deleting rather than nulling gives
-// the same asymmetry is_player_created already has -- create takes the column
-// default, update leaves whatever an admin set.
-const ADMIN_ONLY_FIELDS = ['challenge_level', 'prerelease_section', 'designer'];
+// Curation, provenance, and access controls are admin-only. The form hides
+// these fields from non-admins, so handlers drop them rather than trust them.
+// Deleting rather than nulling preserves the create default and leaves existing
+// values unchanged on update.
+const ADMIN_ONLY_FIELDS = ['challenge_level', 'prerelease_section', 'designer', 'free_play_access'];
 
 // The flat ability_name[] / ability_description[] path is gone, but a browser
 // holding the previous version of the form still posts those names. req.body
@@ -732,6 +730,9 @@ router.post('/', isAuthenticated, upload.single('class_pdf'), asyncHandler(async
     // Enforce class type: only admins may set/override is_player_created
     const isAdmin = profile?.role === 'admin';
     if (isAdmin) {
+        req.body.free_play_access = req.body.free_play_access === 'on';
+    }
+    if (isAdmin) {
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
@@ -805,6 +806,7 @@ router.put('/:id', isAuthenticated, upload.single('class_pdf'), asyncHandler(asy
     // Enforce class type: only admins may change is_player_created
     const isAdmin = res.locals.profile?.role === 'admin';
     if (isAdmin) {
+        req.body.free_play_access = req.body.free_play_access === 'on';
         if (req.body.is_player_created !== undefined) {
             req.body.is_player_created = req.body.is_player_created === 'true';
         }
