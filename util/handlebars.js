@@ -1,4 +1,9 @@
 const { missionsRequiredForLevel } = require('./character-leveling');
+const { economyFor } = require('./merx-economy');
+const characterMode = (character, classRules) => {
+  const mode = economyFor({ creatorMode: character?.creator_mode, contentFormat: classRules?.content_format });
+  return mode[0].toUpperCase() + mode.slice(1);
+};
 const moment = require('moment-timezone');
 const { google, outlook, office365, yahoo, ics } = require("calendar-link");
 const { personalityMap } = require('./enclave-consts');
@@ -281,6 +286,7 @@ const anyOutdatedH = (...args) => args.slice(0, -1)
   .some(list => Array.isArray(list) && list.some(c => c && c.outdated));
 
 module.exports = {
+  characterMode,
   times,
   customTrait: customTraitH,
   date_tz,

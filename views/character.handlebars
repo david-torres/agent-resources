@@ -12,11 +12,12 @@
   {{/if}}
   {{> private-badge isPublic=character.is_public}}
 </h1>
-{{#if characterClass}}
-<p class="subtitle is-6 has-text-grey">
-  <span class="tag is-light">{{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
-</p>
-{{/if}}
+<div class="tags mb-4">
+  <span class="tag is-primary is-medium">Mode: {{characterMode character characterClass}}</span>
+  {{#if characterClass}}
+  <span class="tag is-light">Class edition: {{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
+  {{/if}}
+</div>
 <div class="columns">
   <div class="column is-one-third">
     {{#if character.image_url}}

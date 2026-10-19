@@ -72,7 +72,7 @@ const findUpgradeTargetsFor = async (classId, client = supabase) => {
 const getOwnCharacters = async (profile, client = supabase) => {
   const { data, error } = await client
     .from('characters')
-    .select('*, linked_class:classes(rules_edition, rules_version)')
+    .select('*, linked_class:classes(rules_edition, rules_version, content_format)')
     .eq('creator_id', profile.id);
   if (error) {
     console.error(error);

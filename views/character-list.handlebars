@@ -20,7 +20,10 @@
           Level <span class="sort-indicator" :class="indicatorClass('level')" x-text="indicator('level')"></span>
         </th>
         <th data-sort-key="edition" @click="sortBy('edition', 'string')">
-          Edition <span class="sort-indicator" :class="indicatorClass('edition')" x-text="indicator('edition')"></span>
+          Class edition <span class="sort-indicator" :class="indicatorClass('edition')" x-text="indicator('edition')"></span>
+        </th>
+        <th data-sort-key="mode" @click="sortBy('mode', 'string')">
+          Mode <span class="sort-indicator" :class="indicatorClass('mode')" x-text="indicator('mode')"></span>
         </th>
         <th>Actions</th>
       </tr>
@@ -45,6 +48,9 @@
           {{else}}
           <span class="has-text-grey-light">—</span>
           {{/if}}
+        </td>
+        <td data-sort-value="{{characterMode this this.linked_class}}">
+          <span class="tag is-primary">{{characterMode this this.linked_class}}</span>
         </td>
         <td>
           <div class="buttons are-small">

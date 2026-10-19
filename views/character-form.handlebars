@@ -3,11 +3,12 @@
 {{#if adventTrialEndedAt}}
 {{> access/trial-ended-alert lead="Advent classes are locked because" edition="advent" endedAt=adventTrialEndedAt}}
 {{/if}}
-{{#if characterClass}}
-<p class="subtitle is-6 has-text-grey">
-  <span class="tag is-light">{{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
-</p>
-{{/if}}
+<div class="tags mb-4">
+  <span class="tag is-primary is-medium">Mode: {{characterMode character characterClass}}</span>
+  {{#if characterClass}}
+  <span class="tag is-light">Class edition: {{capitalize characterClass.rules_edition}} {{characterClass.rules_version}}</span>
+  {{/if}}
+</div>
 {{#unless isNew}}
 <div class="buttons">
   <a href="/characters/{{character.id}}/{{encodeURIComponentH character.name}}" class="button is-primary">View Character</a>
