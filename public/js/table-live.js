@@ -12,22 +12,33 @@ window.TableLive = window.TableLive || (function () {
   let tableId = null;
   const pending = new Map();
   const openSources = new Set();
+  const forced = new Set();
 
-  const refresh = (memberId) => {
+  const refresh = (memberId, force = false) => {
+    if (force) forced.add(memberId);
     clearTimeout(pending.get(memberId));
     pending.set(memberId, setTimeout(() => {
       const el = document.getElementById(`tracker-${memberId}`);
-      if (!el || el.classList.contains('htmx-request') || el.querySelector('.htmx-request')) return;
-      htmx.ajax('GET', `/tables/${tableId}/members/${memberId}/tracker?v=${el.dataset.version}`, { source: el, target: el, swap: 'outerHTML' });
+      pending.delete(memberId);
+      if (!el) { forced.delete(memberId); return; }
+      if (el.classList.contains('htmx-request') || el.querySelector('.htmx-request')) {
+        refresh(memberId);
+        return;
+      }
+      const query = forced.delete(memberId) ? '' : `?v=${el.dataset.version}`;
+      htmx.ajax('GET', `/tables/${tableId}/members/${memberId}/tracker${query}`, { source: el, target: el, swap: 'outerHTML' });
     }, 250));
   };
 
   // Unchanged trackers answer 204, so this is cheap.
-  const refreshAll = () => {
-    document.querySelectorAll('[data-tracker]').forEach((el) => refresh(el.id.replace(/^tracker-/, '')));
+  const refreshAll = (force = false) => {
+    document.querySelectorAll('[data-tracker]').forEach((el) => refresh(el.id.replace(/^tracker-/, ''), force));
   };
 
   const stop = () => {
+    for (const timer of pending.values()) clearTimeout(timer);
+    pending.clear();
+    forced.clear();
     const client = typeof App !== 'undefined' && App.getSupabaseClient();
     if (channel && client) client.removeChannel(channel);
     channel = null;
@@ -70,6 +81,12 @@ window.TableLive = window.TableLive || (function () {
     if (root) start(root);
     else stop();
   };
+
+  // Sheet and guest edits do not bump tracker state versions or emit state
+  // events. Periodically re-read their inputs even on a healthy subscription.
+  setInterval(() => {
+    if (document.visibilityState === 'visible' && document.querySelector('[data-table-live]')) refreshAll(true);
+  }, 30000);
 
   document.addEventListener('DOMContentLoaded', scan);
   document.addEventListener('htmx:afterSettle', scan);

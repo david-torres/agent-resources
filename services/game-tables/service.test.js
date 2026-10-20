@@ -495,3 +495,18 @@ test('a signed-in non-manager may not act on a guest seat', async () => {
   const { svc } = service({ table: TABLE, members: [guest('g1')], trackerRows: { g1: row('g1') } });
   expect((await svc.act(USER, 't1', 'g1', { type: 'spend', pool: 'essence', amount: 'Low' }, USER_CLIENT)).error.status).toBe(403);
 });
+
+test('a full refresh reloads guest budgets and character sources without a state version change', async () => {
+  const g = guest('g1');
+  const state = { table: TABLE, members: [g, seat('m1', 'c1', 'player')],
+    trackerRows: { g1: row('g1'), m1: row('m1') },
+    characters: { c1: { abilities: [], gear: [] } } };
+  const { svc } = service(state);
+  expect((await svc.tracker(CREATOR, 't1', 'g1')).data.tracker.pools[1].budget).toBe(6);
+  g.guest_stats.will = 2;
+  state.characters.c1.abilities.push({ id: 'a1', name: 'New ability', meters: [] });
+  expect((await svc.tracker(CREATOR, 't1', 'g1')).data.tracker.pools[1].budget).toBe(9);
+  const refreshed = (await svc.tracker(USER, 't1', 'm1')).data.tracker;
+  expect(refreshed.version).toBe(3);
+  expect(refreshed.sources[0].name).toBe('New ability');
+});
