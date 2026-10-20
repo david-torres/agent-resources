@@ -98,12 +98,21 @@ test.describe('signed in', () => {
     await expect(page).toHaveURL(/\/tables\/[0-9a-f-]{36}$/);
     await expect(page.locator(`#table-panel [data-member-id]`)).toHaveCount(1);
 
+    await expect(page.locator('#table-seating')).toBeHidden();
+    await expect(page.locator('#table-panel').locator('..')).toHaveClass(/is-12/);
+    await page.getByRole('button', { name: 'Add / seat characters', exact: true }).click();
+    await expect(page.locator('#table-seating')).toBeVisible();
     await page.fill('[data-guest-form] input[name="name"]', `Guest ${prefix}`);
     await page.click('[data-guest-form] .stat-blocks[data-stat="might"] [aria-label="Might: 3"]');
     await page.click('[data-guest-form] button[type="submit"]');
 
     await expect(page.locator('#table-panel')).toContainText(`Guest ${prefix}`);
     await expect(page.locator('#table-panel')).toContainText('Unregistered');
+    await page.getByRole('button', { name: 'Hide seating controls', exact: true }).click();
+    const guestRow = page.locator('#table-panel [data-member-id]').filter({ hasText: `Guest ${prefix}` });
+    await guestRow.getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(page.locator('#table-seating')).toBeVisible();
+    await expect(page.locator('[data-guest-form] input[name="name"]')).toHaveValue(`Guest ${prefix}`);
   });
   test('trackers spend and undo with a toast, keep sources open across a swap, and a signed-out viewer polls the change', async ({ page, browser }) => {
     await page.goto(`/tables/new?c=${alpha.id}`);
@@ -111,6 +120,7 @@ test.describe('signed in', () => {
     await page.click('form[hx-post="/tables"] button[type="submit"]');
     await expect(page).toHaveURL(/\/tables\/[0-9a-f-]{36}$/);
 
+    await page.getByRole('button', { name: 'Add / seat characters', exact: true }).click();
     await page.fill('[data-guest-form] input[name="name"]', `Tracked ${prefix}`);
     await page.click('[data-guest-form] button[type="submit"]');
     const guestRow = page.locator('#table-panel [data-member-id]').filter({ hasText: `Tracked ${prefix}` });

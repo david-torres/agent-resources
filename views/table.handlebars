@@ -36,11 +36,18 @@
 {{/if}}
 {{/if}}
 
-<div{{#unless draft}} data-table-live="{{table.id}}" data-live-mode="{{liveMode}}"{{/unless}}>
+<div x-data="{ seatingOpen: {{#if draft}}true{{else}}{{#if summary.memberCount}}false{{else}}true{{/if}}{{/if}} }"
+  @open-table-seating.window="seatingOpen = true"
+  {{#unless draft}}data-table-live="{{table.id}}" data-live-mode="{{liveMode}}"{{/unless}}>
   {{#unless draft}}<p class="help mb-3" role="status" aria-live="polite" data-table-connection>Connecting to updates…</p>{{/unless}}
+  {{#if (or draft profile)}}
+  <button type="button" class="button is-small mb-4" aria-controls="table-seating" aria-expanded="true"
+    :aria-expanded="seatingOpen" @click="seatingOpen = !seatingOpen"
+    x-text="seatingOpen ? 'Hide seating controls' : 'Add / seat characters'">Add / seat characters</button>
+  {{/if}}
 <div class="columns">
   {{#if (or draft profile)}}
-  <div class="column is-5">
+  <div class="column is-5" id="table-seating" x-show="seatingOpen" x-cloak>
     {{#if draft}}{{#if profile}}
     <div class="box">
       <h3 class="title is-5">Save as a Table</h3>
@@ -84,7 +91,7 @@
   </div>
   {{/if}}
 
-  <div class="column {{#if (or draft profile)}}is-7{{else}}is-12{{/if}}">
+  <div class="column {{#if (or draft profile)}}" :class="seatingOpen ? 'is-7' : 'is-12'{{else}}is-12{{/if}}">
     {{> table-panel}}
   </div>
 </div>
