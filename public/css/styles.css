@@ -627,8 +627,7 @@ a.dropdown-item:hover {
   font-weight: 600;
 }
 
-/* ============================================
-   Mission Editors & Collaboration Styles
+/* =====================================   Mission Editors & Collaboration Styles
    ============================================ */
 
 /* Editor list */
@@ -862,8 +861,7 @@ a.dropdown-item:hover {
   color: var(--bulma-text-strong);
 }
 
-/* ============================================================
-   Character Creator wizard
+/* =====================================================   Character Creator wizard
    ============================================================ */
 .wizard-steps {
   margin: 1.5rem 0 1rem;
@@ -1939,3 +1937,41 @@ li.shop-preview > .shop-preview-tooltip {
   width: auto;
   margin: 0.25rem 0;
 }
+/* A stat with Stat Scaling text behind it. Bare numbers get the dotted
+   underline; block rows are already visibly interactive enough. */
+.stat-value[data-tooltip-markdown] { cursor: help; }
+td > .stat-value[data-tooltip-markdown] { text-decoration: underline dotted; }
+.wizard-stat-name[data-tooltip-markdown],
+.label[data-tooltip-markdown] { cursor: help; }
+
+/* A whole Baseline-+++++ row is taller than most screens. Capped below half
+   the viewport so it fits above or below its trigger, and scrolls inside. */
+.stat-scaling-row {
+  max-height: 40vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Bulma pins .level-left to its content width, so a long table or character
+   name pushes the page wider than a phone instead of wrapping. */
+.table-heading .level-left,
+.table-roster .level-left {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.table-heading .title,
+.table-roster strong {
+  overflow-wrap: anywhere;
+}
+
+/* Live trackers: a threshold tag coloured Green→Below Red and a bar of
+   Low-cost segments. The bar is capped in width, so large budgets wrap onto
+   further rows. */
+.tracker-threshold.is-threshold-0 { background: hsl(141, 53%, 53%); color: #fff; }
+.tracker-threshold.is-threshold-1 { background: hsl(48, 100%, 67%); color: rgba(0, 0, 0, 0.7); }
+.tracker-threshold.is-threshold-2 { background: hsl(348, 86%, 61%); color: #fff; }
+.tracker-threshold.is-threshold-3 { background: hsl(0, 0%, 21%); color: #fff; }
+.tracker-bar { display: inline-flex; gap: 2px; max-width: 12rem; flex-wrap: wrap; }
+.tracker-seg { width: 0.6rem; height: 0.8rem; border-radius: 2px; background: hsl(0, 0%, 86%); }
+.tracker-seg.is-filled { background: hsl(204, 71%, 39%); }
+.tracker-source + .tracker-source { border-top: 1px solid hsl(0, 0%, 93%); }

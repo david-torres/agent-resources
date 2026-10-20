@@ -59,7 +59,8 @@
       <div class="wizard-stat-grid" id="levelUpStatGrid">
         {{#each statList}}
         <div class="wizard-stat-row" data-stat="{{this}}">
-          <div class="wizard-stat-name">{{capitalize this}}</div>
+          <div class="wizard-stat-name" tabindex="0" data-tooltip-markdown="">{{capitalize this}}</div>
+          {{> stat-scaling-row stat=this}}
           {{!-- This Stat's real Cap, computed by statCapMap (util/stat-caps.js).
                 A level-up is the moment a character grows, and POST
                 /:id/level-up already accepts a value a Trait or a purchase

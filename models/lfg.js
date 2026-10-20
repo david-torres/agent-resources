@@ -3,6 +3,7 @@ const { statList } = require('../util/enclave-consts');
 const moment = require('moment-timezone');
 const { LfgService } = require('../services/lfg/service');
 const lfgRepository = require('../services/lfg/repository');
+const { gameTables } = require('./game-tables');
 const { AuthorizationError } = require('../util/errors');
 moment.tz.setDefault('UTC');
 
@@ -157,7 +158,12 @@ const getLfgPost = async (id, client = supabase) => {
 // The agent surface always uses the role-stripped buildAgentActor (no
 // role-based bypass), consistent across all six agent capabilities.
 // Denials throw AuthorizationError.
-const lfgService = new LfgService(lfgRepository);
+const lfgService = new LfgService(lfgRepository, {
+  afterRosterChange: async (postId) => {
+    const { error } = await gameTables.syncLinkedTable(postId);
+    if (error) console.error(error);
+  },
+});
 
 // Converts a thrown AuthorizationError (or any other thrown error) into the
 // same {status, code, message} shape the agent-scoped wrappers have always
@@ -218,7 +224,12 @@ const getLfgJoinRequestForUserAndPost = async (profileId, postId, client = supab
 // RLS policies (schema.sql) and by the character-view helper (routes/characters.js).
 // All conduit state changes go through lfg_join_requests; this helper mirrors the result.
 // Internal denormalization only — no policy check applies (see LfgService.syncConduitHostId).
-const syncConduitHostId = (postId) => lfgService.syncConduitHostId(postId);
+// A linked game table's Conduit follows host_id, so it is told too.
+const syncConduitHostId = async (postId) => {
+  const result = await lfgService.syncConduitHostId(postId);
+  await lfgService.notifyRosterChange(postId);
+  return result;
+};
 
 // Approve/reject a join request. Previously caller-enforced (routes/models
 // checked host-ness before calling); the capability now verifies it itself.

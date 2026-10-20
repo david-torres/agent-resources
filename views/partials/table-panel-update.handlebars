@@ -1,0 +1,7 @@
+{{!-- An htmx answer to a roster change: the panel, plus (after a guest is
+      added or edited) a fresh guest form swapped out of band so the next
+      guest starts from blank stats. --}}
+{{> table-panel}}
+{{#if resetGuestForm}}
+<div id="guest-form" hx-swap-oob="innerHTML">{{> table-guest-form tableId=tableId statList=statList}}</div>
+{{/if}}

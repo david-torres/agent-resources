@@ -1,4 +1,4 @@
-// party-summary is rendered by BOTH /party and the LFG post page. These tests
+// party-summary is rendered by BOTH game tables and the LFG post page. These tests
 // are the contract between them: whatever changes here changes both pages.
 const { test, expect } = require('bun:test');
 const fs = require('fs');
@@ -13,12 +13,15 @@ const { statList } = require('../../util/enclave-consts');
 const SUMMARY_SRC = fs.readFileSync(path.join(__dirname, 'party-summary.handlebars'), 'utf8');
 const READONLY_SRC = fs.readFileSync(path.join(__dirname, 'stat-blocks-readonly.handlebars'), 'utf8');
 
+const partialSrc = (name) => fs.readFileSync(path.join(__dirname, `${name}.handlebars`), 'utf8');
+
 const render = (summary) => {
   const hb = Handlebars.create();
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
   hb.registerHelper('range', rangeHelper);
   hb.registerPartial('stat-blocks-readonly', READONLY_SRC);
+  for (const name of ['stat-value', 'stat-scaling-entry']) hb.registerPartial(name, partialSrc(name));
   return hb.compile(SUMMARY_SRC)({ summary });
 };
 
@@ -90,4 +93,12 @@ test('an empty party renders no coverage or breakdown sections', () => {
 test('private members are marked so a lossy share link is visible', () => {
   const html = render(summarizeParty([member('Ash', { might: 3 }), { ...member('Bee'), is_public: false }]));
   expect(html).toContain('fa-lock');
+});
+
+test('member stats explain themselves; totals do not', () => {
+  const html = render(summarizeParty([member('Rionnal', { might: 1 }), member('Ash', { might: 2 })]));
+  const [body, foot] = html.split('<tfoot>');
+  expect(body).toContain('Crush an apple one-handed.');
+  expect(body).toContain('Rip a college textbook in half.');
+  expect(foot).not.toContain('data-tooltip-markdown');
 });

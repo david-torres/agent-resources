@@ -368,9 +368,9 @@ const renderStatsReadOnly = (character) => {
   hb.registerHelper(hbsHelpers);
   hb.registerHelper(customHelpers);
   hb.registerHelper('range', rangeHelper);
-  hb.registerPartial('stat-blocks-readonly', fs.readFileSync(
-    path.join(__dirname, 'stat-blocks-readonly.handlebars'), 'utf8'
-  ));
+  for (const name of ['stat-blocks-readonly', 'stat-value', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, `${name}.handlebars`), 'utf8'));
+  }
   return hb.compile(extractStatsReadOnlyBlock())({ character, statList });
 };
 
@@ -471,6 +471,9 @@ const renderEditor = (character, economy) => {
   hb.registerHelper(customHelpers);
   hb.registerHelper('range', rangeHelper);
   hb.registerPartial('stat-blocks', STAT_BLOCKS_SRC);
+  for (const name of ['stat-scaling-row', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, `${name}.handlebars`), 'utf8'));
+  }
   return hb.compile(EDITOR_SRC)({
     statList,
     character,

@@ -1283,6 +1283,7 @@ window.CharacterWizard = (function () {
     const persPts = getPersonalityPoints();
     const userPts = state.userStats || {};
 
+    if (typeof App !== 'undefined') App.destroyTooltips(statGrid);
     statGrid.innerHTML = DATA.statList.map((stat) => {
       const assignable = getMaxAssignable(stat);
       const boxesPerStat = getBoxesPerStat(stat);
@@ -1321,11 +1322,12 @@ window.CharacterWizard = (function () {
       }
       return ''
         + '<div class="wizard-stat-row" data-stat="' + stat + '">'
-        +   '<div class="wizard-stat-name">' + capitalize(stat) + '</div>'
+        +   '<div class="wizard-stat-name" tabindex="0" data-tooltip-markdown="#stat-scaling-row-' + stat + '">' + capitalize(stat) + '</div>'
         +   '<div class="wizard-stat-boxes">' + boxes + '</div>'
         +   labels
         + '</div>';
     }).join('');
+    if (typeof App !== 'undefined') App.initTooltips(statGrid);
   };
 
   // Update the points summary line and enable/disable the stat section.

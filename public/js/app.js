@@ -8,24 +8,29 @@ const App = (function (document, supabase, htmx) {
 
   // Lazy-loading utilities for on-demand script/stylesheet loading
   const _loadedAssets = new Set();
+  // A second caller while a script is still downloading waits for the same load.
+  const _pendingScripts = new Map();
 
   const _loadScript = (src, options = {}) => {
     const { crossOrigin } = options;
     if (_loadedAssets.has(src)) return Promise.resolve();
+    if (_pendingScripts.has(src)) return _pendingScripts.get(src);
     if (document.querySelector(`script[src="${src}"]`)) {
       _loadedAssets.add(src);
       return Promise.resolve();
     }
-    return new Promise((resolve, reject) => {
+    const loading = new Promise((resolve, reject) => {
       const script = document.createElement('script');
       script.src = src;
       if (crossOrigin) {
         script.crossOrigin = crossOrigin;
       }
-      script.onload = () => { _loadedAssets.add(src); resolve(); };
-      script.onerror = reject;
+      script.onload = () => { _loadedAssets.add(src); _pendingScripts.delete(src); resolve(); };
+      script.onerror = (e) => { _pendingScripts.delete(src); reject(e); };
       document.head.appendChild(script);
     });
+    _pendingScripts.set(src, loading);
+    return loading;
   };
 
   const _loadStylesheet = (href, options = {}) => {
@@ -52,6 +57,51 @@ const App = (function (document, supabase, htmx) {
     .then(() => {
       _loadStylesheet('https://unpkg.com/tippy.js@6/themes/light-border.css');
     });
+
+  // A tap fires mouseenter and then mouseleave straight away, so a hover
+  // trigger shows and hides the tooltip in one tap. Touch-only screens open
+  // it on tap instead, and close it on a tap elsewhere.
+  const _canHover = () => !window.matchMedia || !window.matchMedia('(hover: none)').matches;
+
+  const _initTooltips = (root) => {
+    const container = root || document;
+    const els = container.querySelectorAll('[data-tooltip-markdown]');
+    if (!els.length) return;
+    const doInit = () => {
+      if (typeof tippy !== 'function') return;
+      els.forEach((el) => {
+      try {
+        if (el._tippy) return;
+        const ref = el.getAttribute('data-tooltip-markdown');
+        let contentEl = null;
+        if (ref) {
+          if (ref.startsWith('#')) {
+            const id = ref.slice(1);
+            contentEl = document.getElementById(id) || (container.getElementById ? container.getElementById(id) : null);
+          }
+          if (!contentEl) {
+            try { contentEl = container.querySelector(ref) || document.querySelector(ref); } catch (_) { /* ignore */ }
+          }
+        }
+        if (!contentEl && el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('tooltip-markdown')) {
+          contentEl = el.nextElementSibling;
+        }
+        if (!contentEl) return;
+        tippy(el, {
+          trigger: _canHover() ? 'mouseenter focus' : 'click',
+          theme: 'light-border',
+          allowHTML: true,
+          interactive: true,
+          maxWidth: 350,
+          content: contentEl.innerHTML,
+          placement: 'top',
+          appendTo: () => document.body,
+        });
+      } catch (e) { /* noop per element */ }
+    });
+    };
+    if (typeof tippy === 'function') { doInit(); } else { _loadTippy().then(doInit).catch(() => {}); }
+  };
 
   const _loadTomSelect = () => {
     _loadStylesheet('https://cdn.jsdelivr.net/npm/tom-select@2/dist/css/tom-select.bootstrap5.min.css');
@@ -95,7 +145,7 @@ const App = (function (document, supabase, htmx) {
   const TOAST_AUTO_DISMISS_MS = 5000;
   let toastTimer = null;
 
-  const _displayNotification = (alertType, message) => {
+  const _displayNotification = (alertType, message, { action } = {}) => {
     const messageContainer = document.getElementById('alerts');
     const validTypes = ['danger', 'success', 'info', 'warning', 'primary', 'link'];
     const safeType = validTypes.includes(alertType) ? alertType : 'info';
@@ -107,6 +157,14 @@ const App = (function (document, supabase, htmx) {
     dismiss.addEventListener('click', () => notification.remove());
     notification.appendChild(dismiss);
     notification.appendChild(document.createTextNode(message));
+    if (action && action.label && typeof action.run === 'function') {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'button is-small is-light ml-3';
+      button.textContent = action.label;
+      button.addEventListener('click', () => { notification.remove(); action.run(); });
+      notification.appendChild(button);
+    }
     clearTimeout(toastTimer);
     toastTimer = null;
     messageContainer.innerHTML = '';
@@ -977,45 +1035,6 @@ const App = (function (document, supabase, htmx) {
         }
       });
 
-      const _initTooltips = (root) => {
-        const container = root || document;
-        const els = container.querySelectorAll('[data-tooltip-markdown]');
-        if (!els.length) return;
-        const doInit = () => {
-          if (typeof tippy !== 'function') return;
-          els.forEach((el) => {
-          try {
-            if (el._tippy) return;
-            const ref = el.getAttribute('data-tooltip-markdown');
-            let contentEl = null;
-            if (ref) {
-              if (ref.startsWith('#')) {
-                const id = ref.slice(1);
-                contentEl = document.getElementById(id) || (container.getElementById ? container.getElementById(id) : null);
-              }
-              if (!contentEl) {
-                try { contentEl = container.querySelector(ref) || document.querySelector(ref); } catch (_) { /* ignore */ }
-              }
-            }
-            if (!contentEl && el.nextElementSibling && el.nextElementSibling.classList && el.nextElementSibling.classList.contains('tooltip-markdown')) {
-              contentEl = el.nextElementSibling;
-            }
-            if (!contentEl) return;
-            tippy(el, {
-              theme: 'light-border',
-              allowHTML: true,
-              interactive: true,
-              maxWidth: 350,
-              content: contentEl.innerHTML,
-              placement: 'top',
-              appendTo: () => document.body,
-            });
-          } catch (e) { /* noop per element */ }
-        });
-        };
-        if (typeof tippy === 'function') { doInit(); } else { _loadTippy().then(doInit).catch(() => {}); }
-      };
-
       const _initSearchableSelects = (root) => {
         const container = root || document;
         const els = container.querySelectorAll('[data-searchable-select]');
@@ -1655,6 +1674,8 @@ const App = (function (document, supabase, htmx) {
 
   return {
     init,
+    getSupabaseClient: () => supabaseClient || null,
+    showToast: (message, { type = 'info', action } = {}) => _displayNotification(type, message, { action }),
     initTooltips: (root) => { try { _initTooltips(root); } catch (e) { /* noop */ } },
     // Tippy appends its popper to document.body, so a tooltip showing when its
     // element is replaced would stay on screen; call this before re-rendering.

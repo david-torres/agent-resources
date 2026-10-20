@@ -107,7 +107,7 @@ Four new tables.
 | `id` | uuid |
 | `name` | text, required |
 | `creator_id` | → `profiles`, required |
-| `conduit_id` | → `profiles`, nullable |
+| `conduit_id` | → `profiles`, nullable; the creator for a standalone table, the post's `host_id` (else the creator) for a linked one |
 | `lfg_post_id` | → `lfg_posts`, nullable, unique, `ON DELETE SET NULL` |
 | `session_started_at` | timestamptz |
 | `created_at`, `updated_at` | |
@@ -118,8 +118,8 @@ Four new tables.
 |---|---|
 | `id` | uuid |
 | `table_id` | → `game_tables`, `ON DELETE CASCADE` |
-| `position` | integer |
 | `character_id` | → `characters`, nullable, `ON DELETE CASCADE` |
+| `lfg_join_request_id` | → `lfg_join_requests`, nullable, unique, `ON DELETE CASCADE`; set only on seats the LFG roster sync made |
 | `guest_name` | text, nullable |
 | `guest_class_label` | text, nullable |
 | `guest_stats` | jsonb of the 12 `statList` keys, nullable |
@@ -127,7 +127,8 @@ Four new tables.
 A check constraint requires exactly one of a character or a guest: either
 `character_id` is set and the guest columns are null, or `guest_name` and
 `guest_stats` are set and `character_id` is null. A table holds at most 8
-members, guests included (`PARTY_CAP`).
+members, guests included (`PARTY_CAP`). Members show in seating order
+(`created_at`); there is no reorder control.
 
 ### `game_table_member_state`
 
@@ -172,7 +173,8 @@ Realtime exactly one table to watch.
 |---|---|
 | View a table, its members and state | Anyone with the link, signed in or not |
 | Seat one of your own characters (private included) | Any signed-in viewer |
-| Seat public characters, add or edit guests, reorder, remove anyone | Creator or Conduit |
+| Seat public characters, add or edit guests, remove anyone | Creator or Conduit |
+| Remove your own seated character | The character's owner |
 | Edit a registered member's state | The character's owner, or the Conduit |
 | Edit a guest's state | Creator or Conduit |
 | Start a new session | Creator or Conduit |
@@ -232,7 +234,7 @@ The budget is always computed from the character's current stats.
 | `GET /tables/:id` | The table page: roster, party summary, member breakdown, trackers |
 | `GET /tables/new?c=…` | An unsaved draft of the table page; works signed out; "Save table" when signed in |
 | `/party?c=…` | 301 to the draft |
-| Member endpoints | Seat, remove, add or edit guest, reorder — each returns the roster fragment |
+| Member endpoints | Seat, remove, add or edit guest — each returns the roster fragment |
 
 `routes/party.js`, `views/party.handlebars`, and the party-only partials are
 deleted. Shared partials move to `views/partials/table-*`. `summarizeParty`
@@ -242,20 +244,38 @@ is reused unchanged; a guest is one more stat object.
 
 "+ Add unregistered character" opens a form: name (required), class label
 (optional), and the 12 stats with the character form's block steppers in
-`statList` order. Each stat is 0–5. Validation failures re-render with field
-errors, as the character form does. Guests have no abilities or Signatures,
+`statList` order. Each stat is 0–5. Validation failures come back as a toast
+naming every problem (`sendRouteError`), which is this app's form-error pattern. Guests have no abilities or Signatures,
 so their tracker is the two pools and narrative spends.
 
 ### LFG link
 
 The post's creator or approved Conduit sees **Open table** on the post. The
-first click creates a linked table seeded with the approved roster and that
-Conduit as `conduit_id`; later clicks open it.
+first click creates a linked table seeded with the approved roster, with the
+post's creator as its creator and the post's Conduit as `conduit_id`; later
+clicks open it.
 
-While linked, approving a join request seats its character and withdrawing
-or rejecting one unseats it, and a change of approved Conduit updates
-`conduit_id`. The hook sits in `LfgService` beside `syncConduitHostId`. Guests are never touched by the sync. Deleting the post
-clears `lfg_post_id`; the table survives.
+While linked, approving a join request seats its character if that character
+is public, and withdrawing or rejecting one unseats it. A private character is
+never seated by the sync: seating it is its owner's consent, so the player
+seats it from the table page. A change of approved Conduit updates
+`conduit_id`. The hook sits in `LfgService` beside `syncConduitHostId` and
+never fails the moderation that triggered it. The sync only removes seats it
+made (`lfg_join_request_id`), so guests and characters seated by hand are
+never touched, and it seats nobody past the cap.
+
+When approved players are missing from a linked table, the table page says
+how many ("2 approved players aren't seated yet") and why: players with a
+private character seat it themselves, or the table is full. Removing an LFG
+seat by hand lasts only until the post's roster next changes; to remove a
+player for good, reject them on the post.
+
+Deleting the post clears `lfg_post_id`; the table survives with its roster,
+and the LFG seats become ordinary hand seats.
+
+Everyone viewing a linked post sees a link to its table. Without one, the
+creator or Conduit sees **Open table** and other viewers see a link to the
+roster as a draft table.
 
 ## 5. Live trackers
 
@@ -277,8 +297,16 @@ the state row, calls `applyAction`, and writes through the per-request client
 so RLS decides who may write, saving the prior state into `undo`.
 
 Writes are conditional on `version`. On a conflict the server re-reads and
-re-applies once. Undo is refused, with a toast naming who changed the row,
-when the row's version has moved past the snapshot.
+re-applies once, then answers 409. Each successful action's toast carries an
+Undo button; the undo sends the version that action produced and is refused,
+with a toast naming who changed the row, when the row has moved past it.
+
+Who may act: the seated character's owner, or the table's creator or Conduit
+(guests: creator or Conduit). Only the Conduit imposes or lifts Limiters.
+
+Printed costs come from the class's ability and Signature meters, merged onto
+the character's rows by the existing character loader; a range such as
+`Low–High` offers one Use button per level.
 
 ### Live updates
 
@@ -290,14 +318,16 @@ response. If Realtime disconnects, the page polls every 5 seconds until it
 reconnects.
 
 **Everyone else**, signed-out viewers included, polls every 5 seconds. They
-have no RLS read access, so Realtime would deliver them nothing.
+have no RLS read access, so Realtime would deliver them nothing. A poll sends
+the version it holds and gets 204 while nothing changed.
 
 ### New session
 
 Creator or Conduit, behind a confirm. Resets every member to Green with
 nothing spent, clears counts, cooldowns, imposed Limiters and undo, and
 stamps `session_started_at`. Not undoable — the rules reset everything at
-mission end.
+mission end. The reset runs with the service-role client after the creator or
+Conduit check, because `session_started_at` is not user-writable.
 
 ## 6. Conduit run view (#168)
 

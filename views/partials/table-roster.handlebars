@@ -1,0 +1,86 @@
+{{!-- Seated members. Details lazy-loads the shared character-details
+      fragment on first expand; it is offered only where that fragment will
+      load for this viewer (public characters, or your own). Guests have no
+      sheet, so they show their class label and an Edit control instead. --}}
+{{#if members.length}}
+<div class="table-roster">
+  {{#each members}}
+  <div class="box p-3 mb-2" data-member-id="{{this.memberId}}" x-data="{ open: false }">
+    <div class="level is-mobile mb-0">
+      <div class="level-left">
+        <div class="level-item">
+          <div>
+            {{#if this.isGuest}}
+            <strong>{{this.name}}</strong> <span class="tag is-light">Unregistered</span>
+            {{else}}
+            {{#if this.canViewDetails}}
+            <a href="/characters/{{this.id}}/{{encodeURIComponentH this.name}}"><strong>{{this.name}}</strong></a>
+            {{else}}
+            <strong>{{this.name}}</strong>
+            {{/if}}
+            {{#unless this.is_public}}
+            <span class="icon is-small" title="Private"><i class="fas fa-lock"></i></span>
+            {{/unless}}
+            {{#if this.is_deceased}}
+            <span class="icon is-small" title="Deceased"><i class="fas fa-skull"></i></span>
+            {{/if}}
+            {{#if this.fromLfg}}<span class="tag is-light" title="Seated from the LFG post. Removing this seat lasts only until the post's roster changes; to remove a player for good, reject them on the post.">LFG</span>{{/if}}
+            {{/if}}
+            <p class="help mb-0">{{this.class}}{{#if this.level}} · Level {{this.level}}{{/if}}</p>
+          </div>
+        </div>
+      </div>
+      <div class="level-right">
+        {{#if this.canViewDetails}}
+        <div class="level-item">
+          <button type="button" class="button is-small is-info"
+            @click="open = !open"
+            hx-get="/characters/{{this.id}}/details"
+            hx-trigger="click once"
+            hx-target="#member-details-{{this.memberId}}"
+            hx-swap="innerHTML">
+            Details
+          </button>
+        </div>
+        {{/if}}
+        {{#if this.canEdit}}
+        <div class="level-item">
+          <button type="button" class="button is-small"
+            hx-get="/tables/{{../tableId}}/members/{{this.memberId}}/edit"
+            hx-target="#guest-form"
+            hx-swap="innerHTML">Edit</button>
+        </div>
+        {{/if}}
+        {{#if this.canRemove}}
+        <div class="level-item">
+          {{#if ../draft}}
+          <button type="button" class="delete"
+            data-remove-character="{{this.id}}"
+            aria-label="Remove {{this.name}} from the table"
+            hx-get="/tables/new/panel"
+            hx-vals='{"remove": "{{this.id}}"}'
+            hx-include="#table-csv"
+            hx-target="#table-panel"
+            hx-swap="outerHTML"></button>
+          {{else}}
+          <button type="button" class="delete"
+            data-remove-member="{{this.memberId}}"
+            aria-label="Remove {{this.name}} from the table"
+            hx-delete="/tables/{{../tableId}}/members/{{this.memberId}}"
+            hx-target="#table-panel"
+            hx-swap="outerHTML"></button>
+          {{/if}}
+        </div>
+        {{/if}}
+      </div>
+    </div>
+    {{#if (lookup ../trackers this.memberId)}}
+    {{> table-tracker tracker=(lookup ../trackers this.memberId) tableId=../tableId memberId=this.memberId}}
+    {{/if}}
+    <div id="member-details-{{this.memberId}}" x-show="open" x-cloak class="mt-3"></div>
+  </div>
+  {{/each}}
+</div>
+{{else}}
+<p class="has-text-grey">Nobody is seated yet.</p>
+{{/if}}

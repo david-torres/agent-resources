@@ -10,6 +10,7 @@ const integrationFiles = new Set([
   'models/character-convert-aspirant.integration.test.js',
   'models/character-level-up.integration.test.js',
   'models/nav-rls.integration.test.js',
+  'models/game-tables-rls.integration.test.js',
   'models/lfg-agent.test.js',
   'routes/bot-link.test.js',
   'routes/mcp-oauth.integration.test.js',
@@ -33,6 +34,7 @@ const integrationFiles = new Set([
 ]);
 const httpFiles = new Set([
   'routes/badges.test.js',
+  'routes/lfg-table.test.js',
   'routes/agent-read.test.js',
   'routes/bot-link-confirm.test.js',
   'routes/character-details.test.js',
@@ -58,7 +60,7 @@ const httpFiles = new Set([
   'routes/oauth-metadata.test.js',
   'routes/open-graph.test.js',
   'routes/pages.test.js',
-  'routes/party.test.js',
+  'routes/tables.test.js',
   'routes/sitemap.test.js'
 ]);
 const TIERS = ['unit', 'http', 'integration'];

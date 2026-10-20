@@ -1,0 +1,22 @@
+{{!-- A character's stat, with what that many pluses can do (the Stat Scaling
+      Table, util/stat-scaling.js) in a tooltip. For per-character values
+      only -- a party total is not a capacity anyone has.
+
+      Params:
+        stat    the stat key ("might")
+        value   the plus count
+        blocks  render read-only blocks (and the over-5 "N points" note)
+                instead of the bare number
+
+      The tooltip div must stay the trigger's next sibling: _initTooltips in
+      public/js/app.js reads it from there when data-tooltip-markdown is
+      empty. A value the table does not cover renders with no tooltip. --}}
+{{#if (statScaling stat value)}}<span class="stat-value" tabindex="0" data-tooltip-markdown="">{{else}}<span class="stat-value">{{/if}}
+{{#if blocks}}
+{{> stat-blocks-readonly value=value max=5}}
+{{#if (gt value 5)}}<span class="stat-blocks-over">{{value}} points</span>{{/if}}
+{{else}}
+{{value}}
+{{/if}}
+</span>
+{{#with (statScaling stat value)}}<div class="tooltip-markdown is-hidden">{{> stat-scaling-entry}}</div>{{/with}}

@@ -90,10 +90,11 @@ const serializePostForAgent = (post, { agentProfileId, includePending }) => {
 
 /** Coordinates LFG write decisions and authorization; the repository owns Supabase reads/writes. */
 class LfgService {
-  constructor(repository) {
+  constructor(repository, { afterRosterChange } = {}) {
     const missing = REQUIRED_REPOSITORY_METHODS.filter(method => typeof repository?.[method] !== 'function');
     if (missing.length) throw new TypeError(`LfgService requires repository methods: ${missing.join(', ')}`);
     this.repo = repository;
+    this.afterRosterChange = afterRosterChange || null;
   }
 
   // No ownership check — the creator becomes the owner, unless the system
@@ -204,7 +205,10 @@ class LfgService {
 
     const { data, error } = await this.repo.insertJoinRequest(joinRequest);
     if (error) return { data, error };
-    if (status === 'approved' && joinType === 'conduit') await this.syncConduitHostId(postId);
+    if (status === 'approved') {
+      if (joinType === 'conduit') await this.syncConduitHostId(postId);
+      await this.notifyRosterChange(postId);
+    }
     return { data, error };
   }
 
@@ -238,6 +242,17 @@ class LfgService {
     return this.repo.updatePostHostId(postId, newHostId);
   }
 
+  // Lets dependents that mirror a post's approved roster (a linked game
+  // table) catch up. Never fails the moderation that triggered it.
+  async notifyRosterChange(postId) {
+    if (!this.afterRosterChange || !postId) return;
+    try {
+      await this.afterRosterChange(postId);
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
   // Approve/reject a join request. Closes the previously caller-enforced gap:
   // the capability now verifies the actor is the post's host (or admin/system)
   // itself, rather than trusting the caller to have checked.
@@ -252,6 +267,7 @@ class LfgService {
     const result = await this.repo.updateJoinRequestStatusRow(requestId, status, resolvedPostId);
     if (result.error) return { data: null, error: result.error };
     await this.syncConduitHostId(resolvedPostId);
+    await this.notifyRosterChange(resolvedPostId);
     return result;
   }
 
@@ -267,7 +283,10 @@ class LfgService {
       throw new AuthorizationError('Not authorized to remove this join request', { reason: 'not_owner' });
     }
     const result = await this.repo.deleteJoinRequestRow(requestId);
-    if (!result.error && request.lfg_post_id) await this.syncConduitHostId(request.lfg_post_id);
+    if (!result.error && request.lfg_post_id) {
+      await this.syncConduitHostId(request.lfg_post_id);
+      await this.notifyRosterChange(request.lfg_post_id);
+    }
     return result;
   }
 

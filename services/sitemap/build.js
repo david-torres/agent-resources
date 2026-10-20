@@ -24,7 +24,6 @@ const STATIC_PATHS = [
   '/news',
   '/classes',
   '/library',
-  '/party',
   '/privacy',
   '/terms',
   '/contact'

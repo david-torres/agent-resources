@@ -230,6 +230,8 @@ const renderLevelUpStats = (character, economy) => {
   hb.registerHelper(customHelpers);
   hb.registerHelper('range', rangeHelper);
   hb.registerPartial('stat-blocks', read('stat-blocks.handlebars'));
+  hb.registerPartial('stat-scaling-row', read('stat-scaling-row.handlebars'));
+  hb.registerPartial('stat-scaling-entry', read('stat-scaling-entry.handlebars'));
   const src = read('character-level-up.handlebars');
   const grid = src.slice(src.indexOf('id="levelUpStatGrid"'), src.indexOf('Abilities</h4>'));
   return hb.compile(grid)({

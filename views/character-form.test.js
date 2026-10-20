@@ -159,6 +159,9 @@ test('every stat POSTs its own name from a hidden input', async () => {
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
   ));
+  for (const name of ['stat-scaling-row', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, 'partials', `${name}.handlebars`), 'utf8'));
+  }
 
   const statsSection = FORM_SRC.slice(
     FORM_SRC.indexOf('<label class="label">Stats</label>'),
@@ -440,6 +443,9 @@ const renderStats = (context) => {
   hb.registerPartial('stat-blocks', fs.readFileSync(
     path.join(__dirname, 'partials', 'stat-blocks.handlebars'), 'utf8'
   ));
+  for (const name of ['stat-scaling-row', 'stat-scaling-entry']) {
+    hb.registerPartial(name, fs.readFileSync(path.join(__dirname, 'partials', `${name}.handlebars`), 'utf8'));
+  }
   const section = FORM_SRC.slice(
     FORM_SRC.indexOf('<label class="label">Stats</label>'),
     FORM_SRC.indexOf('Signature Gear')
@@ -843,5 +849,25 @@ test('replacing auto-calculated fields preserves the rest of the edit form', () 
     expect(doc.getElementById('char-level').value).toBe(on ? '3' : '2');
     expect(doc.getElementById('char-level').disabled).toBe(on);
     expect(doc.getElementById('auto-calc-fields').querySelectorAll('input').length).toBe(3);
+  }
+});
+
+test('each stat name on the form is a tooltip trigger followed by its own scaling row', () => {
+  const { statScalingRow } = customHelpers;
+  const character = Object.fromEntries(statList.map((s) => [s, 0]));
+  const statCaps = Object.fromEntries(statList.map((s) => [s, 5]));
+  const html = renderStats({ character, statCaps });
+  const { document } = new JSDOM(html).window;
+
+  for (const stat of statList) {
+    const name = stat[0].toUpperCase() + stat.slice(1);
+    const baseline = statScalingRow(stat)[0].lines[0].text;
+    const triggers = [...document.querySelectorAll('.label[data-tooltip-markdown]')]
+      .filter((el) => el.textContent.trim() === name);
+    expect(triggers).toHaveLength(1);
+    const row = triggers[0].nextElementSibling;
+    expect(row.classList.contains('tooltip-markdown')).toBe(true);
+    expect(row.textContent).toContain(baseline);
+    expect(html.split(baseline).length - 1).toBe(1);
   }
 });

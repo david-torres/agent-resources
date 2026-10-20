@@ -1,0 +1,33 @@
+{{!-- Add (or, given `guest`, edit) an unregistered character: a name, an
+      optional class label, and the 12 stats as block selectors (0–5). Errors
+      come back as a toast via sendRouteError. --}}
+<form data-guest-form
+  {{#if guest}}hx-put="/tables/{{tableId}}/members/{{guest.memberId}}"{{else}}hx-post="/tables/{{tableId}}/guests"{{/if}}
+  hx-target="#table-panel" hx-swap="outerHTML">
+  <h3 class="title is-5">{{#if guest}}Edit {{guest.name}}{{else}}Add an unregistered character{{/if}}</h3>
+  <div class="field">
+    <label class="label" for="guest-name">Name</label>
+    <div class="control"><input class="input" id="guest-name" name="name" maxlength="60" required value="{{guest.name}}"></div>
+  </div>
+  <div class="field">
+    <label class="label" for="guest-class">Class <span class="has-text-grey is-size-7">(optional)</span></label>
+    <div class="control"><input class="input" id="guest-class" name="class_label" maxlength="60" value="{{guest.class}}"></div>
+  </div>
+  <div class="wizard-stat-grid">
+    {{#each statList}}
+    <div class="wizard-stat-row" data-stat="{{this}}">
+      <div class="wizard-stat-name" tabindex="0" data-tooltip-markdown="">{{capitalize this}}</div>
+      {{> stat-scaling-row stat=this}}
+      {{> stat-blocks stat=this name=this value=(lookup ../guest this) max=5}}
+    </div>
+    {{/each}}
+  </div>
+  <div class="field is-grouped mt-3">
+    <div class="control"><button class="button is-primary" type="submit">{{#if guest}}Save{{else}}Add to table{{/if}}</button></div>
+    {{#if guest}}
+    <div class="control">
+      <button type="button" class="button" hx-get="/tables/{{tableId}}/guests/new" hx-target="#guest-form" hx-swap="innerHTML">Cancel</button>
+    </div>
+    {{/if}}
+  </div>
+</form>

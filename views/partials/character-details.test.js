@@ -1,5 +1,5 @@
 // The full-sheet details fragment served by GET /characters/:id/details and
-// lazy-loaded into the /party roster and the LFG post page. These tests are
+// lazy-loaded into the table roster and the LFG post page. These tests are
 // the contract for what an expanded member shows on both pages.
 const { test, expect } = require('bun:test');
 const fs = require('fs');
@@ -29,7 +29,7 @@ const render = (character, effectiveVersion = 'v1', showGearPurchases = false) =
   hb.registerPartial('stat-blocks-readonly', READONLY_SRC);
   hb.registerPartial('signature-entry', SIGNATURE_ENTRY_SRC);
   hb.registerPartial('class-enchantment', CLASS_ENCHANTMENT_SRC);
-  for (const partial of ['class-meters', 'class-notes']) {
+  for (const partial of ['class-meters', 'class-notes', 'class-sample-perks', 'stat-value', 'stat-scaling-entry']) {
     hb.registerPartial(partial, fs.readFileSync(path.join(__dirname, `${partial}.handlebars`), 'utf8'));
   }
   return hb.compile(DETAILS_SRC)({ character, effectiveVersion, statList, showGearPurchases });
@@ -134,7 +134,9 @@ test('a gated item shows its name but offers no tooltip', () => {
     gear: [],
   }));
   expect(html).toContain('Fireball');
-  expect(html).not.toContain('data-tooltip-markdown');
+  const abilitiesStart = html.indexOf('Class Abilities');
+  expect(abilitiesStart).toBeGreaterThan(-1);
+  expect(html.slice(abilitiesStart)).not.toContain('data-tooltip-markdown');
 });
 
 test('personality traits render each trait name, not [object Object]', () => {
@@ -157,7 +159,7 @@ test('common items render as a markdown list', () => {
 // stat-blocks-readonly documents its own contract: a value above `max` "fills
 // every block and stops there", and "callers that can exceed max (party totals)
 // print the real number alongside". This fragment was the one caller that did
-// not, so a Stat of 6 rendered identically to a Stat of 5 on the /party roster
+// not, so a Stat of 6 rendered identically to a Stat of 5 on the table roster
 // and the LFG post page -- a player reading their own character as weaker than
 // it is, with nothing to indicate the rounding. A Trait raises a V1 Stat's Cap
 // to 6 (pg. 3, restated pg. 6), which is what makes a 6 ordinary rather than
@@ -184,7 +186,7 @@ test('a Stat at the blocks shown prints no number', () => {
   expect(html).not.toContain('stat-blocks-over');
 });
 
-// This fragment is served to the /party roster and the LFG post page for any
+// This fragment is served to the table roster and the LFG post page for any
 // character a viewer can see, so a missing or null Stat has to render as
 // quietly as it did before rather than as "null points".
 test('a missing or null Stat prints no number', () => {
@@ -193,7 +195,7 @@ test('a missing or null Stat prints no number', () => {
   expect(html).not.toContain('points');
 });
 
-// This fragment is lazy-loaded into the /party roster and the LFG post page, so
+// This fragment is lazy-loaded into the table roster and the LFG post page, so
 // a stray character in the common output would be visible on both. Nothing may
 // change for a character at or below the blocks shown.
 test('a character no Stat of which exceeds the blocks renders unchanged', () => {
@@ -203,11 +205,11 @@ test('a character no Stat of which exceeds the blocks renders unchanged', () => 
 
   expect(html).not.toContain('stat-blocks-over');
   expect(html).not.toContain('points');
-  // The stats section is exactly one readonly row per Stat and nothing else.
+  // The stats section is exactly one stat-value wrapping one readonly row per Stat and nothing else.
   const section = statsSection(html);
   expect(section.match(/<span class="stat-blocks is-readonly">/g)).toHaveLength(statList.length);
   expect((section.match(/<span/g) || []).length)
-    .toBe(statList.length + (section.match(/wizard-stat-box/g) || []).length);
+    .toBe(2 * statList.length + (section.match(/wizard-stat-box/g) || []).length);
 });
 
 // -- Signature Gear: Enchantments and Mods (Task 11) ------------------------

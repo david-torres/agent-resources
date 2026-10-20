@@ -1,4 +1,4 @@
-{{!-- The party stat summary, rendered by BOTH the /party tool and the LFG
+{{!-- The party stat summary, rendered by BOTH the game table page and the LFG
       post page. Takes a summary object from util/party-stats.js — see
       views/partials/party-summary.test.js for the contract.
 
@@ -58,7 +58,7 @@
             <span class="icon has-text-grey" title="Deceased"><i class="fas fa-skull"></i></span>
             {{/if}}
           </td>
-          {{#each this.stats}}<td>{{this}}</td>{{/each}}
+          {{#each this.stats}}<td>{{> stat-value stat=@key value=this}}</td>{{/each}}
         </tr>
         {{/each}}
       </tbody>

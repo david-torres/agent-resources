@@ -1,0 +1,15 @@
+{{!-- The whole Baseline–+++++ row of the Stat Scaling Table for one stat,
+      as tooltip content for that stat's name wherever stats are chosen.
+
+      Params:
+        stat  the stat key
+        id    optional; given one, a trigger anywhere can point at it with
+              data-tooltip-markdown="#id" (the wizard renders its triggers
+              client-side). Without one, place it straight after a trigger
+              with data-tooltip-markdown="". --}}
+<div {{#if id}}id="{{id}}" {{/if}}class="tooltip-markdown is-hidden">
+  {{!-- Inside the tooltip-markdown div: tippy copies only its innerHTML. --}}
+  <div class="stat-scaling-row">
+    {{#each (statScalingRow stat)}}{{> stat-scaling-entry}}{{/each}}
+  </div>
+</div>

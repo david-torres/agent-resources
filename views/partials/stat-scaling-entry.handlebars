@@ -1,0 +1,7 @@
+{{!-- One cell of the Stat Scaling Table (util/stat-scaling.js Entry) as
+      tooltip content. Book text only -- nothing user-authored passes
+      through here. --}}
+<p class="mb-1"><strong>{{label}} {{statLabel}}</strong>{{#if note}} <em>({{note}})</em>{{/if}}</p>
+{{#each lines}}
+<p class="mb-1">{{#if term}}<strong>{{term}}</strong>: {{/if}}{{text}}</p>
+{{/each}}
