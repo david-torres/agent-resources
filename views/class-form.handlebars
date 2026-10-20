@@ -42,15 +42,13 @@
         </div>
       </div>
     </div>
+    {{#unless (eq profile.role 'admin')}}
     <div class="column is-one-third-tablet">
       <div class="field">
         <label class="label" for="class-status">Status</label>
         <div class="control">
           <div class="select is-fullwidth">
             <select name="status" id="class-status">
-              {{#if (eq profile.role 'admin')}}
-              <option value="release" {{#if (eq class.status "release")}}selected{{/if}}>Release</option>
-              {{/if}}
               <option value="beta" {{#if (eq class.status "beta")}}selected{{/if}}>Beta</option>
               <option value="alpha" {{#if (eq class.status "alpha")}}selected{{/if}}>Alpha</option>
             </select>
@@ -58,10 +56,7 @@
         </div>
       </div>
     </div>
-    {{!-- Admin-only: prerelease_section is provenance -- which section of the
-          source document a class was printed under -- and a player-created
-          class must not be able to tag itself with one. --}}
-    {{#if (eq profile.role 'admin')}}
+    {{/unless}}
     <div class="column is-one-third-tablet">
       <div class="field">
         <label class="label" for="class-challenge-level">Challenge Level</label>
@@ -80,47 +75,12 @@
     </div>
     <div class="column is-one-third-tablet">
       <div class="field">
-        <label class="label" for="class-prerelease-section">Pre-release Section</label>
-        <div class="control">
-          <div class="select is-fullwidth">
-            <select name="prerelease_section" id="class-prerelease-section">
-              <option value="">Not set</option>
-              <option value="pcc" {{#if (eq class.prerelease_section "pcc")}}selected{{/if}}>PCCs</option>
-              <option value="exclusive" {{#if (eq class.prerelease_section "exclusive")}}selected{{/if}}>Exclusives</option>
-              <option value="aspirant" {{#if (eq class.prerelease_section "aspirant")}}selected{{/if}}>Aspirant Classes</option>
-            </select>
-          </div>
-        </div>
-        <p class="help">Which section of the pre-release bundle this class was printed under.</p>
-      </div>
-    </div>
-    <div class="column is-one-third-tablet">
-      <div class="field">
         <label class="label" for="class-designer">Designer</label>
         <div class="control">
           <input class="input" type="text" name="designer" id="class-designer" value="{{class.designer}}">
         </div>
       </div>
     </div>
-    {{/if}}
-  </div>
-  <div class="field">
-    {{#if (eq profile.role 'admin')}}
-      <label class="label">Type</label>
-      <div class="control">
-        <label class="radio">
-          <input type="radio" name="is_player_created" value="false" {{#unless isNew}}{{#unless class.is_player_created}}checked{{/unless}}{{/unless}}>
-          Official
-        </label>
-        <label class="radio">
-          <input type="radio" name="is_player_created" value="true" {{#if isNew}}checked{{else}}{{#if class.is_player_created}}checked{{/if}}{{/if}}>
-          PCC (player-created)
-        </label>
-      </div>
-      
-    {{else}}
-      <input type="hidden" name="is_player_created" value="true">
-    {{/if}}
   </div>
   <div class="field">
     <label class="label" for="class-name">Name</label>
@@ -194,15 +154,6 @@
       Public (visible to everyone)
     </label>
   </div>
-  {{#if (eq profile.role 'admin')}}
-  <div class="field">
-    <label class="checkbox">
-      <input type="checkbox" name="free_play_access" {{#if class.free_play_access}}checked{{/if}}>
-      Free pre-release access (unlocked for everyone)
-    </label>
-    <p class="help">Lets every user access this class without an individual unlock. The class must also be public to appear in the catalog.</p>
-  </div>
-  {{/if}}
   <div class="field">
     <label class="label" for="class-tips-heading">Tips Heading</label>
     <div class="control">
@@ -847,6 +798,65 @@
     <template data-prototype="note">{{> gearNoteRow gi=0 ni=0}}</template>
     <template data-prototype="child">{{> gearNoteChildRow gi=0 ni=0 ci=0}}</template>
   </div>
+  {{#if (eq profile.role 'admin')}}
+  <section class="box" aria-labelledby="class-admin-heading" data-class-admin>
+    <h3 class="title is-5" id="class-admin-heading">Admin settings</h3>
+    <div class="columns is-multiline">
+      <div class="column is-one-third-tablet">
+        <div class="field">
+          <label class="label" for="class-status">Status</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="status" id="class-status">
+                <option value="release" {{#if (eq class.status "release")}}selected{{/if}}>Release</option>
+                <option value="beta" {{#if (eq class.status "beta")}}selected{{/if}}>Beta</option>
+                <option value="alpha" {{#if (eq class.status "alpha")}}selected{{/if}}>Alpha</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="column is-one-third-tablet">
+        <div class="field">
+          <label class="label" for="class-prerelease-section">Pre-release Section</label>
+          <div class="control">
+            <div class="select is-fullwidth">
+              <select name="prerelease_section" id="class-prerelease-section">
+                <option value="">Not set</option>
+                <option value="pcc" {{#if (eq class.prerelease_section "pcc")}}selected{{/if}}>PCCs</option>
+                <option value="exclusive" {{#if (eq class.prerelease_section "exclusive")}}selected{{/if}}>Exclusives</option>
+                <option value="aspirant" {{#if (eq class.prerelease_section "aspirant")}}selected{{/if}}>Aspirant Classes</option>
+              </select>
+            </div>
+          </div>
+          <p class="help">Which section of the pre-release bundle this class was printed under.</p>
+        </div>
+      </div>
+    </div>
+    <div class="field">
+      <label class="label">Type</label>
+      <div class="control">
+        <label class="radio">
+          <input type="radio" name="is_player_created" value="false" {{#unless isNew}}{{#unless class.is_player_created}}checked{{/unless}}{{/unless}}>
+          Official
+        </label>
+        <label class="radio">
+          <input type="radio" name="is_player_created" value="true" {{#if isNew}}checked{{else}}{{#if class.is_player_created}}checked{{/if}}{{/if}}>
+          PCC (player-created)
+        </label>
+      </div>
+    </div>
+    <div class="field">
+      <label class="checkbox">
+        <input type="checkbox" name="free_play_access" {{#if class.free_play_access}}checked{{/if}}>
+        Free pre-release access (unlocked for everyone)
+      </label>
+      <p class="help">Lets every user access this class without an individual unlock. The class must also be public to appear in the catalog.</p>
+    </div>
+  </section>
+  {{else}}
+  <input type="hidden" name="is_player_created" value="true">
+  {{/if}}
   <div class="field">
     <div class="control">
       <button class="button is-primary" type="submit">Save</button>

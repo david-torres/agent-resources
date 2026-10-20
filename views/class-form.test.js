@@ -7,6 +7,7 @@ const { test, expect, beforeAll } = require('bun:test');
 const fs = require('fs');
 const path = require('path');
 const Handlebars = require('handlebars');
+const { JSDOM } = require('jsdom');
 const hbsHelpers = require('handlebars-helpers')();
 const rangeHelper = require('handlebars-helper-range');
 const customHelpers = require('../util/handlebars');
@@ -118,8 +119,7 @@ test('no prose input is required', () => {
   }
 });
 
-// challenge_level and prerelease_section are provenance and curation, not
-// player-editable metadata: a player-created class must not be able to tag
+// prerelease_section is provenance: a player-created class must not tag
 // itself as printed in the pre-release bundle. Gated the way is_player_created
 // already is in this template.
 const renderForm = (role, context = { isNew: true, class: null }) => {
@@ -135,7 +135,7 @@ const renderForm = (role, context = { isNew: true, class: null }) => {
 };
 
 test('the admin-only class metadata renders for an admin and not for a player', () => {
-  const adminOnly = ['challenge_level', 'prerelease_section', 'designer'];
+  const adminOnly = ['prerelease_section', 'free_play_access'];
   const asAdmin = renderForm('admin');
   const asPlayer = renderForm('player');
   for (const field of adminOnly) {
@@ -144,6 +144,25 @@ test('the admin-only class metadata renders for an admin and not for a player', 
   }
   // The prose fields are not gated -- any creator writes those.
   expect(asPlayer).toContain('name="overview"');
+});
+
+test('players can edit the challenge level and see the current selection', () => {
+  const html = renderForm('player', { isNew: false, class: { challenge_level: 'High' } });
+  expect(html).toContain('name="challenge_level"');
+  expect(html).toMatch(/value="High"\s+selected/);
+});
+
+test('designer is editable by players and admin controls are grouped separately', () => {
+  const player = new JSDOM(renderForm('player', { isNew: false, class: { designer: 'Jane' } })).window.document;
+  expect(player.querySelector('[name="designer"]').value).toBe('Jane');
+  expect(player.querySelector('[data-class-admin]')).toBeNull();
+  expect(player.querySelector('[name="status"] option[value="release"]')).toBeNull();
+  expect(player.querySelector('[name="is_player_created"]').type).toBe('hidden');
+  const admin = new JSDOM(renderForm('admin')).window.document;
+  for (const name of ['status', 'prerelease_section', 'is_player_created', 'free_play_access']) {
+    expect(admin.querySelector(`[data-class-admin] [name="${name}"]`)).not.toBeNull();
+    expect(admin.querySelectorAll(`[name="${name}"]`).length).toBe(name === 'is_player_created' ? 2 : 1);
+  }
 });
 
 // _syncToastUIEditorsToTextareas writes editor.getMarkdown() back on submit,

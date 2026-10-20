@@ -77,7 +77,7 @@ const parseStatSpread = (body) => {
 // these fields from non-admins, so handlers drop them rather than trust them.
 // Deleting rather than nulling preserves the create default and leaves existing
 // values unchanged on update.
-const ADMIN_ONLY_FIELDS = ['challenge_level', 'prerelease_section', 'designer', 'free_play_access'];
+const ADMIN_ONLY_FIELDS = ['prerelease_section', 'free_play_access'];
 
 // The flat ability_name[] / ability_description[] path is gone, but a browser
 // holding the previous version of the form still posts those names. req.body

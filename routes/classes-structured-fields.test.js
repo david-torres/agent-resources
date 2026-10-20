@@ -293,12 +293,11 @@ test('PUT /classes/:id rejects out-of-allowlist select values without a 500', as
 });
 
 // prerelease_section is provenance: which section of the source document a
-// class was printed under. Both inputs are admin-only in the form, so the
-// server must not take them from a non-admin who posts them anyway.
+// class was printed under. The server must not accept admin-only metadata
+// from a non-admin who posts it anyway.
 const adminOnlyFields = {
-  challenge_level: 'High',
   prerelease_section: 'exclusive',
-  designer: 'Sneaky Player',
+  free_play_access: 'on',
 };
 
 test('POST /classes ignores the admin-only class metadata from a non-admin', async () => {
@@ -318,6 +317,30 @@ test('PUT /classes/:id ignores the admin-only class metadata from a non-admin', 
   expect(res.status).toBe(200);
   for (const field of Object.keys(adminOnlyFields)) {
     expect(capturedUpdate).not.toHaveProperty(field);
+  }
+});
+
+for (const rating of ['Low', 'Mid', 'High', '']) {
+  test(`players can create and update a class with challenge level ${rating || 'unset'}`, async () => {
+    profileRole = 'player';
+    const body = { ...baseBody, challenge_level: rating, examples: '' };
+    const created = await post('/classes', body);
+    expect(created.status).toBe(200);
+    expect(capturedCreate.challenge_level).toBe(rating || null);
+    const updated = await put(`/classes/${EXISTING_CLASS_ID}`, body);
+    expect(updated.status).toBe(200);
+    expect(capturedUpdate.challenge_level).toBe(rating || null);
+  });
+}
+
+test('players can set and clear designer on create and update', async () => {
+  profileRole = 'player';
+  for (const designer of ['Jane Doe', '']) {
+    const body = { ...baseBody, designer, examples: '' };
+    expect((await post('/classes', body)).status).toBe(200);
+    expect(capturedCreate.designer).toBe(designer || null);
+    expect((await put(`/classes/${EXISTING_CLASS_ID}`, body)).status).toBe(200);
+    expect(capturedUpdate.designer).toBe(designer || null);
   }
 });
 
