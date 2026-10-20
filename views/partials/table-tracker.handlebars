@@ -30,10 +30,10 @@
   </div>
   {{/each}}
 
-  <details class="tracker-sources mt-1">
-    <summary class="is-size-7 has-text-link">Abilities, Signatures &amp; mechanics</summary>
+  <details class="tracker-sources mt-3">
+    <summary class="is-size-5 has-text-weight-semibold has-text-link py-2">Abilities, Signatures &amp; mechanics</summary>
     {{#each tracker.sources}}
-    <div class="tracker-source is-flex is-align-items-center is-flex-wrap-wrap py-1" data-source="{{this.key}}">
+    <div class="tracker-source is-flex is-align-items-center is-flex-wrap-wrap py-2" data-source="{{this.key}}">
       <span class="mr-2"><strong>{{this.name}}</strong> <span class="has-text-grey is-size-7">{{this.kind}}</span></span>
       {{#if this.used}}<span class="tag is-light mr-1{{#if this.heavyUse}} is-warning{{/if}}">Used ×{{this.used}} this session</span>{{/if}}
       {{#if this.uses}}<span class="tag is-light mr-1" title="Finite Uses {{this.uses.label}}">{{this.remaining}} left</span>{{/if}}
