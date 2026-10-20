@@ -6,7 +6,10 @@ const source = fs.readFileSync(path.join(__dirname, '../public/js/table-live.js'
 
 function harness() {
   let busy = false;
-  let ping, interval;
+  let ping, interval, subscription;
+  const connection = { textContent: '' };
+  const navigator = { onLine: true };
+  const windowListeners = {};
   let nextTimer = 0;
   const timers = new Map();
   const requests = [];
@@ -15,16 +18,16 @@ function harness() {
   const root = { dataset: { tableLive: 't1', liveMode: 'realtime' } };
   const client = {
     auth: { onAuthStateChange() {} }, removeChannel() {},
-    channel: () => ({ on(_event, _filter, cb) { ping = cb; return this; }, subscribe(cb) { cb('SUBSCRIBED'); return this; } }),
+    channel: () => ({ on(_event, _filter, cb) { ping = cb; return this; }, subscribe(cb) { subscription = cb; cb('SUBSCRIBED'); return this; } }),
   };
   const document = {
     readyState: 'complete', visibilityState: 'visible',
     addEventListener: (name, cb) => { listeners[name] = cb; },
     getElementById: () => tracker,
-    querySelector: () => root,
+    querySelector: selector => selector === '[data-table-connection]' ? connection : selector === '[data-table-live]' ? root : null,
     querySelectorAll: () => [tracker],
   };
-  const context = { window: {}, document, App: { getSupabaseClient: () => client },
+  const context = { window: { addEventListener: (name, cb) => { windowListeners[name] = cb; } }, navigator, document, App: { getSupabaseClient: () => client },
     htmx: { ajax: (...args) => requests.push(args) },
     setTimeout: cb => { timers.set(++nextTimer, cb); return nextTimer; },
     clearTimeout: id => timers.delete(id), setInterval: cb => { interval = cb; },
@@ -33,7 +36,7 @@ function harness() {
   const flush = () => { const queued = [...timers.values()]; timers.clear(); queued.forEach(cb => cb()); };
   flush();
   requests.length = 0;
-  return { document, requests, flush, timers, ping: () => ping({ new: { member_id: 'm1' } }),
+  return { document, requests, flush, timers, connection, navigator, windowListeners, live: context.window.TableLive, subscription: status => subscription(status), ping: () => ping({ new: { member_id: 'm1' } }),
     periodic: () => interval(), busy: value => { busy = value; }, listeners };
 }
 
@@ -66,4 +69,36 @@ test('hidden pages do not perform periodic full refreshes', () => {
   h.periodic();
   h.flush();
   expect(h.requests).toHaveLength(0);
+});
+
+
+test('Realtime disconnect falls back to polling and catches up after reconnect', () => {
+  const h = harness();
+  expect(h.live.shouldPoll()).toBe(false);
+  h.subscription('CHANNEL_ERROR');
+  expect(h.live.shouldPoll()).toBe(true);
+  expect(h.connection.textContent).toContain('every 5 seconds');
+  h.subscription('SUBSCRIBED');
+  h.flush();
+  expect(h.live.shouldPoll()).toBe(false);
+  expect(h.requests[0][1]).toBe('/tables/t1/members/m1/tracker');
+});
+
+test('offline suspends requests and reconnect refreshes the saved values', () => {
+  const h = harness();
+  h.navigator.onLine = false;
+  h.windowListeners.offline();
+  expect(h.live.shouldPoll()).toBe(false);
+  expect(h.connection.textContent).toContain('Offline');
+  h.periodic();
+  h.flush();
+  expect(h.requests).toHaveLength(0);
+  let prevented = false;
+  h.listeners['htmx:beforeRequest']({ detail: { elt: { closest: () => ({}) }, requestConfig: { verb: 'get' } }, preventDefault: () => { prevented = true; } });
+  expect(prevented).toBe(true);
+  h.navigator.onLine = true;
+  h.windowListeners.online();
+  h.flush();
+  expect(h.requests[0][1]).toBe('/tables/t1/members/m1/tracker');
+  expect(h.connection.textContent).toContain('connected');
 });

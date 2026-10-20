@@ -37,6 +37,7 @@
 {{/if}}
 
 <div{{#unless draft}} data-table-live="{{table.id}}" data-live-mode="{{liveMode}}"{{/unless}}>
+  {{#unless draft}}<p class="help mb-3" role="status" aria-live="polite" data-table-connection>Connecting to updates…</p>{{/unless}}
 <div class="columns">
   {{#if (or draft profile)}}
   <div class="column is-5">

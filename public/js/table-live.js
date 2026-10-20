@@ -10,6 +10,14 @@ window.TableLive = window.TableLive || (function () {
   let connected = false;
   let channel = null;
   let tableId = null;
+  let generation = 0;
+  const online = () => navigator.onLine !== false;
+  const showStatus = () => {
+    const el = document.querySelector('[data-table-connection]');
+    if (!el) return;
+    el.textContent = !online() ? 'Offline — showing saved values. Reconnect before making changes.'
+      : connected ? 'Live updates connected.' : 'Checking for updates every 5 seconds. Live updates will reconnect automatically.';
+  };
   const pending = new Map();
   const openSources = new Set();
   const forced = new Set();
@@ -21,6 +29,7 @@ window.TableLive = window.TableLive || (function () {
       const el = document.getElementById(`tracker-${memberId}`);
       pending.delete(memberId);
       if (!el) { forced.delete(memberId); return; }
+      if (!online()) return;
       if (el.classList.contains('htmx-request') || el.querySelector('.htmx-request')) {
         refresh(memberId);
         return;
@@ -36,6 +45,7 @@ window.TableLive = window.TableLive || (function () {
   };
 
   const stop = () => {
+    generation += 1;
     for (const timer of pending.values()) clearTimeout(timer);
     pending.clear();
     forced.clear();
@@ -43,6 +53,7 @@ window.TableLive = window.TableLive || (function () {
     if (channel && client) client.removeChannel(channel);
     channel = null;
     connected = false;
+    showStatus();
   };
 
   const start = (root) => {
@@ -50,18 +61,22 @@ window.TableLive = window.TableLive || (function () {
     if (channel && nextTable === tableId) return;
     stop();
     tableId = nextTable;
-    if (root.dataset.liveMode !== 'realtime') return;
+    showStatus();
+    if (!online() || root.dataset.liveMode !== 'realtime') return;
     const client = typeof App !== 'undefined' && App.getSupabaseClient();
     if (!client) return;
+    const currentGeneration = generation;
     channel = client
       .channel(`game-table-${tableId}`)
       .on('postgres_changes',
         { event: 'UPDATE', schema: 'public', table: 'game_table_member_state', filter: `table_id=eq.${tableId}` },
-        (payload) => refresh(payload.new.member_id))
+        (payload) => { if (generation === currentGeneration) refresh(payload.new.member_id); })
       .subscribe((status) => {
+        if (generation !== currentGeneration) return;
         const wasConnected = connected;
         connected = status === 'SUBSCRIBED';
-        if (connected && !wasConnected) refreshAll();
+        showStatus();
+        if (connected && !wasConnected) refreshAll(true);
       });
   };
 
@@ -85,8 +100,19 @@ window.TableLive = window.TableLive || (function () {
   // Sheet and guest edits do not bump tracker state versions or emit state
   // events. Periodically re-read their inputs even on a healthy subscription.
   setInterval(() => {
-    if (document.visibilityState === 'visible' && document.querySelector('[data-table-live]')) refreshAll(true);
+    if (online() && document.visibilityState === 'visible' && document.querySelector('[data-table-live]')) refreshAll(true);
   }, 30000);
+
+  window.addEventListener('offline', () => stop());
+  window.addEventListener('online', () => { scan(); refreshAll(true); });
+  document.addEventListener('htmx:beforeRequest', (event) => {
+    if (online() || !event.detail.elt?.closest('[data-tracker]')) return;
+    event.preventDefault();
+    showStatus();
+    if (event.detail.requestConfig?.verb !== 'get' && typeof App !== 'undefined') {
+      App.showToast('You are offline. Reconnect and try again; this change was not sent.', { type: 'warning' });
+    }
+  });
 
   document.addEventListener('DOMContentLoaded', scan);
   document.addEventListener('htmx:afterSettle', scan);
@@ -137,7 +163,7 @@ window.TableLive = window.TableLive || (function () {
   // A poll must not abort an in-flight action (hx-sync replaces).
   const requestInFlight = () => !!document.querySelector('[data-tracker].htmx-request, [data-tracker] .htmx-request');
 
-  return { shouldPoll: () => !connected && document.visibilityState === 'visible' && !requestInFlight(), scan };
+  return { shouldPoll: () => online() && !connected && document.visibilityState === 'visible' && !requestInFlight(), scan };
 })();
 
 // On a boosted navigation this script runs long after DOMContentLoaded, and
