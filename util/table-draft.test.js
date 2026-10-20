@@ -71,3 +71,33 @@ test('draft members are display-shaped for the shared roster', async () => {
   const draft = await resolveDraft({ c: uuid(1) }, null, async () => ({ data: rows, error: null }));
   expect(draft.members[0]).toMatchObject({ memberId: uuid(1), id: uuid(1), isGuest: false, canRemove: true, canViewDetails: true });
 });
+
+
+test('draft guests survive sharing and membership changes and contribute stats', async () => {
+  const g = JSON.stringify([{ name: 'Mira', will: 7 }]);
+  const draft = await resolveDraft({ c: ID[0], g, add: ID[1] }, null, loader);
+  expect(draft.members).toHaveLength(3);
+  expect(draft.members[2]).toMatchObject({ name: 'Mira', isGuest: true, will: 7 });
+  expect(draft.summary.totals.will).toBe(7);
+  expect(draft.tableCsv).toBe(`${ID[0]},${ID[1]}`);
+  const removed = await resolveDraft({ c: draft.tableCsv, g: draft.tableGuests, removeGuest: '0' }, null, loader);
+  expect(removed.members).toHaveLength(2);
+  expect(removed.tableGuests).toBe('[]');
+});
+
+test('draft guest payloads reject malformed data and obey the shared seat cap', async () => {
+  for (const g of ['invalid', '{}', '[null]', JSON.stringify([{ name: 'Mira', will: -1 }])]) {
+    expect((await resolveDraft({ g }, null, loader)).error.status).toBe(400);
+  }
+  const full = await resolveDraft({ c: ID.slice(0, 8).join(','), g: JSON.stringify([{ name: 'Mira' }]) }, null, loader);
+  expect(full.members).toHaveLength(8);
+  expect(full.droppedOverCap).toBe(1);
+});
+
+
+test('adding a registered character to a full mixed draft keeps the existing guest', async () => {
+  const draft = await resolveDraft({ c: ID.slice(0, 7).join(','), g: JSON.stringify([{ name: 'Mira' }]), add: ID[7] }, null, loader);
+  expect(draft.members).toHaveLength(8);
+  expect(draft.members.at(-1).name).toBe('Mira');
+  expect(draft.droppedOverCap).toBe(1);
+});

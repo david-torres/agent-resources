@@ -13,10 +13,10 @@ test('a guest needs a name; class is optional; missing stats are zero', () => {
   expect(Object.keys(data.guest_stats).sort()).toEqual([...statList].sort());
 });
 
-test('guest stats are whole numbers from 0 to 5, and every bad one is named in stat order', () => {
-  const { errors } = normalizeGuestInput({ name: 'Mira', might: '6', luck: '1.5', will: '-1' });
+test('guest stats are whole numbers from 0 to 100, and every bad one is named in stat order', () => {
+  const { errors } = normalizeGuestInput({ name: 'Mira', might: '101', luck: '1.5', will: '-1' });
   const named = statList.filter((stat) => ['might', 'luck', 'will'].includes(stat)).join(', ');
-  expect(errors).toEqual([`Stats must be whole numbers from 0 to 5: ${named}.`]);
+  expect(errors).toEqual([`Stats must be whole numbers from 0 to 100: ${named}.`]);
 });
 
 test('guest names and class labels are capped at 60 characters', () => {
@@ -54,4 +54,8 @@ test('the Conduit is the table\'s conduit_id, or an admin', () => {
   expect(capabilitiesFor(table, { profileId: 'conduit' }).isConduit).toBe(true);
   expect(capabilitiesFor(table, { profileId: 'creator' }).isConduit).toBe(false);
   expect(capabilitiesFor(table, { profileId: 'x', role: 'admin' }).isConduit).toBe(true);
+});
+
+test('unregistered stats above five are accepted', () => {
+  expect(normalizeGuestInput({ name: 'Mira', will: '7', might: '100' }).data.guest_stats).toMatchObject({ will: 7, might: 100 });
 });

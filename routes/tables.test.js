@@ -286,7 +286,7 @@ test('a draft renders signed out, carrying its roster in #table-csv', async () =
 test('the panel adds to the roster it was given and pushes the draft URL', async () => {
   const res = await get(`/tables/new/panel?c=${ID[0]}&add=${ID[1]}`);
   expect(csvFrom(await res.text())).toBe(`${ID[0]},${ID[1]}`);
-  expect(res.headers.get('HX-Push-Url')).toBe(`/tables/new?c=${ID[0]},${ID[1]}`);
+  expect(new URL(res.headers.get('HX-Push-Url'), baseUrl).searchParams.get('c')).toBe(`${ID[0]},${ID[1]}`);
 });
 
 test('the panel removes one member and keeps the rest in order', async () => {
@@ -332,7 +332,7 @@ test('/party sends old links to the draft, keeping the roster', async () => {
 test('a signed-in draft offers to save, posting its roster', async () => {
   const html = await (await fetch(`${baseUrl}/tables/new?c=${uuid(1)}`, { headers: authed })).text();
   expect(html).toContain('hx-post="/tables"');
-  expect(html).toContain('hx-include="#table-csv"');
+  expect(html).toContain('hx-include="#table-csv, #table-guests"');
 });
 
 test('a signed-out draft asks the visitor to sign in to save', async () => {
@@ -466,4 +466,32 @@ test('the table page renders each member\'s tracker', async () => {
   const html = await (await get(`/tables/${TABLE_ID}`)).text();
   expect(html).toContain(`id="tracker-${MEMBER_ID}"`);
   expect(html).toContain('Yellow');
+});
+
+
+test('a signed-out draft can add an unregistered character and share it in its URL', async () => {
+  const page = await (await get('/tables/new')).text();
+  expect(page).toContain('hx-post="/tables/new/guests"');
+  expect(page).toContain('data-add-stat-block');
+  expect(page).not.toContain('type="number"');
+  const added = await fetch(`${baseUrl}/tables/new/guests`, {
+    method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'HX-Request': 'true' },
+    body: new URLSearchParams({ c: ID[0], name: 'Mira', will: '7' }),
+  });
+  expect(added.status).toBe(200);
+  const url = added.headers.get('HX-Push-Url');
+  const html = await added.text();
+  expect(html).toContain('Mira');
+  expect(html).toContain('hx-post="/tables/new/guests"');
+  const shared = await (await get(url)).text();
+  expect(shared).toContain('Mira');
+  expect(shared).toContain('data-remove-character="0"');
+  let saved;
+  fake.create = async (_actor, input) => { saved = input; return { data: { id: TABLE_ID } }; };
+  const params = new URL(url, baseUrl).searchParams;
+  params.set('name', 'Friday');
+  const res = await fetch(`${baseUrl}/tables`, { method: 'POST', headers: { ...hx, 'Content-Type': 'application/x-www-form-urlencoded' }, body: params });
+  expect(res.headers.get('HX-Location')).toBe(`/tables/${TABLE_ID}`);
+  expect(saved.guests[0]).toMatchObject({ name: 'Mira', will: 7 });
+  expect(saved.characterIds).toEqual([ID[0]]);
 });

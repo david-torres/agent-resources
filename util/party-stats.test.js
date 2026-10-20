@@ -70,13 +70,11 @@ test('strongest lists the top three by total, highest first', () => {
   expect(summary.strongest).toEqual(['might', 'vigor', 'skill']);
 });
 
-test('weakest lists the lowest non-gap stats, lowest first', () => {
+test('weakest includes zero-total stats, lowest first', () => {
   const summary = summarizeParty([
     member('Ash', { might: 9, vigor: 7, skill: 5, luck: 1, spirit: 2, will: 3 })
   ]);
-  // arcane and the rest are 0, so they are gaps and must not appear here.
-  expect(summary.weakest).toEqual(['luck', 'spirit', 'will']);
-  summary.weakest.forEach(stat => expect(summary.gaps).not.toContain(stat));
+  expect(summary.weakest).toEqual(statList.filter(stat => summary.totals[stat] === 0).slice(0, 3));
 });
 
 test('ties break by statList order so the output is deterministic', () => {
@@ -90,7 +88,7 @@ test('ties break by statList order so the output is deterministic', () => {
 test('fewer than three non-gap stats yields a shorter list, not padding', () => {
   const summary = summarizeParty([member('Ash', { might: 2, luck: 1 })]);
   expect(summary.strongest).toEqual(['might', 'luck']);
-  expect(summary.weakest).toEqual(['luck', 'might']);
+  expect(summary.weakest).toEqual(statList.filter(stat => !['luck', 'might'].includes(stat)).slice(0, 3));
 });
 
 test('breakdown carries one entry per member, in the order given', () => {

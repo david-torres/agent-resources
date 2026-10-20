@@ -113,7 +113,7 @@ test('seating an already-seated character changes nothing', async () => {
 test('only the creator or Conduit adds guests, and bad input names its problem', async () => {
   const { svc, repo } = service({ table: TABLE, members: [] });
   expect((await svc.addGuest(USER, 't1', { name: 'Mira' }, USER_CLIENT)).error.status).toBe(403);
-  const bad = await svc.addGuest(CREATOR, 't1', { name: '', might: '9' }, USER_CLIENT);
+  const bad = await svc.addGuest(CREATOR, 't1', { name: '', might: '101' }, USER_CLIENT);
   expect(bad.error.status).toBe(400);
   expect(bad.error.message).toContain('Give the character a name.');
   expect(bad.error.message).toContain('might');
@@ -509,4 +509,14 @@ test('a full refresh reloads guest budgets and character sources without a state
   const refreshed = (await svc.tracker(USER, 't1', 'm1')).data.tracker;
   expect(refreshed.version).toBe(3);
   expect(refreshed.sources[0].name).toBe('New ability');
+});
+
+
+test('saving a draft seats unregistered characters alongside registered members', async () => {
+  const { svc, repo } = service({ table: TABLE, members: [] });
+  const result = await svc.create(CREATOR, { name: 'Friday', characterIds: ['c1'], guests: [{ name: 'Mira', will: 7 }] }, USER_CLIENT);
+  expect(result.error).toBeUndefined();
+  const rows = repo.calls.find(c => c.name === 'insertMembers').args[0];
+  expect(rows).toHaveLength(2);
+  expect(rows[1]).toMatchObject({ table_id: 'new-id', guest_name: 'Mira', guest_stats: { will: 7 } });
 });

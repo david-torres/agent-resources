@@ -232,7 +232,7 @@ The budget is always computed from the character's current stats.
 | `GET /tables` | Tables you created, are Conduit of, or have a character seated at |
 | `POST /tables` | Create, optionally seeded from `?c=` ids or an LFG post |
 | `GET /tables/:id` | The table page: roster, party summary, member breakdown, trackers |
-| `GET /tables/new?c=…` | An unsaved draft of the table page; works signed out; "Save table" when signed in |
+| `GET /tables/new?c=…` | An unsaved draft of the table page; registered ids use `c`, unregistered characters use JSON in `g`; works signed out; "Save table" when signed in |
 | `/party?c=…` | 301 to the draft |
 | Member endpoints | Seat, remove, add or edit guest — each returns the roster fragment |
 
@@ -244,7 +244,7 @@ is reused unchanged; a guest is one more stat object.
 
 "+ Add unregistered character" opens a form: name (required), class label
 (optional), and the 12 stats with the character form's block steppers in
-`statList` order. Each stat is 0–5. Validation failures come back as a toast
+`statList` order. Each stat uses the normal cube selector, starting with five cubes (or the saved value). A + button reveals one more empty cube per click, up to 100; clicking a cube sets the stat. Validation failures come back as a toast
 naming every problem (`sendRouteError`), which is this app's form-error pattern. Guests have no abilities or Signatures,
 so their tracker is the two pools and narrative spends.
 
@@ -399,3 +399,5 @@ Production migrations are applied by the user with
 - Analytics (#165 was deleted)
 - Discord notifications (#167)
 - Changing the Library's PDF link — that follows #169's verdict
+
+Draft tables offer the unregistered character form before saving, including while signed out. Saving preserves both member kinds within the shared eight-seat cap. Stat summaries show Strongest and Weakest (including zero totals), without a separate No coverage warning.

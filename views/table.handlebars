@@ -3,7 +3,7 @@
 <h2 class="title is-2">New Table</h2>
 <p class="subtitle is-6 has-text-grey">
   Add characters to compare their stats. This draft lives in the page's address, so you can bookmark or share it.
-  {{#if profile}}Save it to keep it, seat unregistered characters, and share private members.{{else}}<a href="/auth">Sign in</a> to save it as a table.{{/if}}
+  {{#if profile}}Save it to keep it and share private members.{{else}}<a href="/auth">Sign in</a> to save it as a table.{{/if}}
 </p>
 {{else}}
 <div class="level is-mobile mb-2 table-heading">
@@ -44,7 +44,7 @@
     {{#if draft}}{{#if profile}}
     <div class="box">
       <h3 class="title is-5">Save as a Table</h3>
-      <form class="field has-addons" hx-post="/tables" hx-include="#table-csv">
+      <form class="field has-addons" hx-post="/tables" hx-include="#table-csv, #table-guests">
         <div class="control is-expanded"><input class="input" name="name" maxlength="80" required placeholder="Friday game night" aria-label="Table name"></div>
         <div class="control"><button class="button is-primary" type="submit">Save</button></div>
       </form>
@@ -78,8 +78,8 @@
     </div>
     {{/if}}
 
-    {{#if capabilities.canManage}}
-    <div class="box" id="guest-form">{{> table-guest-form tableId=table.id statList=statList}}</div>
+    {{#if (or draft capabilities.canManage)}}
+    <div class="box" id="guest-form">{{> table-guest-form tableId=table.id statList=statList draft=draft}}</div>
     {{/if}}
   </div>
   {{/if}}

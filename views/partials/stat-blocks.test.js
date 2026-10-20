@@ -1,5 +1,5 @@
 const { test, expect, beforeAll } = require('bun:test');
-const { setupAlpine, render, tick } = require('../../test/helpers/alpine-dom');
+const { setupAlpine, render, tick, settle } = require('../../test/helpers/alpine-dom');
 
 beforeAll(async () => {
   await setupAlpine();
@@ -503,4 +503,37 @@ test('character-wizard.js wires the hover preview', () => {
   );
   expect(src).toContain("addEventListener('mouseover', onStatBoxHover)");
   expect(src).toContain("addEventListener('mouseleave', clearStatPreview)");
+});
+
+
+test('expandable stats add an empty cube before it can be filled', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 5, max: 100, expandable: true }));
+  await settle();
+  const visible = () => blocks().filter(el => el.style.display !== 'none');
+  expect(visible()).toHaveLength(5);
+  document.querySelector('[data-add-stat-block]').click();
+  await settle();
+  expect(visible()).toHaveLength(6);
+  expect(hidden().value).toBe('5');
+  expect(visible()[5].classList.contains('is-empty')).toBe(true);
+  visible()[5].click();
+  await settle();
+  expect(hidden().value).toBe('6');
+  expect(visible()[5].classList.contains('is-set')).toBe(true);
+  document.querySelector('[data-add-stat-block]').click();
+  await settle();
+  expect(visible()).toHaveLength(7);
+  expect(hidden().value).toBe('6');
+});
+
+test('expandable stats show saved values above five and stop at the limit', async () => {
+  await render(renderPartial({ stat: 'might', name: 'might', value: 7, max: 8, expandable: true }));
+  await settle();
+  expect(blocks().filter(el => el.style.display !== 'none')).toHaveLength(7);
+  const add = document.querySelector('[data-add-stat-block]');
+  add.click();
+  await settle();
+  expect(blocks().filter(el => el.style.display !== 'none')).toHaveLength(8);
+  expect(add.disabled).toBe(true);
+  expect(hidden().value).toBe('7');
 });

@@ -9,6 +9,7 @@ const { sendError, sendRouteError } = require('../util/http-error');
 const { isValidUuid } = require('../util/validate');
 const { actorFromLocals } = require('../util/actor');
 const { statList } = require('../util/enclave-consts');
+const { normalizeGuestInput } = require('../services/game-tables/policy');
 const { PARTY_CAP } = require('../util/party-stats');
 const { getOwnCharacters, getPartyCharacters, searchPublicCharacters } = require('../models/character');
 const { gameTables } = require('../models/game-tables');
@@ -97,9 +98,11 @@ router.post('/', isAuthenticated, asyncHandler(async (req, res) => {
   if (visibleError) return sendRouteError(req, res, visibleError);
   const visibleIds = new Set((visible || []).map((character) => character.id));
 
+  const draft = await resolveDraft({ c: requested.filter((id) => visibleIds.has(id)).join(','), g: req.body.g }, res.locals.supabase, async () => ({ data: visible }));
+  if (draft.error) return sendRouteError(req, res, draft.error);
   const { data, error } = await gameTables.create(
     actorFromLocals(res.locals),
-    { name: req.body.name, characterIds: requested.filter((id) => visibleIds.has(id)) },
+    { name: req.body.name, characterIds: draft.tableCsv.split(',').filter(Boolean), guests: JSON.parse(draft.tableGuests) },
     res.locals.supabase,
   );
   if (error && !data) return sendRouteError(req, res, error);
@@ -132,12 +135,25 @@ router.get('/new', authOptional, asyncHandler(async (req, res) => {
   });
 }));
 
+router.post('/new/guests', authOptional, asyncHandler(async (req, res) => {
+  const guest = normalizeGuestInput(req.body);
+  if (guest.errors) return sendRouteError(req, res, { status: 400, message: guest.errors.join(' ') });
+  const draft = await resolveDraft(req.body, res.locals.supabase);
+  if (draft.error) return sendRouteError(req, res, draft.error);
+  if (draft.members.length >= PARTY_CAP) return sendRouteError(req, res, { status: 400, message: `A table seats at most ${PARTY_CAP}.` });
+  const guests = [...JSON.parse(draft.tableGuests), { name: guest.data.guest_name, class_label: guest.data.guest_class_label, ...guest.data.guest_stats }];
+  const updated = await resolveDraft({ c: draft.tableCsv, g: JSON.stringify(guests) }, res.locals.supabase);
+  if (updated.error) return sendRouteError(req, res, updated.error);
+  res.header('HX-Push-Url', `/tables/new?${new URLSearchParams({ c: updated.tableCsv, g: updated.tableGuests })}`);
+  res.render('partials/table-panel-update', { layout: false, ...draftContext(updated, res.locals.profile), resetGuestForm: true });
+}));
+
 router.get('/new/panel', authOptional, asyncHandler(async (req, res) => {
   const draft = await resolveDraft(req.query, res.locals.supabase);
   if (draft.error) return sendRouteError(req, res, draft.error);
   // The panel owns draft membership, so the address bar learns the new URL
   // from the response.
-  res.header('HX-Push-Url', `/tables/new?c=${draft.tableCsv}`);
+  res.header('HX-Push-Url', `/tables/new?${new URLSearchParams({ c: draft.tableCsv, ...(draft.tableGuests !== '[]' ? { g: draft.tableGuests } : {}) })}`);
   res.render('partials/table-panel-update', { layout: false, ...draftContext(draft, res.locals.profile) });
 }));
 

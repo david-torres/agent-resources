@@ -29,7 +29,7 @@
       aria-label="Add {{this.name}} to the table"
       hx-get="/tables/new/panel"
       hx-vals='{"add": "{{this.id}}"}'
-      hx-include="#table-csv"
+      hx-include="#table-csv, #table-guests"
       hx-target="#table-panel"
       hx-swap="outerHTML">Add</button>
     {{/if}}

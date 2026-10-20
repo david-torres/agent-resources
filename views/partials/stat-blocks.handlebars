@@ -6,6 +6,8 @@
         stat        the stat key ("might"). Accessible name + data-stat.
         name        the hidden input's name -- what actually POSTs.
         value       seeded points. null/undefined becomes 0.
+        expandable  optional: start with five cubes (or the saved value);
+                    + reveals one empty cube at a time, up to max.
         max         how many blocks render (5 for character stats, 3 for a
                     class stat spread).
         model       optional expression ("stats.might"); when present the
@@ -50,7 +52,7 @@
       regardless of who put the class there. --}}
 <div class="stat-blocks" role="radiogroup" aria-label="{{capitalize stat}}"
      data-stat="{{stat}}"
-     x-data="statBlocks({{json value}}, {{max}}, {{json stat}})"
+     x-data="statBlocks({{json value}}, {{max}}, {{json stat}}{{#if expandable}}, true{{/if}})"
      {{#if model}}x-modelable="value" x-model="{{model}}"{{/if}}
      @mouseleave="preview = null"
      @keydown="key($event)">
@@ -59,6 +61,7 @@
          data-stat="{{stat}}">
   {{#range 1 (add max 1)}}
   <span class="wizard-stat-box {{#if (gte ../value this)}}is-set{{else}}is-empty{{/if}}"
+        {{#if ../expandable}}x-show="{{this}} <= max"{{#if (gt this 5)}} style="display: none;"{{/if}}{{/if}}
         role="radio"
         aria-label="{{capitalize ../stat}}: {{this}}"
         :class="boxClass({{this}})"
@@ -67,6 +70,11 @@
         @click="set({{this}})"
         @mouseenter="preview = {{this}}"></span>
   {{/range}}
+  {{#if expandable}}
+  <button type="button" class="button is-small is-light" data-add-stat-block
+          aria-label="Add a {{capitalize stat}} cube" @click="addBlock()"
+          x-show="max < limit" :disabled="max >= limit">+</button>
+  {{/if}}
   {{!-- A stat above the block count. The blocks cannot express it -- every
         one of them reads aria-checked="false" -- so this indicator is the
         only place the real value exists, and a bare numeral read out as

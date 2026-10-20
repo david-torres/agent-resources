@@ -51,17 +51,11 @@ test('a total above five prints the real number beside a full block row', () => 
   expect(html).toContain('14');
 });
 
-test('gaps are named so a zero does not have to be spotted by eye', () => {
+test('zero stats appear as weakest without a no-coverage warning', () => {
   const html = render(summarizeParty([member('Ash', { might: 3 })]));
-  expect(html).toMatch(/No coverage/i);
-  // Assert against the callout paragraph alone, not the whole document: the
-  // totals grid above prints all 12 stat names regardless, so a
-  // document-wide toContain('Arcane') would pass with the gaps list empty.
-  // Bounded at the closing </p> because "Strongest: Might" follows it.
-  const start = html.search(/No coverage/i);
-  const callout = html.slice(start, html.indexOf('</p>', start));
-  expect(callout).toContain('Arcane');
-  expect(callout).not.toContain('Might');
+  expect(html).not.toMatch(/No coverage/i);
+  expect(html).toContain('Strongest:');
+  expect(html).toContain('Weakest:');
 });
 
 test('a party with full coverage shows no gaps callout', () => {

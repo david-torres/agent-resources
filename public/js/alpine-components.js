@@ -389,11 +389,16 @@ document.addEventListener('alpine:init', () => {
   // preview, and a focus-driven preview would fight the click preview for
   // the same `preview` slot every time focusBlock() moved focus after a
   // click.
-  Alpine.data('statBlocks', (initial, max, stat) => ({
+  Alpine.data('statBlocks', (initial, max, stat, expandable = false) => ({
     value: parseInt(initial, 10) || 0,
     preview: null,
-    max: max,
+    max: expandable ? Math.min(max, Math.max(5, parseInt(initial, 10) || 0)) : max,
+    limit: max,
     stat: stat,
+
+    addBlock() {
+      if (this.max < this.limit) this.max += 1;
+    },
 
     // A stat already above `max` (the editor historically allowed 0-20) can
     // step DOWN through the blocks but must never be raised by them, so the
@@ -467,6 +472,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     key(e) {
+      if (e.target.closest('button')) return;
       if (e.key === ' ' || e.key === 'Enter') {
         const all = Array.prototype.slice.call(this.$root.querySelectorAll('[role="radio"]'));
         const idx = all.indexOf(e.target);

@@ -30,7 +30,7 @@ const summarizeParty = (characters = []) => {
   // stable in every engine we run on, so filtering it first and sorting by
   // total alone gives deterministic ties without a secondary comparator.
   const byTotalDesc = [...covered].sort((a, b) => totals[b] - totals[a]);
-  const byTotalAsc = [...covered].sort((a, b) => totals[a] - totals[b]);
+  const byTotalAsc = (members.length ? [...statList] : []).sort((a, b) => totals[a] - totals[b]);
 
   return {
     totals,

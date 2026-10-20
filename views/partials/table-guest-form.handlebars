@@ -1,8 +1,8 @@
 {{!-- Add (or, given `guest`, edit) an unregistered character: a name, an
-      optional class label, and the 12 stats as block selectors (0–5). Errors
+      optional class label, and the 12 stats as expandable cube selectors (0–100). Errors
       come back as a toast via sendRouteError. --}}
 <form data-guest-form
-  {{#if guest}}hx-put="/tables/{{tableId}}/members/{{guest.memberId}}"{{else}}hx-post="/tables/{{tableId}}/guests"{{/if}}
+  {{#if draft}}hx-post="/tables/new/guests" hx-include="#table-csv, #table-guests"{{else}}{{#if guest}}hx-put="/tables/{{tableId}}/members/{{guest.memberId}}"{{else}}hx-post="/tables/{{tableId}}/guests"{{/if}}{{/if}}
   hx-target="#table-panel" hx-swap="outerHTML">
   <h3 class="title is-5">{{#if guest}}Edit {{guest.name}}{{else}}Add an unregistered character{{/if}}</h3>
   <div class="field">
@@ -18,7 +18,7 @@
     <div class="wizard-stat-row" data-stat="{{this}}">
       <div class="wizard-stat-name" tabindex="0" data-tooltip-markdown="">{{capitalize this}}</div>
       {{> stat-scaling-row stat=this}}
-      {{> stat-blocks stat=this name=this value=(lookup ../guest this) max=5}}
+      {{> stat-blocks stat=this name=this value=(lookup ../guest this) max=100 expandable=true}}
     </div>
     {{/each}}
   </div>

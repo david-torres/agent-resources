@@ -1,9 +1,9 @@
-{{!-- The roster and party stats. On a draft, #table-csv is the single source
-      of truth for membership: every Add/Remove hx-includes it, because the
+{{!-- The roster and party stats. On a draft, #table-csv and #table-guests carry
+      membership: every Add/Remove hx-includes them, because the
       Add buttons live in the left column, which does not re-render when this
       panel swaps. A saved table's membership lives in the database. --}}
 <div id="table-panel" class="box">
-  {{#if draft}}<input type="hidden" id="table-csv" name="c" value="{{tableCsv}}">{{/if}}
+  {{#if draft}}<input type="hidden" id="table-csv" name="c" value="{{tableCsv}}"><input type="hidden" id="table-guests" name="g" value="{{tableGuests}}">{{/if}}
 
   <h3 class="title is-4">Roster <span class="tag is-light">{{summary.memberCount}}/{{partyCap}}</span></h3>
 

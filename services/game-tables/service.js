@@ -257,17 +257,25 @@ class GameTableService {
     return this.repo.listTables(client);
   }
 
-  async create(actor, { name, characterIds } = {}, client) {
+  async create(actor, { name, characterIds, guests = [] } = {}, client) {
     if (!actor?.profileId) return { data: null, error: forbidden('Sign in to save a table.') };
     const named = normalizeTableName(name);
     if (named.error) return { data: null, error: invalid(named.error) };
 
+    const guestRows = [];
+    if (!Array.isArray(guests)) return { data: null, error: invalid('Invalid unregistered characters.') };
+    for (const guest of guests) {
+      const result = normalizeGuestInput(guest);
+      if (result.errors) return { data: null, error: invalid(result.errors.join(' ')) };
+      guestRows.push(result.data);
+    }
     const id = this.newId();
     const inserted = await this.repo.insertTable(
       { id, name: named.name, creator_id: actor.profileId, conduit_id: actor.profileId }, client);
     if (inserted.error) return { data: null, error: inserted.error };
 
     const seats = [...new Set(Array.isArray(characterIds) ? characterIds : [])].slice(0, PARTY_CAP).map((characterId) => ({ table_id: id, character_id: characterId }));
+    seats.push(...guestRows.slice(0, PARTY_CAP - seats.length).map((guest) => ({ table_id: id, ...guest })));
     if (seats.length) {
       const seated = await this.repo.insertMembers(seats, client);
       if (seated.error) return { data: { id }, error: seatError(seated.error) };

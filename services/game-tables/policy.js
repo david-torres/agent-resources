@@ -7,7 +7,7 @@ const { statList } = require('../../util/enclave-consts');
 const TABLE_NAME_MAX = 80;
 const GUEST_NAME_MAX = 60;
 const GUEST_CLASS_MAX = 60;
-const GUEST_STAT_MAX = 5;
+const GUEST_STAT_MAX = 100;
 
 const pickStats = (source = {}) =>
   Object.fromEntries(statList.map((stat) => [stat, Number(source?.[stat]) || 0]));

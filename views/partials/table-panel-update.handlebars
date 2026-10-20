@@ -3,5 +3,5 @@
       guest starts from blank stats. --}}
 {{> table-panel}}
 {{#if resetGuestForm}}
-<div id="guest-form" hx-swap-oob="innerHTML">{{> table-guest-form tableId=tableId statList=statList}}</div>
+<div id="guest-form" hx-swap-oob="innerHTML">{{> table-guest-form tableId=tableId statList=statList draft=draft}}</div>
 {{/if}}
