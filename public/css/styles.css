@@ -167,6 +167,22 @@
   transition: color 0.2s ease-in-out, background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
 }
 
+/* The mission panel can be narrower than this action's label. */
+.button.conduit-credit-button {
+  height: auto;
+  min-height: 2.5em;
+  white-space: normal;
+}
+
+.conduit-credit-button > .icon {
+  flex-shrink: 0;
+}
+
+.conduit-credit-button > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .htmx-request .button {
   position: relative;
   color: transparent !important;
