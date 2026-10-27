@@ -3333,7 +3333,7 @@ window.CharacterWizard = (function () {
     renderYourSignatures(owned);
     if (!signatureGrid) return;
     const columns = [];
-    cells.forEach((cell) => {
+    cells.filter((cell) => !findPurchase(cell.entry.name, cell.classId)).forEach((cell) => {
       const key = cell.entry.column || 1;
       let column = columns.find((x) => x.key === key);
       if (!column) { column = { key: key, cells: [] }; columns.push(column); }

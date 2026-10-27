@@ -23,6 +23,7 @@ const { test, expect } = require('@playwright/test');
 const { connect, newPrefix, profileForEmail, cleanupByPrefix } = require('../fixtures/db');
 const { seedClass, unlockClassForProfile } = require('../fixtures/class');
 const { PLAYER_EMAIL, PLAYER_STATE } = require('../global-setup');
+const { grantAspirantBook } = require('../../test/helpers/auth-user-fixture');
 
 test.use({ storageState: PLAYER_STATE });
 
@@ -32,10 +33,14 @@ const SIGNATURE_NAME = `${prefix} Signature`;
 let db;
 let profile;
 let classRow;
+let bookId;
+let shopClassRow;
+const SHOP_SIGNATURE_NAME = `${prefix} Revolver`;
 
 test.beforeAll(async () => {
   db = await connect();
   profile = await profileForEmail(db, PLAYER_EMAIL);
+  bookId = await grantAspirantBook(db, profile, `${prefix} Aspirant book`);
   classRow = await seedClass(prefix, {
     rulesVersion: 'v1',
     // character-wizard.js's populatePersonalitySelects requires >= 2 spread
@@ -62,11 +67,18 @@ test.beforeAll(async () => {
   // V1's own content shape) to buy under the V1 economy this spec is about.
   await db.query('update classes set content_format = $1 where id = $2', ['aspirant', classRow.id]);
   await unlockClassForProfile(profile, classRow);
+  shopClassRow = await seedClass(prefix, {
+    name: `${prefix}-shop-class`,
+    contentFormat: 'aspirant',
+    gear: [{ name: SHOP_SIGNATURE_NAME, description: 'A shop Signature.' }]
+  });
+  await unlockClassForProfile(profile, shopClassRow);
 });
 
 test.afterAll(async () => {
   try {
     await cleanupByPrefix(db, prefix);
+    if (bookId) await db.query('delete from rules_pdfs where id=$1', [bookId]);
   } finally {
     await db.end();
   }
@@ -126,6 +138,22 @@ const readPrice = async (locator) => {
   return n;
 };
 
+test('each shop click buys one copy and Remove refunds one copy', async ({ page }) => {
+  await openToSignatureDrawer(page);
+  const card = page.locator('[data-shop-key]').filter({ hasText: SHOP_SIGNATURE_NAME });
+  const price = await readPrice(card.locator('.tag.is-warning'));
+  const copies = () => page.evaluate((name) => CharacterWizard.getState().gear.filter((g) => g.name === name).length, SHOP_SIGNATURE_NAME);
+  await card.locator('h5').click();
+  expect(await copies()).toBe(1);
+  await expect(page.locator('#merxSpent')).toHaveText(String(price));
+  await card.locator('h5').click();
+  expect(await copies()).toBe(2);
+  await expect(page.locator('#merxSpent')).toHaveText(String(2 * price));
+  await card.locator('[data-shop-remove]').click();
+  expect(await copies()).toBe(1);
+  await expect(page.locator('#merxSpent')).toHaveText(String(price));
+});
+
 test('buying a Default, swapping to a Custom and adding two Mods prices exactly as served, then an over-budget build is refused', async ({ page }) => {
   await openToSignatureDrawer(page);
   const drawer = page.locator('#signatureDrawer');
@@ -135,6 +163,8 @@ test('buying a Default, swapping to a Custom and adding two Mods prices exactly 
   const sigPrice = await readPrice(drawer.locator('.entry-header .entry-price'));
   await drawer.locator('[data-signature-buy]').click();
   await expect(page.locator('#merxSpent')).toHaveText(String(sigPrice));
+  expect(await page.evaluate((name) => CharacterWizard.getState().gear.filter((g) => g.name === name).length, SIGNATURE_NAME)).toBe(1);
+  await expect(page.locator('[data-your-signatures] [data-signature-name]')).toHaveCount(1);
 
   const defaultPrice = await readPrice(
     drawer.locator('label.entry-option:has(input[value="default"]) .entry-price')

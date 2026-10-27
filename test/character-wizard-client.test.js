@@ -652,6 +652,9 @@ describe('step 4 offers the whole class and its purchases', () => {
     document.querySelector('[data-signature-name="Cowboy Hat"]').click();
     document.querySelector('[data-signature-buy]').click();
     expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+    expect(document.querySelectorAll('[data-signature-name="Cowboy Hat"]')).toHaveLength(1);
+    expect(document.querySelector('#yourSignatures [data-signature-name="Cowboy Hat"]')).not.toBeNull();
+    expect(document.querySelector('#signatureGrid [data-signature-name="Cowboy Hat"]')).toBeNull();
 
     const drawer = document.getElementById('signatureDrawer');
     const defaultRadio = drawer.querySelector('input[name="enchantment"][value="default"]');
@@ -2008,6 +2011,21 @@ describe('the aspirant shops sell each name once per lineage', () => {
     expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
   });
 
+  test('each shop click buys one copy and each Remove click removes one copy', () => {
+    const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
+    wizard.renderGearStep();
+    const clickItem = () => document.querySelector('[data-shop-key="class:gs-advent:Duster"] .card-content').click();
+    clickItem();
+    expect(wizard.getState().gear).toHaveLength(1);
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+    clickItem();
+    expect(wizard.getState().gear).toHaveLength(2);
+    expect(wizard.getMerxSpent()).toBe(2 * FIGURES.prices.signature.own);
+    document.querySelector('[data-shop-remove="class:gs-advent:Duster"]').click();
+    expect(wizard.getState().gear).toHaveLength(1);
+    expect(wizard.getMerxSpent()).toBe(FIGURES.prices.signature.own);
+  });
+
   test('a preselected forked Advent class buys its Aspirant version\'s other items cross-class', () => {
     const wizard = boot('gs-advent', [GS_FORK, WANDERER, MESMER, GS_ADVENT]);
     const items = wizard.getShopPool().filter((p) => p.kind === 'class');
@@ -2118,6 +2136,20 @@ describe('Your Signatures', () => {
     ]);
   });
 
+  test('three own-class purchases and one cross-class copy cost nine after removing a duplicate', () => {
+    const wizard = bootAspirant();
+    for (const name of ['Cowboy Hat', 'Duster', 'Sharps Rifle']) wizard.buySignature(name, 'c-v1');
+    expect(wizard.getMerxSpent()).toBe(6);
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    buyFromShop('c-other', 'Drifter Sharps Rifle');
+    expect(wizard.getMerxSpent()).toBe(12);
+    openYourSignature('Drifter Sharps Rifle');
+    document.querySelector('[data-signature-sell]').click();
+    expect(wizard.getState().gear).toHaveLength(4);
+    expect(wizard.getMerxSpent()).toBe(9);
+    expect(document.getElementById('merxSpent').textContent).toBe('9');
+  });
+
   test('opening a cross-class Signature shows its entry and Remove in the drawer', () => {
     bootAspirant();
     buyFromShop('c-other', 'Drifter Sharps Rifle');
@@ -2192,7 +2224,7 @@ describe('Your Signatures', () => {
     expect(document.querySelectorAll('[data-signature-loadout]')).toHaveLength(1);
   });
 
-  test('class grid Signatures, owned or not, never hover an Enchantment or badges', () => {
+  test('the class grid omits owned Signatures and never shows their loadout', () => {
     const wizard = bootAspirant();
     wizard.buySignature('Cowboy Hat', 'c-v1');
     const hat = wizard.getState().gear.find((g) => g.name === 'Cowboy Hat');
@@ -2200,7 +2232,8 @@ describe('Your Signatures', () => {
     hat.mods = [{ name: 'Scope', description: 'Sees far' }];
     wizard.renderGearStep();
 
-    for (const name of ['Cowboy Hat', 'Duster']) {
+    expect(document.querySelector('#signatureGrid [data-signature-name="Cowboy Hat"]')).toBeNull();
+    for (const name of ['Duster']) {
       const cell = document.querySelector('#signatureGrid [data-signature-name="' + name + '"]');
       const next = cell.nextElementSibling;
       const tooltipText = next && next.classList.contains('tooltip-markdown') ? next.textContent : '';
