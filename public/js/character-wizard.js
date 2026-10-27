@@ -514,6 +514,10 @@ window.CharacterWizard = (function () {
   const setClassId = (id) => {
     const prev = state.classId;
     state.classId = id;
+    if (prev !== id) {
+      state.abilityClassFilter = '';
+      state.gearClassFilter = '';
+    }
     if (prev !== id && DATA.mode === 'advent') {
       // resetBaseGear() is defined further down — guarded by a flag to
       // avoid a forward-reference issue (we're called from kiosk code that
@@ -2067,7 +2071,17 @@ window.CharacterWizard = (function () {
     const grant = perksGrant(s);
     const spent = perksSpent(s);
     const remaining = Math.max(0, grant - spent);
-    const rows = abilityShopEntries(s).map((entry) => {
+    const entries = abilityShopEntries(s);
+    const filterId = s.abilityClassFilter || s.classId;
+    const classOptions = new Map(entries.map((entry) => [entry.classId, entry.className]));
+    const filter = '<div class="field"><label class="label" for="abilityClassFilter">Browse abilities by class</label>'
+      + '<div class="control"><div class="select"><select id="abilityClassFilter">'
+      + '<option value="' + esc(s.classId) + '"' + (filterId === s.classId ? ' selected' : '') + '>Current class — Advanced Abilities</option>'
+      + Array.from(classOptions).filter(([id]) => id !== s.classId)
+        .sort((a, b) => a[1].localeCompare(b[1]))
+        .map(([id, name]) => '<option value="' + esc(id) + '"' + (filterId === id ? ' selected' : '') + '>' + esc(name) + '</option>').join('')
+      + '</select></div></div></div>';
+    const rows = entries.filter((entry) => entry.classId === filterId).map((entry) => {
       const pick = { classId: entry.classId, abilityName: entry.abilityName, type: entry.type, crossClass: entry.crossClass };
       const owned = (s.acquiredAbilities || []).some((a) => samePick(a, pick));
       const price = priceOfPick(pick);
@@ -2109,7 +2123,8 @@ window.CharacterWizard = (function () {
     const perLevelWord = PERKS.perksPerLevel === 1 ? 'one' : String(PERKS.perksPerLevel);
     return ''
       + '<div class="wizard-ability-shop">'
-      +   rows
+      +   filter
+      +   (rows || '<p class="has-text-grey">No abilities available for this class.</p>')
       +   '<div class="box mt-4 has-background-light">'
       +     '<p class="mb-0"><strong>Perks spent ' + spent + ' / ' + grant + '</strong> (' + remaining + ' remaining)</p>'
       +     '<p class="help mb-0 mt-1">Perks accrue ' + perLevelWord + ' Perk per level — spend one here once you can afford an unlock.</p>'
@@ -3398,7 +3413,7 @@ window.CharacterWizard = (function () {
     const matchesSearch = (it) => !searchText
       || (it.name || '').toLowerCase().includes(searchText);
     const matchesClass = (it) => it.kind !== 'class'
-      || !classFilterId
+      || (!classFilterId && economyForState() !== 'aspirant')
       || it.origin_class_id === classFilterId;
 
     // Refresh the class filter's options on every render — cheap, and it
@@ -3414,11 +3429,11 @@ window.CharacterWizard = (function () {
       }
       // Only show the dropdown if the pool has items from >1 class — the
       // filter is a no-op otherwise and just clutters the UI.
-      const showFilter = classNames.length > 1;
+      const showFilter = classNames.length > 1 || (economyForState() === 'aspirant' && classNames.length > 0);
       gearClassFilterWrap.hidden = !showFilter;
       if (showFilter) {
         classNames.sort((a, b) => a.name.localeCompare(b.name));
-        gearClassFilterEl.innerHTML = '<option value="">All classes</option>'
+        gearClassFilterEl.innerHTML = '<option value="">' + (economyForState() === 'aspirant' ? 'Current class signatures' : 'All classes') + '</option>'
           + classNames.map((cn) => '<option value="' + esc(cn.id) + '">' + esc(cn.name) + '</option>').join('');
         gearClassFilterEl.value = classFilterId;
       } else {
@@ -3515,7 +3530,7 @@ window.CharacterWizard = (function () {
       cardsHtml = searchText
         ? '<p class="has-text-grey">No items match your search.</p>'
         : (tab === 'class'
-            ? '<p class="has-text-grey">Your class\'s Signatures are in the grid above.</p>'
+            ? '<p class="has-text-grey">Your class\'s Signatures are in the grid above. Select another class to browse its Signatures.</p>'
             : '<p class="has-text-grey">Nothing available to spend Merx on.</p>');
     }
     spendList.innerHTML = cardsHtml;
@@ -4055,6 +4070,11 @@ window.CharacterWizard = (function () {
   //                        aspiring's own picks render without it, which
   //                        priceOfPick's crossClass check reads as `own`.
   if (abilityPrimerList) {
+    abilityPrimerList.addEventListener('change', (e) => {
+      if (e.target.id !== 'abilityClassFilter') return;
+      state.abilityClassFilter = e.target.value;
+      renderAbilityPrimer();
+    });
     abilityPrimerList.addEventListener('click', (e) => {
       const dropBtn = e.target.closest && e.target.closest('.wizard-pick-drop');
       if (dropBtn) {

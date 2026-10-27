@@ -586,6 +586,10 @@ describe('step 4 offers the whole class and its purchases', () => {
     }));
     wizard.getState().classId = 'c-v1';
     wizard.renderGearStep();
+    expect(document.getElementById('spendList').innerHTML).not.toContain('Drifter');
+    const filter = document.getElementById('gearClassFilter');
+    filter.value = 'c-other';
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }));
     const shop = document.getElementById('spendList').innerHTML;
     expect(shop).toContain('Drifter');
     expect(shop).not.toContain('Gunslinger');
@@ -1592,10 +1596,14 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     const html = wizard.renderAbilityShop(wizard.getState());
     expect(html).toContain('Own Advanced');
     expect(html).toContain('2 Perks');
-    expect(html).toContain('Other Core');
-    expect(html).toContain('3 Perks');
-    expect(html).toContain('Other Advanced');
-    expect(html).toContain('4 Perks');
+    expect(html).not.toContain('Other Core');
+    wizard.getState().abilityClassFilter = 'fixture-aspirant-other';
+    const otherHtml = wizard.renderAbilityShop(wizard.getState());
+    expect(otherHtml).toContain('Other Core');
+    expect(otherHtml).toContain('3 Perks');
+    expect(otherHtml).toContain('Other Advanced');
+    expect(otherHtml).toContain('4 Perks');
+    expect(otherHtml).not.toContain('>Own Advanced<');
   });
 
   test('the shop sells an Advent-format class\'s Abilities at the Cross-Class prices', () => {
@@ -1609,6 +1617,7 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
       classes: [ASPIRANT_OWN_CLASS, ASPIRANT_OTHER_CLASS, adventClass]
     });
     const state = wizard.getState();
+    state.abilityClassFilter = 'fixture-advent-other';
     const html = wizard.renderAbilityShop(state);
     expect(html).toContain('Advent Core');
     expect(html).toContain('Advent Advanced');
@@ -1635,6 +1644,9 @@ describe('the wizard offers an aspirant ability shop (pg. 7)', () => {
     const state = wizard.getState();
     state.step = 3;
     wizard.renderAbilityPrimer();
+    const filter = document.getElementById('abilityClassFilter');
+    filter.value = 'fixture-aspirant-other';
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }));
     const buyBtn = document.querySelector(
       '[data-pick-class="fixture-aspirant-other"][data-pick-name="Other Core"]'
     );
@@ -2014,6 +2026,8 @@ describe('the aspirant shops sell each name once per lineage', () => {
   test('each shop click buys one copy and each Remove click removes one copy', () => {
     const wizard = boot('gs-fork', [GS_FORK, WANDERER, MESMER]);
     wizard.renderGearStep();
+    document.getElementById('gearClassFilter').value = 'gs-advent';
+    document.getElementById('gearClassFilter').dispatchEvent(new window.Event('change', { bubbles: true }));
     const clickItem = () => document.querySelector('[data-shop-key="class:gs-advent:Duster"] .card-content').click();
     clickItem();
     expect(wizard.getState().gear).toHaveLength(1);
@@ -2109,6 +2123,9 @@ describe('Your Signatures', () => {
     classId: el.getAttribute('data-signature-class')
   }));
   const buyFromShop = (classId, name) => {
+    const filter = document.getElementById('gearClassFilter');
+    filter.value = classId;
+    filter.dispatchEvent(new window.Event('change', { bubbles: true }));
     document.querySelector('[data-shop-key="class:' + classId + ':' + name + '"]').click();
   };
   const openYourSignature = (name) => {
