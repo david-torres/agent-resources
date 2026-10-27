@@ -1527,6 +1527,22 @@ a.dropdown-item:hover {
 .wizard-tips h5 { color: var(--bulma-info, #3e8ed0); }
 .wizard-tips .content p:last-child { margin-bottom: 0; }
 
+.wizard-gear-purchases {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  border: 1px solid rgba(var(--wizard-accent-rgb), 0.3);
+  border-left: 4px solid var(--wizard-accent);
+  border-radius: 6px;
+  background: rgba(var(--wizard-accent-rgb), 0.06);
+}
+.wizard-gear-purchases:empty { display: none; }
+.wizard-class-gear {
+  padding: 1.25rem;
+  border: 1px solid var(--bulma-border, #dbdbdb);
+  border-radius: 6px;
+  background: var(--bulma-scheme-main-bis, #fafafa);
+}
+
 /* Step 4 shop items: pickable cards in the right column. Hover lifts the
    card and shifts the cursor; picked cards keep a thin primary border so
    the user can see what they've already added. Disabled cards (over the

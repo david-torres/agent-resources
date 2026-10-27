@@ -3332,7 +3332,9 @@ window.CharacterWizard = (function () {
     if (!yourSignatures) return;
     if (typeof App !== 'undefined') App.destroyTooltips(yourSignatures);
     yourSignatures.innerHTML = owned.length
-      ? '<h5 class="title is-6 mb-2">Your Signatures</h5>' + owned.map(renderOwnedSignatureCell).join('')
+      ? '<h5 class="title is-6 mb-2">Your Signatures</h5>'
+        + '<p class="is-size-7 has-text-grey mb-3">Selected purchases. Open an item to customize it or remove it.</p>'
+        + owned.map(renderOwnedSignatureCell).join('')
       : '';
     if (typeof App !== 'undefined') App.initTooltips(yourSignatures);
   };
@@ -3358,7 +3360,7 @@ window.CharacterWizard = (function () {
     signatureGrid.innerHTML = columns.length
       ? '<div class="columns is-multiline">' + columns.map((column) => '<div class="column">'
           + column.cells.map(renderGridSignatureCell).join('') + '</div>').join('') + '</div>'
-      : '';
+      : '<p class="has-text-grey is-size-7">No unpurchased Signatures available from your class.</p>';
     renderSignatureDrawer(cells.concat(owned));
   };
 

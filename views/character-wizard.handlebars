@@ -319,9 +319,13 @@
   <div id="signaturePanel" class="mb-4" hidden>
     <h4 class="title is-5">Signature Items</h4>
     <p class="has-text-grey is-size-7 mb-2">Open one to read its entry and buy it, its Enchantment and its Mods.</p>
-    <div id="yourSignatures" data-your-signatures></div>
-    <div id="signatureGrid">
-      <!-- The class's printed Signature grid, rendered by character-wizard.js -->
+    <div id="yourSignatures" class="wizard-gear-purchases" data-your-signatures></div>
+    <div class="wizard-class-gear">
+      <h5 class="title is-6 mb-2">Available from your class</h5>
+      <p class="has-text-grey is-size-7 mb-3">Browse your class's Signatures below. Purchased items move into Your Signatures above.</p>
+      <div id="signatureGrid">
+        <!-- The class's printed Signature grid, rendered by character-wizard.js -->
+      </div>
     </div>
     <div id="signatureDrawer" class="box" hidden>
       <!-- The open Signature's entry, rendered by public/js/signature-entry.js -->
